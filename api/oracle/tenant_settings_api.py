@@ -26,6 +26,11 @@ Removing a domain or a shared drive (or resetting either) takes effect on save (
 from every member's Google Docs sources in the same request, with no Drive call
 (:func:`oracle.sources.service.hide_outside_company`).
 
+- ``alignment_report`` (F6): the weekly alignment report's schedule and Slack channel,
+  ``{"enabled", "weekday": "mon".."sun", "time": "HH:MM", "timezone": an IANA zone,
+  "slack_channel": {"id", "name"} | null}`` (oracle.reports.alignment). A partial value
+  takes the defaults for the rest.
+
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
 
@@ -64,6 +69,14 @@ DEFAULTS: dict[str, Any] = {
     # S5 (owner, 2026-10-20): explicit, never inferred in production.
     "company_email_domains": [],
     "company_shared_drives": [],
+    # F6 (defaults the spec picks): Monday 08:00 Pacific, for the week that just ended.
+    "alignment_report": {
+        "enabled": True,
+        "weekday": "mon",
+        "time": "08:00",
+        "timezone": "America/Los_Angeles",
+        "slack_channel": None,
+    },
 }
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
@@ -191,6 +204,13 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         return validate_company_domains(value)
     if key == "company_shared_drives":
         return validate_shared_drives(value)
+    if key == "alignment_report":
+        from oracle.reports.alignment import validate_setting
+
+        try:
+            return validate_setting(value)
+        except ValueError as e:
+            raise InvalidSetting(str(e)) from None
     raise KeyError(key)
 
 

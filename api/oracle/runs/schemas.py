@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from oracle.docs.schemas import DocumentKind, ImportProblem, VersionSource
 from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
+from oracle.reports.schemas import InboxReport, InboxReportFailure
 from oracle.review.schemas import FeedbackKind
 
 Flow = Literal["baseline_to_prd", "feedback_loop", "prd_to_roadmap"]
@@ -569,6 +570,10 @@ class InboxOut(BaseModel):
     feedback: list[InboxDocument]
     # Owners only: provider revokes a member's disable could not make (Retry, Dismiss).
     revoke_failures: list[InboxRevokeFailure] = []
+    # Owners only (F6): the newest weekly alignment reports, unread ones in ``total``; and
+    # the reports Slack refused for 24 hours (Retry, Dismiss), in ``total`` too.
+    reports: list[InboxReport] = []
+    report_failures: list[InboxReportFailure] = []
     total: int
     # Approvers and owners: feedback in every state, newest first (declined and done
     # capped to the most recent), the counts per state, and the staged rows.

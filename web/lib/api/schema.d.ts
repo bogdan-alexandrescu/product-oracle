@@ -6180,6 +6180,236 @@ export interface paths {
         patch: operations["update_milestone"];
         trace?: never;
     };
+    "/v1/alignment-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Alignment Reports
+         * @description Every alignment report, newest first.
+         */
+        get: operations["list_alignment_reports"];
+        put?: never;
+        /**
+         * Create Alignment Report
+         * @description Generate now: an on-demand report for the week so far, posted to Slack only with
+         *     ``post_to_slack``.
+         */
+        post: operations["create_alignment_report"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/alignment-reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Alignment Report
+         * @description One report: the headline, the summary figures, one part per track, its Markdown
+         *     and its Slack post.
+         */
+        get: operations["get_alignment_report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/alignment-reports/{report_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Alignment Report Read
+         * @description I opened the report: Done in my Inbox (for me only).
+         */
+        post: operations["mark_alignment_report_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/alignment-reports/{report_id}/slack/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Alignment Report Slack
+         * @description Post a report Slack refused again, now.
+         */
+        post: operations["retry_alignment_report_slack"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/alignment-reports/{report_id}/slack/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Alignment Report Slack
+         * @description Take "Report not posted to Slack" out of the owners' Inbox; the report stays.
+         */
+        post: operations["dismiss_alignment_report_slack"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/company-integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Company Integrations
+         * @description The company's own integrations (Oracle's Slack app); never a credential.
+         */
+        get: operations["list_company_integrations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/company-integrations/slack/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Install Slack Notifications
+         * @description Slack's authorize URL to install Oracle's Slack app for the company (browser only:
+         *     the owner signs in at Slack and comes back to the callback).
+         */
+        get: operations["install_slack_notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/company-integrations/slack/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth Slack Notifications Callback
+         * @description Where Slack sends the owner back after the install; ends on Settings › Notifications.
+         */
+        get: operations["oauth_slack_notifications_callback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/company-integrations/slack/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Slack Notification Channels
+         * @description The channels the report can post to: public ones, and the private ones the bot was
+         *     invited to when the install can read them.
+         */
+        get: operations["list_slack_notification_channels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/company-integrations/slack/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Slack Notifications
+         * @description Send "Product Oracle will post the weekly alignment report here." to a channel.
+         */
+        post: operations["test_slack_notifications"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/company-integrations/{integration_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Company Integration
+         * @description Disconnect: revoke the bot token at Slack (best effort) and delete it. The report
+         *     stops posting (and the report's channel is cleared); people's own Slack connections
+         *     are untouched.
+         */
+        delete: operations["delete_company_integration"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -6486,6 +6716,96 @@ export interface components {
             items: components["schemas"]["AlignmentItem"][];
             /** Unplanned */
             unplanned: components["schemas"]["DriftEntry"][];
+        };
+        /** AlignmentReportCreate */
+        AlignmentReportCreate: {
+            /**
+             * Post To Slack
+             * @default false
+             */
+            post_to_slack: boolean;
+        };
+        /** AlignmentReportListItem */
+        AlignmentReportListItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "weekly" | "on_demand";
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Title */
+            title: string;
+            period: components["schemas"]["ReportPeriod"];
+            /** Timezone */
+            timezone: string;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Headline */
+            headline: string;
+            summary: components["schemas"]["ReportSummaryFigures"];
+            slack: components["schemas"]["ReportSlack"];
+            /** Read */
+            read: boolean;
+        };
+        /** AlignmentReportOut */
+        AlignmentReportOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "weekly" | "on_demand";
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Title */
+            title: string;
+            period: components["schemas"]["ReportPeriod"];
+            /** Timezone */
+            timezone: string;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Headline */
+            headline: string;
+            summary: components["schemas"]["ReportSummaryFigures"];
+            slack: components["schemas"]["ReportSlack"];
+            /** Read */
+            read: boolean;
+            /** Tracks */
+            tracks: components["schemas"]["ReportTrack"][];
+            /**
+             * Unreadable Tracks
+             * @default []
+             */
+            unreadable_tracks: components["schemas"]["ReportUnreadableTrack"][];
+            /** Markdown */
+            markdown: string;
+            /**
+             * Needs Attention As Of Now
+             * @default true
+             */
+            needs_attention_as_of_now: boolean;
         };
         /** AnswerIn */
         AnswerIn: {
@@ -8276,6 +8596,47 @@ export interface components {
             resolved?: boolean | null;
             /** Body */
             body?: string | null;
+        };
+        /** CompanyIntegrationOut */
+        CompanyIntegrationOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "slack";
+            /**
+             * Purpose
+             * @constant
+             */
+            purpose: "notifications";
+            /** Account Id */
+            account_id: string;
+            /** Account Label */
+            account_label: string | null;
+            /** Scopes */
+            scopes: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "revoked" | "error";
+            /** Last Error */
+            last_error: string | null;
+            /**
+             * Installed By
+             * Format: uuid
+             */
+            installed_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * ComposedModule
@@ -11325,6 +11686,16 @@ export interface components {
              * @default []
              */
             revoke_failures: components["schemas"]["InboxRevokeFailure"][];
+            /**
+             * Reports
+             * @default []
+             */
+            reports: components["schemas"]["InboxReport"][];
+            /**
+             * Report Failures
+             * @default []
+             */
+            report_failures: components["schemas"]["InboxReportFailure"][];
             /** Total */
             total: number;
             /**
@@ -11354,6 +11725,67 @@ export interface components {
             needs_me: number;
             /** Last Seen At */
             last_seen_at?: string | null;
+        };
+        /**
+         * InboxReport
+         * @description Owners' Inbox: a weekly report, Open while unread, Done once I opened it.
+         */
+        InboxReport: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "weekly" | "on_demand";
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Title */
+            title: string;
+            /** Headline */
+            headline: string;
+            summary: components["schemas"]["ReportSummaryFigures"];
+            /** Read */
+            read: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * InboxReportFailure
+         * @description Owners' Inbox: a report Slack refused for 24 hours (Retry, Dismiss).
+         */
+        InboxReportFailure: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Title */
+            title: string;
+            /** Error */
+            error: string | null;
+            channel?: components["schemas"]["ReportChannel"] | null;
+            /** Attempts */
+            attempts: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * InboxRevokeFailure
@@ -11607,6 +12039,11 @@ export interface components {
              * @default []
              */
             problems: components["schemas"]["CompositionProblem"][];
+        };
+        /** InstallOut */
+        InstallOut: {
+            /** Url */
+            url: string;
         };
         /**
          * IntakeAnalysis
@@ -13267,6 +13704,18 @@ export interface components {
             /** Milestone Id */
             milestone_id?: string | null;
         };
+        /** NotificationChannelOut */
+        NotificationChannelOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Is Private
+             * @default false
+             */
+            is_private: boolean;
+        };
         /** NotificationOut */
         NotificationOut: {
             /**
@@ -14590,6 +15039,78 @@ export interface components {
             /** Body */
             body: string;
         };
+        /** ReportAlignmentCounts */
+        ReportAlignmentCounts: {
+            /** Aligned */
+            aligned: number;
+            /** Drift */
+            drift: number;
+            /** Untracked */
+            untracked: number;
+            /** Done */
+            done: number;
+        };
+        /** ReportAttention */
+        ReportAttention: {
+            /** Item Key */
+            item_key: string;
+            /** Title */
+            title: string;
+            /** Horizon */
+            horizon: string;
+            /** Kind */
+            kind: string;
+            /** Detail */
+            detail: string;
+            /** Alert Id */
+            alert_id?: string | null;
+            /** Link */
+            link: string;
+        };
+        /** ReportBasis */
+        ReportBasis: {
+            /** Reference */
+            reference: string;
+            /**
+             * Supports Date
+             * Format: date
+             */
+            supports_date: string;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** ReportChannel */
+        ReportChannel: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** ReportDates */
+        ReportDates: {
+            /** Verified */
+            verified: components["schemas"]["ReportBasis"][];
+            /** Withdrawn */
+            withdrawn: components["schemas"]["ReportBasis"][];
+        };
+        /** ReportDrift */
+        ReportDrift: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "ahead" | "unplanned";
+            /** Item Key */
+            item_key?: string | null;
+            /** Tracker Ref */
+            tracker_ref?: string | null;
+            /** Detail */
+            detail: string;
+            /** Title */
+            title?: string | null;
+            /** Link */
+            link?: string | null;
+        };
         /** ReportItem */
         ReportItem: {
             /**
@@ -14613,6 +15134,35 @@ export interface components {
              */
             explanation: string;
         };
+        /** ReportMilestone */
+        ReportMilestone: {
+            /** Name */
+            name: string;
+            /** Date */
+            date: string | null;
+            /** Verified */
+            verified: boolean;
+        };
+        /** ReportPeriod */
+        ReportPeriod: {
+            /**
+             * From
+             * Format: date-time
+             */
+            from: string;
+            /**
+             * To
+             * Format: date-time
+             */
+            to: string;
+        };
+        /** ReportPrd */
+        ReportPrd: {
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
         /** ReportRef */
         ReportRef: {
             /**
@@ -14625,6 +15175,86 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ReportSlack */
+        ReportSlack: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "not_configured" | "not_requested" | "pending" | "posted" | "failed";
+            channel?: components["schemas"]["ReportChannel"] | null;
+            /** Posted At */
+            posted_at?: string | null;
+            /**
+             * Attempts
+             * @default 0
+             */
+            attempts: number;
+            /** Error */
+            error?: string | null;
+            /** Next Attempt At */
+            next_attempt_at?: string | null;
+        };
+        /** ReportSummaryFigures */
+        ReportSummaryFigures: {
+            /** Tracks */
+            tracks: number;
+            /** At Risk */
+            at_risk: number;
+            /** Off Track */
+            off_track: number;
+            /** Slips */
+            slips: number;
+            /** Untracked Now */
+            untracked_now: number;
+            /** Unplanned */
+            unplanned: number;
+            /** Dates Verified */
+            dates_verified: number;
+            /** Dates Withdrawn */
+            dates_withdrawn: number;
+        };
+        /** ReportTrack */
+        ReportTrack: {
+            /**
+             * Track Id
+             * Format: uuid
+             */
+            track_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused";
+            prd: components["schemas"]["ReportPrd"];
+            /** Link */
+            link: string;
+            /** Health */
+            health: string;
+            /** Health Before */
+            health_before: string;
+            /** Headline */
+            headline: string;
+            next_milestone: components["schemas"]["ReportMilestone"] | null;
+            alignment: components["schemas"]["ReportAlignmentCounts"];
+            /** Needs Attention */
+            needs_attention: components["schemas"]["ReportAttention"][];
+            /** Drift */
+            drift: components["schemas"]["ReportDrift"][];
+            dates: components["schemas"]["ReportDates"];
+            /** Prd Moved */
+            prd_moved: boolean;
+        };
+        /** ReportUnreadableTrack */
+        ReportUnreadableTrack: {
+            /**
+             * Track Id
+             * Format: uuid
+             */
+            track_id: string;
+            /** Title */
+            title: string;
         };
         /** RescoreResult */
         RescoreResult: {
@@ -16373,6 +17003,18 @@ export interface components {
             channels: components["schemas"]["SlackChannelOut"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /** SlackTestIn */
+        SlackTestIn: {
+            /** Channel Id */
+            channel_id: string;
+        };
+        /** SlackTestOut */
+        SlackTestOut: {
+            /** Sent */
+            sent: boolean;
+            /** Channel Id */
+            channel_id: string;
         };
         /** SlideOut */
         SlideOut: {
@@ -30526,6 +31168,411 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MilestoneOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_alignment_reports: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlignmentReportListItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_alignment_report: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlignmentReportCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlignmentReportOut"];
+                };
+            };
+            /** @description No active or paused track */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_alignment_report: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlignmentReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_alignment_report_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlignmentReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_alignment_report_slack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlignmentReportOut"];
+                };
+            };
+            /** @description Nothing to retry */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_alignment_report_slack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlignmentReportOut"];
+                };
+            };
+            /** @description The post did not fail */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_company_integrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyIntegrationOut"][];
+                };
+            };
+        };
+    };
+    install_slack_notifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstallOut"];
+                };
+            };
+            /** @description Already connected, or not configured */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    oauth_slack_notifications_callback: {
+        parameters: {
+            query?: {
+                state?: string;
+                code?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_slack_notification_channels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannelOut"][];
+                };
+            };
+            /** @description Slack is not connected */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Slack */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    test_slack_notifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlackTestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackTestOut"];
+                };
+            };
+            /** @description Slack is not connected */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Slack */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_company_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                integration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -10,6 +10,7 @@ leaves a table behind; no_claim=the models matching the migration (test_migratio
 
 import asyncio
 import uuid
+from datetime import date
 
 import pytest
 from alembic import command
@@ -69,7 +70,7 @@ def test_0020_chains_on_mains_head_and_is_the_single_head():
     assert script.get_heads() == [REVISION]
 
 
-def _report(tenant: uuid.UUID, kind: str, week: str = "2026-10-19") -> None:
+def _report(tenant: uuid.UUID, kind: str, week: date = date(2026, 10, 19)) -> None:
     _run(
         "INSERT INTO alignment_reports (id, tenant_id, kind, week_start, period_start, "
         "period_end, timezone, content, markdown, slack_status) VALUES (:id, :t, :k, :w, "
@@ -94,7 +95,7 @@ def test_upgrade_adds_the_tables_and_downgrade_drops_them(scratch_db):
     _report(tenant, "on_demand")
     with pytest.raises(IntegrityError):
         _report(tenant, "weekly")
-    _report(tenant, "weekly", week="2026-10-26")
+    _report(tenant, "weekly", week=date(2026, 10, 26))
     with pytest.raises(IntegrityError):
         _report(tenant, "monthly")
     # One Oracle Slack install per company.
@@ -107,6 +108,11 @@ def test_upgrade_adds_the_tables_and_downgrade_drops_them(scratch_db):
     with pytest.raises(IntegrityError):
         _run(insert, id=uuid.uuid4(), t=tenant, u=uuid.uuid4())
 
+    # Dropping a stored install would leave the bot token valid at Slack: refused.
+    with pytest.raises(RuntimeError, match="disconnect Slack"):
+        command.downgrade(cfg, BEFORE)
+    assert TABLES <= _tables()
+    _run("DELETE FROM company_integrations")
     command.downgrade(cfg, BEFORE)
     assert not TABLES & _tables()
     command.upgrade(cfg, REVISION)

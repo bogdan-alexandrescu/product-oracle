@@ -44,6 +44,14 @@ async def test_defaults_and_unknown_keys(client, owner):
         "blocker_risk_review_max_days": 90,
         "company_email_domains": [],
         "company_shared_drives": [],
+        # F6: the weekly alignment report, Monday 08:00 Pacific, no Slack channel yet.
+        "alignment_report": {
+            "enabled": True,
+            "weekday": "mon",
+            "time": "08:00",
+            "timezone": "America/Los_Angeles",
+            "slack_channel": None,
+        },
     }
     assert all(s["is_default"] for s in listed)
     assert (await client.get("/v1/settings/nope", headers=owner.headers)).status_code == 404

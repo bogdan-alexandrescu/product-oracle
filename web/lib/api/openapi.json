@@ -22045,6 +22045,628 @@
         }
       }
     },
+    "/v1/alignment-reports": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "List Alignment Reports",
+        "description": "Every alignment report, newest first.",
+        "operationId": "list_alignment_reports",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AlignmentReportListItem"
+                  },
+                  "title": "Response List Alignment Reports"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Create Alignment Report",
+        "description": "Generate now: an on-demand report for the week so far, posted to Slack only with\n``post_to_slack``.",
+        "operationId": "create_alignment_report",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlignmentReportCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlignmentReportOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No active or paused track"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/alignment-reports/{report_id}": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Get Alignment Report",
+        "description": "One report: the headline, the summary figures, one part per track, its Markdown\nand its Slack post.",
+        "operationId": "get_alignment_report",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlignmentReportOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/alignment-reports/{report_id}/read": {
+      "post": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Mark Alignment Report Read",
+        "description": "I opened the report: Done in my Inbox (for me only).",
+        "operationId": "mark_alignment_report_read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlignmentReportOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/alignment-reports/{report_id}/slack/retry": {
+      "post": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Retry Alignment Report Slack",
+        "description": "Post a report Slack refused again, now.",
+        "operationId": "retry_alignment_report_slack",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlignmentReportOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Nothing to retry"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/alignment-reports/{report_id}/slack/dismiss": {
+      "post": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Dismiss Alignment Report Slack",
+        "description": "Take \"Report not posted to Slack\" out of the owners' Inbox; the report stays.",
+        "operationId": "dismiss_alignment_report_slack",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlignmentReportOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The post did not fail"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/company-integrations": {
+      "get": {
+        "tags": [
+          "company integrations"
+        ],
+        "summary": "List Company Integrations",
+        "description": "The company's own integrations (Oracle's Slack app); never a credential.",
+        "operationId": "list_company_integrations",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CompanyIntegrationOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Company Integrations"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/company-integrations/slack/install": {
+      "get": {
+        "tags": [
+          "company integrations"
+        ],
+        "summary": "Install Slack Notifications",
+        "description": "Slack's authorize URL to install Oracle's Slack app for the company (browser only:\nthe owner signs in at Slack and comes back to the callback).",
+        "operationId": "install_slack_notifications",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already connected, or not configured"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/company-integrations/slack/callback": {
+      "get": {
+        "tags": [
+          "company integrations"
+        ],
+        "summary": "Oauth Slack Notifications Callback",
+        "description": "Where Slack sends the owner back after the install; ends on Settings \u203a Notifications.",
+        "operationId": "oauth_slack_notifications_callback",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "State"
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/company-integrations/slack/channels": {
+      "get": {
+        "tags": [
+          "company integrations"
+        ],
+        "summary": "List Slack Notification Channels",
+        "description": "The channels the report can post to: public ones, and the private ones the bot was\ninvited to when the install can read them.",
+        "operationId": "list_slack_notification_channels",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationChannelOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Slack Notification Channels"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Slack is not connected"
+          },
+          "502": {
+            "description": "Slack"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/company-integrations/slack/test": {
+      "post": {
+        "tags": [
+          "company integrations"
+        ],
+        "summary": "Test Slack Notifications",
+        "description": "Send \"Product Oracle will post the weekly alignment report here.\" to a channel.",
+        "operationId": "test_slack_notifications",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlackTestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackTestOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Slack is not connected"
+          },
+          "502": {
+            "description": "Slack"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/company-integrations/{integration_id}": {
+      "delete": {
+        "tags": [
+          "company integrations"
+        ],
+        "summary": "Delete Company Integration",
+        "description": "Disconnect: revoke the bot token at Slack (best effort) and delete it. The report\nstops posting (and the report's channel is cleared); people's own Slack connections\nare untouched.",
+        "operationId": "delete_company_integration",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "integration_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Integration Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/.well-known/oauth-protected-resource": {
       "get": {
         "tags": [
@@ -22919,6 +23541,177 @@
         ],
         "title": "AlignmentReport",
         "description": "The roadmap against the tracker's state, read-only: the path that works without\ntracker write permission (E1)."
+      },
+      "AlignmentReportCreate": {
+        "properties": {
+          "post_to_slack": {
+            "type": "boolean",
+            "title": "Post To Slack",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "AlignmentReportCreate"
+      },
+      "AlignmentReportListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "weekly",
+              "on_demand"
+            ],
+            "title": "Kind"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "period": {
+            "$ref": "#/components/schemas/ReportPeriod"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "headline": {
+            "type": "string",
+            "title": "Headline"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ReportSummaryFigures"
+          },
+          "slack": {
+            "$ref": "#/components/schemas/ReportSlack"
+          },
+          "read": {
+            "type": "boolean",
+            "title": "Read"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "week_start",
+          "title",
+          "period",
+          "timezone",
+          "generated_at",
+          "headline",
+          "summary",
+          "slack",
+          "read"
+        ],
+        "title": "AlignmentReportListItem"
+      },
+      "AlignmentReportOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "weekly",
+              "on_demand"
+            ],
+            "title": "Kind"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "period": {
+            "$ref": "#/components/schemas/ReportPeriod"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "headline": {
+            "type": "string",
+            "title": "Headline"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ReportSummaryFigures"
+          },
+          "slack": {
+            "$ref": "#/components/schemas/ReportSlack"
+          },
+          "read": {
+            "type": "boolean",
+            "title": "Read"
+          },
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/ReportTrack"
+            },
+            "type": "array",
+            "title": "Tracks"
+          },
+          "unreadable_tracks": {
+            "items": {
+              "$ref": "#/components/schemas/ReportUnreadableTrack"
+            },
+            "type": "array",
+            "title": "Unreadable Tracks",
+            "default": []
+          },
+          "markdown": {
+            "type": "string",
+            "title": "Markdown"
+          },
+          "needs_attention_as_of_now": {
+            "type": "boolean",
+            "title": "Needs Attention As Of Now",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "week_start",
+          "title",
+          "period",
+          "timezone",
+          "generated_at",
+          "headline",
+          "summary",
+          "slack",
+          "read",
+          "tracks",
+          "markdown"
+        ],
+        "title": "AlignmentReportOut"
       },
       "AnswerIn": {
         "properties": {
@@ -28314,6 +29107,91 @@
         },
         "type": "object",
         "title": "CommentPatch"
+      },
+      "CompanyIntegrationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "provider": {
+            "type": "string",
+            "const": "slack",
+            "title": "Provider"
+          },
+          "purpose": {
+            "type": "string",
+            "const": "notifications",
+            "title": "Purpose"
+          },
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "account_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Label"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scopes"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "revoked",
+              "error"
+            ],
+            "title": "Status"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "installed_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Installed By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "purpose",
+          "account_id",
+          "account_label",
+          "scopes",
+          "status",
+          "last_error",
+          "installed_by",
+          "created_at"
+        ],
+        "title": "CompanyIntegrationOut"
       },
       "ComposedModule": {
         "properties": {
@@ -36701,6 +37579,22 @@
             "title": "Revoke Failures",
             "default": []
           },
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/InboxReport"
+            },
+            "type": "array",
+            "title": "Reports",
+            "default": []
+          },
+          "report_failures": {
+            "items": {
+              "$ref": "#/components/schemas/InboxReportFailure"
+            },
+            "type": "array",
+            "title": "Report Failures",
+            "default": []
+          },
           "total": {
             "type": "integer",
             "title": "Total"
@@ -36758,6 +37652,120 @@
           "total"
         ],
         "title": "InboxOut"
+      },
+      "InboxReport": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "weekly",
+              "on_demand"
+            ],
+            "title": "Kind"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "headline": {
+            "type": "string",
+            "title": "Headline"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ReportSummaryFigures"
+          },
+          "read": {
+            "type": "boolean",
+            "title": "Read"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "week_start",
+          "title",
+          "headline",
+          "summary",
+          "read",
+          "created_at"
+        ],
+        "title": "InboxReport",
+        "description": "Owners' Inbox: a weekly report, Open while unread, Done once I opened it."
+      },
+      "InboxReportFailure": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportChannel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "week_start",
+          "title",
+          "error",
+          "attempts",
+          "created_at"
+        ],
+        "title": "InboxReportFailure",
+        "description": "Owners' Inbox: a report Slack refused for 24 hours (Retry, Dismiss)."
       },
       "InboxRevokeFailure": {
         "properties": {
@@ -37340,6 +38348,19 @@
         ],
         "title": "InspectorOut",
         "description": "Everything the composition inspector shows for one document (\u00a74.5)."
+      },
+      "InstallOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "InstallOut"
       },
       "IntakeAnalysis": {
         "properties": {
@@ -41645,6 +42666,29 @@
         ],
         "title": "NextMilestone"
       },
+      "NotificationChannelOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_private": {
+            "type": "boolean",
+            "title": "Is Private",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "NotificationChannelOut"
+      },
       "NotificationOut": {
         "properties": {
           "id": {
@@ -45441,6 +46485,222 @@
         ],
         "title": "ReplyCreate"
       },
+      "ReportAlignmentCounts": {
+        "properties": {
+          "aligned": {
+            "type": "integer",
+            "title": "Aligned"
+          },
+          "drift": {
+            "type": "integer",
+            "title": "Drift"
+          },
+          "untracked": {
+            "type": "integer",
+            "title": "Untracked"
+          },
+          "done": {
+            "type": "integer",
+            "title": "Done"
+          }
+        },
+        "type": "object",
+        "required": [
+          "aligned",
+          "drift",
+          "untracked",
+          "done"
+        ],
+        "title": "ReportAlignmentCounts"
+      },
+      "ReportAttention": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "horizon": {
+            "type": "string",
+            "title": "Horizon"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "alert_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert Id"
+          },
+          "link": {
+            "type": "string",
+            "title": "Link"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "title",
+          "horizon",
+          "kind",
+          "detail",
+          "link"
+        ],
+        "title": "ReportAttention"
+      },
+      "ReportBasis": {
+        "properties": {
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          },
+          "supports_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Supports Date"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reference",
+          "supports_date"
+        ],
+        "title": "ReportBasis"
+      },
+      "ReportChannel": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ReportChannel"
+      },
+      "ReportDates": {
+        "properties": {
+          "verified": {
+            "items": {
+              "$ref": "#/components/schemas/ReportBasis"
+            },
+            "type": "array",
+            "title": "Verified"
+          },
+          "withdrawn": {
+            "items": {
+              "$ref": "#/components/schemas/ReportBasis"
+            },
+            "type": "array",
+            "title": "Withdrawn"
+          }
+        },
+        "type": "object",
+        "required": [
+          "verified",
+          "withdrawn"
+        ],
+        "title": "ReportDates"
+      },
+      "ReportDrift": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ahead",
+              "unplanned"
+            ],
+            "title": "Kind"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key"
+          },
+          "tracker_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Ref"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "detail"
+        ],
+        "title": "ReportDrift"
+      },
       "ReportItem": {
         "properties": {
           "feedback_id": {
@@ -45503,6 +46763,75 @@
         ],
         "title": "ReportItem"
       },
+      "ReportMilestone": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "date",
+          "verified"
+        ],
+        "title": "ReportMilestone"
+      },
+      "ReportPeriod": {
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date-time",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time",
+            "title": "To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from",
+          "to"
+        ],
+        "title": "ReportPeriod"
+      },
+      "ReportPrd": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "title"
+        ],
+        "title": "ReportPrd"
+      },
       "ReportRef": {
         "properties": {
           "id": {
@@ -45522,6 +46851,230 @@
           "created_at"
         ],
         "title": "ReportRef"
+      },
+      "ReportSlack": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_configured",
+              "not_requested",
+              "pending",
+              "posted",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportChannel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted At"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts",
+            "default": 0
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "ReportSlack"
+      },
+      "ReportSummaryFigures": {
+        "properties": {
+          "tracks": {
+            "type": "integer",
+            "title": "Tracks"
+          },
+          "at_risk": {
+            "type": "integer",
+            "title": "At Risk"
+          },
+          "off_track": {
+            "type": "integer",
+            "title": "Off Track"
+          },
+          "slips": {
+            "type": "integer",
+            "title": "Slips"
+          },
+          "untracked_now": {
+            "type": "integer",
+            "title": "Untracked Now"
+          },
+          "unplanned": {
+            "type": "integer",
+            "title": "Unplanned"
+          },
+          "dates_verified": {
+            "type": "integer",
+            "title": "Dates Verified"
+          },
+          "dates_withdrawn": {
+            "type": "integer",
+            "title": "Dates Withdrawn"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tracks",
+          "at_risk",
+          "off_track",
+          "slips",
+          "untracked_now",
+          "unplanned",
+          "dates_verified",
+          "dates_withdrawn"
+        ],
+        "title": "ReportSummaryFigures"
+      },
+      "ReportTrack": {
+        "properties": {
+          "track_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Track Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused"
+            ],
+            "title": "Status"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/ReportPrd"
+          },
+          "link": {
+            "type": "string",
+            "title": "Link"
+          },
+          "health": {
+            "type": "string",
+            "title": "Health"
+          },
+          "health_before": {
+            "type": "string",
+            "title": "Health Before"
+          },
+          "headline": {
+            "type": "string",
+            "title": "Headline"
+          },
+          "next_milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportMilestone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "alignment": {
+            "$ref": "#/components/schemas/ReportAlignmentCounts"
+          },
+          "needs_attention": {
+            "items": {
+              "$ref": "#/components/schemas/ReportAttention"
+            },
+            "type": "array",
+            "title": "Needs Attention"
+          },
+          "drift": {
+            "items": {
+              "$ref": "#/components/schemas/ReportDrift"
+            },
+            "type": "array",
+            "title": "Drift"
+          },
+          "dates": {
+            "$ref": "#/components/schemas/ReportDates"
+          },
+          "prd_moved": {
+            "type": "boolean",
+            "title": "Prd Moved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "track_id",
+          "status",
+          "prd",
+          "link",
+          "health",
+          "health_before",
+          "headline",
+          "next_milestone",
+          "alignment",
+          "needs_attention",
+          "drift",
+          "dates",
+          "prd_moved"
+        ],
+        "title": "ReportTrack"
+      },
+      "ReportUnreadableTrack": {
+        "properties": {
+          "track_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Track Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "track_id",
+          "title"
+        ],
+        "title": "ReportUnreadableTrack"
       },
       "RescoreResult": {
         "properties": {
@@ -50583,6 +52136,39 @@
           "next_cursor"
         ],
         "title": "SlackChannelPage"
+      },
+      "SlackTestIn": {
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Channel Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel_id"
+        ],
+        "title": "SlackTestIn"
+      },
+      "SlackTestOut": {
+        "properties": {
+          "sent": {
+            "type": "boolean",
+            "title": "Sent"
+          },
+          "channel_id": {
+            "type": "string",
+            "title": "Channel Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sent",
+          "channel_id"
+        ],
+        "title": "SlackTestOut"
       },
       "SlideOut": {
         "properties": {

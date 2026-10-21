@@ -7448,6 +7448,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         failed_refs = await _refs(db, failed_runs)
         imports = [_summary(r, failed_refs, None) for r in failed_runs]
     revising = await _revising(db, principal)
+    from oracle.reports.service import inbox_rows
+
+    reports, report_failures = await inbox_rows(db, principal)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -7463,6 +7466,8 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         imports=imports,
         feedback=feedback,
         revoke_failures=revoke_failures,
+        reports=reports,
+        report_failures=report_failures,
         # Every new or open item (C1e, owner 2026-10-20): the rail badge, = New + Open.
         total=len(checkpoints)
         + len(approvals)
@@ -7471,7 +7476,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + len(imports)
         + counts.new
         + counts.open
-        + len(revoke_failures),
+        + len(revoke_failures)
+        + sum(1 for r in reports if not r.read)
+        + len(report_failures),
         items=states,
         counts=counts,
         staged=staged,

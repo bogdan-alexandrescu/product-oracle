@@ -930,3 +930,37 @@ async def test_callback_refusals(client, owner, slack):
     assert "error=access_denied" in resp.headers["location"]
     assert (await client.get("/v1/company-integrations", headers=auth)).json() == []
     assert slack.of("oauth.v2.access") == []
+
+
+async def test_a_track_that_cannot_be_read_does_not_stop_the_report(
+    client, owner, runtime, at, monkeypatch
+):
+    """protects=the weekly report per company; fails_when=one track whose overview raises
+    stops the report for every other track, or is dropped without a word; no_claim=why it
+    raised (monitoring logs and counts it too)."""
+    from oracle.docs.models import Document
+    from oracle.roadmap import views
+
+    tenant_id, auth = owner
+    await a_track(client, auth, runtime)
+    async with tenant_session(tenant_id) as s:
+        other = Document(slug="billing-prd", title="Billing PRD", kind="prd", status="draft")
+        s.add(other)
+        await s.flush()
+        bad = ProductTrack(prd_document_id=other.id, title="Billing")
+        s.add(bad)
+        await s.commit()
+        bad_id = bad.id
+    real = views.overview
+
+    async def overview(db, track):
+        if track.id == bad_id:
+            raise RuntimeError("boom")
+        return await real(db, track)
+
+    monkeypatch.setattr(views, "overview", overview)
+    at(la(2026, 10, 26, 8))
+    (report,) = await due(tenant_id)
+    assert [t["prd"]["slug"] for t in report.content["tracks"]] == [PRD]
+    assert report.content["unreadable_tracks"] == [{"track_id": str(bad_id), "title": "Billing"}]
+    assert "could not read 1 track(s) this time: Billing" in report.markdown
