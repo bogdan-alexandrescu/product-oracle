@@ -4,7 +4,7 @@ suggestions, and the themes that group them.
 Rules (issue #150, behaviour rules 1-10): commenters add; approvers and owners decide.
 Qualifying needs a confirmed goal (decision F3b). A merge points at the root of the
 target's chain and never forms a cycle; mentions count every request merged in, through
-chains. Oracle's triage writes ``suggestion`` only (oracle.requests.triage, lane 3):
+chains. Oracle's triage writes ``suggestion`` only (oracle.requests.triage):
 nothing changes until an approver accepts a part. A request filed from the filer's own
 source item carries a copy of its title, link, kind and a 400-character excerpt
 (decided 2026-10-21, C1 "Found items"), audited as shared in full.
@@ -208,11 +208,11 @@ def excerpt_of(content: str | None) -> str | None:
     return flat[: EXCERPT_MAX - 1].rstrip() + "…"
 
 
-async def copy_source(db: AsyncSession, principal: Principal, item_id: uuid.UUID) -> dict[str, Any]:
-    """The columns filing copies from one of the principal's own source items: its
-    title, link, source kind and excerpt (C1 "Found items"); 422 for anyone else's."""
-    if principal.user_id is None:
-        raise _invalid(NOT_YOUR_ITEM)
+async def item_copy(
+    db: AsyncSession, owner_user_id: uuid.UUID, item_id: uuid.UUID
+) -> dict[str, Any] | None:
+    """What filing copies from one of ``owner_user_id``'s own live source items: its
+    title, link, source kind and excerpt (C1 "Found items"); None for anyone else's."""
     found = (
         await db.execute(
             select(SourceItem, Source.kind)
@@ -220,12 +220,12 @@ async def copy_source(db: AsyncSession, principal: Principal, item_id: uuid.UUID
             .where(
                 SourceItem.id == item_id,
                 SourceItem.deleted_at.is_(None),
-                Source.owner_user_id == principal.user_id,
+                Source.owner_user_id == owner_user_id,
             )
         )
     ).first()
     if found is None:
-        raise _invalid(NOT_YOUR_ITEM)
+        return None
     item, kind = found
     version = (
         await db.get(SourceItemVersion, item.current_version_id)
@@ -239,6 +239,15 @@ async def copy_source(db: AsyncSession, principal: Principal, item_id: uuid.UUID
         "source_kind": kind,
         "source_excerpt": excerpt_of(version.content if version else None),
     }
+
+
+async def copy_source(db: AsyncSession, principal: Principal, item_id: uuid.UUID) -> dict[str, Any]:
+    """:func:`item_copy` of one of the principal's own source items; 422 for anyone
+    else's."""
+    copied = await item_copy(db, principal.user_id, item_id) if principal.user_id else None
+    if copied is None:
+        raise _invalid(NOT_YOUR_ITEM)
+    return copied
 
 
 # --- reading -----------------------------------------------------------------------------

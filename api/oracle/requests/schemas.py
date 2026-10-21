@@ -6,6 +6,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from oracle.runs.schemas import RunStatus
+
 Channel = Literal["support", "sales", "team", "interview", "slack", "meeting", "doc", "other"]
 RequesterKind = Literal["customer", "team", "unknown"]
 State = Literal["new", "qualified", "merged", "disqualified"]
@@ -216,3 +218,71 @@ class RequestThemeOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     lock_version: int
+
+
+# --- triage and found items (lane 3) -------------------------------------------------
+
+
+class TriageStart(_In):
+    depth: Literal["quick", "standard"] | None = None
+
+
+class TriageStatus(BaseModel):
+    """The latest triage run, for the Requests header. Empty before the first one."""
+
+    run_id: uuid.UUID | None = None
+    status: RunStatus | None = None
+    # Under way: "Oracle is classifying · started 2 min ago".
+    active: bool = False
+    # Oracle's daily run (no starter).
+    automatic: bool = False
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    # Requests holding this run's suggestion.
+    suggestions: int = 0
+    # What it found in the caller's own sources.
+    found: int = 0
+    error: str | None = None
+
+
+class CandidateFile(_In):
+    """Filing a found item: its own words unless these say otherwise."""
+
+    title: Title | None = None
+    body: Body | None = None
+    channel: Channel | None = None
+    requester_name: Name | None = None
+    requester_kind: RequesterKind | None = None
+    goal_ids: GoalIds | None = None
+    theme_id: uuid.UUID | None = None
+
+
+class CandidateSource(BaseModel):
+    """The item, as filing would share it: title, link, kind and excerpt."""
+
+    item_id: uuid.UUID
+    title: str | None
+    url: str | None
+    kind: str | None
+    excerpt: str | None
+
+
+class CandidateOut(BaseModel):
+    """A possible request Oracle found in its owner's own source item (theirs alone)."""
+
+    id: uuid.UUID
+    owner_user_id: uuid.UUID
+    run_id: uuid.UUID | None
+    title: str
+    body: str | None
+    requester_name: str | None
+    channel: Literal["support", "sales", "team", "slack", "meeting", "doc", "other"]
+    theme_title: str | None
+    goal_ids: list[uuid.UUID]
+    confidence: float | None
+    rationale: str | None
+    status: Literal["open", "filed", "dismissed"]
+    request_id: uuid.UUID | None
+    source: CandidateSource
+    created_at: datetime
+    updated_at: datetime

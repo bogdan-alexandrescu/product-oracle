@@ -67,6 +67,9 @@ MCP_TOOLS = {
     "get_launch": "a launch: its items, tier, checklist and the requesters' counts",
     "list_requester_notes": "the people who asked for a launch's items, each with what "
     "they asked in their own words",
+    "list_requests": "the company's feature requests (state=new for those to classify), each "
+    "in the asker's words, with its channel, theme, goals and mentions",
+    "list_request_themes": "the live request themes, each with the goals it serves",
 }
 # Stated in the tasks of segments that pick features or items (H4).
 STRATEGY_FLAG = (
@@ -220,6 +223,8 @@ class FlowDef:
 READ = ("read:sources", "read:baseline")
 # What a launch_kit run writes (oracle.launches.kit).
 LAUNCH_FILE = "launch.yaml"
+# What a request_triage run writes (oracle.requests.triage).
+TRIAGE_FILE = "requests_triage.yaml"
 # Stated in every task that writes a draft (owner, 2026-10-20).
 CITATION_CONTRACT = citation_contract()
 
@@ -556,6 +561,56 @@ FLOWS: dict[str, FlowDef] = {
                         "get_source_item",
                         "push_draft",
                         "get_checkpoint_review",
+                    ),
+                ),
+            ),
+        ),
+        FlowDef(
+            key="request_triage",
+            title="Request triage",
+            description="Oracle suggests a theme, goals, a duplicate and a baseline feature "
+            "for every New request, and lists possible requests it finds in the starter's own "
+            "sources. People accept or ignore each suggestion on Requests.",
+            target_kind=None,
+            writes_document=False,
+            default_depth="quick",
+            # Every suggestion is reviewed per row on the Requests screen.
+            default_checkpoints={"request_triage": False},
+            entry="POST /v1/requests/triage",
+            # D12: started from Requests (Classify now) or Oracle's daily run, never from
+            # the New run dialog.
+            starts_from=("Request triage", "/requests"),
+            segments=(
+                SegmentDef(
+                    name="triage",
+                    title="Request triage",
+                    roles=("analyst",),
+                    scopes=READ,
+                    outputs=(TRIAGE_FILE,),
+                    checkpoint="request_triage",
+                    task="Classify every request in state New (list_requests with "
+                    "state=new): for each, the theme it belongs to (an existing one from "
+                    "list_request_themes by id; propose a new theme by title only when no "
+                    "existing one fits), the confirmed goals it would move (goal keys from "
+                    "get_baseline), duplicate_of (the id of another request asking for the "
+                    "same thing, or null), feature (the key of the baseline feature it "
+                    "extends, or null), confidence (0-1) and a one-line rationale. Then look "
+                    "through your own source items for things customers or teammates asked "
+                    "for and list each as found (source_item_id, title, body, requester as "
+                    "written or null, channel, theme, goals, confidence, rationale); skip "
+                    "what is already a request. Write requests_triage.yaml in this format: "
+                    "version: 1; requests: a list of {id, theme: {id} or {title}, goals: "
+                    "[goal keys], duplicate_of, feature, confidence, rationale}; found: a "
+                    "list of {source_item_id, title, body, requester, channel (support | "
+                    "sales | team | slack | meeting | doc | other), theme: {title}, goals, "
+                    "confidence, rationale}. You suggest; you never decide: qualifying, "
+                    "merging and disqualifying are for people.",
+                    tools=(
+                        "search",
+                        "get_source_item",
+                        "get_baseline",
+                        "list_requests",
+                        "list_request_themes",
                     ),
                 ),
             ),

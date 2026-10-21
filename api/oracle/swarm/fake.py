@@ -258,6 +258,12 @@ def _default_content(name: str, segment: str, attempt: int, document: str | None
             "    requirements: []\n"
             "excluded: []\n"
         )
+    if name == "requests_triage.yaml":
+        # C1 (oracle.requests.triage): nothing classified, nothing found.
+        return (
+            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            "version: 1\nrequests: []\nfound: []\n"
+        )
     if name.endswith(".yaml"):
         return f"# {segment} (local agent runtime, attempt {attempt})\nitems: []\n"
     return f"# {segment}\n\nWritten by the local agent runtime (attempt {attempt}).\n"
