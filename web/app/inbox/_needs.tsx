@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useId, type ReactNode } from "react";
 
 import { Button, Chip, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
-import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { BUILD_PARAM } from "@/components/NextDraft";
 import { sectionHref } from "@/lib/section-link";
@@ -37,6 +37,10 @@ export type Need = {
   action: ReactNode;
   /** The row's Inbox state (new, open, staged, declined, done), when it has one. */
   state?: string;
+  /** Whether it counts as an item (a question settled in place does not, until it moves to Done). */
+  counted?: boolean;
+  /** Drawn under the row, across it: the row opened in place (a question's answer form). */
+  detail?: ReactNode;
 };
 
 export const NEED_COLUMNS: Column<Need>[] = [
@@ -134,6 +138,7 @@ export function NeedTable({
         rowKey={(n) => n.key}
         hideHeader
         rowProps={(n) => ({ "data-need": n.kind, "data-state": n.state })}
+        detail={(n) => n.detail}
       />
     </section>
   );
@@ -185,10 +190,14 @@ export type NeedGroup =
   | "revoke-failures"
   | "report-failures"
   | "reports"
+  | "strategy"
+  | "oracle-actions"
   | "feedback"
   | "questions"
   | "searches"
-  | "revising";
+  | "revising"
+  | "launches"
+  | "shipped";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
 
 type FeedbackRow = InboxOut["items"][number];
@@ -481,6 +490,98 @@ export function reportFailureNeeds(failures: ReportFailure[], busy: string | nul
       ),
     };
   });
+}
+
+type OracleAction = NonNullable<InboxOut["oracle_actions"]>[number];
+
+/**
+ * "Oracle did" (H11): what Oracle did on its own, for each person it told. Counted until I
+ * open it (Done then, for me only); Undo when the behaviour that acted gave an undo route.
+ */
+export function oracleActionNeeds(actions: OracleAction[], busy: string | null, act: Act, seenBefore: string | null | undefined): StatedNeed[] {
+  return actions.map((a) => {
+    const path = { params: { path: { action_id: a.id } } };
+    const href = typeof a.subject?.href === "string" && a.subject.href.startsWith("/") ? a.subject.href : null;
+    const open = a.state === "open";
+    return {
+      key: `oracle-${a.id}`,
+      icon: "check",
+      kind: "Oracle did",
+      state: open ? (isNew(a.created_at, seenBefore) ? "new" : "open") : "done",
+      counted: true,
+      group: "oracle-actions",
+      item: (
+        <>
+          {href ? (
+            <Link href={href} className="min-w-0 truncate hover:underline" title={a.summary}>
+              {a.summary}
+            </Link>
+          ) : (
+            <span className="min-w-0 truncate" title={a.summary}>
+              {a.summary}
+            </span>
+          )}
+          {a.undone_at && <Chip kind="na">Undone</Chip>}
+        </>
+      ),
+      context: (
+        <Link href="/settings/autonomy" className="block truncate text-text2 hover:underline" title={a.responsibility_title}>
+          {a.responsibility_title}
+        </Link>
+      ),
+      at: a.created_at,
+      action: (
+        <>
+          {open && (
+            <Button
+              disabled={busy !== null}
+              aria-label={`Open ${a.summary}`}
+              onClick={() => act(`open-${a.id}`, () => unwrap(api.POST("/v1/oracle-actions/{action_id}/open", path)))}
+            >
+              Open
+            </Button>
+          )}
+          {a.undo && !a.undone_at && (
+            <Button
+              variant="ghost"
+              disabled={busy !== null}
+              aria-label={`Undo ${a.summary}`}
+              onClick={() => act(`undo-${a.id}`, () => unwrap(api.POST("/v1/oracle-actions/{action_id}/undo", path)))}
+            >
+              Undo
+            </Button>
+          )}
+        </>
+      ),
+    };
+  });
+}
+
+/** Owners only (H4): open strategy drift findings, one row however many, opening Company ›
+ * Strategy where each is read and waived. */
+export function strategyNeeds(strategy: InboxOut["strategy"]): Need[] {
+  if (!strategy) return [];
+  const high = strategy.high ? ` · ${strategy.high} high` : "";
+  return [
+    {
+      key: "strategy-drift",
+      icon: "alert",
+      kind: "Strategy drift",
+      item: (
+        <span className="truncate" title={`Strategy drift · ${strategy.new_findings} new${high}`}>
+          Strategy drift · {strategy.new_findings} new
+          {strategy.high > 0 && <span className="text-crit">{high}</span>}
+        </span>
+      ),
+      context: <span className="block truncate text-text2">Goals and roadmap items against the product strategy</span>,
+      at: strategy.since,
+      action: (
+        <LinkButton href={strategy.href} aria-label="Open strategy drift">
+          Open
+        </LinkButton>
+      ),
+    },
+  ];
 }
 
 /**
@@ -778,33 +879,6 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
 }
 
 /**
- * The questions asked of the signed-in person (I3), one row each with the document they are
- * about: Home's Needs you and the Inbox's Questions group draw the same rows.
- */
-export function questionNeeds(questions: Schemas["StakeholderQuestionOut"][], docs: DocumentSummary[]): Need[] {
-  return questions.map((q) => {
-    const doc = docs.find((d) => d.id === q.document_id);
-    return {
-      key: q.id,
-      icon: "ask",
-      kind: "Asked you",
-      item: (
-        <span className="truncate" title={q.prompt}>
-          {q.prompt}
-        </span>
-      ),
-      context: <span className="block truncate">{doc?.title ?? "–"}</span>,
-      at: q.created_at,
-      action: doc ? (
-        <LinkButton href={`/documents/${doc.slug}`} aria-label={`Open ${doc.title}`}>
-          Open
-        </LinkButton>
-      ) : null,
-    };
-  });
-}
-
-/**
  * My sources that need attention: saved before a newer rule they break (more than 100 Slack
  * channels, a date out of range), so they are not synced until edited. GET /v1/sources
  * filtered here; each row opens the source on Settings › Sources, where Edit is.
@@ -831,6 +905,37 @@ export function sourceNeeds(sources: Schemas["SourceOut"][]): Need[] {
     }));
 }
 
+/** H6 launch rows: Ready to launch and Notes to send (the launch's owner), Set tier (approvers),
+ * each opening the launch; Shipped (a member's personal note) is shown only, carrying the note. */
+export function launchNeeds(inbox: InboxOut): { counted: Need[]; shipped: Need[] } {
+  const rows = inbox.launches ?? [];
+  const need = (r: (typeof rows)[number]): Need => ({
+    key: `launch-${r.reason}-${r.launch_id}`,
+    icon: r.reason === "shipped_note" ? "check" : "flag",
+    kind: r.reason === "ready" ? "Ready to launch" : r.reason === "set_tier" ? "Set tier" : r.reason === "notes_to_send" ? "Notes to send" : "Shipped",
+    item: (
+      <span className="truncate" title={r.title} data-testid="launch-need">
+        {r.title}
+      </span>
+    ),
+    context:
+      r.reason === "shipped_note" && r.note ? (
+        <span className="block truncate text-text2" title={r.note}>
+          {r.note}
+        </span>
+      ) : (
+        <span className="block truncate text-text2">Launches</span>
+      ),
+    at: r.at,
+    action: (
+      <LinkButton variant="secondary" href={`/roadmap/launches?launch=${r.launch_id}`}>
+        Open
+      </LinkButton>
+    ),
+  });
+  return { counted: rows.filter((r) => r.counted).map(need), shipped: rows.filter((r) => !r.counted).map(need) };
+}
+
 /**
  * Every row of the one Inbox, each in its state (owner, 2026-10-20): checkpoints, cost
  * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke (owners), feedback items and the questions asked
@@ -847,8 +952,15 @@ export function allNeeds(
   compact = false,
 ): StatedNeed[] {
   const n = inboxNeeds(inbox, busy, act, compact);
+  // A row may carry its own state and count (a question answered in place: ./_questions).
+  const launches = launchNeeds(inbox);
   const stated = (rows: Need[], group: NeedGroup, counted = true): StatedNeed[] =>
-    rows.map((r) => ({ ...r, state: isNew(r.at, seenBefore) ? "new" : "open", counted, group }));
+    rows.map((r) => ({
+      ...r,
+      state: (r.state as InboxState | undefined) ?? (isNew(r.at, seenBefore) ? "new" : "open"),
+      counted: r.counted ?? counted,
+      group,
+    }));
   return [
     ...stated(n.checkpoints, "checkpoints"),
     ...stated(n.approvals, "approvals"),
@@ -858,12 +970,16 @@ export function allNeeds(
     ...stated(revokeNeeds(inbox.revoke_failures ?? [], busy, act), "revoke-failures"),
     ...stated(reportFailureNeeds(inbox.report_failures ?? [], busy, act), "report-failures"),
     ...reportNeeds(inbox.reports ?? [], seenBefore),
+    ...stated(strategyNeeds(inbox.strategy), "strategy"),
+    ...stated(launches.counted, "launches"),
+    ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.
     ...stated(n.deliveries, "deliveries", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.searches, "searches", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.revising, "revising", false).map((r) => ({ ...r, state: "open" as const })),
+    ...stated(launches.shipped, "shipped", false),
   ];
 }
 

@@ -42,6 +42,8 @@ ENTITY_TYPES = (
     "acceptance_criterion",
     "assumption",
     "risk",
+    # H4 (migration 0020_strategy): a focus or stop choice of an approved product strategy.
+    "strategy_choice",
 )
 EDGE_TYPES = (
     "supports",

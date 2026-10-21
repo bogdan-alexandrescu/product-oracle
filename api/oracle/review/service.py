@@ -64,6 +64,11 @@ class ReviewError(Exception):
         super().__init__(message)
 
 
+# H4: the lowest role that approves a version of these kinds.
+MIN_APPROVER_ROLE = {"vision": "owner", "strategy": "owner"}
+KIND_WORDS = {"vision": "a vision", "strategy": "a product strategy"}
+
+
 def _now() -> datetime:
     # Wall clock, not the transaction's now(): verdict order must hold even when two
     # verdicts land in one transaction.
@@ -933,11 +938,24 @@ async def approve_version(
     from oracle.review.state import effective_policy
 
     version = await get_version(session, doc, n)
+    kind = await session.scalar(select(Document.kind).where(Document.id == version.document_id))
+    if kind == "roadmap" and version.approved_at is None:
+        # A roadmap's dates are found before the gate and the lock, never waited for under
+        # them (up to WAIT_SECONDS, then 503): the publish gate under the lock reads them
+        # kept.
+        from oracle.roadmap import doc_dates
+
+        await doc_dates.prefetch(session, version)
     # The review gate, then the publish lock (publish's order): an approval never
     # commits while a publish renders, nor lands after a role change that ended it.
     await _still_an_approver(session, principal)
     document = await lock_document(session, version.document_id)
     await session.refresh(version)
+    # H4: a vision or a product strategy is an owner's to approve (section verdicts stay
+    # open to approvers).
+    needed = MIN_APPROVER_ROLE.get(document.kind)
+    if needed is not None and not has_role(principal.role, needed):  # type: ignore[arg-type]
+        raise ReviewError("forbidden", f"Only an {needed} can approve {KIND_WORDS[document.kind]}")
     policy = await effective_policy(session, document)
     # The person behind the call: an API token acting for a user is that user.
     who = principal.user_id or principal.id
@@ -999,4 +1017,19 @@ async def approve_version(
         from oracle.roadmap import tracks
 
         await tracks.ensure_track(session, document, version, actor=principal, cause="approved")
+    elif document.kind == "roadmap":
+        # H6: approving a roadmap version plans a launch per item in Now, owned by the
+        # approver (none for items that already have one).
+        from oracle.launches import service as launches_service
+
+        await launches_service.plan_roadmap(session, version, actor=principal, owner_id=who)
+    if document.kind in ("strategy", "vision", "roadmap") and (
+        not already or previous_approver != who
+    ):
+        # H4: the strategy stack in the graph (choices, beliefs, a roadmap's dependencies
+        # on the choices), then the drift check.
+        from oracle.strategy import drift, sync
+
+        await sync.on_approval(session, principal, document, version)
+        await drift.run_check(session, "approval")
     return document, version

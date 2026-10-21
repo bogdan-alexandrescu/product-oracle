@@ -30,6 +30,15 @@ def has_role(role: str, min_role: Role) -> bool:
     return rank is not None and rank >= _RANK[min_role]
 
 
+async def not_for_runs(principal: CurrentPrincipal) -> Principal:
+    """A FastAPI dependency refusing a call made for a run (403): a run's agents never
+    manage members, tokens or accounts. Run tokens also never see these operations as
+    MCP tools (oracle.mcp.scopes); this is the REST layer's own check."""
+    if principal.run_id is not None or principal.run_token_id is not None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "A run's agents cannot manage accounts")
+    return principal
+
+
 def require_role(min_role: Role) -> Callable[[Principal], Awaitable[Principal]]:
     """A FastAPI dependency that returns the principal, or raises 403 below ``min_role``."""
     if min_role not in _RANK:

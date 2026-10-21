@@ -45,6 +45,27 @@ GapCategory = Literal[
     "third_party_policy",
     "configurability_scaling",
 ]
+# A gap's category, or "general": a question a person asks a teammate (C2).
+QuestionCategory = Literal[
+    "customer_user",
+    "pain_evidence",
+    "goal_alignment",
+    "success_metric",
+    "differentiation",
+    "alternatives",
+    "constraints",
+    "blockers",
+    "economic_benefit",
+    "effort_cost",
+    "security_privacy",
+    "ownership",
+    "non_goals",
+    "release_rollout",
+    "evaluation_criteria",
+    "third_party_policy",
+    "configurability_scaling",
+    "general",
+]
 ImpactArea = Literal["goals", "feasibility", "scope", "economics", "risks", "module_selection"]
 Importance = Literal["critical", "high", "medium", "low"]
 KnowledgeState = Literal["verified_fact", "user_decision", "ai_inference", "hypothesis", "unknown"]
@@ -313,7 +334,10 @@ class StakeholderQuestionOut(ORM):
     gap_id: uuid.UUID | None = None
     intake_id: uuid.UUID | None = None
     document_id: uuid.UUID | None = None
-    category: GapCategory
+    checkpoint_id: uuid.UUID | None = None
+    item_ref: str | None = None
+    entity_id: uuid.UUID | None = None
+    category: QuestionCategory
     prompt: str
     rationale: str | None = None
     priority: int

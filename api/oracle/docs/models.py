@@ -24,7 +24,8 @@ from oracle.db import Base, TenantScoped
 
 DOCUMENT_STATUSES = ("draft", "in_review", "approved")
 # "spec": a technical brief or engineering spec built from an approved PRD (CR-09).
-DOCUMENT_KINDS = ("prd", "roadmap", "spec")
+# H4 (migration 0020_strategy): a product vision and a product strategy.
+DOCUMENT_KINDS = ("prd", "roadmap", "spec", "vision", "strategy")
 # O1f: a section belongs to the brief layer or is detail (oracle.docs.layers).
 SECTION_LAYERS = ("brief", "detail")
 BRIEF_SOURCES = ("draft", "template", "full_heading", "none")

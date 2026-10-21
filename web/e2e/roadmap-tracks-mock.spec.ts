@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import { dateMarks, routeRoadmap, seedRoadmap, type RoadmapContext } from "../lib/api/mock/roadmap";
 
-// The mock's roadmap alignment and track routes mirror the API's (CR-11; no page yet:
-// the UI wave builds the screens).
+// The mock's roadmap alignment and track routes mirror the API's (CR-11). The Plan screen
+// (F1, e2e/plan.spec.ts) reads its own route, GET /v1/plan; these routes have no page yet.
 const USER = "u0000000-0000-4000-8000-000000000001";
 const PRD = { id: "d0000000-0000-4000-8000-000000000001", slug: "usage-alerts", title: "Usage alerts PRD", kind: "prd" };
 const ROADMAP = { id: "d0000000-0000-4000-8000-000000000002", slug: "usage-alerts-roadmap", title: "Usage alerts roadmap", kind: "roadmap" };

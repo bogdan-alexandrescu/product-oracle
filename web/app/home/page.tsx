@@ -10,18 +10,17 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
 
 import { useActed } from "../inbox/_actions";
-import { allNeeds, CountChip, NeedTable, questionNeeds, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
-import { goalViews, historyOf, shownGoals, type Point } from "./_goals";
+import { allNeeds, CountChip, NeedTable, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
+import { useQuestionRows } from "../inbox/_questions";
 import { GoalsPanel } from "./_goals-panel";
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
 import { SetupChip, SetupPanel, setupOpen } from "./_setup";
+import { useGoals } from "./_use-goals";
 
 /** Runs that are still going: under way, or waiting on a person. */
 const IN_FLIGHT = new Set(["running", "awaiting_checkpoint", "awaiting_approval", "paused_overrun"]);
 /** Needs you shows this many lines; the rest are one click away in the Inbox. */
 const MAX_NEEDS = 7;
-/** A goal's trend reads at most this many of its newest revisions (six monthly readings and change). */
-const TREND_REVISIONS = 24;
 
 /**
  * At most `max` lines, in the Inbox's order, never without a question when there is one
@@ -66,7 +65,6 @@ export default function HomePage() {
   const { role } = useMe();
   const canWrite = hasRole(role, "approver");
 
-  const goalsQ = useQuery("home|goals", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
   const inboxQ = useQuery("home|inbox", loadInbox);
   // Asked of me, filtered by the API so none is cut off; a failure shows in Needs you.
   const questionsQ = useQuery("home|questions", loadMyQuestions);
@@ -92,29 +90,10 @@ export default function HomePage() {
   }
   const setup = setupOpen(setupQ.data) ? setupQ.data : undefined;
 
-  const goals = useMemo(() => (goalsQ.data ? goalViews(goalsQ.data) : undefined), [goalsQ.data]);
+  const { goals, history, error: goalsError, loading: goalsLoading } = useGoals("home");
   const goalIndex: GoalIndex = useMemo(
     () => new Map((goals ?? []).map((g) => [g.id, { tag: g.tag, title: g.title, proposed: g.proposed }])),
     [goals],
-  );
-
-  // A trend for each goal shown that has a current value, from its newest revisions only.
-  const tracked = (goals ? shownGoals(goals) : []).filter((g) => g.currentText).map((g) => g.id);
-  const historyQ = useQuery(
-    `home|history|${tracked.join(",")}`,
-    async () => {
-      const lists = await Promise.all(
-        tracked.map((id) =>
-          unwrap(
-            api.GET("/v1/baseline/entities/{entity_id}/revisions", {
-              params: { path: { entity_id: id }, query: { limit: TREND_REVISIONS } },
-            }),
-          ).catch(() => []),
-        ),
-      );
-      return new Map<string, Point[]>(tracked.map((id, i) => [id, historyOf(lists[i])]));
-    },
-    { keepPrevious: true },
   );
 
   const docs = useMemo(() => docsQ.data ?? [], [docsQ.data]);
@@ -153,10 +132,14 @@ export default function HomePage() {
   // D14: feedback rows act in place (one primary action each); what they did shows here.
   const { onActed, notice } = useActed(() => Promise.all([inboxQ.reload(), questionsQ.reload()]));
   const inbox = inboxQ.data;
-  // The API filters (asked of me, still asked): Home counts exactly what the badge counts.
-  const questions = questionNeeds(questionsQ.data ?? [], docs);
-  // Needs you: the Inbox's New and Open items, each once (owner, 2026-10-20).
-  const needs = inbox ? waitingNeeds(allNeeds(inbox, questions, busy, act, inbox.last_seen_at ?? null, onActed, true)) : [];
+  // The API filters (asked of me, still open): Home counts exactly what the badge counts.
+  // Answered here, a question stays in its line with its outcome (C2).
+  const questionRows = useQuestionRows(questionsQ.data ?? [], questionsQ.reload);
+  // Needs you: the Inbox's New and Open items, each once (owner, 2026-10-20); a question
+  // answered here stays shown, no longer counted.
+  const all = inbox ? allNeeds(inbox, questionRows.rows, busy, act, inbox.last_seen_at ?? null, onActed, true) : [];
+  const needs = waitingNeeds(all);
+  const visible = all.filter((r) => needs.includes(r) || (r.group === "questions" && !r.counted && r.state !== "done"));
   const decisions = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "overruns");
   // Stuck runs and failed imports: counted in the badge, so drawn here too (searches are not).
   const runs = needs.filter((r) => r.group === "lookups" || r.group === "imports");
@@ -164,7 +147,7 @@ export default function HomePage() {
   const access = needs.filter((r) => r.group === "revoke-failures");
   const reviews = needs.filter((r) => r.group === "feedback");
   const asked = needs.filter((r) => r.group === "questions");
-  const shownNeeds = pickNeeds(needs, MAX_NEEDS);
+  const shownNeeds = pickNeeds(visible, MAX_NEEDS);
   // The rail badge's count: the Inbox's New + Open items.
   const waiting = inbox ? needs.length : undefined;
   const openItems = new Map((inbox?.feedback ?? []).map((d) => [d.document_id, d.open_count]));
@@ -204,13 +187,7 @@ export default function HomePage() {
         {setupError && <Notice tone="error">{setupError}</Notice>}
         {setup && !setup.hidden && <SetupPanel setup={setup} onHide={() => hideSetup(true)} busy={setupBusy} />}
 
-        <GoalsPanel
-          goals={goals}
-          history={historyQ.data ?? new Map()}
-          error={goalsQ.error}
-          loading={goalsQ.loading}
-          canImport={canWrite}
-        />
+        <GoalsPanel goals={goals} history={history} error={goalsError} loading={goalsLoading} canImport={canWrite} />
 
         <Panel
           title="Needs you"
@@ -254,6 +231,7 @@ export default function HomePage() {
             <Empty testId="home-needs-empty">Nothing waiting</Empty>
           )}
           <NeedTable title="Needs you" testId="home-needs-table" rows={shownNeeds} compact />
+          {questionRows.sheet}
 
           <section aria-label="In flight" data-testid="home-in-flight" className="border-t border-line">
             <div data-testid="home-in-flight-phone-title" className="hidden min-h-12 items-center border-b border-line bg-surface2 px-3 max-[600px]:flex">

@@ -1,10 +1,17 @@
 """Seed the single tenant, the admin user, a new API token (acting as the admin) and
 the default PRD template.
 
-    python -m oracle.seed [--email admin@example.com] [--password ...] [--token-name ...]
+    python -m oracle.seed --email you@yourcompany.com [--password ...] [--token-name ...]
+
+``--email`` (or ORACLE_ADMIN_EMAIL) is required: there is no default admin, and a
+reserved example domain (example.com, *.test, ...) is refused, except in the mock/test
+build (ORACLE_ALLOW_RESERVED_EMAIL_DOMAINS), where it defaults to admin@example.com.
 
 Idempotent for the tenant and the admin (existing ones are kept, the password is not
 changed). Every run creates a NEW API token and prints it once; only its hash is stored.
+No token is minted for a disabled member (restore them first) or, outside the mock/test
+build, for an existing member at a reserved example domain. ``--password`` is at least
+12 characters, as My account requires.
 """
 
 import argparse
@@ -17,12 +24,24 @@ from dataclasses import dataclass
 from sqlalchemy import select
 
 from oracle.auth.models import User
-from oracle.auth.service import create_api_token, create_user
+from oracle.auth.service import (
+    PASSWORD_MIN_LENGTH,
+    ReservedEmailError,
+    check_email_allowed,
+    create_api_token,
+    create_user,
+    may_sign_in,
+)
+from oracle.config import get_settings
 from oracle.db import dispose_engine
 from oracle.models import Tenant
 from oracle.modules.service import ensure_seeded
 from oracle.templates.defaults import ensure_default_template
 from oracle.tenancy import tenant_session, unscoped_session
+
+
+class SeedRefused(ValueError):
+    """The admin exists but may not get a token (a disabled member)."""
 
 
 @dataclass
@@ -39,10 +58,15 @@ class SeedResult:
 async def seed(
     *,
     tenant_name: str = "Example Co",
-    email: str = "admin@example.com",
+    email: str | None = None,
     password: str | None = None,
     token_name: str = "agent-track",
 ) -> SeedResult:
+    email = email or default_email()
+    if email is None:
+        raise ValueError("an admin email is required (--email); there is no default admin")
+    # Existing members too: a seed never mints a live token for admin@example.com again.
+    check_email_allowed(email)
     async with unscoped_session() as s:
         tenant = await s.scalar(select(Tenant).order_by(Tenant.created_at).limit(1))
         tenant_created = tenant is None
@@ -61,6 +85,10 @@ async def seed(
             if not password:
                 password = generated = secrets.token_urlsafe(12)
             user = await create_user(s, email, password)
+        elif not may_sign_in(user):
+            raise SeedRefused(
+                f"{email} is a disabled member; restore them (Settings > Members) first"
+            )
         # The token acts as the admin, so per-user calls (`oracle sync`) work with it.
         _, raw = await create_api_token(s, token_name, user_id=user.id)
         await ensure_default_template(s)
@@ -77,6 +105,17 @@ async def seed(
         token_name=token_name,
         token=raw,
     )
+
+
+# The mock/test build's admin; never a default anywhere real.
+TEST_ADMIN_EMAIL = "admin@example.com"
+
+
+def default_email() -> str | None:
+    """ORACLE_ADMIN_EMAIL, else the test admin in the mock/test build, else None."""
+    if os.environ.get("ORACLE_ADMIN_EMAIL"):
+        return os.environ["ORACLE_ADMIN_EMAIL"]
+    return TEST_ADMIN_EMAIL if get_settings().allow_reserved_email_domains else None
 
 
 def format_result(r: SeedResult, *, password_given: bool = False) -> str:
@@ -113,6 +152,8 @@ async def _main(args: argparse.Namespace) -> None:
             password=args.password,
             token_name=args.token_name,
         )
+    except (ReservedEmailError, SeedRefused) as e:
+        raise SystemExit(f"oracle.seed: {e}") from None
     finally:
         await dispose_engine()
     print(format_result(r, password_given=bool(args.password)))
@@ -121,10 +162,15 @@ async def _main(args: argparse.Namespace) -> None:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     p.add_argument("--tenant-name", default="Example Co")
-    p.add_argument("--email", default=os.environ.get("ORACLE_ADMIN_EMAIL", "admin@example.com"))
+    p.add_argument("--email", default=default_email())
     p.add_argument("--password", default=os.environ.get("ORACLE_ADMIN_PASSWORD"))
     p.add_argument("--token-name", default="agent-track")
-    asyncio.run(_main(p.parse_args()))
+    args = p.parse_args()
+    if not args.email:
+        p.error("--email is required (or ORACLE_ADMIN_EMAIL): there is no default admin")
+    if args.password is not None and len(args.password) < PASSWORD_MIN_LENGTH:
+        p.error(f"--password must be at least {PASSWORD_MIN_LENGTH} characters")
+    asyncio.run(_main(args))
 
 
 if __name__ == "__main__":

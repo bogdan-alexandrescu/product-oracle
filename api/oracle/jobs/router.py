@@ -17,9 +17,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from markdown_it import MarkdownIt
 from markupsafe import escape
 
-from oracle.auth.deps import Principal, TenantDB
+from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import require_role, require_role_now
 from oracle.docs.schemas import VersionOut
+from oracle.export import offload
 from oracle.intake import sharing
 from oracle.jobs import next_draft, service
 from oracle.jobs.schemas import (
@@ -293,6 +294,7 @@ async def export_version_reports(
     doc: str,
     n: int,
     db: TenantDB,
+    principal: CurrentPrincipal,
     fmt: Literal["md", "html"] = Query("md", alias="format"),
 ) -> Response:
     document = await _call(service.get_document(db, doc))
@@ -306,11 +308,19 @@ async def export_version_reports(
             headers={"Content-Disposition": f'attachment; filename="{stem}.md"'},
         )
     title = escape(f"{document.title}: reports for version {n}")
+    # Rendered on the export pool, in the person's and the company's share, within its
+    # cap (oracle.export.offload); no database connection held while it waits.
+    try:
+        with offload.place(principal) as held:
+            await db.commit()
+            body = await offload.run(held, _md.render, text)
+    except offload.Refused as e:
+        return e.response()
     html = (
         f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{title}</title>'
         "<style>body{font:15px/1.55 system-ui,sans-serif;max-width:46rem;margin:2rem auto;"
         "padding:0 1rem;color:#171717}h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:2rem}"
-        "</style></head><body>" + _md.render(text) + "</body></html>"
+        "</style></head><body>" + body + "</body></html>"
     )
     return Response(
         html,

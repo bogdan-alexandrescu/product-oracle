@@ -152,8 +152,38 @@ BUILTIN_TEMPLATES: tuple[BuiltinTemplate, ...] = (
         "roadmap-board",
     ),
 )
-BUILTIN_TEMPLATES_BY_KEY = {t.key: t for t in BUILTIN_TEMPLATES}
-DEFAULT_TEMPLATE_FOR_KIND = {"prd": "oracle-default", "roadmap": "now-next-later"}
+# H4 Strategy and vision: one template per kind. Not in the company seed, so the PRD and
+# roadmap template lists stay as they are: :func:`ensure_kind_templates` adds them when a
+# company first starts a vision or a product strategy.
+KIND_TEMPLATES: tuple[BuiltinTemplate, ...] = (
+    BuiltinTemplate(
+        "vision-narrative",
+        "vision",
+        "Vision narrative",
+        "The product two to five years out, in prose: who it is for, what we believe, and "
+        "the evidence for and against each belief",
+        "The founder holds a direction nobody has written down, or the vision's review date "
+        "has come",
+        "editorial-memo",
+    ),
+    BuiltinTemplate(
+        "product-strategy",
+        "strategy",
+        "Product strategy",
+        "The few problems that matter now, the insight behind each, the goals they serve, "
+        "and what we stop",
+        "Goals exist but nothing says why these goals; the roadmap is scattered; the "
+        "strategy's yearly review has come",
+        "editorial-memo",
+    ),
+)
+BUILTIN_TEMPLATES_BY_KEY = {t.key: t for t in (*BUILTIN_TEMPLATES, *KIND_TEMPLATES)}
+DEFAULT_TEMPLATE_FOR_KIND = {
+    "prd": "oracle-default",
+    "roadmap": "now-next-later",
+    "vision": "vision-narrative",
+    "strategy": "product-strategy",
+}
 
 
 def _yaml_str(value: str) -> str:
@@ -311,7 +341,12 @@ BUILTIN_THEMES: tuple[BuiltinTheme, ...] = (
     ),
 )
 BUILTIN_THEMES_BY_KEY = {t.key: t for t in BUILTIN_THEMES}
-DEFAULT_THEME_FOR_KIND = {"prd": "clean-document", "roadmap": "roadmap-board"}
+DEFAULT_THEME_FOR_KIND = {
+    "prd": "clean-document",
+    "roadmap": "roadmap-board",
+    "vision": "editorial-memo",
+    "strategy": "editorial-memo",
+}
 
 
 async def _stale_builtins(session: AsyncSession) -> list[str]:
@@ -420,6 +455,35 @@ async def ensure_builtins(session: AsyncSession) -> bool:
     existing = set(await session.scalars(select(Template.key)))
     for t in BUILTIN_TEMPLATES:
         if t.key in existing:
+            continue
+        row = Template(key=t.key, name=t.name, kind=t.kind, description=t.description, builtin=True)
+        session.add(row)
+        await session.flush()
+        session.add(_version(row, 1, builtin_body(t)))
+    await session.flush()
+    return True
+
+
+async def ensure_kind_templates(session: AsyncSession, kind: str) -> bool:
+    """Seed the built-ins (:func:`ensure_builtins`) and the built-in template of a vision
+    or strategy ``kind`` (no commit). A company that archived or edited it keeps its own.
+    Returns True when something was added."""
+    added = await ensure_builtins(session)
+    missing = [
+        t
+        for t in KIND_TEMPLATES
+        if t.kind == kind
+        and await session.scalar(select(Template.id).where(Template.key == t.key)) is None
+    ]
+    if not missing:
+        return added
+    tenant_id = current_tenant(session)
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"oracle-builtins:{tenant_id}"}
+    )
+    for t in missing:
+        # Re-read under the lock: another request may have seeded it meanwhile.
+        if await session.scalar(select(Template.id).where(Template.key == t.key)) is not None:
             continue
         row = Template(key=t.key, name=t.name, kind=t.kind, description=t.description, builtin=True)
         session.add(row)

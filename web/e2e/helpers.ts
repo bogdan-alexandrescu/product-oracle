@@ -46,6 +46,13 @@ export async function selectText(page: Page, key: string, text: string) {
   );
 }
 
+/** Signs out from the user menu. */
+export async function signOut(page: Page) {
+  await page.getByTestId("user-menu").click();
+  await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+}
+
 /** The version view's outline rail (>= 1280 px; one section is open at a time). */
 export function sectionStrip(page: Page): Locator {
   return page.getByTestId("outline-rail").filter({ visible: true });

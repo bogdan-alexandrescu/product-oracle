@@ -447,6 +447,7 @@ function RunInspector({ run }: { run: RunOut }) {
           Runtime
         </InspectorRow>
       </InspectorSection>
+      <RunDecisions run={run} />
     </Inspector>
   );
 }
@@ -477,6 +478,45 @@ function ProposalsRow({ run }: { run: RunOut }) {
         Baseline proposals
       </InspectorRow>
     </div>
+  );
+}
+
+/** D11: what people decided at the run's checkpoints, in the words its agents read. */
+function RunDecisions({ run }: { run: RunOut }) {
+  // Read again whenever a checkpoint of the run is decided or delivered.
+  const states = run.checkpoints.map((c) => `${c.id}:${c.status}:${c.delivery ? 1 : 0}`).join(",");
+  const q = useQuery(
+    `run-decisions|${run.id}|${states}`,
+    () => unwrap(api.GET("/v1/runs/{run_id}/decisions", { params: { path: { run_id: run.id } } })),
+    { keepPrevious: true },
+  );
+  return (
+    <InspectorSection
+      label="Decisions"
+      testId="run-decisions"
+      tools={
+        <InfoTip label="decisions" side="bottom">
+          What people decided at this run&apos;s checkpoints. The run&apos;s agents read the same list before they start, so an
+          approval note reaches the segments that follow it.
+        </InfoTip>
+      }
+    >
+      {q.error ? (
+        <ErrorNote>{q.error}</ErrorNote>
+      ) : !q.data ? (
+        <Loading />
+      ) : q.data.length === 0 ? (
+        <p className="text-sm text-text2">No decisions yet.</p>
+      ) : (
+        <ol className="space-y-1.5 text-[13px] leading-5 text-text">
+          {q.data.map((d) => (
+            <li key={d.checkpoint_id} data-testid="run-decision" className="break-words">
+              {d.summary}
+            </li>
+          ))}
+        </ol>
+      )}
+    </InspectorSection>
   );
 }
 
@@ -511,7 +551,7 @@ function SegmentItem({
   const waiting = checkpoints.some((c) => c.status === "pending");
   // Decided, not delivered to the run yet: said under the segment, with why it waits.
   const delivering = checkpoints.filter((c) => c.delivery && !s.sent_back);
-  const details = s.error || s.items_check || s.draft_import || s.artifacts.length > 0 || deciding.length > 0 || delivering.length > 0;
+  const details = s.error || s.autonomy_note || s.items_check || s.draft_import || s.artifacts.length > 0 || deciding.length > 0 || delivering.length > 0;
   const rejected = !!s.draft_import?.error;
   // Each open decision's note, here so Send back to writer can fill it in.
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -631,6 +671,15 @@ function SegmentItem({
       {details && (
         <div className="space-y-2.5 pr-4 pb-3 pl-[56px] text-[15px] max-[600px]:pr-3 max-[600px]:pl-[44px]">
           {s.error && <p className="text-crit">{s.error}</p>}
+          {s.autonomy_note && (
+            // H11: the baseline's level changed this segment's merge.
+            <p data-testid="autonomy-note" className="text-text2">
+              {s.autonomy_note}.{" "}
+              <Link href="/settings/autonomy" className="font-medium text-accent-ink hover:underline">
+                Settings, Autonomy
+              </Link>
+            </p>
+          )}
           {s.items_check && <ItemsCheckLine check={s.items_check} />}
           {s.draft_import && (
             <DraftImportLine

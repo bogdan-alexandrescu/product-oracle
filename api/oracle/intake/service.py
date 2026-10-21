@@ -195,20 +195,25 @@ async def queue_extraction(db: AsyncSession, principal: Principal | None, intake
 
 
 async def ask(
-    db: AsyncSession, principal: Principal, intake: ProductIntake, size: int
+    db: AsyncSession,
+    principal: Principal,
+    intake: ProductIntake,
+    size: int,
+    assign: dict[uuid.UUID, uuid.UUID] | None = None,
 ) -> list[StakeholderQuestion]:
     """Ask the next batch. Questions of gaps the asker may not see (S6) are left as
-    drafts, so they are neither asked nor take a place in the batch."""
+    drafts, so they are neither asked nor take a place in the batch. ``assign``: the
+    person to ask, per draft question (C2); every one is checked before anything is
+    asked."""
     v = sharing.viewer(principal, intake)
     skip: set[uuid.UUID] = set()
+    gaps = await engine.intake_gaps(db, intake.id)
     if not v.is_author:
         reg = sharing.registry(intake)
-        skip = {
-            g.id
-            for g in await engine.intake_gaps(db, intake.id)
-            if sharing.gap_view(g, reg, v) is None
-        }
-    asked = await engine.ask_batch(db, intake, principal.id, size, skip)
+        skip = {g.id for g in gaps if sharing.gap_view(g, reg, v) is None}
+    if assign:
+        await _check_assign(db, intake, gaps, skip, assign)
+    asked = await engine.ask_batch(db, intake, principal.id, size, skip, assign)
     if asked:
         await audit.record(
             db,
@@ -219,6 +224,29 @@ async def ask(
             {"batch": asked[0].batch, "question_ids": [str(q.id) for q in asked]},
         )
     return asked
+
+
+async def _check_assign(
+    db: AsyncSession,
+    intake: ProductIntake,
+    gaps: list[KnowledgeGap],
+    skip: set[uuid.UUID],
+    assign: dict[uuid.UUID, uuid.UUID],
+) -> None:
+    # Here, not at the top: oracle.intake.questions reads this module's errors.
+    from oracle.intake.questions import check_assignee
+
+    by_gap = {g.id: g for g in gaps}
+    drafts = {
+        q.id: q
+        for q in await engine.intake_questions(db, intake.id)
+        if q.status == "draft" and q.gap_id not in skip
+    }
+    for question_id, user_id in assign.items():
+        q = drafts.get(question_id)
+        if q is None:
+            raise IntakeError(422, f"Question {question_id} is not waiting to be asked here")
+        await check_assignee(db, intake, by_gap.get(q.gap_id) if q.gap_id else None, user_id)
 
 
 # --- edit, analyze, repin ------------------------------------------------------------------
@@ -294,12 +322,16 @@ async def repin(db: AsyncSession, principal: Principal, intake: ProductIntake) -
 
 
 async def ask_next(
-    db: AsyncSession, principal: Principal, intake: ProductIntake, size: int
+    db: AsyncSession,
+    principal: Principal,
+    intake: ProductIntake,
+    size: int,
+    assign: dict[uuid.UUID, uuid.UUID] | None = None,
 ) -> list[StakeholderQuestion]:
     """Ask the next batch: the author or an approver."""
     if not sharing.is_author(principal, intake) and not has_role(principal.role, "approver"):  # type: ignore[arg-type]
         raise IntakeError(403, "Only the intake's author or an approver asks the next batch")
-    return await ask(db, principal, intake, size)
+    return await ask(db, principal, intake, size, assign)
 
 
 # --- sharing (S6) ------------------------------------------------------------------------

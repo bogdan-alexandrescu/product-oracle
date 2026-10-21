@@ -22,6 +22,11 @@ class MemberOut(BaseModel):
     # A removed member is disabled (C2): kept, so history keeps their name.
     disabled_at: datetime | None = None
     disabled_by: uuid.UUID | None = None
+    # Their last password or Google sign-in, when known (recorded since account management).
+    last_sign_in_at: datetime | None = None
+    # Credentials still acting for them: unrevoked personal API tokens and live MCP
+    # client grants (a disable revokes them all).
+    open_tokens: int = 0
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -60,17 +65,37 @@ class InviteOut(BaseModel):
     revoked_at: datetime | None = None
 
 
+# personal: an API token acting as a member (po_); service: an API token acting with its
+# own role, for no one; run: a run's short-lived token for its agents (ort_); mcp_client:
+# an MCP client's OAuth grant (poa_ access and por_ refresh tokens, one id per grant).
+TokenKind = Literal["personal", "service", "run", "mcp_client"]
+
+
 class ApiTokenOut(BaseModel):
+    """A credential of this company, never its secret."""
+
     model_config = ConfigDict(from_attributes=True)
 
+    # The API token's id, the run token's id, or the MCP grant's id (its family).
     id: uuid.UUID
     name: str
-    # The role a user-less token acts with; a token for a user acts as that user.
+    kind: TokenKind = "service"
+    # The role it acts with now: a service token's own; a member's role capped by the
+    # scope for a personal token or an MCP client; a run creator's role for a run token.
     role: Role
+    # The member it acts for (a run token: the run's creator); None for a service token.
     user_id: uuid.UUID | None = None
+    owner_email: str | None = None
+    # oracle:read / oracle:write (personal, MCP client), read:... / write:... (run); none
+    # for a service token (its role says what it may do).
+    scopes: list[str] = []
     created_at: datetime
     last_used_at: datetime | None = None
     revoked_at: datetime | None = None
+    expires_at: datetime | None = None
+    run_id: uuid.UUID | None = None
+    # The MCP client's registered client_id (pocl_...).
+    client_id: str | None = None
 
 
 class TokenApprovalOut(BaseModel):
@@ -112,3 +137,15 @@ class FollowUpOut(BaseModel):
     done_at: datetime | None = None
     dismissed_at: datetime | None = None
     dismissed_by: uuid.UUID | None = None
+
+
+class PersonOut(BaseModel):
+    """A member as the member directory shows them to everyone (``GET /v1/people``):
+    no other field, so a picker never learns more than whom it may name."""
+
+    user_id: uuid.UUID
+    name: str
+    email: str
+    role: Role
+    # Commenter or above: can answer a question, comment or be asked.
+    can_write: bool

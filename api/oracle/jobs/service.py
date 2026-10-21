@@ -55,6 +55,12 @@ def turned_off(kind: str) -> str:
     return f'"{SWITCH_LABELS.get(switch, switch)}" is turned off for this document'
 
 
+def observing(kind: str) -> str:
+    """H11: a triage job refused while Oracle observes review feedback, in D15's words."""
+    switch = SWITCH.get(kind, kind)
+    return f'"{SWITCH_LABELS.get(switch, switch)}" is off: {OBSERVING_FEEDBACK}'
+
+
 class JobError(Exception):
     def __init__(self, status: int, message: str):
         self.status = status
@@ -165,6 +171,19 @@ def enabled(document: Document, kind: str) -> bool:
     return SWITCH.get(kind, kind) not in (document.disabled_llm_jobs or [])
 
 
+# The jobs that triage review feedback (H11 ``feedback_triage``): at observe they are off
+# for every document; a document's own switch can still turn them off, never on.
+TRIAGE_KINDS = ("review_comments", "reporting")
+OBSERVING_FEEDBACK = "Oracle is set to observe review feedback (Settings, Autonomy)"
+
+
+async def triage_on(db: AsyncSession, kind: str) -> bool:
+    """False for a triage job while Oracle is set to observe review feedback."""
+    from oracle import autonomy
+
+    return kind not in TRIAGE_KINDS or await autonomy.allows(db, "feedback_triage", "draft")
+
+
 # --- queueing -------------------------------------------------------------------------
 
 
@@ -182,6 +201,8 @@ async def enqueue(
     """Queue a job. ``coalesce``: reuse a queued job of the same kind and version."""
     if not enabled(document, kind):
         raise JobError(409, turned_off(kind))
+    if not await triage_on(db, kind):
+        raise JobError(409, observing(kind))
     if coalesce:
         queued = await db.scalar(
             select(LlmJob)
@@ -226,6 +247,8 @@ async def on_feedback(db: AsyncSession, document_id: uuid.UUID, version_number: 
     document = await db.get(Document, document_id)
     if document is None or not enabled(document, "review_comments"):
         return
+    if not await triage_on(db, "review_comments"):
+        return
     version = await get_version(db, document, version_number)
     await enqueue(db, document, "review_comments", version=version, coalesce=True)
 
@@ -236,6 +259,8 @@ async def on_version_imported(
     """A version after the first was imported: queue its reports (when on)."""
     document = await db.get(Document, document_id)
     if number < 2 or document is None or not enabled(document, "reporting"):
+        return
+    if not await triage_on(db, "reporting"):
         return
     version = await get_version(db, document, number)
     await enqueue(db, document, "reporting", version=version, principal=principal, coalesce=True)
@@ -296,6 +321,8 @@ async def retry(db: AsyncSession, principal: "Principal", job_id: uuid.UUID) -> 
     document = await db.get(Document, job.document_id) if job.document_id else None
     if document is not None and not enabled(document, job.kind):
         raise JobError(409, turned_off(job.kind))
+    if not await triage_on(db, job.kind):
+        raise JobError(409, observing(job.kind))
     before = job.status
     job.status = "queued"
     job.attempts = 0

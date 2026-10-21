@@ -45,6 +45,9 @@ class McpCaller:
     # A run token's run. Whether its writes are held back for now (W5) is decided when a
     # write is about to run (oracle.mcp.tools.call_operation), never here.
     run_id: uuid.UUID | None = None
+    # A credential without oracle:write (a personal API token or an MCP client's grant):
+    # every write tool is refused before its REST call, which refuses it too (AC1).
+    read_only: bool = False
 
 
 Verifier = Callable[[str], Awaitable[McpCaller | None]]
@@ -124,6 +127,7 @@ async def verify_api_token(raw: str) -> McpCaller | None:
         # A token for a user acts as that user (the REST layer resolves it the same way).
         user_id=token.user_id,
         token_id=token.id,
+        read_only=service.token_read_only(token.scope),
     )
 
 
@@ -144,6 +148,7 @@ async def verify_oauth_access_token(raw: str) -> McpCaller | None:
         kind="user",
         credentials={"authorization": f"Bearer {raw}"},
         user_id=principal.user_id,
+        read_only=principal.read_only,
     )
 
 
