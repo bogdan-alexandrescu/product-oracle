@@ -103,6 +103,6 @@ test("the New run dialog no longer offers the feedback loop and points at where 
   await expect(dialog.getByRole("radio", { name: "Baseline to PRD" })).toBeChecked();
   await expect(dialog.getByText("Feedback loop")).toHaveCount(0);
   const pointers = dialog.getByTestId("flow-pointer");
-  await expect(pointers).toHaveText(["Build next draft · open a PRD or roadmap and use Build next draft", "PRD to roadmap · Plan › Roadmap documents"]);
+  await expect(pointers).toHaveText(["Build next draft · open a PRD or roadmap and use Build next draft", "PRD to roadmap · Plan › Roadmap documents", "Build the baseline · Baseline"]);
   await expect(pointers.getByRole("link", { name: "PRD to roadmap · Plan › Roadmap documents" })).toHaveAttribute("href", "/plan/documents");
 });

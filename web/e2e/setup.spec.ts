@@ -4,7 +4,8 @@ import { login } from "./helpers";
 
 /**
  * A1 First-run path: a new company's owner sets Oracle up from the Set up checklist on Home,
- * through the UI only. A3 (engineering lead) has not merged, so an owner has five steps.
+ * through the UI only. A3 (engineering lead) has not merged, so an owner has six steps
+ * (B1 adds Build baseline; the default company's baseline was built before).
  *
  * no_claim for every test here: the in-browser mock's /v1/setup stands in for the API's
  * (api/tests/test_setup.py covers the API's step rules); the mock's connections and sources
@@ -53,9 +54,9 @@ test("setup: a new company's owner sees the checklist with what is already done"
   await newCompany(page);
   await login(page);
   await expect(panel(page).getByRole("heading", { name: "Set up" })).toBeVisible();
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("2 of 5");
+  await expect(panel(page).getByTestId("panel-count")).toHaveText("2 of 6");
   const keys = await panel(page).locator("[data-testid^='setup-row-']").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
-  expect(keys).toEqual(["setup-row-connect", "setup-row-sources", "setup-row-invite", "setup-row-domains", "setup-row-horizons"]);
+  expect(keys).toEqual(["setup-row-connect", "setup-row-sources", "setup-row-invite", "setup-row-domains", "setup-row-horizons", "setup-row-build_baseline"]);
   await expect(row(page, "invite")).toHaveAttribute("data-done", "true");
   await expect(row(page, "invite").getByTestId("setup-status")).toHaveText("4 people");
   await expect(row(page, "domains")).toHaveAttribute("data-done", "true");
@@ -64,6 +65,7 @@ test("setup: a new company's owner sees the checklist with what is already done"
     ["connect", "None"],
     ["sources", "None"],
     ["horizons", "Not checked"],
+    ["build_baseline", "Not built"],
   ]) {
     await expect(row(page, key)).toHaveAttribute("data-done", "false");
     await expect(row(page, key).getByTestId("setup-status")).toHaveText(status);
@@ -84,7 +86,7 @@ test("setup: Connect tools opens Connections and Back to Home shows it done", as
   await expect(page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Back to Home" })).toBeVisible();
   await connectSlack(page);
   await backToHome(page);
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("3 of 5");
+  await expect(panel(page).getByTestId("panel-count")).toHaveText("3 of 6");
   await expect(row(page, "connect")).toHaveAttribute("data-done", "true");
   await expect(row(page, "connect").getByTestId("setup-status")).toHaveText("1 connected");
   // Another settings tab drops the way back.
@@ -113,7 +115,7 @@ test("setup: Horizons opens the Company page with the defaults and Confirm ticks
   await backToHome(page);
   await expect(row(page, "horizons")).toHaveAttribute("data-done", "true");
   await expect(row(page, "horizons").getByTestId("setup-status")).toHaveText("Checked");
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("3 of 5");
+  await expect(panel(page).getByTestId("panel-count")).toHaveText("3 of 6");
 });
 
 test("setup: a change shows Save, a bad span shows the error, Reset reopens the step", async ({ page }) => {
@@ -148,19 +150,19 @@ test("setup: Hide puts the checklist behind a header chip, and a reload keeps th
   await login(page);
   await connectFromSetup(page);
   await confirmHorizonsFromSetup(page);
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 5");
+  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 6");
   await panel(page).getByRole("button", { name: "Hide" }).click();
   await expect(panel(page)).toHaveCount(0);
-  const chip = page.getByRole("button", { name: "Set up 4/5" });
+  const chip = page.getByRole("button", { name: "Set up 4/6" });
   await expect(chip).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("button", { name: "Set up 4/5" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Set up 4/6" })).toBeVisible();
   await expect(panel(page)).toHaveCount(0);
-  await page.getByRole("button", { name: "Set up 4/5" }).click();
+  await page.getByRole("button", { name: "Set up 4/6" }).click();
   await expect(panel(page)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Set up 4/5" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Set up 4/6" })).toHaveCount(0);
   await page.reload();
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 5");
+  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 6");
 });
 
 test("setup: commenters see their own two steps", async ({ page }) => {
@@ -189,7 +191,8 @@ test("setup: with every step done the checklist is not drawn", async ({ page }) 
   // protects=a finished setup leaves Home alone; fails_when=the panel or the chip still
   // draws; no_claim=a step going back to open later (covered by the Reset test).
   await login(page);
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("3 of 5");
+  // The default company's baseline was built before: invite, domains and Build baseline done.
+  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 6");
   await connectFromSetup(page);
   await confirmHorizonsFromSetup(page);
   await expect(page.getByTestId("home-needs")).toBeVisible();
@@ -205,7 +208,7 @@ test("setup: on a phone each row keeps one line and nothing scrolls sideways", a
   await login(page);
   await expect(panel(page)).toBeVisible();
   const opens = panel(page).getByRole("link", { name: "Open" });
-  await expect(opens).toHaveCount(5);
+  await expect(opens).toHaveCount(6);
   for (const link of await opens.all()) {
     await link.scrollIntoViewIfNeeded();
     await expect(link).toBeInViewport();
