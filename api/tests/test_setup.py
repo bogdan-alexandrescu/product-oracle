@@ -20,6 +20,7 @@ from oracle.runs.models import Run
 from oracle.runtokens import SCOPES, mint_run_token
 from oracle.sources.models import Source
 from oracle.tenancy import tenant_session
+from tests.conftest import make_tenant
 from tests.connection_helpers import add_connection, make_person
 
 OWNER_KEYS = ["connect", "sources", "invite", "domains", "horizons"]
@@ -210,6 +211,32 @@ async def test_horizons_done_while_a_row_is_stored(client, owner):
     )
     assert reset.status_code == 200 and reset.json()["is_default"] is True
     assert _step(await _setup(client, owner), "horizons")["done"] is False
+
+
+async def test_a_second_company_sees_only_its_own_counts(client, tenant_id, owner):
+    # protects=every count is the caller's company's; fails_when=a step reads another
+    # company's connections, sources, members, invites or horizons; no_claim=domains
+    # (from the environment, the same for every company here).
+    await add_connection(tenant_id, owner.id, "github", account_id="1")
+    await make_person(tenant_id, "approver@example.com", "approver")
+    async with tenant_session(tenant_id) as s:
+        s.add(Source(owner_user_id=owner.id, kind="upload", name="Notes"))
+        s.add(Invite(email="next@example.com", role="commenter"))
+        await s.commit()
+    put = await client.put(
+        "/v1/settings/planning_horizons", json={"value": DEFAULT_HORIZONS}, headers=owner.headers
+    )
+    assert put.status_code == 200, put.text
+    first = await _setup(client, owner)
+    assert first["done"] == 4 and _step(first, "invite")["count"] == 2
+
+    other = await make_person(await make_tenant("Second Co"), "second-owner@example.com")
+    body = await _setup(client, other)
+    assert [s["key"] for s in body["steps"]] == OWNER_KEYS
+    assert [s["done"] for s in body["steps"]] == [False] * 5
+    assert _step(body, "connect")["count"] == 0
+    assert _step(body, "sources")["count"] == 0
+    assert _step(body, "invite")["count"] == 1
 
 
 async def test_hidden_is_each_persons_own(client, tenant_id, owner):
