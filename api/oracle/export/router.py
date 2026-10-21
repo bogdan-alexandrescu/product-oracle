@@ -6,8 +6,11 @@ the brief as slides (PDF, PPTX; HTML is the page the PDF is printed from).
 ``/deck`` returns the slides as JSON for Present mode.
 
 Every format renders on the export pool, never on the event loop (oracle.export.offload):
-one export per person and two per company at a time (more: 429 ``export_busy_you``;
-``/deck``, Present mode, is not counted: owner decision 2026-10-20), a
+one export per person and two per company at a time (more: 429 ``export_busy_you``). A
+``/deck`` build (Present mode) takes a place too: two per person at once, apart from the
+person's exports (more: 429 ``present_busy_you``), within the company's two; a deck built
+once is kept and served without a place (oracle.export.present; owner decision
+2026-10-20). A
 wait of more than ``offload.QUEUE_SECONDS`` for a worker is 503 ``export_busy``, and a
 render that takes longer than ``offload.SECONDS`` from its start is refused: 422 "This
 document is too large to export quickly". The request ends its transaction before it waits
@@ -22,7 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from oracle.auth.deps import CurrentPrincipal, TenantDB
 from oracle.authz import require_role
-from oracle.export import offload
+from oracle.export import offload, present
 from oracle.export.deck import build_deck, render_deck_html, theme_class
 from oracle.export.pdf import PdfUnavailable, html_to_pdf
 from oracle.export.render import (
@@ -130,16 +133,16 @@ async def export_version(
 
 
 @router.get("/documents/{doc}/versions/{n}/deck", response_model=DeckOut)
-async def get_deck(doc: str, n: int, db: TenantDB) -> Any:
+async def get_deck(doc: str, n: int, db: TenantDB, principal: CurrentPrincipal) -> Any:
     """The brief layer as slides in the document's theme (its slide variant), with
     presenter notes and the detail each slide can expand. 422 when the version has no
     brief sections."""
-    # Present mode: on the export pool, within its waits, but counted against no export
-    # cap (owner decision 2026-10-20).
+    # Present mode: kept, else built on the export pool in a Present place (owner decision
+    # 2026-10-20).
     ev = detached(await _load(db, doc, n, "deck"))
     await db.commit()  # no connection held while it waits for the pool
     try:
-        deck = await offload.run(None, build_deck, ev)
+        deck = await present.deck_for(principal, ev, build_deck)
     except offload.Refused as e:
         return e.response()
     return DeckOut(

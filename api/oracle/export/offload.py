@@ -12,8 +12,11 @@ Owner decisions 2026-10-20 (security review of PR #134):
   ``export_busy_you``. An export keeps its place until its render ends, even after its
   request gave up: a request that gave up never frees a worker that is still busy. With
   4 workers, one company never holds every worker.
-- Present mode's deck (``/deck``) is not counted against these caps; it renders on the
-  same pool, within the same waits.
+- Present mode's deck (``/deck``) takes a place too (owner decision 2026-10-20, review
+  of 7ab8fcf): two deck builds per person at once (``PRESENTS_PER_PERSON``, a counter of
+  its own: Present works while the person's export runs; one more is 429
+  ``present_busy_you``), and the company's two places count exports and decks together.
+  A deck already built is served from oracle.export.present without a place.
 - A wait of more than ``QUEUE_SECONDS`` for a free worker is 503 ``export_busy`` (``BUSY``),
   never "too large"; the export it refused never renders.
 - ``SECONDS`` caps the render itself, counted from when it starts (not its wait): past it,
@@ -47,16 +50,18 @@ if TYPE_CHECKING:
 # Owner decisions 2026-10-20: 4 workers; a render may take 60 s, counted from when it
 # starts (every format alike); a wait of more than 10 s for a free worker is "busy"; at
 # most 1 export per person at a time and 2 per company, running or queued (so one company
-# never holds every worker).
+# never holds every worker). Present: 2 deck builds per person, in the company's 2.
 POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="export")
 SECONDS = 60.0
 QUEUE_SECONDS = 10.0
 EXPORTS_PER_PERSON = 1
 EXPORTS_PER_COMPANY = 2
+PRESENTS_PER_PERSON = 2
 TOO_LARGE = "This document is too large to export quickly"
 BUSY = "Oracle is busy with other exports. Try again in a moment."
 BUSY_YOU = "Your previous export is still running"
 BUSY_COMPANY = "Your company's other exports are still running. Try again in a moment."
+PRESENT_BUSY_YOU = "Your other Present views are still loading. Try again in a moment."
 RETRY_AFTER_SECONDS = 5
 
 
@@ -78,15 +83,17 @@ class Refused(Exception):
 
 
 _lock = threading.Lock()
-_people: Counter[Hashable] = Counter()
+_people: Counter[Hashable] = Counter()  # exports per person
+_presenters: Counter[Hashable] = Counter()  # deck builds per person
 _companies: Counter[Hashable] = Counter()
 
 
 class Place:
-    """One export's place in its person's and its company's share. Held by its request
-    and, once handed to the pool, by its render: free when both are done."""
+    """One export's (or deck build's) place in its person's and its company's share. Held
+    by its request and, once handed to the pool, by its render: free when both are done."""
 
-    def __init__(self, person: Hashable, company: Hashable) -> None:
+    def __init__(self, people: Counter[Hashable], person: Hashable, company: Hashable) -> None:
+        self.people = people
         self.person = person
         self.company = company
         self._holders = 1
@@ -100,30 +107,40 @@ class Place:
             self._holders -= 1
             if self._holders:
                 return
-            for counts, key in ((_people, self.person), (_companies, self.company)):
+            for counts, key in ((self.people, self.person), (_companies, self.company)):
                 counts[key] -= 1
                 if counts[key] <= 0:
                     del counts[key]
 
 
-def _admit(principal: "Principal") -> Place:
+def _admit(principal: "Principal", present: bool) -> Place:
     person = (principal.tenant_id, principal.actor)
     company = principal.tenant_id
+    if present:
+        people, cap, code, message = (
+            _presenters,
+            PRESENTS_PER_PERSON,
+            "present_busy_you",
+            PRESENT_BUSY_YOU,
+        )
+    else:
+        people, cap, code, message = _people, EXPORTS_PER_PERSON, "export_busy_you", BUSY_YOU
     with _lock:
-        if _people[person] >= EXPORTS_PER_PERSON:
-            raise Refused(status.HTTP_429_TOO_MANY_REQUESTS, "export_busy_you", BUSY_YOU)
+        if people[person] >= cap:
+            raise Refused(status.HTTP_429_TOO_MANY_REQUESTS, code, message)
         if _companies[company] >= EXPORTS_PER_COMPANY:
             raise Refused(status.HTTP_429_TOO_MANY_REQUESTS, "export_busy_you", BUSY_COMPANY)
-        _people[person] += 1
+        people[person] += 1
         _companies[company] += 1
-    return Place(person, company)
+    return Place(people, person, company)
 
 
 @contextlib.contextmanager
-def place(principal: "Principal") -> Iterator[Place]:
-    """A place for one export of ``principal`` (:class:`Refused` 429 when its person or its
-    company has none left), held while the block runs and by the render it starts."""
-    held = _admit(principal)
+def place(principal: "Principal", *, present: bool = False) -> Iterator[Place]:
+    """A place for one export of ``principal`` (``present``: one deck build for Present
+    mode, counted per person apart from exports), :class:`Refused` 429 when its person or
+    its company has none left; held while the block runs and by the render it starts."""
+    held = _admit(principal, present)
     try:
         yield held
     finally:
@@ -131,7 +148,7 @@ def place(principal: "Principal") -> Iterator[Place]:
 
 
 def in_flight(company: uuid.UUID) -> int:
-    """How many exports ``company`` has running or queued."""
+    """How many exports and deck builds ``company`` has running or queued."""
     with _lock:
         return _companies.get(company, 0)
 
@@ -141,9 +158,8 @@ def _started(future: asyncio.Future[None]) -> None:
         future.set_result(None)
 
 
-async def run[T](held: Place | None, fn: Callable[..., T], /, *args: Any) -> T:
-    """``fn(*args)`` on the export pool, in ``held``'s place (None: counted against no
-    cap, as Present mode's deck). Refused when no worker is free
+async def run[T](held: Place, fn: Callable[..., T], /, *args: Any) -> T:
+    """``fn(*args)`` on the export pool, in ``held``'s place. Refused when no worker is free
     within ``QUEUE_SECONDS`` (:class:`Refused`, 503 ``export_busy``: it never renders);
     past ``SECONDS`` from its start, an HTTP 422 (``TOO_LARGE``). Exceptions from ``fn``
     propagate unchanged."""
@@ -166,16 +182,13 @@ async def run[T](held: Place | None, fn: Callable[..., T], /, *args: Any) -> T:
             finally:
                 state["took"] = time.monotonic() - state["at"]
         finally:
-            if held is not None:
-                held.leave()
+            held.leave()
 
-    if held is not None:
-        held.hold()
+    held.hold()
     try:
         work = loop.run_in_executor(POOL, call)
     except BaseException:
-        if held is not None:
-            held.leave()
+        held.leave()
         raise
     # Its outcome is read even when nobody waits for it any more.
     work.add_done_callback(lambda f: f.cancelled() or f.exception())
@@ -187,7 +200,7 @@ async def run[T](held: Place | None, fn: Callable[..., T], /, *args: Any) -> T:
             abandoned = "at" not in state
             if abandoned:
                 state["abandoned"] = True
-        if abandoned and held is not None:
+        if abandoned:
             held.leave()  # the render's hold: it will not render
         if isinstance(exc, asyncio.CancelledError):
             raise
