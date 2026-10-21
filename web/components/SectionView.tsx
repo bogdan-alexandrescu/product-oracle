@@ -8,8 +8,10 @@ import { DateMarker, MarkdownBody, unplacedMarks, type ExpandCtx, type Highlight
 import { RefineSection } from "@/components/RefineSection";
 import { SectionReviewBar } from "@/components/SectionReviewBar";
 import { LayerChip, Menu } from "@/components/review/parts";
+import { SpecStateBadge } from "@/components/ui";
+import { IGNORE_ATTR } from "@/lib/anchor";
 import type { CitationOut, DateMarkOut, EntityOut, SectionOut, Verdict } from "@/lib/api/client";
-import type { Block } from "@/lib/markdown";
+import { blocksText, type Block } from "@/lib/markdown";
 
 const HEADING_CLASS: Record<number, string> = {
   1: "font-display text-[26px] leading-8 font-bold tracking-heading max-[600px]:text-[22px] max-[600px]:leading-7",
@@ -71,6 +73,23 @@ export const SectionView = memo(function SectionView({
   dateMarks?: DateMarkOut[];
 }) {
   const Heading = (`h${Math.min(section.level, 3)}` as "h1" | "h2" | "h3");
+  // E1: a spec's part states; the acceptance criteria's proposed half starts at a block.
+  const states = section.spec_states;
+  const topState = states?.[0];
+  const markers = useMemo(() => {
+    const m = new Map<number, ReactNode>();
+    for (const st of states?.slice(1) ?? []) {
+      const at = st.starts_at ? blocks.findIndex((b) => b.t === "p" && blocksText([b]).startsWith(st.starts_at!)) : -1;
+      if (at >= 0)
+        m.set(
+          at,
+          <p key={`state-${at}`} className="pt-2" data-testid="spec-state-marker" {...{ [IGNORE_ATTR]: "" }}>
+            <SpecStateBadge state={st} />
+          </p>,
+        );
+    }
+    return m;
+  }, [blocks, states]);
   const locked = section.verdict?.verdict === "approved" && !section.verdict.lapsed_at;
   // The tool picked from the ⋯ menu, shown under the review bar; a new pick remounts it.
   const [tool, setTool] = useState<{ kind: Tool; n: number } | null>(null);
@@ -157,6 +176,11 @@ export const SectionView = memo(function SectionView({
           )}
         </span>
       </div>
+      {topState && (
+        <p className="mb-3" data-testid="spec-state-top">
+          <SpecStateBadge state={topState} />
+        </p>
+      )}
       {unplaced.length > 0 && (
         <p className="mb-2 text-sm text-text2" data-testid="unplaced-date-marks">
           Dates in this section:{" "}
@@ -176,6 +200,7 @@ export const SectionView = memo(function SectionView({
           citations={citations}
           onHighlightClick={onHighlightClick}
           expand={expand}
+          markers={markers.size ? markers : undefined}
           dateMarks={dateMarks}
         />
       </div>

@@ -106,3 +106,17 @@
 .deck .expand-section { margin-bottom: 18px; }
 .deck .expand-section table { border-collapse: collapse; width: 100%; }
 .deck .expand-section th, .deck .expand-section td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--color-rule); }
+
+/* E1: a spec part's state (an element no body markdown can produce). */
+.deck .spec-state {
+  display: inline-block;
+  margin: 0 0 0.5em;
+  padding: 0.15em 0.7em;
+  border-radius: 999px;
+  font-family: var(--font-body, sans-serif);
+  font-size: 0.8em;
+  font-weight: 600;
+}
+.deck .spec-state-decided { background: #e7f6ec; color: #17663a; }
+.deck .spec-state-proposed { background: #fdf3dc; color: #7a4d00; }
+.deck .spec-state-added { background: #fdf3dc; color: #7a4d00; border: 1px dashed #b7791f; }

@@ -338,7 +338,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
 
   const citations = useMemo(() => {
     const m = new Map<string, { citation: CitationOut; number: number }>();
-    version?.citations.forEach((c, i) => m.set(c.cite_key, { citation: c, number: i + 1 }));
+    // E1: Oracle's sources first, then the ones an edit added (listed apart, numbered on).
+    const ordered = [...(version?.citations.filter((c) => !c.added) ?? []), ...(version?.citations.filter((c) => c.added) ?? [])];
+    ordered.forEach((c, i) => m.set(c.cite_key, { citation: c, number: i + 1 }));
     return m;
   }, [version]);
 

@@ -144,6 +144,7 @@ async def get_deck(doc: str, n: int, db: TenantDB) -> DeckOut:
                 section_key=s.section_key,
                 html=str(s.html),
                 notes=s.notes,
+                state=s.state,
                 expand=[
                     ExpandOut(section_key=e.section_key, heading=e.heading, html=str(e.html))
                     for e in s.expand

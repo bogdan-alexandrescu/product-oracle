@@ -133,3 +133,18 @@ sup.cite a { padding: 0 0.05em; }
 .version-banner .banner-layer { font-weight: 600; }
 .version-banner .banner-source a { color: inherit; }
 .detail-ref { color: inherit; }
+
+/* E1: a spec part's state (an element no body markdown can produce). */
+.spec-state {
+  display: inline-block;
+  margin: 0 0 0.6em;
+  padding: 0.15em 0.7em;
+  border-radius: 999px;
+  font-family: "DejaVu Sans", sans-serif;
+  font-size: 9.5pt;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.spec-state-decided { background: #e7f6ec; color: #17663a; }
+.spec-state-proposed { background: #fdf3dc; color: #7a4d00; }
+.spec-state-added { background: #fdf3dc; color: #7a4d00; border: 1px dashed #b7791f; }

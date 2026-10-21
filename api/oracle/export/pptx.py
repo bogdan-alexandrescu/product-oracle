@@ -18,8 +18,9 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Emu, Inches, Pt
 
-from oracle.docs.parser import CITATION_STRIP_RE
+from oracle.docs.parser import strip_citations
 from oracle.export.deck import Deck, Slide
+from oracle.export.render import image_label, stored_image
 
 WIDTH, HEIGHT = Inches(13.333), Inches(7.5)
 MARGIN = Inches(0.8)
@@ -89,13 +90,21 @@ def _runs(children) -> list[Run]:
             italic = True
         elif t.type == "em_close":
             italic = False
+        elif t.type == "image":
+            # A slide holds no image: a stored one shows its alt text, any other its label
+            # (owner decision, 2026-10-20: 'chart (example.com)'), as the HTML export does.
+            alt = "".join(c.content for c in t.children or [] if c.type in ("text", "code_inline"))
+            src = str(t.attrGet("src") or "")
+            text = alt if stored_image(src) else image_label(src, alt)[0]
+            if text:
+                runs.append(Run(text, bold, italic))
     return runs
 
 
 def parse_blocks(markdown: str) -> Blocks:
     """Slide body markdown as paragraphs and tables."""
     out = Blocks()
-    tokens = _md.parse(CITATION_STRIP_RE.sub("", markdown or ""))
+    tokens = _md.parse(strip_citations(markdown or ""))
     lists: list[list] = []  # stack of [kind, counter]
     table: list[list[str]] | None = None
     row: list[str] | None = None
@@ -169,11 +178,29 @@ def _textbox(slide, left, top, width, height, *, wrap=True):
     return frame
 
 
+def _add_state(slide, s: Slide, style: dict, top) -> int:
+    """E1: a spec's state label as a styled run of its own above the body (bold, in the
+    accent colour, its own text box), never as body text. Returns the new top."""
+    if not s.state:
+        return top
+    height = Inches(0.45)
+    frame = _textbox(slide, MARGIN, top, WIDTH - 2 * MARGIN, height)
+    _write_runs(
+        frame.paragraphs[0],
+        [Run(s.state, bold=True)],
+        14,
+        style["body"],
+        style["mono"],
+        style["accent"],
+    )
+    return top + height
+
+
 def _add_body(slide, s: Slide, deck: Deck, style: dict) -> None:
     blocks = parse_blocks(s.body_md)
     size = 16 if s.dense else 20
-    top = BODY_TOP
     width = WIDTH - 2 * MARGIN
+    top = _add_state(slide, s, style, BODY_TOP)
     pending: list[Para] = []
 
     def flush_text() -> None:
@@ -286,7 +313,8 @@ def deck_to_pptx(deck: Deck) -> bytes:
                 style["heading"],
             )
             if s.kind == "sources":
-                frame = _textbox(slide, MARGIN, BODY_TOP, width, Inches(5))
+                top = _add_state(slide, s, style, BODY_TOP)
+                frame = _textbox(slide, MARGIN, top, width, Inches(5))
                 for i, (number, src_title, kind, retrieved) in enumerate(s.sources):
                     para = frame.paragraphs[0] if i == 0 else frame.add_paragraph()
                     para.space_after = Pt(6)

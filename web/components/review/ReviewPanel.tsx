@@ -6,11 +6,11 @@ import { ResolutionPanel, type GoTo } from "@/components/FeedbackPanel";
 import { JobsPanel, ORACLE_WORK } from "@/components/JobsPanel";
 import { ReportsPanel } from "@/components/ReportsPanel";
 import { LowConfidence } from "@/components/CitationChip";
-import { Icon, Inspector, InspectorRow } from "@/components/ds";
+import { Icon, Inspector, InspectorRow, Label } from "@/components/ds";
 import { FeedbackList } from "@/components/review/FeedbackList";
 import { TabBar } from "@/components/review/parts";
-import { ErrorNote, Loading } from "@/components/ui";
-import type { VersionOut } from "@/lib/api/client";
+import { ErrorNote, Loading, SpecStateBadge } from "@/components/ui";
+import type { CitationOut, VersionOut } from "@/lib/api/client";
 import { citationHref, citationSourceLabel, formatDateTime } from "@/lib/format";
 
 export type PanelTab = "feedback" | "sources" | "history";
@@ -115,7 +115,48 @@ export function ReviewPanel({
   );
 }
 
+/** E1 (owner, 2026-10-20): sources an edit added to a spec are listed apart from Oracle's. */
+const ADDED_SOURCE_LABEL = "Proposed · added in an edit";
+
+function sourceRow(c: CitationOut, number: number) {
+  const href = citationHref(c);
+  return (
+    <li key={c.id} className="flex min-h-8 min-w-0 items-center gap-2.5 text-sm max-[639px]:min-h-11">
+      <span className="tnum w-5 flex-none text-right font-semibold text-text2">{number}</span>
+      {/* The writer's confidence beside the source, or its note when unscored (text). */}
+      <span
+        title={citationSourceLabel(c)}
+        className="max-w-[45%] min-w-0 flex-none truncate text-[13px] font-semibold text-text2"
+        data-testid="source-label"
+      >
+        {citationSourceLabel(c)}
+      </span>
+      {c.low_confidence && <LowConfidence />}
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={c.title ?? c.ref}
+          className="min-w-0 truncate font-medium text-text underline-offset-2 hover:underline"
+        >
+          {c.title ?? c.ref}
+        </a>
+      ) : (
+        // A baseline item named in free text (source oracle): its ref on hover, no link.
+        <span title={c.ref} className="min-w-0 truncate font-medium text-text">
+          {c.title ?? c.ref}
+        </span>
+      )}
+    </li>
+  );
+}
+
 function SourcesTab({ version }: { version: VersionOut }) {
+  const id = useId();
+  // Numbered as the document numbers them: Oracle's sources first, then the added ones.
+  const oracle = version.citations.filter((c) => !c.added);
+  const added = version.citations.filter((c) => c.added);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col text-sm" data-testid="version-info">
@@ -140,41 +181,35 @@ function SourcesTab({ version }: { version: VersionOut }) {
       {version.citations.length === 0 ? (
         <p className="text-sm text-text2">No sources cited</p>
       ) : (
-        <ol className="flex flex-col" aria-label="Sources" data-testid="sources-list">
-          {version.citations.map((c, i) => {
-            const href = citationHref(c);
-            return (
-              <li key={c.id} className="flex min-h-8 min-w-0 items-center gap-2.5 text-sm max-[639px]:min-h-11">
-                <span className="tnum w-5 flex-none text-right font-semibold text-text2">{i + 1}</span>
-                {/* The writer's confidence beside the source, or its note when unscored (text). */}
-                <span
-                  title={citationSourceLabel(c)}
-                  className="max-w-[45%] min-w-0 flex-none truncate text-[13px] font-semibold text-text2"
-                  data-testid="source-label"
-                >
-                  {citationSourceLabel(c)}
-                </span>
-                {c.low_confidence && <LowConfidence />}
-                {href ? (
-                  <a
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={c.title ?? c.ref}
-                    className="min-w-0 truncate font-medium text-text underline-offset-2 hover:underline"
-                  >
-                    {c.title ?? c.ref}
-                  </a>
-                ) : (
-                  // A baseline item named in free text (source oracle): its ref on hover, no link.
-                  <span title={c.ref} className="min-w-0 truncate font-medium text-text">
-                    {c.title ?? c.ref}
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ol>
+        <>
+          {oracle.length > 0 && (
+            <section className="flex flex-col gap-1" aria-labelledby={added.length ? `${id}-oracle` : undefined}>
+              {added.length > 0 && (
+                <Label id={`${id}-oracle`} className="py-1">
+                  Sources
+                </Label>
+              )}
+              <ol className="flex flex-col" aria-label="Sources" data-testid="sources-list">
+                {oracle.map((c, i) => sourceRow(c, i + 1))}
+              </ol>
+            </section>
+          )}
+          {added.length > 0 && (
+            <section
+              className="flex flex-col gap-2 border-t border-line pt-3"
+              aria-labelledby={`${id}-added`}
+              data-testid="added-sources"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <Label id={`${id}-added`}>Added sources</Label>
+                <SpecStateBadge state={{ label: added[0].state_label ?? ADDED_SOURCE_LABEL, decided: false, added: true }} />
+              </div>
+              <ol className="flex flex-col" aria-label="Added sources">
+                {added.map((c, i) => sourceRow(c, oracle.length + i + 1))}
+              </ol>
+            </section>
+          )}
+        </>
       )}
     </div>
   );

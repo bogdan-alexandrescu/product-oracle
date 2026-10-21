@@ -75,6 +75,7 @@ interface DiffableSection {
   body_text: string;
   content_hash: string;
   layer?: "brief" | "detail" | null;
+  spec_states?: Schemas["SpecPartState"][];
 }
 
 /**
@@ -100,6 +101,7 @@ export function sectionDiff(from: DiffableSection[], to: DiffableSection[]): Sch
         to_heading: t.heading,
         to_layer: t.layer ?? null,
         words: [{ op: "insert", text: t.body_text }],
+        spec_states: t.spec_states ?? [],
       };
     }
     const changed = f.content_hash !== t.content_hash || f.heading !== t.heading;
@@ -114,6 +116,7 @@ export function sectionDiff(from: DiffableSection[], to: DiffableSection[]): Sch
       from_layer: f.layer ?? null,
       to_layer: t.layer ?? null,
       words: changed ? wordDiff(f.body_text, t.body_text) : null,
+      spec_states: t.spec_states ?? [],
     };
   });
 
@@ -127,6 +130,8 @@ export function sectionDiff(from: DiffableSection[], to: DiffableSection[]): Sch
       from_heading: f.heading,
       from_layer: f.layer ?? null,
       words: [{ op: "delete", text: f.body_text }],
+      // The older version's states for a removed section (as the API).
+      spec_states: f.spec_states ?? [],
     };
     // Insert after the closest preceding section (from the source order) still in the output.
     let at = 0;

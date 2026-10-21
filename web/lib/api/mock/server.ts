@@ -27,13 +27,14 @@ import { routeIntake } from "./intake";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { dateMarks, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { routeTrace } from "./trace";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
 export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source">;
 export type VersionRow = Omit<Schemas["VersionOut"], "sections" | "date_marks"> & {
-  sections: Omit<Schemas["SectionOut"], "verdict">[];
+  sections: (Omit<Schemas["SectionOut"], "verdict" | "spec_states"> & Partial<Pick<Schemas["SectionOut"], "spec_states">>)[];
 };
 type CommentRow = Omit<Schemas["CommentOut"], "replies">;
 /** A stored section review; a spec may mark an approval lapsed (C2). */
@@ -78,6 +79,8 @@ export interface Db {
   inbox_seen?: Record<string, string>;
   /** Roadmap items, product tracks, schedule bases and tracker records (./roadmap.ts, CR-11). */
   roadmap?: RoadmapDb;
+  /** Specs, flows and wireframes (./specs.ts); absent in data saved before CR-09. */
+  specs?: SpecsDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
@@ -194,6 +197,7 @@ const now = () => new Date().toISOString();
 function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
   const id = uuid();
   const layered = resolveBrief(seed.sections.map((s) => ({ section_key: s.key, level: s.level })), seed.brief);
+  const depth = (DOCUMENTS as DocumentSeed[]).find((d) => d.slug === doc.slug)?.depth ?? "full";
   const sections = seed.sections.map((s, ordinal) => ({
     id: uuid(),
     section_key: s.key,
@@ -203,9 +207,10 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     body_md: s.body,
     body_text: plainText(s.body),
     content_hash: hash(s.heading + "\n" + s.body),
-    citation_keys: [...new Set([...s.body.matchAll(/\[c:([\w.-]+)\]/g)].map((m) => m[1]))],
+    citation_keys: [...new Set([...s.body.matchAll(/\[c:([\w.:-]+)\]/g)].map((m) => m[1]))],
     layer: layered.brief.has(s.key) ? ("brief" as const) : ("detail" as const),
     notes: layered.brief.has(s.key) ? presenterNotes(s.body) : null,
+    spec_states: doc.kind === "spec" ? specStates(s.key, s.body, false, depth) : [],
   }));
   return {
     id,
@@ -230,6 +235,8 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
       title: c.title,
       excerpt: c.excerpt,
       retrieved_at: c.retrieved_at,
+      added: c.added ?? false,
+      state_label: c.state_label ?? null,
       // A mock company has no source items: the writer's item id shows as given.
       item_id: c.item ?? null,
       confidence: c.confidence ?? null,
@@ -696,6 +703,8 @@ function importSections(
       title: c.title ?? "",
       excerpt: c.excerpt ?? "",
       retrieved_at: c.retrieved_at ?? "",
+      added: c.added,
+      state_label: c.state_label ?? undefined,
       item: c.item_id ?? undefined,
       confidence: c.confidence,
       confidence_note: c.confidence_note ?? undefined,
@@ -926,6 +935,7 @@ function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
       const r = latestReview(db, v.id, s.section_key);
       return {
         ...s,
+        spec_states: s.spec_states ?? [],
         verdict: r
           ? {
               verdict: r.verdict,
@@ -1439,6 +1449,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   };
   const quality = await routeQuality(qualityCtx, req, p, q);
   if (quality) return quality;
+  // Specs, flows and wireframes (./specs.ts) check roles themselves.
+  if (p[1] === "spec-requests" || p[1] === "design-artifacts") {
+    db.specs ??= seedSpecs();
+    const specs = await routeSpecs({ db: db.specs, userId: me.id, role: me.role, uuid, now }, req, p, q);
+    if (specs) return specs;
+  }
   // Modules and compositions check roles themselves (viewers may ask for a recommendation).
   if (!db.modules) {
     const prd = db.documents.find((d) => d.kind === "prd");

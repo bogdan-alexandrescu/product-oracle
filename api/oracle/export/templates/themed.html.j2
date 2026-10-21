@@ -139,5 +139,25 @@
   </ol>
   {% endif %}
 </section>
+{% if added_source_list %}
+{# E1: citations added in a spec edit, outside Oracle's Sources. #}
+<section id="added-sources" class="sources-appendix added-sources" aria-label="Added sources" data-section-key="added-sources">
+  <h2>Added sources</h2>
+  <p class="spec-state spec-state-added" data-spec-state="added">{{ added_label }}</p>
+  <ol class="source-list">
+  {% for f in added_source_list %}
+    <li id="src-{{ f.number }}" value="{{ f.number }}" data-cite-key="{{ f.key }}">
+      <span class="src-title">
+        {%- if f.href %}<a href="{{ f.href }}">{{ f.title }}</a>{% else %}{{ f.title }}{% endif -%}
+      </span>
+      <span class="src-kind">{{ f.source }}</span>
+      {% if f.retrieved_at %}<span class="src-retrieved">retrieved {{ f.retrieved_at }}</span>{% endif %}
+      {% if f.excerpt %}<blockquote class="src-excerpt">{{ f.excerpt }}</blockquote>{% endif %}
+      <span class="src-ref">{{ f.ref }}</span>
+    </li>
+  {% endfor %}
+  </ol>
+</section>
+{% endif %}
 </body>
 </html>

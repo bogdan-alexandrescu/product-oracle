@@ -787,6 +787,26 @@ async def _free_slug(db: AsyncSession, base: str) -> str:
     return f"{base}-{n}"
 
 
+_H1_LINE = re.compile(r"^(#[ \t]+)(.*)$", re.M)
+# The id at the end of a heading, with the space before it (linear: starts after a non-space).
+_ID_TAIL = re.compile(r"(?<!\s)\s*\{#[A-Za-z0-9][A-Za-z0-9_.:-]*\}\s*$")
+
+
+def _retitle(text: str, title: str) -> str:
+    """The first level-1 heading that ends in ``{#id}``, with ``title`` as its text."""
+    for line in _H1_LINE.finditer(text):
+        tail = _ID_TAIL.search(line.group(2))
+        if tail is not None:
+            return (
+                text[: line.start()]
+                + line.group(1)
+                + title
+                + line.group(2)[tail.start() :]
+                + text[line.end() :]
+            )
+    return text
+
+
 # Linear: the marker's whitespace is taken once (possessive), and the title ends on a
 # non-space, so the anchor's leading whitespace is scanned from one place, not every one.
 _TITLE_LINE = re.compile(r"^(#\s++)((?:.*?\S)??)(\s*\{#[A-Za-z0-9][A-Za-z0-9_.:-]*\}\s*)$", re.M)
@@ -826,7 +846,7 @@ def draft_skeleton(
         lines.append("brief: [" + ", ".join(json.dumps(k) for k in brief) + "]")
     lines.append("---")
     safe_title = title.replace("{", "(").replace("}", ")").replace("\n", " ")
-    rest = _TITLE_LINE.sub(lambda m: f"{m.group(1)}{safe_title}{m.group(3)}", rest, count=1)
+    rest = _retitle(rest, safe_title)
     return "\n".join(lines) + "\n" + rest.lstrip("\n")
 
 

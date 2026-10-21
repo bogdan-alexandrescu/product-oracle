@@ -4,7 +4,7 @@ import { Fragment, type ReactNode } from "react";
 import { CitationChip } from "@/components/CitationChip";
 import { IGNORE_ATTR } from "@/lib/anchor";
 import type { CitationOut, DateMarkOut } from "@/lib/api/client";
-import type { Block, Inline } from "@/lib/markdown";
+import { isSafeHref, storedImageSrc, type Block, type Inline } from "@/lib/markdown";
 import { sectionHash, sectionHref } from "@/lib/section-link";
 
 /** A highlighted span of a section's anchorable text. */
@@ -57,8 +57,21 @@ function docLinkHref(href: string): string | null {
   return m ? sectionHref(m[1], Number(m[2]), m[3]) : null;
 }
 
+/** The host of an http(s) URL, or null (a remote image is shown as a link, never loaded). */
+function remoteHost(src: string): string | null {
+  if (/[\\\u0000-\x20\u007f-\u009f]/.test(src)) return null;
+  try {
+    const u = new URL(src);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.hostname : null;
+  } catch {
+    return null;
+  }
+}
+
 function label(nodes: Inline[]): string {
-  return nodes.map((n) => (n.t === "text" || n.t === "code" ? n.v : n.t === "cite" ? "" : label(n.c))).join("");
+  return nodes
+    .map((n) => (n.t === "text" || n.t === "code" ? n.v : n.t === "cite" || n.t === "img" ? "" : label(n.c)))
+    .join("");
 }
 
 /** The detail sections opened from the links of the block just rendered. */
@@ -169,6 +182,8 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
       case "em":
         return <em key={k}>{renderInline(n.c, ctx, k)}</em>;
       case "link": {
+        // Only http, https, mailto and relative or anchor links render as links.
+        if (!isSafeHref(n.href)) return <Fragment key={k}>{renderInline(n.c, ctx, k)}</Fragment>;
         const doc = docLinkHref(n.href);
         if (doc) {
           return (
@@ -212,6 +227,31 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
           </span>
         );
       }
+      case "img": {
+        // Owner decision (2026-10-20): an image loads only when Oracle stores it (a path
+        // of this app under /uploads/, storedImageSrc). A remote image is a link showing
+        // its alt text and host, never an <img>: a reviewer's browser contacts no outside
+        // host; anything else shows its alt text. The alt text is not anchorable text (the
+        // API checks a spec's labels the same way: an image is no visible text).
+        const stored = storedImageSrc(n.src);
+        if (stored) {
+          // eslint-disable-next-line @next/next/no-img-element
+          return <img key={k} src={stored} alt={n.alt} loading="lazy" className="max-w-full" />;
+        }
+        const host = remoteHost(n.src);
+        if (!host) {
+          return n.alt ? (
+            <span key={k} {...ignore} data-image-alt="">
+              {n.alt}
+            </span>
+          ) : null;
+        }
+        return (
+          <a key={k} {...ignore} href={n.src} target="_blank" rel="noopener noreferrer" data-remote-image="">
+            {n.alt ? `${n.alt} (${host})` : host}
+          </a>
+        );
+      }
       case "cite": {
         const c = ctx.citations.get(n.key);
         return <CitationChip key={k} citeKey={n.key} citation={c?.citation} number={c?.number} />;
@@ -244,7 +284,7 @@ function leaves(blocks: Block[]): string[] {
   const walk = (nodes: Inline[]) => {
     for (const n of nodes) {
       if (n.t === "text" || n.t === "code") out.push(n.v);
-      else if (n.t !== "cite") walk(n.c);
+      else if (n.t !== "cite" && n.t !== "img") walk(n.c);
     }
   };
   for (const b of blocks) {
@@ -275,8 +315,13 @@ export function MarkdownBody({
   citations,
   onHighlightClick,
   expand,
+  markers,
   dateMarks,
-}: Omit<Ctx, "pos" | "found" | "shown"> & { blocks: Block[] }) {
+}: Omit<Ctx, "pos" | "found" | "shown"> & {
+  blocks: Block[];
+  /** Shown before the block at each index (not part of the anchorable text). */
+  markers?: Map<number, ReactNode>;
+}) {
   const ctx: Ctx = {
     pos: 0,
     highlights,
@@ -304,70 +349,82 @@ export function MarkdownBody({
     <>
       {blocks.map((b, i) => {
         const k = String(i);
-        switch (b.t) {
-          case "p":
-            return withDetail(k, <p key={k}>{renderInline(b.c, ctx, k)}</p>);
-          case "h":
-            return <h4 key={k}>{renderInline(b.c, ctx, k)}</h4>;
-          case "quote":
-            return withDetail(k, <blockquote key={k}>{renderInline(b.c, ctx, k)}</blockquote>);
-          case "pre":
-            return (
-              <pre key={k}>
-                <code>{renderMarkedText(b.v, ctx, k)}</code>
-              </pre>
-            );
-          case "ul":
-          case "ol": {
-            const List = b.t;
-            return (
-              <List key={k}>
-                {b.items.map((it, j) => {
-                  const content = renderInline(it, ctx, `${k}.${j}`);
-                  return (
-                    <li key={j}>
-                      {content}
-                      <Detail keys={opened(ctx)} expand={expand} />
-                    </li>
-                  );
-                })}
-              </List>
-            );
-          }
-          case "table":
-            return (
-              <div key={k} className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      {b.head.map((c, j) => (
-                        <th key={j}>{renderInline(c, ctx, `${k}.h${j}`)}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {b.rows.map((r, j) => {
-                      const cells = r.map((c, x) => <td key={x}>{renderInline(c, ctx, `${k}.${j}.${x}`)}</td>);
-                      const keys = opened(ctx);
-                      return (
-                        <Fragment key={j}>
-                          <tr>{cells}</tr>
-                          {keys.length > 0 && (
-                            <tr {...ignore} className="detail-row">
-                              <td colSpan={Math.max(b.head.length, r.length)}>
-                                <Detail keys={keys} expand={expand} />
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            );
-        }
+        const marker = markers?.get(i);
+        return marker ? (
+          <Fragment key={`m-${k}`}>
+            {marker}
+            {block(b, k)}
+          </Fragment>
+        ) : (
+          block(b, k)
+        );
       })}
     </>
   );
+
+  function block(b: Block, k: string): ReactNode {
+    switch (b.t) {
+      case "p":
+        return withDetail(k, <p key={k}>{renderInline(b.c, ctx, k)}</p>);
+      case "h":
+        return <h4 key={k}>{renderInline(b.c, ctx, k)}</h4>;
+      case "quote":
+        return withDetail(k, <blockquote key={k}>{renderInline(b.c, ctx, k)}</blockquote>);
+      case "pre":
+        return (
+          <pre key={k}>
+            <code>{renderMarkedText(b.v, ctx, k)}</code>
+          </pre>
+        );
+      case "ul":
+      case "ol": {
+        const List = b.t;
+        return (
+          <List key={k}>
+            {b.items.map((it, j) => {
+              const content = renderInline(it, ctx, `${k}.${j}`);
+              return (
+                <li key={j}>
+                  {content}
+                  <Detail keys={opened(ctx)} expand={expand} />
+                </li>
+              );
+            })}
+          </List>
+        );
+      }
+      case "table":
+        return (
+          <div key={k} className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  {b.head.map((c, j) => (
+                    <th key={j}>{renderInline(c, ctx, `${k}.h${j}`)}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {b.rows.map((r, j) => {
+                  const cells = r.map((c, x) => <td key={x}>{renderInline(c, ctx, `${k}.${j}.${x}`)}</td>);
+                  const keys = opened(ctx);
+                  return (
+                    <Fragment key={j}>
+                      <tr>{cells}</tr>
+                      {keys.length > 0 && (
+                        <tr {...ignore} className="detail-row">
+                          <td colSpan={Math.max(b.head.length, r.length)}>
+                            <Detail keys={keys} expand={expand} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+    }
+  }
 }

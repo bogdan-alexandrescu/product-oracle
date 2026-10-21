@@ -5825,6 +5825,140 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/spec-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Spec Requests
+         * @description Spec requests, newest first; ``prd`` (slug or id) narrows to one PRD's.
+         */
+        get: operations["list_spec_requests"];
+        put?: never;
+        /**
+         * Create Spec Request
+         * @description Request a technical brief (or full engineering spec) with its flows and wireframes
+         *     from an approved PRD version. Creates the spec request and a draft prd_to_spec run:
+         *     estimate and start it like any run (over $50 waits for an owner's approval).
+         */
+        post: operations["create_spec_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/spec-requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Spec Request
+         * @description A spec: its requirements (from the PRD), versions with their approach status,
+         *     sections by part, flows and wireframes, and whatever is stale and why.
+         */
+        get: operations["get_spec_request"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/spec-requests/{request_id}/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Regenerate Spec
+         * @description Propose regenerating a spec and its design from the latest approved PRD version: a
+         *     draft run, never an automatic rewrite. Current versions stay until new ones are
+         *     approved.
+         */
+        post: operations["regenerate_spec"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/design-artifacts/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Design Artifact
+         * @description A flow or wireframe version: its outputs, their PRD sections and requirement ids,
+         *     annotations with their reviews, and lineage.
+         */
+        get: operations["get_design_artifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/design-artifacts/{version_id}/outputs/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Design Output
+         * @description A flow (SVG) or wireframe (HTML), sanitised when it was stored, served with a
+         *     sandboxing Content-Security-Policy: no scripts, no network, no access to Oracle's
+         *     cookies.
+         */
+        get: operations["get_design_output"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/design-artifacts/{version_id}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Review Design Artifact
+         * @description Comment on a flow or wireframe version or one of its annotations (commenter), or
+         *     approve, reject or request changes on the version (the spec's engineering approvers or
+         *     an owner).
+         */
+        post: operations["review_design_artifact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/roadmaps/{doc}/items": {
         parameters: {
             query?: never;
@@ -6507,6 +6641,27 @@ export interface components {
             items: components["schemas"]["AlignmentItem"][];
             /** Unplanned */
             unplanned: components["schemas"]["DriftEntry"][];
+        };
+        /** AnnotationOut */
+        AnnotationOut: {
+            /** Id */
+            id: string;
+            /** Target */
+            target: string;
+            /** Note */
+            note: string;
+            /** Section Key */
+            section_key?: string | null;
+            /**
+             * Requirement Ids
+             * @default []
+             */
+            requirement_ids: string[];
+            /**
+             * Reviews
+             * @default []
+             */
+            reviews: components["schemas"]["ArtifactReviewEventOut"][];
         };
         /** AnswerIn */
         AnswerIn: {
@@ -8121,6 +8276,13 @@ export interface components {
             excerpt?: string | null;
             /** Retrieved At */
             retrieved_at?: string | null;
+            /**
+             * Added
+             * @default false
+             */
+            added: boolean;
+            /** State Label */
+            state_label?: string | null;
             /** Item Id */
             item_id?: string | null;
             /** Confidence */
@@ -9109,6 +9271,86 @@ export interface components {
             /** Upstream */
             upstream: components["schemas"]["TraceUpstreamRef"][];
         };
+        /** DesignArtifactOut */
+        DesignArtifactOut: {
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "tech_brief" | "engineering_spec" | "user_flow" | "wireframe" | "prototype" | "acceptance_tests" | "figma_design";
+            /** Title */
+            title: string;
+            version: components["schemas"]["ArtifactVersionOut"];
+            /** Outputs */
+            outputs: components["schemas"]["DesignOutputOut"][];
+            /**
+             * Reviews
+             * @default []
+             */
+            reviews: components["schemas"]["ArtifactReviewEventOut"][];
+            lineage?: components["schemas"]["TraceOutput"] | null;
+        };
+        /** DesignOutputOut */
+        DesignOutputOut: {
+            /** Name */
+            name: string;
+            /** Title */
+            title?: string | null;
+            /** Screen */
+            screen?: string | null;
+            /** Media Type */
+            media_type: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Sha256 */
+            sha256: string;
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+            /**
+             * Requirement Ids
+             * @default []
+             */
+            requirement_ids: string[];
+            /**
+             * Annotations
+             * @default []
+             */
+            annotations: components["schemas"]["AnnotationOut"][];
+            /**
+             * Removed
+             * @default []
+             */
+            removed: string[];
+            /** Content Url */
+            content_url: string;
+        };
+        /** DesignReviewIn */
+        DesignReviewIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "comment" | "approved" | "changes_requested" | "rejected";
+            /** Body */
+            body?: string | null;
+            /** Output */
+            output?: string | null;
+            /** Annotation Id */
+            annotation_id?: string | null;
+        };
+        /** DesignReviewOut */
+        DesignReviewOut: {
+            event: components["schemas"]["ArtifactReviewEventOut"];
+            version: components["schemas"]["ArtifactVersionOut"];
+        };
         /** DiffOut */
         DiffOut: {
             /**
@@ -9187,7 +9429,7 @@ export interface components {
              * @default prd
              * @enum {string}
              */
-            kind: "prd" | "roadmap";
+            kind: "prd" | "roadmap" | "spec";
             /** Template */
             template?: string | null;
             /** Template Version */
@@ -9310,7 +9552,7 @@ export interface components {
              * @default prd
              * @enum {string}
              */
-            kind: "prd" | "roadmap";
+            kind: "prd" | "roadmap" | "spec";
             /** Template */
             template?: string | null;
             /** Template Version */
@@ -9348,7 +9590,7 @@ export interface components {
             /** Slug */
             slug?: string | null;
             /** Kind */
-            kind?: ("prd" | "roadmap") | null;
+            kind?: ("prd" | "roadmap" | "spec") | null;
             /** Version */
             version?: number | null;
             /** Created */
@@ -10722,7 +10964,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec";
             /** Title */
             title: string;
             /** Description */
@@ -10730,9 +10972,11 @@ export interface components {
             /** Requires Document */
             requires_document: boolean;
             /** Target Kind */
-            target_kind?: ("prd" | "roadmap") | null;
+            target_kind?: ("prd" | "roadmap" | "spec") | null;
             /** Source Kind */
-            source_kind?: ("prd" | "roadmap") | null;
+            source_kind?: ("prd" | "roadmap" | "spec") | null;
+            /** Entry */
+            entry?: string | null;
             /** Segments */
             segments: components["schemas"]["FlowSegmentOut"][];
         };
@@ -11199,7 +11443,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -14682,6 +14926,53 @@ export interface components {
             /** Readable */
             readable: boolean;
         };
+        /** RegenerateIn */
+        RegenerateIn: {
+            /** Prd Version */
+            prd_version?: number | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * @default {
+             *       "depth": "standard",
+             *       "roles": {},
+             *       "checkpoints": {}
+             *     }
+             */
+            knobs: components["schemas"]["KnobsIn"];
+        };
+        /**
+         * RegenerationOut
+         * @description A proposed regeneration: a draft run nobody has started. Estimate and start it like
+         *     any run (the >$50 approval and the 1.5x pause apply); it writes new versions for review,
+         *     and the current ones stay until a reviewer approves the new ones.
+         */
+        RegenerationOut: {
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Prd Version */
+            prd_version: number;
+            /** Section Keys */
+            section_keys: string[];
+            /**
+             * Dropped Section Keys
+             * @default []
+             */
+            dropped_section_keys: string[];
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+        };
         /**
          * RegenerationProposal
          * @description A targeted regeneration proposal (§11.5). Nothing runs until a person accepts it,
@@ -14795,6 +15086,30 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** RequirementOut */
+        RequirementOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Status */
+            status?: string | null;
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+            /**
+             * Missing
+             * @default false
+             */
+            missing: boolean;
         };
         /** RescoreResult */
         RescoreResult: {
@@ -15275,7 +15590,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec";
             /** Document */
             document?: string | null;
             /** Source */
@@ -15306,7 +15621,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec";
             /** Flow Title */
             flow_title: string;
             /**
@@ -15319,7 +15634,7 @@ export interface components {
             /** Document Slug */
             document_slug?: string | null;
             /** Document Kind */
-            document_kind?: ("prd" | "roadmap") | null;
+            document_kind?: ("prd" | "roadmap" | "spec") | null;
             source?: components["schemas"]["VersionSource"] | null;
             /** Template */
             template?: string | null;
@@ -15456,7 +15771,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec";
             /** Flow Title */
             flow_title: string;
             /**
@@ -15469,7 +15784,7 @@ export interface components {
             /** Document Slug */
             document_slug?: string | null;
             /** Document Kind */
-            document_kind?: ("prd" | "roadmap") | null;
+            document_kind?: ("prd" | "roadmap" | "spec") | null;
             source?: components["schemas"]["VersionSource"] | null;
             /** Template */
             template?: string | null;
@@ -15811,6 +16126,11 @@ export interface components {
             to_layer?: ("brief" | "detail") | null;
             /** Words */
             words?: components["schemas"]["WordOp"][] | null;
+            /**
+             * Spec States
+             * @default []
+             */
+            spec_states: components["schemas"]["SpecPartState"][];
         };
         /**
          * SectionEditIn
@@ -16006,6 +16326,11 @@ export interface components {
             layer: "brief" | "detail";
             /** Notes */
             notes?: string | null;
+            /**
+             * Spec States
+             * @default []
+             */
+            spec_states: components["schemas"]["SpecPartState"][];
         };
         /** SectionPatchAccept */
         SectionPatchAccept: {
@@ -16572,6 +16897,8 @@ export interface components {
              * @default []
              */
             expand: components["schemas"]["ExpandOut"][];
+            /** State */
+            state?: string | null;
         };
         /** SnapshotCreate */
         SnapshotCreate: {
@@ -16756,6 +17083,197 @@ export interface components {
             swapped_to: string | null;
             /** Swapped To Reason */
             swapped_to_reason: string | null;
+        };
+        /** SpecOut */
+        SpecOut: {
+            request: components["schemas"]["ArtifactRequestOut"];
+            /** Document Slug */
+            document_slug?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            prd?: components["schemas"]["VersionSource"] | null;
+            /**
+             * Depth
+             * @enum {string}
+             */
+            depth: "brief" | "full";
+            /** Latest Version */
+            latest_version?: number | null;
+            /** Approach Status */
+            approach_status?: ("proposed" | "approved") | null;
+            /** Freshness */
+            freshness?: string | null;
+            /** Requirements */
+            requirements: components["schemas"]["RequirementOut"][];
+            /** Section Keys */
+            section_keys: string[];
+            /**
+             * Engineering Approver Ids
+             * @default []
+             */
+            engineering_approver_ids: string[];
+            /**
+             * Code Capability Map
+             * @enum {string}
+             */
+            code_capability_map: "used" | "unavailable";
+            /** Versions */
+            versions: components["schemas"]["SpecVersionOut"][];
+            /**
+             * Sections
+             * @default []
+             */
+            sections: components["schemas"]["SpecSectionOut"][];
+            /**
+             * Design
+             * @default []
+             */
+            design: components["schemas"]["DesignArtifactOut"][];
+            /**
+             * Stale
+             * @default []
+             */
+            stale: components["schemas"]["TraceOutput"][];
+            /** Run Id */
+            run_id?: string | null;
+            /** Run Status */
+            run_status?: string | null;
+        };
+        /**
+         * SpecPartState
+         * @description E1: the decided/proposed state of a part of a spec version's section, as the
+         *     document view shows it (the exports and the markdown show the same label).
+         */
+        SpecPartState: {
+            /** Label */
+            label: string;
+            /** Decided */
+            decided: boolean;
+            /**
+             * Added
+             * @default false
+             */
+            added: boolean;
+            /** Half */
+            half?: ("decided" | "proposed") | null;
+            /** Starts At */
+            starts_at?: string | null;
+        };
+        /** SpecRequestCreate */
+        SpecRequestCreate: {
+            /** Prd */
+            prd: string;
+            /** Prd Version */
+            prd_version?: number | null;
+            /** Requirement Ids */
+            requirement_ids: string[];
+            /** Section Keys */
+            section_keys?: string[];
+            /** Feature Id */
+            feature_id?: string | null;
+            /**
+             * Depth
+             * @default brief
+             * @enum {string}
+             */
+            depth: "brief" | "full";
+            /**
+             * Design
+             * @default true
+             */
+            design: boolean;
+            /**
+             * Screens
+             * @default 3
+             */
+            screens: number;
+            /** Engineering Approver Ids */
+            engineering_approver_ids?: string[];
+            /** Title */
+            title?: string | null;
+            /** Document */
+            document?: string | null;
+            /**
+             * @default {
+             *       "depth": "standard",
+             *       "roles": {},
+             *       "checkpoints": {}
+             *     }
+             */
+            knobs: components["schemas"]["KnobsIn"];
+        };
+        /** SpecRequestCreated */
+        SpecRequestCreated: {
+            spec: components["schemas"]["SpecOut"];
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+        };
+        /** SpecSectionOut */
+        SpecSectionOut: {
+            /** Key */
+            key: string;
+            /** Heading */
+            heading: string;
+            /** Layer */
+            layer: string;
+            /**
+             * Part
+             * @enum {string}
+             */
+            part: "context" | "product_requirement" | "engineering_approach" | "open_decision" | "assumption" | "proposed";
+            /** Decided */
+            decided: boolean;
+            /** Label */
+            label: string;
+            /** Half */
+            half?: ("decided" | "proposed") | null;
+            /**
+             * Added
+             * @default false
+             */
+            added: boolean;
+        };
+        /** SpecSummary */
+        SpecSummary: {
+            request: components["schemas"]["ArtifactRequestOut"];
+            /** Document Slug */
+            document_slug?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            prd?: components["schemas"]["VersionSource"] | null;
+            /**
+             * Depth
+             * @enum {string}
+             */
+            depth: "brief" | "full";
+            /** Latest Version */
+            latest_version?: number | null;
+            /** Approach Status */
+            approach_status?: ("proposed" | "approved") | null;
+            /** Freshness */
+            freshness?: string | null;
+        };
+        /** SpecVersionOut */
+        SpecVersionOut: {
+            artifact_version: components["schemas"]["ArtifactVersionOut"];
+            /** Document Version */
+            document_version?: number | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /**
+             * Approach Status
+             * @enum {string}
+             */
+            approach_status: "proposed" | "approved";
+            /** Approved By */
+            approved_by?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Origin */
+            origin?: string | null;
         };
         /**
          * StagedChange
@@ -18668,7 +19186,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap";
+            kind: "prd" | "roadmap" | "spec";
             /** Version */
             version: number;
             /**
@@ -18997,7 +19515,7 @@ export interface operations {
     list_documents: {
         parameters: {
             query?: {
-                kind?: ("prd" | "roadmap") | null;
+                kind?: ("prd" | "roadmap" | "spec") | null;
             };
             header?: never;
             path?: never;
@@ -30009,6 +30527,235 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BlockerModuleRender"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_spec_requests: {
+        parameters: {
+            query?: {
+                prd?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpecSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_spec_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpecRequestCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpecRequestCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_spec_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpecOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    regenerate_spec: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegenerationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_design_artifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignArtifactOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_design_output: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/svg+xml": unknown;
+                    "text/html": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_design_artifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesignReviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignReviewOut"];
                 };
             };
             /** @description Validation Error */

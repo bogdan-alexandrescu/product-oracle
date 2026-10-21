@@ -213,7 +213,8 @@
                 {
                   "enum": [
                     "prd",
-                    "roadmap"
+                    "roadmap",
+                    "spec"
                   ],
                   "type": "string"
                 },
@@ -20790,6 +20791,402 @@
         }
       }
     },
+    "/v1/spec-requests": {
+      "post": {
+        "tags": [
+          "specs"
+        ],
+        "summary": "Create Spec Request",
+        "description": "Request a technical brief (or full engineering spec) with its flows and wireframes\nfrom an approved PRD version. Creates the spec request and a draft prd_to_spec run:\nestimate and start it like any run (over $50 waits for an owner's approval).",
+        "operationId": "create_spec_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecRequestCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecRequestCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "specs"
+        ],
+        "summary": "List Spec Requests",
+        "description": "Spec requests, newest first; ``prd`` (slug or id) narrows to one PRD's.",
+        "operationId": "list_spec_requests",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prd"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SpecSummary"
+                  },
+                  "title": "Response List Spec Requests"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/spec-requests/{request_id}": {
+      "get": {
+        "tags": [
+          "specs"
+        ],
+        "summary": "Get Spec Request",
+        "description": "A spec: its requirements (from the PRD), versions with their approach status,\nsections by part, flows and wireframes, and whatever is stale and why.",
+        "operationId": "get_spec_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/spec-requests/{request_id}/regenerate": {
+      "post": {
+        "tags": [
+          "specs"
+        ],
+        "summary": "Regenerate Spec",
+        "description": "Propose regenerating a spec and its design from the latest approved PRD version: a\ndraft run, never an automatic rewrite. Current versions stay until new ones are\napproved.",
+        "operationId": "regenerate_spec",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenerateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegenerationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/design-artifacts/{version_id}": {
+      "get": {
+        "tags": [
+          "specs"
+        ],
+        "summary": "Get Design Artifact",
+        "description": "A flow or wireframe version: its outputs, their PRD sections and requirement ids,\nannotations with their reviews, and lineage.",
+        "operationId": "get_design_artifact",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignArtifactOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/design-artifacts/{version_id}/outputs/{name}": {
+      "get": {
+        "tags": [
+          "specs"
+        ],
+        "summary": "Get Design Output",
+        "description": "A flow (SVG) or wireframe (HTML), sanitised when it was stored, served with a\nsandboxing Content-Security-Policy: no scripts, no network, no access to Oracle's\ncookies.",
+        "operationId": "get_design_output",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "image/svg+xml": {},
+              "text/html": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/design-artifacts/{version_id}/reviews": {
+      "post": {
+        "tags": [
+          "specs"
+        ],
+        "summary": "Review Design Artifact",
+        "description": "Comment on a flow or wireframe version or one of its annotations (commenter), or\napprove, reject or request changes on the version (the spec's engineering approvers or\nan owner).",
+        "operationId": "review_design_artifact",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesignReviewIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignReviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/roadmaps/{doc}/items": {
       "get": {
         "tags": [
@@ -23025,6 +23422,57 @@
         ],
         "title": "AlignmentReport",
         "description": "The roadmap against the tracker's state, read-only: the path that works without\ntracker write permission (E1)."
+      },
+      "AnnotationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "requirement_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Requirement Ids",
+            "default": []
+          },
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactReviewEventOut"
+            },
+            "type": "array",
+            "title": "Reviews",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "target",
+          "note"
+        ],
+        "title": "AnnotationOut"
       },
       "AnswerIn": {
         "properties": {
@@ -27890,6 +28338,22 @@
             ],
             "title": "Retrieved At"
           },
+          "added": {
+            "type": "boolean",
+            "title": "Added",
+            "default": false
+          },
+          "state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Label"
+          },
           "item_id": {
             "anyOf": [
               {
@@ -30429,6 +30893,228 @@
         ],
         "title": "DependenciesCreate"
       },
+      "DesignArtifactOut": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "tech_brief",
+              "engineering_spec",
+              "user_flow",
+              "wireframe",
+              "prototype",
+              "acceptance_tests",
+              "figma_design"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "version": {
+            "$ref": "#/components/schemas/ArtifactVersionOut"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/DesignOutputOut"
+            },
+            "type": "array",
+            "title": "Outputs"
+          },
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactReviewEventOut"
+            },
+            "type": "array",
+            "title": "Reviews",
+            "default": []
+          },
+          "lineage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceOutput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "kind",
+          "title",
+          "version",
+          "outputs"
+        ],
+        "title": "DesignArtifactOut"
+      },
+      "DesignOutputOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "screen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screen"
+          },
+          "media_type": {
+            "type": "string",
+            "title": "Media Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section Keys",
+            "default": []
+          },
+          "requirement_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Requirement Ids",
+            "default": []
+          },
+          "annotations": {
+            "items": {
+              "$ref": "#/components/schemas/AnnotationOut"
+            },
+            "type": "array",
+            "title": "Annotations",
+            "default": []
+          },
+          "removed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Removed",
+            "default": []
+          },
+          "content_url": {
+            "type": "string",
+            "title": "Content Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "media_type",
+          "size_bytes",
+          "sha256",
+          "content_url"
+        ],
+        "title": "DesignOutputOut"
+      },
+      "DesignReviewIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "comment",
+              "approved",
+              "changes_requested",
+              "rejected"
+            ],
+            "title": "Kind"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output"
+          },
+          "annotation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "DesignReviewIn"
+      },
+      "DesignReviewOut": {
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/ArtifactReviewEventOut"
+          },
+          "version": {
+            "$ref": "#/components/schemas/ArtifactVersionOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event",
+          "version"
+        ],
+        "title": "DesignReviewOut"
+      },
       "DiffOut": {
         "properties": {
           "document_id": {
@@ -30601,7 +31287,8 @@
             "type": "string",
             "enum": [
               "prd",
-              "roadmap"
+              "roadmap",
+              "spec"
             ],
             "title": "Kind",
             "default": "prd"
@@ -30957,7 +31644,8 @@
             "type": "string",
             "enum": [
               "prd",
-              "roadmap"
+              "roadmap",
+              "spec"
             ],
             "title": "Kind",
             "default": "prd"
@@ -31107,7 +31795,8 @@
                 "type": "string",
                 "enum": [
                   "prd",
-                  "roadmap"
+                  "roadmap",
+                  "spec"
                 ]
               },
               {
@@ -35040,7 +35729,8 @@
             "enum": [
               "baseline_to_prd",
               "feedback_loop",
-              "prd_to_roadmap"
+              "prd_to_roadmap",
+              "prd_to_spec"
             ],
             "title": "Key"
           },
@@ -35062,7 +35752,8 @@
                 "type": "string",
                 "enum": [
                   "prd",
-                  "roadmap"
+                  "roadmap",
+                  "spec"
                 ]
               },
               {
@@ -35077,7 +35768,8 @@
                 "type": "string",
                 "enum": [
                   "prd",
-                  "roadmap"
+                  "roadmap",
+                  "spec"
                 ]
               },
               {
@@ -35085,6 +35777,17 @@
               }
             ],
             "title": "Source Kind"
+          },
+          "entry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry"
           },
           "segments": {
             "items": {
@@ -36461,7 +37164,8 @@
             "enum": [
               "baseline_to_prd",
               "feedback_loop",
-              "prd_to_roadmap"
+              "prd_to_roadmap",
+              "prd_to_spec"
             ],
             "title": "Flow"
           },
@@ -45687,6 +46391,94 @@
         ],
         "title": "RefreshSweepOut"
       },
+      "RegenerateIn": {
+        "properties": {
+          "prd_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Version"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "knobs": {
+            "$ref": "#/components/schemas/KnobsIn",
+            "default": {
+              "depth": "standard",
+              "roles": {},
+              "checkpoints": {}
+            }
+          }
+        },
+        "type": "object",
+        "title": "RegenerateIn"
+      },
+      "RegenerationOut": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "prd_version": {
+            "type": "integer",
+            "title": "Prd Version"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section Keys"
+          },
+          "dropped_section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dropped Section Keys",
+            "default": []
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "run_id",
+          "prd_version",
+          "section_keys"
+        ],
+        "title": "RegenerationOut",
+        "description": "A proposed regeneration: a draft run nobody has started. Estimate and start it like\nany run (the >$50 approval and the 1.5x pause apply); it writes new versions for review,\nand the current ones stay until a reviewer approves the new ones."
+      },
       "RegenerationProposal": {
         "properties": {
           "kind": {
@@ -45943,6 +46735,66 @@
           "created_at"
         ],
         "title": "ReportRef"
+      },
+      "RequirementOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section Keys",
+            "default": []
+          },
+          "missing": {
+            "type": "boolean",
+            "title": "Missing",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "RequirementOut"
       },
       "RescoreResult": {
         "properties": {
@@ -47207,7 +48059,8 @@
             "enum": [
               "baseline_to_prd",
               "feedback_loop",
-              "prd_to_roadmap"
+              "prd_to_roadmap",
+              "prd_to_spec"
             ],
             "title": "Flow"
           },
@@ -47302,7 +48155,8 @@
             "enum": [
               "baseline_to_prd",
               "feedback_loop",
-              "prd_to_roadmap"
+              "prd_to_roadmap",
+              "prd_to_spec"
             ],
             "title": "Flow"
           },
@@ -47353,7 +48207,8 @@
                 "type": "string",
                 "enum": [
                   "prd",
-                  "roadmap"
+                  "roadmap",
+                  "spec"
                 ]
               },
               {
@@ -47840,7 +48695,8 @@
             "enum": [
               "baseline_to_prd",
               "feedback_loop",
-              "prd_to_roadmap"
+              "prd_to_roadmap",
+              "prd_to_spec"
             ],
             "title": "Flow"
           },
@@ -47891,7 +48747,8 @@
                 "type": "string",
                 "enum": [
                   "prd",
-                  "roadmap"
+                  "roadmap",
+                  "spec"
                 ]
               },
               {
@@ -48881,6 +49738,14 @@
               }
             ],
             "title": "Words"
+          },
+          "spec_states": {
+            "items": {
+              "$ref": "#/components/schemas/SpecPartState"
+            },
+            "type": "array",
+            "title": "Spec States",
+            "default": []
           }
         },
         "type": "object",
@@ -49451,6 +50316,14 @@
               }
             ],
             "title": "Notes"
+          },
+          "spec_states": {
+            "items": {
+              "$ref": "#/components/schemas/SpecPartState"
+            },
+            "type": "array",
+            "title": "Spec States",
+            "default": []
           }
         },
         "type": "object",
@@ -51072,6 +51945,17 @@
             "type": "array",
             "title": "Expand",
             "default": []
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
           }
         },
         "type": "object",
@@ -51627,6 +52511,612 @@
           "swapped_to_reason"
         ],
         "title": "SpanOut"
+      },
+      "SpecOut": {
+        "properties": {
+          "request": {
+            "$ref": "#/components/schemas/ArtifactRequestOut"
+          },
+          "document_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Slug"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "depth": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "full"
+            ],
+            "title": "Depth"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "approach_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposed",
+                  "approved"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approach Status"
+          },
+          "freshness": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freshness"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/RequirementOut"
+            },
+            "type": "array",
+            "title": "Requirements"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section Keys"
+          },
+          "engineering_approver_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Engineering Approver Ids",
+            "default": []
+          },
+          "code_capability_map": {
+            "type": "string",
+            "enum": [
+              "used",
+              "unavailable"
+            ],
+            "title": "Code Capability Map"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/SpecVersionOut"
+            },
+            "type": "array",
+            "title": "Versions"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/SpecSectionOut"
+            },
+            "type": "array",
+            "title": "Sections",
+            "default": []
+          },
+          "design": {
+            "items": {
+              "$ref": "#/components/schemas/DesignArtifactOut"
+            },
+            "type": "array",
+            "title": "Design",
+            "default": []
+          },
+          "stale": {
+            "items": {
+              "$ref": "#/components/schemas/TraceOutput"
+            },
+            "type": "array",
+            "title": "Stale",
+            "default": []
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "run_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "request",
+          "depth",
+          "requirements",
+          "section_keys",
+          "code_capability_map",
+          "versions"
+        ],
+        "title": "SpecOut"
+      },
+      "SpecPartState": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "decided": {
+            "type": "boolean",
+            "title": "Decided"
+          },
+          "added": {
+            "type": "boolean",
+            "title": "Added",
+            "default": false
+          },
+          "half": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "decided",
+                  "proposed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Half"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "decided"
+        ],
+        "title": "SpecPartState",
+        "description": "E1: the decided/proposed state of a part of a spec version's section, as the\ndocument view shows it (the exports and the markdown show the same label)."
+      },
+      "SpecRequestCreate": {
+        "properties": {
+          "prd": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Prd"
+          },
+          "prd_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Version"
+          },
+          "requirement_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Requirement Ids"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Section Keys"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "depth": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "full"
+            ],
+            "title": "Depth",
+            "default": "brief"
+          },
+          "design": {
+            "type": "boolean",
+            "title": "Design",
+            "default": true
+          },
+          "screens": {
+            "type": "integer",
+            "maximum": 4.0,
+            "minimum": 2.0,
+            "title": "Screens",
+            "default": 3
+          },
+          "engineering_approver_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Engineering Approver Ids"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "document": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document"
+          },
+          "knobs": {
+            "$ref": "#/components/schemas/KnobsIn",
+            "default": {
+              "depth": "standard",
+              "roles": {},
+              "checkpoints": {}
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "requirement_ids"
+        ],
+        "title": "SpecRequestCreate"
+      },
+      "SpecRequestCreated": {
+        "properties": {
+          "spec": {
+            "$ref": "#/components/schemas/SpecOut"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "spec",
+          "run_id"
+        ],
+        "title": "SpecRequestCreated"
+      },
+      "SpecSectionOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "layer": {
+            "type": "string",
+            "title": "Layer"
+          },
+          "part": {
+            "type": "string",
+            "enum": [
+              "context",
+              "product_requirement",
+              "engineering_approach",
+              "open_decision",
+              "assumption",
+              "proposed"
+            ],
+            "title": "Part"
+          },
+          "decided": {
+            "type": "boolean",
+            "title": "Decided"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "half": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "decided",
+                  "proposed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Half"
+          },
+          "added": {
+            "type": "boolean",
+            "title": "Added",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "heading",
+          "layer",
+          "part",
+          "decided",
+          "label"
+        ],
+        "title": "SpecSectionOut"
+      },
+      "SpecSummary": {
+        "properties": {
+          "request": {
+            "$ref": "#/components/schemas/ArtifactRequestOut"
+          },
+          "document_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Slug"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "depth": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "full"
+            ],
+            "title": "Depth"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "approach_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposed",
+                  "approved"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approach Status"
+          },
+          "freshness": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freshness"
+          }
+        },
+        "type": "object",
+        "required": [
+          "request",
+          "depth"
+        ],
+        "title": "SpecSummary"
+      },
+      "SpecVersionOut": {
+        "properties": {
+          "artifact_version": {
+            "$ref": "#/components/schemas/ArtifactVersionOut"
+          },
+          "document_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Version"
+          },
+          "document_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Version Id"
+          },
+          "approach_status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "approved"
+            ],
+            "title": "Approach Status"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "artifact_version",
+          "approach_status"
+        ],
+        "title": "SpecVersionOut"
       },
       "StagedChange": {
         "properties": {
@@ -57064,7 +58554,8 @@
             "type": "string",
             "enum": [
               "prd",
-              "roadmap"
+              "roadmap",
+              "spec"
             ],
             "title": "Kind"
           },

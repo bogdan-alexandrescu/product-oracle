@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, changes
+from oracle import audit, changes, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.docs import layers
 from oracle.docs.diff import diff_sections
@@ -35,6 +35,7 @@ from oracle.docs.schemas import (
     ImportProblem,
     SectionOut,
     SectionVerdict,
+    SpecPartState,
     VersionOut,
     VersionSource,
     VersionSummary,
@@ -282,6 +283,72 @@ def _template_meta(body: str):
     return version_meta(body)
 
 
+async def is_spec_version(db: AsyncSession, version: DocumentVersion) -> bool:
+    document = await db.get(Document, version.document_id)
+    return document is not None and document.kind == "spec"
+
+
+async def _spec_states(
+    db: AsyncSession, version: DocumentVersion, sections: list[Section]
+) -> dict[str, list[SpecPartState]]:
+    """E1: the state of each part of a spec version's sections (none for other kinds)."""
+    if not await is_spec_version(db, version):
+        return {}
+    from oracle.specs import contract, lineage
+
+    approved = await lineage.approach_approved(db, version)
+    keys = contract.keys_of(version.front_matter)
+    return {
+        s.section_key: [
+            SpecPartState(
+                label=p.label,
+                decided=p.decided,
+                added=p.added,
+                half=p.half,
+                starts_at=contract.ACCEPTANCE_PROPOSED_LABEL if p.half == "proposed" else None,
+            )
+            for p in contract.part_states(s.section_key, s.body_md, approved, keys)
+        ]
+        for s in sections
+        if s.section_key not in contract.UNLABELLED
+    }
+
+
+async def spec_markdown(db: AsyncSession, version: DocumentVersion) -> str:
+    """A version's markdown as it is served (GET .../markdown, MCP get_document_markdown,
+    the markdown export, the feedback package): a spec version's carries its state labels
+    and names its added sources (E1). It fails closed: a spec version that can not carry
+    its labels raises DraftError rather than being served without them."""
+    if not await is_spec_version(db, version):
+        return version.markdown
+    from oracle.specs import contract, lineage
+
+    # Off the event loop: the version's text is an edit's (oracle.safe_yaml).
+    return await safe_yaml.run_parse(
+        contract.label_markdown,
+        version.markdown,
+        await lineage.approach_approved(db, version),
+        await lineage.oracle_citation_keys(db, version),
+    )
+
+
+async def _citations_out(
+    db: AsyncSession, version: DocumentVersion, citations: list[Citation]
+) -> list[CitationOut]:
+    """A version's citations; a spec version's added in an edit carry ``added`` and the
+    'Proposed · added in an edit' label (E1, owner, 2026-10-20)."""
+    out = [CitationOut.model_validate(c) for c in citations]
+    if not out or not await is_spec_version(db, version):
+        return out
+    from oracle.specs import contract, lineage
+
+    oracle = await lineage.oracle_citation_keys(db, version)
+    for c in out:
+        if oracle is None or c.cite_key not in oracle:
+            c.added, c.state_label = True, contract.ADDED_LABEL
+    return out
+
+
 async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut:
     sections = list(
         await db.scalars(
@@ -294,6 +361,7 @@ async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut
         )
     )
     verdicts = await _latest_verdicts(db, version.id)
+    states = await _spec_states(db, version, sections)
     source = (await version_sources(db, [version.source_version_id])).get(
         version.source_version_id  # type: ignore[arg-type]
     )
@@ -327,11 +395,12 @@ async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut
                     "verdict": verdicts.get(s.section_key),
                     # O1g: computed on read, so every version follows the same rule.
                     "notes": layers.presenter_notes(s.body_md) if s.layer == "brief" else None,
+                    "spec_states": states.get(s.section_key, []),
                 }
             )
             for s in sections
         ],
-        citations=[CitationOut.model_validate(c) for c in citations],
+        citations=await _citations_out(db, version, citations),
         date_marks=date_marks,
     )
 
@@ -596,6 +665,19 @@ async def import_draft(
         run_id = run_id or acting_for_run
         if cause == "draft_imported":
             cause = "run_draft"
+    # E1: the state labels a spec's markdown is served with are never stored. They are
+    # stripped before the draft's one parse (the kind read without the row lock, which is
+    # taken after the parse).
+    found = await find_document(db, doc)
+    if found is not None and found.kind == "spec":
+        from oracle.specs.contract import strip_state_labels
+
+        try:
+            markdown = await safe_yaml.run_parse_within(
+                strip_state_labels, markdown, name="the draft"
+            )
+        except safe_yaml.ParseTimeout as exc:
+            raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from exc
     # Off the event loop, time-capped: the draft is untrusted text (oracle.safe_yaml).
     draft = await parse_draft_async(markdown)
     if draft.template is None and template is not None:
@@ -825,6 +907,9 @@ async def import_draft(
 
     from oracle.review import patches, state
 
+    if document.kind == "spec":
+        # The spec lineage handler checks the edit on this parse (oracle.specs.lineage).
+        db.info.setdefault("spec_drafts", {})[version.id] = draft
     # v2 hook: outputs built on earlier versions may now be stale (oracle.trace). One
     # change: the review lane's per-section changes below are parts of it, and the trace
     # marks what the version reaches once, from this event.
@@ -1116,9 +1201,16 @@ async def diff(db: AsyncSession, doc: str, from_number: int, to_number: int) -> 
         (old_sections if s.version_id == old.id else new_sections).append(s)
     if old.id == new.id:
         new_sections = old_sections
+    sections = diff_sections(old_sections, new_sections)
+    new_states = await _spec_states(db, new, new_sections)
+    if new_states:
+        old_states = await _spec_states(db, old, old_sections)
+        for d in sections:
+            states = old_states if d.status == "removed" else new_states
+            d.spec_states = states.get(d.section_key, [])
     return DiffOut(
         document_id=document.id,
         from_version=from_number,
         to_version=to_number,
-        sections=diff_sections(old_sections, new_sections),
+        sections=sections,
     )

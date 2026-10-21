@@ -9,6 +9,7 @@
     {% if deck.source_label %}<p class="slide-source">{{ deck.source_label }}</p>{% endif %}
   {% elif s.kind == "sources" %}
     <h2 class="slide-title">{{ s.heading }}</h2>
+    {% if s.state %}<p class="spec-state spec-state-{{ s.state_kind }}" data-spec-state="{{ s.state_kind }}">{{ s.state }}</p>{% endif %}
     <ol class="slide-sources">
     {% for number, title, kind, retrieved in s.sources %}
       <li value="{{ number }}"><span class="src-title">{{ title }}</span> <span class="src-kind">{{ kind }}</span>{% if retrieved %} <span class="src-retrieved">retrieved {{ retrieved }}</span>{% endif %}</li>
