@@ -41,9 +41,9 @@ def known_step(key: str) -> str:
     return key
 
 
-# A1's keys: connect, sources, invite, domains, horizons (A3 adds eng_lead; B1
-# build_baseline). Later picks
-# add more through STEPS, so the type is a str checked against the registry.
+# A1's keys: connect, sources, invite, domains, horizons (A3 adds eng_lead, B1
+# build_baseline). Later picks add more through STEPS, so the type is a str checked
+# against the registry.
 SetupKey = Annotated[str, AfterValidator(known_step)]
 
 
