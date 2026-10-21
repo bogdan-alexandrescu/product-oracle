@@ -29,21 +29,21 @@ from oracle.discussions.models import (
     DiscussionParticipant,
 )
 from oracle.discussions.schemas import (
-    ChangeCounts,
-    ChangeOut,
+    DiscussionChangeCounts,
+    DiscussionChangeOut,
     DiscussionCreate,
+    DiscussionExposure,
+    DiscussionMe,
+    DiscussionMessageIn,
+    DiscussionMessageOut,
+    DiscussionMeSummary,
     DiscussionOut,
+    DiscussionParticipantOut,
     DiscussionPatch,
+    DiscussionPerson,
+    DiscussionStarter,
     DiscussionSummary,
-    Exposure,
     HiddenDiscussion,
-    Me,
-    MessageIn,
-    MessageOut,
-    MeSummary,
-    ParticipantOut,
-    PersonRef,
-    Starter,
 )
 from oracle.members.names import display_name
 from oracle.v2.concurrency import expect_version, flush_or_conflict
@@ -607,7 +607,7 @@ async def _summary_fields(
         "author_only": d.author_only,
         "status": d.status,
         "origin": d.origin,
-        "started_by": Starter(
+        "started_by": DiscussionStarter(
             user_id=d.started_by,
             name=display_name(starter.email) if starter else "Someone",
             role=starter.role if starter else "viewer",  # type: ignore[arg-type]
@@ -618,7 +618,7 @@ async def _summary_fields(
         "summary": d.summary,
         "summary_status": d.summary_status,
         "summary_shared": d.summary_shared,
-        "changes": ChangeCounts(
+        "changes": DiscussionChangeCounts(
             proposed=changes["proposed"], suggested=changes["suggested"], staged=changes["staged"]
         ),
         "lock_version": d.lock_version,
@@ -639,12 +639,12 @@ async def discussion_out(db: AsyncSession, principal: "Principal", d: Discussion
     users = await users_by_id(db, {d.started_by, *active})
     stats = await _stats(db, principal, [d])
     fields = await _summary_fields(db, principal, d, seat, stats, Labels(db), users)
-    fields["me"] = Me(**fields["me"], can_manage=access.can_manage(seat))
+    fields["me"] = DiscussionMe(**fields["me"], can_manage=access.can_manage(seat))
     out = DiscussionOut(
         **fields,
         subject=d.subject,
         participants=[
-            ParticipantOut(
+            DiscussionParticipantOut(
                 user_id=p.user_id,
                 name=display_name(users[p.user_id].email),
                 role=users[p.user_id].role,  # type: ignore[arg-type]
@@ -657,7 +657,7 @@ async def discussion_out(db: AsyncSession, principal: "Principal", d: Discussion
     )
     if d.visibility == "private" and seat.starter:
         messages, people = await exposure(db, d)
-        out.exposure = Exposure(messages=messages, people=people)
+        out.exposure = DiscussionExposure(messages=messages, people=people)
     return out
 
 
@@ -730,17 +730,17 @@ async def list_discussions(
             )
             continue
         fields = await _summary_fields(db, principal, d, seat, stats, labels, users)
-        out.append(DiscussionSummary(**{**fields, "me": MeSummary(**fields["me"])}))
+        out.append(DiscussionSummary(**{**fields, "me": DiscussionMeSummary(**fields["me"])}))
     return out
 
 
-def message_out(m: DiscussionMessage, users: dict[uuid.UUID, User]) -> MessageOut:
-    def ref(uid: uuid.UUID) -> PersonRef:
+def message_out(m: DiscussionMessage, users: dict[uuid.UUID, User]) -> DiscussionMessageOut:
+    def ref(uid: uuid.UUID) -> DiscussionPerson:
         user = users.get(uid)
-        return PersonRef(user_id=uid, name=display_name(user.email) if user else "Someone")
+        return DiscussionPerson(user_id=uid, name=display_name(user.email) if user else "Someone")
 
     deleted = m.deleted_at is not None
-    return MessageOut(
+    return DiscussionMessageOut(
         id=m.id,
         discussion_id=m.discussion_id,
         author_kind=m.author_kind,  # type: ignore[arg-type]
@@ -758,7 +758,9 @@ def message_out(m: DiscussionMessage, users: dict[uuid.UUID, User]) -> MessageOu
     )
 
 
-async def messages_out(db: AsyncSession, rows: list[DiscussionMessage]) -> list[MessageOut]:
+async def messages_out(
+    db: AsyncSession, rows: list[DiscussionMessage]
+) -> list[DiscussionMessageOut]:
     ids = {m.author_id for m in rows if m.author_id} | {u for m in rows for u in m.mentions}
     users = await users_by_id(db, ids)
     return [message_out(m, users) for m in rows]
@@ -785,13 +787,15 @@ async def list_messages(
     return list(reversed(rows[:limit])), len(rows) > limit
 
 
-async def list_changes(db: AsyncSession, d: Discussion, status: str | None) -> list[ChangeOut]:
+async def list_changes(
+    db: AsyncSession, d: Discussion, status: str | None
+) -> list[DiscussionChangeOut]:
     stmt = select(DiscussionChange).where(DiscussionChange.discussion_id == d.id)
     if status:
         stmt = stmt.where(DiscussionChange.status == status)
     rows = await db.scalars(stmt.order_by(DiscussionChange.created_at, DiscussionChange.id))
     return [
-        ChangeOut(
+        DiscussionChangeOut(
             id=c.id,
             kind=c.kind,
             label=kinds.label(c.kind, c.edited_payload or c.payload),
@@ -872,7 +876,7 @@ async def _post(
     d: Discussion,
     parts: dict[uuid.UUID, DiscussionParticipant],
     seat: access.Seat,
-    body: MessageIn,
+    body: DiscussionMessageIn,
     via: str,
 ) -> DiscussionMessage:
     me = _person(principal)
@@ -961,7 +965,7 @@ async def start(db: AsyncSession, principal: "Principal", body: DiscussionCreate
 
 
 async def post_message(
-    db: AsyncSession, principal: "Principal", discussion_id: uuid.UUID, body: MessageIn
+    db: AsyncSession, principal: "Principal", discussion_id: uuid.UUID, body: DiscussionMessageIn
 ) -> DiscussionMessage:
     await recheck_caller(db, principal, "viewer")
     d, parts, seat = await readable(db, principal, discussion_id, lock=True)
@@ -1069,7 +1073,7 @@ async def _make_open(
     principal: "Principal",
     d: Discussion,
     seat: access.Seat,
-    exposes: Exposure | None,
+    exposes: DiscussionExposure | None,
 ) -> None:
     """G1 "Open later?" (owner, 2026-10-21): the starter alone, after a warning naming
     what it exposes; everyone in it stays in it."""
@@ -1129,7 +1133,7 @@ async def _make_private(
 
 async def add_participants(
     db: AsyncSession, principal: "Principal", discussion_id: uuid.UUID, user_ids: list[uuid.UUID]
-) -> list[ParticipantOut]:
+) -> list[DiscussionParticipantOut]:
     """On a private discussion only the starter adds people. On an open one any reader
     follows it (adds themselves) and commenters and up add others."""
     await recheck_caller(db, principal, "viewer")

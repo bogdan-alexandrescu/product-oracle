@@ -96,7 +96,9 @@ async def events(ctx, action: str) -> list[AuditEvent]:
     async with tenant_session(ctx.tenant_id) as s:
         return list(
             await s.scalars(
-                select(AuditEvent).where(AuditEvent.action == action).order_by(AuditEvent.created_at)
+                select(AuditEvent)
+                .where(AuditEvent.action == action)
+                .order_by(AuditEvent.created_at)
             )
         )
 

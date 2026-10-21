@@ -28,7 +28,7 @@ AddedVia = Literal["started", "mention", "added", "followed", "posted"]
 ChangeStatus = Literal["proposed", "suggested", "staged", "done", "dismissed", "superseded"]
 
 
-class MessageIn(BaseModel):
+class DiscussionMessageIn(BaseModel):
     # The 8,000-character limit answers its own copy (oracle.discussions.service).
     body: str
     mentions: list[uuid.UUID] = Field(default_factory=list, max_length=50)
@@ -36,7 +36,7 @@ class MessageIn(BaseModel):
     reply_to: uuid.UUID | None = None
 
 
-class MessageEdit(BaseModel):
+class DiscussionMessageEdit(BaseModel):
     body: str
 
 
@@ -48,10 +48,10 @@ class DiscussionCreate(BaseModel):
     visibility: Visibility = "open"
     # The starter's pick for a private discussion; treated as mentions on an open one.
     participants: list[uuid.UUID] = Field(default_factory=list, max_length=50)
-    message: MessageIn | None = None
+    message: DiscussionMessageIn | None = None
 
 
-class Exposure(BaseModel):
+class DiscussionExposure(BaseModel):
     """What making a private discussion open exposes: the messages not deleted (people's
     and Oracle's, system lines excluded) and the distinct people who wrote them."""
 
@@ -63,7 +63,7 @@ class DiscussionPatch(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     visibility: Visibility | None = None
     # The counts the Make open warning showed; required to make a private discussion open.
-    exposes: Exposure | None = None
+    exposes: DiscussionExposure | None = None
     status: Status | None = None
     # The 1,200-character limit answers its own copy (oracle.discussions.service).
     summary: str | None = None
@@ -72,24 +72,24 @@ class DiscussionPatch(BaseModel):
     lock_version: int
 
 
-class ParticipantsIn(BaseModel):
+class DiscussionParticipantsIn(BaseModel):
     user_ids: list[uuid.UUID] = Field(min_length=1, max_length=50)
 
 
-class ReadIn(BaseModel):
+class DiscussionReadIn(BaseModel):
     message_id: uuid.UUID
 
 
-class PersonRef(BaseModel):
+class DiscussionPerson(BaseModel):
     user_id: uuid.UUID
     name: str
 
 
-class Starter(PersonRef):
+class DiscussionStarter(DiscussionPerson):
     role: Role
 
 
-class ParticipantOut(BaseModel):
+class DiscussionParticipantOut(BaseModel):
     user_id: uuid.UUID
     name: str
     role: Role
@@ -98,19 +98,19 @@ class ParticipantOut(BaseModel):
     added_via: AddedVia
 
 
-class ChangeCounts(BaseModel):
+class DiscussionChangeCounts(BaseModel):
     proposed: int = 0
     suggested: int = 0
     staged: int = 0
 
 
-class MeSummary(BaseModel):
+class DiscussionMeSummary(BaseModel):
     participant: bool
     can_write: bool
     unread: int
 
 
-class Me(MeSummary):
+class DiscussionMe(DiscussionMeSummary):
     can_manage: bool
 
 
@@ -127,7 +127,7 @@ class DiscussionSummary(BaseModel):
     author_only: bool
     status: Status
     origin: Origin
-    started_by: Starter
+    started_by: DiscussionStarter
     # The version it was started on (document, section, roadmap item): "Started on v3".
     started_on_version: int | None = None
     message_count: int
@@ -135,8 +135,8 @@ class DiscussionSummary(BaseModel):
     summary: str | None
     summary_status: SummaryStatus
     summary_shared: bool
-    changes: ChangeCounts
-    me: MeSummary
+    changes: DiscussionChangeCounts
+    me: DiscussionMeSummary
     lock_version: int
     created_at: datetime
     updated_at: datetime
@@ -144,10 +144,10 @@ class DiscussionSummary(BaseModel):
 
 class DiscussionOut(DiscussionSummary):
     subject: dict[str, Any]
-    participants: list[ParticipantOut]
-    me: Me  # type: ignore[assignment]
+    participants: list[DiscussionParticipantOut]
+    me: DiscussionMe  # type: ignore[assignment]
     # The starter of a private discussion only: what Make open would expose now.
-    exposure: Exposure | None = None
+    exposure: DiscussionExposure | None = None
 
 
 class HiddenDiscussion(BaseModel):
@@ -165,14 +165,14 @@ class DiscussionPage(BaseModel):
     next: str | None = None
 
 
-class MessageOut(BaseModel):
+class DiscussionMessageOut(BaseModel):
     id: uuid.UUID
     discussion_id: uuid.UUID
     author_kind: Literal["person", "oracle", "system"]
-    author: PersonRef | None
+    author: DiscussionPerson | None
     via: Literal["web", "mcp", "slack"]
     body: str
-    mentions: list[PersonRef]
+    mentions: list[DiscussionPerson]
     mentions_oracle: bool
     reply_to: uuid.UUID | None
     status: Literal["pending", "streaming", "complete", "failed", "cancelled"]
@@ -182,12 +182,12 @@ class MessageOut(BaseModel):
     deleted: bool
 
 
-class MessagePage(BaseModel):
-    items: list[MessageOut]
+class DiscussionMessagePage(BaseModel):
+    items: list[DiscussionMessageOut]
     has_more: bool
 
 
-class ChangeOut(BaseModel):
+class DiscussionChangeOut(BaseModel):
     id: uuid.UUID
     kind: str
     # The plain sentence from the registry (oracle.discussions.kinds).
@@ -204,7 +204,7 @@ class ChangeOut(BaseModel):
     lock_version: int
 
 
-class ExposureConflict(BaseModel):
+class DiscussionExposureConflict(BaseModel):
     """409: the counts the warning showed are not the discussion's now."""
 
     detail: str

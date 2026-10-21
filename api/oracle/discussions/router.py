@@ -14,21 +14,21 @@ from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.discussions import service
 from oracle.discussions.schemas import (
-    ChangeOut,
     ChangeStatus,
+    DiscussionChangeOut,
     DiscussionCreate,
+    DiscussionExposureConflict,
+    DiscussionMessageEdit,
+    DiscussionMessageIn,
+    DiscussionMessageOut,
+    DiscussionMessagePage,
     DiscussionOut,
     DiscussionPage,
+    DiscussionParticipantOut,
+    DiscussionParticipantsIn,
     DiscussionPatch,
-    ExposureConflict,
-    MessageEdit,
-    MessageIn,
-    MessageOut,
-    MessagePage,
+    DiscussionReadIn,
     Origin,
-    ParticipantOut,
-    ParticipantsIn,
-    ReadIn,
     Status,
 )
 
@@ -111,7 +111,10 @@ async def get_discussion(
     responses={
         403: PRIVATE,
         404: GONE,
-        409: {"model": ExposureConflict, "description": "Stale, closed, or counts to confirm"},
+        409: {
+            "model": DiscussionExposureConflict,
+            "description": "Stale, closed, or counts to confirm",
+        },
     },
 )
 async def update_discussion(
@@ -126,7 +129,7 @@ async def update_discussion(
         d = await _call(service.update(db, principal, discussion_id, body))
     except service.ExposureMismatch as e:
         await db.rollback()
-        conflict = ExposureConflict(detail=str(e), messages=e.messages, people=e.people)
+        conflict = DiscussionExposureConflict(detail=str(e), messages=e.messages, people=e.people)
         return JSONResponse(conflict.model_dump(), status.HTTP_409_CONFLICT)
     await db.commit()
     await db.refresh(d)
@@ -135,7 +138,7 @@ async def update_discussion(
 
 @router.get(
     "/discussions/{discussion_id}/messages",
-    response_model=MessagePage,
+    response_model=DiscussionMessagePage,
     responses={403: PRIVATE, 404: GONE},
 )
 async def list_discussion_messages(
@@ -144,23 +147,23 @@ async def list_discussion_messages(
     db: TenantDB,
     before: uuid.UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
-) -> MessagePage:
+) -> DiscussionMessagePage:
     """The thread, a page at a time, oldest first within the page; ``before``: the
     messages older than that one."""
     d, _parts, _seat = await _call(service.readable(db, principal, discussion_id))
     rows, more = await _call(service.list_messages(db, d, before, limit))
-    return MessagePage(items=await service.messages_out(db, rows), has_more=more)
+    return DiscussionMessagePage(items=await service.messages_out(db, rows), has_more=more)
 
 
 @router.post(
     "/discussions/{discussion_id}/messages",
-    response_model=MessageOut,
+    response_model=DiscussionMessageOut,
     status_code=status.HTTP_201_CREATED,
     responses={403: PRIVATE, 404: GONE, 409: {"description": "This discussion is closed"}},
 )
 async def create_discussion_message(
-    discussion_id: uuid.UUID, body: MessageIn, principal: Viewer, db: TenantDB
-) -> MessageOut:
+    discussion_id: uuid.UUID, body: DiscussionMessageIn, principal: Viewer, db: TenantDB
+) -> DiscussionMessageOut:
     """Write in a discussion (commenters and up; in a private one, its people). Plain
     text with Markdown links, at most 8,000 characters. ``mentions`` (member ids from
     ``GET /v1/people``) add people to an open discussion; in a private one only the
@@ -173,16 +176,16 @@ async def create_discussion_message(
 
 @router.patch(
     "/discussions/{discussion_id}/messages/{message_id}",
-    response_model=MessageOut,
+    response_model=DiscussionMessageOut,
     responses={403: PRIVATE, 404: GONE},
 )
 async def update_discussion_message(
     discussion_id: uuid.UUID,
     message_id: uuid.UUID,
-    body: MessageEdit,
+    body: DiscussionMessageEdit,
     principal: Viewer,
     db: TenantDB,
-) -> MessageOut:
+) -> DiscussionMessageOut:
     """Edit your own message; it shows "edited". Oracle's messages cannot be edited."""
     message = await _call(service.edit_message(db, principal, discussion_id, message_id, body.body))
     await db.commit()
@@ -205,12 +208,12 @@ async def delete_discussion_message(
 
 @router.post(
     "/discussions/{discussion_id}/participants",
-    response_model=list[ParticipantOut],
+    response_model=list[DiscussionParticipantOut],
     responses={403: PRIVATE, 404: GONE},
 )
 async def add_discussion_participants(
-    discussion_id: uuid.UUID, body: ParticipantsIn, principal: Viewer, db: TenantDB
-) -> list[ParticipantOut]:
+    discussion_id: uuid.UUID, body: DiscussionParticipantsIn, principal: Viewer, db: TenantDB
+) -> list[DiscussionParticipantOut]:
     """Add people. On a private discussion only the starter may; on an open one any
     reader adds themselves (Follow) and commenters and up add others. Returns everyone
     in it."""
@@ -238,7 +241,7 @@ async def remove_discussion_participant(
     responses={403: PRIVATE, 404: GONE},
 )
 async def mark_discussion_read(
-    discussion_id: uuid.UUID, body: ReadIn, principal: Viewer, db: TenantDB
+    discussion_id: uuid.UUID, body: DiscussionReadIn, principal: Viewer, db: TenantDB
 ) -> None:
     """Mark the thread read up to a message (what is unread for the caller)."""
     await _call(service.mark_read(db, principal, discussion_id, body.message_id))
@@ -247,7 +250,7 @@ async def mark_discussion_read(
 
 @router.get(
     "/discussions/{discussion_id}/changes",
-    response_model=list[ChangeOut],
+    response_model=list[DiscussionChangeOut],
     responses={403: PRIVATE, 404: GONE},
 )
 async def list_discussion_changes(
@@ -255,7 +258,7 @@ async def list_discussion_changes(
     principal: Viewer,
     db: TenantDB,
     status_: Annotated[ChangeStatus | None, Query(alias="status")] = None,
-) -> list[ChangeOut]:
+) -> list[DiscussionChangeOut]:
     """The typed changes the discussion ended in, read-only here (proposing, suggesting
     and staging arrive with G3 and G4)."""
     d, _parts, _seat = await _call(service.readable(db, principal, discussion_id))
