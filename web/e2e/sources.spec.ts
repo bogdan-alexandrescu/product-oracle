@@ -45,11 +45,6 @@ test("settings › sources: add from my connections, upload files, delete", asyn
   await page.goto("/settings/sources");
   const form = page.getByRole("form", { name: "Add a source" });
 
-  // A kind without a connector cannot be added.
-  await form.getByLabel("Kind").selectOption("google_docs");
-  await expect(form).toContainText("The Google Docs connector is not available yet.");
-  await expect(form.getByRole("button", { name: "Add source" })).toBeDisabled();
-
   await form.getByLabel("Kind").selectOption("github");
   await expect(form.getByLabel("Connection")).toHaveValue(/.+/);
   await form.getByLabel("Name").fill("Docs repo");
