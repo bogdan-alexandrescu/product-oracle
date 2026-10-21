@@ -66,7 +66,8 @@ def _columns() -> list[str]:
 
 def test_the_chain_ends_here_after_feedback_authors():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == [REVISION]
+    # C9 Move and pin's 0022_priority_overrides follows it; one head.
+    assert script.get_heads() == ["0022_priority_overrides"]
     assert script.get_revision(REVISION).down_revision == "0020_prd_scopes"
 
 
