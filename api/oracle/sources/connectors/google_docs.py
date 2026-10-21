@@ -746,6 +746,7 @@ class GoogleDocsConnector:
                 (f for f in current.values() if f.get("modifiedTime") != known.get(f["id"])),
                 key=lambda f: f.get("modifiedTime") or "",
             )
+            failed = False
             for file in changed:
                 try:
                     content = await drive.export(file["id"])
@@ -754,14 +755,16 @@ class GoogleDocsConnector:
                     if reason is None:
                         raise
                     # Not recorded in the cursor: the next sync tries it again.
+                    failed = True
                     yield ItemUnavailable(external_id=file["id"], reason=reason)
                     continue
                 yield self._item(file, content, flagged=file["id"] in _flagged(notes))
                 known[file["id"]] = file.get("modifiedTime") or ""
                 if (file.get("modifiedTime") or "") > (modified_since or ""):
                     modified_since = file["modifiedTime"]
-                yield checkpoint()
-            yield checkpoint()
+                yield checkpoint(listing_done=False)
+            # Done only when every export worked: a failed one lists again next sync.
+            yield checkpoint(listing_done=not failed)
 
     async def _picked(self, drive: _Drive, doc: str) -> tuple[dict[str, Any] | None, str | None]:
         """A picked doc's metadata, or why it cannot be read."""

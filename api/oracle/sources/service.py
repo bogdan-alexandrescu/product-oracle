@@ -554,10 +554,14 @@ async def _apply_drive_edit(
             source.cursor = {**source.cursor, "notes": notes}
 
 
-async def tidy_drive_source(db: AsyncSession, source_id: uuid.UUID) -> int:
+async def tidy_drive_source(
+    db: AsyncSession, source_id: uuid.UUID, *, unknown_outside: bool = False
+) -> int:
     """After a Google Docs sync stopped because its source or the company's Drive
     settings changed: delete the live items that now fall outside (what the edit's save
-    could not, because the sync held their rows). Commits; returns how many."""
+    could not, because the sync held their rows). Commits; returns how many.
+    ``unknown_outside``: also delete items whose drive and owner are not known; only after
+    a company narrowing (domains or shared drives), not a person's own edit."""
     source = await _lock_source(db, source_id)
     if source is None or source.kind != "google_docs":
         await db.rollback()
@@ -567,7 +571,7 @@ async def tidy_drive_source(db: AsyncSession, source_id: uuid.UUID) -> int:
     if get_settings().drive_docs_owned_outside == "skip":
         domains, drives = await company_scope(db, source.tenant_id)
         gone |= google_docs.outside_company(
-            source.config or {}, items, domains, drives, unknown_outside=True
+            source.config or {}, items, domains, drives, unknown_outside=unknown_outside
         )
     hidden = await _hide_items(db, source, gone)
     await db.commit()

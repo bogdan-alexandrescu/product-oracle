@@ -57,7 +57,14 @@ class SyncRefused(Exception):
 
 
 class _Superseded(Exception):
-    """The source's config or connection changed while it synced."""
+    """The source's config or connection changed while it synced. ``company_narrowed``:
+    the company's email domains or shared drives were narrowed (only then does tidy
+    delete items whose drive and owner are not known; a person's own edit hides only
+    what they removed)."""
+
+    def __init__(self, company_narrowed: bool = False) -> None:
+        super().__init__()
+        self.company_narrowed = company_narrowed
 
 
 @dataclass(frozen=True)
@@ -94,19 +101,30 @@ async def _hold(db: AsyncSession, started: _Started) -> None:
             .with_for_update(key_share=True)
         )
     ).one_or_none()
+    narrowed = False
+    changed = False
+    if started.company is not None:
+        now = await _company(db, started.tenant_id)
+        if now != started.company:
+            changed = True
+            narrowed = not set(started.company[0]) <= set(now[0]) or not set(
+                started.company[1]
+            ) <= set(now[1])
     if row is None or row.config != started.config or row.connection_id != started.connection_id:
-        raise _Superseded
-    if started.company is not None and await _company(db, started.tenant_id) != started.company:
-        raise _Superseded
+        raise _Superseded(narrowed)
+    if changed:
+        raise _Superseded(narrowed)
 
 
-async def _superseded(db: AsyncSession, stats: SyncStats, started: _Started) -> SyncStats:
+async def _superseded(
+    db: AsyncSession, stats: SyncStats, started: _Started, company_narrowed: bool = False
+) -> SyncStats:
     await db.rollback()
     stats.outcome = "superseded"
     stats.unavailable = []
     if started.kind == "google_docs":
         # What the edit's save skipped because this sync held the rows (now rolled back).
-        await service.tidy_drive_source(db, started.source_id)
+        await service.tidy_drive_source(db, started.source_id, unknown_outside=company_narrowed)
     return stats
 
 
@@ -141,8 +159,8 @@ async def _fail(
     if started is not None:
         try:
             await _hold(db, started)
-        except _Superseded:
-            return await _superseded(db, stats, started)
+        except _Superseded as e:
+            return await _superseded(db, stats, started, e.company_narrowed)
     source.status = "error"
     source.last_error = message
     await db.commit()
@@ -216,19 +234,21 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
             elif isinstance(event, base.CursorCheckpoint):
                 await _hold(db, started)
                 source.cursor = dict(event.cursor)
+                # The lost-access report so far, so a sync that fails later shows it.
+                source.unavailable_items = list(stats.unavailable)
                 await db.commit()
                 stats.checkpoints += 1
             else:
                 raise TypeError(f"unexpected sync event {type(event).__name__}")
-    except _Superseded:
-        return await _superseded(db, stats, started)
+    except _Superseded as e:
+        return await _superseded(db, stats, started, e.company_narrowed)
     except base.ConnectorRateLimited as e:
         # Stop cleanly: keep everything up to the last checkpoint and its cursor.
         await db.rollback()
         try:
             await _hold(db, started)
-        except _Superseded:
-            return await _superseded(db, stats, started)
+        except _Superseded as e:
+            return await _superseded(db, stats, started, e.company_narrowed)
         stats.outcome = "rate_limited"
         stats.retry_after = e.retry_after
         wait = f" (retry after {e.retry_after:g}s)" if e.retry_after is not None else ""
@@ -251,8 +271,8 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
 
     try:
         await _hold(db, started)
-    except _Superseded:
-        return await _superseded(db, stats, started)
+    except _Superseded as e:
+        return await _superseded(db, stats, started, e.company_narrowed)
     source.status = "active"
     source.last_error = None
     source.unavailable_items = list(stats.unavailable)
