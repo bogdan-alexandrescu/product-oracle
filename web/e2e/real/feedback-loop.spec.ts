@@ -88,7 +88,8 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
   const inboxRows = page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Team invoices PRD" });
   await expect(inboxRows).toHaveCount(2);
   await expect(page.getByTestId("nav-inbox-badge")).toHaveText("2");
-  await inboxRows.filter({ hasText: "Finance leads need" }).getByRole("link", { name: /^Review comments/ }).click();
+  // D14: a comment's row offers Decline and Open; Open goes to its section.
+  await inboxRows.filter({ hasText: "Finance leads need" }).getByRole("link", { name: /^Open Finance leads need/ }).click();
   await expect(page).toHaveURL(new RegExp(`/documents/${DOC}/v/1\\?feedback=open#solution$`));
   const review = page.getByRole("complementary", { name: "Review panel" }).filter({ visible: true });
   await expect(review.getByRole("tab", { name: /^Feedback\s*2$/ })).toHaveAttribute("aria-selected", "true");
