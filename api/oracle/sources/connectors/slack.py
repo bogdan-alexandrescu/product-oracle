@@ -144,7 +144,9 @@ SKIPPED_SUBTYPES = {
     "bot_remove",
     "reminder_add",
 }
-MENTION = re.compile(r"<@([UW][A-Z0-9]+)(?:\|[^>]*)?>")
+# A user mention, "<@U123>" or "<@U123|label>". The label stops at "<" (Slack escapes it in
+# text as "&lt;"), so a flood of unclosed mentions is scanned once (linear).
+MENTION = re.compile(r"<@([UW][A-Z0-9]++)(?:\|[^<>]*+)?>")
 
 
 def _ts_time(ts: str | None) -> datetime | None:
@@ -334,9 +336,9 @@ class _Slack:
 
     async def text(self, message: dict[str, Any]) -> str:
         text = message.get("text") or ""
-        for user in set(MENTION.findall(text)):
-            name = await self.user_name(user)
-            text = re.sub(rf"<@{user}(?:\|[^>]*)?>", f"@{name}", text)
+        names = {user: await self.user_name(user) for user in set(MENTION.findall(text))}
+        if names:
+            text = MENTION.sub(lambda m: f"@{names[m.group(1)]}", text)
         files = [f.get("name") or f.get("title") for f in message.get("files") or []]
         if any(files):
             text = f"{text}\n[files: {', '.join(f for f in files if f)}]".strip()
