@@ -2,8 +2,9 @@ import { Suspense } from "react";
 
 import { PresentMode } from "@/components/PresentMode";
 import { Loading } from "@/components/ui";
+import type { RouteProps } from "@/lib/route-props";
 
-type Props = PageProps<"/documents/[doc]/v/[n]/present">;
+type Props = RouteProps<{ doc: string; n: string }>;
 
 function first(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
