@@ -28,6 +28,7 @@ from oracle.connections.providers import (
 )
 from oracle.sources import base, store
 from oracle.sources.connectors import google_docs
+from oracle.sources.items import current_xid
 from oracle.sources.models import SOURCE_KINDS, Source, SourceItem
 from oracle.v2 import links
 
@@ -540,7 +541,7 @@ async def _hide_items(db: AsyncSession, source: Source, external_ids: set[str]) 
     await db.execute(
         update(SourceItem)
         .where(SourceItem.id.in_([r.id for r in rows]))
-        .values(deleted_at=func.clock_timestamp())
+        .values(deleted_at=func.clock_timestamp(), deleted_xid=current_xid())
         .execution_options(synchronize_session=False)
     )
     hidden = {r.external_id for r in rows}

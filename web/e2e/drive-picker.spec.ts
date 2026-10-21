@@ -324,3 +324,35 @@ test("sources › Google Docs: pasted ids must be Drive ids; links copied from D
   await expect(form.getByText("Not a Drive file or folder id: root, root?x=")).toBeVisible();
   await expect(form.getByLabel("Drive file ids")).toHaveValue("root\nroot?x='");
 });
+
+test("sources › Google Docs: a stale save shows the message, saves nothing, and Reload shows the current picks", async ({ page }) => {
+  await fakeGoogle(page, PICKED);
+  await login(page);
+  await page.goto("/settings/sources");
+  const row = page.getByRole("listitem", { name: "Product docs" });
+  await row.getByRole("button", { name: "More actions for Product docs" }).click();
+  await row.getByRole("menuitem", { name: "Edit files and folders" }).click();
+  const list = row.getByRole("list", { name: "Picked files and folders" });
+  await expect(list.getByRole("listitem")).toHaveCount(5);
+
+  // Another tab narrows the source to one doc while this form still has five.
+  await page.evaluate(() => {
+    const key = "po-mock-sources-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    const s = db.sources.find((x: { name: string }) => x.name === "Product docs");
+    s.config = { docs: ["1DocPricingExample"], folders: [], names: { "1DocPricingExample": "Pricing strategy" } };
+    s.config_version += 1;
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+
+  await list.getByRole("button", { name: "Remove Customer interviews Q3" }).click();
+  await row.getByRole("button", { name: "Save files" }).click();
+  const alert = row.getByRole("alert");
+  await expect(alert).toContainText("This source changed since you opened it. Reload to see the current picks.");
+  await expect(alert).toContainText("Nothing was saved");
+  await expect(row.getByRole("status")).toHaveCount(0);
+
+  await alert.getByRole("button", { name: "Reload" }).click();
+  await expect(alert).toHaveCount(0);
+  await expect(row.getByRole("list", { name: "Picked files and folders" }).getByRole("listitem")).toHaveText([/Pricing strategy\s*Google Doc/]);
+});

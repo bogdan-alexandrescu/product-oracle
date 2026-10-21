@@ -358,13 +358,15 @@ function DriveFilesEditor({
   source,
   connection,
   onSaved,
+  onReload,
 }: {
   source: Source;
   connection: Choice | undefined;
   onSaved: (s: Source) => void;
+  onReload: (s: Source) => void;
 }) {
   const [files, setFiles] = useState<DriveFile[]>(driveFiles(source.config));
-  const { act, error, busy } = useAction();
+  const { act, error, busy, stale } = useAction();
   const reconnect = !!connection?.reconnect_reason;
   const unavailable = Object.fromEntries(
     (source.unavailable_items ?? []).filter((u) => (u.status ?? "unavailable") === "unavailable").map((u) => [u.external_id, u.reason]),
@@ -374,9 +376,13 @@ function DriveFilesEditor({
     e.preventDefault();
     const config = driveConfig(source.config, files);
     const saved = await act(() =>
-      unwrap(api.PATCH("/v1/sources/{source_id}", { params: { path: { source_id: source.id } }, body: { config } })),
+      unwrap(api.PATCH("/v1/sources/{source_id}", { params: { path: { source_id: source.id } }, body: { config, base_version: source.config_version } })),
     );
     if (saved) onSaved(saved);
+  }
+  async function reload() {
+    const fresh = await act(() => fetchSource(source.id));
+    if (fresh) onReload(fresh);
   }
 
   return (
@@ -392,7 +398,7 @@ function DriveFilesEditor({
         reconnect={reconnect}
         unavailable={unavailable}
       />
-      {error && <Notice tone="error">{error}</Notice>}
+      {error && <SaveError error={error} stale={stale} busy={busy} onReload={reload} />}
       <div className="flex items-center gap-1.5">
         <Button type="submit" variant="solid" disabled={busy || files.length === 0}>
           Save files
@@ -673,8 +679,10 @@ function SourceRow({
       )}
       {editing && drive && (
         <DriveFilesEditor
+          key={source.config_version}
           source={source}
           connection={connection}
+          onReload={onChange}
           onSaved={(s) => {
             onChange(s);
             setEditing(false);

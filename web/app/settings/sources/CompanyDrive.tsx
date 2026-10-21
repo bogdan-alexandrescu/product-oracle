@@ -2,7 +2,7 @@
 
 import { type FormEvent, useId, useState } from "react";
 
-import { Button, Chip, Icon, InfoTip, LinkButton, Notice, Panel } from "@/components/ds";
+import { Button, Chip, confirmInPage, Icon, InfoTip, LinkButton, Notice, Panel } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
@@ -111,9 +111,11 @@ function CompanyDomains() {
   async function remove(domain: string) {
     if (
       list.length === 1 &&
-      !window.confirm(
-        `Remove ${domain}? With no company domain, every doc in a picked folder is skipped, and the ones already pulled in are hidden now.`,
-      )
+      !(await confirmInPage({
+        destructive: true,
+        action: "Remove",
+        message: `Remove ${domain}? With no company domain, every doc in a picked folder is skipped, and the ones already pulled in are hidden now.`,
+      }))
     ) {
       return;
     }
