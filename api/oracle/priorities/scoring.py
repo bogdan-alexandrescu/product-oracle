@@ -16,6 +16,10 @@ then those missing an input; then features that serve no confirmed goal (flagged
 Dependencies override that: a feature never comes before something it depends on,
 and a prerequisite moves up to just before its highest-ranked dependent. Cycles are
 reported and their members flagged, never silently broken.
+
+A person's call comes after the formula (C9 Move and pin): :func:`apply_overrides`
+takes the ranked rows and the active overrides (moves and pins) and reorders them,
+keeping dependency order, with each row's ``formula_rank`` beside its new rank.
 """
 
 import heapq
@@ -55,6 +59,10 @@ class EvidenceRef:
     ref: str | None
     # From a source item since removed (S5): shown as 'source removed'.
     source_removed: bool = False
+    # What a person cites it by (C9): title, kind of source, date (ISO).
+    title: str | None = None
+    source_kind: str | None = None
+    date: str | None = None
 
 
 @dataclass
@@ -70,6 +78,20 @@ class FeatureInput:
     goals: list[GoalLink] = field(default_factory=list)
     # Keys of features this one depends on (depends_on, or the src of a blocks edge).
     depends_on: list[str] = field(default_factory=list)
+
+
+@dataclass
+class OverrideIn:
+    """An active override, as :func:`apply_overrides` reads it."""
+
+    id: str
+    # Feature keys.
+    feature: str
+    kind: str  # move | pin
+    above: str | None
+    position: int | None
+    # What the row shows of it (``RankedFeature.override``).
+    info: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -117,6 +139,9 @@ def confidence_of(f: FeatureInput) -> tuple[float, dict[str, Any]]:
                     "confidence": _round(e.confidence),
                     "ref": e.ref,
                     "source_removed": e.source_removed,
+                    "title": e.title,
+                    "source_kind": e.source_kind,
+                    "date": e.date,
                 }
                 for e in scored
             ],
@@ -428,3 +453,84 @@ def rank(features: list[FeatureInput], method: str = "goal_weighted") -> dict[st
             }
         )
     return {"method": method, "formula": FORMULAS[method], "features": rows, "cycles": cycles}
+
+
+def apply_overrides(result: dict[str, Any], overrides: list[OverrideIn]) -> dict[str, Any]:
+    """Apply active overrides, in creation order, to a :func:`rank` result.
+
+    From the formula order, each override takes its feature out and puts it back: a move
+    directly above its anchor, a pin at ``position`` (clamped to the list). A move whose
+    feature or anchor is no longer ranked (a rejected feature) is dropped and listed in
+    ``dropped``. Then one stable repair pass: a feature above one of its prerequisites
+    (outside its own cycle) moves to just below its lowest prerequisite and is flagged
+    ``held_by_dependency`` with ``held_below``. Ranks are renumbered; ``score_rank`` stays
+    and ``formula_rank`` is the rank before overrides. Pure: ``result`` is not changed.
+    """
+    rows = {r["key"]: dict(r) for r in result["features"]}
+    order = [r["key"] for r in result["features"]]
+    formula_rank = {r["key"]: r["rank"] for r in result["features"]}
+    dropped: list[str] = []
+    applied: dict[str, OverrideIn] = {}
+    for o in overrides:
+        if o.feature not in rows or (
+            o.kind == "move" and (o.above not in rows or o.above == o.feature)
+        ):
+            dropped.append(o.id)
+            continue
+        order.remove(o.feature)
+        if o.kind == "move":
+            order.insert(order.index(o.above), o.feature)  # type: ignore[arg-type]
+        else:
+            order.insert(min(max((o.position or 1) - 1, 0), len(order)), o.feature)
+        applied[o.feature] = o
+
+    cycle_of = {k: i for i, c in enumerate(result.get("cycles") or []) for k in c}
+
+    def prerequisites(k: str) -> list[str]:
+        return [
+            d
+            for d in rows[k]["depends_on"]
+            if d in rows and not (k in cycle_of and cycle_of.get(d) == cycle_of[k])
+        ]
+
+    held: dict[str, str] = {}
+    # Each move puts a feature below what it needs; a chain settles in at most n passes.
+    for _ in range(len(order) + 1):
+        moved = False
+        for k in list(order):
+            at = order.index(k)
+            below = [d for d in prerequisites(k) if order.index(d) > at]
+            if not below:
+                continue
+            lowest = max(below, key=order.index)
+            order.remove(k)
+            order.insert(order.index(lowest) + 1, k)
+            held[k] = lowest
+            moved = True
+        if not moved:
+            break
+
+    features = []
+    for position, k in enumerate(order, start=1):
+        row = rows[k]
+        flags = set(row["flags"])
+        explanation = dict(row["explanation"])
+        if k in held:
+            flags.add("held_by_dependency")
+            explanation["order"] = [
+                *explanation.get("order", []),
+                f"held below {held[k]}: it depends on it",
+            ]
+        o = applied.get(k)
+        features.append(
+            {
+                **row,
+                "rank": position,
+                "formula_rank": formula_rank[k],
+                "flags": sorted(flags),
+                "explanation": explanation,
+                "override": ({"id": o.id, "kind": o.kind, **o.info} if o is not None else None),
+                "held_below": held.get(k),
+            }
+        )
+    return {**result, "features": features, "dropped": dropped}

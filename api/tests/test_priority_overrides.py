@@ -34,7 +34,7 @@ from oracle.priorities.scoring import (
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
-from tests.test_mcp import run_token
+from tests.test_mcp import mcp_client, run_token, text_of
 
 # --- unit: apply_overrides ----------------------------------------------------------------
 
@@ -209,6 +209,16 @@ def test_a_change_with_no_contradiction_has_no_messages():
 
 
 # --- API --------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def local_runtime():
+    """The local runtime: run tokens from any address (as tests.test_mcp)."""
+    from oracle.swarm import FakeRuntime, set_runtime
+
+    set_runtime(FakeRuntime())
+    yield
+    set_runtime(None)
 
 
 async def _baseline(ctx: Ctx) -> dict[str, uuid.UUID]:
@@ -434,7 +444,7 @@ async def test_overrides_apply_under_every_method(client):
         assert rows[0]["override"] is not None and rows[0]["formula_rank"] >= 1
 
 
-async def test_overrides_reach_readers(client):
+async def test_overrides_reach_readers(client, local_runtime):
     """protects=a person's order is the order everyone reads; fails_when=snapshots, the
     roadmap context or get_priorities ignore active overrides; no_claim=the draft's use
     of it."""
@@ -477,20 +487,28 @@ async def test_overrides_reach_readers(client):
         stored = (await s.scalars(select(PrioritySnapshot))).one()
         assert stored.ranking[0]["key"] == "usage-alerts"
 
-    # Agents: a run token reads the ranking with overrides and the log, and cannot write.
+    # Agents (MCP): a run token reads the ranking with overrides and the log, and cannot
+    # write: POST and DELETE map to no run scope.
     owner = ctx.users["owner"]
-    token = {"Authorization": f"Bearer {await run_token(ctx.tenant_id, ['read:baseline'], owner.id)}"}
-    got = await client.get("/v1/priorities", headers=token)
-    assert got.status_code == 200, got.text
-    top = got.json()["features"][0]
-    assert top["key"] == "usage-alerts" and top["formula_rank"] == 3
-    assert (await client.get("/v1/priorities/overrides", headers=token)).status_code == 200
-    refused = await client.post(
-        "/v1/priorities/overrides",
-        json={"feature_id": str(ids["bulk-edit"]), "kind": "pin", "position": 1, "reason": "x"},
-        headers=token,
-    )
-    assert refused.status_code == 403
+    token = await run_token(ctx.tenant_id, ["read:baseline"], owner.id)
+    async with mcp_client(token) as c:
+        names = {t.name for t in (await c.list_tools()).tools}
+        assert {"get_priorities", "list_priority_overrides"} <= names
+        assert "create_priority_override" not in names
+        got = await c.call_tool("get_priorities", {})
+        assert not got.is_error, text_of(got)
+        top = got.structured_content["features"][0]
+        assert top["key"] == "usage-alerts" and top["formula_rank"] == 3
+        listed = await c.call_tool("list_priority_overrides", {})
+        assert not listed.is_error, text_of(listed)
+        refused = await c.call_tool(
+            "create_priority_override",
+            {"body": {"feature_id": str(ids["bulk-edit"]), "kind": "pin", "position": 1,
+                      "reason": "An agent wants it first"}},
+        )  # fmt: skip
+        assert refused.is_error
+    async with tenant_session(ctx.tenant_id) as s:
+        assert len((await s.scalars(select(PriorityOverride))).all()) == 1
 
 
 async def test_roles_and_validation(client):
@@ -503,7 +521,9 @@ async def test_roles_and_validation(client):
     assert (
         await _create(client, ctx, "viewer", feature_id=feature, kind="pin", position=1)
     ).status_code == 403
-    assert (await client.get("/v1/priorities/overrides", headers=ctx.as_("viewer"))).status_code == 200
+    assert (
+        await client.get("/v1/priorities/overrides", headers=ctx.as_("viewer"))
+    ).status_code == 200
     bad = [
         {"kind": "pin", "position": 0},
         {"kind": "pin", "position": 1, "reason": ""},
@@ -580,7 +600,10 @@ async def test_overrides_are_company_scoped(client):
     other = await make_ctx("Other Co")
     assert (await client.get("/v1/priorities/overrides", headers=other.as_("viewer"))).json() == []
     gone = await client.request(
-        "DELETE", f"/v1/priorities/overrides/{resp.json()['id']}", json={}, headers=other.as_("owner")
+        "DELETE",
+        f"/v1/priorities/overrides/{resp.json()['id']}",
+        json={},
+        headers=other.as_("owner"),
     )
     assert gone.status_code == 404
 
