@@ -27,10 +27,10 @@ from oracle.review.schemas import Resolution
 
 # Levels 1-3 start a section; deeper headings are part of the section body.
 SECTION_LEVELS = (1, 2, 3)
-SECTION_ID_RE = re.compile(r"\s*\{#([A-Za-z0-9][A-Za-z0-9_.:-]*)\}\s*$")
+SECTION_ID_RE = re.compile(r"(?<!\s)\s*\{#([A-Za-z0-9][A-Za-z0-9_.:-]*)\}\s*$")
 CITATION_RE = re.compile(r"\[c:([^\]\s]+)\]")
 # A citation marker plus the horizontal space before it, removed from body_text.
-CITATION_STRIP_RE = re.compile(r"[ \t]*\[c:[^\]\s]+\]")
+CITATION_STRIP_RE = re.compile(r"(?<![ \t])[ \t]*\[c:[^\[\]\s]+\]")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 # The markers an export writes after a roadmap date that rests on no verified basis
@@ -226,6 +226,7 @@ def body_text(body_md: str) -> str:
     blocks: list[str] = []
     row: list[str] | None = None
     for token in _md.parse(body_md):
+        parse_budget.check()
         if token.type == "tr_open":
             row = []
             continue
@@ -304,6 +305,7 @@ def _parse_citations(raw: Any, problems: list[ImportProblem]) -> list[CitationIn
     citations: list[CitationIn] = []
     seen: set[str] = set()
     for i, item in enumerate(raw):
+        parse_budget.check()
         key = str(item.get("id")) if isinstance(item, dict) and item.get("id") else None
         try:
             citation = CitationIn.model_validate(
@@ -345,6 +347,7 @@ def _parse_resolutions(raw: Any, problems: list[ImportProblem]) -> list[Resoluti
         return []
     resolutions: list[Resolution] = []
     for i, item in enumerate(raw):
+        parse_budget.check()
         try:
             resolutions.append(Resolution.model_validate(item))
         except ValidationError as exc:
@@ -384,6 +387,7 @@ def _parse_sections(
             ]
         )
     for token_index, token in enumerate(tokens):
+        parse_budget.check()
         if token.type != "heading_open" or token.map is None:
             continue
         level = int(token.tag[1])
@@ -422,6 +426,7 @@ def _parse_sections(
     sections: list[ParsedSection] = []
     seen: set[str] = set()
     for i, (start, body_start, level, heading, key) in enumerate(heads):
+        parse_budget.check()
         body_end = heads[i + 1][0] if i + 1 < len(heads) else len(lines)
         if key is None:
             continue

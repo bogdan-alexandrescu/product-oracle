@@ -7,8 +7,11 @@ paragraph as in 19 KB paragraphs), so no line or paragraph cap bounds it. Instea
 markdown-it parser that reads untrusted text is :func:`guard`-ed: a rule
 first in its block and inline chains, and its link-label scan (``skipToken``), check the
 budget as the parse runs and stop it with :class:`Exceeded` once the thread has used the
-CPU time it was given. The parse ends within a few milliseconds of its cap, so it can not
-hold a slot of the parse pool (:func:`oracle.safe_yaml.run_parse_within`) any longer.
+CPU time it was given. The parse ends within a few milliseconds of its cap once it reaches
+a check, so it holds a slot of the parse pool (:func:`oracle.safe_yaml.run_parse_within`) no
+longer than that. Work between checks is not interrupted: a regex call holds the GIL for its
+whole run, so regexes on untrusted text must be linear, and per-block Python loops call
+:func:`check` themselves.
 
 The budget is CPU time of the parsing thread (``time.thread_time``), counted from the
 moment the parse starts: neither a queue wait nor other threads' load on the machine uses

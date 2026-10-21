@@ -62,8 +62,8 @@ MAX_SCALAR_CHARS = 256 * 1024
 MAX_DIGITS = 30
 # run_parse_within's cap on one parse: this much CPU time of its markdown parses
 # (oracle.parse_budget), counted from the moment the parse starts; a queue wait does not
-# count. As a backstop for anything else, it stops waiting WALL_FACTOR times this long
-# after the parse started.
+# count. As a backstop for anything else, the caller stops waiting WALL_FACTOR times this
+# long after the parse started (the worker thread is not freed by that: it runs to its end).
 PARSE_SECONDS = 5.0
 WALL_FACTOR = 4
 
@@ -359,10 +359,20 @@ async def run_parse_within[T](
     (:class:`ParseTimeout`, ``name`` starts its message), never a stalled tick.
 
     The cap is CPU time of its markdown parses (:mod:`oracle.parse_budget`): a parse past
-    it stops where it is and frees its worker, so slow posts can not hold the pool. Waiting
-    for a free worker does not count, so a queue never refuses an honest parse. As a
-    backstop for work outside markdown (bounded by :func:`load`'s caps and the linear
-    checks), the wait also ends ``WALL_FACTOR`` times the cap after the parse started."""
+    it stops at its next check (a few milliseconds past the cap, once the parse is between
+    two steps), so the worker is freed then. Waiting for a free worker does not count, so a
+    queue never refuses an honest parse. The checks run inside markdown-it and in the
+    per-block loops of the draft parser; a single regex call is not interruptible (Python
+    holds the GIL for its whole run), so every regex that reads untrusted text must be linear
+    (``tests/test_quadratic_regex.py``). As a backstop for work outside those checks, the
+    *caller* stops waiting ``WALL_FACTOR`` times the cap after the parse started: the caller
+    is refused at that point, but the worker thread keeps running the parse to its end and is
+    not freed (a thread can not be killed). The pool can therefore still be held by work no
+    check reaches; this bounds the caller's wait, not the worker's time.
+
+    Queue wait (policy undecided, owner deciding 2026-10-20): the ``await`` below on the pool
+    has no time limit, so a request waits for a free worker for as long as it takes. A queue
+    limit would be added in :func:`run_parse` / here, before ``started`` is awaited."""
     limit = PARSE_SECONDS if seconds is None else seconds
     loop = asyncio.get_running_loop()
     started = loop.create_future()
@@ -380,6 +390,8 @@ async def run_parse_within[T](
     # An abandoned parse's outcome is read, never reported as unretrieved.
     parse.add_done_callback(lambda f: f.cancelled() or f.exception())
     try:
+        # QUEUE-WAIT POLICY (owner deciding): this waits for a free worker with no time limit.
+        # A cap on the queue wait goes here, around this await.
         await asyncio.wait({started, parse}, return_when=asyncio.FIRST_COMPLETED)
         return await asyncio.wait_for(asyncio.shield(parse), timeout=limit * WALL_FACTOR)
     except (TimeoutError, parse_budget.Exceeded):

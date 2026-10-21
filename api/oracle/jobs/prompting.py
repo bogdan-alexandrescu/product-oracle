@@ -70,13 +70,13 @@ def as_str(value: Any, limit: int = 20_000) -> str:
     return (value if isinstance(value, str) else str(value)).strip()[:limit]
 
 
-_CITATION = re.compile(r"[ \t]*\[c:[^\]]*\]")
+_CITATION = re.compile(r"(?<![ \t])[ \t]*\[c:[^\[\]]*\]")
 _LINK = re.compile(r"(?<!!)\[([^\]]+)\]\((?:[^()\s]+|\([^)]*\))+(?:\s+\"[^\"]*\")?\)")
 _IMAGE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
-_URL = re.compile(r"[ \t]*<?https?://[^\s)>]+>?")
-_EMPTY_PARENS = re.compile(r"[ \t]*\(\s*\)")
+_URL = re.compile(r"(?<![ \t])[ \t]*<?https?://[^\s)>]+>?")
+_EMPTY_PARENS = re.compile(r"(?<![ \t])[ \t]*\(\s*\)")
 _HEADING = re.compile(r"^(\s{0,3})(#{1,3})(\s)", re.M)
-_HEADING_ID = re.compile(r"\s*\{#[^}]*\}\s*$", re.M)
+_HEADING_ID = re.compile(r"(?<!\s)\s*\{#[^}]*\}\s*$", re.M)
 
 
 @dataclass
