@@ -9,6 +9,7 @@ import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
 
+import { useActed } from "../inbox/_actions";
 import { allNeeds, CountChip, NeedTable, questionNeeds, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
 import { goalViews, historyOf, shownGoals, type Point } from "./_goals";
 import { GoalsPanel } from "./_goals-panel";
@@ -128,11 +129,13 @@ export default function HomePage() {
       setBusy(null);
     }
   }
+  // D14: feedback rows act in place (one primary action each); what they did shows here.
+  const { onActed, notice } = useActed(() => Promise.all([inboxQ.reload(), questionsQ.reload()]));
   const inbox = inboxQ.data;
   // The API filters (asked of me, still asked): Home counts exactly what the badge counts.
   const questions = questionNeeds(questionsQ.data ?? [], docs);
   // Needs you: the Inbox's New and Open items, each once (owner, 2026-10-20).
-  const needs = inbox ? waitingNeeds(allNeeds(inbox, questions, busy, act, inbox.last_seen_at ?? null, true)) : [];
+  const needs = inbox ? waitingNeeds(allNeeds(inbox, questions, busy, act, inbox.last_seen_at ?? null, onActed, true)) : [];
   const decisions = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "overruns");
   // Stuck runs and failed imports: counted in the badge, so drawn here too (searches are not).
   const runs = needs.filter((r) => r.group === "lookups" || r.group === "imports");
@@ -215,6 +218,7 @@ export default function HomePage() {
               <Notice tone="error">{actError}</Notice>
             </div>
           )}
+          {notice}
           {inbox && !questionsQ.loading && !questionsQ.error && shownNeeds.length === 0 && (
             <Empty testId="home-needs-empty">Nothing waiting</Empty>
           )}

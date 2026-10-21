@@ -9,6 +9,7 @@ import { formatDateTime } from "@/lib/format";
 import { BUILD_PARAM } from "@/components/NextDraft";
 import { sectionHref } from "@/lib/section-link";
 
+import { InboxActions, SuggestionPeek, type OnActed } from "./_actions";
 import {
   CANCEL_AGAIN_CONFIRM,
   CHECKPOINT_LABEL,
@@ -83,7 +84,14 @@ export const NEED_COLUMNS: Column<Need>[] = [
     width: "212px",
     align: "right",
     phone: "action",
-    cell: (n) => <span className="inline-flex flex-wrap justify-end gap-1.5">{n.action}</span>,
+    wrap: true,
+    // D14: a feedback row's actions and their fields go under the row on a phone, full width.
+    className: "max-[600px]:has-[[data-inbox-actions]]:order-5 max-[600px]:has-[[data-inbox-actions]]:basis-full",
+    cell: (n) => (
+      <span className="inline-flex flex-wrap justify-end gap-1.5 has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full">
+        {n.action}
+      </span>
+    ),
   },
 ];
 
@@ -199,19 +207,17 @@ export function visitState(item: FeedbackRow, seenBefore: string | null | undefi
   return item.state;
 }
 
-/** The verb on an open item's button: what it waits for. */
-export function reviewVerb(f: Pick<FeedbackRow, "kind" | "suggestion_status">): string {
-  if (f.suggestion_status === "open") return "Review suggestions";
-  if (f.kind === "comment") return "Review comments";
-  return "Review";
-}
-
 /**
  * One row per feedback item, in its state (the owner, 2026-10-20: one Inbox, no second
  * per-document list), and on Staged each document's 'N changes staged for draft N+1' row
  * first, with Build draft N+1.
  */
-export function feedbackNeeds(inbox: InboxOut, seenBefore: string | null | undefined): StatedNeed[] {
+export function feedbackNeeds(
+  inbox: InboxOut,
+  seenBefore: string | null | undefined,
+  onActed: OnActed,
+  compact = false,
+): StatedNeed[] {
   const docLink = (slug: string, title: string | null | undefined) => (
     <Link href={`/documents/${slug}`} className="block truncate hover:underline">
       {title ?? slug}
@@ -261,7 +267,6 @@ export function feedbackNeeds(inbox: InboxOut, seenBefore: string | null | undef
       ) : state === "done" ? (
         <Chip kind="pass">{f.addressed_in_version ? `v${f.addressed_in_version}` : "Closed"}</Chip>
       ) : null;
-    const verb = reviewVerb(f);
     return {
       key: f.id,
       icon: state === "declined" ? "x" : state === "done" || state === "staged" ? "check" : "comment",
@@ -271,9 +276,7 @@ export function feedbackNeeds(inbox: InboxOut, seenBefore: string | null | undef
       group: "feedback",
       item: (
         <>
-          <Link href={href} className="min-w-0 truncate hover:underline" title={f.summary}>
-            {f.summary}
-          </Link>
+          <SuggestionPeek href={href} summary={f.summary} text={live ? f.suggestion_text : null} />
           {f.section_key ? (
             <span className="flex-none font-mono text-[13px] text-text2">#{f.section_key}</span>
           ) : (
@@ -294,9 +297,8 @@ export function feedbackNeeds(inbox: InboxOut, seenBefore: string | null | undef
             Open
           </LinkButton>
         ) : live ? (
-          <LinkButton href={href} aria-label={`${verb}: ${f.summary}`}>
-            {verb}
-          </LinkButton>
+          // D14: decide on Oracle's suggestion here; a remount per state and suggestion.
+          <InboxActions key={`${f.id}-${state}-${f.suggestion_id ?? ""}`} f={f} href={href} compact={compact} onActed={onActed} />
         ) : (
           <LinkButton variant="ghost" href={href} aria-label={`Open ${f.summary}`}>
             Open
@@ -760,6 +762,7 @@ export function allNeeds(
   busy: string | null,
   act: Act,
   seenBefore: string | null | undefined,
+  onActed: OnActed,
   compact = false,
 ): StatedNeed[] {
   const n = inboxNeeds(inbox, busy, act, compact);
@@ -772,7 +775,7 @@ export function allNeeds(
     ...stated(n.lookups, "lookups"),
     ...stated(n.imports, "imports"),
     ...stated(revokeNeeds(inbox.revoke_failures ?? [], busy, act), "revoke-failures"),
-    ...feedbackNeeds(inbox, seenBefore),
+    ...feedbackNeeds(inbox, seenBefore, onActed, compact),
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.
     ...stated(n.deliveries, "deliveries", false).map((r) => ({ ...r, state: "open" as const })),

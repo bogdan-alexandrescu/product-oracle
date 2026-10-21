@@ -356,6 +356,10 @@ export async function nextDraftRoute(
 type InboxItem = Schemas["InboxFeedbackItem"];
 
 /** The Inbox's feedback by state, its counts and the staged rows, as GET /v1/inbox returns them. */
+/** An Inbox row shows this much of a suggestion's text, as the API cuts it. */
+const EXCERPT = 280;
+const excerpt = (text: string | null | undefined) => (text == null ? null : text.length <= EXCERPT ? text : `${text.slice(0, EXCERPT)}…`);
+
 export function inboxStates(ctx: LlmContext, seen: string | null) {
   const live = (id: string) =>
     ctx.db.suggestions.filter((s) => s.feedback_item_id === id && s.status !== "superseded").at(-1) ?? null;
@@ -368,6 +372,7 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
     const latest = latestOf(ctx, doc.id)?.number ?? null;
     const { state: base, staged_for_version } = stateOf(f, s, latest);
     const state: InboxItem["state"] = base === "open" && (!seen || f.created_at > seen) ? "new" : base;
+    const acting = s?.status === "open" ? s : null;
     counts[state] += 1;
     items.push({
       id: f.id,
@@ -387,6 +392,11 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
       staged_for_version,
       suggestion_status: s?.status ?? null,
       suggestion_kind: s?.kind ?? null,
+      // D14: what the row's actions need, while the suggestion is open.
+      suggestion_id: acting?.id ?? null,
+      suggestion_text: acting ? excerpt(acting.edited_text ?? acting.text) : null,
+      suggestion_pushback: acting ? acting.pushback != null : null,
+      suggestion_rationale: acting ? excerpt(acting.rationale) : null,
     });
   }
   items.sort((a, b) => b.created_at.localeCompare(a.created_at));
