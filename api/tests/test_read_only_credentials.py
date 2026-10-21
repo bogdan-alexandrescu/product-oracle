@@ -10,8 +10,11 @@ import uuid
 import pytest
 from sqlalchemy import select
 
+from oracle.auth.deps import RUN_HEADER
 from oracle.auth.models import User
+from oracle.auth.service import sign_run_binding
 from oracle.connections.models import Connection
+from oracle.sources.models import Source
 from oracle.tenancy import tenant_session, unscoped_session
 from tests.connection_helpers import add_connection, clear_provider_http, use_provider_http
 from tests.test_oauth import full_flow
@@ -157,3 +160,33 @@ async def test_mcp_tools_are_refused_for_a_read_only_client(client, provider):
     assert deleted.is_error and "HTTP 403" in text_of(deleted), text_of(deleted)
     assert await _exists(admin.tenant_id, conn.id)
     assert provider == []
+
+
+# --- With the run binding (S6): a run's signed header changes nothing of AC1 ----------
+
+
+async def test_a_read_only_credential_is_refused_with_or_without_the_run_binding(client, provider):
+    """The read-only refusal is made where the bearer is resolved, before the run binding
+    is read: a signed x-oracle-run-id for the same user (or a forged one) does not let a
+    read-only client write, and a read with the binding still works."""
+    auth = await _bearer(client, "oracle:read")
+    admin = await _admin()
+    signed = {**auth, RUN_HEADER: sign_run_binding(admin.id, uuid.uuid4())}
+    forged = {**auth, RUN_HEADER: str(uuid.uuid4())}
+    body = {"kind": "upload", "name": "Mine"}
+    for headers in (auth, signed, forged):
+        resp = await client.post("/v1/sources", json=body, headers=headers)
+        assert resp.status_code == 403, resp.text
+        assert "oracle:read" in resp.json()["detail"]
+    async with tenant_session(admin.tenant_id) as s:
+        assert (await s.scalars(select(Source))).all() == []
+    assert (await client.get("/v1/sources", headers=signed)).status_code == 200
+    assert provider == []
+
+
+async def test_a_write_credential_with_the_run_binding_may_still_write(client, provider):
+    auth = await _bearer(client, None)
+    admin = await _admin()
+    signed = {**auth, RUN_HEADER: sign_run_binding(admin.id, uuid.uuid4())}
+    resp = await client.post("/v1/sources", json={"kind": "upload", "name": "Mine"}, headers=signed)
+    assert resp.status_code == 201, resp.text

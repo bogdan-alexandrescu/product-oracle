@@ -18,7 +18,7 @@ from oracle.sources.connectors.google_docs import (
     valid_id,
 )
 from tests.connection_helpers import make_person
-from tests.sources_helpers import client_for, make_connection
+from tests.sources_helpers import client_for, make_connection, patch_source
 
 READONLY = ["openid", "email", DRIVE_READONLY]
 # The reviewer's probe: validates as files/root, then lists by the caller's own query.
@@ -79,9 +79,7 @@ async def test_a_bad_id_in_an_edit_is_a_400_too(tenant_id, drive):
     assert resp.status_code == 201, resp.text
     drive.clear()
     async with client_for(pat) as c:
-        edit = await c.patch(
-            f"/v1/sources/{resp.json()['id']}", json={"config": {"folders": [INJECTED]}}
-        )
+        edit = await patch_source(c, resp.json()["id"], {"config": {"folders": [INJECTED]}})
     assert edit.status_code == 400
     assert drive == []
 

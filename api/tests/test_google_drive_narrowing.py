@@ -28,7 +28,7 @@ from oracle.sources.connectors.google_docs import (
 from oracle.sources.models import Source, SourceItem
 from oracle.tenancy import tenant_session
 from tests.connection_helpers import make_person
-from tests.sources_helpers import client_for, make_connection
+from tests.sources_helpers import client_for, make_connection, patch_source
 
 READONLY = ["openid", "email", DRIVE_READONLY]
 TIME = "2026-10-01T09:00:00.000Z"
@@ -204,8 +204,9 @@ async def _sync(pat, source) -> dict:
 
 
 async def _patch(pat, source, body) -> dict:
+    """Save as the Sources page does: with the config_version it read (base_version)."""
     async with client_for(pat) as c:
-        resp = await c.patch(f"/v1/sources/{source['id']}", json=body)
+        resp = await patch_source(c, source["id"], body)
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -500,12 +501,12 @@ async def test_a_sync_running_across_the_edit_saves_nothing_over_it(tenant_id, d
     assert await _live(tenant_id, source["id"]) == {DOC_A}
 
 
-async def test_a_sync_holding_a_removed_docs_row_does_not_block_the_save(
-    tenant_id, drive, monkeypatch
-):
-    """The sync has written (not yet committed) the row of the doc being removed: the
-    save does not wait on that row (SKIP LOCKED leaves the doc live for now), and once the
-    sync stops (superseded, its writes rolled back) tidy deletes it all the same."""
+async def test_a_save_waits_for_a_sync_holding_a_removed_docs_row(tenant_id, drive, monkeypatch):
+    """The sync has written (not yet committed) the row of the doc being removed. It took
+    the source row first (sync._hold, before its first item write), so the save waits for
+    the sync's next commit instead of skipping or deadlocking on the item row; then it
+    deletes the doc, and the sync, finding the source changed at its next hold, stops
+    (superseded) and keeps nothing more."""
     drive.doc(DOC_A, "A")
     drive.doc(SENSITIVE, "SENSITIVE")
     pat, source = await _setup(tenant_id, drive, {"docs": [SENSITIVE, DOC_A]})
@@ -513,10 +514,13 @@ async def test_a_sync_holding_a_removed_docs_row_does_not_block_the_save(
     # A new title, so the sync's write changes (and locks) the row.
     drive.files[SENSITIVE]["name"] = "SENSITIVE renamed"
     async with _held_after_write(monkeypatch, pat, source, SENSITIVE) as first:
-        edited = await asyncio.wait_for(_patch(pat, source, {"config": {"docs": [DOC_A]}}), 10)
-        assert edited["config"]["docs"] == [DOC_A]
-        # The save skipped the locked row: still live while the sync holds it.
+        saving = asyncio.create_task(_patch(pat, source, {"config": {"docs": [DOC_A]}}))
+        done, _ = await asyncio.wait({saving}, timeout=1)
+        # Waiting on the source row the sync holds: nothing deleted yet.
+        assert not done
         assert await _live(tenant_id, source["id"]) == {DOC_A, SENSITIVE}
+    edited = await asyncio.wait_for(saving, 10)
+    assert edited["config"]["docs"] == [DOC_A]
     assert first["outcome"] == "superseded", first
     assert await _live(tenant_id, source["id"]) == {DOC_A}
     assert SENSITIVE not in ((await _row(tenant_id, source["id"])).cursor or {}).get("files", {})
@@ -663,12 +667,13 @@ async def test_the_sync_lock_does_not_wait_on_item_writes(tenant_id, drive):
     up waiting on the other. FOR NO KEY UPDATE does not conflict with KEY SHARE."""
     from sqlalchemy import text
 
-    from oracle.sources.sync import _hold, _Started
+    from oracle.sources.sync import _hold, _start
 
     drive.doc(DOC_A, "A")
     _, source = await _setup(tenant_id, drive, {"docs": [DOC_A]})
     row = await _row(tenant_id, source["id"])
-    started = _Started(row.id, row.config, row.connection_id)
+    async with tenant_session(tenant_id) as s:
+        started = await _start(s, row.id)
     async with tenant_session(tenant_id) as writer, tenant_session(tenant_id) as syncer:
         writer.add(SourceItem(source_id=row.id, external_id="1DocOther00", kind="doc"))
         await writer.flush()  # holds KEY SHARE on the source row until rollback
@@ -1043,9 +1048,10 @@ async def test_renaming_picked_items_does_not_ask_drive_again(tenant_id, drive):
     assert (await _row(tenant_id, source["id"])).unavailable_items == report
     # A names-only edit still checks the shape of what it is given.
     async with client_for(pat) as c:
-        bad = await c.patch(
-            f"/v1/sources/{source['id']}",
-            json={"config": {"docs": [DOC_A, DOC_B, "1DocMissing"], "names": {DOC_A: 1}}},
+        bad = await patch_source(
+            c,
+            source["id"],
+            {"config": {"docs": [DOC_A, DOC_B, "1DocMissing"], "names": {DOC_A: 1}}},
         )
     assert bad.status_code == 422
     # Adding a pick does ask Drive; removing one does not (narrowing takes effect on save).
@@ -1066,8 +1072,8 @@ async def test_names_only_name_what_is_picked(tenant_id, drive):
         {DOC_A: "A", DOC_B: "B"},
     ):
         async with client_for(pat) as c:
-            resp = await c.patch(
-                f"/v1/sources/{source['id']}", json={"config": {"docs": [DOC_A], "names": names}}
+            resp = await patch_source(
+                c, source["id"], {"config": {"docs": [DOC_A], "names": names}}
             )
         assert resp.status_code == 422, names
     await _patch(pat, source, {"config": {"docs": [DOC_A], "names": {DOC_A: "x" * 500}}})
