@@ -725,6 +725,14 @@ async def import_draft(
                 ),
             ),
         )
+    if document.kind in ("strategy", "vision"):
+        # H4: a strategy's choices each have their section; its goal and feature keys,
+        # focus count and goalless focus are warnings. A vision's beliefs are well formed.
+        from oracle.strategy import frontmatter
+
+        warnings += await frontmatter.check_import(
+            db, document.kind, draft.front_matter, {s.section_key for s in draft.sections}
+        )
     if previous is not None:
         locked = await review_service.locked_section_keys(db, previous.id)
         if locked:

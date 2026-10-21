@@ -8,7 +8,7 @@ from oracle.docs.schemas import DocumentKind, ImportProblem, VersionSource
 from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
 from oracle.review.schemas import FeedbackKind
 
-Flow = Literal["baseline_to_prd", "feedback_loop", "prd_to_roadmap"]
+Flow = Literal["baseline_to_prd", "feedback_loop", "prd_to_roadmap", "strategy_draft"]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
     "draft",
@@ -29,6 +29,7 @@ CheckpointKind = Literal[
     "eng_review",
     "roadmap_items",
     "roadmap_review",
+    "strategy_review",
 ]
 CheckpointStatus = Literal["pending", "approved", "changes_requested", "skipped"]
 Role = Literal["viewer", "commenter", "approver", "owner"]
@@ -543,6 +544,17 @@ class InboxCounts(BaseModel):
     done: int = 0
 
 
+class InboxStrategy(BaseModel):
+    """Owners: open strategy drift findings (H4), one Inbox row however many."""
+
+    new_findings: int
+    high: int
+    # Where the findings are read and waived (Company › Strategy).
+    href: str
+    # When the newest open finding was first seen.
+    since: datetime
+
+
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
     # Those with the checkpoint's approver role: decisions recorded and not delivered to
@@ -569,6 +581,8 @@ class InboxOut(BaseModel):
     feedback: list[InboxDocument]
     # Owners only: provider revokes a member's disable could not make (Retry, Dismiss).
     revoke_failures: list[InboxRevokeFailure] = []
+    # Owners only: open strategy drift findings (H4); null when none or not an owner.
+    strategy: InboxStrategy | None = None
     total: int
     # Approvers and owners: feedback in every state, newest first (declined and done
     # capped to the most recent), the counts per state, and the staged rows.

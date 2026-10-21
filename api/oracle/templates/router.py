@@ -259,9 +259,11 @@ async def recommend_draft(data: RecommendIn, db: TenantDB, _: CurrentPrincipal) 
 )
 async def start_draft(data: StartDraftIn, db: TenantDB, principal: ApproverNow):
     """Create the document (kind, template + version, theme) and its version 1 from the
-    template skeleton."""
+    template skeleton. A vision or a product strategy is an owner's to start (403)."""
     try:
         return await service.start_draft(db, data, principal)
+    except service.ForbiddenError as e:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from e
     except service.NotFoundError as e:
         raise _not_found(e) from e
     except service.InvalidError as e:

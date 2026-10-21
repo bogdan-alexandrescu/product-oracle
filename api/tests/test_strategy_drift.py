@@ -11,11 +11,8 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 from sqlalchemy import func, select, update
 
-from oracle.auth.deps import RUN_TOKEN_HEADER
 from oracle.docs.models import DocumentVersion
 from oracle.models import AuditEvent
-from oracle.runs.models import Run
-from oracle.runtokens import mint_run_token
 from oracle.strategy import drift
 from oracle.strategy.models import StrategyFinding
 from oracle.tenancy import tenant_session
@@ -60,8 +57,12 @@ async def _world(client, ctx) -> dict:
     }
     await supports(t, ids["f"], ids["a"])
     await supports(t, ids["h"], ids["c"])
-    await _strategy(client, ctx, [choice("one", goals=["a"]), choice("sso", "stop", features=["f"])])
-    await roadmap_with_items(client, ctx, [("item-f", "now", ids["f"]), ("item-h", "later", ids["h"])])
+    await _strategy(
+        client, ctx, [choice("one", goals=["a"]), choice("sso", "stop", features=["f"])]
+    )
+    await roadmap_with_items(
+        client, ctx, [("item-f", "now", ids["f"]), ("item-h", "later", ids["h"])]
+    )
     await approved(client, ctx.as_("owner"), "example-roadmap", 1)
     return ids
 
@@ -159,7 +160,9 @@ async def test_waive_needs_a_reason_is_audited_and_survives_the_next_check(clien
     url = f"/v1/strategy/findings/{goal['id']}/waive"
     for body in ({}, {"reason": ""}, {"reason": "   "}):
         assert (await client.post(url, json=body, headers=ctx.as_("owner"))).status_code == 422
-    resp = await client.post(url, json={"reason": "A bet outside the plan"}, headers=ctx.as_("owner"))
+    resp = await client.post(
+        url, json={"reason": "A bet outside the plan"}, headers=ctx.as_("owner")
+    )
     assert resp.status_code == 200, resp.text
     out = resp.json()
     assert out["status"] == "waived" and out["waive_reason"] == "A bet outside the plan"
@@ -254,20 +257,26 @@ async def test_the_stack_is_empty_before_any_strategy(client, ctx):
     assert stack["unaligned"] == {"goals": [], "items": []}
 
 
-async def test_a_run_token_with_read_baseline_reads_the_stack(client, ctx):
-    """protects=agents read the stack with read:baseline; fails_when=read:baseline is
-    refused or read:documents alone is let in; no_claim=the MCP transport."""
-    owner = ctx.users["owner"]
-    async with tenant_session(ctx.tenant_id) as s:
-        run = Run(flow="baseline_to_prd", created_by=owner.id, status="running")
-        s.add(run)
-        await s.flush()
-        baseline = await mint_run_token(s, run.id, ["read:baseline"], 600)
-        documents = await mint_run_token(s, run.id, ["read:documents"], 600)
-        await s.commit()
-    for raw, code in ((baseline, 200), (documents, 403)):
-        headers = {**ctx.as_("owner"), RUN_TOKEN_HEADER: raw}
-        assert (await client.get("/v1/strategy/stack", headers=headers)).status_code == code
+async def test_a_run_token_with_read_baseline_reads_the_stack(ctx):
+    """protects=agents read the stack over MCP with read:baseline (get_strategy_stack);
+    fails_when=read:baseline is refused or read:documents alone is let in; no_claim=what
+    agents do with it."""
+    from oracle.swarm import FakeRuntime, set_runtime
+    from tests.test_mcp import mcp_client, run_token, text_of
+
+    set_runtime(FakeRuntime())
+    try:
+        owner = ctx.users["owner"].id
+        async with mcp_client(await run_token(ctx.tenant_id, ["read:baseline"], owner)) as c:
+            names = {t.name for t in (await c.list_tools()).tools}
+            assert "get_strategy_stack" in names
+            ok = await c.call_tool("get_strategy_stack", {})
+            assert not ok.is_error and '"unaligned"' in text_of(ok)
+        async with mcp_client(await run_token(ctx.tenant_id, ["read:documents"], owner)) as c:
+            refused = await c.call_tool("get_strategy_stack", {})
+            assert refused.is_error and "needs the read:baseline scope" in text_of(refused)
+    finally:
+        set_runtime(None)
 
 
 # --------------------------------------------------------------------------- inbox
@@ -280,7 +289,11 @@ async def test_the_inbox_row_counts_open_findings_for_owners(client, ctx):
     no_claim=the UI copy (web/e2e/strategy.spec.ts)."""
     await _world(client, ctx)
     inbox = (await client.get("/v1/inbox", headers=ctx.as_("owner"))).json()
-    assert inbox["strategy"] == {"new_findings": 3, "high": 1, "href": "/company/strategy"}
+    row = inbox["strategy"]
+    assert {k: row[k] for k in ("new_findings", "high", "href")} == {
+        "new_findings": 3, "high": 1, "href": "/company/strategy"
+    }  # fmt: skip
+    assert row["since"] is not None
     approver = (await client.get("/v1/inbox", headers=ctx.as_("approver"))).json()
     assert approver["strategy"] is None
     (goal,) = await findings(client, ctx, kind="goal_without_strategy")
@@ -303,7 +316,9 @@ async def test_the_daily_check_runs_once_a_day(ctx):
     async with tenant_session(ctx.tenant_id) as s:
         assert await drift.check_due(s) is False
         await s.execute(
-            update(drift.StrategyCheck).values(created_at=datetime.now(UTC) - timedelta(days=1, minutes=1))
+            update(drift.StrategyCheck).values(
+                created_at=datetime.now(UTC) - timedelta(days=1, minutes=1)
+            )
         )
         assert await drift.check_due(s) is True
 

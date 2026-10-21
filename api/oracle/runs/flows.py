@@ -49,7 +49,16 @@ MCP_TOOLS = {
     "propose_change": "propose a baseline change (locked items become proposals)",
     "push_draft": "hand back a draft for import as the document's next version",
     "get_run_output": "a file an earlier segment of this run wrote (seq and name)",
+    "get_strategy_stack": "the approved vision and strategy: focus choices with their goals, "
+    "the stop list",
+    "list_outcomes": "tracked outcomes of launched PRD versions, roadmap items and experiments "
+    "against their goals",
 }
+# Stated in the tasks of segments that pick features or items (H4).
+STRATEGY_FLAG = (
+    " Flag any feature or item outside the strategy's focus or on its stop list; never drop "
+    "it silently."
+)
 
 
 @dataclass(frozen=True)
@@ -112,7 +121,12 @@ class SegmentDef:
 
 
 # Document kinds a run writes, and how prompts name them.
-KIND_NAMES = {"prd": "PRD", "roadmap": "roadmap"}
+KIND_NAMES = {
+    "prd": "PRD",
+    "roadmap": "roadmap",
+    "vision": "vision",
+    "strategy": "product strategy",
+}
 
 
 def draft_file(kind: str) -> str:
@@ -133,6 +147,9 @@ class FlowDef:
     # The kind of the approved document the run reads (prd_to_roadmap: a PRD); None:
     # the run reads no source document.
     source_kind: str | None = None
+    # With target_kind None: the kinds of existing document the run may work on (None:
+    # any).
+    document_kinds: tuple[str, ...] | None = None
 
     def segment(self, name: str) -> SegmentDef:
         return next(s for s in self.segments if s.name == name)
@@ -181,10 +198,11 @@ FLOWS: dict[str, FlowDef] = {
                     task="From the confirmed baseline, propose the feature set for the next "
                     "version: each feature traces to a confirmed goal or is flagged as "
                     "serving none; list depends_on and blocks edges. Write the set to "
-                    "feature_set.yaml and a high-level design to design.md.",
+                    "feature_set.yaml and a high-level design to design.md." + STRATEGY_FLAG,
                     tools=(
                         "get_baseline",
                         "trace_feature",
+                        "get_strategy_stack",
                         "search",
                         "get_source_item",
                         "propose_change",
@@ -212,9 +230,13 @@ FLOWS: dict[str, FlowDef] = {
                     task="Write the PRD draft for the approved, ordered feature set as prd.md: "
                     "markdown with YAML front matter (title, template, citations) and a "
                     "{#id} on every heading. Every claim cites; no evidence in the body, a "
-                    "final Sources and data points section. " + CITATION_CONTRACT,
+                    "final Sources and data points section."
+                    + STRATEGY_FLAG
+                    + " "
+                    + CITATION_CONTRACT,
                     tools=(
                         "get_baseline",
+                        "get_strategy_stack",
                         "get_document",
                         "search",
                         "get_source_item",
@@ -287,11 +309,12 @@ FLOWS: dict[str, FlowDef] = {
                     "and economics (value, cost, effort). List items in an order that respects "
                     "dependencies: an item comes after the items it depends on and is "
                     "never in an earlier horizon than them. Write roadmap_items.yaml: "
-                    "version: 1, prd: {document, version}, items: [...].",
+                    "version: 1, prd: {document, version}, items: [...]." + STRATEGY_FLAG,
                     tools=(
                         "get_document",
                         "get_document_markdown",
                         "get_baseline",
+                        "get_strategy_stack",
                         "trace_feature",
                         "get_priorities",
                         "search",
@@ -323,6 +346,47 @@ FLOWS: dict[str, FlowDef] = {
                         "get_baseline",
                         "search",
                         "get_source_item",
+                    ),
+                ),
+            ),
+        ),
+        FlowDef(
+            key="strategy_draft",
+            title="Vision or strategy draft",
+            description="Oracle drafts the product vision or the product strategy from the "
+            "confirmed goals, approved documents, decisions and outcomes; an owner reviews it.",
+            requires_document=True,
+            target_kind=None,
+            document_kinds=("vision", "strategy"),
+            segments=(
+                SegmentDef(
+                    name="strategy_draft",
+                    title="Vision or strategy draft",
+                    roles=("researcher", "writer", "critic"),
+                    scopes=(*READ, "read:documents", "write:drafts"),
+                    outputs=("{draft}",),
+                    checkpoint="strategy_review",
+                    approver_role="owner",
+                    imports_draft=True,
+                    # Decisions are decision entities of the baseline (get_baseline) until
+                    # H1 Decision log's list_decisions lands.
+                    task="Write the {doc} draft as {draft} in the template below. Read the "
+                    "confirmed goals, products and features (get_baseline), approved PRDs and "
+                    "roadmaps (get_document), product tracks, decided decisions (decision "
+                    "items in get_baseline) and outcomes (list_outcomes), and the company's "
+                    "own strategy material in its sources (search). For a strategy: at most 5 "
+                    "focus choices, each tied to confirmed goals and an insight with evidence; "
+                    "a stop list naming features or roadmap items; every claim cites. For a "
+                    "vision: beliefs with evidence for and against. Never invent goals: name "
+                    "only goal keys from get_baseline. " + CITATION_CONTRACT,
+                    tools=(
+                        "get_baseline",
+                        "get_document",
+                        "get_document_markdown",
+                        "list_outcomes",
+                        "search",
+                        "get_source_item",
+                        "push_draft",
                     ),
                 ),
             ),
@@ -553,6 +617,20 @@ def step_prompt(
         lines += source_lines(ctx.source, paste=not ctx.mcp_attached)
     if ctx.roadmap is not None:
         lines += roadmap_lines(ctx.roadmap, ctx.source)
+    if flow.key == "strategy_draft" and ctx.document:
+        lines += [
+            "",
+            f"The template: the {KIND_NAMES[ctx.kind]}'s latest version, read with "
+            f"get_document_markdown(doc={ctx.document}). Keep its front matter (document, "
+            "title, kind, template, template_version, brief) and its section ids, and write "
+            + (
+                "choices (id, title, stance focus | stop, goals or features) with one "
+                "{#choice-<id>} section per choice"
+                if ctx.kind == "strategy"
+                else "beliefs (id, statement, status supported | untested | strained)"
+            )
+            + ", horizon and review_on in the front matter.",
+        ]
     if ctx.mcp_attached:
         if ctx.prior_files:
             lines += [

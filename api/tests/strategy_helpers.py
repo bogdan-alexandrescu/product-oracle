@@ -145,7 +145,7 @@ def vision_md(
         "",
         "## What we believe {#beliefs}",
         "",
-        *[f"- {b['statement']}" for b in beliefs],
+        *[f"- {b.get('statement', '')}" for b in beliefs],
         "",
         "# Full version {#full}",
         "",

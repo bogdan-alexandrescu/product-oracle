@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, safe_yaml
 from oracle.auth.deps import Principal
+from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document
@@ -32,6 +33,7 @@ from oracle.templates.builtins import (
     DEFAULT_TEMPLATE_FOR_KIND,
     DEFAULT_THEME_FOR_KIND,
     ensure_builtins,
+    ensure_kind_templates,
 )
 from oracle.templates.models import Template, TemplateVersion, Theme
 from oracle.templates.schemas import (
@@ -67,6 +69,15 @@ class NotFoundError(LookupError):
 
 class ConflictError(RuntimeError):
     pass
+
+
+class ForbiddenError(PermissionError):
+    pass
+
+
+# H4: who may start a document of a kind (an owner's vision and product strategy).
+MIN_STARTER_ROLE = {"vision": "owner", "strategy": "owner"}
+KIND_WORDS = {"vision": "a vision", "strategy": "a product strategy"}
 
 
 class InvalidError(ValueError):
@@ -829,6 +840,12 @@ def draft_skeleton(
 
 
 async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal) -> StartDraftOut:
+    needed = MIN_STARTER_ROLE.get(data.kind)
+    if needed is not None:
+        if not has_role(principal.role, needed):  # type: ignore[arg-type]
+            raise ForbiddenError(f"Only an {needed} can start {KIND_WORDS[data.kind]}")
+        if await ensure_kind_templates(db, data.kind):
+            await db.commit()
     await seed_builtins(db)
     template = await _template_or_404(db, data.template)
     if template.kind != data.kind:

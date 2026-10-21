@@ -165,6 +165,7 @@ from oracle.runs.schemas import (
     InboxOut,
     InboxRevokeFailure,
     InboxStaged,
+    InboxStrategy,
     ItemsCheck,
     KnobsIn,
     KnobsOut,
@@ -1172,6 +1173,12 @@ async def _resolve_document(
         raise Invalid(
             f"document '{ref}' is a {flows.KIND_NAMES.get(document.kind, document.kind)}, "
             f"not a {flows.KIND_NAMES[flow.target_kind]}"
+        )
+    if flow.document_kinds and document.kind not in flow.document_kinds:
+        raise Invalid(
+            f"document '{ref}' is a {flows.KIND_NAMES.get(document.kind, document.kind)}; "
+            f"the {flow.title} flow drafts a "
+            + " or a ".join(flows.KIND_NAMES[k] for k in flow.document_kinds)
         )
     if flow.requires_document:
         latest = await db.scalar(
@@ -7405,6 +7412,12 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     approvals = [_summary(r, refs, None) for r in waiting_runs if r.status == "awaiting_approval"]
     overruns = [_summary(r, refs, None) for r in waiting_runs if r.status == "paused_overrun"]
     revoke_failures = await _revoke_failures(db) if owner else []
+    strategy = None
+    if owner:
+        from oracle.strategy import drift
+
+        row = await drift.inbox_row(db)
+        strategy = InboxStrategy.model_validate(row) if row else None
     # Lost submissions past the lookup cap (Retry or Cancel), cancels past NOT_FOUND_TRIES
     # 404s (Stop cancelling), answer posts past them (Cancel), and searched workflows past
     # them (shown), by those who manage the run.
@@ -7463,6 +7476,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         imports=imports,
         feedback=feedback,
         revoke_failures=revoke_failures,
+        strategy=strategy,
         # Every new or open item (C1e, owner 2026-10-20): the rail badge, = New + Open.
         total=len(checkpoints)
         + len(approvals)
@@ -7471,7 +7485,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + len(imports)
         + counts.new
         + counts.open
-        + len(revoke_failures),
+        + len(revoke_failures)
+        # Strategy drift: one row, however many findings.
+        + (1 if strategy else 0),
         items=states,
         counts=counts,
         staged=staged,

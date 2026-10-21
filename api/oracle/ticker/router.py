@@ -53,6 +53,7 @@ from oracle.db import get_engine
 from oracle.jobs import worker as llm_jobs
 from oracle.models import Tenant
 from oracle.roadmap import views as track_views
+from oracle.strategy import drift as strategy_drift
 from oracle.tenancy import tenant_session, unscoped_session
 from oracle.ticker import body, idtoken
 
@@ -193,6 +194,14 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
             failures.add(tenant_id)
     except Exception:
         log.exception("run ticker: track monitoring failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
+        # Strategy drift (H4): a daily deterministic check, no model call.
+        async with tenant_session(tenant_id) as db:
+            if await strategy_drift.check_due(db):
+                await db.commit()
+    except Exception:
+        log.exception("run ticker: strategy drift check failed for company %s", tenant_id)
         failures.add(tenant_id)
 
 

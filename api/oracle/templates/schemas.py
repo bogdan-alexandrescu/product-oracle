@@ -4,8 +4,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-TemplateKind = Literal["prd", "roadmap"]
-ThemeKind = Literal["prd", "roadmap", "any"]
+TemplateKind = Literal["prd", "roadmap", "vision", "strategy"]
+ThemeKind = Literal["prd", "roadmap", "vision", "strategy", "any"]
+# The new-draft picker's kinds: a vision or strategy starts on Company › Strategy (H4).
+PickerKind = Literal["prd", "roadmap"]
 KEY_PATTERN = r"^[a-z0-9][a-z0-9-]{0,62}$"
 
 
@@ -234,7 +236,7 @@ class RoadmapAnswers(BaseModel):
 
 
 class RecommendIn(BaseModel):
-    kind: TemplateKind
+    kind: PickerKind
     prd: PrdAnswers | None = None
     roadmap: RoadmapAnswers | None = None
 

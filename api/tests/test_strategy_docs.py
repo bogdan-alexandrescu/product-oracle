@@ -10,8 +10,8 @@ import pytest
 from sqlalchemy import func, select
 
 from oracle.docs.models import Document, DocumentVersion
-from oracle.models import AuditEvent
 from oracle.mcp.scopes import required_scope
+from oracle.models import AuditEvent
 from oracle.runs import flows
 from oracle.runs.models import Checkpoint
 from oracle.swarm import FakeRuntime, set_runtime
@@ -212,7 +212,7 @@ async def test_a_choice_without_its_section_is_refused_naming_it(client, ctx):
     )
     resp = await import_md(client, ctx.as_("owner"), STRATEGY, md)
     assert resp.status_code == 422
-    problems = resp.json()["problems"]
+    problems = resp.json()["errors"]
     assert any(p["code"] == "choice_without_section" and "'x'" in p["message"] for p in problems)
 
 
@@ -224,9 +224,7 @@ async def test_six_focus_choices_import_with_too_many_focus(client, ctx):
     v = await imported(client, ctx.as_("owner"), STRATEGY, md)
     assert "too_many_focus" in _codes(v)
     w = next(w for w in v["warnings"] if w["code"] == "too_many_focus")
-    assert w["message"] == (
-        "More than 5 focus choices. Twenty high priorities overwhelm a team."
-    )
+    assert w["message"] == ("More than 5 focus choices. Twenty high priorities overwhelm a team.")
 
 
 async def test_unknown_keys_and_a_focus_without_goals_are_warnings(client, ctx):
@@ -256,7 +254,9 @@ async def test_malformed_choices_and_beliefs_are_refused(client, ctx):
     bad_stance = strategy_md([choice("a", "maybe")])
     resp = await import_md(client, ctx.as_("owner"), STRATEGY, bad_stance)
     assert resp.status_code == 422 and "invalid_choice" in resp.text
-    dup = strategy_md([choice("a", goals=[]), choice("a", goals=[])])
+    # The same id twice (its section once, so the parser's duplicate-id check is not what
+    # refuses it).
+    dup = strategy_md([choice("a", goals=[]), choice("a", goals=[])], without_sections=("a",))
     resp = await import_md(client, ctx.as_("owner"), STRATEGY, dup)
     assert resp.status_code == 422 and "invalid_choice" in resp.text
     md = vision_md([{"id": "b1"}])  # type: ignore[list-item]
@@ -330,9 +330,7 @@ async def _strategy_document(client, ctx) -> str:
     return resp.json()["slug"]
 
 
-async def test_strategy_draft_run_estimates_13_and_stops_at_an_owners_review(
-    client, ctx, runtime
-):
+async def test_strategy_draft_run_estimates_13_and_stops_at_an_owners_review(client, ctx, runtime):
     """protects=the strategy_draft run: $13.00 at standard depth, its checkpoint is
     strategy_review for owners, an approver's decision is refused; fails_when=the estimate,
     kind or role differ, or an approver decides; no_claim=the draft's content."""
@@ -347,7 +345,7 @@ async def test_strategy_draft_run_estimates_13_and_stops_at_an_owners_review(
     run = resp.json()
     est = await client.post(f"/v1/runs/{run['id']}/estimate", headers=owner)
     assert est.status_code == 200, est.text
-    assert est.json()["estimate_usd"] == 13.0
+    assert est.json()["total_usd"] == 13.0
     resp = await client.post(f"/v1/runs/{run['id']}/start", headers=owner)
     assert resp.status_code == 200, resp.text
     prompt = runtime.submitted[0].steps[-1].prompt
@@ -371,8 +369,9 @@ async def test_strategy_draft_needs_a_vision_or_strategy_document(client, ctx, r
     """protects=the flow only drafts a vision or strategy; fails_when=it runs on a PRD;
     no_claim=other flows' document checks."""
     prd = vision_md([belief("b1", "x")]).replace("kind: vision", "kind: prd")
-    await imported(client, ctx.as_("owner"), "some-prd", prd.replace("document: vision",
-                                                                      "document: some-prd"))
+    await imported(
+        client, ctx.as_("owner"), "some-prd", prd.replace("document: vision", "document: some-prd")
+    )
     resp = await client.post(
         "/v1/runs",
         json={"flow": "strategy_draft", "document": "some-prd"},

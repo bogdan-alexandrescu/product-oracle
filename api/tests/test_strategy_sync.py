@@ -39,7 +39,9 @@ async def ctx():
 async def _entity_events(tenant_id) -> int:
     async with tenant_session(tenant_id) as s:
         return await s.scalar(
-            select(func.count()).select_from(ChangeEvent).where(ChangeEvent.subject_kind == "entity")
+            select(func.count())
+            .select_from(ChangeEvent)
+            .where(ChangeEvent.subject_kind == "entity")
         )
 
 
@@ -121,9 +123,11 @@ async def test_a_choice_back_in_a_later_version_is_confirmed_again(client, ctx):
     no_claim=history of the choice's text."""
     t = ctx.tenant_id
     await add_entity(t, "goal", "a")
-    md_with = strategy_md([choice("one", goals=["a"]), choice("two", goals=["a"])])
-    md_without = strategy_md([choice("one", goals=["a"])])
-    for n, md in enumerate((md_with, md_without, md_with), start=1):
+    both = [choice("one", goals=["a"]), choice("two", goals=["a"])]
+    md_with = strategy_md(both)
+    md_without = strategy_md(both[:1])
+    md_again = strategy_md(both, summary="Two is back.")
+    for n, md in enumerate((md_with, md_without, md_again), start=1):
         await imported(client, ctx.as_("owner"), STRATEGY, md)
         await approved(client, ctx.as_("owner"), STRATEGY, n)
     two = await entity(t, "strategy_choice", f"{STRATEGY}-two")
@@ -137,12 +141,17 @@ async def test_approving_a_vision_writes_its_beliefs_as_assumptions(client, ctx)
     belief_id and status, and a dropped belief is rejected; fails_when=a belief is missing,
     its attrs are wrong or a dropped one stays confirmed; no_claim=evidence on beliefs."""
     t = ctx.tenant_id
-    beliefs = [belief("b1", "Teams plan weekly", "supported"),
-               belief("b2", "Founders decide"), belief("b3", "Tools sprawl", "strained")]  # fmt: skip
+    beliefs = [
+        belief("b1", "Teams plan weekly", "supported"),
+        belief("b2", "Founders decide"),
+        belief("b3", "Tools sprawl", "strained"),
+    ]
     v = await imported(client, ctx.as_("owner"), VISION, vision_md(beliefs))
     await approved(client, ctx.as_("owner"), VISION, 1)
     async with tenant_session(t) as s:
-        rows = {e.key: e for e in await s.scalars(select(Entity).where(Entity.type == "assumption"))}
+        rows = {
+            e.key: e for e in await s.scalars(select(Entity).where(Entity.type == "assumption"))
+        }
     assert set(rows) == {f"{VISION}-b1", f"{VISION}-b2", f"{VISION}-b3"}
     b1 = rows[f"{VISION}-b1"]
     assert b1.title == "Teams plan weekly" and b1.status == "confirmed"

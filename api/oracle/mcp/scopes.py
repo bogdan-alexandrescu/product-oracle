@@ -22,6 +22,10 @@ READ_AREAS = {
         "blocker-options",
         "feasibility-experiments",
         "blocker-events",
+        # H4: the approved vision and strategy, and the drift findings against them.
+        "strategy",
+        # Outcomes tracked against goals (a strategy draft reads them).
+        "outcomes",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }
