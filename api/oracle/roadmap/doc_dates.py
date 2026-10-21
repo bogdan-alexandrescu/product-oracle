@@ -58,17 +58,21 @@ returned).
 
 Off the event loop (owner 2026-10-20): :func:`find` parses the whole text with markdown-it
 and runs on the parse pool (oracle.safe_yaml), never on the event loop. A stored version's
-dates are found once and kept in this process (:func:`found_for_version`: a request waits
-``WAIT_SECONDS``, then gets a 503 while the job goes on; a job past ``JOB_SECONDS`` gives
-up and the version's reads are refused, 422). An import's are found within
-``WAIT_SECONDS`` (else the draft is refused, ``too_slow``) and kept for the version it
-stores (:func:`keep_for_version`).
+dates are found once and kept in this process, packed (:func:`found_for_version`: a
+request waits ``WAIT_SECONDS``, then gets a 503 while the job goes on; a job whose worker
+spent ``JOB_SECONDS`` of its own CPU, or that found more than ``MAX_DATES`` dates, gives up
+and the version's reads are refused, 422; one company runs at most
+``DATE_JOBS_PER_COMPANY`` jobs at once). An import's are found within ``WAIT_SECONDS``
+(else the draft is refused, ``too_slow``), at most ``MAX_DATES`` of them (else
+``too_many_dates``), and kept for the version it stores (:func:`keep_for_version`).
 """
 
 import asyncio
 import bisect
 import hashlib
 import re
+import sys
+import threading
 import time
 import unicodedata
 import uuid
@@ -850,39 +854,64 @@ def template_dates(body: str) -> set[tuple[str, str]]:
 
 # Finding the dates parses the whole text with markdown-it: CPU-bound, and seconds for a
 # large body. It never runs on the event loop: on the parse pool
-# (oracle.safe_yaml.run_parse_within), and once per stored version, since versions are
-# immutable: what it found is kept in this process (an LRU, not the database), keyed by
-# the version, its day and RENDERER. A template's literal dates are kept per template body.
+# (oracle.safe_yaml.run_parse), and once per stored version, since versions are immutable:
+# what it found is kept in this process (an LRU, not the database), packed, keyed by the
+# version, its day and RENDERER. A template's literal dates are kept per template body.
 
 # Bump when find() reads the same text differently: what older code found is not served.
 RENDERER = 1
 # A request waits at most this long for dates: a draft's import is then refused
 # (too_slow), a stored version's read answers 503 while its dates are still being found.
 WAIT_SECONDS = safe_yaml.PARSE_SECONDS
-# Finding a stored version's dates gives up after this long: that version's reads are
-# then refused (422) for GIVE_UP_SECONDS without parsing it again. A job that spent most
-# of that time waiting for a busy pool is not given up on (the next read tries again).
+# Finding a stored version's dates gives up once its worker has spent this much of its own
+# CPU (security review of PR #134): that version's reads are then refused (422) for
+# GIVE_UP_SECONDS without parsing it again. CPU, never the clock: Python runs one thread at
+# a time, so other companies' work slows every job's clock (a 280 KB body took 1.0 s alone
+# and 4.4 s beside five busy threads, with the same 1.0 s of CPU). Read while the job runs
+# where the platform gives another thread's CPU clock (Linux), else when it ends.
 JOB_SECONDS = 4 * safe_yaml.PARSE_SECONDS
+# Liveness only: a job not done after this long on the clock is no longer waited for (its
+# read is 503 and the next read starts it again). The version is NOT given up.
+JOB_WALL_SECONDS = 300.0
 GIVE_UP_SECONDS = 600.0
-# Roughly what the kept results may hold, in bytes (least recently used out first).
+# A job that failed (an error, not its cap): reads get the same error for this long
+# without running it again, then the next read tries again.
+FAILED_SECONDS = 60.0
+# At most this many date jobs of one company at once, queued or running, until their
+# worker ends (a job given up still runs to its end on its thread): one company cycling
+# large versions cannot fill the parse pool's 4 threads. One more is 503, try again.
+DATE_JOBS_PER_COMPANY = 2
+# The most dates one roadmap version may write: an import with more is refused
+# (too_many_dates), and a stored version with more is refused on read (422, given up,
+# never kept). Real roadmaps write dozens (Galatia's); this is far above any of them.
+MAX_DATES = 2_000
+# Roughly what the kept results may hold, in bytes (least recently used out first). An
+# entry above KEPT_BYTES / KEPT_SHARE is not kept at all: it would evict every other one.
 KEPT_BYTES = 32 * 1024 * 1024
+KEPT_SHARE = 8
 STILL_CHECKING = "This roadmap's dates are still being checked; try again in a few seconds"
+DATES_BUSY = "Oracle is checking other roadmaps' dates for your company; try again in a few seconds"
 TOO_LARGE = "This roadmap is too large to check its dates quickly"
+# How often a running job's CPU is read.
+_POLL_SECONDS = 0.1
+# How many given-up and failed keys are listed (least recently listed out first).
+_LISTED = 1024
 
 
 class DatesUnavailable(HTTPException):
     """The dates of a roadmap could not be had in time: 503 with Retry-After while they are
-    still being found (the next read is served from what is found), 422 once finding them
-    gave up after ``JOB_SECONDS``. An HTTP error wherever a request reads them (the
-    document view, its markdown, the exports, the publish gate): never a view without its
-    date markers."""
+    still being found (the next read is served from what is found) or while the company
+    already runs ``DATE_JOBS_PER_COMPANY`` jobs (``busy``), 422 once finding them gave up
+    (``JOB_SECONDS`` of CPU, more than ``MAX_DATES`` dates). An HTTP error wherever a
+    request reads them (the document view, its markdown, the exports, the publish gate):
+    never a view without its date markers. ``pending``: a later try may succeed."""
 
-    def __init__(self, *, pending: bool) -> None:
-        self.pending = pending
-        if pending:
+    def __init__(self, *, pending: bool, busy: bool = False) -> None:
+        self.pending = pending or busy
+        if self.pending:
             super().__init__(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
-                STILL_CHECKING,
+                DATES_BUSY if busy else STILL_CHECKING,
                 headers={"Retry-After": str(max(1, round(WAIT_SECONDS)))},
             )
         else:
@@ -912,26 +941,181 @@ def _template_dates(body: str) -> frozenset[tuple[str, str]]:
     return frozenset(template_dates(body))
 
 
+# Per date, in _Packed.ints: section key, end of its text, end of its days, line, where,
+# start, end, insert_at, owner (-1: none), block, in_code.
+_FIELDS = 11
+_WHERE: tuple[Where, ...] = ("title", "heading", "body")
+
+
+@dataclass(frozen=True)
+class _Packed:
+    """What find() found in a version, packed for keeping: a date took about 512 bytes as
+    objects, about 60 here plus its text. Per date, ``_FIELDS`` integers in ``ints``; its
+    days (ordinals) in ``days``; its text in ``texts`` (one string); section keys, owners
+    and block texts once each in ``strings``. :func:`_unpack` gives back the same
+    :class:`Found` tuple."""
+
+    ints: array[int]
+    days: array[int]
+    texts: str
+    strings: tuple[str, ...]
+
+    def __len__(self) -> int:
+        return len(self.ints) // _FIELDS
+
+
+def _pack(found: Sequence[Found]) -> _Packed:
+    index: dict[str, int] = {}
+    strings: list[str] = []
+
+    def ref(s: str | None) -> int:
+        if s is None:
+            return -1
+        at = index.get(s)
+        if at is None:
+            at = index[s] = len(strings)
+            strings.append(s)
+        return at
+
+    ints, days = array("i"), array("i")
+    texts: list[str] = []
+    text_end = 0
+    for f in found:
+        texts.append(f.text)
+        text_end += len(f.text)
+        days.extend(d.toordinal() for d in f.days)
+        ints.extend(
+            (
+                ref(f.section_key),
+                text_end,
+                len(days),
+                f.line,
+                _WHERE.index(f.where),
+                f.start,
+                f.end,
+                f.insert_at,
+                ref(f.owner),
+                ref(f.block),
+                int(f.in_code),
+            )
+        )
+    return _Packed(ints, days, "".join(texts), tuple(strings))
+
+
+def _unpack(packed: _Packed) -> tuple[Found, ...]:
+    out: list[Found] = []
+    strings, texts, ints, days = packed.strings, packed.texts, packed.ints, packed.days
+    text_at = day_at = 0
+    for k in range(0, len(ints), _FIELDS):
+        key, text_end, days_end, line, where, start, end, insert_at, owner, block, code = ints[
+            k : k + _FIELDS
+        ]
+        out.append(
+            Found(
+                strings[key],
+                texts[text_at:text_end],
+                tuple(date.fromordinal(d) for d in days[day_at:days_end]),
+                line,
+                _WHERE[where],
+                start,
+                end,
+                insert_at,
+                strings[owner] if owner >= 0 else None,
+                strings[block],
+                bool(code),
+            )
+        )
+        text_at, day_at = text_end, days_end
+    return tuple(out)
+
+
 def _weight(value: Any) -> int:
     """About how many bytes a kept result holds."""
-    if isinstance(value, tuple):  # what find() found
-        blocks = {id(f.block): len(f.block) for f in value}
-        return 512 * len(value) + sum(blocks.values()) + 64
+    if isinstance(value, _Packed):
+        strings = sum(sys.getsizeof(s) for s in value.strings)
+        arrays = sys.getsizeof(value.ints) + sys.getsizeof(value.days)
+        return arrays + sys.getsizeof(value.texts) + strings + 8 * len(value.strings) + 128
     return 128 * len(value) + 64
 
 
 _MISSING = object()
 
 
+def _cpu_clock() -> int | None:
+    """This thread's CPU clock, readable from another thread (Linux), else None."""
+    clock_of = getattr(time, "pthread_getcpuclockid", None)
+    if clock_of is None:
+        return None
+    try:
+        return clock_of(threading.get_ident())
+    except OSError:
+        return None
+
+
+def _cpu_now(clock: int | None) -> float:
+    """This thread's CPU seconds (``clock``: its clock from :func:`_cpu_clock`)."""
+    return time.clock_gettime(clock) if clock is not None else time.thread_time()
+
+
+class _Worker:
+    """A date job's run on the parse pool: its company, the CPU it spent (its own thread's,
+    never the clock) and whether it ended. Set from the pool's thread, read from the loop's."""
+
+    def __init__(self, company: Hashable | None) -> None:
+        self.company = company
+        self.abandoned = False  # nobody waits for it: do not start
+        self.started = False
+        self.done = False
+        self._clock: int | None = None
+        self._cpu_start = 0.0
+        self._cpu: float | None = None  # what it spent, once it ended
+
+    def run(self, fn: Callable[..., Any], *args: Any) -> Any:
+        try:
+            if self.abandoned:
+                return _MISSING
+            self._clock = _cpu_clock()
+            self._cpu_start = _cpu_now(self._clock)
+            self.started = True
+            return fn(*args)
+        finally:
+            if self.started:
+                self._cpu = _cpu_now(self._clock) - self._cpu_start
+            self.done = True
+
+    def spent(self) -> float:
+        """CPU seconds so far: exact once it ended; while it runs, its thread's CPU clock
+        where the platform gives it (Linux), else 0 (it is read when the job ends)."""
+        if self._cpu is not None:
+            return self._cpu
+        if not self.started or self._clock is None:
+            return 0.0
+        try:
+            return time.clock_gettime(self._clock) - self._cpu_start
+        except OSError:
+            return 0.0
+
+
+def _list(entries: OrderedDict[Hashable, Any], key: Hashable, value: Any) -> None:
+    """``key`` listed last (newest), the oldest out past ``_LISTED``."""
+    entries.pop(key, None)
+    entries[key] = value
+    while len(entries) > _LISTED:
+        entries.popitem(last=False)
+
+
 class _Kept:
     """Results kept per key (least recently used out first past ``KEPT_BYTES``), the keys
-    whose job gave up, and the jobs running now (at most one per key)."""
+    whose job gave up or failed, the jobs running now (at most one per key) and every job's
+    worker that has not ended (counted per company)."""
 
     def __init__(self) -> None:
         self.values: OrderedDict[Hashable, tuple[Any, int]] = OrderedDict()
         self.weight = 0
         self.gave_up: OrderedDict[Hashable, float] = OrderedDict()  # key -> when
+        self.failed: OrderedDict[Hashable, tuple[float, Exception]] = OrderedDict()
         self.running: dict[Hashable, asyncio.Task[Any]] = {}
+        self.workers: list[_Worker] = []
 
     def get(self, key: Hashable) -> Any:
         hit = self.values.get(key)
@@ -940,21 +1124,23 @@ class _Kept:
         self.values.move_to_end(key)
         return hit[0]
 
-    def put(self, key: Hashable, value: Any) -> None:
+    def put(self, key: Hashable, value: Any) -> bool:
+        """Keep ``value``; False (and nothing evicted) when it is too large to keep."""
+        weight = _weight(value)
+        if weight > KEPT_BYTES // KEPT_SHARE:
+            return False
         old = self.values.pop(key, None)
         if old is not None:
             self.weight -= old[1]
-        weight = _weight(value)
         self.values[key] = (value, weight)
         self.weight += weight
         while self.weight > KEPT_BYTES and len(self.values) > 1:
             _, (_, dropped) = self.values.popitem(last=False)
             self.weight -= dropped
+        return True
 
     def give_up(self, key: Hashable) -> None:
-        self.gave_up[key] = time.monotonic()
-        while len(self.gave_up) > 1024:
-            self.gave_up.popitem(last=False)
+        _list(self.gave_up, key, time.monotonic())
 
     def given_up(self, key: Hashable) -> bool:
         at = self.gave_up.get(key)
@@ -965,47 +1151,90 @@ class _Kept:
             return False
         return True
 
+    def fail(self, key: Hashable, exc: Exception) -> None:
+        _list(self.failed, key, (time.monotonic(), exc))
+
+    def failure(self, key: Hashable) -> Exception | None:
+        hit = self.failed.get(key)
+        if hit is None:
+            return None
+        if time.monotonic() - hit[0] > FAILED_SECONDS:
+            del self.failed[key]
+            return None
+        return hit[1]
+
+    def busy(self, company: Hashable) -> int:
+        """How many of ``company``'s jobs have a worker that has not ended."""
+        self.workers = [w for w in self.workers if not w.done]
+        return sum(1 for w in self.workers if w.company == company)
+
 
 _KEPT = _Kept()
 
 
-async def _job(key: Hashable, fn: Callable[..., Any], args: tuple[Any, ...]) -> Any:
-    started: list[float] = []  # when the pool started it
+def _too_many(value: Any) -> bool:
+    return isinstance(value, tuple) and len(value) > MAX_DATES
 
-    def timed(*a: Any) -> Any:
-        started.append(time.monotonic())
-        return fn(*a)
 
+async def _job(
+    key: Hashable, worker: _Worker, fn: Callable[..., Any], args: tuple[Any, ...]
+) -> Any:
+    loop = asyncio.get_running_loop()
+    work = asyncio.ensure_future(safe_yaml.run_parse(worker.run, fn, *args))
+    # Its outcome is read even when this job stopped waiting for it.
+    work.add_done_callback(lambda f: f.cancelled() or f.exception())
+    deadline = loop.time() + JOB_WALL_SECONDS
     try:
-        value = await safe_yaml.run_parse_within(
-            timed, *args, name="the roadmap's dates", seconds=JOB_SECONDS
-        )
-    except safe_yaml.ParseTimeout:
-        # The cap counts a wait for a busy pool too: given up only when it ran most of it.
-        if started and time.monotonic() - started[0] >= JOB_SECONDS / 2:
+        while not work.done():
+            left = deadline - loop.time()
+            if left <= 0:
+                # Liveness, not cost: stop waiting, do not give the version up.
+                worker.abandoned = True
+                raise DatesUnavailable(pending=True)
+            await asyncio.wait({work}, timeout=min(_POLL_SECONDS, left))
+            if not work.done() and worker.spent() > JOB_SECONDS:
+                _KEPT.give_up(key)
+                raise DatesUnavailable(pending=False)
+        try:
+            value = work.result()
+        except Exception as exc:
+            _KEPT.fail(key, exc)
+            raise
+        if worker.spent() > JOB_SECONDS or _too_many(value):
             _KEPT.give_up(key)
-            raise DatesUnavailable(pending=False) from None
-        raise DatesUnavailable(pending=True) from None
+            raise DatesUnavailable(pending=False)
+        if not _KEPT.put(key, _pack(value) if isinstance(value, tuple) else value):
+            _KEPT.give_up(key)
+            raise DatesUnavailable(pending=False)
+        return value
     finally:
         if _KEPT.running.get(key) is asyncio.current_task():
             del _KEPT.running[key]
-    _KEPT.put(key, value)
-    return value
 
 
-async def _kept(key: Hashable, fn: Callable[..., Any], *args: Any) -> Any:
+async def _kept(
+    key: Hashable, fn: Callable[..., Any], *args: Any, company: Hashable | None = None
+) -> Any:
     """``fn(*args)`` for ``key``: kept, else from the one job finding it (started when none
-    runs), waited for at most ``WAIT_SECONDS``. The job goes on without the caller and
-    keeps what it finds."""
+    runs and ``company`` runs fewer than ``DATE_JOBS_PER_COMPANY``), waited for at most
+    ``WAIT_SECONDS``. The job goes on without the caller and keeps what it finds."""
     value = _KEPT.get(key)
     if value is not _MISSING:
-        return value
+        return _unpack(value) if isinstance(value, _Packed) else value
     if _KEPT.given_up(key):
         raise DatesUnavailable(pending=False)
+    failed = _KEPT.failure(key)
+    if failed is not None:
+        raise failed.with_traceback(None)
     loop = asyncio.get_running_loop()
     job = _KEPT.running.get(key)
     if job is None or job.get_loop() is not loop:
-        job = loop.create_task(_job(key, fn, args))
+        if company is not None and _KEPT.busy(company) >= DATE_JOBS_PER_COMPANY:
+            raise DatesUnavailable(pending=True, busy=True)
+        worker = _Worker(company)
+        if company is not None:
+            _KEPT.workers.append(worker)
+        job = loop.create_task(_job(key, worker, fn, args))
         # Its outcome is read even when every caller stopped waiting.
         job.add_done_callback(lambda t: t.cancelled() or t.exception())
         _KEPT.running[key] = job
@@ -1016,10 +1245,18 @@ async def _kept(key: Hashable, fn: Callable[..., Any], *args: Any) -> Any:
 
 
 async def found_for_version(version: Any, sections: Sequence[_SectionLike]) -> tuple[Found, ...]:
-    """:func:`find` of a stored version (its title, its day): found once, then kept."""
+    """:func:`find` of a stored version (its title, its day): found once, then kept. Its
+    company's jobs are counted (``DATE_JOBS_PER_COMPANY``)."""
     ref = version_day(version)
     key = ("version", version.id, ref, RENDERER)
-    return await _kept(key, _find_all, _parts(sections), version_title(version), ref)
+    return await _kept(
+        key,
+        _find_all,
+        _parts(sections),
+        version_title(version),
+        ref,
+        company=getattr(version, "tenant_id", None),
+    )
 
 
 async def found_for_draft(
@@ -1033,9 +1270,9 @@ async def found_for_draft(
 
 
 def keep_for_version(version_id: uuid.UUID, ref: date, found: Sequence[Found]) -> None:
-    """What an import found, kept for the version it stored. Served when ``ref`` is the
-    version's day (:func:`import_day`; not when the import crossed midnight UTC)."""
-    _KEPT.put(("version", version_id, ref, RENDERER), tuple(found))
+    """What an import found, kept (packed) for the version it stored. Served when ``ref``
+    is the version's day (:func:`import_day`; not when the import crossed midnight UTC)."""
+    _KEPT.put(("version", version_id, ref, RENDERER), _pack(found))
 
 
 def import_day() -> date:
@@ -1046,9 +1283,26 @@ def import_day() -> date:
 
 async def template_dates_async(body: str) -> frozenset[tuple[str, str]]:
     """:func:`template_dates` of a template body: found once (a day: year-less dates read
-    against today), then kept."""
+    against today), then kept. Not counted per company: a template body's key is shared by
+    every company that uses it (a built-in template)."""
     digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
     return await _kept(("template", digest, date.today(), RENDERER), _template_dates, body)
+
+
+async def prefetch(db: AsyncSession, version: Any) -> None:
+    """A stored roadmap version's dates and its template's, found now (kept): a caller
+    about to take a row lock calls this first, so the check under the lock reads them kept
+    instead of waiting for them while it holds the lock. Raises :class:`DatesUnavailable`
+    as a read does."""
+    from oracle.docs.models import Section
+
+    sections = list(
+        await db.scalars(
+            select(Section).where(Section.version_id == version.id).order_by(Section.ordinal)
+        )
+    )
+    await found_for_version(version, sections)
+    await version_template_dates(db, version)
 
 
 # --------------------------------------------------------------------------- checking

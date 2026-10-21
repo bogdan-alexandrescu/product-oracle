@@ -751,6 +751,13 @@ async def approve_version(
     A PRD passes the publish gate first (raises ``publish_gate.PublishBlocked``).
     """
     version = await get_version(session, doc, n)
+    kind = await session.scalar(select(Document.kind).where(Document.id == version.document_id))
+    if kind == "roadmap" and version.approved_at is None:
+        # A roadmap's dates are found before the lock, never waited for under it (up to
+        # WAIT_SECONDS, then 503): the gate under the lock reads them kept.
+        from oracle.roadmap import doc_dates
+
+        await doc_dates.prefetch(session, version)
     # The lock an import takes: no new version lands while the gate decides.
     document = await session.get(Document, version.document_id, with_for_update=True)
     await publish_gate.check(session, document, version)

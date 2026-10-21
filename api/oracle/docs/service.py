@@ -364,7 +364,8 @@ async def _check_document_dates(
 
     The text is read off the event loop (oracle.roadmap.doc_dates.found_for_draft): a
     draft whose dates take longer than ``doc_dates.WAIT_SECONDS`` to find is refused
-    (``too_slow``)."""
+    (``too_slow``), and one that writes more than ``doc_dates.MAX_DATES`` dates
+    (``too_many_dates``), whatever kind of import."""
     from oracle.roadmap import doc_dates
 
     title = draft.front_matter.get("title")
@@ -385,6 +386,19 @@ async def _check_document_dates(
                 )
             ]
         ) from None
+    if len(found) > doc_dates.MAX_DATES:
+        # What a version keeps stays small (oracle.roadmap.doc_dates: a pathological date
+        # count is refused here, not kept and re-read).
+        await db.rollback()
+        raise DraftError(
+            [
+                ImportProblem(
+                    code="too_many_dates",
+                    message=f"the roadmap writes {len(found):,} dates; Oracle checks at most "
+                    f"{doc_dates.MAX_DATES:,} in one version. Split it or write fewer dates",
+                )
+            ]
+        )
     dates = DraftDates(ref, found)
 
     problems: list[ImportProblem] = []

@@ -5,15 +5,21 @@ brief sections and the Sources and data points appendix (HTML, PDF); ``layer=dec
 the brief as slides (PDF, PPTX; HTML is the page the PDF is printed from).
 ``/deck`` returns the slides as JSON for Present mode.
 
-Every format renders on the export pool, never on the event loop, and a render that takes
-longer than ``offload.SECONDS`` is refused: 422 "This document is too large to export
-quickly" (oracle.export.offload). A roadmap's dates are read once per version, off the
-loop too (oracle.roadmap.doc_dates: 503 while they are still being found).
+Every format renders on the export pool, never on the event loop (oracle.export.offload):
+one export per person and two per company at a time (more: 429 ``export_busy_you``), a
+wait of more than ``offload.QUEUE_SECONDS`` for a worker is 503 ``export_busy``, and a
+render that takes longer than ``offload.SECONDS`` from its start is refused: 422 "This
+document is too large to export quickly". The request ends its transaction before it waits
+and the render reads copies of the rows (:func:`oracle.export.render.detached`). A
+roadmap's dates are read once per version, off the loop too (oracle.roadmap.doc_dates: 503
+while they are still being found).
 """
+
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
-from oracle.auth.deps import TenantDB
+from oracle.auth.deps import CurrentPrincipal, TenantDB
 from oracle.authz import require_role
 from oracle.export import offload
 from oracle.export.deck import build_deck, render_deck_html, theme_class
@@ -23,6 +29,7 @@ from oracle.export.render import (
     NoBrief,
     NotFound,
     apply_layer,
+    detached,
     load_export_version,
     render_html,
     render_markdown,
@@ -94,6 +101,7 @@ async def export_version(
     doc: str,
     n: int,
     db: TenantDB,
+    principal: CurrentPrincipal,
     fmt: ExportFormat = Query("html", alias="format"),
     layer: ExportLayer = Query("full"),
 ) -> Response:
@@ -104,9 +112,13 @@ async def export_version(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             f"the {layer} layer exports as {', '.join(LAYER_FORMATS[layer])}, not {fmt}",
         )
-    ev = await _load(db, doc, n, layer)
     try:
-        content = await offload.run(render_export, ev, layer, fmt)
+        with offload.place(principal) as held:
+            ev = detached(await _load(db, doc, n, layer))
+            await db.commit()  # no connection held while it waits for the pool
+            content = await offload.run(held, render_export, ev, layer, fmt)
+    except offload.Refused as e:
+        return e.response()
     except PdfUnavailable as e:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from None
     return Response(
@@ -117,12 +129,17 @@ async def export_version(
 
 
 @router.get("/documents/{doc}/versions/{n}/deck", response_model=DeckOut)
-async def get_deck(doc: str, n: int, db: TenantDB) -> DeckOut:
+async def get_deck(doc: str, n: int, db: TenantDB, principal: CurrentPrincipal) -> Any:
     """The brief layer as slides in the document's theme (its slide variant), with
     presenter notes and the detail each slide can expand. 422 when the version has no
     brief sections."""
-    ev = await _load(db, doc, n, "deck")
-    deck = await offload.run(build_deck, ev)
+    try:
+        with offload.place(principal) as held:
+            ev = detached(await _load(db, doc, n, "deck"))
+            await db.commit()  # no connection held while it waits for the pool
+            deck = await offload.run(held, build_deck, ev)
+    except offload.Refused as e:
+        return e.response()
     return DeckOut(
         document_id=ev.document.id,
         slug=deck.slug,

@@ -22,7 +22,7 @@ version built from another one (a roadmap from its PRD version) says so in its b
 
 import re
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from functools import cache
 from pathlib import Path
@@ -32,7 +32,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markdown_it import MarkdownIt
 from markdown_it.rules_inline import StateInline
 from markupsafe import Markup, escape
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, inspect, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -155,6 +155,34 @@ def sources_keys(sections: list[Section]) -> set[str]:
                 break
             out.add(s.section_key)
     return out
+
+
+def detached(ev: ExportVersion) -> ExportVersion:
+    """``ev`` with copies of its rows that no session holds: what a render on the export
+    pool reads, so the request can end its transaction first (no database connection held
+    while it waits for the pool) and a render that outlives its request never reads an
+    expired row. Each copy carries the row's columns; a row read twice is copied once."""
+    copies: dict[int, object] = {}
+
+    def copy(row):
+        if row is None:
+            return None
+        key = id(row)
+        if key not in copies:
+            mapper = inspect(row).mapper
+            copies[key] = mapper.class_(**{a.key: getattr(row, a.key) for a in mapper.column_attrs})
+        return copies[key]
+
+    return replace(
+        ev,
+        document=copy(ev.document),
+        version=copy(ev.version),
+        sections=[copy(s) for s in ev.sections],
+        citations=[copy(c) for c in ev.citations],
+        theme=copy(ev.theme),
+        all_sections=[copy(s) for s in ev.all_sections],
+        stored_sections=[copy(s) for s in ev.stored_sections],
+    )
 
 
 def apply_layer(ev: ExportVersion, layer: str) -> ExportVersion:

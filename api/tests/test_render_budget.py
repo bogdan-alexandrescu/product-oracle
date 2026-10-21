@@ -395,6 +395,7 @@ async def test_a_job_slowed_by_contention_but_under_its_cpu_cap_is_never_given_u
     three times ``JOB_SECONDS`` on the clock while its worker spends almost no CPU (as when
     other companies' threads hold the GIL; ``time.sleep`` here) is served, never given up."""
     tenant_id, auth = await seed_auth()
+    url = await _slow_plan_v2(client, tenant_id, auth)
     real = doc_dates.find
 
     def slowed(*args, **kwargs):
@@ -404,7 +405,6 @@ async def test_a_job_slowed_by_contention_but_under_its_cpu_cap_is_never_given_u
     monkeypatch.setattr(doc_dates, "find", slowed)
     monkeypatch.setattr(doc_dates, "JOB_SECONDS", 0.2)
     finds = count_calls(monkeypatch, doc_dates, "find")
-    url = await _slow_plan_v2(client, tenant_id, auth)
 
     resp = await until_ready(client, url, auth)
     assert resp.status_code == 200, resp.text
@@ -417,6 +417,7 @@ async def test_the_wall_backstop_never_gives_a_version_up(client, monkeypatch):
     waited for: the read is 503 (try again), the version is not given up, and the next read
     finds its dates."""
     tenant_id, auth = await seed_auth()
+    url = await _slow_plan_v2(client, tenant_id, auth)
     real = doc_dates.find
     calls = [0]
 
@@ -428,14 +429,13 @@ async def test_the_wall_backstop_never_gives_a_version_up(client, monkeypatch):
 
     monkeypatch.setattr(doc_dates, "find", first_slow)
     monkeypatch.setattr(doc_dates, "JOB_WALL_SECONDS", 0.2)
-    url = await _slow_plan_v2(client, tenant_id, auth)
 
     first = await client.get(url, headers=auth)
     assert first.status_code == 503, first.text
     assert first.headers["retry-after"]
-    assert not _given_up_versions()
     resp = await until_ready(client, url, auth)
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 200, resp.text  # not given up: a given-up version is 422
+    assert uuid.UUID(resp.json()["id"]) not in _given_up_versions()
     assert calls[0] == 2
 
 
@@ -773,13 +773,15 @@ async def test_a_wait_for_a_worker_past_ten_seconds_is_busy_not_too_large(client
         assert resp.headers["retry-after"]
         body = _busy(resp, "export_busy")
         assert body["message"] == "Oracle is busy with other exports. Try again in a moment."
+        assert offload.in_flight(b) == 0  # refused: its place is free at once
     finally:
         held.release()
     for t in blockers:
         assert (await t).status_code == 200
-    # The refused export never renders, and its share is free again.
-    await until(lambda: offload.in_flight(b) == 0)
-    assert held.started == 2
+    # The refused export never renders: the pool reaches it before this one (first in,
+    # first out), and only this one renders.
+    assert (await client.get(URL, headers=await _token(b, "viewer"))).status_code == 200
+    assert held.started == 3
 
 
 async def test_the_render_cap_counts_from_when_the_render_starts(client, monkeypatch):
