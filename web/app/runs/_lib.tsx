@@ -57,7 +57,13 @@ export function RunStatusBadge({ run }: { run: RunState }) {
   );
 }
 
-/** P3d: one small figure per run; prominent only on cost approvals and overruns. */
+/**
+ * Runs whose cost needs a decision: the cost approval and the overrun pause. P3d Cost prominence:
+ * only these show cost on the runs list; elsewhere a run's cost is one small line in its details.
+ */
+export const COST_DECISION_STATUSES: RunStatus[] = ["awaiting_approval", "paused_overrun"];
+
+/** P3d Cost prominence: a run's cost, prominent only on cost approvals and overruns. */
 export function RunCost({ run }: { run: RunSummary }) {
   if (run.status === "awaiting_approval") return <CostFigure usd={run.estimate_usd} est prominent />;
   if (run.status === "paused_overrun") return <CostFigure usd={run.spent_usd} of={run.estimate_usd} prominent />;
@@ -195,24 +201,6 @@ export function EstimateSummary({ estimate }: { estimate: EstimateOut }) {
         </div>
       )}
     </section>
-  );
-}
-
-/** Spend against the estimate, with the overrun ceiling marked. */
-export function SpendBar({ spent, estimate, ceiling }: { spent: number; estimate: number | null; ceiling: number | null }) {
-  if (estimate == null || estimate <= 0) return null;
-  const max = Math.max(ceiling ?? estimate * 1.5, spent, estimate);
-  const pct = (v: number) => `${Math.min(100, (v / max) * 100)}%`;
-  const over = ceiling != null && spent > ceiling;
-  return (
-    <div className="relative h-2 w-full rounded-full bg-surface2" aria-hidden>
-      <div
-        className={`absolute inset-y-0 left-0 rounded-full ${over ? "bg-crit" : spent > estimate ? "bg-warn" : "bg-accent"}`}
-        style={{ width: pct(spent) }}
-      />
-      <div className="absolute inset-y-[-3px] w-px bg-text2" style={{ left: pct(estimate) }} title="Estimate" />
-      {ceiling != null && <div className="absolute inset-y-[-3px] w-px bg-crit" style={{ left: pct(ceiling) }} title="Pauses above" />}
-    </div>
   );
 }
 

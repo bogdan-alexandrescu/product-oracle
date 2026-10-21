@@ -96,21 +96,27 @@ test("notion picker: tree by parent, pick a parent, search, paste a link, save r
   await form.getByLabel("Name").fill("Handbook");
   await form.getByRole("button", { name: "Add source" }).click();
   const row = page.getByRole("listitem", { name: "Handbook" });
-  await expect(row).toContainText("3 picked");
-  expect(await savedConfig(page, "Handbook")).toEqual({ roots: [HANDBOOK, RESEARCH_INTERVIEWS, ONBOARDING] });
+  await expect(row.getByTestId("source-picks")).toHaveText("Product handbook, Customer interviews, Engineering onboarding");
+  expect(await savedConfig(page, "Handbook")).toEqual({
+    roots: [HANDBOOK, RESEARCH_INTERVIEWS, ONBOARDING],
+    labels: { [HANDBOOK]: "Product handbook", [RESEARCH_INTERVIEWS]: "Customer interviews", [ONBOARDING]: "Engineering onboarding" },
+  });
 
   // Editing reopens the picker with the picks.
   await row.getByRole("button", { name: "More actions for Handbook" }).click();
-  await row.getByRole("menuitem", { name: "Edit allowlist" }).click();
+  await row.getByRole("menuitem", { name: "Edit pages" }).click();
   const editor = row.getByTestId("notion-picker");
   await expect(editor.getByTestId("notion-picked-count")).toHaveText("3 picked");
   await expect(editor.getByRole("checkbox", { name: "Product handbook", exact: true })).toBeChecked();
   await editor.getByRole("button", { name: "Remove Engineering onboarding" }).click();
   await expect(editor.getByRole("checkbox", { name: "Engineering onboarding", exact: true })).not.toBeChecked();
-  await row.getByRole("button", { name: "Save allowlist" }).click();
-  await expect(row.getByRole("status")).toHaveText("Allowlist saved.");
-  await expect(row).toContainText("2 picked");
-  expect(await savedConfig(page, "Handbook")).toEqual({ roots: [HANDBOOK, RESEARCH_INTERVIEWS] });
+  await row.getByRole("button", { name: "Save pages" }).click();
+  await expect(row.getByRole("status")).toHaveText("Pages saved.");
+  await expect(row.getByTestId("source-picks")).toHaveText("Product handbook, Customer interviews");
+  expect(await savedConfig(page, "Handbook")).toEqual({
+    roots: [HANDBOOK, RESEARCH_INTERVIEWS],
+    labels: { [HANDBOOK]: "Product handbook", [RESEARCH_INTERVIEWS]: "Customer interviews" },
+  });
 });
 
 test("notion picker: loads icons only over https from Notion's hosts, without a referrer", async ({ page }) => {
@@ -150,7 +156,7 @@ test("notion picker: a source whose Notion connection is gone asks to reconnect,
   await picker.getByRole("checkbox", { name: "Product handbook", exact: true }).check();
   await form.getByLabel("Name").fill("Handbook");
   await form.getByRole("button", { name: "Add source" }).click();
-  await expect(page.getByRole("listitem", { name: "Handbook" })).toContainText("1 picked");
+  await expect(page.getByRole("listitem", { name: "Handbook" }).getByTestId("source-picks")).toHaveText("Product handbook");
 
   // The connection is removed (sources keep a null connection_id).
   await page.evaluate((key) => {
@@ -161,15 +167,15 @@ test("notion picker: a source whose Notion connection is gone asks to reconnect,
   await page.reload();
   const row = page.getByRole("listitem", { name: "Handbook" });
   await row.getByRole("button", { name: "More actions for Handbook" }).click();
-  await row.getByRole("menuitem", { name: "Edit allowlist" }).click();
+  await row.getByRole("menuitem", { name: "Edit pages" }).click();
   const reconnect = row.getByTestId("notion-reconnect");
   await expect(reconnect).toContainText("Reconnect Notion to change pages.");
   await expect(reconnect).toContainText("It keeps its 1 picked page; changing them needs a Notion connection.");
   await expect(reconnect.getByRole("link", { name: "Go to Connections" })).toHaveAttribute("href", "/settings/connections");
   await expect(row.locator("textarea, input")).toHaveCount(0);
-  await expect(row.getByRole("button", { name: "Save allowlist" })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Save pages" })).toHaveCount(0);
   expect(await smallestText(reconnect)).toBeGreaterThanOrEqual(13);
-  expect(await savedConfig(page, "Handbook")).toEqual({ roots: [HANDBOOK] });
+  expect(await savedConfig(page, "Handbook")).toEqual({ roots: [HANDBOOK], labels: { [HANDBOOK]: "Product handbook" } });
 
   const shots = process.env.SWARM_ARTIFACTS_DIR ? `${process.env.SWARM_ARTIFACTS_DIR}/screens/after` : null;
   if (shots) {

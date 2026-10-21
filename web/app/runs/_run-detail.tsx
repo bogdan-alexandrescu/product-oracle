@@ -40,7 +40,7 @@ import {
   SEGMENT_STATUS_KIND,
   SEGMENT_STATUS_LABEL,
   SENT_BACK_STATE,
-  SpendBar,
+  RunCost,
   deliveryText,
   shortId,
   usd,
@@ -359,7 +359,10 @@ export function RunDetail({ id }: { id: string }) {
   );
 }
 
-/** The run in the inspector: what it waits on, its cost (P3d: small unless approval or overrun), details. */
+/**
+ * The run in the inspector: what it waits on, then its details. P3d Cost prominence: the cost is
+ * one small Details line; a Cost section comes forward only on a cost approval or an overrun.
+ */
 function RunInspector({ run }: { run: RunOut }) {
   const current =
     run.segments.find((s) => s.status === "running") ??
@@ -369,7 +372,6 @@ function RunInspector({ run }: { run: RunOut }) {
   const waiting = run.waiting_on;
   const approval = run.status === "awaiting_approval";
   const overrun = run.status === "paused_overrun";
-  const prominent = approval ? "bg-warn-bg text-warn" : overrun ? "bg-crit-bg text-crit" : "";
   return (
     <Inspector
       label="Run"
@@ -390,41 +392,40 @@ function RunInspector({ run }: { run: RunOut }) {
         </>
       }
     >
-      <InspectorSection
-        label={approval ? "Cost approval" : overrun ? "Overrun" : "Cost"}
-        tools={
-          <InfoTip label="cost" side="bottom">
-            {approval && <span className="block">The estimate is over $50, so an owner approves the cost before any agent starts.</span>}
-            {overrun && (
-              <span className="block">
-                Spend passed {usd(run.overrun_ceiling_usd)} (1.5× the estimate). An owner resumes the run or cancels it.
-              </span>
-            )}
-            {run.overrun_ceiling_usd != null && <span className="block">Pauses above {usd(run.overrun_ceiling_usd)}.</span>}
-            {run.knobs.budget_usd != null && <span className="block">Budget {usd(run.knobs.budget_usd)}.</span>}
-            {run.segments.map((s) => (
-              <span key={s.id} className="block">
-                {s.seq}. {s.title}: {usd(s.cost_usd)} / {usd(s.estimate_usd)}
-              </span>
-            ))}
-          </InfoTip>
-        }
-      >
-        <div className="mb-2.5 flex items-center">
-          <span
-            className={`tnum inline-flex items-center gap-1 font-mono font-medium whitespace-nowrap ${
-              prominent ? `h-7 rounded-lg px-2 text-[15px] ${prominent}` : "text-[13px] text-text2"
-            }`}
-          >
-            <span data-testid="run-spent">{usd(run.spent_usd)}</span>
-            <span>/ {usd(run.estimate_usd)} est.</span>
-          </span>
-        </div>
-        <SpendBar spent={run.spent_usd} estimate={run.estimate_usd ?? null} ceiling={run.overrun_ceiling_usd ?? null} />
-      </InspectorSection>
-      <InspectorSection label="Details">
+      {(approval || overrun) && (
+        <InspectorSection
+          testId="run-cost-section"
+          label={approval ? "Cost approval" : "Overrun"}
+          tools={
+            <InfoTip label="cost" side="bottom">
+              {approval && <span className="block">The estimate is over $50, so an owner approves the cost before any agent starts.</span>}
+              {overrun && (
+                <span className="block">
+                  Spend passed {usd(run.overrun_ceiling_usd)} (1.5× the estimate). An owner resumes the run or cancels it.
+                </span>
+              )}
+              {run.overrun_ceiling_usd != null && <span className="block">Pauses above {usd(run.overrun_ceiling_usd)}.</span>}
+              {run.knobs.budget_usd != null && <span className="block">Budget {usd(run.knobs.budget_usd)}.</span>}
+            </InfoTip>
+          }
+        >
+          <RunCost run={run} />
+        </InspectorSection>
+      )}
+      <InspectorSection label="Details" testId="run-details">
+        <InspectorRow
+          value={
+            // CostFigure's small look, with the spent value marked.
+            <span data-testid="run-cost" data-cost="small" className="tnum font-mono text-[13px] leading-none font-medium whitespace-nowrap text-text2">
+              <span data-testid="run-spent">{usd(run.spent_usd)}</span> of {usd(run.estimate_usd)} est.
+            </span>
+          }
+        >
+          Cost
+        </InspectorRow>
         <InspectorRow value={<span className="capitalize">{run.knobs.depth}</span>}>Depth</InspectorRow>
         <InspectorRow value={formatDateTime(run.created_at)}>Created</InspectorRow>
+        <ProposalsRow run={run} />
         {run.snapshot_as_of && <InspectorRow value={formatDateTime(run.snapshot_as_of)}>Sources as of</InspectorRow>}
         <InspectorRow
           value={
@@ -447,6 +448,35 @@ function RunInspector({ run }: { run: RunOut }) {
         </InspectorRow>
       </InspectorSection>
     </Inspector>
+  );
+}
+
+/** "Baseline proposals: 2 open · Review": what the run proposed that still waits for a person. */
+function ProposalsRow({ run }: { run: RunOut }) {
+  const open = run.open_proposals ?? 0;
+  // RunOut counts open proposals only: a run that has started says "none open" once all were decided.
+  if (open === 0 && !run.started_at) return null;
+  return (
+    <div data-testid="run-proposals-row">
+      <InspectorRow
+        value={
+          <span data-testid="run-proposals">
+            {open > 0 ? (
+              <>
+                {open} open ·{" "}
+                <Link href={`/baseline?tab=proposals&run=${run.id}`} className="text-accent-ink hover:underline">
+                  Review
+                </Link>
+              </>
+            ) : (
+              "none open"
+            )}
+          </span>
+        }
+      >
+        Baseline proposals
+      </InspectorRow>
+    </div>
   );
 }
 
@@ -611,7 +641,7 @@ function SegmentItem({
               onSendBack={sendBack}
             />
           )}
-          {s.artifacts.length > 0 && <Artifacts runId={run.id} seq={s.seq} names={s.artifacts} />}
+          {(s.artifacts.length > 0 || s.previous_attempt) && <Artifacts runId={run.id} seq={s.seq} names={s.artifacts} previous={s.previous_attempt ?? null} />}
           {delivering.map((cp) => (
             <DeliveryLine key={cp.id} cp={cp} />
           ))}
@@ -775,27 +805,95 @@ function DraftRejected({
 }
 
 /** O4b: the check of roadmap_items.yaml, counts by horizon and every problem found. */
-function ItemsCheckLine({ check }: { check: NonNullable<SegmentOut["items_check"]> }) {
+type ItemsCheck = NonNullable<SegmentOut["items_check"]>;
+type ItemReason = ItemsCheck["reasons"][number];
+
+/** A reason's fixes as plain words, until the items review makes them buttons: "Fix: Remove date or Record basis". */
+function fixText(reason: ItemReason): string | null {
+  const labels = reason.fixes.map((f) => f.label);
+  if (labels.length === 0) return null;
+  const last = labels.pop()!;
+  return `Fix: ${labels.length ? `${labels.join(", ")} or ${last}` : last}`;
+}
+
+/** Reasons per item, in the order given (item position, blocking first). */
+function byItem(reasons: ItemReason[]): { item: string; title: string; reasons: ItemReason[] }[] {
+  const out: { item: string; title: string; reasons: ItemReason[] }[] = [];
+  for (const r of reasons) {
+    let group = out.find((g) => g.item === r.item);
+    if (!group) {
+      group = { item: r.item, title: r.item_title || r.item, reasons: [] };
+      out.push(group);
+    }
+    group.reasons.push(r);
+  }
+  return out;
+}
+
+// Reason chips wrap instead of cutting their label short (a phone is 390 px wide).
+const REASON_CHIP = "h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left";
+
+function ItemsCheckLine({ check }: { check: ItemsCheck }) {
   const horizons = Object.entries(check.by_horizon).map(([h, n]) => `${n} ${h}`);
+  const reasons = check.reasons ?? [];
+  // An item's problems read as its blocking reasons; the box keeps the file's own problems
+  // (or every problem, for a check stored before reasons).
+  const boxed = reasons.length > 0 ? check.problems.filter((p) => !p.item) : check.problems;
+  const counts = [
+    check.blocking > 0 && `${check.blocking} blocking`,
+    check.to_confirm > 0 && `${check.to_confirm} to confirm`,
+  ].filter(Boolean);
   return (
     <div data-testid="items-check">
       <p className="flex flex-wrap items-center gap-2">
-        <span className="tnum">
+        <span className="tnum" data-testid="items-check-summary">
           {check.items} roadmap item{check.items === 1 ? "" : "s"}
           {horizons.length > 0 && `: ${horizons.join(", ")}`}
+          {counts.map((c) => ` · ${c}`).join("")}
         </span>
-        {check.problems.length === 0 ? (
+        {check.problems.length === 0 && reasons.length === 0 ? (
           <Chip kind="pass">no problems</Chip>
         ) : (
-          <Chip kind="warn">
-            {check.problems.length} problem{check.problems.length === 1 ? "" : "s"}
-          </Chip>
+          boxed.length > 0 && (
+            <Chip kind="warn">
+              {boxed.length} problem{boxed.length === 1 ? "" : "s"}
+            </Chip>
+          )
         )}
       </p>
-      {check.problems.length > 0 && (
-        <ul className="mt-1.5 space-y-0.5 rounded-button bg-warn-bg px-3 py-1.5 text-sm text-warn">
-          {check.problems.map((p, i) => (
-            <li key={i} className="truncate" title={p.message}>
+      {check.reasons_partial && (
+        <p className="mt-1 text-sm text-text2">Only the rule problems are listed: Oracle could not load what the other reasons read.</p>
+      )}
+      {reasons.length > 0 && (
+        <ul className="mt-1.5 space-y-2" data-testid="items-reasons">
+          {byItem(reasons).map((g) => (
+            <li key={g.item} data-testid="item-reasons" data-item={g.item} className="min-w-0">
+              <p className="font-medium break-words">{g.title}</p>
+              <ul className="mt-1 space-y-1.5">
+                {g.reasons.map((r, i) => (
+                  <li key={`${r.code}-${i}`} className="flex min-w-0 flex-col items-start gap-0.5 text-sm" data-testid="item-reason" data-code={r.code}>
+                    <Chip kind={r.severity === "blocking" ? "crit" : "warn"} className={REASON_CHIP} data-testid="reason-chip">
+                      {r.label}
+                    </Chip>
+                    <span className="break-words" data-testid="reason-text">
+                      {r.text}
+                    </span>
+                    {fixText(r) && (
+                      <span className="break-words text-text2" data-testid="reason-fixes">
+                        {fixText(r)}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+      {boxed.length > 0 && (
+        <ul className="mt-1.5 space-y-0.5 rounded-button bg-warn-bg px-3 py-1.5 text-sm text-warn" data-testid="items-check-problems">
+          {boxed.map((p, i) => (
+            <li key={i} className="break-words">
               {p.message}
             </li>
           ))}
@@ -805,37 +903,66 @@ function ItemsCheckLine({ check }: { check: NonNullable<SegmentOut["items_check"
   );
 }
 
-function Artifacts({ runId, seq, names }: { runId: string; seq: number; names: string[] }) {
-  const [open, setOpen] = useState<string | null>(null);
+function Artifacts({
+  runId,
+  seq,
+  names,
+  previous,
+}: {
+  runId: string;
+  seq: number;
+  names: string[];
+  previous: { attempt: number; artifacts: string[] } | null;
+}) {
+  // The open file: its name and, for the previous attempt's files, that attempt's number.
+  const [open, setOpen] = useState<{ name: string; attempt: number | null } | null>(null);
   const [content, setContent] = useState<string>("");
-  async function show(name: string) {
-    if (open === name) return setOpen(null);
-    setOpen(name);
+  async function show(name: string, attempt: number | null) {
+    if (open?.name === name && open.attempt === attempt) return setOpen(null);
+    setOpen({ name, attempt });
     setContent("Loading…");
     const { data, response } = await api.GET("/v1/runs/{run_id}/segments/{seq}/artifacts/{name}", {
-      params: { path: { run_id: runId, seq, name } },
+      params: { path: { run_id: runId, seq, name }, query: attempt == null ? {} : { attempt } },
       parseAs: "text",
     });
     setContent(response.ok ? (data as string) : `Could not load ${name} (${response.status}).`);
   }
+  const file = (name: string, attempt: number | null) => {
+    const on = open?.name === name && open.attempt === attempt;
+    return (
+      <button
+        key={name}
+        type="button"
+        onClick={() => void show(name, attempt)}
+        aria-expanded={on}
+        className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 font-mono text-[13px] ${
+          on ? "border-accent bg-accent-soft text-accent-ink" : "border-line-strong bg-surface text-text hover:bg-surface2"
+        }`}
+      >
+        <Icon name="doc" size={16} />
+        {name}
+      </button>
+    );
+  };
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5">
-        {names.map((n) => (
-          <button
-            key={n}
-            type="button"
-            onClick={() => void show(n)}
-            aria-expanded={open === n}
-            className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 font-mono text-[13px] ${
-              open === n ? "border-accent bg-accent-soft text-accent-ink" : "border-line-strong bg-surface text-text hover:bg-surface2"
-            }`}
-          >
-            <Icon name="doc" size={16} />
-            {n}
-          </button>
-        ))}
-      </div>
+      {names.length > 0 && (
+        <div className="flex flex-wrap gap-1.5" data-testid="artifacts-current">
+          {names.map((n) => file(n, null))}
+        </div>
+      )}
+      {previous && previous.artifacts.length > 0 && (
+        // A person sent the segment back: what the attempt before this one wrote, kept to compare.
+        <div
+          role="group"
+          aria-label={`Previous attempt (attempt ${previous.attempt})`}
+          className="mt-2 flex flex-wrap items-center gap-1.5"
+          data-testid="artifacts-previous"
+        >
+          <span className="text-[13px] text-text2">Previous attempt (attempt {previous.attempt}):</span>
+          {previous.artifacts.map((n) => file(n, previous.attempt))}
+        </div>
+      )}
       {open && (
         <pre
           className="mt-2 max-h-80 overflow-auto rounded-button border border-line bg-surface2 p-3 font-mono text-[13px] whitespace-pre-wrap text-text"

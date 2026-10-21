@@ -1,9 +1,9 @@
 "use client";
 
-import { useId, useState, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ComponentProps, type ReactNode } from "react";
 
 import { ResolutionPanel, type GoTo } from "@/components/FeedbackPanel";
-import { JobsPanel } from "@/components/JobsPanel";
+import { JobsPanel, ORACLE_WORK } from "@/components/JobsPanel";
 import { ReportsPanel } from "@/components/ReportsPanel";
 import { LowConfidence } from "@/components/CitationChip";
 import { Icon, Inspector, InspectorRow } from "@/components/ds";
@@ -195,19 +195,34 @@ function HistoryTab({ doc, n, refreshKey, goTo }: { doc: string; n: number; refr
       <Fold title="Reports" testId="history-reports">
         <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} initialTab={landed ? "changes" : "resolution"} />
       </Fold>
-      <Fold title="Jobs" testId="history-jobs">
+      <Fold title="Oracle's work" testId="history-jobs" anchor={ORACLE_WORK}>
         <JobsPanel doc={doc} version={n} refreshKey={refreshKey} />
       </Fold>
     </div>
   );
 }
 
-/** A headed part of History that folds. */
-function Fold({ title, testId, children }: { title: string; testId: string; children: ReactNode }) {
+/** A headed part of History that folds; `anchor` is the #hash that scrolls to it on arrival. */
+function Fold({ title, testId, anchor, children }: { title: string; testId: string; anchor?: string; children: ReactNode }) {
   const [open, setOpen] = useState(true);
   const id = useId();
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!anchor || window.location.hash !== `#${anchor}`) return;
+    // The side panel and the phone's Review sheet both hold History: scroll the one in view.
+    const raf = requestAnimationFrame(() => {
+      if (ref.current?.checkVisibility()) ref.current.scrollIntoView({ block: "start" });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [anchor]);
   return (
-    <section aria-labelledby={`${id}-h`} data-testid={testId} className="border-b border-line py-2 last:border-b-0">
+    <section
+      ref={ref}
+      id={anchor}
+      aria-labelledby={`${id}-h`}
+      data-testid={testId}
+      className="scroll-mt-4 border-b border-line py-2 last:border-b-0"
+    >
       <h3 id={`${id}-h`}>
         <button
           type="button"

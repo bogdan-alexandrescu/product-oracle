@@ -1,7 +1,8 @@
 """Notion connector: pages under allowlisted root pages and databases, as markdown.
 
-``config``: ``{"roots": [page or database id or URL, ...]}``, the roots ticked in the web
-UI's page picker (:func:`search_shared` lists what can be ticked).
+``config``: ``{"roots": [page or database id or URL, ...], "labels"?: {id: title}}``, the
+roots ticked in the web UI's page picker (:func:`search_shared` lists what can be ticked)
+and, under ``labels``, their titles as the picker listed them (only for people to read).
 The credential carries a ``token`` entry: an internal integration secret or an OAuth
 access token.
 
@@ -35,10 +36,14 @@ from oracle.sources.base import (
     ItemUpsert,
     Scope,
     SyncEvent,
+    check_labels,
+    normalize_labels,
     register,
 )
 
 API_URL = "https://api.notion.com/v1"
+# How many root titles ``labels`` may hold.
+MAX_LABELS = 200
 API_VERSION = "2022-06-28"
 # For the connections lane. Notion has no OAuth scopes (an integration's capabilities
 # are set on the integration); its authorize URL also needs ``owner=user`` and the
@@ -532,6 +537,21 @@ class NotionConnector:
         if database is not None:
             return None if _gone(database) else ("database", database)
         return None
+
+    def check_config(self, config: dict[str, Any]) -> None:
+        """The rules a saved config must still meet (the roots, their titles)."""
+        _parse_config(config)
+        check_labels(config, MAX_LABELS, "labels must map page ids to titles")
+
+    def normalize_config(self, config: dict[str, Any]) -> dict[str, Any]:
+        """Titles kept only for the picked roots (by id, dashed or not, or a page link),
+        each cut to length. The roots stay as saved, so a source's fingerprint does not
+        change."""
+        roots = config.get("roots")
+        if not isinstance(roots, list) or not all(isinstance(r, str) for r in roots):
+            return dict(config)
+        picked = set(roots) | {normalize_id(r) for r in roots} - {None}
+        return normalize_labels(dict(config), picked, MAX_LABELS)
 
     def scope(self, config: dict[str, Any]) -> Scope:
         """Still selected, as far as stored items tell: pulled in from a picked root."""

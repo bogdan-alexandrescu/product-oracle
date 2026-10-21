@@ -28,6 +28,7 @@ import { useQuery } from "@/lib/use-query";
 
 import {
   CHECKPOINT_LABEL,
+  COST_DECISION_STATUSES,
   isDelivering,
   runStatusKind,
   runStatusLabel,
@@ -84,13 +85,13 @@ export default function RunsPage() {
       width: "320px",
       phone: "meta",
       cell: (r) => (
-        // P3d: the cost stays on every size; prominent on approvals and overruns.
         <span className="flex min-w-0 flex-wrap items-center gap-2.5 gap-y-1">
           <RunStatusBadge run={r} />
           {r.waiting_on && <span className="sr-only">: {CHECKPOINT_LABEL[r.waiting_on]}</span>}
           {r.draft_rejected && <DraftRejectedChip summary={r.draft_rejected} />}
           {r.sent_back && <SentBackChip summary={r.sent_back} />}
-          <RunCost run={r} />
+          {/* P3d Cost prominence: cost only where it needs a decision; on every size. */}
+          {COST_DECISION_STATUSES.includes(r.status) && <RunCost run={r} />}
         </span>
       ),
     },

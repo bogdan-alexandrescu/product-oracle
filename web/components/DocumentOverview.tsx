@@ -20,23 +20,25 @@ import {
   Split,
   type Column,
 } from "@/components/ds";
-import { JobsPanel } from "@/components/JobsPanel";
+import { ORACLE_WORK } from "@/components/JobsPanel";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type VersionSummary } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
+import { versionHref } from "@/lib/version-href";
 
 /** A template or theme key beside the title: small mono, hairline pill. */
 const META = "inline-flex h-[26px] items-center rounded-full border border-line-strong px-2.5 font-mono text-[13px] text-text2";
 
-function versionColumns(doc: string, latest: number | null | undefined): Column<VersionSummary>[] {
+function versionColumns(doc: string, kind: string | null | undefined, latest: number | null | undefined): Column<VersionSummary>[] {
   return [
     {
       key: "number",
       header: "Version",
       width: "120px",
       cell: (v) => (
-        <Link href={`/documents/${doc}/v/${v.number}`} className="font-medium text-text hover:underline">
+        <Link href={versionHref(doc, kind, v.number)} className="font-medium text-text hover:underline">
           Version {v.number}
         </Link>
       ),
@@ -87,7 +89,18 @@ function versionColumns(doc: string, latest: number | null | undefined): Column<
   ];
 }
 
-function VersionInspector({ doc, v, latest }: { doc: string; v: VersionSummary; latest: number | null | undefined }) {
+function VersionInspector({
+  doc,
+  kind,
+  v,
+  latest,
+}: {
+  doc: string;
+  kind: string | null | undefined;
+  v: VersionSummary;
+  latest: number | null | undefined;
+}) {
+  const { role } = useMe();
   return (
     <Inspector
       testId="version-inspector"
@@ -101,7 +114,7 @@ function VersionInspector({ doc, v, latest }: { doc: string; v: VersionSummary; 
         </>
       }
       action={
-        <LinkButton variant="hero" href={`/documents/${doc}/v/${v.number}`}>
+        <LinkButton variant="hero" href={versionHref(doc, kind, v.number)}>
           Open
         </LinkButton>
       }
@@ -130,6 +143,13 @@ function VersionInspector({ doc, v, latest }: { doc: string; v: VersionSummary; 
               </li>
             ))}
           </ul>
+        </InspectorSection>
+      )}
+      {hasRole(role, "approver") && (
+        <InspectorSection>
+          <Link href={`/documents/${doc}/v/${v.number}?tab=history#${ORACLE_WORK}`} className="text-sm font-medium text-accent-ink hover:underline">
+            Oracle&apos;s work on v{v.number}
+          </Link>
         </InspectorSection>
       )}
     </Inspector>
@@ -177,29 +197,26 @@ export function DocumentOverview({ doc }: { doc: string }) {
                 <>
                   {d.kind === "prd" && <BuildRoadmapButton prd={d} />}
                   {d.latest_version != null && (
-                    <LinkButton variant="primary" href={`/documents/${doc}/v/${d.latest_version}`}>
+                    <LinkButton variant="primary" href={versionHref(doc, d.kind, d.latest_version)}>
                       Open latest (v{d.latest_version})
                     </LinkButton>
                   )}
                 </>
               }
             />
-            <Split inspector={selected ? <VersionInspector doc={doc} v={selected} latest={d.latest_version} /> : undefined}>
+            <Split inspector={selected ? <VersionInspector doc={doc} kind={d.kind} v={selected} latest={d.latest_version} /> : undefined}>
               <Panel title="Versions" count={versions.length}>
                 <DataTable
                   label="Versions"
                   testId="versions-table"
-                  columns={versionColumns(doc, d.latest_version)}
+                  columns={versionColumns(doc, d.kind, d.latest_version)}
                   rows={versions}
                   rowKey={(v) => String(v.number)}
                   selected={selected ? String(selected.number) : null}
                   onSelect={(k) => setPicked(Number(k))}
-                  onActivate={(k) => router.push(`/documents/${doc}/v/${k}`)}
+                  onActivate={(k) => router.push(versionHref(doc, d.kind, k))}
                   empty="No versions yet"
                 />
-              </Panel>
-              <Panel title="Jobs" bodyClassName="p-4">
-                <JobsPanel doc={doc} />
               </Panel>
             </Split>
           </>

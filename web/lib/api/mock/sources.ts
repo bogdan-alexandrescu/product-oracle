@@ -60,6 +60,39 @@ const SOURCE_FACTOR: Record<string, number> = { github: 0.85, upload: 0.7, notio
 
 // The Slack connector's limits (oracle.sources.connectors.slack).
 const MAX_CHANNELS = 100;
+// How many page titles a Notion source's labels may hold (oracle.sources.connectors.notion).
+const MAX_NOTION_LABELS = 200;
+// How long a pick's stored name may be (oracle.sources.base LABEL_LENGTH).
+const LABEL_LENGTH = 200;
+
+// The kinds whose picks carry names in `labels`: the config key of the picks, the cap and
+// the message for a malformed one (as the connectors word them).
+const LABELLED: Partial<Record<Source["kind"], { key: string; max: number; message: string }>> = {
+  slack: { key: "channels", max: MAX_CHANNELS, message: "labels must map channel ids to names" },
+  notion: { key: "roots", max: MAX_NOTION_LABELS, message: "labels must map page ids to titles" },
+};
+
+function mapsStrings(value: unknown): value is Record<string, string> {
+  return !!value && typeof value === "object" && !Array.isArray(value) && Object.values(value).every((v) => typeof v === "string");
+}
+
+/** What a config selects: everything but `labels`, which only name things (oracle.sources.base selection). */
+function selection(config: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(config).filter(([k]) => k !== "labels"));
+}
+
+/** As the connectors' normalize_config: names kept only for the picks, each cut to length. */
+function normalizeLabels(kind: Source["kind"], config: Record<string, unknown>): Record<string, unknown> {
+  const rule = LABELLED[kind];
+  const labels = config.labels;
+  const picks = config[rule?.key ?? ""];
+  if (!rule || !mapsStrings(labels) || Object.keys(labels).length > rule.max || !Array.isArray(picks)) return config;
+  const keep = new Set(picks.map((p) => String(p).trim()));
+  return {
+    ...config,
+    labels: Object.fromEntries(Object.entries(labels).filter(([k]) => keep.has(k)).map(([k, v]) => [k, v.slice(0, LABEL_LENGTH)])),
+  };
+}
 const FIRST_DAY = "2000-01-01";
 const LAST_DAY = "2100-12-31";
 
@@ -345,6 +378,11 @@ function search(db: SourcesDb, q: URLSearchParams): Schemas["SearchResults"] {
  * not before since; Notion needs a root. Other kinds pass.
  */
 function badConfig(kind: Source["kind"], config: Record<string, unknown>): string | null {
+  const rule = LABELLED[kind];
+  if (rule && config.labels !== undefined) {
+    if (!mapsStrings(config.labels)) return rule.message;
+    if (Object.keys(config.labels).length > rule.max) return `labels takes at most ${rule.max} entries`;
+  }
   // As the real connector reads a Notion allowlist: "roots" only.
   if (kind === "notion") {
     return Array.isArray(config.roots) && config.roots.length ? null : "allowlist at least one root page or database";
@@ -412,7 +450,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       kind: body.kind,
       name: body.name.trim(),
       connection_id: body.connection_id ?? null,
-      config: body.config ?? {},
+      config: normalizeLabels(body.kind, body.config ?? {}),
       status: "active",
       last_error: null,
       last_synced_at: null,
@@ -467,13 +505,17 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       const invalid = patch.config ? badConfig(s.kind, patch.config) : null;
       if (invalid) return json(422, { detail: invalid });
       const renamed = patch.name != null && patch.name.trim() !== s.name;
-      const reconfigured =
-        patch.config != null && JSON.stringify(patch.config) !== JSON.stringify(s.config);
+      const config = patch.config ? normalizeLabels(s.kind, patch.config) : null;
+      const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+      const reconfigured = config != null && !same(selection(config), selection(s.config));
+      // New names alone: stored, nothing else changes (no sweep; the "not read" list stays).
+      const relabelled = config != null && !reconfigured && !same(config, s.config);
       // Only a save that changes something bumps the version (as the API does).
-      if (renamed || reconfigured) s.config_version += 1;
+      if (renamed || reconfigured || relabelled) s.config_version += 1;
       if (patch.name) s.name = patch.name;
-      if (patch.config) {
-        s.config = patch.config;
+      if (config && relabelled) s.config = config;
+      if (config && reconfigured) {
+        s.config = config;
         if (s.kind === "google_docs") {
           const choice = Object.values(CONNECTIONS).flat().find((c) => c.id === s.connection_id);
           s.reconnect_reason = choice?.reconnect_reason ?? null;

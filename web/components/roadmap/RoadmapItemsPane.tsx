@@ -1,0 +1,223 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
+
+import { Button, FilterChips, InfoTip, Panel, Sheet, Split } from "@/components/ds";
+import { ItemInspector } from "@/components/review/ItemInspector";
+import { ItemsTable } from "@/components/review/ItemsTable";
+import { ErrorNote, Loading } from "@/components/ui";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { sectionHref } from "@/lib/section-link";
+import { errorMessage, useQuery } from "@/lib/use-query";
+
+import { HORIZONS, needsAttention, sectionFor, toItemRow, type ItemRow } from "./item-row";
+
+type Filter = "all" | "attention";
+type Item = Schemas["RoadmapItemOut"];
+
+/**
+ * A roadmap version's Items tab (E2): its items as rows grouped by horizon, a summary line,
+ * All / Needs attention, and the selected item's inspector beside the table (in a sheet on a
+ * phone). Everyone who reads the document reads it; approvers and owners also act on a stale
+ * item (Mark under review, Still valid…). Nothing else is edited here.
+ */
+export function RoadmapItemsPane({
+  doc,
+  n,
+  sections,
+  canDecide,
+}: {
+  doc: string;
+  n: number;
+  /** The version's sections: "Open in document" links to the one naming the item. */
+  sections: readonly { section_key: string; heading: string }[];
+  canDecide: boolean;
+}) {
+  const itemsQ = useQuery(`roadmap-items|${doc}|${n}`, () =>
+    unwrap(api.GET("/v1/roadmaps/{doc}/items", { params: { path: { doc }, query: { version: n, view: "full" } } })),
+  );
+  const source = itemsQ.data?.source;
+  // The PRD version's headings, for "§ heading".
+  const prdQ = useQuery(`roadmap-items-prd|${source?.slug ?? ""}|${source?.version ?? ""}`, () =>
+    source?.slug && source.version != null
+      ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: source.slug, n: source.version } } })).catch(() => null)
+      : Promise.resolve(null),
+  );
+  // The PRD's schedule bases: a dated milestone's references.
+  const basesQ = useQuery(`roadmap-items-bases|${source?.slug ?? ""}`, () =>
+    source?.slug
+      ? unwrap(api.GET("/v1/schedule-bases", { params: { query: { prd: source.slug } } })).catch(() => [])
+      : Promise.resolve([]),
+  );
+
+  const items = useMemo(() => itemsQ.data?.items ?? [], [itemsQ.data]);
+  const headings = useMemo(() => new Map((prdQ.data?.sections ?? []).map((s) => [s.section_key, s.heading])), [prdQ.data]);
+  const rows = useMemo(() => items.map((i) => toItemRow(i, headings)), [items, headings]);
+  const attention = rows.filter(needsAttention).length;
+
+  const [filter, setFilter] = useState<Filter>("all");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [sheet, setSheet] = useState(false);
+  const row = rows.find((r) => r.key === selected) ?? null;
+  const item = items.find((i) => i.item_key === selected);
+
+  const onSelect = useCallback((key: string) => {
+    setSelected(key);
+    if (window.matchMedia("(max-width: 639px)").matches) setSheet(true);
+  }, []);
+
+  const filterFn = useMemo(() => (filter === "attention" ? needsAttention : undefined), [filter]);
+  const onChanged = (next: Item[]) => itemsQ.setData((prev) => (prev ? { ...prev, items: next } : prev));
+
+  if (itemsQ.error) return <ErrorNote>{itemsQ.error}</ErrorNote>;
+  if (!itemsQ.data) return <Loading label="Loading items…" />;
+
+  if (rows.length === 0) {
+    return (
+      <Panel testId="roadmap-items-empty">
+        <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
+          <p className="flex items-center gap-1.5 text-[15px] font-semibold text-text2">
+            No items for this version
+            <InfoTip label="roadmap items" side="bottom">
+              Items come from the roadmap run&apos;s items file. A version imported without one keeps the previous
+              version&apos;s items that its text still names.
+            </InfoTip>
+          </p>
+          <Link href={`/documents/${doc}/v/${n}`} className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+            Open the document
+          </Link>
+        </div>
+      </Panel>
+    );
+  }
+
+  const count = (h: string) => rows.filter((r) => r.horizon === h).length;
+  const docKey = row ? sectionFor(row, sections) : null;
+  const inspector = (r: ItemRow) => (
+    <ItemInspector
+      row={r}
+      item={item}
+      total={rows.length}
+      rows={rows}
+      bases={basesQ.data ?? undefined}
+      documentHref={docKey ? sectionHref(doc, n, docKey) : null}
+      freshnessActions={
+        canDecide && (r.freshness === "potentially_stale" || r.freshness === "under_review") ? (
+          <StalenessActions key={`${r.key}|${r.freshness}`} doc={doc} n={n} row={r} onChanged={onChanged} />
+        ) : undefined
+      }
+    />
+  );
+
+  return (
+    <div data-testid="roadmap-items-pane">
+      <Split inspector={row ? <div className="max-[639px]:hidden">{inspector(row)}</div> : undefined}>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <p data-testid="items-summary" className="tnum text-sm text-text2">
+            <b className="font-semibold text-text">
+              {rows.length} item{rows.length === 1 ? "" : "s"}
+            </b>
+            {HORIZONS.map((h) => ` · ${count(h.value)} ${h.label}`).join("")}
+          </p>
+          <FilterChips<Filter>
+            label="Items"
+            testId="items-filter"
+            value={filter}
+            onChange={setFilter}
+            items={[
+              { value: "all", label: "All", count: rows.length },
+              { value: "attention", label: "Needs attention", count: attention },
+            ]}
+          />
+        </div>
+        <Panel>
+          <ItemsTable rows={rows} selected={selected} onSelect={onSelect} filter={filterFn} />
+        </Panel>
+      </Split>
+      <Sheet open={sheet && !!row} title={row?.title ?? "Item"} onClose={() => setSheet(false)} testId="sheet-item">
+        {row && inspector(row)}
+      </Sheet>
+    </div>
+  );
+}
+
+/** Mark under review; Still valid… with a one-line reason. The table follows the response. */
+function StalenessActions({
+  doc,
+  n,
+  row,
+  onChanged,
+}: {
+  doc: string;
+  n: number;
+  row: ItemRow;
+  onChanged: (items: Item[]) => void;
+}) {
+  const [asking, setAsking] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function act(action: "review" | "reconcile") {
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await unwrap(
+        api.POST("/v1/roadmaps/{doc}/items/staleness", {
+          params: { path: { doc } },
+          body: { action, version: n, item_keys: [row.key], reason: action === "reconcile" ? reason.trim() : null },
+        }),
+      );
+      onChanged(out.items);
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(false);
+    }
+  }
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (reason.trim()) void act("reconcile");
+  };
+
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <div className="flex flex-wrap gap-2">
+        {row.freshness === "potentially_stale" && (
+          <Button onClick={() => act("review")} disabled={busy}>
+            Mark under review
+          </Button>
+        )}
+        {!asking && (
+          <Button variant="ghost" onClick={() => setAsking(true)} disabled={busy}>
+            Still valid…
+          </Button>
+        )}
+      </div>
+      {asking && (
+        <form onSubmit={submit} className="flex flex-col gap-2">
+          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
+            Why it is still valid
+            <input
+              autoFocus
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              maxLength={500}
+              className="h-10 rounded-button border border-line-strong bg-surface px-2.5 text-[15px] font-normal text-text"
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="primary" disabled={busy || !reason.trim()}>
+              Mark still valid
+            </Button>
+            <Button variant="ghost" onClick={() => setAsking(false)} disabled={busy}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+      {error && <ErrorNote>{error}</ErrorNote>}
+    </div>
+  );
+}

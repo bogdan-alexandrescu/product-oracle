@@ -8,6 +8,17 @@ SourceKind = Literal["upload", "github", "slack", "notion", "fireflies", "google
 SourceStatus = Literal["active", "paused", "error", "needs_attention"]
 
 
+CONFIG_DESCRIPTION = (
+    'What the source reads, by kind. github: {"repos": ["owner/name"]}. slack: '
+    '{"channels": [channel id], "since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD", '
+    '"labels"?: {channel id: "#name"}}. notion: {"roots": [page id], "labels"?: '
+    "{page id: title}}. labels only name the picks for people to read (at most 200 "
+    "characters each; names of ids not picked are dropped): a save that changes labels "
+    "alone reads nothing again and asks the provider nothing. Pick ids from the browse "
+    "lists (list_slack_channels, list_notion_pages). Never secrets."
+)
+
+
 class ORM(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -18,13 +29,13 @@ class SourceCreate(BaseModel):
     # One of the current user's connections, of the provider the kind needs; none for uploads.
     connection_id: uuid.UUID | None = None
     # The allowlist: repos, channel ids, root pages, folders. Never secrets.
-    config: dict[str, Any] = Field(default_factory=dict)
+    config: dict[str, Any] = Field(default_factory=dict, description=CONFIG_DESCRIPTION)
 
 
 class SourcePatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     connection_id: uuid.UUID | None = None
-    config: dict[str, Any] | None = None
+    config: dict[str, Any] | None = Field(default=None, description=CONFIG_DESCRIPTION)
     # The config_version the form loaded. When given and the source has changed since
     # (another save), the save is refused with 409 source_changed and nothing changes.
     # Required (422 base_version_required) when config or connection_id change; a rename

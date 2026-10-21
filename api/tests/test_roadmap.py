@@ -582,7 +582,18 @@ async def test_end_to_end(client, owner, runtime):
     run = await get(client, auth, run["id"])
     assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "roadmap_items"
     check = run["segments"][0]["items_check"]
-    assert check == {"items": 2, "by_horizon": {"now": 1, "next": 1, "later": 0}, "problems": []}
+    assert check == {
+        "items": 2,
+        "by_horizon": {"now": 1, "next": 1, "later": 0},
+        "problems": [],
+        # D2 product reasons (additive): both items serve a confirmed goal, no base yet.
+        "reasons": [],
+        "blocking": 0,
+        "to_confirm": 0,
+        "file_problems": 0,
+        "base": None,
+        "reasons_partial": False,
+    }
     assert pending(run)["payload"]["items_check"] == check
     run = await decide(client, auth, run, note="Keep shipping in next")
 

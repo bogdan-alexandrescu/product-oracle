@@ -5,9 +5,10 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from oracle.baseline.models import Entity
+from oracle.baseline.models import Entity, Proposal
 from oracle.main import app
 from oracle.models import AuditEvent
+from oracle.runs.models import Run
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import confirm, edge, entity, make_ctx, set_token_role
 
@@ -449,3 +450,106 @@ async def test_revisions_take_a_limit_of_the_newest(client, ctx):
     for bad in (0, 501):
         resp = await client.get(url, params={"limit": bad}, headers=ctx.as_("viewer"))
         assert resp.status_code == 422, bad
+
+
+# --- B3: proposals by run --------------------------------------------------------------
+
+
+async def _run(ctx, flow: str = "baseline_to_prd") -> uuid.UUID:
+    async with tenant_session(ctx.tenant_id) as s:
+        run = Run(flow=flow, status="running", created_by=ctx.users["owner"].id)
+        s.add(run)
+        await s.commit()
+        return run.id
+
+
+async def _propose(client, ctx, key: str, run_id: uuid.UUID | None = None, who="commenter"):
+    body = {"op": "create", "kind": "entity", "fields": {"type": "feature", "key": key}}
+    body["fields"]["title"] = key
+    if run_id:
+        body["run_id"] = str(run_id)
+    resp = await client.post(f"{B}/proposals", json=body, headers=ctx.as_(who))
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+async def _listed(client, ctx, **params) -> list[dict]:
+    resp = await client.get(f"{B}/proposals", params=params, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def test_proposals_filter_by_run_and_none(client, ctx):
+    """protects: the run filter (a run's own proposals, or those of no run), newest first.
+    fails_when: another run's or a person's proposal is listed under a run, or the
+    reverse; or an unknown value is accepted.
+    no_claim: proposals made through the API; a run's merge is covered elsewhere."""
+    one, two = await _run(ctx), await _run(ctx, "feedback_loop")
+    a = await _propose(client, ctx, "one-a", one)
+    person = await _propose(client, ctx, "by-a-person")
+    b = await _propose(client, ctx, "one-b", one)
+    await _propose(client, ctx, "two-a", two)
+
+    assert [p["id"] for p in await _listed(client, ctx, run_id=str(one))] == [b["id"], a["id"]]
+    assert [p["id"] for p in await _listed(client, ctx, run_id="none")] == [person["id"]]
+    assert len(await _listed(client, ctx)) == 4
+    open_one = await _listed(client, ctx, status="open", run_id=str(one))
+    assert [p["id"] for p in open_one] == [b["id"], a["id"]]
+    for bad in ("abc", "None", "null", ""):
+        resp = await client.get(f"{B}/proposals", params={"run_id": bad}, headers=ctx.as_("viewer"))
+        assert resp.status_code == 422, bad
+
+
+async def test_withdrawn_proposals_never_listed_with_a_run_filter(client, ctx):
+    """protects: decision S6 Private findings (a withdrawn proposal is never listed).
+    fails_when: the run filter or the none filter lists a withdrawn proposal.
+    no_claim: withdraws by setting the status, not through an intake finding."""
+    run_id = await _run(ctx)
+    kept = await _propose(client, ctx, "kept", run_id)
+    gone = await _propose(client, ctx, "gone", run_id)
+    no_run = await _propose(client, ctx, "gone-too")
+    async with tenant_session(ctx.tenant_id) as s:
+        for pid in (gone["id"], no_run["id"]):
+            (await s.get(Proposal, uuid.UUID(pid))).status = "withdrawn"
+        await s.commit()
+    assert [p["id"] for p in await _listed(client, ctx, run_id=str(run_id))] == [kept["id"]]
+    assert await _listed(client, ctx, run_id="none") == []
+    assert [p["id"] for p in await _listed(client, ctx)] == [kept["id"]]
+
+
+async def test_proposal_carries_its_run_summary_until_the_run_is_deleted(client, ctx):
+    """protects: each proposal names its run (flow title, started date) for the link.
+    fails_when: ProposalOut.run is missing or wrong, or survives the run's deletion.
+    no_claim: the flow title comes from oracle.runs.flows, not from the run row."""
+    run_id = await _run(ctx)
+    made = await _propose(client, ctx, "with-run", run_id)
+    await _propose(client, ctx, "no-run")
+    assert made["run"]["id"] == str(run_id)
+    listed = {p["payload"]["fields"]["key"]: p for p in await _listed(client, ctx)}
+    run = listed["with-run"]["run"]
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(Run, run_id)
+        created_at = row.created_at
+    assert run["id"] == str(run_id)
+    assert run["flow"] == "baseline_to_prd"
+    assert run["flow_title"] == "Baseline to PRD"
+    assert run["status"] == "running"
+    assert run["created_at"].startswith(created_at.date().isoformat())
+    assert listed["no-run"]["run"] is None
+
+    async with tenant_session(ctx.tenant_id) as s:
+        await s.delete(await s.get(Run, run_id))
+        await s.commit()
+    [after] = [p for p in await _listed(client, ctx) if p["id"] == made["id"]]
+    assert after["run_id"] is None and after["run"] is None
+
+
+async def test_people_may_still_name_any_run_or_none(client, ctx):
+    """protects: a person or an API token without a run binding chooses the run, as before.
+    fails_when: the run-token check refuses a person's run_id or invents one.
+    no_claim: says nothing about run tokens (tests/test_mcp.py covers them)."""
+    run_id = await _run(ctx)
+    assert (await _propose(client, ctx, "person-run", run_id))["run_id"] == str(run_id)
+    assert (await _propose(client, ctx, "person-none"))["run_id"] is None
+    token = await _propose(client, ctx, "token-run", run_id, who="token")
+    assert token["run_id"] == str(run_id)

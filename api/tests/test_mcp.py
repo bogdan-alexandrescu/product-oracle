@@ -12,12 +12,13 @@ import pytest
 from fastapi import Depends, FastAPI, File
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from oracle.auth.deps import Principal
 from oracle.auth.models import ROLES, ApiToken, User
 from oracle.auth.service import create_api_token, create_user
 from oracle.authz import require_role
+from oracle.baseline.models import Proposal
 from oracle.main import app, create_app
 from oracle.mcp import auth as mcp_auth
 from oracle.mcp.curated import CURATED, flag_low_confidence
@@ -580,3 +581,52 @@ async def test_update_source_over_mcp_requires_the_version_that_was_read(tenant_
             "update_source", {**path, "body": {"config": {}, "base_version": base}}
         )
         assert not saved.is_error, text_of(saved)
+
+
+# --- B3: a run token's proposals record the run ----------------------------------------
+
+
+async def _run_and_token(tenant_id: uuid.UUID, created_by: uuid.UUID) -> tuple[uuid.UUID, str]:
+    async with tenant_session(tenant_id) as s:
+        run = Run(flow="baseline_to_prd", created_by=created_by)
+        s.add(run)
+        await s.flush()
+        raw = await mint_run_token(s, run.id, ["write:proposals"], ttl_seconds=600)
+        await s.commit()
+        return run.id, raw
+
+
+async def test_run_token_proposal_records_its_run(tenant_id):
+    """protects: every agent proposal is attributable to its run.
+    fails_when: a run-token proposal is stored with run_id null.
+    no_claim: uses the run binding the MCP server sets, not a live SwarmCloud agent."""
+    pm = await user_with_role(tenant_id, "commenter")
+    run_id, token = await _run_and_token(tenant_id, pm.id)
+    change = {"op": "create", "kind": "entity", "fields": PROPOSED_GOAL, "reason": "seen"}
+    async with mcp_client(token) as c:
+        r = await c.call_tool("propose_change", {"body": change})
+    assert not r.is_error, text_of(r)
+    assert r.structured_content["run_id"] == str(run_id)
+    async with tenant_session(tenant_id) as s:
+        [row] = (await s.scalars(select(Proposal))).all()
+        assert row.run_id == run_id
+
+
+async def test_run_token_cannot_propose_for_another_run(tenant_id):
+    """protects: a run cannot attribute its proposals to another run.
+    fails_when: a run token's proposal carrying another run's id is stored.
+    no_claim: uses the run binding the MCP server sets, not a live SwarmCloud agent."""
+    pm = await user_with_role(tenant_id, "commenter")
+    _, token = await _run_and_token(tenant_id, pm.id)
+    other_run, _ = await _run_and_token(tenant_id, pm.id)
+    change = {
+        "op": "create",
+        "kind": "entity",
+        "fields": PROPOSED_GOAL,
+        "run_id": str(other_run),
+    }
+    async with mcp_client(token) as c:
+        r = await c.call_tool("propose_change", {"body": change})
+    assert r.is_error and "a run can only propose for itself" in text_of(r)
+    async with tenant_session(tenant_id) as s:
+        assert (await s.scalars(select(Proposal))).all() == []

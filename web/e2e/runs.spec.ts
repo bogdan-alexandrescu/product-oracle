@@ -14,16 +14,21 @@ async function openRuns(page: Page) {
   await expect(page.getByRole("heading", { level: 1, name: "Runs" })).toBeVisible();
 }
 
-test("runs list shows each run with its status, estimate and spend", async ({ page }) => {
+test("runs list shows each run with its status, and cost only on the approval and the overrun", async ({ page }) => {
   await openRuns(page);
   const rows = page.getByTestId("run-row");
-  await expect(rows).toHaveCount(4);
+  await expect(rows).toHaveCount(5);
   const waiting = rows.filter({ hasText: "team-onboarding" });
   await expect(waiting).toContainText("Waiting for review");
   await expect(waiting).toContainText("Confirm the baseline");
-  await expect(waiting).toContainText("$26.50");
-  await expect(rows.filter({ hasText: "usage-alerts-v2" })).toContainText("Awaiting cost approval");
-  await expect(rows.filter({ hasText: "team-workspaces" })).toContainText("Paused: over budget");
+  // P3d Cost prominence: no figure on a row that needs no cost decision.
+  await expect(waiting).not.toContainText("$");
+  const approval = rows.filter({ hasText: "usage-alerts-v2" });
+  await expect(approval).toContainText("Awaiting cost approval");
+  await expect(approval.locator('[data-cost="prominent"]')).toContainText("est.");
+  const overrun = rows.filter({ hasText: "team-workspaces" });
+  await expect(overrun).toContainText("Paused: over budget");
+  await expect(overrun.locator('[data-cost="prominent"]')).toHaveText("$14.20 / $9.00");
 });
 
 test("run detail: approve each checkpoint through to the imported PRD", async ({ page }) => {
@@ -31,7 +36,8 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
   await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   await expect(page.getByTestId("run-notes")).toContainText("Local agent runtime");
-  await expect(page.getByTestId("run-spent")).toHaveText("$6.30");
+  // P3d Cost prominence: the cost is one small line in Details.
+  await expect(page.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$6.30 of $26.50 est.");
 
   // The open checkpoint: its state in the row (named once, in the decision and the inspector),
   // Decide as the page's primary action.
@@ -353,7 +359,7 @@ test("mock run ids and times are stable: every page load, the runs list, the inb
     const page = await context.newPage();
     await openRuns(page);
     const rows = page.getByTestId("run-row");
-    await expect(rows).toHaveCount(4);
+    await expect(rows).toHaveCount(5);
     const byRun: Record<string, string> = {};
     for (const row of await rows.all()) {
       const slug = (await row.getByRole("link").first().innerText()).trim();
@@ -377,7 +383,7 @@ test("mock run ids and times are stable: every page load, the runs list, the inb
     await expect(page.getByText(`Run ${short("team-onboarding")}`)).toBeVisible();
     await context.close();
   }
-  expect(Object.keys(ids[0]!).sort()).toEqual(["checkout-redesign", "team-onboarding", "team-workspaces", "usage-alerts-v2"]);
+  expect(Object.keys(ids[0]!).sort()).toEqual(["checkout-redesign", "saved-carts", "team-onboarding", "team-workspaces", "usage-alerts-v2"]);
   expect(ids[1]).toEqual(ids[0]);
   expect(dates[1]).toEqual(dates[0]);
 });

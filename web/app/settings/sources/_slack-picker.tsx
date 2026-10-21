@@ -6,7 +6,7 @@ import { Icon } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 
 import { INPUT } from "../_components/fields";
-import { BrowseList, listOf, type BrowsePage, type PickerProps } from "./_browse-list";
+import { BrowseList, labelsOf, listOf, type BrowsePage, type PickerProps } from "./_browse-list";
 
 const LABEL = "text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2";
 
@@ -15,7 +15,8 @@ export const MAX_CHANNELS = 100;
 
 /**
  * Slack source picker (S5): public channels and the private ones you are in, never DMs;
- * writes `{channels, since, until}` (days, UTC; the same range shape as Fireflies). Only
+ * writes `{channels, since, until, labels}` (days, UTC; the same range shape as Fireflies;
+ * `labels` names each picked channel, "#product", for the source's row). Only
  * messages from `since` through `until` are read; nothing posted after `until` is, thread
  * replies included (S5, owner 2026-10-20). Narrowing the range removes what falls outside
  * it when the source is saved (S5, owner 2026-10-20: narrowing takes effect on save).
@@ -62,6 +63,8 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
       connectionId={connectionId}
       picked={listOf(config, "channels")}
       onPicked={(channels) => onChange({ ...config, channels })}
+      labels={labelsOf(config)}
+      onLabels={(labels) => onChange({ ...config, labels })}
       load={load}
       extra={
         <div className="flex min-w-0 flex-col gap-1.5">

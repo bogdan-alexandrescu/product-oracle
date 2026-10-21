@@ -180,12 +180,69 @@ class ItemsProblem(BaseModel):
     item: str | None = None
 
 
+class FixAction(BaseModel):
+    """What a fix does to one item. ``edit`` sets ``field`` (``horizon``,
+    ``milestone_date``, ``milestone_name``, ``depends_on``, ``outcome``, ``title``,
+    ``prd_section``, ``order``, ``clear:<field>``) to ``value``."""
+
+    kind: Literal["accept", "edit", "drop", "restore", "waive"]
+    item: str
+    field: str | None = None
+    value: Any = None
+
+
+class ReasonFix(BaseModel):
+    label: str
+    action: FixAction
+
+
+class ItemReason(BaseModel):
+    """Why a roadmap item needs a person (oracle.runs.reasons): ``blocking`` (a rule
+    problem) or ``confirm`` (advisory), with a chip label, one sentence and its fixes."""
+
+    item: str
+    # The item's title (a dropped item's, from the comparison base).
+    item_title: str | None = None
+    code: str
+    severity: Literal["blocking", "confirm"]
+    label: str
+    text: str
+    data: dict[str, Any] = {}
+    fixes: list[ReasonFix] = []
+
+
+class ReasonBase(BaseModel):
+    """What moved, new and dropped compare with: the previous attempt or roadmap version."""
+
+    kind: Literal["attempt", "roadmap_version"]
+    label: str
+    version: int | None = None
+    attempt: int | None = None
+
+
 class ItemsCheck(BaseModel):
-    """The check of roadmap_items.yaml (oracle.runs.roadmap)."""
+    """The check of roadmap_items.yaml (oracle.runs.roadmap) and every item's reasons
+    (oracle.runs.reasons). Checks stored before reasons existed read with none."""
 
     items: int
     by_horizon: dict[str, int]
     problems: list[ItemsProblem]
+    reasons: list[ItemReason] = []
+    blocking: int = 0
+    to_confirm: int = 0
+    # Problems of the whole file (no item): it needs a send-back.
+    file_problems: int = 0
+    base: ReasonBase | None = None
+    # The advisory reasons could not be loaded: only the blocking ones are listed.
+    reasons_partial: bool = False
+
+
+class PreviousAttempt(BaseModel):
+    """The attempt before the current one, kept when a person sent the segment back (D5):
+    its number and file names (read with ``?attempt=``)."""
+
+    attempt: int
+    artifacts: list[str]
 
 
 class SegmentOut(BaseModel):
@@ -216,6 +273,7 @@ class SegmentOut(BaseModel):
     # above, or the run finished with no version imported and I am an owner.
     can_retry_draft_import: bool = False
     items_check: ItemsCheck | None = None
+    previous_attempt: PreviousAttempt | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error: str | None = None
@@ -391,6 +449,8 @@ class RunOut(RunSummary):
     # W5: while a console answer that did not count waits for an approver, the run's
     # token is read-only (its agents' writes are refused "waiting for approval").
     token_read_only: bool = False
+    # The baseline proposals this run made that wait for a person (B3).
+    open_proposals: int = 0
 
 
 class CheckpointDecision(BaseModel):

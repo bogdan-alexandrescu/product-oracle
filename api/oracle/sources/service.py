@@ -663,10 +663,10 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         # wait on each other's rows.
         await db.refresh(source, with_for_update=True)
         _check_base(source, base_version)
-        reconnect, reconfigure, narrowing = _what_changed(source, changes)
+        reconnect, reconfigure, narrowing, relabel = _what_changed(source, changes)
         if reconnect or (reconfigure and not narrowing):
             connection_id = changes["connection_id"] if reconnect else source.connection_id
-            config = changes["config"] if reconfigure else source.config
+            config = changes["config"] if reconfigure or relabel else source.config
             # Validating reads the credential, which commits (and so frees the lock):
             # nothing is changed before it, and the row is read again, locked, after it.
             # What was validated is the target (connection and config), whatever the row
@@ -676,17 +676,21 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
             await _validate(db, source.kind, config, conn)
             await db.refresh(source, with_for_update=True)
             _check_base(source, base_version)  # another save may have landed meanwhile
-            reconnect, reconfigure, narrowing = _what_changed(source, changes)
-        if narrowing:
+            reconnect, reconfigure, narrowing, relabel = _what_changed(source, changes)
+        if narrowing or (relabel and not reconnect):
             # Nothing is asked of the provider (S5, owner 2026-10-20), so the connection
             # may be expired; the shape and ids are still checked, offline.
             _check_shape(source.kind, changes["config"])
         old_config = dict(source.config or {})
         connection_id = changes.get("connection_id", source.connection_id)
     else:
-        reconnect = reconfigure = narrowing = False
+        reconnect = reconfigure = narrowing = relabel = False
+    if relabel and not reconnect:
+        # New names alone (labels): stored as they are, nothing else changes. No provider
+        # call, no sweep; the cursor, the "not read" list and a running sync stay.
+        source.config = changes["config"]
     if reconnect or reconfigure:
-        config = changes["config"] if reconfigure else source.config
+        config = changes["config"] if reconfigure or relabel else source.config
         if source.kind == "google_docs":
             # Google Docs narrows on save from its cursor's tree (which folder each doc
             # came from), not from item provenance: it has no ``scope``, so _sweep below
@@ -721,7 +725,7 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
     renamed = name is not None and name.strip() != source.name
     if renamed:
         source.name = name.strip()
-    if reconnect or reconfigure or renamed:
+    if reconnect or reconfigure or relabel or renamed:
         # In SQL: a rename-only save holds no lock, so the row may have moved on since it
         # was read at request start; add one to what is stored now.
         source.config_version = Source.config_version + 1
@@ -738,19 +742,19 @@ def _check_base(source: Source, base_version: int | None) -> None:
         raise StaleError
 
 
-def _what_changed(source: Source, changes: dict[str, Any]) -> tuple[bool, bool, bool]:
-    """(connection changed, config changed, the config change only narrows), each against
-    ``source`` as it is now. A pure narrowing (no new pick, no wider date, same connection;
-    owner S5 2026-10-20: "no provider call") needs neither the provider nor an active
-    connection."""
+def _what_changed(source: Source, changes: dict[str, Any]) -> tuple[bool, bool, bool, bool]:
+    """(connection changed, selection changed, the selection change only narrows, only the
+    names changed), each against ``source`` as it is now. A pure narrowing (no new pick,
+    no wider date, same connection; owner S5 2026-10-20: "no provider call") needs neither
+    the provider nor an active connection. New names alone (``labels``, base.selection)
+    are not a change of selection: they need no provider call either."""
     reconnect = "connection_id" in changes and changes["connection_id"] != source.connection_id
-    reconfigure = changes.get("config") is not None and changes["config"] != source.config
-    narrowing = (
-        reconfigure
-        and not reconnect
-        and _only_narrows(source.kind, source.config, changes["config"])
-    )
-    return reconnect, reconfigure, narrowing
+    new = changes.get("config")
+    old = dict(source.config or {})
+    reconfigure = new is not None and base.selection(new) != base.selection(old)
+    relabel = new is not None and not reconfigure and new != old
+    narrowing = reconfigure and not reconnect and _only_narrows(source.kind, old, new)
+    return reconnect, reconfigure, narrowing, relabel
 
 
 def _only_narrows(kind: str, old: dict[str, Any] | None, new: dict[str, Any]) -> bool:

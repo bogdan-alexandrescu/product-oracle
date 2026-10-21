@@ -2665,7 +2665,8 @@ export interface paths {
         put?: never;
         /**
          * Create Proposal
-         * @description Suggest a change; an approver accepts or rejects it.
+         * @description Suggest a change; an approver accepts or rejects it. A run's proposal records
+         *     the run.
          */
         post: operations["create_proposal"];
         delete?: never;
@@ -10779,6 +10780,25 @@ export interface components {
             /** Organizer */
             organizer: string | null;
         };
+        /**
+         * FixAction
+         * @description What a fix does to one item. ``edit`` sets ``field`` (``horizon``,
+         *     ``milestone_date``, ``milestone_name``, ``depends_on``, ``outcome``, ``title``,
+         *     ``prd_section``, ``order``, ``clear:<field>``) to ``value``.
+         */
+        FixAction: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "accept" | "edit" | "drop" | "restore" | "waive";
+            /** Item */
+            item: string;
+            /** Field */
+            field?: string | null;
+            /** Value */
+            value?: unknown;
+        };
         /** FlowCatalog */
         FlowCatalog: {
             /** Flows */
@@ -12161,6 +12181,40 @@ export interface components {
             /** Item */
             item?: string | null;
         };
+        /**
+         * ItemReason
+         * @description Why a roadmap item needs a person (oracle.runs.reasons): ``blocking`` (a rule
+         *     problem) or ``confirm`` (advisory), with a chip label, one sentence and its fixes.
+         */
+        ItemReason: {
+            /** Item */
+            item: string;
+            /** Item Title */
+            item_title?: string | null;
+            /** Code */
+            code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "blocking" | "confirm";
+            /** Label */
+            label: string;
+            /** Text */
+            text: string;
+            /**
+             * Data
+             * @default {}
+             */
+            data: {
+                [key: string]: unknown;
+            };
+            /**
+             * Fixes
+             * @default []
+             */
+            fixes: components["schemas"]["ReasonFix"][];
+        };
         /** ItemStalenessAction */
         ItemStalenessAction: {
             /**
@@ -12186,7 +12240,8 @@ export interface components {
         };
         /**
          * ItemsCheck
-         * @description The check of roadmap_items.yaml (oracle.runs.roadmap).
+         * @description The check of roadmap_items.yaml (oracle.runs.roadmap) and every item's reasons
+         *     (oracle.runs.reasons). Checks stored before reasons existed read with none.
          */
         ItemsCheck: {
             /** Items */
@@ -12197,6 +12252,32 @@ export interface components {
             };
             /** Problems */
             problems: components["schemas"]["ItemsProblem"][];
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ItemReason"][];
+            /**
+             * Blocking
+             * @default 0
+             */
+            blocking: number;
+            /**
+             * To Confirm
+             * @default 0
+             */
+            to_confirm: number;
+            /**
+             * File Problems
+             * @default 0
+             */
+            file_problems: number;
+            base?: components["schemas"]["ReasonBase"] | null;
+            /**
+             * Reasons Partial
+             * @default false
+             */
+            reasons_partial: boolean;
         };
         /**
          * ItemsImport
@@ -13822,6 +13903,17 @@ export interface components {
             /** Document View */
             document_view?: ("brief" | "full") | null;
         };
+        /**
+         * PreviousAttempt
+         * @description The attempt before the current one, kept when a person sent the segment back (D5):
+         *     its number and file names (read with ``?attempt=``).
+         */
+        PreviousAttempt: {
+            /** Attempt */
+            attempt: number;
+            /** Artifacts */
+            artifacts: string[];
+        };
         /** PriorityRanking */
         PriorityRanking: {
             /**
@@ -14031,6 +14123,7 @@ export interface components {
             };
             /** Run Id */
             run_id?: string | null;
+            run?: components["schemas"]["ProposalRun"] | null;
             /** Actor */
             actor?: string | null;
             /**
@@ -14042,6 +14135,28 @@ export interface components {
             decided_by?: string | null;
             /** Decided At */
             decided_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * ProposalRun
+         * @description The run that made a proposal, enough to name it and link to it.
+         */
+        ProposalRun: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Flow */
+            flow: string;
+            /** Flow Title */
+            flow_title: string;
+            /** Status */
+            status: string;
             /**
              * Created At
              * Format: date-time
@@ -14639,6 +14754,29 @@ export interface components {
             section_keys: string[];
             /** Error */
             error?: string | null;
+        };
+        /**
+         * ReasonBase
+         * @description What moved, new and dropped compare with: the previous attempt or roadmap version.
+         */
+        ReasonBase: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "attempt" | "roadmap_version";
+            /** Label */
+            label: string;
+            /** Version */
+            version?: number | null;
+            /** Attempt */
+            attempt?: number | null;
+        };
+        /** ReasonFix */
+        ReasonFix: {
+            /** Label */
+            label: string;
+            action: components["schemas"]["FixAction"];
         };
         /** RecommendIn */
         RecommendIn: {
@@ -15500,6 +15638,11 @@ export interface components {
              * @default false
              */
             token_read_only: boolean;
+            /**
+             * Open Proposals
+             * @default 0
+             */
+            open_proposals: number;
         };
         /** RunPatch */
         RunPatch: {
@@ -16534,6 +16677,7 @@ export interface components {
              */
             can_retry_draft_import: boolean;
             items_check?: components["schemas"]["ItemsCheck"] | null;
+            previous_attempt?: components["schemas"]["PreviousAttempt"] | null;
             /** Started At */
             started_at?: string | null;
             /** Finished At */
@@ -16694,7 +16838,10 @@ export interface components {
             name: string;
             /** Connection Id */
             connection_id?: string | null;
-            /** Config */
+            /**
+             * Config
+             * @description What the source reads, by kind. github: {"repos": ["owner/name"]}. slack: {"channels": [channel id], "since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD", "labels"?: {channel id: "#name"}}. notion: {"roots": [page id], "labels"?: {page id: title}}. labels only name the picks for people to read (at most 200 characters each; names of ids not picked are dropped): a save that changes labels alone reads nothing again and asks the provider nothing. Pick ids from the browse lists (list_slack_channels, list_notion_pages). Never secrets.
+             */
             config?: {
                 [key: string]: unknown;
             };
@@ -16802,7 +16949,10 @@ export interface components {
             name?: string | null;
             /** Connection Id */
             connection_id?: string | null;
-            /** Config */
+            /**
+             * Config
+             * @description What the source reads, by kind. github: {"repos": ["owner/name"]}. slack: {"channels": [channel id], "since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD", "labels"?: {channel id: "#name"}}. notion: {"roots": [page id], "labels"?: {page id: title}}. labels only name the picks for people to read (at most 200 characters each; names of ids not picked are dropped): a save that changes labels alone reads nothing again and asks the provider nothing. Pick ids from the browse lists (list_slack_channels, list_notion_pages). Never secrets.
+             */
             config?: {
                 [key: string]: unknown;
             } | null;
@@ -24349,6 +24499,8 @@ export interface operations {
         parameters: {
             query?: {
                 status?: ("open" | "accepted" | "rejected") | null;
+                /** @description A run's id for that run's proposals, or `none` for those of no run */
+                run_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -26059,7 +26211,10 @@ export interface operations {
     };
     get_run_artifact: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The attempt whose file to read: the current one, or the previous one a send-back kept. Older attempts are not kept (404). */
+                attempt?: number | null;
+            };
             header?: never;
             path: {
                 run_id: string;

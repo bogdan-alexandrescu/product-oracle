@@ -368,8 +368,8 @@ test("review panel: three tabs; Feedback is one list by state, scope and kind, w
 
   // Sources and History.
   await openTab(page, "History");
-  for (const h of ["Resolutions", "Reports", "Jobs"]) await expect(panel.getByRole("button", { name: h, exact: true })).toHaveAttribute("aria-expanded", "true");
-  await panel.getByRole("button", { name: "Jobs", exact: true }).click();
+  for (const h of ["Resolutions", "Reports", "Oracle's work"]) await expect(panel.getByRole("button", { name: h, exact: true })).toHaveAttribute("aria-expanded", "true");
+  await panel.getByRole("button", { name: "Oracle's work", exact: true }).click();
   await expect(panel.getByTestId("jobs-panel")).toBeHidden();
   await expect(panel.getByTestId("reports-panel")).toBeVisible();
   await openTab(page, "Sources");

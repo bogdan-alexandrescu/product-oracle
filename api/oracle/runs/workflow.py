@@ -45,8 +45,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-from oracle.docs.schemas import citation_contract
-from oracle.runs import flows
+from oracle.docs.schemas import ImportProblem, citation_contract
+from oracle.runs import flows, rejection
 from oracle.runtokens import SCOPES
 from oracle.swarm.runtime import AWAIT_PROFILE, NOT_YET, StepSpec
 from oracle.swarm.settings import MAX_CREDENTIAL_SECONDS, MIN_CREDENTIAL_SECONDS, RuntimeSettings
@@ -227,6 +227,49 @@ def import_findings(name: str, problems: list[dict[str, Any]]) -> list[str]:
     return out
 
 
+def check_problems(
+    name: str, items_check: dict[str, Any] | None, import_problems: list[dict[str, Any]]
+) -> list[str]:
+    """One line per problem Oracle's check found in ``name`` that the agents must fix:
+    the items check's blocking reasons (D2 Product reasons: label and sentence; to-confirm
+    reasons are a person's), else its problems; and a refused draft's import problems in
+    their plain summary (oracle.runs.rejection)."""
+    out: list[str] = []
+    check = items_check or {}
+    reasons = check.get("reasons")
+    if isinstance(reasons, list) and reasons:
+        for r in reasons:
+            if not isinstance(r, dict) or not _blocking(r):
+                continue
+            label = str(r.get("label") or r.get("code") or "Problem")
+            item = f" ({r['item']})" if r.get("item") else ""
+            sentence = str(r.get("sentence") or r.get("message") or "")
+            out.append(f"{label}{item}: {sentence}" if sentence else f"{label}{item}")
+    else:
+        for p in check.get("problems") or []:
+            if isinstance(p, dict):
+                out.append(f"[{p.get('code')}] {p.get('message')}")
+    if import_problems:
+        problems = [ImportProblem.model_validate(p) for p in import_problems]
+        out.append(rejection.summary(name, problems))
+    return out
+
+
+def _blocking(reason: dict[str, Any]) -> bool:
+    return reason.get("blocking") is True or reason.get("severity") == "blocking"
+
+
+def check_findings(
+    name: str, items_check: dict[str, Any] | None, import_problems: list[dict[str, Any]]
+) -> list[str]:
+    """A person's NOT_YET at the last segment's review: a lead line and the problems
+    Oracle's check found in ``name`` (:func:`check_problems`), or nothing when none."""
+    lines = check_problems(name, items_check, import_problems)
+    if not lines:
+        return []
+    return [f"Oracle's check found these problems in {name}; fix each one:", *lines]
+
+
 def build_plan(
     flow: flows.FlowDef,
     segments: list[tuple[int, flows.SegmentDef, flows.PromptContext]],
@@ -312,7 +355,16 @@ def _with_note(ctx: flows.PromptContext, note: str, attempt: int) -> flows.Promp
     from dataclasses import replace
 
     change = f"{ctx.change_request}\n\n{note}" if ctx.change_request else note
-    return replace(ctx, change_request=change, attempt=attempt)
+    # A revision works on the staged file and the review's findings, not on an earlier
+    # attempt's files.
+    return replace(
+        ctx,
+        change_request=change,
+        attempt=attempt,
+        previous_attempt=None,
+        previous_files={},
+        previous_problems=[],
+    )
 
 
 def expires_at(submitted: datetime, seconds: int) -> datetime:

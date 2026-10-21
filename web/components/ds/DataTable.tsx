@@ -62,6 +62,8 @@ export function DataTable<T>({
   loading = false,
   empty = "Nothing yet",
   group,
+  groupLabel,
+  groupProps,
   rowProps,
   testId,
   hideHeader = false,
@@ -80,6 +82,10 @@ export function DataTable<T>({
   empty?: ReactNode;
   /** Group header rows: a header is drawn whenever this value changes. */
   group?: (row: T) => string;
+  /** What a group header row shows (default: the group value). */
+  groupLabel?: (group: string) => ReactNode;
+  /** Attributes on a group header row (a test id, a data attribute). */
+  groupProps?: (group: string) => Record<string, string | undefined>;
   rowProps?: (row: T) => Record<string, string | undefined>;
   testId?: string;
   hideHeader?: boolean;
@@ -177,14 +183,14 @@ export function DataTable<T>({
             return (
               <Fragment key={k}>
                 {header && (
-                  <tr role="row" className="border-t border-line bg-surface2 max-[600px]:block" data-group={g}>
+                  <tr role="row" className="border-t border-line bg-surface2 max-[600px]:block" data-group={g} {...groupProps?.(g)}>
                     <th
                       role="rowheader"
                       colSpan={visibleCols}
                       scope="colgroup"
                       className="h-9 px-4 max-[600px]:flex max-[600px]:items-center max-[600px]:px-3 text-left font-display tracking-heading text-[15px] font-bold"
                     >
-                      {g}
+                      {groupLabel ? groupLabel(g) : g}
                     </th>
                   </tr>
                 )}

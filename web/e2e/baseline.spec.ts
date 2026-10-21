@@ -260,24 +260,27 @@ test("baseline: an approver resolves an open material conflict by picking a clai
 test("baseline: an approver accepts and rejects proposals", async ({ page }) => {
   await openBaseline(page);
   const tab = page.getByRole("tab", { name: /Proposals/ });
-  await expect(tab.getByTestId("tab-count-proposals")).toHaveText("2");
+  await expect(tab.getByTestId("tab-count-proposals")).toHaveText("3");
   await tab.click();
 
   const proposals = page.getByTestId("proposal");
-  await expect(proposals).toHaveCount(2);
+  await expect(proposals).toHaveCount(3);
   const onLocked = proposals.filter({ hasText: "Guided setup" });
   await expect(onLocked).toContainText("update");
   await expect(onLocked).toContainText("attrs.effort:L");
   await expect(onLocked).toContainText("The setup review estimated more work than planned.");
-  await expect(onLocked).toContainText("run:");
+  await expect(onLocked).toContainText("From run · Baseline to PRD · Oct 16");
 
   await onLocked.getByRole("button", { name: "Accept" }).click();
   await expect(page.getByRole("status")).toContainText("Proposal accepted");
-  await expect(proposals).toHaveCount(1);
-  await expect(tab.getByTestId("tab-count-proposals")).toHaveText("1");
+  await expect(proposals).toHaveCount(2);
+  await expect(tab.getByTestId("tab-count-proposals")).toHaveText("2");
 
   const darkMode = proposals.filter({ hasText: "Dark mode" });
   await darkMode.getByRole("button", { name: "Reject" }).click();
+  await expect(proposals).toHaveCount(1);
+  await expect(tab.getByTestId("tab-count-proposals")).toHaveText("1");
+  await proposals.filter({ hasText: "Team invites" }).getByRole("button", { name: "Reject" }).click();
   await expect(page.getByText("No open proposals.")).toBeVisible();
   await expect(tab.getByTestId("tab-count-proposals")).toHaveText("0");
 
@@ -311,7 +314,132 @@ test("baseline: a viewer reads everything but sees no write buttons", async ({ p
   await expect(main.getByRole("button", { name: /Pick/ })).toHaveCount(0);
 
   await page.getByRole("tab", { name: /Proposals/ }).click();
-  await expect(page.getByTestId("proposal")).toHaveCount(2);
+  await expect(page.getByTestId("proposal")).toHaveCount(3);
   await expect(main.getByRole("button", { name: "Accept" })).toHaveCount(0);
   await expect(main.getByRole("button", { name: "Reject" })).toHaveCount(0);
+});
+
+// B3 Proposals by run. The mock seeds two proposals from one Baseline to PRD run (started
+// Oct 16) and one from a commenter, with no run.
+const AGENT_RUN = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a291";
+const RUN_LABEL = "Baseline to PRD · Oct 16";
+
+async function openProposals(page: Page) {
+  await openBaseline(page);
+  await page.getByRole("tab", { name: /Proposals/ }).click();
+  await expect(page.getByTestId("proposal")).toHaveCount(3);
+}
+
+/**
+ * protects: the From filter and its shareable URL.
+ * fails_when: another run's or a person's proposal shows under the run, the select misses
+ * an entry, or choosing a run leaves the URL without run=.
+ * no_claim: mock data only.
+ */
+test("baseline: proposals filtered by the run that made them", async ({ page }) => {
+  await openProposals(page);
+  const from = page.getByLabel("From");
+  await expect(from).toHaveValue("");
+  await expect(from.locator("option")).toHaveText(["All", "People and intake answers", RUN_LABEL]);
+
+  await from.selectOption({ label: RUN_LABEL });
+  await expect(page).toHaveURL(new RegExp(`[?&]run=${AGENT_RUN}`));
+  await expect(page).toHaveURL(/[?&]tab=proposals/);
+  const rows = page.getByTestId("proposal");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.filter({ hasText: "Guided setup" })).toHaveCount(1);
+  await expect(rows.filter({ hasText: "Dark mode" })).toHaveCount(1);
+  await expect(rows.filter({ hasText: "Team invites" })).toHaveCount(0);
+  const line = page.getByTestId("run-filter-line");
+  await expect(line).toHaveText(`Proposals from ${RUN_LABEL} · Open run`);
+  await expect(line.getByRole("link", { name: "Open run" })).toHaveAttribute("href", `/runs/${AGENT_RUN}`);
+
+  await from.selectOption({ label: "People and intake answers" });
+  await expect(page).toHaveURL(/[?&]run=none/);
+  await expect(rows).toHaveCount(1);
+  await expect(rows).toContainText("Team invites");
+
+  await from.selectOption({ label: "All" });
+  await expect(page).not.toHaveURL(/run=/);
+  await expect(rows).toHaveCount(3);
+});
+
+/**
+ * protects: a shared link to one run's proposals opens filtered.
+ * fails_when: reloading /baseline?tab=proposals&run=<id> shows the Graph tab or every proposal.
+ * no_claim: mock data only.
+ */
+test("baseline: reloading a run's proposals link restores the filter", async ({ page }) => {
+  await openBaseline(page);
+  await page.goto(`/baseline?tab=proposals&run=${AGENT_RUN}`);
+  await expect(page.getByRole("tab", { name: /Proposals/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByLabel("From")).toHaveValue(AGENT_RUN);
+  await expect(page.getByTestId("proposal")).toHaveCount(2);
+  await page.reload();
+  await expect(page.getByLabel("From")).toHaveValue(AGENT_RUN);
+  await expect(page.getByTestId("proposal")).toHaveCount(2);
+  await expect(page.getByTestId("run-filter-line")).toContainText(RUN_LABEL);
+});
+
+/**
+ * protects: each proposal from a run links to that run, named in plain words.
+ * fails_when: a row shows a raw run id, the link is missing, or it does not open the run.
+ * no_claim: the person's name on rows not from a run (pick B4 Proposal sentences).
+ */
+test("baseline: each run's proposal links to its run", async ({ page }) => {
+  await openProposals(page);
+  const rows = page.getByTestId("proposal");
+  for (const title of ["Guided setup", "Dark mode"]) {
+    const link = rows.filter({ hasText: title }).getByRole("link", { name: `From run · ${RUN_LABEL}` });
+    await expect(link).toHaveAttribute("href", `/runs/${AGENT_RUN}`);
+  }
+  await expect(rows.filter({ hasText: "Team invites" }).getByRole("link", { name: /From run/ })).toHaveCount(0);
+  await expect(page.getByTestId("proposal").filter({ hasText: `run:${AGENT_RUN}` })).toHaveCount(0);
+
+  await rows.filter({ hasText: "Guided setup" }).getByRole("link", { name: /From run/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${AGENT_RUN}$`));
+  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+});
+
+/**
+ * protects: the run page says how many open proposals the run left and leads to them.
+ * fails_when: the count is missing or stale after a proposal is accepted, or Review does not
+ * land on the run's filtered proposals.
+ * no_claim: mock data only.
+ */
+test("baseline: the run page counts its open proposals and Review opens them", async ({ page }) => {
+  await login(page);
+  await page.goto(`/runs/${AGENT_RUN}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  const count = page.getByTestId("run-proposals");
+  await expect(count).toHaveText("2 open · Review");
+  await expect(page.getByTestId("run-proposals-row")).toContainText("Baseline proposals");
+
+  await count.getByRole("link", { name: "Review" }).click();
+  await expect(page).toHaveURL(new RegExp(`/baseline\\?tab=proposals&run=${AGENT_RUN}$`));
+  const rows = page.getByTestId("proposal");
+  await expect(rows).toHaveCount(2);
+  await rows.filter({ hasText: "Guided setup" }).getByRole("button", { name: "Accept" }).click();
+  await expect(page.getByRole("status")).toContainText("Proposal accepted");
+  await expect(rows).toHaveCount(1);
+
+  await page.getByTestId("run-filter-line").getByRole("link", { name: "Open run" }).click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${AGENT_RUN}$`));
+  await expect(page.getByTestId("run-proposals")).toHaveText("1 open · Review");
+});
+
+/**
+ * protects: the From select and the run rows on a phone.
+ * fails_when: the page scrolls sideways at 390 px.
+ * no_claim: other widths.
+ */
+test("baseline: proposals by run fit a phone", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openProposals(page);
+  await expect(page.getByLabel("From")).toBeVisible();
+  const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(await overflow()).toBeLessThanOrEqual(0);
+  await page.getByLabel("From").selectOption({ label: RUN_LABEL });
+  await expect(page.getByTestId("run-filter-line")).toBeVisible();
+  expect(await overflow()).toBeLessThanOrEqual(0);
 });

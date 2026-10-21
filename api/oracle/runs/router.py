@@ -283,9 +283,19 @@ async def decide_checkpoint(
     responses={200: {"content": {"text/plain": {"schema": {"type": "string"}}}}},
 )
 async def get_run_artifact(
-    run_id: uuid.UUID, seq: int, name: str, db: TenantDB
+    run_id: uuid.UUID,
+    seq: int,
+    name: str,
+    db: TenantDB,
+    attempt: Annotated[
+        int | None,
+        Query(
+            description="The attempt whose file to read: the current one, or the previous one "
+            "a send-back kept. Older attempts are not kept (404)."
+        ),
+    ] = None,
 ) -> PlainTextResponse:
-    content = await _call(service.read_artifact(db, run_id, seq, name))
+    content = await _call(service.read_artifact(db, run_id, seq, name, attempt))
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
 
 

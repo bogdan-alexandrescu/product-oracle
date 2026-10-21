@@ -73,6 +73,8 @@ from oracle.sources.base import (
     ItemUpsert,
     Scope,
     SyncEvent,
+    check_labels,
+    normalize_labels,
     register,
 )
 
@@ -402,17 +404,20 @@ class SlackConnector:
             yield _Slack(client, token)
 
     def check_config(self, config: dict[str, Any]) -> None:
-        """The rules a saved config must still meet (the channel cap, the dates)."""
+        """The rules a saved config must still meet (the channel cap, the dates, the
+        channel names in ``labels``)."""
         _channels(config)
         _since(config)
         _until(config)
+        check_labels(config, MAX_CHANNELS, "labels must map channel ids to names")
 
     def normalize_config(self, config: dict[str, Any]) -> dict[str, Any]:
-        """Channel ids stripped, without repeats, sorted."""
+        """Channel ids stripped, without repeats, sorted; names kept only for them."""
         channels = config.get("channels")
         if not isinstance(channels, list) or not all(isinstance(c, str) for c in channels):
             return dict(config)
-        return {**config, "channels": sorted({c.strip() for c in channels})}
+        ids = sorted({c.strip() for c in channels})
+        return normalize_labels({**config, "channels": ids}, ids, MAX_CHANNELS)
 
     def scope(self, config: dict[str, Any]) -> Scope:
         """Still selected: in an allowlisted channel, started inside the date range (a

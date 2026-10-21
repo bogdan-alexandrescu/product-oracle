@@ -9404,6 +9404,24 @@
               ],
               "title": "Status"
             }
+          },
+          {
+            "name": "run_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A run's id for that run's proposals, or `none` for those of no run",
+              "title": "Run Id"
+            },
+            "description": "A run's id for that run's proposals, or `none` for those of no run"
           }
         ],
         "responses": {
@@ -9438,7 +9456,7 @@
           "baseline"
         ],
         "summary": "Create Proposal",
-        "description": "Suggest a change; an approver accepts or rejects it.",
+        "description": "Suggest a change; an approver accepts or rejects it. A run's proposal records\nthe run.",
         "operationId": "create_proposal",
         "security": [
           {
@@ -12315,6 +12333,24 @@
               "type": "string",
               "title": "Name"
             }
+          },
+          {
+            "name": "attempt",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The attempt whose file to read: the current one, or the previous one a send-back kept. Older attempts are not kept (404).",
+              "title": "Attempt"
+            },
+            "description": "The attempt whose file to read: the current one, or the previous one a send-back kept. Older attempts are not kept (404)."
           }
         ],
         "responses": {
@@ -35130,6 +35166,46 @@
         ],
         "title": "FirefliesSeriesOut"
       },
+      "FixAction": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "accept",
+              "edit",
+              "drop",
+              "restore",
+              "waive"
+            ],
+            "title": "Kind"
+          },
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "item"
+        ],
+        "title": "FixAction",
+        "description": "What a fix does to one item. ``edit`` sets ``field`` (``horizon``,\n``milestone_date``, ``milestone_name``, ``depends_on``, ``outcome``, ``title``,\n``prd_section``, ``order``, ``clear:<field>``) to ``value``."
+      },
       "FlowCatalog": {
         "properties": {
           "flows": {
@@ -38869,6 +38945,69 @@
         ],
         "title": "ItemProblem"
       },
+      "ItemReason": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "item_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Title"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "confirm"
+            ],
+            "title": "Severity"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "default": {}
+          },
+          "fixes": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonFix"
+            },
+            "type": "array",
+            "title": "Fixes",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "code",
+          "severity",
+          "label",
+          "text"
+        ],
+        "title": "ItemReason",
+        "description": "Why a roadmap item needs a person (oracle.runs.reasons): ``blocking`` (a rule\nproblem) or ``confirm`` (advisory), with a chip label, one sentence and its fixes."
+      },
       "ItemStalenessAction": {
         "properties": {
           "action": {
@@ -38963,6 +39102,44 @@
             },
             "type": "array",
             "title": "Problems"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ItemReason"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          },
+          "blocking": {
+            "type": "integer",
+            "title": "Blocking",
+            "default": 0
+          },
+          "to_confirm": {
+            "type": "integer",
+            "title": "To Confirm",
+            "default": 0
+          },
+          "file_problems": {
+            "type": "integer",
+            "title": "File Problems",
+            "default": 0
+          },
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReasonBase"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reasons_partial": {
+            "type": "boolean",
+            "title": "Reasons Partial",
+            "default": false
           }
         },
         "type": "object",
@@ -38972,7 +39149,7 @@
           "problems"
         ],
         "title": "ItemsCheck",
-        "description": "The check of roadmap_items.yaml (oracle.runs.roadmap)."
+        "description": "The check of roadmap_items.yaml (oracle.runs.roadmap) and every item's reasons\n(oracle.runs.reasons). Checks stored before reasons existed read with none."
       },
       "ItemsImport": {
         "properties": {
@@ -43238,6 +43415,28 @@
         "type": "object",
         "title": "PreferencesUpdate"
       },
+      "PreviousAttempt": {
+        "properties": {
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt"
+          },
+          "artifacts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Artifacts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempt",
+          "artifacts"
+        ],
+        "title": "PreviousAttempt",
+        "description": "The attempt before the current one, kept when a person sent the segment back (D5):\nits number and file names (read with ``?attempt=``)."
+      },
       "PriorityRanking": {
         "properties": {
           "method": {
@@ -43793,6 +43992,16 @@
             ],
             "title": "Run Id"
           },
+          "run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProposalRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "actor": {
             "anyOf": [
               {
@@ -43851,6 +44060,42 @@
           "created_at"
         ],
         "title": "ProposalOut"
+      },
+      "ProposalRun": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "flow": {
+            "type": "string",
+            "title": "Flow"
+          },
+          "flow_title": {
+            "type": "string",
+            "title": "Flow Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "flow",
+          "flow_title",
+          "status",
+          "created_at"
+        ],
+        "title": "ProposalRun",
+        "description": "The run that made a proposal, enough to name it and link to it."
       },
       "ProtectedResourceMetadata": {
         "properties": {
@@ -45398,6 +45643,68 @@
           "rationale"
         ],
         "title": "ReadinessResultOut"
+      },
+      "ReasonBase": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "attempt",
+              "roadmap_version"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "ReasonBase",
+        "description": "What moved, new and dropped compare with: the previous attempt or roadmap version."
+      },
+      "ReasonFix": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "action": {
+            "$ref": "#/components/schemas/FixAction"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "action"
+        ],
+        "title": "ReasonFix"
       },
       "RecommendIn": {
         "properties": {
@@ -47899,6 +48206,11 @@
             "type": "boolean",
             "title": "Token Read Only",
             "default": false
+          },
+          "open_proposals": {
+            "type": "integer",
+            "title": "Open Proposals",
+            "default": 0
           }
         },
         "type": "object",
@@ -50901,6 +51213,16 @@
               }
             ]
           },
+          "previous_attempt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreviousAttempt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "started_at": {
             "anyOf": [
               {
@@ -51389,7 +51711,8 @@
           "config": {
             "additionalProperties": true,
             "type": "object",
-            "title": "Config"
+            "title": "Config",
+            "description": "What the source reads, by kind. github: {\"repos\": [\"owner/name\"]}. slack: {\"channels\": [channel id], \"since\"?: \"YYYY-MM-DD\", \"until\"?: \"YYYY-MM-DD\", \"labels\"?: {channel id: \"#name\"}}. notion: {\"roots\": [page id], \"labels\"?: {page id: title}}. labels only name the picks for people to read (at most 200 characters each; names of ids not picked are dropped): a save that changes labels alone reads nothing again and asks the provider nothing. Pick ids from the browse lists (list_slack_channels, list_notion_pages). Never secrets."
           }
         },
         "type": "object",
@@ -51667,7 +51990,8 @@
                 "type": "null"
               }
             ],
-            "title": "Config"
+            "title": "Config",
+            "description": "What the source reads, by kind. github: {\"repos\": [\"owner/name\"]}. slack: {\"channels\": [channel id], \"since\"?: \"YYYY-MM-DD\", \"until\"?: \"YYYY-MM-DD\", \"labels\"?: {channel id: \"#name\"}}. notion: {\"roots\": [page id], \"labels\"?: {page id: title}}. labels only name the picks for people to read (at most 200 characters each; names of ids not picked are dropped): a save that changes labels alone reads nothing again and asks the provider nothing. Pick ids from the browse lists (list_slack_channels, list_notion_pages). Never secrets."
           },
           "base_version": {
             "anyOf": [

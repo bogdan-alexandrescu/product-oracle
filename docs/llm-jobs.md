@@ -27,12 +27,29 @@ no Claude account could take the call, the pool's reason and next reset.
   quota, an answer that is not the JSON asked for) goes back to the queue once, then
   fails. No Claude account available fails at once with the pool's reason
   (`no_accounts_registered`, `pool_paused`, `no_account_available` with the next reset,
-  `no_recent_reading`, `unusable`); the Jobs panel says what to do. A job left running by
+  `no_recent_reading`, `unusable`); the job's row in Oracle's work says what to do. A job left running by
   a stopped worker for `ORACLE_LLM_JOBS_STALE_AFTER_SECONDS` (30 min) is reclaimed the same
   way. Retry (failed or cancelled) and Cancel (queued or running; a running job's answer is
   dropped) are approver actions.
 - **Per document.** An owner turns each kind on or off (`PUT
   /v1/documents/{doc}/llm-jobs/settings`, `documents.disabled_llm_jobs`); all on by default.
+
+## In the app: Oracle's work
+
+The jobs live once, in a version's History tab, in the fold "Oracle's work"
+(`/documents/{doc}/v/{n}?tab=history#oracle-work`; the PRD overview shows versions only,
+and its version inspector links there for approvers). Plain names (D15):
+
+| Setting key | Switch ("Oracle does on its own") | Job row name |
+|---|---|---|
+| `review_comments` | Suggest changes from feedback | Suggestions |
+| `reporting` | Write reports | Reports |
+| `refinement` | Rewrite sections and build drafts | Section rewrite (Next draft for a whole draft) |
+| `quality_review` | Quality review | Quality review |
+
+Approvers queue by hand with "Suggest changes now" and "Write reports now". A row shows
+its status, version, section, time and outcome; the account, tokens and cost sit behind
+its "Details".
 
 ## Review comments
 
