@@ -27,7 +27,8 @@ STOPWORDS = frozenset(
 )
 _WORD = re.compile(r"[a-z][a-z'-]{2,}")
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
-_CLAUSE_END = re.compile(r"\s+(?:so that|so|to|and|because|which|but)\s+|[,;:]")
+# Starts only where a whitespace run starts, so a long run is scanned once (linear).
+_CLAUSE_END = re.compile(r"(?<!\s)\s++(?:so that|so|to|and|because|which|but)\s+|[,;:]")
 
 _USER = re.compile(
     r"\b((?:new|returning|existing|enterprise|small|internal|mobile|first[- ]time|power|"
@@ -52,9 +53,15 @@ _NON_GOAL = re.compile(r"\b(?:not|without|out of scope:?|excluding|never)\s+([^.
 _DEPENDENCY = re.compile(
     r"\b(?:depends on|requires|relies on|needs|via|from the|using the)\s+([^.;,]{3,120})", re.I
 )
-_PERCENT = re.compile(
-    r"([a-z][a-z ]{2,60}?)\s+(?:is|was|are|were|at|of|=|:)\s*(\d+(?:\.\d+)?)\s*%", re.I
+# "<topic> is 52%": the matches of
+#   ([a-z][a-z ]{2,60}?)\s+(?:is|was|are|were|at|of|=|:)\s*(\d+(?:\.\d+)?)\s*%
+# found in linear time. That pattern retries the same tail ("is" + spaces + number) from
+# every one of up to 61 starts before it; percent_claims finds each tail once, then the
+# topic in at most the 61 characters before it.
+_PERCENT_TAIL = re.compile(
+    r"(?<!\s)(\s++)(?:is|was|are|were|at|of|=|:)\s*+(\d++(?:\.\d++)?+)\s*+%", re.I
 )
+_PERCENT_TOPIC = re.compile(r"([a-z][a-z ]{2,60}?)\s+\Z", re.I)
 
 # Which categories a source item speaks to, by what it says.
 CATEGORY_CUES: dict[str, re.Pattern[str]] = {
@@ -63,8 +70,10 @@ CATEGORY_CUES: dict[str, re.Pattern[str]] = {
         r"annoy\w*|drop[- ]?off|struggl\w*|confus\w*)\b",
         re.I,
     ),
+    # A number starts where its digits start, so a long digit run is scanned once (linear).
     "success_metric": re.compile(
-        r"(\d+(?:\.\d+)?\s*%|\b(conversion|rate|baseline|metric|kpi|median|nps)\b)", re.I
+        r"((?<!\d)\d++(?:\.\d++)?+\s*+%|\b(conversion|rate|baseline|metric|kpi|median|nps)\b)",
+        re.I,
     ),
     "customer_user": re.compile(r"\b(customers?|users?|buyers?|segment|persona|shoppers?)\b", re.I),
     "differentiation": re.compile(r"\b(competitors?|differentiat\w*|unique|moat)\b", re.I),
@@ -106,6 +115,20 @@ def terms(text: str) -> set[str]:
 def _clause(text: str) -> str:
     text = _CLAUSE_END.split(text, maxsplit=1)[0]
     return text.strip(" .;,:-").strip()
+
+
+def percent_claims(text: str) -> list[tuple[str, str]]:
+    """(topic, number) for each "<topic> is <number>%" in the text."""
+    claims, pos = [], 0
+    for tail in _PERCENT_TAIL.finditer(text):
+        space, keyword = tail.span(1)
+        # The topic ends inside the space before the keyword, at most 61 characters after
+        # it starts, so the space past that is never read.
+        topic = _PERCENT_TOPIC.search(text, max(pos, space - 61), min(keyword, space + 62))
+        if topic:
+            claims.append((topic.group(1), tail.group(2)))
+            pos = tail.end()
+    return claims
 
 
 def _dedupe(values: list[str]) -> list[str]:
@@ -212,9 +235,9 @@ def from_sources(items: list[PinnedItem], stale_freshness: float) -> SourceFacts
                 facts.by_category[category].append(item)
         for name, value in signals_in(text).items():
             signals[name] = signals.get(name, False) or value
-        for m in _PERCENT.finditer(item.text):
-            topic = " ".join(m.group(1).lower().split()[-3:])
-            claims[topic].append((f"{m.group(2)}%", item))
+        for found, value in percent_claims(item.text):
+            topic = " ".join(found.lower().split()[-3:])
+            claims[topic].append((f"{value}%", item))
         if item.freshness <= stale_freshness:
             facts.stale.append(item)
     facts.signals = signals
