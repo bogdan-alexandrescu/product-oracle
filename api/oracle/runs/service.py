@@ -88,7 +88,8 @@ row says, and in any state but parked on that unfinished step, not listed or not
 it holds; a
 read-only answer is reused for up to 5 seconds, 'may write' never; a request joining a
 read in flight shares only a read-only answer, and on 'may write' reads for itself).
-A lost submission holds its token until it is resolved. Agents are told a fixed reason. An
+A lost submission holds its token until it is resolved, and a decision recorded in Oracle
+until it is delivered to the workflow (owner, 2026-10-20). Agents are told a fixed reason. An
 answered wait Oracle cannot read yet (SwarmCloud errors, a 404, a record that lags the
 step, or a 409 already_answered whose record does not read) is shown as ``needs: unread``
 until the answer is read; the approver rule applies then.
@@ -841,7 +842,12 @@ def _holds_token(cp: Checkpoint) -> bool:
     """W5 (owner, 2026-10-19): the run's token is read-only while a checkpoint wait is
     open in SwarmCloud (unanswered, answered and not read yet, unreadable, or answered by
     someone whose answer does not count); writes return once Oracle has read an answer
-    that counts. A wait that ended (expired, closed, paused) is no longer open."""
+    that counts. A wait that ended (expired, closed, paused) is no longer open.
+    Owner decision 2026-10-20: a decision recorded in the Inbox and not delivered to the
+    workflow yet (:func:`_owes`, "Delivering decision") holds it too, until delivered; a
+    voided one leaves the checkpoint pending, which holds as any other."""
+    if _owes(cp):
+        return True
     if cp.status != "pending":
         return False
     wait = (cp.payload or {}).get("wait") or {}
@@ -853,7 +859,9 @@ def _holds_token(cp: Checkpoint) -> bool:
 
 def _hold_reason(cp: Checkpoint) -> str:
     needs = (((cp.payload or {}).get("wait") or {}).get("console") or {}).get("needs")
-    if needs == "confirm":
+    if _owes(cp):
+        why = "has a decision recorded in Oracle that is not delivered to the run yet"
+    elif needs == "confirm":
         why = (
             "was answered in SwarmCloud's console by someone whose answer does not count "
             "until an Oracle approver confirms it"
@@ -1066,8 +1074,9 @@ async def _live_hold(run_id: uuid.UUID, workflow_id: str, reviews: _Reviews) -> 
 async def token_hold(db: AsyncSession, run_id: uuid.UUID, *, live: bool = True) -> str | None:
     """Why the run's token is read-only now (W5), or None: its agents may read Oracle,
     and their writes (drafts, proposals) are refused while any checkpoint wait of the
-    run is open in SwarmCloud, until Oracle has read an answer that counts, and while a
-    lost submission (whose token is alive) is unresolved.
+    run is open in SwarmCloud, until Oracle has read an answer that counts, while a
+    decision recorded in Oracle is not delivered to the workflow yet, and while a lost
+    submission (whose token is alive) is unresolved.
 
     From the moment the workflow reaches the wait, not from Oracle's next look at it: a
     review step of the live workflow that no checkpoint stands for yet is read from
