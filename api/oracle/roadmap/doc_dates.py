@@ -1181,8 +1181,14 @@ async def _job(
 ) -> Any:
     loop = asyncio.get_running_loop()
     work = asyncio.ensure_future(safe_yaml.run_parse(worker.run, fn, *args))
-    # Its outcome is read even when this job stopped waiting for it.
-    work.add_done_callback(lambda f: f.cancelled() or f.exception())
+
+    def ended(f: asyncio.Future[Any]) -> None:
+        # Its outcome is read even when this job stopped waiting for it. A run the pool
+        # turned away (ParseBusy) or cancelled before it started holds no place either.
+        if f.cancelled() or f.exception() is not None:
+            worker.done = worker.done or not worker.started
+
+    work.add_done_callback(ended)
     deadline = loop.time() + JOB_WALL_SECONDS
     try:
         while not work.done():
@@ -1197,6 +1203,8 @@ async def _job(
                 raise DatesUnavailable(pending=False)
         try:
             value = work.result()
+        except safe_yaml.ParseBusy:
+            raise  # the pool was busy: nothing is wrong with this version, the next read retries
         except Exception as exc:
             _KEPT.fail(key, exc)
             raise
