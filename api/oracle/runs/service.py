@@ -120,7 +120,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, confidence
+from oracle import audit, confidence, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -2609,6 +2609,8 @@ async def _advance(
             # stays usable.
             async with db.begin_nested():
                 items_check = await _check_items(db, run, art["files"].get(ITEMS_FILE))
+        except safe_yaml.ParseBusy:
+            raise  # no worker for it: this tick gives up, the next retries
         except Exception as exc:  # noqa: BLE001 - a bad file fails the check, never the tick
             log.exception("checking %s of run %s failed", ITEMS_FILE, run.id)
             items_check = {
@@ -2645,6 +2647,8 @@ async def _advance(
         await db.commit()
         try:
             imported = await _run_importer(db, run, sdef.importer, art["files"])
+        except safe_yaml.ParseBusy:
+            raise  # no worker for it: this tick gives up, the next retries
         except Exception as exc:  # the checkpoint must open whatever the importer does
             log.exception("run %s: importer %s failed", run.id, sdef.importer)
             imported = {"error": f"the {sdef.importer} import failed ({type(exc).__name__})"}
@@ -4347,8 +4351,16 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
             continue
         stats.checked += 1
         try:
-            await _tick_run(db, run, stats)
+            # Its parses count against the run (oracle.safe_yaml.MAX_PER_OWNER).
+            with safe_yaml.parse_owner(str(run_id)):
+                await _tick_run(db, run, stats)
             await db.commit()
+        except safe_yaml.ParseBusy as exc:
+            # No free worker for its import within the wait: the run stays as it was
+            # (retryable), the tick gives up on it and the next tick tries again. The
+            # run's row lock and transaction end here, not after the wait.
+            await db.rollback()
+            errors.append(f"run {run_id}: {exc.code}")
         except RuntimeUnavailable as exc:
             await db.rollback()
             errors.append(f"run {run_id}: {exc}")

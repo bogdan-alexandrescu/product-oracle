@@ -41,6 +41,7 @@ from oracle.quality.router import router as quality_router
 from oracle.review.router import router as review_router
 from oracle.roadmap.router import router as roadmap_router
 from oracle.runs.router import router as runs_router
+from oracle.safe_yaml import ParseBusy
 from oracle.sources.repair import run_at_startup as repair_version_urls_at_startup
 from oracle.sources.router import router as sources_router
 from oracle.specs.router import router as specs_router
@@ -132,6 +133,12 @@ def create_app() -> FastAPI:
             detail=f"draft rejected: {len(exc.problems)} problem(s)", errors=exc.problems
         )
         return JSONResponse(body.model_dump(mode="json"), 422)
+
+    @app.exception_handler(ParseBusy)
+    async def parse_busy(_request: Request, exc: ParseBusy) -> JSONResponse:
+        # The parse pool would not take an import now (owner, 2026-10-20): 429 for a person
+        # with two parses already, 503 after a 10 s wait for a free worker.
+        return JSONResponse({"code": exc.code, "message": exc.message}, exc.status)
 
     @app.get("/healthz", response_model=Health, tags=["health"])
     async def healthz(response: Response) -> Health:
