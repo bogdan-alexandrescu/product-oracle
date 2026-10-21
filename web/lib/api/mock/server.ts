@@ -14,6 +14,7 @@ import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from 
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
+import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
@@ -85,6 +86,8 @@ export interface Db {
   specs?: SpecsDb;
   /** Requests, their themes and the found items of the seed owner (./requests.ts, C1). */
   requests?: RequestsDb;
+  /** The decision log (./decisions.ts, H1); absent in data saved before it. */
+  decisions?: DecisionsDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
@@ -167,7 +170,7 @@ export const MOCK_ROLE_KEY = "po-mock-role";
 /**
  * Tests and screenshots set this localStorage key before the first call: "empty" starts as a
  * new company (members only, no goals, documents, runs or questions); "large" as a big one
- * (30 goals, 50 more active runs, questions asked of the signed-in member); "suggestions" as the
+ * (30 goals, 50 more active runs, 250 more decisions, questions asked of the signed-in member); "suggestions" as the
  * default company plus a PRD with three open Oracle suggestions (fleet-next); "big-prd" adds a PRD
  * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts); "revoke-failures" as the
  * default company plus two provider revokes a removed member's disable could not make (C2);
@@ -730,6 +733,18 @@ function withInboxStates(
     total: base.total + states.needs_me,
     ...states,
     last_seen_at: seen,
+  };
+}
+
+/** What the decision log mock reads: the signed-in member, the members, the runs' stops. */
+function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
+  return {
+    me: { id: me.id, email: me.email, role: me.role, status: me.status },
+    members: db.members.map((m) => ({ id: m.id, email: m.email, role: m.role, status: m.status })),
+    runs: (db.runs?.runs ?? []) as unknown as DecisionsContext["runs"],
+    documentTitle: (slug) => db.documents.find((d) => d.slug === slug)?.title ?? null,
+    uuid,
+    now,
   };
 }
 
@@ -1757,10 +1772,24 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (followUp) return followUp;
 
   db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+  // The decision log (H1): judgement calls, and a record of every run stop decided.
+  const decisionsCtx = decisionsContext(db, me);
+  db.decisions ??= seeded("decisions", () => {
+    const log = seedDecisions(decisionsCtx);
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large") enlargeDecisions(decisionsCtx, log, 250);
+    return log;
+  });
+  const decided = await routeDecisions(decisionsCtx, db.decisions, req, p, q);
+  if (decided) return decided;
+  const seenBefore = db.inbox_seen?.[me.id] ?? null;
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   if (runs && p[1] === "inbox") {
     tick(llm);
-    const inbox = withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true");
+    const withStates = withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true");
+    // Decision rows: proposals I decide and reviews due count; informed and done do not.
+    const decisions = decisionInbox(decisionsCtx, db.decisions, seenBefore);
+    const counted = decisions.filter((d) => d.counts).length;
+    const inbox = { ...withStates, decisions, total: withStates.total + counted, needs_me: (withStates.needs_me ?? 0) + counted };
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")

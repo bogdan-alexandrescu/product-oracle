@@ -69,6 +69,7 @@ JOBS = (
     "quality_review",
     "refinement_batch",
     "intake_analysis",
+    "decision_options",
 )
 
 #: Accounts one call may try before giving up (the first plus two swaps).

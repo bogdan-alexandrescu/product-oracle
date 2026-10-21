@@ -50,7 +50,15 @@ MCP_TOOLS = {
     "push_draft": "hand back a draft for import as the document's next version",
     "get_run_output": "a file an earlier segment of this run wrote (seq and name), or with "
     "attempt a segment's previous attempt",
+    "list_decisions": "decided judgement calls the company made (pass class=checkpoint for "
+    "the run stops' approvals and send-backs); a draft never contradicts a decided one "
+    "without flagging it",
 }
+# H1: the drafting segments read the company's decided calls first.
+DECISIONS_TASK = (
+    " Before writing, call list_decisions with class=judgement and status=decided: where "
+    "the draft departs from a decided call, say so and name its D-number."
+)
 
 
 @dataclass(frozen=True)
@@ -225,13 +233,14 @@ FLOWS: dict[str, FlowDef] = {
                     task="Write the PRD draft for the approved, ordered feature set as prd.md: "
                     "markdown with YAML front matter (title, template, citations) and a "
                     "{#id} on every heading. Every claim cites; no evidence in the body, a "
-                    "final Sources and data points section. " + CITATION_CONTRACT,
+                    "final Sources and data points section. " + CITATION_CONTRACT + DECISIONS_TASK,
                     tools=(
                         "get_baseline",
                         "get_document",
                         "search",
                         "get_source_item",
                         "push_draft",
+                        "list_decisions",
                     ),
                 ),
             ),
@@ -257,7 +266,8 @@ FLOWS: dict[str, FlowDef] = {
                     "template, template_version, brief) and its section ids. Write the "
                     "draft as {draft} with a resolutions list in its front matter "
                     "(feedback_id, status addressed | declined, note) for every item. "
-                    + CITATION_CONTRACT,
+                    + CITATION_CONTRACT
+                    + DECISIONS_TASK,
                     tools=(
                         "get_document",
                         "get_document_markdown",
@@ -266,6 +276,7 @@ FLOWS: dict[str, FlowDef] = {
                         "search",
                         "get_source_item",
                         "push_draft",
+                        "list_decisions",
                     ),
                 ),
             ),
@@ -300,7 +311,7 @@ FLOWS: dict[str, FlowDef] = {
                     "and economics (value, cost, effort). List items in an order that respects "
                     "dependencies: an item comes after the items it depends on and is "
                     "never in an earlier horizon than them. Write roadmap_items.yaml: "
-                    "version: 1, prd: {document, version}, items: [...].",
+                    "version: 1, prd: {document, version}, items: [...]." + DECISIONS_TASK,
                     tools=(
                         "get_document",
                         "get_document_markdown",
@@ -309,6 +320,7 @@ FLOWS: dict[str, FlowDef] = {
                         "get_priorities",
                         "search",
                         "get_source_item",
+                        "list_decisions",
                     ),
                 ),
                 SegmentDef(
@@ -329,13 +341,14 @@ FLOWS: dict[str, FlowDef] = {
                     "lists every source, every data point (value, as of, source) and the "
                     "evidence by section, with citations in the front matter. Each item "
                     "links back to the PRD section it comes from with a cross-document "
-                    "link of the form given below. " + CITATION_CONTRACT,
+                    "link of the form given below. " + CITATION_CONTRACT + DECISIONS_TASK,
                     tools=(
                         "get_document",
                         "get_document_markdown",
                         "get_baseline",
                         "search",
                         "get_source_item",
+                        "list_decisions",
                     ),
                 ),
             ),

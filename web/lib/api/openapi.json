@@ -10353,6 +10353,766 @@
         }
       }
     },
+    "/v1/decisions": {
+      "get": {
+        "tags": [
+          "decisions"
+        ],
+        "summary": "List Decisions",
+        "description": "Decisions, newest D-number first. ``class`` defaults to ``all`` (both judgement calls\nand checkpoint records); agents pass ``class=judgement`` to read the company's decided\ncalls, ``class=checkpoint`` for a run's stops approved and sent back. Every filter runs\nhere, so ``limit`` and ``offset`` page through what matches.",
+        "operationId": "list_decisions",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "class",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "judgement",
+                "checkpoint",
+                "all"
+              ],
+              "type": "string",
+              "default": "all",
+              "title": "Class"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "proposed",
+                    "decided",
+                    "review_due",
+                    "open",
+                    "superseded",
+                    "reversed",
+                    "withdrawn"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "open is proposed or review due: what waits on its approver",
+              "title": "Status"
+            },
+            "description": "open is proposed or review due: what waits on its approver"
+          },
+          {
+            "name": "approver",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "me or a member id",
+              "title": "Approver"
+            },
+            "description": "me or a member id"
+          },
+          {
+            "name": "due",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Due"
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, comma-separated",
+              "title": "Origin"
+            },
+            "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, comma-separated"
+          },
+          {
+            "name": "chosen",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 60
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "the chosen option's key",
+              "title": "Chosen"
+            },
+            "description": "the chosen option's key"
+          },
+          {
+            "name": "run_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "subject_kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "document",
+                    "document_version",
+                    "section",
+                    "roadmap_item",
+                    "entity",
+                    "blocker",
+                    "gap",
+                    "run",
+                    "ritual_occurrence",
+                    "discussion"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subject Kind"
+            }
+          },
+          {
+            "name": "subject_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subject Id"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DecisionSummary"
+                  },
+                  "title": "Response List Decisions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "decisions"
+        ],
+        "summary": "Create Decision",
+        "description": "Propose a decision (commenter and above). A run token's proposal is Oracle's\n(driver and origin ``oracle``); only the named approver decides it.",
+        "operationId": "create_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, or not the named approver"
+          },
+          "404": {
+            "description": "No such decision in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a decided decision, or a checkpoint record"
+          },
+          "422": {
+            "description": "Invalid options, rationale, expected outcome or review date"
+          }
+        }
+      }
+    },
+    "/v1/decisions/people": {
+      "get": {
+        "tags": [
+          "decisions"
+        ],
+        "summary": "List Decision People",
+        "description": "Active members (id, email, role): the approver is one with the approver role or\nabove; contributors and informed are any member.",
+        "operationId": "list_decision_people",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DecisionPerson"
+                  },
+                  "type": "array",
+                  "title": "Response List Decision People"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/decisions/{decision}": {
+      "get": {
+        "tags": [
+          "decisions"
+        ],
+        "summary": "Get Decision",
+        "operationId": "get_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Decision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, or not the named approver"
+          },
+          "404": {
+            "description": "No such decision in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a decided decision, or a checkpoint record"
+          },
+          "422": {
+            "description": "Invalid options, rationale, expected outcome or review date"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "decisions"
+        ],
+        "summary": "Update Decision",
+        "description": "Edit a proposed decision (its creator, its approver, an owner; lock_version).",
+        "operationId": "update_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Decision"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, or not the named approver"
+          },
+          "404": {
+            "description": "No such decision in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a decided decision, or a checkpoint record"
+          },
+          "422": {
+            "description": "Invalid options, rationale, expected outcome or review date"
+          }
+        }
+      }
+    },
+    "/v1/decisions/{decision}/decide": {
+      "post": {
+        "tags": [
+          "decisions"
+        ],
+        "summary": "Decide Decision",
+        "description": "Decide: only the named approver. Picks an option with a rationale, confirms\nreversibility, sets the review date (default plus 90 days) and the expected outcome;\na prediction creates its outcome record.",
+        "operationId": "decide_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Decision"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, or not the named approver"
+          },
+          "404": {
+            "description": "No such decision in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a decided decision, or a checkpoint record"
+          },
+          "422": {
+            "description": "Invalid options, rationale, expected outcome or review date"
+          }
+        }
+      }
+    },
+    "/v1/decisions/{decision}/reassign": {
+      "post": {
+        "tags": [
+          "decisions"
+        ],
+        "summary": "Reassign Decision",
+        "operationId": "reassign_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Decision"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReassignIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, or not the named approver"
+          },
+          "404": {
+            "description": "No such decision in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a decided decision, or a checkpoint record"
+          },
+          "422": {
+            "description": "Invalid options, rationale, expected outcome or review date"
+          }
+        }
+      }
+    },
+    "/v1/decisions/{decision}/withdraw": {
+      "post": {
+        "tags": [
+          "decisions"
+        ],
+        "summary": "Withdraw Decision",
+        "operationId": "withdraw_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Decision"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, or not the named approver"
+          },
+          "404": {
+            "description": "No such decision in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a decided decision, or a checkpoint record"
+          },
+          "422": {
+            "description": "Invalid options, rationale, expected outcome or review date"
+          }
+        }
+      }
+    },
+    "/v1/decisions/{decision}/reviews": {
+      "post": {
+        "tags": [
+          "decisions"
+        ],
+        "summary": "Review Decision",
+        "description": "Review a decided decision (its approver): reaffirm it with the next review date,\nrevisit it (a new proposal that supersedes it once decided, ``revisit_id``), or\nreverse it.",
+        "operationId": "review_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Decision"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, or not the named approver"
+          },
+          "404": {
+            "description": "No such decision in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a decided decision, or a checkpoint record"
+          },
+          "422": {
+            "description": "Invalid options, rationale, expected outcome or review date"
+          }
+        }
+      }
+    },
+    "/v1/decisions/{decision}/options-job": {
+      "post": {
+        "tags": [
+          "decisions"
+        ],
+        "summary": "Recommend Decision Options",
+        "description": "Ask Oracle for options (approver and above): a built-in job on Oracle's own model\nfills the options with evidence and marks the one it recommends.",
+        "operationId": "recommend_decision_options",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Decision"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmJobOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, or not the named approver"
+          },
+          "404": {
+            "description": "No such decision in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a decided decision, or a checkpoint record"
+          },
+          "422": {
+            "description": "Invalid options, rationale, expected outcome or review date"
+          }
+        }
+      }
+    },
     "/v1/templates": {
       "get": {
         "tags": [
@@ -32747,6 +33507,193 @@
         "title": "DateMarkOut",
         "description": "A date written in a roadmap's text, checked against its PRD's schedule bases now\n(O4 'document dates', oracle.roadmap.doc_dates). ``label`` is the marker shown next\nto the date (``unverified``, ``date withdrawn``); None for a verified date. The\ntext itself is never rewritten."
       },
+      "DecideIn": {
+        "properties": {
+          "option_key": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Option Key"
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Rationale"
+          },
+          "reversibility": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "reversible",
+                  "irreversible"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reversibility"
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
+          },
+          "expected_outcome": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Expected Outcome"
+          },
+          "prediction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictionIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lock_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "option_key",
+          "rationale",
+          "expected_outcome"
+        ],
+        "title": "DecideIn"
+      },
+      "DecisionCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionOption"
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Options",
+            "default": []
+          },
+          "approver_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Approver Id"
+          },
+          "reversibility": {
+            "type": "string",
+            "enum": [
+              "reversible",
+              "irreversible"
+            ],
+            "title": "Reversibility",
+            "default": "reversible"
+          },
+          "contributor_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Contributor Ids",
+            "default": []
+          },
+          "informed_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Informed Ids",
+            "default": []
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Evidence Ids",
+            "default": []
+          },
+          "entity_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Entity Ids",
+            "default": []
+          },
+          "subjects": {
+            "items": {
+              "$ref": "#/components/schemas/Subject"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Subjects",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "approver_id"
+        ],
+        "title": "DecisionCreate"
+      },
       "DecisionIn": {
         "properties": {
           "decision": {
@@ -32785,6 +33732,752 @@
         ],
         "title": "DecisionIn"
       },
+      "DecisionOption": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "pros": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Pros",
+            "default": []
+          },
+          "cons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Cons",
+            "default": []
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Evidence Ids",
+            "default": []
+          },
+          "cost_if_wrong": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost If Wrong"
+          },
+          "recommended": {
+            "type": "boolean",
+            "title": "Recommended",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "DecisionOption"
+      },
+      "DecisionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "decided",
+              "superseded",
+              "reversed",
+              "withdrawn"
+            ],
+            "title": "Status"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "decided",
+              "review_due",
+              "superseded",
+              "reversed",
+              "withdrawn"
+            ],
+            "title": "State"
+          },
+          "class": {
+            "type": "string",
+            "enum": [
+              "judgement",
+              "checkpoint"
+            ],
+            "title": "Class"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "oracle",
+              "version_approval",
+              "assumption",
+              "blocker",
+              "pushback_override",
+              "priority_override",
+              "autonomy",
+              "checkpoint"
+            ],
+            "title": "Origin"
+          },
+          "reversibility": {
+            "type": "string",
+            "enum": [
+              "reversible",
+              "irreversible"
+            ],
+            "title": "Reversibility"
+          },
+          "approver_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Approver Id"
+          },
+          "approver_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approver Email"
+          },
+          "chosen_option": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chosen Option"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecisionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionOption"
+            },
+            "type": "array",
+            "title": "Options",
+            "default": []
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "driver": {
+            "type": "string",
+            "title": "Driver"
+          },
+          "contributor_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Contributor Ids",
+            "default": []
+          },
+          "informed_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Informed Ids",
+            "default": []
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Evidence Ids",
+            "default": []
+          },
+          "entity_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Entity Ids",
+            "default": []
+          },
+          "subjects": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Subjects",
+            "default": []
+          },
+          "expected_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Outcome"
+          },
+          "prediction": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prediction"
+          },
+          "outcome_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome Id"
+          },
+          "supersedes_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Id"
+          },
+          "revisit_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revisit Id"
+          },
+          "superseded_by_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Id"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "decided_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided Via"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Email"
+          },
+          "decided_actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided Actor"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionReviewOut"
+            },
+            "type": "array",
+            "title": "Reviews",
+            "default": []
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit",
+            "default": false
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
+          "can_withdraw": {
+            "type": "boolean",
+            "title": "Can Withdraw",
+            "default": false
+          },
+          "can_review": {
+            "type": "boolean",
+            "title": "Can Review",
+            "default": false
+          },
+          "can_reassign": {
+            "type": "boolean",
+            "title": "Can Reassign",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "ref",
+          "title",
+          "status",
+          "state",
+          "class",
+          "origin",
+          "reversibility",
+          "approver_id",
+          "created_at",
+          "driver",
+          "updated_at",
+          "lock_version"
+        ],
+        "title": "DecisionOut"
+      },
+      "DecisionPatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DecisionOption"
+                },
+                "type": "array",
+                "maxItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          },
+          "reversibility": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "reversible",
+                  "irreversible"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reversibility"
+          },
+          "contributor_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contributor Ids"
+          },
+          "informed_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Informed Ids"
+          },
+          "evidence_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Ids"
+          },
+          "entity_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Ids"
+          },
+          "subjects": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Subject"
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subjects"
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
+          },
+          "expected_outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Outcome"
+          },
+          "prediction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictionIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "DecisionPatch",
+        "description": "Edit a proposed decision (lock_version required). On a decided captured call its\napprover may change only review_at, expected_outcome and prediction."
+      },
+      "DecisionPerson": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role"
+        ],
+        "title": "DecisionPerson",
+        "description": "An active member, for the approver, contributor and informed pickers."
+      },
       "DecisionResult": {
         "properties": {
           "decision": {
@@ -32800,6 +34493,303 @@
           "gap"
         ],
         "title": "DecisionResult"
+      },
+      "DecisionReviewOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "reaffirmed",
+              "revisit",
+              "reversed"
+            ],
+            "title": "Verdict"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "outcome_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome Status"
+          },
+          "next_review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Review At"
+          },
+          "revisit_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revisit Id"
+          },
+          "reviewed_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Reviewed By"
+          },
+          "reviewed_by_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed By Email"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "verdict",
+          "note",
+          "reviewed_by",
+          "created_at"
+        ],
+        "title": "DecisionReviewOut"
+      },
+      "DecisionSource": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "checkpoint_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Kind"
+          },
+          "segment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "DecisionSource",
+        "description": "What a captured record came from; for a checkpoint record, the stop."
+      },
+      "DecisionSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "decided",
+              "superseded",
+              "reversed",
+              "withdrawn"
+            ],
+            "title": "Status"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "decided",
+              "review_due",
+              "superseded",
+              "reversed",
+              "withdrawn"
+            ],
+            "title": "State"
+          },
+          "class": {
+            "type": "string",
+            "enum": [
+              "judgement",
+              "checkpoint"
+            ],
+            "title": "Class"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "oracle",
+              "version_approval",
+              "assumption",
+              "blocker",
+              "pushback_override",
+              "priority_override",
+              "autonomy",
+              "checkpoint"
+            ],
+            "title": "Origin"
+          },
+          "reversibility": {
+            "type": "string",
+            "enum": [
+              "reversible",
+              "irreversible"
+            ],
+            "title": "Reversibility"
+          },
+          "approver_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Approver Id"
+          },
+          "approver_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approver Email"
+          },
+          "chosen_option": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chosen Option"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecisionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "ref",
+          "title",
+          "status",
+          "state",
+          "class",
+          "origin",
+          "reversibility",
+          "approver_id",
+          "created_at"
+        ],
+        "title": "DecisionSummary"
       },
       "DeckOut": {
         "properties": {
@@ -39356,6 +41346,80 @@
         "type": "object",
         "title": "InboxCounts"
       },
+      "InboxDecision": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "needs_decision",
+              "review_due",
+              "oracle_decided",
+              "informed"
+            ],
+            "title": "Reason"
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Since"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open",
+              "done"
+            ],
+            "title": "State"
+          },
+          "counts": {
+            "type": "boolean",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "ref",
+          "title",
+          "reason",
+          "since",
+          "state",
+          "counts"
+        ],
+        "title": "InboxDecision",
+        "description": "A decision row (H1): a proposal I decide, a review that came due (both counted),\na decision made that I am informed of, or one I just handled (shown only)."
+      },
       "InboxDocument": {
         "properties": {
           "document_id": {
@@ -39799,6 +41863,14 @@
             },
             "type": "array",
             "title": "Staged",
+            "default": []
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/InboxDecision"
+            },
+            "type": "array",
+            "title": "Decisions",
             "default": []
           },
           "needs_me": {
@@ -42952,7 +45024,8 @@
               "refinement",
               "quality_review",
               "refinement_batch",
-              "intake_analysis"
+              "intake_analysis",
+              "decision_options"
             ],
             "title": "Kind"
           },
@@ -42979,6 +45052,18 @@
               }
             ],
             "title": "Intake Id"
+          },
+          "decision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Id"
           },
           "version_number": {
             "anyOf": [
@@ -46100,6 +48185,71 @@
         "title": "Prediction",
         "description": "What the PRD predicted for the goal, in its own words and numbers."
       },
+      "PredictionIn": {
+        "properties": {
+          "metric": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Metric"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "predicted": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Predicted"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric",
+          "predicted",
+          "goal_id"
+        ],
+        "title": "PredictionIn",
+        "description": "A measurable version of the expected outcome: deciding creates its outcome record."
+      },
       "Preferences": {
         "properties": {
           "document_view": {
@@ -48366,6 +50516,27 @@
           "action"
         ],
         "title": "ReasonFix"
+      },
+      "ReassignIn": {
+        "properties": {
+          "approver_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Approver Id"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "approver_id",
+          "reason"
+        ],
+        "title": "ReassignIn"
       },
       "RecommendIn": {
         "properties": {
@@ -51034,6 +53205,43 @@
         ],
         "title": "ResolutionReport",
         "description": "How each feedback item raised on earlier versions was handled, as of ``version``."
+      },
+      "ReviewIn": {
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "reaffirmed",
+              "revisit",
+              "reversed"
+            ],
+            "title": "Verdict"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Note"
+          },
+          "next_review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Review At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "verdict",
+          "note"
+        ],
+        "title": "ReviewIn"
       },
       "ReviewPolicyIn": {
         "properties": {
@@ -58429,6 +60637,49 @@
         ],
         "title": "StateOut"
       },
+      "Subject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "document",
+              "document_version",
+              "section",
+              "roadmap_item",
+              "entity",
+              "blocker",
+              "gap",
+              "run",
+              "ritual_occurrence",
+              "discussion"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "Subject"
+      },
       "Suggestion": {
         "properties": {
           "theme_id": {
@@ -63684,6 +65935,21 @@
           "reset"
         ],
         "title": "WindowOut"
+      },
+      "WithdrawIn": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "WithdrawIn"
       },
       "WithdrawOut": {
         "properties": {

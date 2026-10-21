@@ -63,14 +63,17 @@ async def _blocks(db: AsyncSession, report: readiness.ReadinessReport) -> list[B
     return out
 
 
-async def check(db: AsyncSession, document: Document, version: DocumentVersion) -> None:
+async def check(
+    db: AsyncSession, document: Document, version: DocumentVersion
+) -> readiness.ReadinessReport | None:
     """Raise :class:`PublishBlocked` when this PRD version may not be published, or this
-    roadmap version writes a date no verified basis supports."""
+    roadmap version writes a date no verified basis supports. A PRD's passing report is
+    returned (the decision log records its summary, H1)."""
     if document.kind == "roadmap":
         await check_roadmap_dates(db, version)
-        return
+        return None
     if document.kind != "prd":
-        return
+        return None
     latest = await db.scalar(
         select(func.max(DocumentVersion.number)).where(DocumentVersion.document_id == document.id)
     )
@@ -88,6 +91,7 @@ async def check(db: AsyncSession, document: Document, version: DocumentVersion) 
         blocks = await _blocks(db, report)
         noun = "block" if len(blocks) == 1 else "blocks"
         raise PublishBlocked(f"{len(blocks)} {noun}: {', '.join(b.title for b in blocks)}", blocks)
+    return report
 
 
 async def check_roadmap_dates(db: AsyncSession, version: DocumentVersion) -> None:

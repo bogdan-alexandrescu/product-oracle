@@ -180,6 +180,10 @@ export function RunDetail({ id }: { id: string }) {
                 {run.theme && `, theme ${run.theme}`}
               </Chip>
             )}
+            {/* H1: the stops this run had approved or sent back, in the decision log. */}
+            <Link href={`/company/decisions?run=${run.id}`} data-testid="run-decisions" className="text-sm font-medium text-accent-ink hover:underline">
+              Decisions in this run
+            </Link>
           </>
         }
         action={

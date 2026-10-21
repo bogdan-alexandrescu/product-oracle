@@ -44,6 +44,7 @@ SWITCH_LABELS = {
     "reporting": "Write reports",
     "refinement": "Rewrite sections and build drafts",
     "quality_review": "Quality review",
+    "decision_options": "Decision options",
 }
 #: Kinds that share another kind's per-document switch: the next-draft batch is
 #: refinement, so turning refinement off turns it off too.
@@ -454,6 +455,10 @@ async def accept_suggestion(
             row.id,
             {"reason": reason, "pushback": row.pushback.get("reason")},
         )
+        # H1: the override is a judgement call in the decision log, reviewed in 90 days.
+        from oracle.decisions import capture
+
+        await capture.pushback_overridden(db, principal, row, reason or "")
     return row
 
 

@@ -16,7 +16,7 @@ commit; the router commits once per request. Every mutation writes an audit even
 import uuid
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -918,6 +918,18 @@ async def resolution_report(session: AsyncSession, doc: str, n: int) -> Resoluti
 # --- Approval ----------------------------------------------------------------------------
 
 
+def readiness_summary(report: Any) -> str | None:
+    """One line of a passing readiness report, for the decision log (H1)."""
+    if report is None or not getattr(report, "results", None):
+        return None
+    counts: dict[str, int] = {}
+    for r in report.results:
+        counts[r.status] = counts.get(r.status, 0) + 1
+    order = (("pass", "passed"), ("warning", "warned"), ("critical", "critical"))
+    parts = [f"{counts[k]} {word}" for k, word in order if counts.get(k)]
+    return "Readiness at approval: " + (", ".join(parts) or "no checks applied")
+
+
 async def approve_version(
     session: AsyncSession, principal: "Principal", doc: str, n: int
 ) -> tuple[Document, DocumentVersion]:
@@ -946,7 +958,7 @@ async def approve_version(
             "forbidden", "Only the designated decider approves this document's versions"
         )
     # A PRD: the publish gate (only the latest version, then readiness), in its words.
-    await publish_gate.check(session, document, version)
+    gate = await publish_gate.check(session, document, version)
     latest = await session.scalar(
         select(DocumentVersion.number)
         .where(DocumentVersion.document_id == document.id)
@@ -993,6 +1005,13 @@ async def approve_version(
             ),
         },
     )
+    if not already:
+        # H1: the first approval of a version is a decision ("Publish <document> v<n>").
+        from oracle.decisions import capture
+
+        await capture.version_approved(
+            session, principal, document, version, readiness_summary(gate)
+        )
     if document.kind == "prd":
         # V2b, T2: approving a PRD version publishes it; a published PRD starts (or
         # advances) its product track.

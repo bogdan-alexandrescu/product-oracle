@@ -136,6 +136,7 @@ from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.baseline import yaml_io
 from oracle.baseline.models import Edge, Entity, Proposal
+from oracle.decisions import capture as decisions_capture
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
@@ -5020,6 +5021,11 @@ async def _take_answer(
         # Oracle's own post: the label is the one Oracle sent, for its Inbox user.
         cp.decided_by = await db.scalar(select(User.id).where(User.email == record.on_behalf_of))
     _set_wait(cp, wait)
+    # H1: a counted answer from the console (or Oracle's own lost post) is the stop's
+    # decision: a checkpoint record, unless one was recorded when it was decided here.
+    await decisions_capture.checkpoint(
+        db, None, run, cp, decided_via="oracle" if ours else "swarmcloud_console"
+    )
     await audit.record(
         db,
         None,
@@ -5448,6 +5454,8 @@ async def decide_checkpoint(
     note = (note or "").strip() or None
     wait = (cp.payload or {}).get("wait") or {}
     redo = False
+    # A choice about an answer SwarmCloud's console recorded is decided through it (H1).
+    via = "swarmcloud_console" if decision in ("confirm", "redo", "continue") else "oracle"
     if decision in ("confirm", "redo", "continue"):
         decision, note, redo = _console_choice(cp, wait, decision, note)
         if decision == "confirm":
@@ -5498,6 +5506,8 @@ async def decide_checkpoint(
         cp.id,
         {"run_id": str(run.id), "kind": cp.kind},
     )
+    # H1: the stop's decision is a checkpoint record, in this transaction.
+    await decisions_capture.checkpoint(db, principal, run, cp, decided_via=via)
     wf = _drivable(run)
     live = (
         (redo and wf is not None)
@@ -5850,6 +5860,8 @@ async def _void_owed(
     cp.decided_by = None
     cp.decided_at = None
     cp.note = None
+    # H1: a decision voided before it reached the run is not in the decision log.
+    await decisions_capture.checkpoint_voided(db, cp.id)
     segments = await _segments(db, run.id)
     target = next((s for s in segments if s.seq == (cp.payload or {}).get("segment_seq")), None)
     if target is not None:
@@ -5958,6 +5970,8 @@ async def void_decision(
     cp.decided_by = None
     cp.decided_at = None
     cp.note = None
+    # H1: a decision voided before it reached the run is not in the decision log.
+    await decisions_capture.checkpoint_voided(db, cp.id)
     run.status = "awaiting_checkpoint"
     await revoke_run_tokens(db, run.id)
     await audit.record(
@@ -6010,6 +6024,8 @@ async def _undecide(db: AsyncSession, run: Run, cp: Checkpoint) -> bool:
     cp.decided_by = None
     cp.decided_at = None
     cp.note = None
+    # H1: a decision voided before it reached the run is not in the decision log.
+    await decisions_capture.checkpoint_voided(db, cp.id)
     await audit.record(
         db, None, "checkpoint.decision_not_posted", "checkpoint", cp.id,
         {"run_id": str(run.id), "decision": kind, "decided_by": str(decided_by)},
@@ -7626,9 +7642,12 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         failed_refs = await _refs(db, failed_runs)
         imports = [_summary(r, failed_refs, None) for r in failed_runs]
     revising = await _revising(db, principal)
+    from oracle.decisions.service import inbox_rows as decision_rows
     from oracle.reports.service import inbox_rows
 
     reports, report_failures = await inbox_rows(db, principal)
+    decisions = await decision_rows(db, principal, seen)
+    counted = sum(1 for d in decisions if d.counts)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -7656,11 +7675,13 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + counts.open
         + len(revoke_failures)
         + sum(1 for r in reports if not r.read)
-        + len(report_failures),
+        + len(report_failures)
+        + counted,
         items=states,
         counts=counts,
         staged=staged,
-        needs_me=counts.new + counts.open,
+        decisions=decisions,
+        needs_me=counts.new + counts.open + counted,
         last_seen_at=seen,
     )
 
