@@ -8,7 +8,7 @@ import type { Role } from "@/lib/me";
 export type CompanyTab = { key: string; label: string; href: string; testId: string; minRole?: Role };
 
 export const COMPANY_TABS: CompanyTab[] = [
-  // H4 Strategy and vision adds { key: "strategy", label: "Strategy", href: "/company/strategy", testId: "company-tab-strategy" } first
+  { key: "strategy", label: "Strategy", href: "/company/strategy", testId: "company-tab-strategy" },
   { key: "decisions", label: "Decisions", href: "/company/decisions", testId: "company-tab-decisions" },
   // H2 Cadence engine adds { key: "rituals", label: "Rituals", href: "/company/rituals", ... }
   // H8 Board and investor drafts adds { key: "updates", label: "Updates", href: "/company/updates", ..., minRole: "approver" }

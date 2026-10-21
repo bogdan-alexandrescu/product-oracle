@@ -524,8 +524,11 @@ FLOWS: dict[str, FlowDef] = {
             requires_document=True,
             target_kind=None,
             document_kinds=("vision", "strategy"),
-            # D12: not in the New run dialog. Its door is Company › Strategy (H4's later
-            # lane); no pointer until that page exists.
+            # D12: not in the New run dialog. Its door is Company › Strategy (H4).
+            starts_from=(
+                "Vision or strategy · Company › Strategy, New vision or Draft next version",
+                "/company/strategy",
+            ),
             segments=(
                 SegmentDef(
                     name="strategy_draft",

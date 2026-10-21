@@ -20058,6 +20058,7 @@ export interface components {
              *     }
              */
             knobs: components["schemas"]["KnobsIn"];
+            strategy_brief?: components["schemas"]["StrategyBriefIn"] | null;
         };
         /**
          * RunDecision
@@ -22065,7 +22066,7 @@ export interface components {
              */
             stance: "focus" | "stop";
             /** Goals */
-            goals: components["schemas"]["StackNode"][];
+            goals: components["schemas"]["StackGoal"][];
             /** Features */
             features: components["schemas"]["StackNode"][];
             /** Items */
@@ -22092,6 +22093,23 @@ export interface components {
             version: number;
             /** Approved At */
             approved_at: string | null;
+        };
+        /** StackGoal */
+        StackGoal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Items
+             * @default 0
+             */
+            items: number;
         };
         /** StackNode */
         StackNode: {
@@ -22421,6 +22439,26 @@ export interface components {
             account: components["schemas"]["AccountOut"];
             /** Moving */
             moving: number;
+        };
+        /**
+         * StrategyBriefIn
+         * @description strategy_draft: what the owner tells Oracle in Company › Strategy's sheet. A vision's
+         *     horizon is in years; a product strategy's is the dates it covers.
+         */
+        StrategyBriefIn: {
+            /** Changed */
+            changed?: string | null;
+            /** Horizon Years */
+            horizon_years?: number | null;
+            /** Horizon From */
+            horizon_from?: string | null;
+            /** Horizon To */
+            horizon_to?: string | null;
+            /**
+             * From Approved
+             * @default false
+             */
+            from_approved: boolean;
         };
         /** StrategyFindingOut */
         StrategyFindingOut: {

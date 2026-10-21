@@ -8,7 +8,7 @@ import { useMe } from "@/lib/me";
 
 import { visibleTabs } from "./_nav";
 
-/** /company opens the first tab the member may see (Decisions until Strategy lands). */
+/** /company opens the first tab the member may see (Strategy). */
 export default function CompanyPage() {
   const router = useRouter();
   const { role, loading } = useMe();

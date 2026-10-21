@@ -42,6 +42,7 @@ from oracle.strategy.schemas import (
     StackChoice,
     StackCounts,
     StackDocument,
+    StackGoal,
     StackNode,
     StackStrategy,
     StackVision,
@@ -489,7 +490,12 @@ async def stack(db: AsyncSession) -> StrategyStackOut:
                 id=c.key.removeprefix(prefix),
                 title=c.title,
                 stance=stance,  # type: ignore[arg-type]
-                goals=[_node(x) for x in sorted(goals, key=lambda e: e.key)],
+                goals=[
+                    StackGoal(
+                        **_node(x).model_dump(), items=sum(x.id in g.item_goals(i) for i in g.items)
+                    )
+                    for x in sorted(goals, key=lambda e: e.key)
+                ],
                 features=[_node(x) for x in sorted(features, key=lambda e: e.key)],
                 items=items,
                 open_findings=open_for(c.id),

@@ -61282,6 +61282,16 @@
               "roles": {},
               "checkpoints": {}
             }
+          },
+          "strategy_brief": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StrategyBriefIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -67226,7 +67236,7 @@
           },
           "goals": {
             "items": {
-              "$ref": "#/components/schemas/StackNode"
+              "$ref": "#/components/schemas/StackGoal"
             },
             "type": "array",
             "title": "Goals"
@@ -67318,6 +67328,35 @@
           "approved_at"
         ],
         "title": "StackDocument"
+      },
+      "StackGoal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title"
+        ],
+        "title": "StackGoal"
       },
       "StackNode": {
         "properties": {
@@ -68264,6 +68303,67 @@
           "moving"
         ],
         "title": "StateOut"
+      },
+      "StrategyBriefIn": {
+        "properties": {
+          "changed": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed"
+          },
+          "horizon_years": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon Years"
+          },
+          "horizon_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon From"
+          },
+          "horizon_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon To"
+          },
+          "from_approved": {
+            "type": "boolean",
+            "title": "From Approved",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "StrategyBriefIn",
+        "description": "strategy_draft: what the owner tells Oracle in Company \u203a Strategy's sheet. A vision's\nhorizon is in years; a product strategy's is the dates it covers."
       },
       "StrategyFindingOut": {
         "properties": {

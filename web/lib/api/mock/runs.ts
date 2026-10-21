@@ -122,6 +122,20 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
         { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver" },
       ],
     },
+    {
+      key: "strategy_draft",
+      title: "Vision or strategy draft",
+      description: "Oracle drafts the product vision or the product strategy from the confirmed goals, approved documents, decisions and outcomes; an owner reviews it.",
+      requires_document: true,
+      target_kind: null,
+      source_kind: null,
+      // H4: started from Company › Strategy, never from the New run dialog.
+      in_new_run_dialog: false,
+      starts_from: { label: "Vision or strategy · Company › Strategy, New vision or Draft next version", href: "/company/strategy" },
+      segments: [
+        { name: "strategy_draft", title: "Vision or strategy draft", roles: ["researcher", "writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["{draft}"], checkpoint: "strategy_review", approver_role: "owner" },
+      ],
+    },
   ],
   roles: ROLES,
   depths: { quick: 0.5, standard: 1, deep: 2 },
@@ -544,7 +558,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     // As the API: the feedback loop on a roadmap is a roadmap review.
     kind: def.checkpoint === "prd_review" && r.document_kind === "roadmap" ? "roadmap_review" : def.checkpoint,
     status: on ? "pending" : "skipped",
-    approver_role: "approver",
+    approver_role: def.approver_role,
     segment_seq: s.seq,
     decided_by: null,
     decided_at: on ? null : ctx.now(),
@@ -790,6 +804,20 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (!ref) return fail(422, "name the PRD: an existing document, or a new slug to create");
     const doc = find(ref);
     if (flow.requires_document && !doc) return fail(422, `document '${ref}' not found`);
+    if (input.flow === "strategy_draft" && doc && doc.kind !== "vision" && doc.kind !== "strategy") {
+      return fail(422, `document '${ref}' is a ${KIND_NAME[doc.kind]}; the ${flow.title} flow drafts a vision or a product strategy`);
+    }
+    // As the API (oracle.strategy.brief): the brief from Company › Strategy fits its document.
+    const brief = input.strategy_brief;
+    if (brief) {
+      if (input.flow !== "strategy_draft" || !doc) return fail(422, "only a Vision or strategy draft run takes a brief");
+      if (doc.kind === "vision" && (brief.horizon_from || brief.horizon_to)) return fail(422, "a vision's horizon is in years");
+      if (doc.kind === "strategy" && brief.horizon_years != null) return fail(422, "a product strategy's horizon is its dates");
+      if (brief.horizon_from && brief.horizon_to && brief.horizon_to <= brief.horizon_from) return fail(422, "the horizon ends before it starts");
+      if (brief.from_approved && typeof ctx.sourceVersion(doc.id, null) === "string") {
+        return fail(422, `the ${KIND_NAME[doc.kind]} has no approved version to start from`);
+      }
+    }
     if (doc && flow.target_kind && doc.kind !== flow.target_kind) {
       return fail(422, `document '${ref}' is a ${KIND_NAME[doc.kind]}, not a ${KIND_NAME[flow.target_kind]}`);
     }

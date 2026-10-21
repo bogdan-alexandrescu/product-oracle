@@ -86,13 +86,18 @@ class StackNode(BaseModel):
     title: str
 
 
+class StackGoal(StackNode):
+    # Roadmap items serving this goal (Company › Strategy's one line per goal).
+    items: int = 0
+
+
 class StackChoice(BaseModel):
     entity_id: uuid.UUID
     id: str
     title: str
     stance: Literal["focus", "stop"]
     # Focus: the confirmed goals derived from it. Stop: none.
-    goals: list[StackNode]
+    goals: list[StackGoal]
     # Stop: the features it covers. Focus: none.
     features: list[StackNode]
     # Focus: roadmap items under it. Stop: items still planned in Now or Next.
