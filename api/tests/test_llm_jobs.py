@@ -986,6 +986,11 @@ async def test_a_job_left_running_by_a_stopped_worker_is_reclaimed(client, ctx, 
 # --- settings and roles ------------------------------------------------------------------
 
 
+# D15: a refusal names the switch the owner unticked, in the words History shows.
+TURNED_OFF = '"{}" is turned off for this document'
+OLD_NAMES = ("Review comments", "Reporting", "Refinement", "Handle new feedback", "Built-in jobs")
+
+
 async def test_an_owner_turns_job_kinds_off_per_document(client, ctx, pool, fake):
     await import_draft(client, ctx)
     url = f"/v1/documents/{SLUG}/llm-jobs/settings"
@@ -1006,14 +1011,33 @@ async def test_an_owner_turns_job_kinds_off_per_document(client, ctx, pool, fake
     resp = await client.post(
         f"/v1/documents/{SLUG}/llm-jobs", json={"kind": "review_comments"}, headers=ctx["headers"]
     )
-    assert resp.status_code == 409 and "turned off" in resp.json()["detail"]
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == TURNED_OFF.format("Suggest changes from feedback")
     resp = await client.post(
         V(1, "/sections/problem/refine"), json={"instruction": "x"}, headers=ctx["headers"]
     )
     assert resp.status_code == 409
+    assert resp.json()["detail"] == TURNED_OFF.format("Rewrite sections and build drafts")
     # Reporting stays on: a second version queues its reports.
     await import_draft(client, ctx, DRAFT_V1.replace("Owner: product.", "Owner: growth."))
     assert [j["kind"] for j in await jobs(client, ctx)] == ["reporting"]
+
+
+async def test_retrying_a_job_whose_switch_is_off_names_the_switch_plainly(client, ctx, pool, fake):
+    await import_draft(client, ctx)
+    await comment(client, ctx, "problem", "Why half?")
+    fake.script["review_comments"] += ["not json at all", LlmUnavailable("Overloaded")]
+    await tick(client, ctx)
+    [job] = await jobs(client, ctx)
+    assert job["status"] == "failed"
+    url = f"/v1/documents/{SLUG}/llm-jobs/settings"
+    resp = await client.put(url, json={"review_comments": False}, headers=ctx["headers"])
+    assert resp.status_code == 200
+    resp = await client.post(f"/v1/llm-jobs/{job['id']}/retry", headers=ctx["headers"])
+    assert resp.status_code == 409
+    detail = resp.json()["detail"]
+    assert detail == TURNED_OFF.format("Suggest changes from feedback")
+    assert not any(name in detail for name in OLD_NAMES)
 
 
 # D15: the History fold names these four switches in plain words; the keys stay the API's.

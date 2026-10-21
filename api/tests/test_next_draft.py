@@ -263,7 +263,11 @@ async def test_build_respects_roles_the_job_switch_and_locked_sections(client, c
     )
     assert resp.status_code == 200
     resp = await client.post(f"{DOC}/next-draft", json={}, headers=ctx["headers"])
-    assert resp.status_code == 409 and "turned off" in resp.json()["detail"]
+    assert resp.status_code == 409
+    assert (
+        resp.json()["detail"]
+        == '"Rewrite sections and build drafts" is turned off for this document'
+    )
     await client.put(f"{DOC}/llm-jobs/settings", json={"refinement": True}, headers=ctx["headers"])
 
     await verdict(client, ctx, "goal-trace", "approved")

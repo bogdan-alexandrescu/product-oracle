@@ -6,7 +6,7 @@ import { login } from "./helpers";
 // the PRD overview shows versions only and links there. Each test runs on a laptop and a phone.
 
 const PLAIN = ["Suggest changes from feedback", "Write reports", "Rewrite sections and build drafts", "Quality review"];
-const OLD = ["Built-in jobs", "Handle new feedback", "Review comments", "Reporting"];
+const OLD = ["Built-in jobs", "Handle new feedback", "Review comments", "Reporting", "Refinement"];
 
 /** The version view's History tab; on a phone it lives in the Review sheet. */
 async function openHistory(page: Page, phone: boolean) {
@@ -55,7 +55,9 @@ for (const width of [1366, 390]) {
       await suggest.uncheck();
       await expect(suggest).not.toBeChecked();
       await jobsPanel(page).getByRole("button", { name: "Suggest changes now", exact: true }).click();
-      await expect(jobsPanel(page).getByRole("alert").filter({ hasText: "turned off" })).toBeVisible();
+      const refused = jobsPanel(page).getByRole("alert").filter({ hasText: "turned off" });
+      await expect(refused).toContainText('"Suggest changes from feedback" is turned off for this document');
+      for (const text of OLD) await expect(refused).not.toContainText(text);
       await page.reload();
       await openHistory(page, phone);
       await expect(oracleWork(page).getByLabel("Suggest changes from feedback", { exact: true })).not.toBeChecked();
