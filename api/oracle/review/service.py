@@ -950,4 +950,10 @@ async def approve_version(
         from oracle.roadmap import tracks
 
         await tracks.ensure_track(session, document, version, actor=principal, cause="approved")
+    elif document.kind == "roadmap":
+        # H6: approving a roadmap version plans a launch per item in Now, owned by the
+        # approver (none for items that already have one).
+        from oracle.launches import service as launches_service
+
+        await launches_service.plan_roadmap(session, version, actor=principal, owner_id=who)
     return document, version

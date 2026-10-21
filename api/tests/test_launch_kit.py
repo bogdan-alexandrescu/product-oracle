@@ -79,7 +79,7 @@ def test_the_prompt_names_the_launch_and_treats_sources_as_data():
         (lambda t: t.replace("category: added", "category: improved"), "category"),
         (lambda t: t.replace("audience: public", "audience: everyone"), "audience"),
         (lambda t: t.replace("  sales_briefing:", "  press_release:"), "press_release"),
-        (lambda t: t.replace("tigers: [", "tigers: ").replace('outage"]', 'outage"'), "tigers"),
+        (lambda t: t.replace('tigers: ["Card vault outage"]', "tigers: 3"), "tigers"),
         (lambda t: t.replace('requester_ref: "member:', 'requester_ref: "who:'), "requester_ref"),
         (lambda t: "launch: [unclosed", "YAML"),
     ],

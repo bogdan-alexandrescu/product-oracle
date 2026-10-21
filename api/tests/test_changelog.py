@@ -78,7 +78,9 @@ async def test_publish_and_export(client, owner):  # noqa: F811
     for e in (cards, old, internal):
         resp = await client.post(publish.format(e["id"]), headers=auth)
         assert resp.status_code == 200 and resp.json()["status"] == "published"
-        assert resp.json()["published_actor"].startswith("token:")
+        # A person published it (the seed's token acts for its user), never Oracle.
+        assert resp.json()["published_actor"].startswith("user:")
+        assert resp.json()["published_by"]
 
     resp = await client.get(
         "/v1/changelog/export", params={"audience": "public", "format": "md"}, headers=viewer

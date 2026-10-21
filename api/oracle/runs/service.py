@@ -225,6 +225,8 @@ ORACLE_KNOBS = (
     "intake_id",
     "intake_snapshot_id",
     "intake_gap_ids",
+    # A launch_kit run (oracle.launches): the launch it drafts for.
+    "launch_id",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -322,6 +324,7 @@ def flow_catalog() -> FlowCatalog:
                 title=f.title,
                 description=f.description,
                 requires_document=f.requires_document,
+                in_new_run_dialog=f.in_new_run_dialog,
                 target_kind=f.target_kind,  # type: ignore[arg-type]
                 source_kind=f.source_kind,  # type: ignore[arg-type]
                 segments=[
@@ -1316,6 +1319,10 @@ async def _resolve_inputs(
     template choices."""
     if flow.target_kind != "roadmap" and (inputs.template or inputs.theme):
         raise Invalid(f"the {flow.title} flow takes no template or theme")
+    if not flow.writes_document:
+        if inputs.document or inputs.source:
+            raise Invalid(f"the {flow.title} flow writes no document and reads none")
+        return None, {}
     source = await _resolve_source(db, flow, inputs.source, inputs.source_version)
     default_slug = None
     if source is not None and inputs.document is None:
@@ -1367,6 +1374,11 @@ async def create_run(
     """A draft run. ``oracle_knobs``: knobs Oracle sets (``ORACLE_KNOBS``), e.g. the
     intake a run starts from; ``commit=False`` leaves the commit to the caller."""
     flow = flows.FLOWS[body.flow]
+    if flow.key == "launch_kit" and not (oracle_knobs or {}).get("launch_id"):
+        raise Invalid(
+            "the Launch kit flow starts from a launch: Draft on the launch "
+            "(POST /v1/launches/{id}/draft)"
+        )
     knobs = _resolve_knobs(flow, body.knobs)
     document_id, oracle = await _resolve_inputs(
         db,
@@ -1641,6 +1653,7 @@ async def _prompt_context(
         roadmap=roadmap_ctx,
         intake_id=run.knobs.get("intake_id"),
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
+        launch_id=run.knobs.get("launch_id"),
     )
 
 
@@ -3209,6 +3222,21 @@ async def _advance(
                 ],
             }
         art["items_check"] = items_check
+    launch_import: dict[str, Any] | None = None
+    if flows.LAUNCH_FILE in sdef.outputs:
+        from oracle.launches import service as launches_service
+
+        try:
+            # In a savepoint, as the items check: a bad file never fails the tick.
+            async with db.begin_nested():
+                launch_import = await launches_service.import_kit_run(
+                    db, run, art["files"].get(flows.LAUNCH_FILE)
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.exception("importing %s of run %s failed", flows.LAUNCH_FILE, run.id)
+            launch_import = {"error": f"{flows.LAUNCH_FILE} could not be imported "
+                             f"({type(exc).__name__})"}  # fmt: skip
+        art["launch_import"] = launch_import
     if sdef.imports_draft:
         kind = await _target_kind(db, run)
         name = flows.draft_file(kind)
@@ -3253,6 +3281,8 @@ async def _advance(
         payload["baseline_import"] = baseline_import
     if items_check is not None:
         payload["items_check"] = items_check
+    if launch_import is not None:
+        payload["launch_import"] = launch_import
     if wait is not None:
         payload["wait"] = wait
         _set_knob(run, "opening_wait", None)
@@ -3290,7 +3320,7 @@ async def _advance(
             decided_at=_now(),
         )
     )
-    for result in (baseline_import, imported):
+    for result in (baseline_import, imported, launch_import):
         if result is not None and result.get("error"):
             await _finish(db, run, "failed", result["error"])
             return True
@@ -7448,6 +7478,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         failed_refs = await _refs(db, failed_runs)
         imports = [_summary(r, failed_refs, None) for r in failed_runs]
     revising = await _revising(db, principal)
+    from oracle.launches import service as launches_service
+
+    launch_rows = await launches_service.inbox_rows(db, principal)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -7471,7 +7504,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + len(imports)
         + counts.new
         + counts.open
-        + len(revoke_failures),
+        + len(revoke_failures)
+        + sum(1 for r in launch_rows if r.counted),
+        launches=launch_rows,
         items=states,
         counts=counts,
         staged=staged,

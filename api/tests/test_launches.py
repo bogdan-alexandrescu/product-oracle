@@ -124,7 +124,8 @@ async def test_approving_a_roadmap_plans_a_launch_per_now_item(client, owner, ru
         assert launch["owner_id"] is not None
         assert launch["track_id"] is not None
     me = (await client.get("/v1/me", headers=auth)).json()
-    assert {lnch["owner_id"] for lnch in by_item.values()} == {me["id"]}
+    # The seed's token acts for its user: the approver is that person.
+    assert {lnch["owner_id"] for lnch in by_item.values()} == {me["user_id"] or me["token_id"]}
 
     await approve_roadmap(client, auth)
     assert len((await client.get("/v1/launches", headers=auth)).json()) == 2
@@ -235,11 +236,10 @@ async def test_tier_suggestion_and_set_tier(client, owner, runtime):  # noqa: F8
     assert resp.json()["tier"] == 2
     async with tenant_session(tenant_id) as s:
         assert (await s.get(Launch, uuid.UUID(launch["id"]))).tier_set_by is not None
+    version = resp.json()["lock_version"]
     for bad in (0, 4):
-        resp = await client.patch(
-            url, json={"tier": bad, "lock_version": resp.json()["lock_version"]}, headers=auth
-        )
-        assert resp.status_code == 422
+        refused = await client.patch(url, json={"tier": bad, "lock_version": version}, headers=auth)
+        assert refused.status_code == 422
     stale = await client.patch(url, json={"tier": 1, "lock_version": 1}, headers=auth)
     assert stale.status_code == 409
 
