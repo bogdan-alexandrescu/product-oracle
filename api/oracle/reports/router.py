@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import recheck_caller, require_role
+from oracle.integrations import slack_oauth
 from oracle.reports import alignment, clock, service
 from oracle.reports import slack as report_slack
 from oracle.reports.models import AlignmentReport, AlignmentReportRead
@@ -129,7 +130,7 @@ async def mark_alignment_report_read(
 @router.post(
     "/alignment-reports/{report_id}/slack/retry",
     response_model=AlignmentReportOut,
-    responses={409: {"description": "Nothing to retry"}},
+    responses={409: {"description": "Nothing to retry, or Slack is not connected"}},
 )
 async def retry_alignment_report_slack(
     report_id: uuid.UUID, principal: Owner, db: TenantDB
@@ -141,6 +142,10 @@ async def retry_alignment_report_slack(
         raise HTTPException(
             status.HTTP_409_CONFLICT, f"Nothing to retry: the report is {report.slack_status}"
         )
+    install = await slack_oauth.installed(db)
+    if install is None or install.status != "active":
+        # Disconnected since: say so, and leave the failure in the Inbox (Dismiss stays).
+        raise HTTPException(status.HTTP_409_CONFLICT, report_slack.NOT_CONNECTED)
     await report_slack.deliver(db, report, actor=principal)
     await db.commit()
     read = report.id in await service.read_ids(db, principal, [report.id])

@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from oracle import audit, crypto
@@ -24,6 +24,7 @@ from oracle.authz import recheck_caller, require_role
 from oracle.connections import oauth
 from oracle.integrations import slack_api, slack_oauth
 from oracle.integrations.models import CompanyIntegration
+from oracle.reports.alignment import CHANNEL_ID
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings import TenantSetting
 
@@ -60,6 +61,14 @@ class NotificationChannelOut(BaseModel):
 
 class SlackTestIn(BaseModel):
     channel_id: str = Field(min_length=1, max_length=40)
+
+    @field_validator("channel_id")
+    @classmethod
+    def _a_channel(cls, v: str) -> str:
+        # The same check as the report's saved channel: a channel, never a person or a name.
+        if not CHANNEL_ID.fullmatch(v):
+            raise ValueError("not a Slack channel id")
+        return v
 
 
 class SlackTestOut(BaseModel):

@@ -31334,7 +31334,7 @@ export interface operations {
                     "application/json": components["schemas"]["AlignmentReportOut"];
                 };
             };
-            /** @description Nothing to retry */
+            /** @description Nothing to retry, or Slack is not connected */
             409: {
                 headers: {
                     [name: string]: unknown;

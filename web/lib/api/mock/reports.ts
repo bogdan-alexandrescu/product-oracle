@@ -29,6 +29,8 @@ export const REPORT_SCENARIO = "alignment-report";
 const SCENARIO_KEY = "po-mock-scenario";
 const CHANNELS: Schemas["NotificationChannelOut"][] = [
   { id: "C0ENG", name: "eng", is_private: false },
+  // A private channel the bot was invited to (the install has groups:read).
+  { id: "G0LEADS", name: "leads", is_private: true },
   { id: "C0PLAN", name: "plan", is_private: false },
   { id: "C0PRODUCT", name: "product", is_private: false },
 ];
@@ -209,7 +211,7 @@ function seedReports(ownerId: string): ReportsDb {
       purpose: "notifications",
       account_id: "T0EXAMPLE",
       account_label: "Example Co",
-      scopes: ["chat:write", "chat:write.public", "channels:read"],
+      scopes: ["chat:write", "chat:write.public", "channels:read", "groups:read"],
       status: "active",
       last_error: null,
       installed_by: ownerId,
@@ -296,7 +298,7 @@ export async function reportsRoute(holder: { reports?: ReportsDb }, ownerId: str
         purpose: "notifications",
         account_id: "T0EXAMPLE",
         account_label: "Example Co",
-        scopes: ["chat:write", "chat:write.public", "channels:read"],
+        scopes: ["chat:write", "chat:write.public", "channels:read", "groups:read"],
         status: "active",
         last_error: null,
         installed_by: me.id,
@@ -372,6 +374,7 @@ export async function reportsRoute(holder: { reports?: ReportsDb }, ownerId: str
     if (!atLeast(me.role, "owner")) return forbidden("owner");
     if (p[4] === "retry") {
       if (!["pending", "failed"].includes(row.slack.status)) return json(409, { detail: `Nothing to retry: the report is ${row.slack.status}` });
+      if (!db.integration) return json(409, { detail: "Slack is not connected for notifications: connect it in Settings › Notifications, then retry" });
       row.slack = { ...post(db, row.slack.channel ?? reportSetting().slack_channel), attempts: (row.slack.attempts ?? 0) + 1 };
       row.dismissed = false;
       return json(200, out(db, row, me.id));

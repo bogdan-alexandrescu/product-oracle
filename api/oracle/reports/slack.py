@@ -33,11 +33,20 @@ BACKOFF_MINUTES = (1, 5, 15, 60)
 RETRY_WINDOW = timedelta(hours=24)
 # Posts the ticker makes per company per tick.
 MAX_POSTS_PER_TICK = 5
+NOT_CONNECTED = (
+    "Slack is not connected for notifications: connect it in Settings › Notifications, then retry"
+)
+
+
+# Slack mrkdwn has no escape for its formatting characters: titles get their full-width
+# look-alikes, so "*Beta*" reads as written instead of turning bold.
+_NEUTRAL = str.maketrans({"*": "\uff0a", "_": "\uff3f", "~": "\uff5e", "`": "\uff40"})
 
 
 def _escape(text: str | None) -> str:
-    """Slack's three control characters, and no line breaks inside a line."""
-    flat = " ".join((text or "").split())
+    """Slack's three control characters, its formatting characters (*, _, ~, `), and no
+    line breaks inside a line."""
+    flat = " ".join((text or "").split()).translate(_NEUTRAL)
     return flat.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 

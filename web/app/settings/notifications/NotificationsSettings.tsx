@@ -178,6 +178,7 @@ function SlackPanel({
                   {(channels.data ?? []).map((c) => (
                     <option key={c.id} value={c.id}>
                       #{c.name}
+                      {c.is_private ? " (private)" : ""}
                     </option>
                   ))}
                 </select>

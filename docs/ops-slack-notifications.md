@@ -15,9 +15,11 @@ notifications is not configured".
 
 In the Slack app's settings:
 
-- **Bot token scopes**: `chat:write`, `chat:write.public`, `channels:read`. With
-  `groups:read` added too, the channel picker also lists the private channels the bot was
-  invited to.
+- **Bot token scopes**: `chat:write`, `chat:write.public`, `channels:read` and
+  `groups:read`, all required: Connect asks Slack for the four. `groups:read` lets the
+  channel picker list the private channels the bot was invited to (invite it with
+  `/invite @Product Oracle` in the channel first). An install made before `groups:read`
+  was asked lists public channels only: Disconnect and Connect again.
 - **Redirect URL**: `https://$HOST/v1/company-integrations/slack/callback`
   (`ORACLE_OAUTH_REDIRECT_BASE` is `https://$HOST`).
 

@@ -32,7 +32,7 @@ from oracle.integrations import slack_api
 from oracle.integrations.models import CompanyIntegration
 
 AUTHORIZE_URL = "https://slack.com/oauth/v2/authorize"
-BOT_SCOPES = ("chat:write", "chat:write.public", "channels:read")
+BOT_SCOPES = ("chat:write", "chat:write.public", "channels:read", "groups:read")
 STATE_PROVIDER = "slack-notifications"
 PROVIDER, PURPOSE = "slack", "notifications"
 TEST_MESSAGE = "Product Oracle will post the weekly alignment report here."
@@ -129,8 +129,8 @@ async def revoke(http: httpx.AsyncClient, token: str) -> bool:
 
 
 async def channels(http: httpx.AsyncClient, row: CompanyIntegration) -> list[dict[str, Any]]:
-    """Public channels, and the private ones the bot was invited to when the install can
-    read them (``groups:read``), by name."""
+    """Public channels, and the private ones the bot was invited to (``groups:read``, in
+    :data:`BOT_SCOPES`; an install made without it lists public ones only), by name."""
     types = "public_channel,private_channel" if "groups:read" in row.scopes else "public_channel"
     token = token_of(row)
     out: dict[str, dict[str, Any]] = {}

@@ -409,6 +409,11 @@ def _line(text: str | None) -> str:
     return " ".join((text or "").split())
 
 
+def _link_text(text: str | None) -> str:
+    """A link's text: brackets (and backslashes) escaped so a "]" does not end it early."""
+    return _line(text).replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+
+
 def markdown(content: dict[str, Any]) -> str:
     """The report as Markdown: what the page shows, printable and exportable."""
     s = content["summary"]
@@ -449,7 +454,7 @@ def markdown(content: dict[str, Any]) -> str:
         if t["needs_attention"]:
             lines += ["", f"### Needs attention ({when})", ""]
             lines += [
-                f"- [{_line(n['title'])}]({n['link']}) ({n['horizon']}): {_line(n['detail'])}"
+                f"- [{_link_text(n['title'])}]({n['link']}) ({n['horizon']}): {_line(n['detail'])}"
                 for n in t["needs_attention"]
             ]
         if t["drift"]:

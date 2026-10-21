@@ -22309,7 +22309,7 @@
             }
           },
           "409": {
-            "description": "Nothing to retry"
+            "description": "Nothing to retry, or Slack is not connected"
           },
           "422": {
             "description": "Validation Error",
