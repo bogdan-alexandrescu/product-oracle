@@ -21,6 +21,7 @@ from oracle.connections.notion_pages import router as notion_pages_router
 from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
+from oracle.engineering.router import router as engineering_router
 from oracle.export.router import router as export_router
 from oracle.intake.router import router as intake_router
 from oracle.jobs.router import router as llm_jobs_router
@@ -165,6 +166,7 @@ def create_app() -> FastAPI:
     # Modules and compositions (CR-01/02): catalogue, packs, manifests, revisions.
     app.include_router(modules_router)
     app.include_router(trace_router)
+    app.include_router(engineering_router)
     app.include_router(blockers_router)
     app.include_router(roadmap_router)
     # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
