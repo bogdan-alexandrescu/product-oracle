@@ -1,0 +1,117 @@
+"use client";
+
+import { useMemo, useState } from "react";
+
+import { InfoTip, PageHeader, Panel, Split } from "@/components/ds";
+import { ErrorNote } from "@/components/ui";
+import { goalViews } from "@/app/home/_goals";
+import { api, unwrap } from "@/lib/api/client";
+import { useMe } from "@/lib/me";
+import { useQuery } from "@/lib/use-query";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+
+import { StrategyCard, VisionCard } from "./_components/Cards";
+import { DraftSheet } from "./_components/DraftSheet";
+import { DriftList } from "./_components/DriftList";
+import { StackInspector, StackTable, stackRows } from "./_components/StackTable";
+import type { DocKind, FindingState } from "./_components/lib";
+
+/**
+ * Company › Strategy (H4): the approved vision and product strategy, the strategy stack
+ * (vision → focus choice → goal → roadmap items, then what is not under the strategy) with
+ * its inspector, and the drift findings. Owners start a vision or strategy here, or draft
+ * its next version with Oracle; the documents themselves open from the cards.
+ */
+export default function StrategyPage() {
+  const { role } = useMe();
+  const owner = role === "owner";
+  const [state, setState] = useState<FindingState>("open");
+  const [picked, setPicked] = useState<string | null>(null);
+  const [drafting, setDrafting] = useState<DocKind | null>(null);
+
+  const stackQ = useQuery("strategy|stack", () => unwrap(api.GET("/v1/strategy/stack")));
+  const openQ = useQuery("strategy|findings|open", () => unwrap(api.GET("/v1/strategy/findings", { params: { query: { status: "open" } } })));
+  const listQ = useQuery(
+    `strategy|findings|${state}`,
+    () => (state === "open" ? Promise.resolve(undefined) : unwrap(api.GET("/v1/strategy/findings", { params: { query: { status: state } } }))),
+    { keepPrevious: true },
+  );
+  const docsQ = useQuery("strategy|documents", async () => {
+    const [vision, strategy] = await Promise.all(
+      (["vision", "strategy"] as const).map((kind) => unwrap(api.GET("/v1/documents", { params: { query: { kind } } }))),
+    );
+    return { vision, strategy };
+  });
+  const goalsQ = useQuery("strategy|goals", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
+
+  const stack = stackQ.data;
+  const open = useMemo(() => openQ.data ?? [], [openQ.data]);
+  const rows = useMemo(() => stackRows(stack, open), [stack, open]);
+  const goals = useMemo(() => new Map((goalsQ.data ? goalViews(goalsQ.data) : []).map((g) => [g.id, g])), [goalsQ.data]);
+  const selected = rows.find((r) => r.key === picked) ?? rows[0] ?? null;
+
+  // The approved document when there is one; else the draft in progress.
+  const docs = docsQ.data;
+  const docOf = (kind: DocKind) => {
+    const approved = kind === "vision" ? stack?.vision?.document : stack?.strategy?.document;
+    const listed = docs?.[kind] ?? [];
+    return listed.find((d) => d.slug === approved?.slug) ?? listed[0] ?? null;
+  };
+  const approvedVersion = (kind: DocKind) => (kind === "vision" ? stack?.vision?.document.version : stack?.strategy?.document.version) ?? null;
+
+  async function waived() {
+    invalidateWaiting();
+    await Promise.all([stackQ.reload(), openQ.reload(), listQ.reload()]);
+    waitingChanged();
+  }
+
+  return (
+    <div data-testid="strategy-page" className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
+      <PageHeader
+        title="Company"
+        status={
+          <InfoTip label="the strategy" align="start" side="bottom">
+            The vision and the product strategy Oracle drafts and an owner approves. Each goal should follow from a focus choice, and each
+            roadmap item from a goal; what does not shows as drift.
+          </InfoTip>
+        }
+      />
+      {(stackQ.error || docsQ.error) && <ErrorNote>{stackQ.error ?? docsQ.error}</ErrorNote>}
+      <div className="grid grid-cols-2 items-stretch gap-4 max-[900px]:grid-cols-1 max-[600px]:gap-3">
+        <VisionCard stack={stack} doc={docs ? docOf("vision") : null} owner={owner && !!docs} onDraft={setDrafting} />
+        <StrategyCard stack={stack} doc={docs ? docOf("strategy") : null} owner={owner && !!docs} goals={goals} onDraft={setDrafting} />
+      </div>
+      <Split inspector={selected ? <StackInspector stack={stack} row={selected} onWaived={waived} /> : undefined}>
+        <Panel
+          title="Strategy stack"
+          tools={
+            <InfoTip label="the strategy stack" align="end">
+              One line per goal under the focus choice it derives from, with the roadmap items serving it. The last group lists the goals
+              and items not under the strategy.
+            </InfoTip>
+          }
+        >
+          <StackTable stack={stack} rows={rows} selected={selected?.key ?? null} onSelect={setPicked} />
+        </Panel>
+        <DriftList
+          state={state}
+          onState={setState}
+          rows={state === "open" ? openQ.data : listQ.data}
+          loading={state === "open" ? openQ.loading : listQ.loading}
+          error={state === "open" ? openQ.error : listQ.error}
+          stack={stack}
+          onWaived={waived}
+        />
+      </Split>
+      {drafting && owner && (
+        <DraftSheet
+          kind={drafting}
+          doc={docOf(drafting)}
+          approvedVersion={approvedVersion(drafting)}
+          onClose={() => setDrafting(null)}
+          onCreated={() => void docsQ.reload()}
+        />
+      )}
+    </div>
+  );
+}

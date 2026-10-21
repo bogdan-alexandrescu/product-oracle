@@ -107,7 +107,8 @@ const strategyPage = (page: Page) => page.getByTestId("strategy-page").filter({ 
 
 // protects=Company in the rail opens /company/strategy, its first tab, with the Vision card
 // (3 beliefs with their status chips), the Strategy card (2 focus rows, 1 stop row whose
-// "2 items still planned" is red) and the stack table's "Not under the strategy" group;
+// "2 items still planned" is red) and the stack table (the vision, one line per goal under
+// its focus choice with its items) with its "Not under the strategy" group;
 // fails_when=Company lands elsewhere, Strategy is not the first tab, or a card, row or the
 // group is missing; no_claim=the stack's numbers (pytest covers the API's).
 test("strategy: an owner opens Company and lands on Strategy with the vision, the strategy and the stack", async ({ page }) => {
@@ -146,7 +147,12 @@ test("strategy: an owner opens Company and lands on Strategy with the vision, th
   await expect(strategy).toContainText("Next review 1 Oct 2027");
 
   const stack = root.getByTestId("strategy-stack");
-  await expect(stack.getByRole("columnheader")).toHaveText(["Vision belief", "Focus choice", "Goal", "Roadmap items", "Findings"]);
+  await expect(stack.getByRole("columnheader")).toHaveText(["Focus choice", "Goal", "Roadmap items", "Findings"]);
+  // The stack starts at the vision: choices name no belief, so the vision heads the stack.
+  await expect(stack.getByTestId("stack-group-under")).toContainText("Vision: Every small team plans its product like a large one.");
+  const activation = stack.getByTestId("stack-row").filter({ hasText: "Raise activation" });
+  await expect(activation).toContainText("Self-serve onboarding");
+  await expect(activation).toContainText("3 items");
   await expect(stack.locator("[data-group]").filter({ hasText: "Not under the strategy" })).toHaveCount(1);
   await expect(stack.getByTestId("stack-row").filter({ hasText: "Retention" })).toHaveCount(1);
   await expect(stack.getByTestId("stack-row").filter({ hasText: "Dark mode" })).toHaveCount(1);
@@ -204,8 +210,8 @@ test("strategy: an owner drafts the next strategy version with Oracle from the s
   await root.getByTestId("strategy-card").getByRole("button", { name: "Draft next version" }).click();
   const sheet = page.getByRole("dialog", { name: "Draft next version" });
   await sheet.getByLabel("What changed since the last one").fill("Team plans moved up after the pricing change.");
-  await sheet.getByLabel("From").fill("2027-01-01");
-  await sheet.getByLabel("To").fill("2027-12-31");
+  await sheet.getByLabel("From", { exact: true }).fill("2027-01-01");
+  await sheet.getByLabel("To", { exact: true }).fill("2027-12-31");
   await expect(sheet.getByLabel("Start from the last approved version (v1)")).toBeChecked();
   await expect(sheet.getByRole("button", { name: "Start from the empty template" })).toHaveCount(0);
   await sheet.getByRole("button", { name: "Draft with Oracle" }).click();
@@ -229,8 +235,10 @@ test("strategy: with no vision, an owner starts one with Oracle, or from the emp
   await expect(sheet.getByLabel("Horizon in years")).toHaveValue("5");
   await expect(sheet.getByLabel(/Start from the last approved version/)).toHaveCount(0);
   await sheet.getByRole("button", { name: "Start from the empty template" }).click();
-  await expect(page).toHaveURL(/\/documents\/vision/);
-  await expect(page.getByTestId("doc-header")).toContainText("Vision");
+  await expect(page).toHaveURL(/\/documents\/vision$/);
+  const crumb = page.getByRole("navigation", { name: "Breadcrumb" }).filter({ visible: true }).first();
+  await expect(crumb.getByRole("link", { name: "Vision", exact: true })).toBeVisible();
+  await expect(crumb).toContainText("Draft");
 
   await page.goto("/company/strategy");
   // The vision exists now (a draft, not approved): the card offers it and a next version.
