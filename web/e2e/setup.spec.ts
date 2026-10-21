@@ -39,6 +39,16 @@ async function connectFromSetup(page: Page) {
   await backToHome(page);
 }
 
+/** A3: names the approver engineering lead from the checklist's Engineering lead step. */
+async function nameLeadFromSetup(page: Page) {
+  await row(page, "eng_lead").getByRole("link", { name: "Open" }).click();
+  await expect(page).toHaveURL(/\/settings\/members\?from=setup#engineering-lead$/);
+  const box = page.getByRole("checkbox", { name: "Engineering lead: approver@example.com" });
+  await box.check();
+  await expect(box).toBeChecked();
+  await backToHome(page);
+}
+
 async function confirmHorizonsFromSetup(page: Page) {
   await row(page, "horizons").getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company\?from=setup#horizons$/);
@@ -192,6 +202,7 @@ test("setup: with every step done the checklist is not drawn", async ({ page }) 
   await login(page);
   await expect(panel(page).getByTestId("panel-count")).toHaveText("3 of 6");
   await connectFromSetup(page);
+  await nameLeadFromSetup(page);
   await confirmHorizonsFromSetup(page);
   await expect(page.getByTestId("home-needs")).toBeVisible();
   await expect(panel(page)).toHaveCount(0);
@@ -206,7 +217,7 @@ test("setup: on a phone each row keeps one line and nothing scrolls sideways", a
   await login(page);
   await expect(panel(page)).toBeVisible();
   const opens = panel(page).getByRole("link", { name: "Open" });
-  await expect(opens).toHaveCount(5);
+  await expect(opens).toHaveCount(6);
   for (const link of await opens.all()) {
     await link.scrollIntoViewIfNeeded();
     await expect(link).toBeInViewport();
