@@ -1,0 +1,14 @@
+id: social-api-risk-accepted
+description: >
+  Someone "accepted the risk" of breaking a platform policy. A policy limit cannot be
+  accepted as a risk, so the hard check stays critical.
+covers: [social_api_policy, unsupported_third_party]
+extends: social-api-policy
+overrides:
+  blockers:
+    social-posting: {blocker: {type: hard, limit_kind: policy, severity: critical, status: accepted_risk}}
+expected:
+  third_party_support: critical
+blocked: true
+rationale_contains:
+  third_party_support: [cannot be accepted as a risk]

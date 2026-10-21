@@ -1,16 +1,30 @@
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from oracle.docs.schemas import WordOp
+from oracle.jobs.prompting import MAX_BODY_CHARS
 
-JobKind = Literal["review_comments", "reporting", "refinement"]
+JobKind = Literal[
+    "review_comments", "reporting", "refinement", "quality_review", "refinement_batch"
+]
+# Every kind a job row may have: the document kinds and the intake's (oracle.intake.job).
+AnyJobKind = Literal[
+    "review_comments",
+    "reporting",
+    "refinement",
+    "quality_review",
+    "refinement_batch",
+    "intake_analysis",
+]
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 Classification = Literal["question", "change_request", "factual_correction", "approval", "other"]
 SuggestionKind = Literal["section_text", "answer", "none", "duplicate"]
 SuggestionStatus = Literal["open", "accepted", "dismissed", "applied", "superseded"]
+# Section text an approver sends: at most the spec's 200k characters (422 past it).
+SectionText = Annotated[str, Field(max_length=MAX_BODY_CHARS)]
 
 
 class ORM(BaseModel):
@@ -19,8 +33,10 @@ class ORM(BaseModel):
 
 class LlmJobOut(ORM):
     id: uuid.UUID
-    kind: JobKind
-    document_id: uuid.UUID
+    kind: AnyJobKind
+    # Null for an intake job, which has intake_id instead.
+    document_id: uuid.UUID | None = None
+    intake_id: uuid.UUID | None = None
     version_number: int | None = None
     section_key: str | None = None
     status: JobStatus
@@ -63,6 +79,8 @@ class JobSettings(BaseModel):
     review_comments: bool = True
     reporting: bool = True
     refinement: bool = True
+    # Only ever queued by a person (POST .../quality-review), never on its own.
+    quality_review: bool = True
 
 
 class RefineIn(BaseModel):
@@ -75,7 +93,7 @@ class RefinementApply(BaseModel):
     """Accept a refinement, optionally with the approver's own edit of it."""
 
     heading: str | None = Field(default=None, min_length=1, max_length=300)
-    body_md: str | None = None
+    body_md: SectionText | None = None
 
 
 class PushbackSource(BaseModel):
@@ -117,12 +135,12 @@ class SuggestionOut(ORM):
 
 
 class SuggestionPatch(BaseModel):
-    text: str = Field(min_length=1)
+    text: str = Field(min_length=1, max_length=MAX_BODY_CHARS)
 
 
 class SuggestionAccept(BaseModel):
     # Accept with this text instead of the suggestion's (an edit at the same time).
-    text: str | None = Field(default=None, min_length=1)
+    text: str | None = Field(default=None, min_length=1, max_length=MAX_BODY_CHARS)
     # Required when Oracle pushed back: why the approver keeps their call (C1b).
     reason: str | None = None
 
@@ -198,3 +216,113 @@ class LlmJobsTick(BaseModel):
     failed: int
     retried: int
     errors: list[str]
+
+
+# --- C1e: staged changes and the next draft ---------------------------------------------
+
+
+class StagedChange(BaseModel):
+    """An accepted section-text suggestion not applied in any draft yet."""
+
+    suggestion_id: uuid.UUID
+    feedback_item_id: uuid.UUID
+    section_key: str
+    # The heading in the latest version, else the one in the draft it was raised on.
+    section_heading: str
+    feedback_summary: str
+    # The accepted text (the approver's edit when there is one).
+    text: str
+    accepted_by: uuid.UUID | None = None
+    accepted_by_name: str | None = None
+    accepted_at: datetime | None = None
+    # The draft the reviewer read, and the one Oracle's suggestion was written against.
+    raised_on_version: int
+    suggested_on_version: int
+    # The section is not in the latest version: not built (excluded by default).
+    section_gone: bool = False
+    # The section is approved (locked) in the latest version: building it is refused.
+    section_locked: bool = False
+
+
+class StagedChanges(BaseModel):
+    document_id: uuid.UUID
+    slug: str
+    latest_version: int | None = None
+    # The draft a build would make (latest + 1).
+    next_version: int
+    items: list[StagedChange]
+    # Staged items whose section is gone (listed only with include_gone).
+    gone_count: int = 0
+    # A typical cost of building these sections, from earlier refinements; None
+    # without history.
+    estimate_usd: float | None = None
+    # The current next-draft build (queued, running, failed, or ready to preview), if any.
+    draft_job: LlmJobOut | None = None
+
+
+class NextDraftIn(BaseModel):
+    # The staged suggestions to build; default: every staged one whose section exists.
+    suggestion_ids: list[uuid.UUID] | None = None
+
+
+class NextDraftFeedback(BaseModel):
+    id: uuid.UUID
+    summary: str
+
+
+class NextDraftResolution(BaseModel):
+    feedback_id: uuid.UUID
+    status: Literal["addressed", "declined"]
+    note: str | None = None
+
+
+class NextDraftDataPoint(BaseModel):
+    value: str
+    as_of: str = ""
+    source: str = ""
+
+
+class NextDraftSection(BaseModel):
+    section_key: str
+    heading: str
+    before_heading: str
+    before_body_md: str
+    body_md: str
+    words: list[WordOp]
+    notes: str = ""
+    o1c_fixes: list[str] = []
+    data_points: list[NextDraftDataPoint] = []
+    resolutions: list[NextDraftResolution] = []
+    suggestion_ids: list[uuid.UUID] = []
+    feedback: list[NextDraftFeedback] = []
+
+
+class SkippedSection(BaseModel):
+    section_key: str | None = None
+    suggestion_ids: list[uuid.UUID] = []
+    reason: str
+
+
+class NextDraftPreview(BaseModel):
+    """The combined preview of a next-draft build: one entry per revised section.
+
+    Sections are empty until the job has succeeded (``job.status`` says where it is)."""
+
+    job: LlmJobOut
+    base_version: int | None = None
+    next_version: int | None = None
+    latest_version: int | None = None
+    # A newer version appeared since the build started: it can no longer be applied.
+    stale: bool = False
+    applied_version: int | None = None
+    discarded: bool = False
+    notes: str = ""
+    sections: list[NextDraftSection] = []
+    skipped: list[SkippedSection] = []
+
+
+class NextDraftApply(BaseModel):
+    # Sections not to change in this draft; their suggestions stay staged.
+    drop_sections: list[str] = []
+    # The approver's own body for a kept section (house rules applied).
+    edits: dict[str, SectionText] = {}

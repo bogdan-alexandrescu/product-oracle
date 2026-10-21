@@ -10,7 +10,7 @@ export async function login(page: Page, email: string = ADMIN.email) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(ADMIN.password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/documents$/);
+  await expect(page).toHaveURL(/\/home$/);
 }
 
 /** A section of the visible version (Next keeps recently visited routes mounted but hidden). */
@@ -50,4 +50,172 @@ export async function signOut(page: Page) {
   await page.getByTestId("user-menu").click();
   await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
+}
+
+/** The version view's outline rail (>= 1280 px; one section is open at a time). */
+export function sectionStrip(page: Page): Locator {
+  return page.getByTestId("outline-rail").filter({ visible: true });
+}
+
+/** A section's row in the visible outline (rail, switcher popover or Sections sheet). */
+export function outlineRow(page: Page, key: string): Locator {
+  return page.locator(`a[data-outline-key="${key}"]`).filter({ visible: true });
+}
+
+/**
+ * Opens a section of the current Brief / Full mode from the outline, and waits for its
+ * panel. A row inside a folded chapter (or no rail, below 1280 px) is opened by its #key.
+ */
+export async function openSection(page: Page, key: string): Promise<Locator> {
+  const row = outlineRow(page, key);
+  if (await row.count()) await row.first().click();
+  else await page.evaluate((k) => (window.location.hash = k), key);
+  const s = section(page, key);
+  await expect(s).toBeVisible();
+  return s;
+}
+
+/** Opens a review panel tab (Feedback, Sources, History) in the visible panel. */
+export async function openTab(page: Page, name: "Feedback" | "Sources" | "History") {
+  await page.getByRole("tab", { name: new RegExp(`^${name}`) }).filter({ visible: true }).click();
+}
+
+/** Picks a Feedback state chip (Open, Staged, Declined, Done). */
+export async function feedbackState(page: Page, state: "Open" | "Staged" | "Declined" | "Done") {
+  await page.getByTestId("feedback-state").filter({ visible: true }).getByRole("button", { name: new RegExp(`^${state}`) }).click();
+}
+
+/** The review panel's feedback for every section, not only the open one. */
+export async function showAll(page: Page) {
+  await page.getByTestId("inspector-scope").filter({ visible: true }).getByRole("button", { name: /^All sections/ }).click();
+}
+
+/** Picks an item from the open section's ⋯ menu. */
+export async function sectionAction(scope: Locator, heading: string, item: string | RegExp) {
+  await scope.getByRole("button", { name: `Actions for ${heading}` }).click();
+  await scope.getByRole("menuitem", { name: item }).click();
+}
+
+/**
+ * Seeds the mock with what the adapter puts in the Inbox: a run whose lost submission is past
+ * the lookup cap (Retry, Cancel run) and still looked for, a run whose output Oracle stopped
+ * importing (Retry), and an ended run whose spend went over its ceiling while a workflow an
+ * approver stopped cancelling still runs (Cancel again). Returns the overrun run's id.
+ */
+export async function seedStuckRuns(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    type R = Record<string, unknown> & { id: string; document_slug: string; segments: Record<string, unknown>[] };
+    const runs: R[] = db.runs.runs;
+    const base = runs.find((r) => r.document_slug === "team-onboarding")!;
+    const clone = (id: string, at: string): R => ({
+      ...JSON.parse(JSON.stringify(base)),
+      id,
+      status: "running",
+      checkpoints: [],
+      waiting_on: null,
+      created_at: at,
+      started_at: at,
+    });
+    const lost = clone("7a11c0de-0000-4000-8000-000000000001", "2026-10-17T06:00:00Z");
+    Object.assign(lost, {
+      stuck: "Submission seg-1-a2 was lost and is still not found. Retry looks again; Cancel ends the run.",
+      can_retry: true,
+      searching: "Oracle still looks for submission seg-1-a1, given up on: if it landed, it is cancelled and its cost counted.",
+    });
+    const failed = clone("7a11c0de-0000-4000-8000-000000000002", "2026-10-17T07:00:00Z");
+    failed.segments[0] = { ...failed.segments[0], status: "failed", error: "Couldn't import its output: DataError on 5 tries in a row." };
+    Object.assign(failed, {
+      import_failed:
+        "Couldn't import team-onboarding's output: DataError on 5 tries in a row, and Oracle stopped trying. Retry tries again.",
+      can_retry_import: true,
+    });
+    const done = runs.find((r) => r.document_slug === "checkout-redesign" && r.status === "succeeded")!;
+    done.segments[0] = { ...done.segments[0], cost_usd: 16.4 };
+    Object.assign(done, {
+      spent_usd: 16.4,
+      stuck:
+        "After the run ended its spend reached $16.40, over its $13.50 ceiling: workflow mock-wf-done still runs in SwarmCloud, and Oracle counts its spend on the run until it ends. An approver stopped cancelling mock-wf-done: Cancel again turns Oracle's cancel calls back on (nothing restarts), or cancel it in SwarmCloud's console.",
+      cancel_again: ["mock-wf-done"],
+      can_dismiss_overrun: false,
+    });
+    runs.push(lost, failed);
+    localStorage.setItem(key, JSON.stringify(db));
+    return done.id;
+  });
+}
+
+/** The run seedSentBack adds, and the summary of the draft Oracle refused and sent back. */
+export const SENT_BACK_RUN = "7a11c0de-0000-4000-8000-0000000000e1";
+export const SENT_BACK_SUMMARY =
+  "Oracle refused prd.md: 2 citations use source 'jira', which isn't accepted; 3 references fail because of them.";
+
+/**
+ * Seeds the mock with a run whose PRD draft Oracle refused at import and sent back to the
+ * writer itself: no checkpoint stands for that review, the revision runs as attempt 2 with
+ * Oracle's findings, and the refused import stays on the segment until the revision lands.
+ */
+export async function seedSentBack(page: Page): Promise<string> {
+  return page.evaluate(
+    ({ id, summary }) => {
+      const key = "po-mock-db-v2";
+      const db = JSON.parse(localStorage.getItem(key)!);
+      type S = Record<string, unknown> & { seq: number; checkpoint: string };
+      const base = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
+      const at = "2026-10-17T09:00:00Z";
+      const wf = "mock-wf-sent-back";
+      // As the API stores the refusal: two citations of source 'jira', cited three times.
+      const problems: Record<string, unknown>[] = [
+        { code: "invalid_citation", message: "citation #1 (j1) is invalid: source 'jira' isn't accepted", section_key: null, cite_key: "j1", line: null },
+        { code: "invalid_citation", message: "citation #2 (j2) is invalid: source 'jira' isn't accepted", section_key: null, cite_key: "j2", line: null },
+        { code: "unknown_citation", message: "[c:j1] in section 'problem' is not defined in front matter 'citations'", section_key: "problem", cite_key: "j1", line: 14 },
+        { code: "unknown_citation", message: "[c:j2] in section 'problem' is not defined in front matter 'citations'", section_key: "problem", cite_key: "j2", line: 14 },
+        { code: "unknown_citation", message: "[c:j1] in section 'goals' is not defined in front matter 'citations'", section_key: "goals", cite_key: "j1", line: 20 },
+      ];
+      const error = `prd.md was rejected: ${problems.map((p) => `[${p.code}] ${p.message}`).join("; ")}`;
+      const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "guest-checkout", document_id: null, created_at: at, started_at: at };
+      const segments: S[] = run.segments;
+      for (const s of segments) {
+        Object.assign(s, {
+          id: crypto.randomUUID(),
+          status: "succeeded",
+          cost_usd: 1,
+          attempts: [{ attempt: 1, workflow_id: wf, submitted_at: at, cost_usd: 1, note: null, note_by: null, state: "succeeded" }],
+        });
+      }
+      const findings = [
+        "Oracle could not import prd.md as the document's next version, so it sent the draft back before a person reviews it.",
+        "Citations: citation #1 (j1) is invalid: source 'jira' isn't accepted; citation #2 (j2) is invalid: source 'jira' isn't accepted.",
+      ].join("\n");
+      Object.assign(segments[3], {
+        status: "running",
+        artifacts: ["prd.md"],
+        draft_import: { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems, summary, source: null, prd_links: null },
+      });
+      (segments[3].attempts as unknown[]).push({ attempt: 2, workflow_id: wf, submitted_at: at, cost_usd: 0, note: findings, note_by: "Oracle", state: "running" });
+      // Oracle answered the PRD review itself: no checkpoint stands for it.
+      run.checkpoints = segments.slice(0, 3).map((s) => ({
+        id: crypto.randomUUID(),
+        run_id: id,
+        kind: s.checkpoint,
+        status: "approved",
+        approver_role: "approver",
+        segment_seq: s.seq,
+        decided_by: null,
+        decided_at: at,
+        note: null,
+        payload: {},
+        created_at: at,
+        can_decide: false,
+        cannot_approve: null,
+      }));
+      Object.assign(run, { status: "running", waiting_on: null });
+      db.runs.runs.push(run);
+      db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Guest checkout PRD\n---\n\n# Guest checkout PRD {#title}\n";
+      localStorage.setItem(key, JSON.stringify(db));
+      return id;
+    },
+    { id: SENT_BACK_RUN, summary: SENT_BACK_SUMMARY },
+  );
 }

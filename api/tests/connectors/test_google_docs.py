@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 from datetime import UTC, datetime
@@ -7,11 +8,13 @@ import httpx
 import pytest
 
 from oracle.sources.base import (
+    COMPANY_DOMAINS,
     ConnectorAuthError,
     ConnectorConfigError,
     ConnectorRateLimited,
     CursorCheckpoint,
     ItemDelete,
+    ItemUnavailable,
     ItemUpsert,
     get_connector,
 )
@@ -22,7 +25,8 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "connectors" / "go
 CREDENTIAL = {"access_token": "ya29.test-token", "refresh_token": "1//test-refresh"}
 PRODUCT = "1FolderProductExample"
 SPECS = "1FolderSpecsExample"
-CONFIG = {"folders": [PRODUCT], "docs": ["1DocListedExample"]}
+# The sync engine adds the company's domains; without them every folder doc is skipped.
+CONFIG = {"folders": [PRODUCT], "docs": ["1DocListedExample"], COMPANY_DOMAINS: ["example.com"]}
 EXTENSIONS = {"text/markdown": "md", "text/plain": "txt"}
 # The page cursor list_product_page1 hands out (added by FakeDrive, built from pieces).
 PAGE_2 = "-".join(["page", "2"])
@@ -109,6 +113,7 @@ async def collect(conn, config, cursor=None):
 def test_registered_with_oauth_metadata():
     assert isinstance(get_connector("google_docs"), GoogleDocsConnector)
     assert google_docs.OAUTH["token_url"] == "https://oauth2.googleapis.com/token"
+    # Picked files and folders, folders read in full (S5, 'Drive folders', 2026-10-19).
     assert google_docs.OAUTH["scopes"] == ["https://www.googleapis.com/auth/drive.readonly"]
 
 
@@ -116,6 +121,38 @@ async def test_validate():
     fake = FakeDrive()
     await connector(fake).validate(CONFIG, CREDENTIAL)
     assert fake.calls == ["about", f"file:{PRODUCT}", "file:1DocListedExample"]
+
+
+async def test_validate_checks_picked_items_in_bounded_batches():
+    docs = [f"1DocMany{i:02d}" for i in range(23)]
+    in_flight, peak, seen = 0, 0, []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal in_flight, peak
+        path = str(request.url.copy_with(query=None))[len(DRIVE_URL) :]
+        if path == "about":
+            return httpx.Response(200, json=fixture("about"))
+        in_flight += 1
+        peak = max(peak, in_flight)
+        await asyncio.sleep(0.01)
+        in_flight -= 1
+        file_id = path.split("/")[1]
+        seen.append(file_id)
+        return httpx.Response(200, json={"id": file_id, "mimeType": google_docs.DOC_MIME})
+
+    conn = GoogleDocsConnector(httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    await conn.validate({"docs": docs}, CREDENTIAL)
+    assert sorted(seen) == docs
+    # Several at once, never more than one batch.
+    assert 1 < peak <= google_docs.VALIDATE_BATCH
+
+
+async def test_validate_caps_how_many_items_a_source_picks():
+    fake = FakeDrive()
+    many = {"docs": [f"1DocMany{i:04d}" for i in range(google_docs.MAX_PICKED + 1)]}
+    with pytest.raises(ConnectorConfigError, match=f"at most {google_docs.MAX_PICKED}"):
+        await connector(fake).validate(many, CREDENTIAL)
+    assert fake.calls == []
 
 
 @pytest.mark.parametrize(
@@ -133,6 +170,22 @@ async def test_validate():
 async def test_validate_config_errors(config, credential, match):
     with pytest.raises(ConnectorConfigError, match=match):
         await connector(FakeDrive()).validate(config, credential)
+
+
+async def test_without_company_domains_every_folder_doc_is_skipped_and_says_why():
+    """Fails closed: with no company domain known, who owns a folder doc cannot be
+    checked, so none is pulled in; the picked doc still is."""
+    fake = FakeDrive(FULL_ROUTES)
+    config = {k: v for k, v in CONFIG.items() if k != COMPANY_DOMAINS}
+    events = await collect(connector(fake), config)
+    assert [e.external_id for e in events if isinstance(e, ItemUpsert)] == ["1DocListedExample"]
+    skipped = [e for e in events if isinstance(e, ItemUnavailable) and e.status == "skipped"]
+    assert {e.external_id for e in skipped} == {
+        "1DocSpecExample",
+        "1DocPrdExample",
+        "1DocNotesExample",
+    }
+    assert {e.reason for e in skipped} == {"Skipped: company domain not set"}
 
 
 async def test_full_sync_recurses_folders_and_falls_back_to_plain_text():
@@ -175,17 +228,22 @@ async def test_full_sync_recurses_folders_and_falls_back_to_plain_text():
     assert fake.calls.count("export:1DocPrdExample:text/plain") == 0
     assert fake.calls.count(f"list:{PRODUCT}:{PAGE_2}") == 1
 
-    assert events[-1] == CursorCheckpoint(
-        {
-            "modified_since": "2026-10-03T10:00:00.000Z",
-            "files": {
-                "1DocListedExample": "2026-09-15T10:00:00.000Z",
-                "1DocSpecExample": "2026-09-28T10:00:00.000Z",
-                "1DocPrdExample": "2026-10-02T10:00:00.000Z",
-                "1DocNotesExample": "2026-10-03T10:00:00.000Z",
-            },
-        }
-    )
+    last = events[-1]
+    assert isinstance(last, CursorCheckpoint)
+    assert last.cursor["modified_since"] == "2026-10-03T10:00:00.000Z"
+    assert last.cursor["files"] == {
+        "1DocListedExample": "2026-09-15T10:00:00.000Z",
+        "1DocSpecExample": "2026-09-28T10:00:00.000Z",
+        "1DocPrdExample": "2026-10-02T10:00:00.000Z",
+        "1DocNotesExample": "2026-10-03T10:00:00.000Z",
+    }
+    # Which docs came from the picked folder, and every folder walked.
+    assert set(last.cursor["tree"][PRODUCT]) == {
+        "1DocSpecExample",
+        "1DocPrdExample",
+        "1DocNotesExample",
+    }
+    assert set(last.cursor["folders"]) == {PRODUCT, SPECS}
 
 
 @pytest.mark.parametrize(
@@ -230,12 +288,10 @@ async def test_incremental_sync_exports_changes_and_deletes_removed_docs():
     assert [c for c in fake.calls if c.startswith("export:")] == [
         "export:1DocPrdExample:text/markdown"
     ]
-    assert events[-1].cursor == {
-        "modified_since": "2026-10-06T10:00:00.000Z",
-        "files": {
-            "1DocSpecExample": "2026-09-28T10:00:00.000Z",
-            "1DocPrdExample": "2026-10-06T10:00:00.000Z",
-        },
+    assert events[-1].cursor["modified_since"] == "2026-10-06T10:00:00.000Z"
+    assert events[-1].cursor["files"] == {
+        "1DocSpecExample": "2026-09-28T10:00:00.000Z",
+        "1DocPrdExample": "2026-10-06T10:00:00.000Z",
     }
 
 
@@ -243,7 +299,7 @@ async def test_removed_listed_doc_is_deleted():
     cursor = {"modified_since": None, "files": {"1DocGoneExample": "2026-09-01T00:00:00.000Z"}}
     events = await collect(connector(FakeDrive()), {"docs": ["1DocGoneExample"]}, cursor)
     assert events[0] == ItemDelete("1DocGoneExample")
-    assert events[-1].cursor == {"modified_since": None, "files": {}}
+    assert events[-1].cursor["files"] == {}
 
 
 async def test_expired_token():
@@ -266,3 +322,83 @@ async def test_rate_limited(response):
     with pytest.raises(ConnectorRateLimited) as raised:
         await collect(connector(fake), CONFIG)
     assert raised.value.retry_after == 12
+
+
+# --- drive.file: the files each person picked ----------------------------------------
+
+PICKED = {
+    "docs": ["1DocListedExample", "1DocPrdExample"],
+    "names": {"1DocListedExample": "Pricing strategy", "1DocPrdExample": "Onboarding v2 PRD"},
+}
+
+
+async def test_picked_docs_sync_without_listing_any_folder():
+    fake = FakeDrive()
+    await connector(fake).validate(PICKED, CREDENTIAL)
+    events = await collect(connector(fake), PICKED)
+    items = [e for e in events if isinstance(e, ItemUpsert)]
+    assert [i.external_id for i in items] == ["1DocListedExample", "1DocPrdExample"]
+    assert items[1].title == "Onboarding v2 PRD"
+    # drive.file cannot list folders: only the picked files are read.
+    assert not [c for c in fake.calls if c.startswith("list:")]
+    assert not [e for e in events if isinstance(e, ItemUnavailable)]
+
+
+async def test_unreadable_picked_docs_are_reported_per_item():
+    cursor = {
+        "modified_since": None,
+        "files": {"1DocUnsharedExample": "2026-09-01T00:00:00.000Z"},
+    }
+    config = {"docs": ["1DocListedExample", "1DocUnsharedExample", "1DocPrdExample"]}
+    fake = FakeDrive({"file:1DocPrdExample": error("error_403_app_not_authorized", 403)})
+    events = await collect(connector(fake), config, cursor)
+
+    unavailable = {e.external_id: e.reason for e in events if isinstance(e, ItemUnavailable)}
+    assert set(unavailable) == {"1DocUnsharedExample", "1DocPrdExample"}
+    assert unavailable["1DocUnsharedExample"].startswith("No access")
+    assert unavailable["1DocPrdExample"].startswith("Not picked")
+    # What can be read is still synced; the unshared doc's item is removed.
+    assert [e.external_id for e in events if isinstance(e, ItemUpsert)] == ["1DocListedExample"]
+    assert ItemDelete("1DocUnsharedExample") in events
+    assert set(events[-1].cursor["files"]) == {"1DocListedExample"}
+
+
+async def test_export_refused_for_one_doc_is_reported_per_item():
+    refused = error("error_403_insufficient", 403)
+    fake = FakeDrive(
+        {
+            "export:1DocListedExample:text/markdown": refused,
+            "export:1DocListedExample:text/plain": refused,
+        }
+    )
+    events = await collect(connector(fake), PICKED)
+    assert [e.external_id for e in events if isinstance(e, ItemUpsert)] == ["1DocPrdExample"]
+    (gone,) = [e for e in events if isinstance(e, ItemUnavailable)]
+    assert gone.external_id == "1DocListedExample" and gone.reason.startswith("No access")
+    # Not recorded as synced, so the next sync tries it again.
+    assert set(events[-1].cursor["files"]) == {"1DocPrdExample"}
+
+
+def test_names_must_be_a_map_of_strings():
+    from oracle.sources.base import ConnectorConfigError
+    from oracle.sources.connectors.google_docs import _options
+
+    with pytest.raises(ConnectorConfigError, match="names"):
+        _options({"docs": ["1DocListedExample"], "names": ["x"]})
+
+
+@pytest.mark.parametrize(
+    "names",
+    [
+        {"1DocOtherExample": "Not picked"},
+        {"1DocListedExample": "x" * 501},
+        {"1DocListedExample": "A", "1FolderSpecsExample": "B"},
+    ],
+)
+def test_names_name_only_what_is_picked_and_are_short(names):
+    from oracle.sources.base import ConnectorConfigError
+    from oracle.sources.connectors.google_docs import _options
+
+    with pytest.raises(ConnectorConfigError, match="names"):
+        _options({"docs": ["1DocListedExample"], "names": names})
+    _options({"docs": ["1DocListedExample"], "names": {"1DocListedExample": "x" * 500}})

@@ -103,7 +103,8 @@ async def test_every_import_path_matches_the_rest_import(client, tenant_id, path
         def norm(t: str) -> str:
             t = re.sub(r"feedback_id: [0-9a-f-]{36}", "feedback_id: ID", t)
             t = t.replace("via-api", "SLUG").replace("via-other", "SLUG")
-            return re.sub(r"imported \d{4}-\d\d-\d\d \d\d:\d\d UTC", "imported T", t)
+            # Every rendered timestamp, not only "imported …": two exports can straddle a minute.
+            return re.sub(r"\d{4}-\d\d-\d\d \d\d:\d\d UTC", "T", t)
 
         assert norm(ea) == norm(eb)
 

@@ -33,6 +33,7 @@ from sqlalchemy import (
     Uuid,
     false,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -54,6 +55,8 @@ GAP_STATUSES = (
     "under_investigation",
     "asked",
     "answered",
+    # A critical gap answered below the owner role, waiting for review (B4).
+    "answered_pending_review",
     "validated",
     "deferred",
     "accepted_risk",
@@ -137,6 +140,8 @@ CHANGE_SUBJECTS = (
     "entity",
     "artifact_version",
     "member",
+    # A product track's monitoring (oracle.roadmap, migration 0016_roadmap).
+    "product_track",
 )
 
 # §10, T2: advisory by default; hard only where a hard readiness check says so.
@@ -368,6 +373,17 @@ class KnowledgeGap(TenantScoped, Base):
         CheckConstraint(_all_in("impact", IMPACT_AREAS), name="impact"),
         CheckConstraint(CONFIDENCE_RANGE, name="confidence"),
         CheckConstraint("intake_id IS NOT NULL OR document_id IS NOT NULL", name="subject"),
+        CheckConstraint(
+            "importance_basis IS NULL OR importance_basis IN ('brief', 'person')",
+            name="importance_basis",
+        ),
+        # Rule-made rows from before their importance basis was recorded: read by
+        # /v1/gaps?importance= (oracle.intake.views); the next analysis records it.
+        Index(
+            "ix_knowledge_gaps_legacy_importance",
+            "intake_id",
+            postgresql_where=text("rule_key IS NOT NULL AND importance_basis IS NULL"),
+        ),
     )
 
     intake_id: Mapped[uuid.UUID | None] = _fk("product_intakes")
@@ -391,6 +407,14 @@ class KnowledgeGap(TenantScoped, Base):
     entity_ids: Mapped[list[uuid.UUID]] = _uuids()
     section_keys: Mapped[list[str]] = _texts()
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # The category key of a rule-made gap (the intake engine's own, one per category);
+    # None for a gap a person or the model wrote. Its statement text may change in
+    # code; this does not (S6: model-written gaps are private, rule-made ones are not).
+    rule_key: Mapped[str | None] = mapped_column(Text)
+    # Where the importance comes from: "brief" (the engine, from the brief and public
+    # facts; refreshed by each analysis) or "person" (someone set it; kept). None: a row
+    # from before this was recorded, whose importance others read from the brief (S6).
+    importance_basis: Mapped[str | None] = mapped_column(Text)
     lock_version: Mapped[int] = _lock_version()
     __mapper_args__ = {"version_id_col": lock_version}
     updated_at: Mapped[datetime] = _updated_at()
@@ -614,6 +638,8 @@ class DocumentSectionLink(TenantScoped, Base):
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     entity_id: Mapped[uuid.UUID | None] = _fk("entities")
     evidence_id: Mapped[uuid.UUID | None] = _fk("evidence")
+    # SET NULL: a link keeps its other targets when its source item goes. The delete paths
+    # delete a link that would be left with no target first (oracle.v2.links).
     source_item_id: Mapped[uuid.UUID | None] = _fk("source_items", "SET NULL")
     precision: Mapped[str] = mapped_column(Text, nullable=False, server_default="section")
     # The claim, for precision "claim" (the exact words it supports).
@@ -626,6 +652,8 @@ class ArtifactDependency(TenantScoped, Base):
 
     Downstream is an artifact version or a document version (roadmaps are documents).
     Upstream is a document section (at a hash), an entity, or a whole document version.
+    An upstream entity that is deleted leaves the row in place (0014_trace): the
+    reference is nulled and ``upstream_snapshot`` keeps what it pointed at.
     """
 
     __tablename__ = "artifact_dependencies"
@@ -635,7 +663,8 @@ class ArtifactDependency(TenantScoped, Base):
             "(artifact_version_id IS NULL) <> (document_version_id IS NULL)", name="downstream"
         ),
         CheckConstraint(
-            "upstream_version_id IS NOT NULL OR upstream_entity_id IS NOT NULL",
+            "upstream_version_id IS NOT NULL OR upstream_entity_id IS NOT NULL"
+            " OR upstream_snapshot IS NOT NULL",
             name="upstream",
         ),
         Index("ix_artifact_dependencies_freshness", "tenant_id", "freshness"),
@@ -647,7 +676,10 @@ class ArtifactDependency(TenantScoped, Base):
     # With upstream_version_id: the section it depends on; null: the whole version.
     upstream_section_key: Mapped[str | None] = mapped_column(Text)
     upstream_section_hash: Mapped[str | None] = mapped_column(Text)
-    upstream_entity_id: Mapped[uuid.UUID | None] = _fk("entities")
+    upstream_entity_id: Mapped[uuid.UUID | None] = _fk("entities", "SET NULL")
+    # The upstream entity as it was when it was deleted ({id, type, key, title, status}).
+    upstream_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    upstream_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     composition_revision: Mapped[int | None] = mapped_column(Integer)
     freshness: Mapped[str] = mapped_column(
         Text, nullable=False, default="fresh", server_default="fresh"

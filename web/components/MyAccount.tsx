@@ -8,13 +8,22 @@ import { ConfirmDialog } from "@/components/account/ConfirmDialog";
 import { Expiry, expiryText, Scopes, TokenStatus, tokenState, when } from "@/components/ApiTokensSettings";
 import { ROLE_LABEL } from "@/components/MembersSettings";
 import { Field, INPUT } from "@/app/settings/_components/fields";
-import { Button } from "@/components/ds/Button";
-import { Chip } from "@/components/ds/Chip";
-import { DataTable, type Column } from "@/components/ds/DataTable";
-import { InfoTip } from "@/components/ds/InfoTip";
-import { Inspector, InspectorRow, InspectorSection } from "@/components/ds/Inspector";
-import { Notice, Page, PageHeader, Panel, Split } from "@/components/ds/Layout";
-import { SegmentedControl } from "@/components/ds/SegmentedControl";
+import {
+  Button,
+  Chip,
+  type Column,
+  DataTable,
+  InfoTip,
+  Inspector,
+  InspectorRow,
+  InspectorSection,
+  Notice,
+  Page,
+  PageHeader,
+  Panel,
+  SegmentedControl,
+  Split,
+} from "@/components/ds";
 import { api, ApiError, unwrap, type ApiToken, type McpClient, type MyAccount as Account } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";

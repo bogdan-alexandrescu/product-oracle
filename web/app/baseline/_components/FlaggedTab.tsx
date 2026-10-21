@@ -1,94 +1,160 @@
 "use client";
 
-import type { TraceReport } from "@/lib/api/client";
+import { Chip, DataTable, GoalTag, KpiStrip, Panel, type Column } from "@/components/ds";
+import type { TraceFeature, TraceGoal, TraceReport } from "@/lib/api/client";
 
-import { ConfidenceBadge, FlagBadges, NodeStatusBadge, Panel } from "./common";
+import { ConfidenceRing, FlagBadges, KPI_PHONE, NodeStatusBadge } from "./common";
 
 /** Features that serve no confirmed goal or rest on weak evidence, and goal coverage. */
-export function FlaggedTab({ trace, onOpen }: { trace: TraceReport; onOpen: (id: string) => void }) {
+export function FlaggedTab({
+  trace,
+  tags,
+  selectedId,
+  onOpen,
+}: {
+  trace: TraceReport;
+  tags: Map<string, string>;
+  selectedId?: string | null;
+  onOpen: (id: string) => void;
+}) {
   const s = trace.summary;
-  const stats: [string, number][] = [
-    ["Features", s.features],
-    ["Flagged", s.flagged],
-    ["Serve no goal", s.serves_no_goal],
-    ["Weak evidence", s.weak_evidence],
-    ["Goals", s.goals],
-    ["Confirmed goals", s.confirmed_goals],
-    ["Uncovered goals", s.uncovered_goals],
+  const open = (id: string) => (e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    onOpen(id);
+  };
+
+  const flaggedCols: Column<TraceFeature>[] = [
+    {
+      key: "feature",
+      header: "Feature",
+      cell: (f) => (
+        <span className="flex min-w-0 items-center gap-2">
+          <button type="button" onClick={open(f.id)} className="min-w-0 truncate text-left font-medium hover:underline">
+            {f.title}
+          </button>
+          <span className="flex flex-none gap-1.5">
+            <FlagBadges flags={f.flags} />
+          </span>
+        </span>
+      ),
+    },
+    { key: "state", header: "State", width: "120px", hideOnPhone: true, cell: (f) => <NodeStatusBadge status={f.status} /> },
+    {
+      key: "goals",
+      header: "Goals",
+      width: "120px",
+      hideOnPhone: true,
+      cell: (f) =>
+        f.goals.length === 0 ? (
+          <span className="text-text2">–</span>
+        ) : (
+          <span className="flex gap-1">
+            {f.goals.map((g) => (
+              <GoalTag key={g.goal_id} id={tags.get(g.goal_id) ?? "G"} title={g.title} />
+            ))}
+          </span>
+        ),
+    },
+    {
+      key: "evidence",
+      header: "Evidence",
+      phoneLabel: "Evidence",
+      width: "84px",
+      align: "right",
+      cell: (f) => <span className="tnum">{f.evidence_count}</span>,
+    },
+    {
+      key: "confidence",
+      header: "Conf.",
+      width: "64px",
+      align: "center",
+      cell: (f) => <ConfidenceRing value={f.confidence} low={trace.low} size={32} />,
+    },
+  ];
+
+  const coverageCols: Column<TraceGoal>[] = [
+    {
+      key: "goal",
+      header: "Goal",
+      cell: (g) => (
+        <span className="flex min-w-0 items-center gap-2">
+          <GoalTag id={tags.get(g.id) ?? "G"} proposed={g.status === "proposed"} />
+          <button type="button" onClick={open(g.id)} className="min-w-0 truncate text-left font-medium hover:underline">
+            {g.title}
+          </button>
+        </span>
+      ),
+    },
+    { key: "state", header: "State", width: "120px", hideOnPhone: true, cell: (g) => <NodeStatusBadge status={g.status} /> },
+    {
+      key: "features",
+      header: "Features",
+      phoneLabel: "Features",
+      width: "92px",
+      align: "right",
+      cell: (g) => (
+        <span data-col="features" className="tnum" title={g.features.map((f) => `${f.title} (${f.contribution})`).join(", ")}>
+          {g.features.length}
+        </span>
+      ),
+    },
+    {
+      key: "coverage",
+      header: "Coverage",
+      phoneLabel: "Coverage",
+      width: "96px",
+      align: "right",
+      cell: (g) =>
+        g.coverage === 0 && g.status === "confirmed" ? (
+          <Chip kind="crit">
+            <span data-col="coverage">{g.coverage}</span>
+          </Chip>
+        ) : (
+          <span data-col="coverage" className="tnum font-semibold">
+            {g.coverage}
+          </span>
+        ),
+    },
   ];
 
   return (
-    <div className="space-y-6">
-      <dl className="grid grid-cols-4 gap-3 sm:grid-cols-7" aria-label="Summary">
-        {stats.map(([label, n]) => (
-          <div key={label} className="rounded-lg border border-neutral-200 bg-white px-3 py-2">
-            <dt className="text-xs text-neutral-500">{label}</dt>
-            <dd className="text-lg font-semibold text-neutral-900 tabular-nums">{n}</dd>
-          </div>
-        ))}
-      </dl>
+    <div className="flex flex-col gap-4">
+      <div className={KPI_PHONE}>
+        <KpiStrip
+          label="Summary"
+          items={[
+            { label: "Flagged", value: s.flagged, of: s.features, tone: s.flagged > 0 ? "crit" : undefined },
+            { label: "Serve no goal", value: s.serves_no_goal, tone: s.serves_no_goal > 0 ? "crit" : undefined },
+            { label: "Weak evidence", value: s.weak_evidence, tone: s.weak_evidence > 0 ? "warn" : undefined },
+            { label: "Uncovered goals", value: s.uncovered_goals, of: s.confirmed_goals, tone: s.uncovered_goals > 0 ? "warn" : undefined },
+          ]}
+        />
+      </div>
 
-      <Panel title="Flagged features">
-        {trace.flagged.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-neutral-500">
-            Nothing flagged: every feature serves a confirmed goal and rests on solid evidence.
-          </p>
-        ) : (
-          <ul className="divide-y divide-neutral-200" aria-label="Flagged features">
-            {trace.flagged.map((f) => (
-              <li key={f.id} data-testid={`flagged-${f.key}`} className="flex flex-wrap items-center gap-1.5 px-4 py-2.5">
-                <button type="button" onClick={() => onOpen(f.id)} className="font-medium text-neutral-900 hover:underline">
-                  {f.title}
-                </button>
-                <NodeStatusBadge status={f.status} />
-                <ConfidenceBadge value={f.confidence} low={trace.low} />
-                <FlagBadges flags={f.flags} />
-                <span className="ml-auto text-xs text-neutral-500">
-                  {f.evidence_count} piece{f.evidence_count === 1 ? "" : "s"} of evidence
-                  {f.goals.length > 0 && ` · supports ${f.goals.map((g) => g.title).join(", ")}`}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+      <Panel title="Flagged features" count={trace.flagged.length}>
+        <DataTable
+          label="Flagged features"
+          columns={flaggedCols}
+          rows={trace.flagged}
+          rowKey={(f) => f.id}
+          selected={selectedId}
+          onSelect={(id) => onOpen(id)}
+          rowProps={(f) => ({ "data-testid": `flagged-${f.key}` })}
+          empty="Nothing flagged"
+        />
       </Panel>
 
-      <Panel title="Goal coverage">
-        <table className="w-full text-sm" aria-label="Goal coverage">
-          <thead className="bg-neutral-50 text-left text-xs text-neutral-500">
-            <tr>
-              <th className="px-4 py-2 font-medium">Goal</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2 text-right font-medium">Features</th>
-              <th className="px-4 py-2 text-right font-medium">Coverage</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-200">
-            {trace.goals.map((g) => (
-              <tr key={g.id} data-testid={`coverage-${g.key}`}>
-                <td className="px-4 py-2">
-                  <button type="button" onClick={() => onOpen(g.id)} className="text-neutral-900 hover:underline">
-                    {g.title}
-                  </button>
-                  {g.features.length > 0 && (
-                    <div className="text-xs text-neutral-500">
-                      {g.features.map((f) => `${f.title} (${f.contribution})`).join(", ")}
-                    </div>
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  <NodeStatusBadge status={g.status} />
-                </td>
-                <td className="px-4 py-2 text-right tabular-nums" data-col="features">
-                  {g.features.length}
-                </td>
-                <td className="px-4 py-2 text-right tabular-nums" data-col="coverage">
-                  {g.coverage}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Panel title="Goal coverage" count={trace.goals.length}>
+        <DataTable
+          label="Goal coverage"
+          columns={coverageCols}
+          rows={trace.goals}
+          rowKey={(g) => g.id}
+          selected={selectedId}
+          onSelect={(id) => onOpen(id)}
+          rowProps={(g) => ({ "data-testid": `coverage-${g.key}` })}
+          empty="No goals yet"
+        />
       </Panel>
     </div>
   );

@@ -97,7 +97,11 @@ async def test_an_edit_invalidates_only_the_affected_section(client):
     assert s2["risks"]["status"] == "approved"
 
     async with tenant_session(ctx.tenant_id) as s:
-        events = (await s.scalars(select(ChangeEvent))).all()
+        events = [
+            e
+            for e in (await s.scalars(select(ChangeEvent))).all()
+            if e.subject_kind == "document_section"
+        ]
         # One change, for the edited section only, handled by the review lane's handler.
         assert [(e.subject_kind, e.cause, e.data["section_key"]) for e in events] == [
             ("document_section", "section_edited", "problem")
@@ -189,6 +193,7 @@ async def test_an_accepted_ai_patch_invalidates_the_section_approval(client):
         causes = [
             (e.cause, e.data["section_key"])
             for e in (await s.scalars(select(ChangeEvent).order_by(ChangeEvent.created_at)))
+            if e.subject_kind == "document_section"
         ]
     assert ("patch_accepted", "problem") in causes
     assert ("patch_accepted", "solution") not in causes
@@ -250,9 +255,10 @@ async def test_the_decider_approves_current_versions_only(client):
 
     v2 = replace(DRAFT, "Calendar sync may lag.", "Calendar sync may lag by a day.")
     assert (await import_md(client, ctx.auth, v2)).status_code == 201
-    # Version 1 is no longer current.
+    # Version 1 is no longer current: the publish gate's words (C5) for a PRD.
     resp = await client.post(ctx.v(1, "/approve"), headers=decider.headers)
-    assert resp.status_code == 409 and "current version" in resp.json()["detail"]
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "v2 exists: only the latest version can be published"
     resp = await client.post(ctx.v(2, "/approve"), headers=decider.headers)
     assert resp.status_code == 200
     assert resp.json()["version"]["approved_at"]

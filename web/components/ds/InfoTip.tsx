@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /**
  * The (i) tooltip that holds every explanation (I3 rule 1: no visible prose).
@@ -28,7 +28,38 @@ export function InfoTip({
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const root = useRef<HTMLSpanElement>(null);
+  const tip = useRef<HTMLSpanElement>(null);
   const shown = open || pinned;
+  // Keep an open tip inside the viewport, or inside a scrolling panel that clips it (the
+  // Inspector), with a 12 px margin: narrow it to the room there, then shift it in.
+  const [fit, setFit] = useState<{ shift: number; width?: number }>({ shift: 0 });
+
+  useLayoutEffect(() => {
+    if (!shown || !tip.current) {
+      setFit({ shift: 0 });
+      return;
+    }
+    let lo = 0;
+    let hi = document.documentElement.clientWidth;
+    for (let el = root.current?.parentElement; el && el !== document.body; el = el.parentElement) {
+      if (getComputedStyle(el).overflowX !== "visible") {
+        const r = el.getBoundingClientRect();
+        lo = Math.max(lo, r.left);
+        hi = Math.min(hi, r.right);
+        break;
+      }
+    }
+    lo += 12;
+    hi -= 12;
+    const box = tip.current.getBoundingClientRect();
+    const width = Math.min(box.width, hi - lo);
+    // Unshifted, the tip keeps the edge `align` names next to the (i).
+    const left = align === "end" ? box.right - fit.shift - width : box.left - fit.shift;
+    const shift = left < lo ? lo - left : left + width > hi ? hi - (left + width) : 0;
+    setFit({ shift, width: width < box.width ? width : undefined });
+    // Measured once per opening; fitting does not re-measure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown]);
 
   useEffect(() => {
     if (!shown) return;
@@ -76,9 +107,14 @@ export function InfoTip({
         i
       </button>
       <span
+        ref={tip}
         id={id}
         role="tooltip"
         hidden={!shown}
+        style={{
+          ...(fit.shift ? { transform: `translateX(${fit.shift}px)` } : {}),
+          ...(fit.width ? { maxWidth: fit.width } : {}),
+        }}
         className={`absolute z-50 w-max max-w-[min(380px,calc(100vw-24px))] rounded-button bg-tip px-3.5 py-2.5 text-left text-sm leading-5 font-normal tracking-normal whitespace-normal text-tip-text not-italic shadow-tip ${
           side === "top" ? "bottom-[calc(100%+10px)]" : "top-[calc(100%+10px)]"
         } ${align === "end" ? "-right-3" : "-left-3"}`}

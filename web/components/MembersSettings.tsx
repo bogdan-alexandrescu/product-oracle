@@ -6,13 +6,21 @@ import { useRef, useState, type FormEvent } from "react";
 import { ActedCell, SETTLING, Unavailable, useActed } from "@/components/account/acted";
 import { ConfirmDialog } from "@/components/account/ConfirmDialog";
 import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
-import { Button } from "@/components/ds/Button";
-import { Chip } from "@/components/ds/Chip";
-import { DataTable, type Column } from "@/components/ds/DataTable";
-import { Avatar } from "@/components/ds/Figures";
-import { InfoTip } from "@/components/ds/InfoTip";
-import { Inspector, InspectorRow, InspectorSection } from "@/components/ds/Inspector";
-import { Notice, Page, PageHeader, Panel, Split } from "@/components/ds/Layout";
+import {
+  Avatar,
+  Button,
+  Chip,
+  DataTable,
+  InfoTip,
+  Inspector,
+  InspectorRow,
+  InspectorSection,
+  Notice,
+  PageHeader,
+  Panel,
+  Split,
+  type Column,
+} from "@/components/ds";
 import { api, unwrap, type Invite, type Member } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { hasRole, useMe, type Role } from "@/lib/me";
@@ -65,7 +73,7 @@ export function MembersSettings() {
 
   if (!loading && isOwner) return <OwnerView selfId={me?.user_id ?? null} />;
   return (
-    <Page>
+    <>
       <PageHeader title="Members" status={pageTip} />
       {!loading && (
         <Split inspector={<RolesInspector />}>
@@ -81,7 +89,7 @@ export function MembersSettings() {
           </p>
         </Split>
       )}
-    </Page>
+    </>
   );
 }
 
@@ -443,7 +451,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
 
   const active = members?.filter((m) => !removed(m)).length;
   return (
-    <Page>
+    <>
       <PageHeader
         title="Members"
         status={
@@ -510,6 +518,6 @@ function OwnerView({ selfId }: { selfId: string | null }) {
           { icon: "user", text: "An owner can restore them; revoked tokens and connections stay revoked." },
         ]}
       />
-    </Page>
+    </>
   );
 }

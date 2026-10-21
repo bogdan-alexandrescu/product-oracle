@@ -18,13 +18,14 @@ from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.jobs.schemas import SuggestionOut
+from oracle.review import publish_gate
 from oracle.review.models import FEEDBACK_STATUSES, Comment, FeedbackItem, SectionReview
 from oracle.review.schemas import (
     CommentOut,
@@ -175,10 +176,12 @@ async def feedback_out(
     from oracle.jobs.service import latest_suggestions
 
     suggestions = await latest_suggestions(session, [i.id for i in items])
+    latest = await latest_numbers(session, {i.document_id for i in items})
     out = []
     for item in items:
         anchor = anchors.get(item.comment_id) if item.comment_id else None
         suggestion = suggestions.get(item.id)
+        state = feedback_state(item.status, suggestion)
         out.append(
             FeedbackItemOut(
                 id=item.id,
@@ -198,9 +201,55 @@ async def feedback_out(
                 created_at=item.created_at,
                 updated_at=item.updated_at,
                 suggestion=SuggestionOut.model_validate(suggestion) if suggestion else None,
+                state=state,
+                staged_for_version=(latest.get(item.document_id) or 0) + 1
+                if state == "staged"
+                else None,
             )
         )
     return out
+
+
+def is_staged(suggestion) -> bool:
+    """C1e: an accepted section-text suggestion not applied in any draft yet."""
+    return (
+        suggestion is not None
+        and suggestion.kind == "section_text"
+        and suggestion.status == "accepted"
+        and suggestion.applied_in_version is None
+    )
+
+
+def feedback_state(status: str, suggestion) -> str:
+    """open / staged / declined / done, from the item's status and its live suggestion.
+
+    Staged first (owner, 2026-10-20): an accepted change carries into the next draft until
+    a draft applies it or someone discards it, whatever happened to its item since (closed
+    by a draft's resolutions, an approval or by hand). The build action counts the same
+    changes (``kinds.staged_suggestions``)."""
+    if is_staged(suggestion):
+        return "staged"
+    if status == "declined":
+        return "declined"
+    if status != "open":
+        return "done"
+    if suggestion is not None and suggestion.status == "applied":
+        return "done"
+    return "open"
+
+
+async def latest_numbers(
+    session: AsyncSession, document_ids: Iterable[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    ids = set(document_ids)
+    if not ids:
+        return {}
+    rows = await session.execute(
+        select(DocumentVersion.document_id, func.max(DocumentVersion.number))
+        .where(DocumentVersion.document_id.in_(ids))
+        .group_by(DocumentVersion.document_id)
+    )
+    return dict(rows.all())
 
 
 def _feedback_order():
@@ -357,8 +406,8 @@ async def update_comment(
 ) -> CommentOut:
     """Resolve / reopen a thread and/or edit a comment's text.
 
-    Resolving is thread state for the UI; the feedback item keeps its own status (it is
-    closed by the next draft's ``resolutions`` or ``PATCH /v1/feedback/{id}``). Editing
+    Resolving a thread also closes its feedback item (``addressed``, no version), so the
+    Inbox stops counting it; reopening the thread reopens an item closed that way. Editing
     the body of a top-level comment refreshes its item's summary while the item is open.
 
     Below the approver role a principal may only change its own comments.
@@ -382,9 +431,23 @@ async def update_comment(
         if resolved and comment.resolved_at is None:
             comment.resolved_at = _now()
             changes["resolved"] = True
+            item = await session.scalar(
+                select(FeedbackItem).where(FeedbackItem.comment_id == comment.id)
+            )
+            if item is not None and item.status == "open":
+                item.status = "addressed"
         elif not resolved and comment.resolved_at is not None:
             comment.resolved_at = None
             changes["resolved"] = False
+            item = await session.scalar(
+                select(FeedbackItem).where(FeedbackItem.comment_id == comment.id)
+            )
+            if (
+                item is not None
+                and item.status == "addressed"
+                and item.addressed_in_version is None
+            ):
+                item.status = "open"
     if body is not None and body != comment.body:
         comment.body = body
         changes["body"] = body
@@ -814,7 +877,8 @@ async def approve_version(
 
     The final approval is the designated decider's when the review policy names one
     (others review and give section verdicts), and it is of the current version only:
-    approving a version a newer one replaced is a ``conflict``.
+    approving a version a newer one replaced is a ``conflict``. A PRD passes the publish
+    gate first (raises ``publish_gate.PublishBlocked``).
     """
     from oracle.review.publish import lock_document
     from oracle.review.state import effective_policy
@@ -832,6 +896,8 @@ async def approve_version(
         raise ReviewError(
             "forbidden", "Only the designated decider approves this document's versions"
         )
+    # A PRD: the publish gate (only the latest version, then readiness), in its words.
+    await publish_gate.check(session, document, version)
     latest = await session.scalar(
         select(DocumentVersion.number)
         .where(DocumentVersion.document_id == document.id)
@@ -878,4 +944,10 @@ async def approve_version(
             ),
         },
     )
+    if document.kind == "prd":
+        # V2b, T2: approving a PRD version publishes it; a published PRD starts (or
+        # advances) its product track.
+        from oracle.roadmap import tracks
+
+        await tracks.ensure_track(session, document, version, actor=principal, cause="approved")
     return document, version

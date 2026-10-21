@@ -23,7 +23,7 @@ class Tenant(IdMixin, Base):
 class AuditEvent(TenantScoped, Base):
     __tablename__ = "audit_events"
 
-    # "user:<uuid>", "token:<uuid>" or "system".
+    # "user:<uuid>", "token:<uuid>", "oracle" (oracle.audit.ORACLE) or "system".
     actor: Mapped[str] = mapped_column(Text, nullable=False)
     # The API token the actor acted through (also a token acting for a user), C2.
     actor_token_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
@@ -54,11 +54,13 @@ from oracle.claude_accounts.models import (  # noqa: E402
 )
 from oracle.connections.models import Connection  # noqa: E402
 from oracle.docs.models import Citation, Document, DocumentVersion, Section  # noqa: E402
+from oracle.intake.models import IntakeProposal, IntakeWithheldItem  # noqa: E402
 from oracle.jobs.models import LlmJob, LlmSuggestion  # noqa: E402
 from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken  # noqa: E402
 from oracle.members.models import Invite, MemberFollowUp  # noqa: E402
 from oracle.preferences.models import UserPreference  # noqa: E402
 from oracle.priorities.models import PrioritySnapshot  # noqa: E402
+from oracle.quality.models import OutcomeRecord, QualityLearning  # noqa: E402
 from oracle.review.models import (  # noqa: E402
     Comment,
     DocumentPublication,
@@ -70,6 +72,13 @@ from oracle.review.models import (  # noqa: E402
     SectionReview,
     SectionReviewState,
 )
+from oracle.roadmap.models import (  # noqa: E402
+    ProductTrack,
+    RoadmapItem,
+    ScheduleBasis,
+    TrackerRecord,
+    TrackMilestone,
+)
 from oracle.runs.models import Checkpoint, Run, RunSegment  # noqa: E402
 from oracle.runtokens import RunToken  # noqa: E402
 from oracle.sources.models import (  # noqa: E402
@@ -78,6 +87,7 @@ from oracle.sources.models import (  # noqa: E402
     SourceItem,
     SourceItemVersion,
 )
+from oracle.swarm.learned import LearnedFeature  # noqa: E402
 from oracle.templates.models import Template, TemplateVersion, Theme  # noqa: E402
 from oracle.tenant_settings import TenantSetting  # noqa: E402
 from oracle.v2.models import (  # noqa: E402
@@ -143,9 +153,12 @@ __all__ = [
     "EvidenceLinkSnapshot",
     "FeasibilityExperiment",
     "FeedbackItem",
+    "IntakeProposal",
+    "IntakeWithheldItem",
     "Invite",
     "MemberFollowUp",
     "KnowledgeGap",
+    "LearnedFeature",
     "LlmJob",
     "LlmSuggestion",
     "ModuleDefinition",
@@ -154,13 +167,18 @@ __all__ = [
     "OAuthClient",
     "OAuthCode",
     "OAuthToken",
+    "OutcomeRecord",
     "PrioritySnapshot",
     "ProductIntake",
+    "ProductTrack",
     "Proposal",
     "ReviewCampaign",
+    "QualityLearning",
+    "RoadmapItem",
     "Run",
     "RunSegment",
     "RunToken",
+    "ScheduleBasis",
     "Section",
     "SectionPatch",
     "SectionReview",
@@ -177,6 +195,8 @@ __all__ = [
     "Tenant",
     "TenantSetting",
     "Theme",
+    "TrackMilestone",
+    "TrackerRecord",
     "User",
     "UserPreference",
 ]

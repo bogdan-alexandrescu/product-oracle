@@ -9,24 +9,27 @@ test("settings › sources: my sources, status and last error, sync, allowlist, 
 
   const chat = page.getByRole("listitem", { name: "Product chat" });
   await expect(chat).toContainText("Slack");
-  await expect(chat).toContainText("active");
+  await expect(chat).toContainText("Active");
   await expect(chat).toContainText("C0123PRODUCT, C0456FEEDBACK");
 
   const repo = page.getByRole("listitem", { name: "Example repo" });
-  await expect(repo).toContainText("error");
+  await expect(repo).toContainText("Error");
   await expect(repo.getByTestId("last-error")).toHaveText("The connection was rejected: token expired");
 
   await chat.getByRole("button", { name: "Sync now" }).click();
   await expect(chat.getByRole("status")).toContainText("Synced: 2 item(s) seen, 1 new version(s)");
 
-  await chat.getByRole("button", { name: "Edit allowlist" }).click();
+  // Edit allowlist and Delete sit in the row's More menu.
+  await chat.getByRole("button", { name: "More actions for Product chat" }).click();
+  await chat.getByRole("menuitem", { name: "Edit allowlist" }).click();
+  await chat.getByRole("button", { name: "Paste ids" }).click();
   await chat.getByLabel("Channel ids (one per line)").fill("C0123PRODUCT\nC0789ROADMAP");
   await chat.getByRole("button", { name: "Save allowlist" }).click();
   await expect(chat.getByRole("status")).toHaveText("Allowlist saved.");
   await expect(chat).toContainText("C0123PRODUCT, C0789ROADMAP");
 
   await chat.getByRole("button", { name: "Pause" }).click();
-  await expect(chat).toContainText("paused");
+  await expect(chat).toContainText("Paused");
   await expect(chat.getByRole("button", { name: "Sync now" })).toBeDisabled();
   await chat.getByRole("button", { name: "Resume" }).click();
   await expect(chat.getByRole("button", { name: "Sync now" })).toBeEnabled();
@@ -42,15 +45,11 @@ test("settings › sources: add from my connections, upload files, delete", asyn
   await page.goto("/settings/sources");
   const form = page.getByRole("form", { name: "Add a source" });
 
-  // A kind without a connector cannot be added.
-  await form.getByLabel("Kind").selectOption("notion");
-  await expect(form).toContainText("The Notion connector is not available yet.");
-  await expect(form.getByRole("button", { name: "Add source" })).toBeDisabled();
-
   await form.getByLabel("Kind").selectOption("github");
   await expect(form.getByLabel("Connection")).toHaveValue(/.+/);
   await form.getByLabel("Name").fill("Docs repo");
-  await form.getByLabel("Repositories to pull in (one per line)").fill("example-org/docs");
+  await form.getByRole("button", { name: "Paste ids" }).click();
+  await form.getByLabel("Repositories (one per line)").fill("example-org/docs");
   await form.getByRole("button", { name: "Add source" }).click();
   const docs = page.getByRole("listitem", { name: "Docs repo" });
   await expect(docs).toContainText("example-org/docs");
@@ -74,9 +73,24 @@ test("settings › sources: add from my connections, upload files, delete", asyn
   ]);
   await expect(notes.getByRole("alert")).toContainText("only .md, .txt and .pdf files can be uploaded");
 
-  page.once("dialog", (d) => d.accept());
-  await docs.getByRole("button", { name: "Delete" }).click();
+  // Delete asks in the page (never a browser dialog); Back keeps the source.
+  const native: string[] = [];
+  page.on("dialog", (d) => {
+    native.push(d.message());
+    void d.dismiss();
+  });
+  const ask = page.getByRole("alertdialog", { name: "Delete" });
+  await docs.getByRole("button", { name: "More actions for Docs repo" }).click();
+  await docs.getByRole("menuitem", { name: "Delete" }).click();
+  await expect(ask).toContainText("Delete “Docs repo” and everything it pulled in?");
+  await ask.getByRole("button", { name: "Back" }).click();
+  await expect(ask).toHaveCount(0);
+  await expect(page.getByRole("listitem", { name: "Docs repo" })).toHaveCount(1);
+  await docs.getByRole("button", { name: "More actions for Docs repo" }).click();
+  await docs.getByRole("menuitem", { name: "Delete" }).click();
+  await ask.getByRole("button", { name: "Delete" }).click();
   await expect(page.getByRole("listitem", { name: "Docs repo" })).toHaveCount(0);
+  expect(native).toEqual([]);
 });
 
 test("/sources: search ranks by confidence and explains the badge", async ({ page }) => {

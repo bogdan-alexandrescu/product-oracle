@@ -1,11 +1,42 @@
 import uuid
-from datetime import datetime
-from typing import Any, Literal
+from datetime import date, datetime
+from typing import Any, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 DocumentStatus = Literal["draft", "in_review", "approved"]
-CitationSource = Literal["slack", "notion", "gdocs", "github", "fireflies", "upload", "web"]
+# "oracle": Oracle's own baseline (a goal, decision, constraint or feature); its ``ref`` is
+# free text naming the baseline item, not a link.
+CitationSource = Literal[
+    "slack", "notion", "gdocs", "github", "fireflies", "upload", "web", "oracle"
+]
+# A citation's confidence (owner, 2026-10-20): a number from 0 to 1, or none. The import
+# (oracle.docs.parser.CitationIn), the API (CitationOut), the contract agents read and the
+# database's check (migration 0019_citation_confidence) keep these bounds.
+CONFIDENCE_MIN = 0
+CONFIDENCE_MAX = 1
+CONFIDENCE_RANGE = f"a number from {CONFIDENCE_MIN} to {CONFIDENCE_MAX}"
+
+
+def citation_contract() -> str:
+    """The citation contract as agents read it (draft prompts, push_draft), its sources
+    generated from :data:`CitationSource` and its confidence bounds from
+    :data:`CONFIDENCE_MIN` and :data:`CONFIDENCE_MAX`, so they cannot drift."""
+    sources = ", ".join(get_args(CitationSource))
+    return (
+        "Citation contract: citations are a list under citations in the YAML front matter; "
+        f"each has id, source (one of: {sources}), ref (a URL to the item; for oracle, the "
+        'baseline item\'s kind and key, e.g. "baseline decision <key>"), title, excerpt and '
+        "retrieved_at (when you read it, ISO 8601), and may have item (the id of the source "
+        f"item you read), confidence ({CONFIDENCE_RANGE}: how much the evidence counts; "
+        "null when there is no score, with confidence_note saying why) and low_confidence "
+        "(true when the confidence is under the company's low threshold). Every [c:id] chip "
+        "in the body must match a citation's id. Oracle refuses a draft with any other "
+        f"source, a confidence outside {CONFIDENCE_MIN} to {CONFIDENCE_MAX}, or a chip that "
+        "matches no id."
+    )
+
+
 Verdict = Literal["approved", "changes_requested", "rejected"]
 # O1f: brief sections make up the brief layer; the full layer is every section.
 Layer = Literal["brief", "detail"]
@@ -103,6 +134,13 @@ class CitationOut(ORM):
     title: str | None = None
     excerpt: str | None = None
     retrieved_at: datetime | None = None
+    # What the writer computed for the citation: the source item it read (null when the
+    # company has no such item), its confidence 0-1 and the low-confidence flag. With no
+    # confidence, ``confidence_note`` says why ("owner decision, locked").
+    item_id: uuid.UUID | None = None
+    confidence: float | None = Field(default=None, ge=CONFIDENCE_MIN, le=CONFIDENCE_MAX)
+    confidence_note: str | None = None
+    low_confidence: bool = False
 
 
 class SectionVerdict(ORM):
@@ -125,7 +163,11 @@ class SectionOut(ORM):
     level: int
     heading: str
     body_md: str
-    body_text: str
+    body_text: str = Field(
+        description="Plain text of the body, citation markers removed. A table is one line "
+        "per row (header first, no separator row), cells joined by ' | '; a literal '|' in "
+        "a cell is '\\|'."
+    )
     content_hash: str
     # The review revision: the text, the citation entries it cites and its layer. Send
     # it as ``base_revision`` when saving the section.
@@ -149,12 +191,32 @@ class ApprovalLapse(BaseModel):
     reason: str | None = None
 
 
+class DateMarkOut(BaseModel):
+    """A date written in a roadmap's text, checked against its PRD's schedule bases now
+    (O4 'document dates', oracle.roadmap.doc_dates). ``label`` is the marker shown next
+    to the date (``unverified``, ``date withdrawn``); None for a verified date. The
+    text itself is never rewritten."""
+
+    section_key: str
+    text: str
+    date: date
+    status: Literal["verified", "unverified", "withdrawn"]
+    label: str | None = None
+    # The references of the bases that support it (or, withdrawn, that did).
+    bases: list[str] = []
+    # Where it is written: the front matter title (``section_key`` is ""), a section's
+    # heading or its body.
+    where: Literal["title", "heading", "body"] = "body"
+
+
 class VersionOut(VersionSummary):
     # Every approval of this version that lapsed, oldest first.
     approval_lapses: list[ApprovalLapse] = []
     front_matter: dict[str, Any] = {}
     sections: list[SectionOut] = []
     citations: list[CitationOut] = []
+    # Roadmaps only: each date its text writes, one per date and section.
+    date_marks: list[DateMarkOut] = []
 
 
 class WordOp(BaseModel):

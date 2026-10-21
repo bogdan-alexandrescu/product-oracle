@@ -19,6 +19,26 @@ export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
   fireflies: "Meeting notes",
   upload: "Upload",
   web: "Web",
+  oracle: "Oracle baseline",
+};
+
+/**
+ * Where a citation opens, or null when its ref is not a link: an "oracle" citation names a
+ * baseline item in free text ("baseline decision <key> ..."), shown as text.
+ */
+export const citationHref = (c: Pick<CitationOut, "source" | "ref">): string | null => (c.source === "oracle" ? null : c.ref);
+
+/**
+ * What a citation's writer said of it: its confidence as "0.75", else (no score) its note,
+ * e.g. "owner decision, locked"; null when it says neither.
+ */
+export const citationConfidence = (c: Pick<CitationOut, "confidence" | "confidence_note">): string | null =>
+  c.confidence != null ? c.confidence.toFixed(2) : c.confidence_note?.trim() || null;
+
+/** The source with the citation's confidence beside it: "GitHub · 0.75". */
+export const citationSourceLabel = (c: Pick<CitationOut, "source" | "confidence" | "confidence_note">): string => {
+  const confidence = citationConfidence(c);
+  return confidence ? `${SOURCE_LABEL[c.source]} · ${confidence}` : SOURCE_LABEL[c.source];
 };
 
 export const VERDICT_LABEL: Record<Verdict, string> = {
@@ -40,6 +60,9 @@ export const JOB_KIND_LABEL: Record<LlmJobKind, string> = {
   review_comments: "Review comments",
   reporting: "Reporting",
   refinement: "Refinement",
+  intake_analysis: "Intake analysis",
+  quality_review: "Quality review",
+  refinement_batch: "Next draft",
 };
 
 export const JOB_STATUS_LABEL: Record<LlmJob["status"], string> = {

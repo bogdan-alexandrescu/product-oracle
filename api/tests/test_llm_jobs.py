@@ -59,13 +59,13 @@ class FakeClaude:
     """Answers each job kind from a script: a dict, a callable(payload) or an exception."""
 
     def __init__(self):
-        self.script: dict[str, list] = {"review_comments": [], "reporting": [], "refinement": []}
+        self.script: dict[str, list] = {k: [] for k in prompting.CURRENT}
         self.calls: list[tuple[str, dict]] = []
         self.on_call = None
 
     @staticmethod
     def kind_of(request: LlmRequest) -> str:
-        for kind in ("review_comments", "reporting", "refinement"):
+        for kind in prompting.CURRENT:
             if request.system == prompting.current(kind)[1]:
                 return kind
         raise AssertionError("unknown prompt")
@@ -632,6 +632,20 @@ async def test_a_refinement_of_an_outdated_version_is_refused(client, ctx, pool,
     assert resp.status_code == 409
 
 
+async def test_a_refined_body_past_the_200k_cap_fails_the_job(client, ctx, pool, fake):
+    # Model output is capped like an approver's edit: the house rules never read more.
+    await import_draft(client, ctx)
+    resp = await client.post(
+        V(1, "/sections/problem/refine"), json={"instruction": "Longer."}, headers=ctx["headers"]
+    )
+    job_id = resp.json()["id"]
+    too_long = {"heading": "Problem", "body_md": "a" * 200_001}
+    fake.script["refinement"] += [too_long, too_long]
+    await tick(client, ctx)
+    job = (await client.get(f"/v1/llm-jobs/{job_id}", headers=ctx["headers"])).json()
+    assert job["status"] == "failed" and "200,000 characters" in job["error"], job
+
+
 async def test_refine_needs_an_accepted_suggestion_or_an_instruction(client, ctx, pool, fake):
     await import_draft(client, ctx)
     resp = await client.post(V(1, "/sections/problem/refine"), json={}, headers=ctx["headers"])
@@ -977,6 +991,7 @@ async def test_an_owner_turns_job_kinds_off_per_document(client, ctx, pool, fake
         "review_comments": True,
         "reporting": True,
         "refinement": True,
+        "quality_review": True,
     }
     resp = await client.put(
         url,

@@ -2,11 +2,16 @@
  * Mock of the connections and company settings endpoints (mock mode only). Kept apart
  * from server.ts; state lives in its own localStorage key.
  *
- * Token rules: anything starting with "bad" is rejected. OAuth is "configured" for GitHub
- * and Google: authorize connects at once and sends the browser straight back to the page.
+ * Token rules: anything starting with "bad" is rejected; a Google token starting with
+ * "legacy" has the short-lived drive.file grant, which cannot read folders ("Reconnect to
+ * choose files"). OAuth is
+ * "configured" for GitHub and Google: authorize connects at once and sends the browser
+ * straight back to the page. The Drive picker config is a fake (e2e mocks Google itself).
  * Claude is not a connection: see ./claude-accounts.ts.
  */
 import type { Schemas } from "@/lib/api/client";
+
+import { MOCK_NOTION_CONNECTION_ID, notionPages } from "./notion";
 
 type ConnectionRow = Schemas["ConnectionOut"];
 
@@ -16,6 +21,18 @@ interface ConnDb {
 }
 
 const STORAGE_KEY = "po-mock-connections-v1";
+const DRIVE_FILE = "https://www.googleapis.com/auth/drive.file";
+const DRIVE_READONLY = "https://www.googleapis.com/auth/drive.readonly";
+export const MOCK_PICKER_CONFIG: Schemas["PickerConfigOut"] = {
+  client_id: "000000000000-mock.apps.googleusercontent.com",
+  app_id: "000000000000",
+  developer_key: "mock-browser-key",
+};
+
+/** As oracle.connections.providers.reconnect_reason. */
+export function reconnectReason(provider: string, scopes: string[]): string | null {
+  return provider === "google" && scopes.length > 0 && !scopes.includes(DRIVE_READONLY) ? "Reconnect to choose files" : null;
+}
 const PROVIDERS: Schemas["ProviderOut"][] = [
   {
     key: "github",
@@ -54,7 +71,7 @@ const PROVIDERS: Schemas["ProviderOut"][] = [
     name: "Google Docs",
     source_kinds: ["google_docs"],
     oauth_configured: true,
-    oauth_scopes: ["openid", "email", "https://www.googleapis.com/auth/drive.readonly"],
+    oauth_scopes: ["openid", "email", DRIVE_READONLY],
     token_help: "Google access tokens expire within an hour; connect with Google sign-in.",
   },
 ];
@@ -62,7 +79,28 @@ const PROVIDERS: Schemas["ProviderOut"][] = [
 const SETTING_DEFAULTS: Record<string, unknown> = {
   iap_default_role: "commenter",
   confidence_weights: {},
+  blocker_risk_acceptance_role: "owner",
+  blocker_risk_review_max_days: 90,
+  // S5 (owner settings, Settings > Sources > Google Drive). The API's default is []; the
+  // mock company's members are all @example.com.
+  company_email_domains: ["example.com"],
+  company_shared_drives: [],
 };
+
+/** A mail provider anyone can sign up with, which the API refuses as a company domain. */
+function publicMailDomain(domain: string): boolean {
+  if (["gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "yahoo.com", "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com"].includes(domain)) {
+    return true;
+  }
+  return /^(gmail|googlemail|outlook|hotmail|live|msn|yahoo|aol|icloud|protonmail|gmx|yandex)\.[a-z]{2,3}(\.[a-z]{2,3})?$/.test(domain);
+}
+
+/** The shared drives a mock Google connection can see. */
+export const MOCK_SHARED_DRIVES = [
+  { id: "0ADriveProductExample", name: "Product" },
+  { id: "0ADriveDesignExample", name: "Design" },
+  { id: "0ADrivePartnerAcmeExample", name: "Partner: Acme" },
+];
 
 function load(): ConnDb {
   try {
@@ -96,7 +134,9 @@ function identity(provider: string, token: string): { account_id: string; label:
     fireflies: "pat@example.com",
     google: "pat@example.com",
   };
-  return { account_id: `${provider}-1`, label: labels[provider] ?? provider, scopes: provider === "github" ? ["repo"] : [] };
+  const google = token.startsWith("legacy") ? ["openid", "email", DRIVE_FILE] : ["openid", "email", DRIVE_READONLY];
+  const scopes = provider === "github" ? ["repo"] : provider === "google" ? google : [];
+  return { account_id: `${provider}-1`, label: labels[provider] ?? provider, scopes };
 }
 
 function upsert(
@@ -137,7 +177,7 @@ function upsert(
 }
 
 function out(_db: ConnDb, c: ConnectionRow): ConnectionRow {
-  return c;
+  return { ...c, reconnect_reason: reconnectReason(c.provider, c.scopes) };
 }
 
 function settingOut(db: ConnDb, key: string): Schemas["SettingOut"] {
@@ -171,6 +211,14 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
     if (m === "GET") return json(200, settingOut(db, key));
     if (m === "PUT") {
       const { value } = await body<Schemas["SettingIn"]>();
+      if (key === "company_email_domains" && Array.isArray(value)) {
+        const domain = value.map((d) => String(d).trim().toLowerCase().replace(/^@/, "")).find(publicMailDomain);
+        if (domain) {
+          return json(422, {
+            detail: `company_email_domains: ${domain} is a public mail provider, where anyone can have an address; enter the company's own domain`,
+          });
+        }
+      }
       if (value === null || value === undefined) delete db.settings[key];
       else db.settings[key] = value;
       return json(200, settingOut(db, key));
@@ -180,6 +228,7 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
   if (p[1] === "connections") {
     if (!p[2] && m === "GET") return json(200, db.connections.map((c) => out(db, c)));
     if (p[2] === "providers" && m === "GET") return json(200, PROVIDERS);
+    if (p[2] === "google" && p[3] === "picker-config" && m === "GET") return json(200, MOCK_PICKER_CONFIG);
     const provider = PROVIDERS.find((x) => x.key === p[2]);
 
     if (provider && p[3] === "token" && m === "POST") {
@@ -197,8 +246,21 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
       return json(200, { url: `/settings/connections?connected=${provider.key}` });
     }
 
+    if (p[3] === "notion" && p[4] === "pages" && m === "GET") {
+      // The Sources page's mock Notion connection, or one connected on Settings > Connections.
+      const own = db.connections.find((c) => c.id === p[2]);
+      if (p[2] !== MOCK_NOTION_CONNECTION_ID && !own) return json(404, { detail: "Connection not found" });
+      if (own && own.provider !== "notion") return json(409, { detail: "This is not a Notion connection" });
+      return notionPages(new URL(req.url, "http://mock"));
+    }
+
     const row = db.connections.find((c) => c.id === p[2]);
     if (!row) return json(404, { detail: "Connection not found" });
+    if (p[3] === "google" && p[4] === "shared-drives" && m === "GET") {
+      if (row.provider !== "google") return json(404, { detail: "Not your Google connection" });
+      if (reconnectReason(row.provider, row.scopes)) return json(409, { detail: "Reconnect Google to list shared drives" });
+      return json(200, { drives: MOCK_SHARED_DRIVES });
+    }
     if (!p[3] && m === "DELETE") {
       db.connections = db.connections.filter((c) => c.id !== row.id);
       return json(204, undefined);
@@ -209,6 +271,12 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
         const who = identity(row.provider, token.trim());
         if (typeof who === "string") return json(400, { detail: who });
         if (who.account_id !== row.account_id) return json(400, { detail: "That token belongs to another account" });
+      }
+      if (!token && reconnectReason(row.provider, row.scopes)) {
+        // Signs in again for drive.readonly, as the real API's authorize_url would.
+        const who = identity(row.provider, "oauth-token");
+        if (typeof who !== "string") upsert(db, row.provider, "oauth", { ...who, account_id: row.account_id });
+        return json(200, { connection: out(db, row), authorize_url: `/settings/connections?connected=${row.provider}` });
       }
       Object.assign(row, { status: "active", last_error: null, updated_at: now() });
       return json(200, { connection: out(db, row), authorize_url: null });

@@ -8,12 +8,12 @@ Commenters may only propose (POST /v1/baseline/proposals).
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import inspect
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import require_role, require_role_now
+from oracle.authz import recheck_caller, require_role, require_role_now
 from oracle.baseline import conflicts, evidence, public_links, scoring, service, trace, yaml_io
 from oracle.baseline.models import Edge, Entity
 from oracle.baseline.schemas import (
@@ -53,6 +53,7 @@ from oracle.baseline.schemas import (
     YamlImportError,
     YamlImportResult,
 )
+from oracle.http import read_capped_body
 
 router = APIRouter(prefix="/v1/baseline", tags=["baseline"])
 
@@ -77,22 +78,32 @@ def _writer(principal: Principal, body: OriginIn | EntityCreate | EdgeCreate) ->
     return service.Writer(principal, body.origin, run_id=body.run_id, reason=body.reason)
 
 
-async def _entities_out(db, rows: list[Entity]) -> list[EntityOut]:
+async def _entities_out(
+    db, rows: list[Entity], principal: Principal | None = None
+) -> list[EntityOut]:
     await _fresh(db, *rows)
     counts = await service.evidence_counts(db, entity_ids=[e.id for e in rows])
-    return [
-        EntityOut.model_validate(e).model_copy(update={"evidence_count": counts.get(e.id, 0)})
-        for e in rows
-    ]
+    view = await evidence.run_view(db, principal, entity_ids=[e.id for e in rows])
+    out = []
+    for e in rows:
+        o = EntityOut.model_validate(e).model_copy(update={"evidence_count": counts.get(e.id, 0)})
+        if view is not None:
+            o = o.model_copy(update={"confidence": view.confidence("entity", e.id)})
+        out.append(o)
+    return out
 
 
-async def _edges_out(db, rows: list[Edge]) -> list[EdgeOut]:
+async def _edges_out(db, rows: list[Edge], principal: Principal | None = None) -> list[EdgeOut]:
     await _fresh(db, *rows)
     counts = await service.evidence_counts(db, edge_ids=[e.id for e in rows])
-    return [
-        EdgeOut.model_validate(e).model_copy(update={"evidence_count": counts.get(e.id, 0)})
-        for e in rows
-    ]
+    view = await evidence.run_view(db, principal, edge_ids=[e.id for e in rows])
+    out = []
+    for e in rows:
+        o = EdgeOut.model_validate(e).model_copy(update={"evidence_count": counts.get(e.id, 0)})
+        if view is not None:
+            o = o.model_copy(update={"confidence": view.confidence("edge", e.id)})
+        out.append(o)
+    return out
 
 
 async def _entity_write(db, result: service.WriteResult, created: bool = False) -> JSONResponse:
@@ -129,8 +140,8 @@ _WRITE_RESPONSES = {202: {"description": "The item is locked: the change became 
 async def get_graph(principal: Reader, db: TenantDB) -> GraphOut:
     """Every entity and edge (no evidence bodies): what the Baseline screen draws."""
     return GraphOut(
-        entities=await _entities_out(db, await service.list_entities(db)),
-        edges=await _edges_out(db, await service.list_edges(db)),
+        entities=await _entities_out(db, await service.list_entities(db), principal),
+        edges=await _edges_out(db, await service.list_edges(db), principal),
     )
 
 
@@ -144,7 +155,7 @@ async def list_entities(
     type: EntityType | None = None,
     status: NodeStatus | None = None,
 ) -> list[EntityOut]:
-    return await _entities_out(db, await service.list_entities(db, type, status))
+    return await _entities_out(db, await service.list_entities(db, type, status), principal)
 
 
 @router.post(
@@ -178,14 +189,14 @@ async def get_entity(entity_id: uuid.UUID, principal: Reader, db: TenantDB) -> E
         raise _fail(exc) from exc
     edges = await service.list_edges(db, entity_id=entity.id)
     proposals = [p for p in await service.list_proposals(db, "open") if p.entity_id == entity.id]
-    base = (await _entities_out(db, [entity]))[0]
+    base = (await _entities_out(db, [entity], principal))[0]
+    rows = await evidence.present(db, principal, await evidence.list_for(db, entity_id=entity.id))
     return EntityDetail(
-        **base.model_dump(),
-        evidence=await evidence.present(
-            db, principal, await evidence.list_for(db, entity_id=entity.id)
-        ),
-        edges_out=await _edges_out(db, [e for e in edges if e.src_id == entity.id]),
-        edges_in=await _edges_out(db, [e for e in edges if e.dst_id == entity.id]),
+        **base.model_dump(exclude={"confidence"}),
+        confidence=evidence.as_read(principal, base.confidence, rows),
+        evidence=rows,
+        edges_out=await _edges_out(db, [e for e in edges if e.src_id == entity.id], principal),
+        edges_in=await _edges_out(db, [e for e in edges if e.dst_id == entity.id], principal),
         open_proposals=len(proposals),
     )
 
@@ -270,9 +281,14 @@ async def unlock_entity(entity_id: uuid.UUID, principal: ApproverNow, db: Tenant
 
 @router.get("/entities/{entity_id}/revisions", response_model=list[RevisionOut])
 async def list_entity_revisions(
-    entity_id: uuid.UUID, principal: Reader, db: TenantDB
+    entity_id: uuid.UUID,
+    principal: Reader,
+    db: TenantDB,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
 ) -> list[RevisionOut]:
-    return [RevisionOut.model_validate(r) for r in await service.revisions(db, entity_id=entity_id)]
+    """The entity's revisions, newest first; ``limit`` keeps only the newest (Home's trend)."""
+    rows = await service.revisions(db, entity_id=entity_id, limit=limit)
+    return [RevisionOut.model_validate(r) for r in rows]
 
 
 # --- edges ----------------------------------------------------------------------------------
@@ -285,7 +301,7 @@ async def list_edges(
     type: EdgeType | None = None,
     entity_id: uuid.UUID | None = None,
 ) -> list[EdgeOut]:
-    return await _edges_out(db, await service.list_edges(db, type, entity_id))
+    return await _edges_out(db, await service.list_edges(db, type, entity_id), principal)
 
 
 @router.post(
@@ -316,12 +332,12 @@ async def get_edge(edge_id: uuid.UUID, principal: Reader, db: TenantDB) -> EdgeD
         edge = await service.get_edge(db, edge_id)
     except service.BaselineError as exc:
         raise _fail(exc) from exc
-    base = (await _edges_out(db, [edge]))[0]
+    base = (await _edges_out(db, [edge], principal))[0]
+    rows = await evidence.present(db, principal, await evidence.list_for(db, edge_id=edge.id))
     return EdgeDetail(
-        **base.model_dump(),
-        evidence=await evidence.present(
-            db, principal, await evidence.list_for(db, edge_id=edge.id)
-        ),
+        **base.model_dump(exclude={"confidence"}),
+        confidence=evidence.as_read(principal, base.confidence, rows),
+        evidence=rows,
     )
 
 
@@ -644,7 +660,7 @@ async def resolve_conflict(
 @router.get("/trace", response_model=TraceReport)
 async def get_trace(principal: Reader, db: TenantDB) -> TraceReport:
     """Features that serve no confirmed goal, or rest on weak evidence; goal coverage."""
-    return await trace.report(db)
+    return await trace.report(db, principal)
 
 
 @router.get(
@@ -662,7 +678,11 @@ async def export_yaml(principal: Reader, db: TenantDB) -> PlainTextResponse:
 @router.post(
     "/yaml",
     response_model=YamlImportResult,
-    responses={422: {"model": YamlImportError, "description": "File rejected"}},
+    responses={
+        403: {"model": YamlImportError, "description": "A change the caller's role may not make"},
+        413: {"description": "File larger than 1 MiB (ORACLE_MAX_BODY_BYTES)"},
+        422: {"model": YamlImportError, "description": "File rejected"},
+    },
     openapi_extra={
         "requestBody": {
             "required": True,
@@ -671,17 +691,24 @@ async def export_yaml(principal: Reader, db: TenantDB) -> PlainTextResponse:
     },
 )
 async def import_yaml(
-    request: Request, principal: ApproverNow, db: TenantDB, run_id: uuid.UUID | None = None
+    request: Request, principal: Approver, db: TenantDB, run_id: uuid.UUID | None = None
 ) -> YamlImportResult | JSONResponse:
     """Merge a YAML graph in, idempotent by (type, key); locked items get proposals."""
+    raw = await read_capped_body(request)
+    # The body is in before the gate is taken (and the caller re-read under it).
+    await recheck_caller(db, principal, "approver")
     try:
-        text = (await request.body()).decode("utf-8")
+        text = raw.decode("utf-8")
     except UnicodeDecodeError:
         text = None
     try:
         if text is None:
             raise yaml_io.YamlInvalid([])
         result = await yaml_io.import_yaml(db, principal, text, run_id=run_id)
+    except yaml_io.YamlForbidden as exc:
+        await db.rollback()
+        body = YamlImportError(detail=exc.message, errors=exc.problems)
+        return JSONResponse(body.model_dump(mode="json"), 403)
     except yaml_io.YamlInvalid as exc:
         await db.rollback()
         problems = exc.problems or []

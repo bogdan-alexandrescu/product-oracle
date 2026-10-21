@@ -248,7 +248,7 @@ test("my account: change password", async ({ page }) => {
   await expect(page).toHaveURL(/\/login/);
   await page.getByRole("textbox", { name: "Password", exact: true }).fill(fresh);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/documents$/);
+  await expect(page).toHaveURL(/\/home$/);
 });
 
 test("my account: sign out everywhere ends the session, personal tokens, MCP clients and run tokens", async ({ page }) => {

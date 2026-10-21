@@ -137,7 +137,7 @@ def _mark_expand(html: str) -> str:
 
 
 def _banner(ev: ExportVersion) -> str:
-    parts = [ev.document.title, f"Version {ev.version.number}", ev.status.replace("_", " ")]
+    parts = [ev.title, f"Version {ev.version.number}", ev.status.replace("_", " ")]
     if ev.version.approved_at is not None:
         parts.append(f"approved {_format_dt(ev.version.approved_at)}")
     else:
@@ -157,7 +157,7 @@ def build_deck(ev: ExportVersion) -> Deck:
     all_keys = set(by_key)
     detail_keys = {s.section_key for s in ev.all_sections if s.layer != layers.BRIEF} - appendix
 
-    slides: list[Slide] = [Slide(index=1, kind="title", heading=ev.document.title)]
+    slides: list[Slide] = [Slide(index=1, kind="title", heading=ev.title)]
     for s in brief:
         body = layers.slide_body(s.body_md or "")
         expand = []
@@ -228,7 +228,7 @@ def build_deck(ev: ExportVersion) -> Deck:
         ]
     )
     deck = Deck(
-        title=ev.document.title,
+        title=ev.title,
         slug=ev.document.slug,
         number=ev.version.number,
         latest_number=ev.latest_number,

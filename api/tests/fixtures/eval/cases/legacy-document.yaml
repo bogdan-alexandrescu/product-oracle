@@ -1,0 +1,13 @@
+id: legacy-document
+description: >
+  A legacy PRD imported before v2: no composition, no section links, citations in the
+  body. It is evaluated from its text and citations alone, and nothing errors.
+covers: [legacy_document]
+document:
+  from: ../prd_v1.md
+expected:
+  goal_alignment: critical
+  downstream_consistency: not_applicable
+  security_policy: not_applicable
+  third_party_support: not_applicable
+blocked: false

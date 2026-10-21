@@ -24,16 +24,18 @@ same file twice changes nothing. Items not in the file are left alone. Writes ar
 goal never becomes confirmed through an import (it lands proposed; an approver
 confirms it). Evidence is matched by (url, ref, excerpt) on its item; a
 ``source_item`` id is exported and honoured only for the caller's own items.
+Evidence from a source item since removed (S5) carries ``source_removed: true``;
+an import ignores it.
 """
 
 import uuid
 from datetime import datetime
 from typing import Any
 
-import yaml
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import safe_yaml
 from oracle.auth.deps import Principal
 from oracle.baseline import scoring, service
 from oracle.baseline.models import EDGE_TYPES, ENTITY_TYPES, NODE_STATUSES, Edge, Entity, Evidence
@@ -49,22 +51,49 @@ class YamlInvalid(Exception):
         self.problems = problems
 
 
+class YamlForbidden(YamlInvalid):
+    """A change the caller's role may not make (B4: archiving a blocker that still gates
+    publishing): a 403 with the refusal's own text, not a rejected file."""
+
+    def __init__(self, message: str, where: str):
+        super().__init__([ImportIssue(code="forbidden", message=message, where=where)])
+        self.message = message
+
+
 def _ref(e: Entity) -> str:
     return f"{e.type}:{e.key}"
 
 
 async def _own_item_ids(db: AsyncSession, principal: Principal) -> set[uuid.UUID]:
+    """The caller's own items, less those a run may not read (S6): withheld by its
+    user's intakes, deleted upstream, or ever frozen with no release readable now."""
+    from oracle.baseline.evidence import run_versions, withheld_from
+
     if principal.user_id is None:
         return set()
-    rows = await db.scalars(
+    stmt = (
         select(SourceItem.id)
         .join(Source, Source.id == SourceItem.source_id)
         .where(Source.owner_user_id == principal.user_id)
     )
+    if principal.is_run:
+        stmt = stmt.where(SourceItem.deleted_at.is_(None))
+    own = set((await db.scalars(stmt)).all()) - await withheld_from(db, principal)
+    frozen = await run_versions(db, principal, own)
+    return {i for i in own if not (i in frozen and frozen[i] is None)}
+
+
+async def _removed_item_ids(db: AsyncSession) -> set[uuid.UUID]:
+    """Cited source items narrowed out or deleted upstream (S5)."""
+    rows = await db.scalars(
+        select(SourceItem.id)
+        .join(Evidence, Evidence.source_item_id == SourceItem.id)
+        .where(SourceItem.deleted_at.is_not(None))
+    )
     return set(rows.all())
 
 
-def _evidence_out(ev: Evidence, own: set[uuid.UUID]) -> dict[str, Any]:
+def _evidence_out(ev: Evidence, own: set[uuid.UUID], removed: set[uuid.UUID]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for f in ("url", "ref", "excerpt"):
         if getattr(ev, f):
@@ -73,6 +102,9 @@ def _evidence_out(ev: Evidence, own: set[uuid.UUID]) -> dict[str, Any]:
         out["retrieved_at"] = ev.retrieved_at.isoformat()
     if ev.source_item_id and ev.source_item_id in own:
         out["source_item"] = str(ev.source_item_id)
+    if ev.source_item_id in removed:
+        # Citations of a removed item say 'source removed' (ignored on import).
+        out["source_removed"] = True
     return out
 
 
@@ -81,9 +113,10 @@ async def export(db: AsyncSession, principal: Principal) -> str:
     edges = (await db.scalars(select(Edge).order_by(Edge.type, Edge.created_at))).all()
     evidence = (await db.scalars(select(Evidence).order_by(Evidence.created_at))).all()
     own = await _own_item_ids(db, principal)
+    removed = await _removed_item_ids(db)
     by_target: dict[uuid.UUID, list[dict]] = {}
     for ev in evidence:
-        by_target.setdefault(ev.entity_id or ev.edge_id, []).append(_evidence_out(ev, own))
+        by_target.setdefault(ev.entity_id or ev.edge_id, []).append(_evidence_out(ev, own, removed))
     refs = {e.id: _ref(e) for e in entities}
 
     def entity_doc(e: Entity) -> dict[str, Any]:
@@ -115,7 +148,7 @@ async def export(db: AsyncSession, principal: Principal) -> str:
         "entities": [entity_doc(e) for e in entities],
         "edges": [edge_doc(e) for e in edges],
     }
-    return yaml.safe_dump(data, sort_keys=False, allow_unicode=True, width=100)
+    return safe_yaml.dump(data, sort_keys=False, allow_unicode=True, width=100)
 
 
 # --- import ---------------------------------------------------------------------------------
@@ -123,14 +156,20 @@ async def export(db: AsyncSession, principal: Principal) -> str:
 
 def _parse(text: str) -> dict[str, Any]:
     try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError as e:
+        data = safe_yaml.load(text)
+    except safe_yaml.SafeYamlError as e:
+        # Invalid or refused (oracle.safe_yaml): too large, too deep, anchors, tags...
         raise YamlInvalid([ImportIssue(code="invalid_yaml", message=str(e))]) from None
     if data is None:
         data = {}
     if not isinstance(data, dict):
         raise YamlInvalid([ImportIssue(code="invalid_yaml", message="expected a mapping")])
     return data
+
+
+def _parse_and_validate(text: str) -> tuple[dict[str, Any], list[ImportIssue]]:
+    data = _parse(text)
+    return data, _validate(data)
 
 
 def _validate(data: dict[str, Any]) -> list[ImportIssue]:
@@ -281,11 +320,19 @@ async def import_yaml(
 ) -> YamlImportResult:
     """Merge ``text`` in. ``origin`` is ``import`` (a person's file) or ``agent`` (a run's
     baseline.yaml); either way locked items get proposals instead of changes."""
-    data = _parse(text)
-    problems = _validate(data)
+    # Off the event loop: the file is untrusted text (oracle.safe_yaml bounds its cost).
+    data, problems = await safe_yaml.run_parse(_parse_and_validate, text)
     if problems:
         raise YamlInvalid(problems)
     writer = service.Writer(principal, origin, run_id=run_id, reason=reason)
+    # One change event per subject kind for the whole file, not one per item.
+    async with service.batched_changes(db):
+        return await _merge(db, data, writer, principal)
+
+
+async def _merge(
+    db: AsyncSession, data: dict, writer: service.Writer, principal: Principal
+) -> YamlImportResult:
     own = await _own_item_ids(db, principal)
     result = YamlImportResult()
     by_ref: dict[str, Entity] = {_ref(e): e for e in (await db.scalars(select(Entity))).all()}
@@ -322,15 +369,20 @@ async def import_yaml(
                 entity = by_ref[ref] = write.entity
                 result.created += 1
             else:
-                # The file states the full attrs: keys it drops are removed.
+                # The file states the full attrs: keys it drops are removed, except the
+                # keys a module manages (a blocker's strategy), which a file leaving them
+                # out keeps; a file that changes one is refused.
                 attrs = doc.get("attrs") or {}
-                attrs_patch = {**dict.fromkeys(entity.attrs or {}), **attrs}
+                kept = [k for k in entity.attrs or {} if k not in service.MANAGED_ATTRS]
+                attrs_patch = {**dict.fromkeys(kept), **attrs}
                 changes = {"title": doc["title"], "body": doc.get("body"), "attrs": attrs_patch}
                 if status is not None:
                     changes["status"] = status
                 changed = bool(service._entity_changes(entity, changes))
                 write = await service.update_entity(db, writer, entity, changes)
                 _count(result, write, changed)
+        except service.ForbiddenError as e:
+            raise YamlForbidden(str(e), f"entities[{i}]") from None
         except service.BaselineError as e:
             raise YamlInvalid(
                 [ImportIssue(code="rejected", message=str(e), where=f"entities[{i}]")]
@@ -369,6 +421,8 @@ async def import_yaml(
                     changes.get("status", before[1]),
                 )
                 _count(result, write, after != before)
+        except service.ForbiddenError as e:
+            raise YamlForbidden(str(e), where) from None
         except service.BaselineError as e:
             raise YamlInvalid([ImportIssue(code="rejected", message=str(e), where=where)]) from None
         await _import_evidence(db, doc.get("evidence"), own, result, edge_id=edge.id)

@@ -5,11 +5,16 @@
 
 export type CitationSeed = {
   id: string;
-  source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web";
+  source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web" | "oracle";
   ref: string;
   title: string;
   excerpt: string;
   retrieved_at: string;
+  /** What the writer computed (change D): the source item it read, its confidence 0-1 or a note. */
+  item?: string;
+  confidence?: number | null;
+  confidence_note?: string;
+  low_confidence?: boolean;
 };
 
 export type SectionSeed = { key: string; level: number; heading: string; body: string };
@@ -44,6 +49,7 @@ const CHECKOUT_CITATIONS: CitationSeed[] = [
     title: "#product thread on checkout drop-off",
     excerpt: "Most users who abandon do it at the shipping step, usually right after the cost appears.",
     retrieved_at: "2026-10-16T13:10:00Z",
+    confidence: 0.82,
   },
   {
     id: "c2",
@@ -52,6 +58,9 @@ const CHECKOUT_CITATIONS: CitationSeed[] = [
     title: "Customer interview 07 (transcript)",
     excerpt: "I didn't know what shipping would cost until the last screen, so I went back to compare.",
     retrieved_at: "2026-10-15T09:42:00Z",
+    confidence: 0.35,
+    confidence_note: "one interview, not corroborated",
+    low_confidence: true,
   },
   {
     id: "c3",
@@ -60,6 +69,9 @@ const CHECKOUT_CITATIONS: CitationSeed[] = [
     title: "Q4 goals: activation and retention",
     excerpt: "G1: raise first-order completion from 61% to 70% by the end of Q4.",
     retrieved_at: "2026-10-14T16:05:00Z",
+    // No score: the note shows instead. Its angle brackets are text, never markup.
+    confidence: null,
+    confidence_note: "owner decision (confirmed, locked) <G1>; not evidence-scored",
   },
   {
     id: "c4",
@@ -68,6 +80,8 @@ const CHECKOUT_CITATIONS: CitationSeed[] = [
     title: "Address form loses state on back navigation",
     excerpt: "Navigating back from payment clears every field in the address form.",
     retrieved_at: "2026-10-16T11:30:00Z",
+    item: "7d0c6f3e-2b4a-4e8f-9c1d-3a5b7e9f1c2d",
+    confidence: 0.75,
   },
   {
     id: "c5",
@@ -272,6 +286,29 @@ const ALERTS_V1: SectionSeed[] = [
   },
 ];
 
+// The Quillfield clinic set (as on /design): deposits is the B1 Publish frame's PRD, held
+// by a critical blocker and an unsupported third-party operation; reminders is ready.
+const DEPOSITS_V1: SectionSeed[] = [
+  { key: "title", level: 1, heading: "Online deposits at booking", body: "Patients pay a small deposit when they book, so fewer slots go unused." },
+  { key: "problem", level: 2, heading: "1. Problem", body: "One booking in nine ends as a no-show; the slot cannot be offered again that day." },
+  { key: "solution", level: 2, heading: "2. Solution", body: "Take a deposit through the booking calendar; refund it when the patient cancels in time." },
+  { key: "metrics", level: 2, heading: "3. Success metrics", body: "No-show rate under 5% within two months of launch." },
+];
+const DEPOSITS_V2: SectionSeed[] = [
+  ...DEPOSITS_V1.slice(0, 3),
+  { key: "risks", level: 2, heading: "3. Risks", body: "Same-day cancellations need a same-day refund, which the card processor may not support." },
+  { ...DEPOSITS_V1[3], heading: "4. Success metrics" },
+];
+const DEPOSITS_V3: SectionSeed[] = DEPOSITS_V2.map((s) =>
+  s.key === "metrics" ? { ...s, body: "No-show rate under 5% within two months of launch; refunds within one working day." } : s,
+);
+const REMINDERS_V1: SectionSeed[] = [
+  { key: "title", level: 1, heading: "Visit reminders", body: "A text and an email the day before each visit, with one-tap confirm or rebook." },
+  { key: "problem", level: 2, heading: "1. Problem", body: "Patients forget visits booked weeks ahead; front desks spend mornings on reminder calls." },
+  { key: "solution", level: 2, heading: "2. Solution", body: "Send reminders 24 hours ahead; a reply of C confirms, R opens the rebook page." },
+  { key: "metrics", level: 2, heading: "3. Success metrics", body: "Reminder calls down by half; confirmations from 60% of patients." },
+];
+
 // A PRD with a brief layer (O1f): the brief first, then "Full version" and the detail
 // each feature row and milestone expands.
 const CARTS_CITATIONS: CitationSeed[] = [
@@ -436,7 +473,17 @@ export function roadmapFromPrd(prd: {
       { key: h.key, level: 2, heading: h.heading, body: h.body },
       ...items
         .filter((i) => i.horizon.key === h.key)
-        .map((i) => ({ key: i.key, level: 3, heading: i.title, body: `From the PRD: [${i.from.heading}](${link(i.from.key)}).` })),
+        .map((i, n) => ({
+          key: i.key,
+          level: 3,
+          heading: i.title,
+          // O4: the first Now item carries dated milestones, each on a schedule basis
+          // (mock roadmap.ts seeds ENG-412 verified and ENG-413 withdrawn).
+          body:
+            h.key === "now" && n === 0
+              ? `Beta by 2026-11-30 (ENG-412 estimate); GA by 2026-12-15 (ENG-413 estimate). From the PRD: [${i.from.heading}](${link(i.from.key)}).`
+              : `From the PRD: [${i.from.heading}](${link(i.from.key)}).`,
+        })),
     ]),
     { key: "sources", level: 2, heading: "Sources and data points", body: `- [${prd.title} v${prd.version}](${link()})` },
   ];
@@ -450,6 +497,59 @@ const CARTS_V2: SectionSeed[] = CARTS_V1.map((s) =>
     ? { ...s, body: "Shoppers build a cart on their phone, then lose it when they move to a laptop. More than half start over." }
     : s,
 );
+
+// C1e: a Galatia-like PRD on its fifth draft, with two accepted changes staged for draft 6
+// (F-38 Outbound check, raised on v5, and Goal trace, raised on v4), one declined, one still
+// open and one addressed in v4 (comments seeded in ./server.ts, suggestions in ./llm-jobs.ts).
+const OUTREACH_V1: SectionSeed[] = [
+  {
+    key: "title",
+    level: 1,
+    heading: "Clinic outreach PRD",
+    body: "Clinic outreach calls patients who missed a visit and books them back in, from one queue per clinic.",
+  },
+  {
+    key: "goal-trace",
+    level: 2,
+    heading: "Goal trace",
+    body: "Serves G1 activation: more new patients reach a second visit.",
+  },
+  {
+    key: "problem",
+    level: 2,
+    heading: "1. Problem",
+    body: "40% of missed visits are never rebooked. Front desks call back when they have time, from paper lists.",
+  },
+  {
+    key: "f-38",
+    level: 2,
+    heading: "F-38 Outbound check",
+    body: "After each outbound call, the agent checks the patient's consent and records the outcome.",
+  },
+  {
+    key: "metrics",
+    level: 2,
+    heading: "2. Metrics",
+    body: "- Rebooked within 14 days: 22% today, 35% target.\n- Calls per rebooking: 3.1 today.",
+  },
+  {
+    key: "sources",
+    level: 2,
+    heading: "Sources and data points",
+    body: "- Missed-visit audit, 2024.",
+  },
+];
+const OUTREACH_V3 = revise(OUTREACH_V1, {
+  problem: { body: "40% of missed visits are never rebooked. Front desks call back when they have time, from paper lists, in every pilot clinic." },
+});
+const OUTREACH_V4 = revise(OUTREACH_V3, {
+  problem: {
+    body: "40% of missed visits are never rebooked. Front desks in the three pilot clinics (Harbour, Northgate, Riverside) call back when they have time, from paper lists.",
+  },
+});
+const OUTREACH_V5 = revise(OUTREACH_V4, {
+  metrics: { body: "- Rebooked within 14 days: 22% today, 35% target.\n- Calls per rebooking: 3.1 today, 2 target." },
+});
 
 export const DOCUMENTS: DocumentSeed[] = [
   {
@@ -518,6 +618,37 @@ export const DOCUMENTS: DocumentSeed[] = [
       },
     ],
   },
+  {
+    slug: "online-deposits",
+    title: "Online deposits at booking",
+    template: "oracle-default",
+    template_version: "1",
+    versions: [
+      { number: 1, created_at: "2026-10-14T09:00:00Z", sections: DEPOSITS_V1, citations: [] },
+      { number: 2, created_at: "2026-10-15T09:00:00Z", sections: DEPOSITS_V2, citations: [] },
+      { number: 3, created_at: "2026-10-16T09:00:00Z", sections: DEPOSITS_V3, citations: [] },
+    ],
+  },
+  {
+    slug: "clinic-outreach",
+    title: "Clinic outreach PRD",
+    template: "oracle-default",
+    template_version: "1",
+    versions: [
+      { number: 1, created_at: "2026-10-06T10:00:00Z", sections: OUTREACH_V1, citations: [] },
+      { number: 2, created_at: "2026-10-07T10:00:00Z", sections: OUTREACH_V1, citations: [] },
+      { number: 3, created_at: "2026-10-08T10:00:00Z", sections: OUTREACH_V3, citations: [] },
+      { number: 4, created_at: "2026-10-09T10:00:00Z", sections: OUTREACH_V4, citations: [] },
+      { number: 5, created_at: "2026-10-10T10:00:00Z", sections: OUTREACH_V5, citations: [] },
+    ],
+  },
+  {
+    slug: "visit-reminders",
+    title: "Visit reminders",
+    template: "oracle-default",
+    template_version: "1",
+    versions: [{ number: 1, created_at: "2026-10-11T09:00:00Z", sections: REMINDERS_V1, citations: [] }],
+  },
 ];
 
 // Built from pieces so no credential-shaped literal sits in the source.
@@ -542,3 +673,106 @@ export const REMOVED_MEMBER = {
 } as const;
 
 export const MOCK_INVITES = [{ email: "new.hire@example.com", role: "commenter", created_at: "2026-10-15T09:00:00Z" }] as const;
+
+/*
+ * The "suggestions" scenario (MOCK_SCENARIO_KEY): a PRD whose open feedback is three Oracle
+ * change requests on feature sections further down, none on the first section, plus one
+ * item already addressed. The Inbox's feedback row leads here.
+ */
+const FLEET_FEATURES: [string, string, string][] = [
+  ["f-31", "F-31 Route planner", "Dispatchers plan a day of stops on one map and drag stops between drivers."],
+  ["f-32", "F-32 Live arrival times", "Each customer sees a live arrival window that moves with the driver."],
+  ["f-33", "F-33 Proof of delivery", "Drivers take a photo and a signature at the door; both attach to the order."],
+  ["f-34", "F-34 Failed delivery flow", "A driver marks a stop as failed with a reason; the customer picks a new slot."],
+  ["f-35", "F-35 Driver shift summary", "At the end of a shift each driver sees stops done, distance and time on the road."],
+  ["f-36", "F-36 Depot handover", "Returned parcels are scanned back in at the depot and leave the driver's list."],
+];
+
+const fleetSections = (problem: string): SectionSeed[] => [
+  {
+    key: "summary",
+    level: 2,
+    heading: "Summary",
+    body: "The next version of the delivery app for small fleets: plan routes, keep customers informed, close every stop with proof.",
+  },
+  { key: "problem", level: 2, heading: "Problem", body: problem },
+  { key: "features", level: 2, heading: "Features", body: "Six features, in delivery order." },
+  ...FLEET_FEATURES.map(([key, heading, body]) => ({ key, level: 3, heading, body })),
+  {
+    key: "metrics",
+    level: 2,
+    heading: "Metrics",
+    body: "- First-attempt delivery rate up from 88% to 94%.\n- Support contacts per 100 deliveries down by a third.",
+  },
+];
+
+export const FLEET_DOC: DocumentSeed = {
+  slug: "fleet-next",
+  title: "Fleet next version — PRD",
+  template: "oracle-default",
+  template_version: "1",
+  versions: [
+    {
+      number: 1,
+      created_at: "2026-10-17T09:00:00Z",
+      sections: fleetSections("Customers do not know when a parcel will arrive, so many are out when the driver comes."),
+      citations: [],
+    },
+    {
+      number: 2,
+      created_at: "2026-10-19T09:00:00Z",
+      sections: fleetSections(
+        "Customers do not know when a parcel will arrive, so many are out when the driver comes: 12% of first attempts fail today.",
+      ),
+      citations: [],
+    },
+  ],
+};
+
+/** Oracle's proposed text for the three open change requests: long on purpose, as in real drafts. */
+export const FLEET_SUGGESTIONS: { key: string; summary: string; rationale: string; text: string }[] = [
+  {
+    key: "f-33",
+    summary: "Say what happens when the customer is not home and nobody can sign.",
+    rationale: "Proof of delivery has no path for a safe-place drop; two reviewers asked for one.",
+    text: [
+      "Drivers take a photo and a signature at the door; both attach to the order and show in the customer's tracking page within a minute.",
+      "",
+      "When nobody answers, the driver may leave the parcel in a safe place the customer named at checkout (porch, side gate, neighbour). The app asks for a photo that shows the parcel and the door number, and records the GPS position. A signature is not asked for.",
+      "",
+      "When the customer named no safe place, the parcel is not left: the stop goes to the failed delivery flow (F-34).",
+      "",
+      "Orders flagged as age-restricted or high value never use a safe place; the app hides the option.",
+      "",
+      "Dispatchers see every safe-place drop in the day's list with its photo, so a complaint can be checked in seconds.",
+    ].join("\n"),
+  },
+  {
+    key: "f-34",
+    summary: "Limit how many times a customer can move a failed delivery.",
+    rationale: "Without a limit, one order can bounce between slots for a week; ops asked for a cap.",
+    text: [
+      "A driver marks a stop as failed with one of five reasons: nobody home, wrong address, refused, access problem, damaged.",
+      "",
+      "The customer gets a message within five minutes with a link to pick a new slot in the next three days. The first new slot is free; a second one is offered once more; after that the parcel goes back to the depot and the customer collects it there.",
+      "",
+      "Wrong address and refused skip the new slot and go straight to customer support, who call within one working day.",
+      "",
+      "Each failed attempt is counted against the first-attempt delivery rate, so the metric matches what customers see.",
+    ].join("\n"),
+  },
+  {
+    key: "f-36",
+    summary: "Depot handover needs a count check before the driver leaves.",
+    rationale: "Scans alone miss parcels that never left the van; a count at handover catches them.",
+    text: [
+      "Returned parcels are scanned back in at the depot and leave the driver's list.",
+      "",
+      "Before the driver can end the shift, the app shows how many parcels should come back and how many were scanned. A mismatch blocks the end of the shift until a depot lead confirms it with a note.",
+      "",
+      "Parcels scanned at the depot go back into the next day's planning pool, at the top of the list, so they leave first the next morning.",
+      "",
+      "The depot lead sees open mismatches on the dashboard until each one is closed.",
+    ].join("\n"),
+  },
+];

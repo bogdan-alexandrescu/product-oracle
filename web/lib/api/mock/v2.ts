@@ -29,6 +29,8 @@ export interface V2Db {
   artifact_versions: Schemas["ArtifactVersionOut"][];
   artifact_outputs: Schemas["ArtifactOutputOut"][];
   artifact_review_events: Schemas["ArtifactReviewEventOut"][];
+  /** What intakes proposed (./intake.ts); absent in data saved before the intake lane. */
+  intake_proposals?: Schemas["IntakeProposalOut"][];
 }
 
 /** URL segment after /v1 -> the table it lists. */
@@ -56,6 +58,11 @@ const PATHS: Record<string, keyof V2Db> = {
   "artifact-outputs": "artifact_outputs",
   "artifact-review-events": "artifact_review_events",
 };
+
+/** No v2 rows: a new company's (the mock's empty-company scenario). */
+export function emptyV2(): V2Db {
+  return Object.fromEntries(Object.values(PATHS).map((t) => [t, []])) as unknown as V2Db;
+}
 
 /** Fixed ids, so fixtures link to each other and tests can address them. */
 export const V2_IDS = {
@@ -230,7 +237,7 @@ export function seedV2(documentId: string, versionId: string | null, userId: str
       { id: I.experiment, blocker_id: I.blocker, option_id: I.option, hypothesis: "Batching halves lookup calls", method: "Replay a synthetic day of traffic", success_threshold: "Under 50% of today's calls", owner_id: userId, decision_gate_at: null, status: "planned", result: null, evidence_ids: [], lock_version: 1, created_at: AT, updated_at: AT },
     ],
     blocker_events: [
-      { id: I.blockerEvent, blocker_id: I.blocker, option_id: I.option, experiment_id: I.experiment, kind: "experiment_started", from_status: "open", to_status: "mitigating", reason: null, actor: `user:${userId}`, data: {}, created_at: AT },
+      { id: I.blockerEvent, blocker_id: I.blocker, option_id: I.option, experiment_id: I.experiment, kind: "experiment_started", from_status: "open", to_status: "mitigating", reason: null, actor: `user:${userId}`, data: {}, summary: "Experiment started", created_at: AT },
     ],
     change_events: [
       { id: I.change, subject_kind: "document_section", subject_id: null, subject_ref: "checkout-redesign@2#metrics", document_id: documentId, cause: "section_edited", actor: `user:${userId}`, data: {}, handled_by: [], created_at: AT },
@@ -266,8 +273,8 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-/** GET /v1/<v2 path>[/<id>]; null when the path is not a v2 route. */
-export function routeV2(db: V2Db, req: Request, p: string[], q: URLSearchParams): Response | null {
+/** GET /v1/<v2 path>[/<id>]; null when the path is not a v2 route. `me` is the signed-in user (asked_to=me). */
+export function routeV2(db: V2Db, req: Request, p: string[], q: URLSearchParams, me: string | null = null): Response | null {
   const table = PATHS[p[1]];
   if (!table || req.method !== "GET" || p.length > 3) return null;
   const rows = db[table] as unknown as Record<string, unknown>[];
@@ -282,7 +289,10 @@ export function routeV2(db: V2Db, req: Request, p: string[], q: URLSearchParams)
   const limit = Number(q.get("limit") ?? 100);
   const offset = Number(q.get("offset") ?? 0);
   if (!(limit >= 1 && limit <= 500) || !(offset >= 0)) return json(422, { detail: "limit or offset" });
-  const filters = [...q.entries()].filter(([k]) => k !== "limit" && k !== "offset");
+  if (q.get("asked_to") && q.get("asked_to") !== "me") return json(422, { detail: "asked_to takes only me" });
+  const filters = [...q.entries()]
+    .filter(([k]) => k !== "limit" && k !== "offset")
+    .map(([k, v]): [string, string] => [k, v === "me" ? (me ?? "nobody") : v]);
   const hits = rows
     .filter((r) => filters.every(([k, v]) => String(r[k]) === v))
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));

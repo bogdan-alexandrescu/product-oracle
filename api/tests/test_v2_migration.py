@@ -78,12 +78,30 @@ def scratch_db():
     asyncio.run(_reset_schema(SCRATCH_URL))
 
 
-def test_0013_is_the_single_head_after_0012():
-    """0013 follows 0012; the wave-1 lanes' 0014_* revisions chain on it (one head)."""
+def test_0013_follows_0012_and_the_0014_lanes_chain_on_it():
+    # Lanes add 0014_<lane> on top of 0013 (waves.md); the integrator re-chains them in
+    # merge order so the chain stays linear, one head.
     script = ScriptDirectory.from_config(_cfg())
-    [head] = script.get_heads()
-    assert head == "0013" or head.startswith("0014_")
+    assert script.get_heads() == ["0014_account_fixes"]
     assert script.get_revision("0013").down_revision == "0012"
+    assert script.get_revision("0014_quality").down_revision == "0013"
+    assert script.get_revision("0014_usage_retry_at").down_revision == "0014_quality"
+    assert script.get_revision("0014_trace").down_revision == "0014_usage_retry_at"
+    assert script.get_revision("0015_section_table_rows").down_revision == "0014_trace"
+    assert script.get_revision("0014_blockers_snapshot").down_revision == "0015_section_table_rows"
+    assert script.get_revision("0016_roadmap").down_revision == "0014_blockers_snapshot"
+    assert script.get_revision("0016_refinement_batch").down_revision == "0016_roadmap"
+    assert script.get_revision("0017_citation_source_oracle").down_revision == (
+        "0016_refinement_batch"
+    )
+    assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
+    assert script.get_revision("0014_review").down_revision == "0018_source_unavailable_items"
+    assert script.get_revision("0014_member_disable").down_revision == "0014_review"
+    assert script.get_revision("0014_member_follow_up_retry").down_revision == "0014_member_disable"
+    assert script.get_revision("0014_account_management").down_revision == (
+        "0014_member_follow_up_retry"
+    )
+    assert script.get_revision("0014_account_fixes").down_revision == "0014_account_management"
 
 
 def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):

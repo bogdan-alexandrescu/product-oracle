@@ -16,3 +16,15 @@ Key routing rules:
 - Save progress → invoke /context-save
 - Resume context → invoke /context-restore
 - Author a backlog-ready spec/issue → invoke /spec
+
+## Feature loop
+
+For every new or existing feature:
+1. Design and implement.
+2. Deploy the feature and its configs.
+3. Test it through the UI, as a person would. Never test it by calling the API or by
+   changing data or settings by hand.
+4. Repeat until the feature is done.
+
+SwarmCloud lanes cannot deploy: they prove the feature with a Playwright test that drives
+the built app's UI.

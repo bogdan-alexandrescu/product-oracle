@@ -1,16 +1,20 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
+    Numeric,
     SmallInteger,
     Text,
     UniqueConstraint,
     Uuid,
+    false,
     func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
@@ -23,7 +27,9 @@ DOCUMENT_KINDS = ("prd", "roadmap")
 # O1f: a section belongs to the brief layer or is detail (oracle.docs.layers).
 SECTION_LAYERS = ("brief", "detail")
 BRIEF_SOURCES = ("draft", "template", "full_heading", "none")
-CITATION_SOURCES = ("slack", "notion", "gdocs", "github", "fireflies", "upload", "web")
+# "oracle": the baseline itself (oracle.docs.schemas.CitationSource); added by migration
+# 0017_citation_source_oracle.
+CITATION_SOURCES = ("slack", "notion", "gdocs", "github", "fireflies", "upload", "web", "oracle")
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:
@@ -160,6 +166,9 @@ class Citation(TenantScoped, Base):
     __table_args__ = (
         UniqueConstraint("version_id", "cite_key"),
         CheckConstraint(_in("source", CITATION_SOURCES), name="source"),
+        CheckConstraint(
+            "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)", name="confidence"
+        ),
     )
 
     version_id: Mapped[uuid.UUID] = mapped_column(
@@ -171,3 +180,13 @@ class Citation(TenantScoped, Base):
     title: Mapped[str | None] = mapped_column(Text)
     excerpt: Mapped[str | None] = mapped_column(Text)
     retrieved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # What the writer computed for the citation (migration 0019_citation_confidence). The
+    # source item it read, when the company has that item; null otherwise.
+    item_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("source_items.id", ondelete="SET NULL"), index=True
+    )
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    confidence_note: Mapped[str | None] = mapped_column(Text)
+    low_confidence: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )

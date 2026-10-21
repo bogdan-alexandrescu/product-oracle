@@ -25,6 +25,7 @@ export type VersionSummary = Schemas["VersionSummary"];
 export type VersionSource = Schemas["VersionSource"];
 export type SectionOut = Schemas["SectionOut"];
 export type CitationOut = Schemas["CitationOut"];
+export type DateMarkOut = Schemas["DateMarkOut"];
 export type CommentOut = Schemas["CommentOut"];
 export type FeedbackItem = Schemas["FeedbackItemOut"];
 export type Verdict = Schemas["SectionReviewIn"]["verdict"];
@@ -75,6 +76,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** The API's machine-readable code, when the error body has one ("source_changed"). */
+    readonly code?: string,
   ) {
     super(message);
   }
@@ -86,6 +89,10 @@ type Result<T> = { data?: T; error?: unknown; response: Response };
 export async function unwrap<T>(call: Promise<Result<T>>): Promise<T> {
   const { data, error, response } = await call;
   if (response.ok) return data as T;
+  if (error && typeof error === "object" && "code" in error && typeof error.code === "string") {
+    const message = "message" in error && typeof error.message === "string" ? error.message : response.statusText;
+    throw new ApiError(response.status, message, error.code);
+  }
   const detail =
     error && typeof error === "object" && "detail" in error && typeof error.detail === "string"
       ? error.detail

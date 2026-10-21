@@ -8,14 +8,27 @@ and leaves generic artifacts for the segment it ran. Tests script other outcomes
 Each submission of a segment takes the next scripted outcome for it, then falls back to
 the default. The workflow id encodes the segment, attempt and estimate, so a process
 that did not submit it (``oracle tick`` against a running API) still answers for it.
+
+Adapter v2's features are all off here (runs take today's one-workflow-per-segment
+flow); tests of v2 drive :class:`oracle.swarm.SwarmCloudRuntime` against a fake
+SwarmCloud API instead (``tests/swarmcloud_fake.py``).
 """
 
 import re
 import secrets
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
-from oracle.swarm.runtime import WorkflowSpec, WorkflowState, WorkflowStatus
+from oracle.swarm.runtime import (
+    Answer,
+    Features,
+    RecordedAnswer,
+    WorkflowSpec,
+    WorkflowState,
+    WorkflowStatus,
+)
 
 _ID = re.compile(r"^fake-(?P<segment>[a-z_]+)-a(?P<attempt>\d+)-c(?P<cents>\d+)-[0-9a-f]+$")
 
@@ -140,6 +153,8 @@ class FakeRuntime:
     name: str = "fake"
     submitted: list[WorkflowSpec] = field(default_factory=list)
     cancelled: list[str] = field(default_factory=list)
+    # None: run tokens are accepted from any address (no runtime egress to check).
+    egress: frozenset[str] | None = None
     _records: dict[str, _Record] = field(default_factory=dict)
 
     @property
@@ -173,6 +188,36 @@ class FakeRuntime:
         if record.outcome.cost_usd is not None:
             return record.outcome.cost_usd
         return (record.estimate * Decimal("0.9")).quantize(Decimal("0.0001"))
+
+    async def features(self, *, refresh: bool = False) -> Features:
+        # Off, with nothing to report on a run: the local runtime has no such switches.
+        return Features()
+
+    async def ensure_mcp_server(self, url: str) -> str:
+        return "unchanged"
+
+    async def egress_addresses(self) -> frozenset[str] | None:
+        return self.egress
+
+    async def find_by_label(self, label: str, since: datetime | None = None) -> str | None:
+        for workflow_id, record in self._records.items():
+            if record.spec is not None and record.spec.label == label:
+                return workflow_id
+        return None
+
+    async def answer(
+        self,
+        workflow_id: str,
+        step_id: str,
+        *,
+        answer_id: str,
+        payload: dict[str, Any],
+        on_behalf_of: str | None = None,
+    ) -> Answer:
+        raise LookupError("the local agent runtime has no steps that wait for a person")
+
+    async def answer_record(self, workflow_id: str, step_id: str, artifact: str) -> RecordedAnswer:
+        raise LookupError("the local agent runtime has no steps that wait for a person")
 
     async def submit(self, spec: WorkflowSpec) -> str:
         segment = spec.labels.get("segment", spec.name)
@@ -209,7 +254,9 @@ class FakeRuntime:
             return self._cost(record) / 2
         return self._cost(record)
 
-    async def artifacts(self, workflow_id: str) -> dict[str, str]:
+    async def artifacts(
+        self, workflow_id: str, steps: tuple[str, ...] | None = None
+    ) -> dict[str, str]:
         record = self._record(workflow_id)
         if record.outcome.artifacts is not None:
             return dict(record.outcome.artifacts)

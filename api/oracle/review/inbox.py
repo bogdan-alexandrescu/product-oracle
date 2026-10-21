@@ -1,0 +1,202 @@
+"""C1e: feedback in the Inbox by state, and the staged rows for the next draft.
+
+States: ``new`` (open and raised after my last Inbox visit), ``open``, ``staged`` (its
+suggestion was accepted and waits for the next draft), ``declined`` and ``done``
+(addressed, applied or superseded). My last visit is a per-user preference
+(``inbox_last_seen_at``), set by ``GET /v1/inbox?mark_seen=true``; before the first visit
+every open item is new.
+"""
+
+import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.jobs import kinds
+from oracle.jobs.models import LlmSuggestion
+from oracle.jobs.next_draft import current_job
+from oracle.jobs.service import latest_suggestions
+from oracle.preferences.models import UserPreference
+from oracle.review.models import FeedbackItem
+from oracle.review.service import feedback_state, latest_numbers
+from oracle.runs.schemas import InboxCounts, InboxFeedbackItem, InboxStaged
+
+LAST_SEEN = "inbox_last_seen_at"
+#: Declined and done items listed at most (the counts are always complete).
+SETTLED_LIMIT = 100
+
+
+async def last_seen(db: AsyncSession, principal_id: uuid.UUID) -> datetime | None:
+    value = await db.scalar(
+        select(UserPreference.value).where(
+            UserPreference.principal_id == principal_id, UserPreference.key == LAST_SEEN
+        )
+    )
+    try:
+        return datetime.fromisoformat(value) if isinstance(value, str) else None
+    except ValueError:
+        return None
+
+
+async def mark_seen(db: AsyncSession, principal_id: uuid.UUID, at: datetime | None = None) -> None:
+    value = (at or datetime.now(UTC)).isoformat()
+    row = await db.scalar(
+        select(UserPreference).where(
+            UserPreference.principal_id == principal_id, UserPreference.key == LAST_SEEN
+        )
+    )
+    if row is None:
+        db.add(UserPreference(principal_id=principal_id, key=LAST_SEEN, value=value))
+    else:
+        row.value = value
+    await db.flush()
+
+
+def _with_staged_change():
+    """Items with an accepted section-text change no draft has applied yet. They stay live
+    (Staged) whatever their own status (owner, 2026-10-20): closing the item, as a draft's
+    resolutions or an approval do, does not take the change out of the next draft."""
+    return select(LlmSuggestion.feedback_item_id).where(
+        LlmSuggestion.kind == "section_text",
+        LlmSuggestion.status == "accepted",
+        LlmSuggestion.applied_in_version.is_(None),
+    )
+
+
+async def feedback_states(
+    db: AsyncSession, seen: datetime | None
+) -> tuple[list[InboxFeedbackItem], InboxCounts]:
+    """Every live item (open, or with a staged change) and the most recent settled ones,
+    newest first."""
+    live = list(
+        await db.scalars(
+            select(FeedbackItem)
+            .where(or_(FeedbackItem.status == "open", FeedbackItem.id.in_(_with_staged_change())))
+            .order_by(FeedbackItem.created_at.desc(), FeedbackItem.id)
+        )
+    )
+    live_ids = {f.id for f in live}
+    settled_only = (
+        FeedbackItem.status != "open",
+        FeedbackItem.id.not_in(_with_staged_change()),
+    )
+    settled = list(
+        await db.scalars(
+            select(FeedbackItem)
+            .where(*settled_only)
+            .order_by(FeedbackItem.updated_at.desc(), FeedbackItem.id)
+            .limit(SETTLED_LIMIT * 2)
+        )
+    )
+    settled_counts = dict(
+        (
+            await db.execute(
+                select(FeedbackItem.status, func.count())
+                .where(*settled_only)
+                .group_by(FeedbackItem.status)
+            )
+        ).all()
+    )
+    rows = [*live, *settled]
+    suggestions = await latest_suggestions(db, [f.id for f in rows])
+    latest = await latest_numbers(db, {f.document_id for f in rows})
+    docs = {
+        d.id: d
+        for d in await db.scalars(
+            select(Document).where(Document.id.in_({f.document_id for f in rows}))
+        )
+    }
+    counts = InboxCounts(
+        declined=settled_counts.get("declined", 0),
+        done=sum(v for k, v in settled_counts.items() if k != "declined"),
+    )
+    items: list[InboxFeedbackItem] = []
+    settled_listed = 0
+    for f in rows:
+        s = suggestions.get(f.id)
+        state = feedback_state(f.status, s)
+        if state == "open" and (seen is None or f.created_at > seen):
+            state = "new"
+        if f.id in live_ids:
+            if state == "done":
+                counts.done += 1
+            else:
+                setattr(counts, state, getattr(counts, state) + 1)
+        elif settled_listed >= SETTLED_LIMIT:
+            continue
+        else:
+            settled_listed += 1
+        d = docs.get(f.document_id)
+        items.append(
+            InboxFeedbackItem(
+                id=f.id,
+                summary=f.summary,
+                kind=f.kind,  # type: ignore[arg-type]
+                section_key=f.section_key,
+                raised_on_version=f.raised_on_version,
+                created_at=f.created_at,
+                updated_at=f.updated_at,
+                document_id=f.document_id,
+                slug=d.slug if d else None,
+                title=d.title if d else None,
+                latest_version=latest.get(f.document_id),
+                state=state,  # type: ignore[arg-type]
+                resolution_note=f.resolution_note,
+                addressed_in_version=f.addressed_in_version,
+                staged_for_version=(latest.get(f.document_id) or 0) + 1
+                if state == "staged"
+                else None,
+                suggestion_status=s.status if s else None,  # type: ignore[arg-type]
+                suggestion_kind=s.kind if s else None,
+            )
+        )
+    items.sort(key=lambda i: (i.created_at, str(i.id)), reverse=True)
+    return items, counts
+
+
+async def staged_rows(db: AsyncSession) -> list[InboxStaged]:
+    """One row per document with staged changes: 'N changes staged for draft N+1'."""
+    doc_ids = set(
+        await db.scalars(
+            select(LlmSuggestion.document_id).where(
+                LlmSuggestion.kind == "section_text",
+                LlmSuggestion.status == "accepted",
+                LlmSuggestion.applied_in_version.is_(None),
+            )
+        )
+    )
+    if not doc_ids:
+        return []
+    latest = await latest_numbers(db, doc_ids)
+    out = []
+    for d in await db.scalars(select(Document).where(Document.id.in_(doc_ids))):
+        rows = await kinds.staged_suggestions(db, d.id)
+        number = latest.get(d.id)
+        keys: set[str] = set()
+        if number is not None:
+            keys = set(
+                await db.scalars(
+                    select(Section.section_key)
+                    .join(DocumentVersion, DocumentVersion.id == Section.version_id)
+                    .where(DocumentVersion.document_id == d.id, DocumentVersion.number == number)
+                )
+            )
+        buildable = [r for r in rows if r.section_key in keys]
+        job = await current_job(db, d.id)
+        out.append(
+            InboxStaged(
+                document_id=d.id,
+                slug=d.slug,
+                title=d.title,
+                latest_version=number,
+                next_version=(number or 0) + 1,
+                count=len(buildable),
+                gone_count=len(rows) - len(buildable),
+                draft_job_id=job.id if job else None,
+                draft_job_status=job.status if job else None,
+            )
+        )
+    out.sort(key=lambda r: r.title.lower())
+    return [r for r in out if r.count or r.gone_count]

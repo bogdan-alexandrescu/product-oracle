@@ -14,9 +14,18 @@ from fastapi.security import APIKeyCookie, HTTPAuthorizationCredentials, HTTPBea
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth import iap, service
+from oracle.auth.jwks import KeysUnavailable
 from oracle.auth.models import Role, User
 from oracle.config import get_settings
 from oracle.tenancy import tenant_session
+
+# Set by Oracle's MCP server on the in-process REST call a run token makes (it acts for
+# the run's creator). The value is the run id signed by the server and bound to the
+# acting user (oracle.auth.service.sign_run_binding). A run sees more than people do
+# (S6: the full text of what a finding shared in full), so the header is trusted only
+# when its signature verifies for the authenticated user; a bare or forged run id is
+# ignored and the caller stays the person, with person rules.
+RUN_HEADER = "x-oracle-run-id"
 
 _bearer = HTTPBearer(auto_error=False, description="API token for the agent track")
 _cookie = APIKeyCookie(
@@ -35,11 +44,19 @@ class Principal:
     # The MCP OAuth grant (its refresh-token family) the call came through: approvals
     # record it, and revoking the grant voids them, as for API tokens (C2).
     grant_id: uuid.UUID | None = None
+    # An MCP client approved with oracle:read only: it reads as the user and changes
+    # nothing of theirs, including what the role check would allow (their own sources).
+    read_only: bool = False
     # The run token of a call made for a run (below): re-read under the review gate.
     run_token_id: uuid.UUID | None = None
-    # Set when the call is made for a run (an MCP call with the run's token): what it
-    # writes is an agent's work (oracle.docs.service.import_draft holds approved text).
+    # The run whose token made this call (through MCP), else None. What it writes is an
+    # agent's work (oracle.docs.service.import_draft holds approved text), and it reads
+    # as a run (S6).
     run_id: uuid.UUID | None = None
+
+    @property
+    def is_run(self) -> bool:
+        return self.run_id is not None
 
     @property
     def id(self) -> uuid.UUID:
@@ -50,6 +67,13 @@ class Principal:
     def actor(self) -> str:
         """Audit actor string, e.g. ``user:<uuid>``."""
         return f"{self.kind}:{self.id}"
+
+
+_READ_METHODS = frozenset({"GET", "HEAD"})
+READ_ONLY = (
+    "This credential can only read (oracle:read): it cannot add, change or delete anything. "
+    "Approve the MCP client with oracle:write to make changes"
+)
 
 
 def _unauthorized() -> HTTPException:
@@ -74,7 +98,7 @@ async def _iap_user(request: Request) -> User | None:
         claims = await iap.verify_assertion(assertion, audiences)
     except iap.InvalidAssertion:
         raise _unauthorized() from None
-    except iap.KeysUnavailable:
+    except KeysUnavailable:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "Cannot verify the sign-in right now"
         ) from None
@@ -138,26 +162,57 @@ async def _for_run(principal: Principal, raw: str) -> Principal:
     return replace(principal, run_id=run.id, run_token_id=claims.token_id)
 
 
+def _run_of(request: Request, principal: Principal) -> uuid.UUID | None:
+    raw = request.headers.get(RUN_HEADER)
+    if not raw:
+        return None
+    run_id = service.read_run_binding(raw, principal.user_id)
+    if run_id is None:
+        # Fail closed: a header that does not verify must not leave the request acting as
+        # the person (who would see author-only findings a run may not).
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Invalid {RUN_HEADER}: not a run binding issued for this credential",
+        )
+    return run_id
+
+
 async def get_principal(
     request: Request,
     bearer: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     cookie: Annotated[str | None, Depends(_cookie)],
 ) -> Principal:
-    principal = await _get_principal(request, bearer, cookie)
+    principal = await _authenticate(request, bearer, cookie)
+    # Oracle's MCP server marks a run token's in-process REST call twice: with the run
+    # token (re-read under the review gate) and with a server-signed run binding. Either
+    # one alone marks the call as the run's; both must name the same run.
     run_token = request.headers.get(RUN_TOKEN_HEADER)
     if run_token is not None:
         principal = await _for_run(principal, run_token)
-    return principal
+    run_id = _run_of(request, principal)
+    if run_id is None:
+        return principal
+    if principal.run_id is not None and principal.run_id != run_id:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"{RUN_HEADER} and {RUN_TOKEN_HEADER} name different runs",
+        )
+    return replace(principal, run_id=run_id)
 
 
-async def _get_principal(
+async def _authenticate(
     request: Request,
     bearer: HTTPAuthorizationCredentials | None,
     cookie: str | None,
 ) -> Principal:
     iap_user = await _iap_user(request)
     if bearer is not None:
-        return await _bearer_principal(bearer.credentials)
+        principal = await _bearer_principal(bearer.credentials)
+        if principal.read_only and request.method not in _READ_METHODS:
+            # AC1: a read-only credential changes nothing, whatever the route or role
+            # allows; checked here once, over MCP and on REST alike.
+            raise HTTPException(status.HTTP_403_FORBIDDEN, READ_ONLY)
+        return principal
     if iap_user is not None:
         return Principal(
             tenant_id=iap_user.tenant_id, kind="user", role=iap_user.role, user_id=iap_user.id

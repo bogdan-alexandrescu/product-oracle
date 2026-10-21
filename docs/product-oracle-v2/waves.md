@@ -84,12 +84,19 @@ Lanes never call another lane's code. They meet at two small registries:
    document themes), as rendered mockups of five screens in light and dark, desktop and
    mobile. The orchestrator reviews every frame, publishes an options page, and the owner
    picks.
+1b. `v2-design-blend` (owner, 2026-10-19, I3): one direction blending Atlas and Ledger,
+   light and breathable, helper text in tooltips, fewer consolidated indicator cards. It
+   draws V2b's whole loop in nine screens (home, requests, baseline, idea interview, PRD
+   review, priorities, roadmap and tracks, runs, publish). The sources are in
+   `design/directions/`.
 2. `v2-design-system`: the chosen direction as tokens and components, restyling every
    existing screen without changing behaviour or the Playwright contracts.
 3. `v2-ui`: the screens wave 1 needs, on the design system, from the lanes' screen lists:
    New product idea, Opportunity and Gaps, question batches, the composition inspector,
    blocker strategy, impact explorer, evidence inspector, section review status, the
    publish check and the readiness dashboard.
+
+In every screen, cost is a secondary detail (P3d): one small line on a run, and prominent only in the Inbox's approval and overrun items.
 
 Deploys (V2a): one per wave, after the merged wave passes the full suite and a smoke check.
 
@@ -107,6 +114,17 @@ Deploys (V2a): one per wave, after the merged wave passes the full suite and a s
   Figma `use_figma` feasibility probe as a runbook. It needs an owner decision first.
 - `v2-ops`: CR-14, cost per run and phase, budget semantics across the new flows, and
   resilience.
+
+Added by V2b and V2c (owner, 2026-10-19):
+- `v2-requests`: feature requests and feedback in one inbox, from every source, with
+  duplicates merged, linked to goals, and qualified or disqualified with a reason.
+- `v2-interviews`: interactive interviews instead of forms: team members during intake
+  and review, and customers. They are real-time, so they run on Oracle's own model
+  configuration (V2c), not SwarmCloud.
+- `v2-roadmap` also builds product tracks: an accepted PRD starts a track, whose roadmap
+  is monitored (status, drift, next milestone, items at risk).
+- V2c applies to every lane: agent work runs in SwarmCloud, and only real-time,
+  on-demand work uses Oracle's own model configuration.
 
 ## Wave 3: the vertical slice
 

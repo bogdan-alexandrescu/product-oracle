@@ -1,0 +1,12 @@
+id: missing-goals
+description: >
+  The feature serves no confirmed goal (its supports edge is gone) and the PRD's goals
+  section is empty of a traced goal. Goal traceability (F3b) flags it, with the feature's
+  priority rank from the baseline's priority logic.
+covers: [missing_goals]
+extends: good-prd
+remove: [supports, goal]
+expected:
+  goal_alignment: critical
+rationale_contains:
+  goal_alignment: [saved-addresses, serves no confirmed goal, ranked]

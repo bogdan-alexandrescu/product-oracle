@@ -7,6 +7,7 @@ run-token scopes apply exactly as for the generated tools.
 """
 
 import copy
+import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -16,6 +17,7 @@ from fastapi import FastAPI
 from sqlalchemy import select
 
 from oracle import confidence
+from oracle.docs.schemas import citation_contract
 from oracle.mcp.auth import McpCaller
 from oracle.mcp.tools import Operation, ToolError, call_operation, to_result
 from oracle.tenancy import tenant_session
@@ -58,6 +60,14 @@ class Curated:
         [FastAPI, McpCaller, dict[str, Operation], dict[str, Any]],
         Awaitable[types.CallToolResult],
     ]
+    # Offered to run tokens only, for their own run: listed whatever the token's scopes.
+    own_run: bool = False
+
+    def offered_to(self, caller: McpCaller) -> bool | None:
+        """True or False for an own-run tool; None: the operations' scopes decide."""
+        if not self.own_run:
+            return None
+        return caller.kind == "run" and caller.run_id is not None
 
     def resolve(self, ops: list[Operation]) -> dict[str, Operation] | None:
         found = {role: find(ops) for role, find in self.needs.items()}
@@ -175,7 +185,22 @@ async def _document_markdown(app, caller, ops, args) -> types.CallToolResult:
         version = resp.json().get("latest_version")
         if version is None:
             raise ToolError(f"Document {doc} has no versions yet.")
-    return to_result(await call_operation(app, caller, ops["markdown"], {"doc": doc, "n": version}))
+    resp = await call_operation(app, caller, ops["markdown"], {"doc": doc, "n": version})
+    if not resp.ok:
+        return to_result(resp)
+    markdown = resp.content.decode("utf-8", "replace")
+    marks: list[dict[str, Any]] = []
+    if "<!-- oracle: date " in markdown:
+        # O4 'document dates': the flagged dates beside the markdown, as the view lists them.
+        full = await call_operation(app, caller, ops["version"], {"doc": doc, "n": version})
+        if full.ok:
+            marks = [m for m in full.json().get("date_marks") or [] if m.get("label")]
+    content = [types.TextContent(text=markdown)]
+    if marks:
+        content.append(types.TextContent(text=json.dumps({"date_marks": marks})))
+    return types.CallToolResult(
+        content=content, structured_content={"markdown": markdown, "date_marks": marks}
+    )
 
 
 _PUSH_DRAFT_SCHEMA = {
@@ -192,22 +217,34 @@ _PUSH_DRAFT_SCHEMA = {
             "description": "The version the draft was written on (the one you read with "
             "get_document_markdown); 0 when the draft creates the document. A newer "
             "version that changed what the draft has is a conflict to merge, never "
-            "overwritten.",
+            "overwritten. Optional: left out, the document's latest version (0 when "
+            "it has none yet).",
         },
     },
-    "required": ["doc", "markdown", "base_version"],
+    "required": ["doc", "markdown"],
 }
 
 
 async def _push_draft(app, caller, ops, args) -> types.CallToolResult:
     op = ops["op"]
     missing = [k for k in ("doc", "markdown") if not args.get(k)]
-    base = args.get("base_version")
-    if base is None:
-        missing.append("base_version")
     if missing:
         raise ToolError(f"Missing required argument(s): {', '.join(missing)}")
-    if isinstance(base, bool) or not isinstance(base, int) or base < 0:
+    base = args.get("base_version")
+    if base is None:
+        # Left out: the draft is taken as written on the latest version (0: a new
+        # document). Read as part of this call (its scope is the push's); the caller's own
+        # access still applies.
+        found = await call_operation(
+            app, caller, ops["document"], {"doc": args["doc"]}, check_scopes=False
+        )
+        if found.ok:
+            base = found.json().get("latest_version") or 0
+        elif found.status_code == 404:
+            base = 0
+        else:
+            return to_result(found)
+    elif isinstance(base, bool) or not isinstance(base, int) or base < 0:
         raise ToolError("base_version must be a whole number, 0 for a new document")
     return to_result(
         await call_operation(
@@ -216,6 +253,52 @@ async def _push_draft(app, caller, ops, args) -> types.CallToolResult:
             op,
             {"doc": args["doc"], "base_version": base, op.body_key: args["markdown"]},
         )
+    )
+
+
+_RUN_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "seq": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The segment's number in this run (1 is the first)",
+        },
+        "name": {"type": "string", "description": "The file name, e.g. baseline.yaml"},
+    },
+    "required": ["seq", "name"],
+}
+
+
+async def _run_output(app, caller, ops, args) -> types.CallToolResult:
+    """A file an earlier segment of the caller's run wrote: the run is the token's own."""
+    if caller.kind != "run" or caller.run_id is None:
+        raise ToolError("get_run_output is for a run's own agents (a run token).")
+    missing = [k for k in ("seq", "name") if args.get(k) in (None, "")]
+    if missing:
+        raise ToolError(f"Missing required argument(s): {', '.join(missing)}")
+    seq, name = args["seq"], args["name"]
+    if isinstance(seq, str) and seq.isascii() and seq.isdigit():
+        seq = int(seq)
+    if isinstance(seq, bool) or not isinstance(seq, int) or seq < 1:
+        raise ToolError("seq must be a whole number from 1 (the segment's number in this run).")
+    if not _plain_file_name(name):
+        raise ToolError("name must be a plain file name such as baseline.yaml (no '/', no '..').")
+    call = {"run_id": str(caller.run_id), "seq": seq, "name": name}
+    return to_result(await call_operation(app, caller, ops["op"], call, check_scopes=False))
+
+
+def _plain_file_name(name: object) -> bool:
+    """A file name, not a path: no separators, no '..', no control characters, and not
+    blank, '.' or '..' (however padded)."""
+    return (
+        isinstance(name, str)
+        and 0 < len(name) <= 255
+        and name.strip() not in ("", ".", "..")
+        and "/" not in name
+        and "\\" not in name
+        and ".." not in name
+        and name.isprintable()
     )
 
 
@@ -296,11 +379,15 @@ CURATED: tuple[Curated, ...] = (
             "Read a document version as markdown (the latest version unless one is given). "
             "Sections approved in review should not be changed in a new draft. Push the "
             "draft with push_draft and base_version set to the version you read "
-            "(get_document lists latest_version)."
+            "(get_document lists latest_version). In a roadmap, a date that rests on no "
+            "verified schedule basis has '<!-- oracle: date unverified -->' or '<!-- oracle: "
+            "date withdrawn -->' after it, and date_marks lists them: the next draft must "
+            "drop such a date or name a verified basis."
         ),
         needs={
             "document": _by("GET", ("get_document",)),
             "markdown": _by("GET", ("get_version_markdown",)),
+            "version": _by("GET", ("get_version",)),
         },
         schema=lambda ops: copy.deepcopy(_DOC_MARKDOWN_SCHEMA),
         run=_document_markdown,
@@ -327,13 +414,29 @@ CURATED: tuple[Curated, ...] = (
         description=(
             "Import a draft as the next version of a document (markdown with YAML front "
             "matter); creates the document on first import (base_version 0). Pass the "
-            "version you wrote it on as base_version. Keep the template's final "
+            "version you wrote it on as base_version (left out, the latest version is "
+            "taken). Keep the template's final "
             "Sources and data points section, with each data point's confidence, and flag "
-            "claims that rest only on low-confidence evidence."
+            "claims that rest only on low-confidence evidence. " + citation_contract()
         ),
-        needs={"op": _by("POST", ("import_version",))},
+        needs={
+            "op": _by("POST", ("import_version",)),
+            "document": _by("GET", ("get_document",)),
+        },
         schema=lambda ops: copy.deepcopy(_PUSH_DRAFT_SCHEMA),
         run=_push_draft,
+    ),
+    Curated(
+        name="get_run_output",
+        description=(
+            "Read a file an earlier segment of this run wrote (by segment number and file "
+            "name), e.g. the baseline proposal or the feature set a later step builds on. "
+            "Only the run's own files."
+        ),
+        needs={"op": _by("GET", ("get_run_artifact",))},
+        schema=lambda ops: copy.deepcopy(_RUN_OUTPUT_SCHEMA),
+        run=_run_output,
+        own_run=True,
     ),
 )
 

@@ -1,0 +1,295 @@
+# Built-in semantic modules for the Fintech and payments pack (fintech.payments, O1h). The
+# pack reuses the shared core of startup.standard and adds these modules: some REQUIRED
+# for every fintech PRD, some CONDITIONAL on the capability scope or signals, and some
+# OPTIONAL for an author to add.
+#
+# TEMPLATES ONLY: titles, instructions, typed fields, question prompts and evidence
+# expectations. No prewritten features, products, brands, regulators, partners, regions
+# or amounts. Legal and regulatory claims carry sources in the appendix.
+
+- id: fintech.regulatory-scope
+  version: 1.0.0
+  title: Regulatory and licensing scope
+  description: Which licences, permissions and regulatory obligations apply, in which regions.
+  applies_to: [fintech.payments]
+  policy: required
+  depends_on: [constraints.solutions]
+  display_order: 400
+  section_ids: [fintech-regulatory-scope]
+  brief_layer: false
+  fields:
+    - {key: regulated_activities, label: "Regulated activities in scope", type: list, item_type: text, required: true}
+    - {key: licensing_basis, label: "Licences or partner permissions relied on, by region", type: markdown, required: true}
+    - {key: obligations, label: "Obligations that follow", type: markdown, required: true}
+    - {key: open_legal_questions, label: "Open legal questions", type: markdown}
+    - {key: compliance_owner, label: "Compliance owner", type: reference, reference_type: person}
+  validators:
+    - {kind: required, field: licensing_basis}
+    - {kind: requires_evidence, field: obligations}
+  question_prompts:
+    - key: regulated_activity
+      prompt: Which regulated financial activities does this touch, and under whose licence does it operate in each region?
+      category: constraints
+      importance: critical
+      fills: [regulated_activities, licensing_basis]
+    - key: compliance_owner
+      prompt: Who signs off that this stays within the company's licences and obligations?
+      category: ownership
+      importance: critical
+      fills: [compliance_owner]
+  instructions: >-
+    List the regulated activities in scope, the licence or partner permission each relies
+    on per region, the obligations that follow and the open questions for counsel. Cite
+    every legal claim; a claim without a source stays an assumption. No legal advice and
+    no invented regulators or rules.
+  evidence_expectations: {min_sources: 1, fields: [licensing_basis, obligations]}
+  required_review_role: owner
+  outputs: [prd, roadmap]
+  output_mappings:
+    roadmap: [open_legal_questions]
+
+- id: fintech.money-movement
+  version: 1.0.0
+  title: Money movement integrity and reconciliation
+  description: How funds flow, how every movement is recorded exactly once and how balances reconcile.
+  applies_to: [fintech.payments]
+  policy: required
+  depends_on: [requirements.nonfunctional]
+  display_order: 410
+  section_ids: [fintech-money-movement]
+  brief_layer: false
+  fields:
+    - {key: fund_flows, label: "Fund flows and accounts", type: markdown, required: true}
+    - {key: ledger_rules, label: "Ledger and idempotency rules", type: markdown, required: true}
+    - {key: reconciliation, label: "Reconciliation and break handling", type: markdown, required: true}
+    - {key: failure_states, label: "Failure, retry and reversal states", type: markdown}
+    - {key: integrity_tests, label: "Integrity acceptance checks", type: markdown, required: true}
+  validators:
+    - {kind: required, field: integrity_tests}
+  question_prompts:
+    - key: fund_flow
+      prompt: Where does money move from and to at each step, and which accounts hold it in between?
+      category: constraints
+      importance: critical
+      fills: [fund_flows]
+    - key: reconciliation
+      prompt: How do we prove internal records match the partner's records, and who resolves a mismatch?
+      category: evaluation_criteria
+      importance: critical
+      fills: [reconciliation]
+  instructions: >-
+    Describe every fund flow, the accounts involved, ledger rules that keep each movement
+    recorded exactly once, reconciliation cadence, break handling and ownership, and the
+    failure, retry and reversal states. Write the checks that prove integrity. No invented
+    balances or volumes.
+  required_review_role: approver
+  outputs: [prd, engineering_spec, acceptance_tests]
+  output_mappings:
+    engineering_spec: [fund_flows, ledger_rules, reconciliation]
+    acceptance_tests: [integrity_tests]
+
+- id: fintech.fraud-abuse
+  version: 1.0.0
+  title: Fraud, abuse and chargebacks
+  description: How fraud and abuse are prevented, detected and handled, including disputes and chargebacks.
+  applies_to: [fintech.payments]
+  policy: required
+  depends_on: [risks.register]
+  display_order: 420
+  section_ids: [fintech-fraud-abuse]
+  brief_layer: false
+  fields:
+    - {key: fraud_vectors, label: "Fraud and abuse vectors", type: markdown, required: true}
+    - {key: controls, label: "Preventive and detective controls", type: markdown, required: true}
+    - {key: disputes, label: "Disputes and chargebacks", type: markdown}
+    - {key: loss_tolerance, label: "Acceptable loss and false positive tolerance", type: markdown}
+  question_prompts:
+    - key: fraud_vectors
+      prompt: How could someone steal money or abuse this flow, and what stops them?
+      category: security_privacy
+      importance: critical
+      fills: [fraud_vectors, controls]
+    - key: tolerance
+      prompt: What fraud loss and what rate of blocked good customers is acceptable?
+      category: evaluation_criteria
+      importance: high
+      fills: [loss_tolerance]
+  instructions: >-
+    Define the fraud and abuse vectors, the preventive and detective controls, manual
+    review, dispute and chargeback handling and the trade-off between loss and friction
+    for good customers. Use confirmed loss figures or mark them as assumptions. No
+    invented rates.
+  evidence_expectations: {min_sources: 1, fields: [fraud_vectors]}
+  required_review_role: approver
+  outputs: [prd, engineering_spec]
+  output_mappings:
+    engineering_spec: [controls]
+
+- id: fintech.kyc-aml
+  version: 1.0.0
+  title: KYC and AML
+  description: Customer identity verification, due diligence, screening and monitoring obligations.
+  applies_to: [fintech.payments]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: kyc_aml}
+      - {op: contains, path: scope.capabilities, value: identity_verification}
+      - {op: contains, path: scope.capabilities, value: stored_value_accounts}
+  depends_on: [fintech.regulatory-scope]
+  display_order: 430
+  section_ids: [fintech-kyc-aml]
+  brief_layer: false
+  fields:
+    - {key: verification_tiers, label: "Verification tiers and what each unlocks", type: markdown, required: true}
+    - {key: screening, label: "Screening and ongoing monitoring", type: markdown, required: true}
+    - {key: escalation, label: "Suspicious activity escalation", type: markdown}
+    - {key: drop_off_measure, label: "Verification drop-off measure", type: text}
+  question_prompts:
+    - key: verification
+      prompt: What must we verify about a customer before they can move money, and at which limits does that change?
+      category: constraints
+      importance: critical
+      fills: [verification_tiers]
+    - key: monitoring
+      prompt: How is suspicious activity detected after onboarding, and who escalates it?
+      category: security_privacy
+      importance: high
+      fills: [screening, escalation]
+  instructions: >-
+    Define verification tiers and the limits each unlocks, screening, ongoing monitoring,
+    escalation of suspicious activity and the record keeping required. Balance obligations
+    against onboarding drop-off. Cite the obligations; no invented thresholds or providers.
+  evidence_expectations: {min_sources: 1, fields: [verification_tiers]}
+  required_review_role: approver
+  outputs: [prd, engineering_spec]
+  output_mappings:
+    engineering_spec: [verification_tiers, screening]
+
+- id: fintech.card-compliance
+  version: 1.0.0
+  title: Payment and card data compliance
+  description: Handling card data and payment credentials within the applicable security standards.
+  applies_to: [fintech.payments]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: card_data}
+      - {op: contains, path: scope.capabilities, value: card_issuing}
+      - {op: contains, path: scope.capabilities, value: card_acceptance}
+  depends_on: [fintech.regulatory-scope]
+  display_order: 440
+  section_ids: [fintech-card-compliance]
+  brief_layer: false
+  fields:
+    - {key: data_scope, label: "Card and credential data in scope", type: markdown, required: true}
+    - {key: scope_reduction, label: "Scope reduction approach", type: markdown, required: true}
+    - {key: attestation, label: "Attestation level and owner", type: markdown}
+    - {key: compliance_tests, label: "Compliance acceptance checks", type: markdown}
+  question_prompts:
+    - key: card_data_scope
+      prompt: Which systems will see card numbers or payment credentials, and can we keep them out of scope?
+      category: security_privacy
+      importance: critical
+      fills: [data_scope, scope_reduction]
+  instructions: >-
+    State which card data and credentials are stored, processed or transmitted, by which
+    systems, how tokenisation or hosted capture reduces scope, and the attestation that
+    follows. Cite the applicable standard from the sources. No invented network rules.
+  evidence_expectations: {min_sources: 1, fields: [data_scope]}
+  required_review_role: owner
+  outputs: [prd, engineering_spec, acceptance_tests]
+  output_mappings:
+    engineering_spec: [scope_reduction]
+    acceptance_tests: [compliance_tests]
+
+- id: fintech.cross-border
+  version: 1.0.0
+  title: Cross-border and multi-currency payments
+  description: Currency conversion, settlement across regions and the rules that differ by region.
+  applies_to: [fintech.payments]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: cross_border_payments}
+      - {op: contains, path: scope.capabilities, value: multi_currency}
+      - {op: gte, path: signals.payment_region_count, value: 2}
+  depends_on: [fintech.regulatory-scope, fintech.money-movement]
+  display_order: 450
+  section_ids: [fintech-cross-border]
+  brief_layer: false
+  fields:
+    - {key: corridors, label: "Regions and currencies in scope", type: list, item_type: text, required: true}
+    - {key: conversion, label: "Conversion, rates and fees", type: markdown, required: true}
+    - {key: regional_rules, label: "Rules that differ by region", type: markdown}
+    - {key: settlement, label: "Settlement timing by region", type: markdown}
+  question_prompts:
+    - key: corridors
+      prompt: Which regions and currencies are in scope at launch, and which rules differ between them?
+      category: constraints
+      importance: high
+      fills: [corridors, regional_rules]
+  instructions: >-
+    List the regions and currencies in scope, how conversion rates and fees are set and
+    disclosed, settlement timing and the rules that differ by region. Leave the list as
+    slots for the PRD's own scope. No prewritten regions or currencies.
+  evidence_expectations: {min_sources: 1, fields: [regional_rules]}
+  required_review_role: approver
+
+- id: fintech.partner-dependencies
+  version: 1.0.0
+  title: Partner bank and processor dependencies
+  description: What the product relies on from banking, processing and other financial partners.
+  applies_to: [fintech.payments]
+  policy: optional
+  depends_on: [constraints.solutions]
+  display_order: 460
+  section_ids: [fintech-partners]
+  brief_layer: false
+  fields:
+    - {key: partner_roles, label: "Partner roles and what each provides", type: markdown, required: true}
+    - {key: partner_constraints, label: "Partner approvals, limits and program rules", type: markdown}
+    - {key: failover, label: "Outage and partner change plan", type: markdown}
+  question_prompts:
+    - key: partner_approval
+      prompt: Which partner must approve this before launch, and what happens if they say no or go down?
+      category: third_party_policy
+      importance: high
+      fills: [partner_roles, partner_constraints, failover]
+  instructions: >-
+    Describe each partner role, the approvals and program rules that constrain this work,
+    lead times, and the plan for an outage or a change of partner. Keep partner terms as
+    sourced constraints. No partner names.
+  evidence_expectations: {min_sources: 1, fields: [partner_constraints]}
+
+- id: fintech.regulator-reporting
+  version: 1.0.0
+  title: Regulatory reporting and record keeping
+  description: Reports, records and audit trails the business keeps for supervisors and auditors.
+  applies_to: [fintech.payments]
+  policy: optional
+  depends_on: [fintech.money-movement]
+  display_order: 470
+  section_ids: [fintech-reporting]
+  brief_layer: false
+  fields:
+    - {key: reports, label: "Reports and their cadence", type: markdown, required: true}
+    - {key: records, label: "Records kept and retention", type: markdown}
+    - {key: report_owner, label: "Report owner", type: reference, reference_type: person}
+  question_prompts:
+    - key: reporting
+      prompt: Which reports or records does this change, and who files or keeps them?
+      category: ownership
+      importance: medium
+      fills: [reports, report_owner]
+  instructions: >-
+    List the reports and records this work creates or changes, their cadence, retention
+    and owner, and the data each needs. Cite the requirement for each. No invented
+    report formats.
+  evidence_expectations: {min_sources: 1, fields: [reports]}
+  outputs: [prd, engineering_spec]
+  output_mappings:
+    engineering_spec: [records]

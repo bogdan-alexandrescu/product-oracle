@@ -2,42 +2,36 @@
 
 import { useState } from "react";
 
-import { Badge, Button, INPUT } from "@/components/ui";
+import { Avatar, Button, Chip, Icon, type ChipKind } from "@/components/ds";
+import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type Suggestion } from "@/lib/api/client";
 import { CLASSIFICATION_LABEL } from "@/lib/format";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
-const STATUS: Record<Suggestion["status"], { label: string; tone: "neutral" | "green" | "blue" }> = {
-  open: { label: "Suggested", tone: "blue" },
-  accepted: { label: "Accepted", tone: "green" },
-  dismissed: { label: "Dismissed", tone: "neutral" },
-  applied: { label: "Applied", tone: "green" },
-  superseded: { label: "Superseded", tone: "neutral" },
+const STATUS: Record<Suggestion["status"], { label: string; kind: ChipKind }> = {
+  open: { label: "Suggested", kind: "warn" },
+  accepted: { label: "Accepted", kind: "pass" },
+  dismissed: { label: "Dismissed", kind: "na" },
+  applied: { label: "Applied", kind: "pass" },
+  superseded: { label: "Superseded", kind: "na" },
 };
 
 type Mode = null | "edit" | "keep" | "dismiss";
 
+/** Proposed text longer than this is collapsed to a few lines until "Show all". */
+const LONG_CHARS = 240;
+const LONG_LINES = 4;
+
 /**
- * Oracle's suggestion on a feedback item: its classification and group, the proposed
- * section text or answer, and a pushback when the feedback contradicts confirmed goals or
- * high-confidence evidence. Approvers accept, edit or dismiss it; nothing changes the
- * document until a refinement built from it is accepted.
+ * An approver's decision on a suggestion: accept, edit and accept, keep their call over a
+ * pushback, or dismiss. The feedback item draws the buttons and the open form at its top.
  */
-export function SuggestionCard({
-  suggestion: s,
-  canDecide,
-  onChanged,
-}: {
-  suggestion: Suggestion;
-  canDecide: boolean;
-  onChanged: () => void;
-}) {
+export function useSuggestionDecision(s: Suggestion, onChanged: () => void) {
   const [mode, setMode] = useState<Mode>(null);
   const [text, setText] = useState(s.edited_text ?? s.text ?? "");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const shown = s.edited_text ?? s.text;
-  const editable = s.kind === "section_text" || s.kind === "answer";
 
   async function run(call: () => Promise<unknown>) {
     setBusy(true);
@@ -46,6 +40,9 @@ export function SuggestionCard({
       await call();
       setMode(null);
       onChanged();
+      // What is staged and what waits in the Inbox changed: the build action and the badge re-read.
+      invalidateWaiting();
+      waitingChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save.");
     } finally {
@@ -53,45 +50,217 @@ export function SuggestionCard({
     }
   }
   const path = { params: { path: { suggestion_id: s.id } } };
-  const accept = (body: { text?: string | null; reason?: string | null }) =>
-    run(() => unwrap(api.POST("/v1/suggestions/{suggestion_id}/accept", { ...path, body })));
-  const dismiss = (decline: boolean) =>
-    run(() =>
-      unwrap(api.POST("/v1/suggestions/{suggestion_id}/dismiss", { ...path, body: { reason: reason || null, decline } })),
-    );
-  const saveEdit = () => run(() => unwrap(api.PATCH("/v1/suggestions/{suggestion_id}", { ...path, body: { text } })));
+  const acceptCall = (body: { text?: string | null; reason?: string | null }) =>
+    unwrap(api.POST("/v1/suggestions/{suggestion_id}/accept", { ...path, body }));
+  const saveCall = () => unwrap(api.PATCH("/v1/suggestions/{suggestion_id}", { ...path, body: { text } }));
+  return {
+    s,
+    mode,
+    setMode,
+    text,
+    setText,
+    reason,
+    setReason,
+    busy,
+    error,
+    accept: (body: { text?: string | null; reason?: string | null }) => run(() => acceptCall(body)),
+    dismiss: (decline: boolean) =>
+      run(() =>
+        unwrap(api.POST("/v1/suggestions/{suggestion_id}/dismiss", { ...path, body: { reason: reason || null, decline } })),
+      ),
+    saveEdit: () => run(saveCall),
+    // The edited text is saved on the suggestion, then accepted.
+    acceptEdited: () =>
+      run(async () => {
+        await saveCall();
+        await acceptCall({});
+      }),
+  };
+}
+
+export type SuggestionDecision = ReturnType<typeof useSuggestionDecision>;
+
+const editable = (s: Suggestion) => s.kind === "section_text" || s.kind === "answer";
+
+/** The buttons for an open suggestion; empty once it is decided or while a form is open. */
+export function SuggestionActions({ d }: { d: SuggestionDecision }) {
+  const { s, busy, mode, setMode } = d;
+  if (s.status !== "open" || mode !== null) return null;
+  return (
+    <>
+      {s.pushback ? (
+        <>
+          <Button variant="solid" icon="check" disabled={busy} onClick={() => d.dismiss(true)}>
+            Take the advice
+          </Button>
+          <Button disabled={busy} onClick={() => setMode("keep")}>
+            Keep my call
+          </Button>
+        </>
+      ) : (
+        <Button variant="solid" icon="check" disabled={busy} onClick={() => d.accept({})}>
+          Accept
+        </Button>
+      )}
+      {editable(s) && (
+        <Button disabled={busy} onClick={() => setMode("edit")}>
+          {s.pushback ? "Edit" : "Edit and accept"}
+        </Button>
+      )}
+      <Button variant="ghost" disabled={busy} onClick={() => setMode("dismiss")}>
+        Dismiss
+      </Button>
+    </>
+  );
+}
+
+/** The open form (edit, keep my call, dismiss) and any error, under the buttons. */
+export function SuggestionForm({ d }: { d: SuggestionDecision }) {
+  const { s, mode, setMode, busy, text, setText, reason, setReason } = d;
+  return (
+    <>
+      {mode === "edit" && (
+        <div className="mt-2 flex flex-col gap-2">
+          <label className={FIELD_LABEL}>
+            {s.kind === "answer" ? "Answer" : "Proposed section text"}
+            <textarea
+              autoFocus
+              rows={6}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className={`${TEXTAREA} max-h-[50vh] min-h-24 resize-y`}
+            />
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {!s.pushback && (
+              <Button variant="solid" icon="check" disabled={busy || !text.trim()} onClick={d.acceptEdited}>
+                Accept edited text
+              </Button>
+            )}
+            <Button variant={s.pushback ? "solid" : "secondary"} disabled={busy || !text.trim()} onClick={d.saveEdit}>
+              Save edit
+            </Button>
+            <Button variant="ghost" onClick={() => setMode(null)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+      {mode === "keep" && (
+        <div className="mt-2 flex flex-col gap-2">
+          <label className={FIELD_LABEL}>
+            Why keep your call? (logged for later review)
+            <textarea autoFocus rows={2} value={reason} onChange={(e) => setReason(e.target.value)} className={TEXTAREA} />
+          </label>
+          <div className="flex gap-1.5">
+            <Button variant="solid" disabled={busy || !reason.trim()} onClick={() => d.accept({ reason })}>
+              Accept anyway
+            </Button>
+            <Button variant="ghost" onClick={() => setMode(null)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+      {mode === "dismiss" && (
+        <div className="mt-2 flex flex-col gap-2">
+          <label className={FIELD_LABEL}>
+            Reason (optional)
+            <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} className={`h-9 ${TEXTAREA}`} />
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            <Button disabled={busy} onClick={() => d.dismiss(false)}>
+              Dismiss suggestion
+            </Button>
+            <Button variant="danger" disabled={busy} onClick={() => d.dismiss(true)}>
+              Dismiss and decline the feedback
+            </Button>
+            <Button variant="ghost" onClick={() => setMode(null)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+      {d.error && <InlineError>{d.error}</InlineError>}
+    </>
+  );
+}
+
+/**
+ * Oracle's suggestion on a feedback item: its classification and group, the proposed
+ * section text or answer (long text collapsed to a few lines), and a pushback when the
+ * feedback contradicts confirmed goals or high-confidence evidence. The decision buttons sit
+ * at the top of the feedback item (SuggestionActions); nothing changes the document until
+ * the next draft built from it is applied (C1e: accepted section text is staged; "Build
+ * draft N+1" on the PRD page builds every staged change in one job).
+ */
+export function SuggestionCard({
+  suggestion: s,
+  canDecide,
+  editing = false,
+}: {
+  suggestion: Suggestion;
+  canDecide: boolean;
+  /** The editor is open at the item's top: the text is not shown twice. */
+  editing?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = s.edited_text ?? s.text;
+  const long = !!shown && (shown.length > LONG_CHARS || shown.split("\n").length > LONG_LINES);
+  const collapsed = long && !expanded;
 
   return (
-    <div className="mt-2 rounded-md border border-sky-200 bg-sky-50/50 px-2.5 py-2" data-testid="suggestion" data-kind={s.kind}>
-      <div className="flex flex-wrap items-center gap-1.5 text-xs">
-        <span className="font-medium text-sky-900">Oracle</span>
-        <Badge>{CLASSIFICATION_LABEL[s.classification]}</Badge>
-        {s.group_key && <span className="text-neutral-500">group: {s.group_key}</span>}
+    <div className="mt-2.5 rounded-button border border-line bg-surface2 px-3 py-2.5" data-testid="suggestion" data-kind={s.kind}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Avatar name="Oracle" initials="O" tone="oracle" />
+        <span className="font-semibold">Oracle</span>
+        <Chip kind="line">{CLASSIFICATION_LABEL[s.classification]}</Chip>
+        {s.group_key && (
+          <span className="truncate font-mono text-[13px] text-text2" title={`group: ${s.group_key}`}>
+            {s.group_key}
+          </span>
+        )}
         <span className="ml-auto">
-          <Badge tone={STATUS[s.status].tone}>{STATUS[s.status].label}</Badge>
+          <Chip kind={STATUS[s.status].kind}>{STATUS[s.status].label}</Chip>
         </span>
       </div>
-      {s.kind === "duplicate" && <p className="mt-1 text-xs text-neutral-700">Duplicate of an earlier item; resolved with it.</p>}
-      {shown && mode !== "edit" && (
-        <div className="mt-1.5">
-          <p className="text-[11px] font-medium text-neutral-500 uppercase">
+      {s.kind === "duplicate" && <p className="mt-1.5 text-sm text-text2">Duplicate of an earlier item; resolved with it.</p>}
+      {shown && !editing && (
+        <div className="mt-2">
+          <p className="text-[13px] font-semibold tracking-[0.02em] text-text2">
             {s.kind === "answer" ? "Suggested answer" : `Proposed text for #${s.section_key}`}
             {s.edited_text && " (edited)"}
           </p>
-          <p className="mt-0.5 rounded border border-neutral-200 bg-white px-2 py-1.5 text-xs whitespace-pre-wrap text-neutral-800" data-testid="suggestion-text">
-            {shown}
-          </p>
+          <div className="mt-1 rounded-lg border border-line bg-surface px-2.5 py-2">
+            <p
+              className={`text-sm leading-5 whitespace-pre-wrap text-text ${collapsed ? "line-clamp-4" : ""}`}
+              data-testid="suggestion-text"
+              data-collapsed={long ? String(collapsed) : undefined}
+            >
+              {collapsed ? shown.replace(/\n\s*\n/g, "\n") : shown}
+            </p>
+          </div>
+          {long && (
+            <button
+              type="button"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((e) => !e)}
+              className="mt-1 h-7 rounded-md px-1 text-sm font-semibold text-accent-ink hover:underline"
+            >
+              {expanded ? "Show less" : "Show all"}
+            </button>
+          )}
         </div>
       )}
-      {s.rationale && <p className="mt-1 text-xs text-neutral-600">{s.rationale}</p>}
+      {s.rationale && <p className="mt-1.5 text-sm leading-5 text-text2">{s.rationale}</p>}
       {s.pushback && (
-        <div className="mt-2 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-950" data-testid="pushback" role="note">
-          <p className="font-medium">Oracle pushes back</p>
-          <p className="mt-0.5">{s.pushback.reason}</p>
-          <ul className="mt-1 list-disc pl-4">
+        <div className="mt-2 rounded-lg bg-warn-bg px-2.5 py-2 text-sm leading-5 text-warn" data-testid="pushback" role="note">
+          <p className="font-semibold">Oracle pushes back</p>
+          <p className="mt-0.5 text-text">{s.pushback.reason}</p>
+          <ul className="mt-1 flex flex-col gap-1">
             {s.pushback.sources.map((src) => (
-              <li key={src.ref}>
-                <span className="text-amber-800">{src.kind === "goal" ? "Confirmed goal" : "Evidence"}: </span>
+              <li key={src.ref} className="text-text">
+                <span className="font-semibold text-warn">{src.kind === "goal" ? "Confirmed goal" : "Evidence"}: </span>
                 {src.url ? (
                   <a href={src.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
                     {src.title}
@@ -99,101 +268,24 @@ export function SuggestionCard({
                 ) : (
                   src.title
                 )}
-                {src.confidence != null && <span className="text-amber-800"> · confidence {src.confidence.toFixed(2)}</span>}
-                {src.excerpt && <span className="block text-amber-900/80">“{src.excerpt}”</span>}
+                {src.confidence != null && <span className="tnum text-text2"> · confidence {src.confidence.toFixed(2)}</span>}
+                {src.excerpt && <span className="block text-text2">“{src.excerpt}”</span>}
               </li>
             ))}
           </ul>
           {s.override_reason && (
-            <p className="mt-1">
-              <span className="font-medium">Kept the call:</span> {s.override_reason}
+            <p className="mt-1 text-text">
+              <span className="font-semibold">Kept the call:</span> {s.override_reason}
             </p>
           )}
         </div>
       )}
-
-      {canDecide && s.status === "open" && mode === null && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {s.pushback ? (
-            <>
-              <Button size="sm" variant="primary" disabled={busy} onClick={() => dismiss(true)}>
-                Take the advice
-              </Button>
-              <Button size="sm" disabled={busy} onClick={() => setMode("keep")}>
-                Keep my call
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" variant="primary" disabled={busy} onClick={() => accept({})}>
-              Accept
-            </Button>
-          )}
-          {editable && (
-            <Button size="sm" disabled={busy} onClick={() => setMode("edit")}>
-              Edit
-            </Button>
-          )}
-          <Button size="sm" variant="ghost" disabled={busy} onClick={() => setMode("dismiss")}>
-            Dismiss
-          </Button>
-        </div>
+      {canDecide && s.status === "accepted" && s.kind === "section_text" && s.applied_in_version == null && (
+        <p className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-text2" data-testid="suggestion-staged">
+          <Icon name="doc" size={16} />
+          Staged for the next draft
+        </p>
       )}
-      {canDecide && s.status === "accepted" && s.kind === "section_text" && (
-        <p className="mt-1.5 text-xs text-neutral-600">Accepted: use “Refine section” on #{s.section_key} to work it into the next version.</p>
-      )}
-
-      {mode === "edit" && (
-        <div className="mt-2 flex flex-col gap-1.5">
-          <label className="flex flex-col gap-1 text-xs text-neutral-600">
-            {s.kind === "answer" ? "Answer" : "Proposed section text"}
-            <textarea rows={5} value={text} onChange={(e) => setText(e.target.value)} className={INPUT} />
-          </label>
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="primary" disabled={busy || !text.trim()} onClick={saveEdit}>
-              Save edit
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode(null)}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
-      {mode === "keep" && (
-        <div className="mt-2 flex flex-col gap-1.5">
-          <label className="flex flex-col gap-1 text-xs text-neutral-600">
-            Why keep your call? (logged for later review)
-            <textarea autoFocus rows={2} value={reason} onChange={(e) => setReason(e.target.value)} className={INPUT} />
-          </label>
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="primary" disabled={busy || !reason.trim()} onClick={() => accept({ reason })}>
-              Accept anyway
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode(null)}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
-      {mode === "dismiss" && (
-        <div className="mt-2 flex flex-col gap-1.5">
-          <label className="flex flex-col gap-1 text-xs text-neutral-600">
-            Reason (optional)
-            <input value={reason} onChange={(e) => setReason(e.target.value)} className={INPUT} />
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            <Button size="sm" disabled={busy} onClick={() => dismiss(false)}>
-              Dismiss suggestion
-            </Button>
-            <Button size="sm" disabled={busy} onClick={() => dismiss(true)}>
-              Dismiss and decline the feedback
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode(null)}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
-      {error && <p className="mt-1 text-xs text-rose-700">{error}</p>}
     </div>
   );
 }

@@ -39,6 +39,7 @@ async def verify_access_token(raw: str) -> Principal | None:
             role=effective_role(user.role, token.scope),
             user_id=user.id,
             grant_id=token.family_id,
+            read_only="oracle:write" not in token.scope.split(),
         )
 
 

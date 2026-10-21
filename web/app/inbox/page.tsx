@@ -1,234 +1,168 @@
 "use client";
 
-import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
-import { Button, ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from "@/components/ds";
+import { TabBar } from "@/components/review/parts";
+import { ErrorNote, Loading } from "@/components/ui";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingChanged } from "@/lib/waiting";
 
-import { CHECKPOINT_LABEL, usd, type RunSummary } from "../runs/_lib";
+import { allNeeds, NeedTable, questionNeeds, sourceNeeds, STATE_TABS, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
 
-/** Why the last attempt did not revoke, in the owner's words. */
-function revokeOutcome(outcome: string | null | undefined, provider: string): string {
-  if (outcome === "not_configured") return `Oracle's ${provider} sign-in app is not configured`;
-  if (outcome === "unreadable") return "Oracle could not read its copy of the credential";
-  return `${provider} refused or did not answer`;
-}
-
-function Section({ title, count, children, testId }: { title: string; count: number; children: ReactNode; testId: string }) {
-  if (count === 0) return null;
-  return (
-    <section className="mb-8" aria-label={title} data-testid={testId}>
-      <h2 className="mb-3 text-sm font-semibold text-neutral-700">
-        {title} <span className="font-normal text-neutral-400">{count}</span>
-      </h2>
-      <ul className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white">{children}</ul>
-    </section>
-  );
-}
-
-function RunLink({ run }: { run: Pick<RunSummary, "id" | "flow_title" | "document_slug"> }) {
-  return (
-    <Link href={`/runs/${run.id}`} className="font-medium text-neutral-900 hover:underline">
-      {run.flow_title}
-      {run.document_slug && <span className="ml-1.5 font-mono text-xs font-normal text-neutral-500">{run.document_slug}</span>}
-    </Link>
-  );
-}
+type Source = Schemas["SourceOut"];
 
 export default function InboxPage() {
-  const q = useQuery("inbox", () => unwrap(api.GET("/v1/inbox")));
+  const q = useQuery("inbox", loadInbox);
+  // Questions asked of me (I3): their own group, counted with the rest as the rail badge counts.
+  const questionsQ = useQuery("inbox|questions", loadMyQuestions);
+  const docsQ = useQuery("inbox|documents", () => unwrap(api.GET("/v1/documents")));
+  // My sources needing an edit before they sync again (a failure here only hides the group).
+  const sourcesQ = useQuery("inbox|sources", () => unwrap(api.GET("/v1/sources")));
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // C1e: my previous visit, read once on arrival; what was new then stays New for this visit.
+  const arrivalQ = useQuery("inbox|arrival", () => loadInbox().then((d) => d.last_seen_at ?? null));
+  const arrived = !arrivalQ.loading && !arrivalQ.error;
+  useEffect(() => {
+    // After the first render with the arrival's states: this visit becomes my last one.
+    if (arrived) void markInboxSeen().catch(() => undefined);
+  }, [arrived]);
   const inbox = q.data;
+  const questions = questionsQ.data ?? [];
 
   async function act(key: string, call: () => Promise<unknown>) {
     setBusy(key);
     setError(null);
     try {
       await call();
-      await q.reload();
+      invalidateWaiting();
+      const reloads = Promise.all([q.reload(), questionsQ.reload()]);
+      waitingChanged();
+      await reloads;
     } catch (e) {
       setError(errorMessage(e));
     } finally {
       setBusy(null);
     }
   }
-  const path = (id: string) => ({ params: { path: { run_id: id } } });
+
+  const seenBefore = arrived ? arrivalQ.data : inbox?.last_seen_at;
+  const rows = inbox ? allNeeds(inbox, questionNeeds(questions, docsQ.data ?? []), busy, act, seenBefore) : null;
+  const waiting = rows ? waitingNeeds(rows).length : undefined;
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-8">
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight text-neutral-900">Inbox</h1>
+    <Page>
+      <PageHeader title="Inbox" status={waiting != null && waiting > 0 && <Chip kind="acc">{waiting} waiting</Chip>} />
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
-      {q.loading && <Loading />}
-      {error && <div className="mb-4"><ErrorNote>{error}</ErrorNote></div>}
-      {inbox && inbox.total === 0 && (
-        <div className="space-y-2 text-neutral-600">
-          <p>
-            Nothing waiting on you. Checkpoints that need a decision, such as a run waiting for budget approval or a
-            draft ready for review, land here.
-          </p>
-          <p>You will see each item with what it needs from you and a link to act on it.</p>
+      {q.loading && !inbox && <Loading />}
+      {error && (
+        <div className="mb-3">
+          <ErrorNote>{error}</ErrorNote>
         </div>
       )}
-      {inbox && (
-        <>
-          <Section title="Checkpoints" count={inbox.checkpoints.length} testId="inbox-checkpoints">
-            {inbox.checkpoints.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium text-neutral-900">{CHECKPOINT_LABEL[c.kind]}</div>
-                  <div className="text-xs text-neutral-500">
-                    {c.flow_title}
-                    {c.segment_title && ` · ${c.segment_title}`}
-                    {c.document_slug && ` · ${c.document_slug}`} · {formatDateTime(c.created_at)}
-                  </div>
-                </div>
-                <Link
-                  href={`/runs/${c.run_id}`}
-                  className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
-                >
-                  Review
-                </Link>
-              </li>
-            ))}
-          </Section>
+      {inbox && rows && <InboxTabs rows={rows} waiting={waiting ?? 0} questionsError={questionsQ.error} />}
+      {sourcesQ.data && <SourcesNeedingAttention sources={sourcesQ.data} />}
+    </Page>
+  );
+}
 
-          <Section title="Cost approvals" count={inbox.approvals.length} testId="inbox-approvals">
-            {inbox.approvals.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
-                <div className="min-w-0 flex-1">
-                  <RunLink run={r} />
-                  <div className="text-xs text-neutral-500">Estimated {usd(r.estimate_usd)}, over the $50 approval threshold</div>
-                </div>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  disabled={busy !== null}
-                  onClick={() => act(`approve-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/approve", path(r.id))))}
-                >
-                  Approve {usd(r.estimate_usd)}
-                </Button>
-              </li>
-            ))}
-          </Section>
-
-          <Section title="Paused on overrun" count={inbox.overruns.length} testId="inbox-overruns">
-            {inbox.overruns.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
-                <div className="min-w-0 flex-1">
-                  <RunLink run={r} />
-                  <div className="text-xs text-neutral-500">
-                    Spent {usd(r.spent_usd)} of {usd(r.estimate_usd)} estimated
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  disabled={busy !== null}
-                  onClick={() => act(`resume-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/resume", path(r.id))))}
-                >
-                  Resume
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={busy !== null}
-                  onClick={() => act(`cancel-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/cancel", path(r.id))))}
-                >
-                  Cancel run
-                </Button>
-              </li>
-            ))}
-          </Section>
-
-          <Section
-            title="Couldn't revoke access"
-            count={inbox.revoke_failures?.length ?? 0}
-            testId="inbox-revoke-failures"
-          >
-            {(inbox.revoke_failures ?? []).map((f) => {
-              const provider = f.provider_name ?? f.provider ?? "the provider";
-              return (
-                <li key={f.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm" data-testid="revoke-failure">
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-neutral-900">{f.title}</div>
-                    <div className="text-xs text-neutral-500">
-                      {revokeOutcome(f.outcome, provider)}
-                      {f.last_error && ` (${f.last_error})`} · tried {f.attempts} time{f.attempts === 1 ? "" : "s"} ·{" "}
-                      {f.status === "pending"
-                        ? `retrying until ${formatDateTime(f.retry_until)}`
-                        : `stopped retrying ${formatDateTime(f.retry_until)}`}
-                    </div>
-                    <div className="text-xs text-neutral-500">
-                      Oracle keeps a copy of the credential until the revoke succeeds or you dismiss this. Dismiss if you
-                      revoked the access at {provider} yourself.
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      act(`retry-${f.id}`, () =>
-                        unwrap(
-                          api.POST("/v1/member-follow-ups/{follow_up_id}/retry", {
-                            params: { path: { follow_up_id: f.id } },
-                          }),
-                        ),
-                      )
-                    }
-                  >
-                    Retry
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      act(`dismiss-${f.id}`, () =>
-                        unwrap(
-                          api.POST("/v1/member-follow-ups/{follow_up_id}/dismiss", {
-                            params: { path: { follow_up_id: f.id } },
-                          }),
-                        ),
-                      )
-                    }
-                  >
-                    Dismiss
-                  </Button>
-                </li>
-              );
-            })}
-          </Section>
-
-          <Section title="Open feedback" count={inbox.feedback.length} testId="inbox-feedback">
-            {inbox.feedback.map((d) => (
-              <li key={d.document_id} className="px-4 py-3 text-sm">
-                <div className="flex flex-wrap items-center gap-3">
-                  <Link
-                    href={d.latest_version ? `/documents/${d.slug}/v/${d.latest_version}` : `/documents/${d.slug}`}
-                    className="font-medium text-neutral-900 hover:underline"
-                  >
-                    {d.title}
-                  </Link>
-                  <span className="text-xs text-neutral-500">
-                    {d.open_count} open item{d.open_count === 1 ? "" : "s"}
-                  </span>
-                </div>
-                <ul className="mt-1.5 space-y-0.5 text-neutral-600">
-                  {d.items.map((f) => (
-                    <li key={f.id} className="truncate">
-                      <span className="text-xs text-neutral-400">v{f.raised_on_version} · </span>
-                      {f.summary}
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </Section>
-        </>
-      )}
+/**
+ * My sources that need an edit before they sync again: their own panel, outside "Needs you",
+ * whose count is the rail badge's and Home's (lib/waiting), as is the header's.
+ */
+function SourcesNeedingAttention({ sources }: { sources: Source[] }) {
+  const rows = sourceNeeds(sources);
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-3">
+      <Panel title="Sources that need attention" count={rows.length}>
+        <NeedTable title="Sources that need attention" testId="inbox-sources" rows={rows} />
+      </Panel>
     </div>
+  );
+}
+
+/**
+ * The groups a tab draws, in order; each is one table under its own label. `heading`: shown
+ * above the group, for one that is not something to act on.
+ */
+const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
+  { id: "checkpoints", title: "Checkpoints" },
+  {
+    id: "deliveries",
+    title: "Decision not delivered yet",
+    heading: (
+      <>
+        Decision not delivered yet
+        <InfoTip label="decisions not delivered yet" align="start">
+          These decisions are recorded and final: nobody needs to decide again. SwarmCloud has not taken them yet, so Oracle sends
+          each again on every tick until it does.
+        </InfoTip>
+      </>
+    ),
+  },
+  { id: "approvals", title: "Cost approvals" },
+  { id: "overruns", title: "Paused on overrun" },
+  { id: "lookups", title: "Stuck runs" },
+  { id: "imports", title: "Couldn't import" },
+  { id: "revoke-failures", title: "Couldn't revoke access" },
+  { id: "feedback", title: "Feedback" },
+  { id: "questions", title: "Questions" },
+  { id: "revising", title: "Sent back by Oracle" },
+  { id: "searches", title: "Looking for earlier submissions" },
+];
+
+/**
+ * ONE Inbox (owner, 2026-10-20): every kind of item in a single list with state tabs, New
+ * first (the default on arrival), each item drawn once. New + Open is what the rail badge
+ * counts.
+ */
+function InboxTabs({
+  rows,
+  waiting,
+  questionsError,
+}: {
+  rows: ReturnType<typeof allNeeds>;
+  waiting: number;
+  questionsError: string | null;
+}) {
+  const [tab, setTab] = useState<InboxState>("new");
+  const count = (st: InboxState) => rows.filter((r) => r.counted && r.state === st).length;
+  const shown = rows.filter((r) => r.state === tab);
+  const label = STATE_TABS.find((t) => t.id === tab)!.label;
+  return (
+    <Panel title="Needs you" count={waiting} testId="inbox-needs">
+      <div className="px-4 pt-1 max-[600px]:px-3" data-testid="inbox-state-tabs">
+        <TabBar
+          label="Inbox by state"
+          tabs={STATE_TABS.map((t) => ({ id: t.id, label: t.label, count: count(t.id) }))}
+          value={tab}
+          onChange={setTab}
+        />
+      </div>
+      {questionsError && (
+        <div className="px-4 pt-3" data-testid="inbox-questions-error">
+          <ErrorNote>{questionsError}</ErrorNote>
+        </div>
+      )}
+      <div role="tabpanel" aria-label={label} data-testid={`inbox-tab-${tab}`}>
+        {shown.length === 0 ? (
+          <Empty>
+            Nothing {label.toLowerCase()}{" "}
+            {tab === "new" && (
+              <InfoTip label="the inbox" align="start">
+                Checkpoints that need a decision, cost approvals, feedback to review and the questions asked of you land here.
+              </InfoTip>
+            )}
+          </Empty>
+        ) : (
+          GROUPS.map((g) => (
+            <NeedTable key={g.id} title={g.title} heading={g.heading} testId={`inbox-${g.id}`} rows={shown.filter((r) => r.group === g.id)} />
+          ))
+        )}
+      </div>
+    </Panel>
   );
 }

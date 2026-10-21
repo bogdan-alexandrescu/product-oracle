@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
+import { Chip } from "@/components/ds";
 import type { EvidenceOut } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 
@@ -30,15 +31,45 @@ const fmt = (v: unknown) => (typeof v === "number" ? v.toFixed(2) : "—");
 /**
  * One piece of evidence: source kind and confidence. Hover or focus previews the
  * card (excerpt, ref, link, factor breakdown); click pins it open, as CitationChip does.
+ * The card is fixed to the viewport, so the inspector's rounded clip never cuts it.
+ * Evidence from a source item since removed (a narrowed source, or deleted upstream)
+ * says 'source removed' and no longer links out; its stored excerpt stays.
  */
 export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: EvidenceOut; low?: number }) {
   const [hover, setHover] = useState(false);
   const [pinned, setPinned] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<CSSProperties>({ top: 0, left: 0, visibility: "hidden" });
   const cardId = useId();
   const open = hover || pinned;
   const label = sourceKindLabel(evidence.source_kind);
+  const removed = !!evidence.source_removed;
   const factors = breakdownOf(evidence);
+
+  useLayoutEffect(() => {
+    if (!hover && !pinned) return;
+    const place = () => {
+      const r = btn.current?.getBoundingClientRect();
+      if (!r) return;
+      const w = Math.min(320, window.innerWidth - 16);
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+      const below = window.innerHeight - r.bottom;
+      // Above the chip when the room below is short and there is more above.
+      setPos(
+        below < 300 && r.top > below
+          ? { bottom: window.innerHeight - r.top, left, width: w, maxHeight: r.top - 8 }
+          : { top: r.bottom, left, width: w, maxHeight: below - 8 },
+      );
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [hover, pinned]);
 
   useEffect(() => {
     if (!pinned) return;
@@ -65,85 +96,99 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
       }}
     >
       <button
+        ref={btn}
         type="button"
         data-testid="evidence-chip"
         aria-expanded={open}
         aria-describedby={open ? cardId : undefined}
-        aria-label={`Evidence: ${label}, confidence ${evidence.confidence != null ? evidence.confidence.toFixed(2) : "not scored"}`}
+        aria-label={`Evidence: ${label}${removed ? ", source removed" : ""}, confidence ${evidence.confidence != null ? evidence.confidence.toFixed(2) : "not scored"}`}
         onClick={() => setPinned((p) => !p)}
         onFocus={() => setHover(true)}
         onBlur={() => setHover(false)}
-        className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50"
+        className={`inline-flex h-8 max-w-full flex-none items-center gap-2 rounded-lg border bg-surface pr-1 pl-2.5 text-sm font-semibold whitespace-nowrap hover:bg-surface2 ${
+          open ? "border-accent" : "border-line-strong"
+        }`}
       >
         {label}
+        {removed && (
+          <Chip kind="na" data-testid="source-removed">
+            source removed
+          </Chip>
+        )}
         <ConfidenceBadge value={evidence.confidence} low={low} />
       </button>
       {open && (
         <span
           id={cardId}
           role="tooltip"
-          className="absolute top-full left-0 z-30 block w-80 pt-1 text-left text-sm leading-snug text-neutral-800"
+          style={pos}
+          className="fixed z-50 block overflow-y-auto py-1 text-left text-sm leading-5 font-normal text-text"
         >
-          <span className="block rounded-md border border-neutral-200 bg-white p-3 shadow-lg">
-            <span className="mb-1 block text-xs text-neutral-500">
+          <span className="block rounded-button border border-line bg-surface p-3.5 shadow-tip">
+            <span className="tnum mb-1 block text-[13px] font-semibold text-text2">
               {label}
               {evidence.retrieved_at && ` · retrieved ${formatDate(evidence.retrieved_at)}`}
             </span>
             {(evidence.source_item?.title || evidence.ref) && (
-              <span className="block font-medium">{evidence.source_item?.title ?? evidence.ref}</span>
+              <span className="block font-semibold">{evidence.source_item?.title ?? evidence.ref}</span>
             )}
             {evidence.ref && evidence.source_item?.title && evidence.ref !== evidence.source_item.title && (
-              <span className="block font-mono text-[11px] text-neutral-500">{evidence.ref}</span>
+              <span className="block truncate font-mono text-[13px] text-text2">{evidence.ref}</span>
             )}
             {evidence.excerpt && (
-              <span className="mt-2 block border-l-2 border-neutral-200 pl-2 text-neutral-600 italic">
+              <span className="mt-2 block border-l-2 border-accent pl-2.5 text-text2">
                 “{evidence.excerpt}”
               </span>
             )}
             {evidence.note && (
-              <span className="mt-2 block text-xs text-neutral-700" data-testid="evidence-note">
+              <span className="mt-2 block text-[13px]" data-testid="evidence-note">
                 Note: {evidence.note}
               </span>
             )}
             {evidence.link && (
-              <span className="mt-2 block rounded bg-neutral-50 px-2 py-1 text-xs text-neutral-600" data-testid="public-link-note">
+              <span className="mt-2 block rounded-lg bg-surface2 px-2 py-1 text-[13px] text-text2" data-testid="public-link-note">
                 Public link, visible to everyone · fetched {formatDate(evidence.link.fetched_at)}
                 {evidence.link.last_modified && ` · page updated ${formatDate(evidence.link.last_modified)}`}
               </span>
             )}
+            {removed && (
+              <span className="mt-2 block rounded-lg bg-na-bg px-2 py-1 text-[13px] text-na" data-testid="source-removed-note">
+                Source removed: the item was taken out of its source or deleted where it came from. The stored excerpt stays.
+              </span>
+            )}
             {evidence.source_item_private && (
-              <span className="mt-2 block rounded bg-neutral-50 px-2 py-1 text-xs text-neutral-600" data-testid="private-note">
+              <span className="mt-2 block rounded-lg bg-warn-bg px-2 py-1 text-[13px] text-warn" data-testid="private-note">
                 From another person&apos;s private source: you see the excerpt, not the item.
               </span>
             )}
             {factors.length > 0 && (
               <span className="mt-2 block">
-                <table className="w-full text-xs" aria-label="Confidence factors">
-                  <thead className="text-neutral-500">
+                <table className="w-full text-[13px]" aria-label="Confidence factors">
+                  <thead className="text-text2">
                     <tr>
-                      <th className="py-0.5 text-left font-medium">Factor</th>
-                      <th className="py-0.5 text-right font-medium">Value</th>
-                      <th className="py-0.5 text-right font-medium">Weight</th>
+                      <th className="py-0.5 text-left font-semibold">Factor</th>
+                      <th className="py-0.5 text-right font-semibold">Value</th>
+                      <th className="py-0.5 text-right font-semibold">Weight</th>
                     </tr>
                   </thead>
                   <tbody>
                     {factors.map(([name, f]) => (
-                      <tr key={name} className="border-t border-neutral-100">
+                      <tr key={name} className="border-t border-line">
                         <td className="py-0.5">{FACTOR_LABEL[name] ?? name}</td>
-                        <td className="py-0.5 text-right tabular-nums">{fmt(f.value)}</td>
-                        <td className="py-0.5 text-right tabular-nums">{fmt(f.weight)}</td>
+                        <td className="py-0.5 text-right tnum">{fmt(f.value)}</td>
+                        <td className="py-0.5 text-right tnum">{fmt(f.weight)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </span>
             )}
-            {evidence.url && (
+            {evidence.url && !removed && (
               <a
                 href={evidence.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 inline-block text-xs text-neutral-700 underline underline-offset-2 hover:text-neutral-950"
+                className="mt-2 inline-block text-[13px] font-semibold text-accent-ink underline underline-offset-2"
               >
                 Open source ↗
               </a>

@@ -251,15 +251,20 @@ Maturity key:
 - Knobs (depth, roles, checkpoints, budget), estimates and owner approval over $50.
 - Segments, with checkpoints in the Inbox.
 - Each draft is imported with its provenance, and each run gets its own MCP token.
-- Live agent runs are limited for now: today they run one workflow per segment, with
-  prompt-only context.
+- While SwarmCloud's switches are off, a run is one workflow per segment with prompt-only
+  context. Once they are on (adapter v2, `oracle/runs/workflow.py`), a run is one
+  workflow whose checkpoints wait for a person in SwarmCloud and are answered from the
+  Inbox; agents read earlier outputs through `/mcp` with the run token.
 
 **Agent runtime adapter** (`oracle/swarm/`). Partial.
 - A `Runtime` protocol, with a SwarmCloud implementation and a deterministic fake for
   tests.
-- v2 is designed but not built: caller MCP, await-input and ID-token auth
-  ([`swarmcloud-interface.md`](swarmcloud-interface.md)). It waits for SwarmCloud's
-  feature switches.
+- v2 is built behind feature detection and tested against a fake SwarmCloud
+  ([`swarmcloud-interface.md`](swarmcloud-interface.md)). It covers ID-token auth,
+  caller MCP (registration, the run token in `mcp_credentials`, run tokens accepted
+  only from SwarmCloud's egress addresses) and await-input (checkpoints as verdict
+  waits, answers, expiry, the tail rule). It also de-duplicates submits by label.
+  The real end-to-end check waits for SwarmCloud's switches.
 
 **Built-in model jobs** (`oracle/jobs/`, `oracle/llm/`). Tested.
 - Review-comment drafts, reporting and refinement, with jobs, a worker and prompts
@@ -320,7 +325,8 @@ Maturity key:
 ## 8. Not built, or partial
 
 - **Agents reading Oracle live (SwarmCloud #1433) and one-workflow runs with person-waits
-  (#1436).** Adapter v2 is specced and waits for SwarmCloud's switches.
+  (#1436).** Adapter v2 is built and tested against a fake SwarmCloud. Its live
+  end-to-end check waits for SwarmCloud's switches.
 - **Engineering alignment (E1):** tracker write-back and reading engineering's estimates.
   Dated roadmap milestones depend on it.
 - **Flows and wireframes (O2); Figma frames (O6):** decided, not built.
@@ -362,6 +368,5 @@ Maturity key:
 - Feature specs: [`brief-and-full.md`](brief-and-full.md),
   [`roadmap-from-prd.md`](roadmap-from-prd.md), [`llm-jobs.md`](llm-jobs.md),
   [`claude-accounts.md`](claude-accounts.md), [`mvp-app.md`](mvp-app.md).
-- Agent runtime: [`swarmcloud-interface.md`](swarmcloud-interface.md),
-  [`swarmcloud-requests.md`](swarmcloud-requests.md).
+- Agent runtime: [`swarmcloud-interface.md`](swarmcloud-interface.md).
 - Formats research: [`research/`](research/).

@@ -3,19 +3,33 @@
 import { useState } from "react";
 
 import { usePolling } from "@/components/JobsPanel";
-import { Badge, Button, ErrorNote, Loading, StatusBadge } from "@/components/ui";
+import { Button } from "@/components/ds";
+import { FeedbackStatusChip, JobStatusChip, TabBar } from "@/components/review/parts";
+import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type FeedbackStatus } from "@/lib/api/client";
-import { formatDate, formatDateTime, JOB_STATUS_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
+import { formatDate, formatDateTime, NO_ACCOUNT_REASON } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
+import { sectionHref } from "@/lib/section-link";
 
 type Tab = "resolution" | "changes";
 
 /** A version's reports: how each feedback item was handled, and what changed since an earlier version. */
-export function ReportsPanel({ doc, n, refreshKey }: { doc: string; n: number; refreshKey: number }) {
+export function ReportsPanel({
+  doc,
+  n,
+  refreshKey,
+  initialTab = "resolution",
+}: {
+  doc: string;
+  n: number;
+  refreshKey: number;
+  /** "changes" opens on What changed (where applying a next draft lands, C1e). */
+  initialTab?: Tab;
+}) {
   const { role } = useMe();
   const canAct = hasRole(role, "approver");
-  const [tab, setTab] = useState<Tab>("resolution");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [error, setError] = useState<string | null>(null);
   const q = useQuery(`reports|${doc}|${n}|${refreshKey}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/versions/{n}/reports", { params: { path: { doc, n } } })),
@@ -63,21 +77,25 @@ export function ReportsPanel({ doc, n, refreshKey }: { doc: string; n: number; r
 
   return (
     <div className="flex flex-col gap-3" data-testid="reports-panel">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
-        {q.data.generated_at ? <span>Written {formatDateTime(q.data.generated_at)}</span> : <span>No reports yet.</span>}
-        {job && job.status !== "succeeded" && <Badge tone={job.status === "failed" ? "red" : "blue"}>{JOB_STATUS_LABEL[job.status]}</Badge>}
+      <div className="flex flex-wrap items-center gap-2">
+        {q.data.generated_at ? (
+          <span className="tnum text-[13px] font-semibold text-text2">Written {formatDateTime(q.data.generated_at)}</span>
+        ) : (
+          <span className="text-sm font-semibold text-text2">No reports yet.</span>
+        )}
+        {job && job.status !== "succeeded" && <JobStatusChip status={job.status} />}
         <span className="ml-auto flex gap-1.5">
           {canAct && (
-            <Button size="sm" disabled={busy} onClick={generate}>
+            <Button disabled={busy} onClick={generate}>
               {r ? "Write again" : "Write reports"}
             </Button>
           )}
           {r && (
             <>
-              <Button size="sm" onClick={() => download("md")} aria-label="Export reports MD">
+              <Button variant="ghost" onClick={() => download("md")} aria-label="Export reports MD">
                 MD
               </Button>
-              <Button size="sm" onClick={() => download("html")} aria-label="Export reports HTML">
+              <Button variant="ghost" onClick={() => download("html")} aria-label="Export reports HTML">
                 HTML
               </Button>
             </>
@@ -85,48 +103,37 @@ export function ReportsPanel({ doc, n, refreshKey }: { doc: string; n: number; r
         </span>
       </div>
       {job?.status === "failed" && (
-        <p className="rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs text-rose-900" role="alert">
+        <p className="rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit" role="alert">
           {job.error}
           {job.error_reason && NO_ACCOUNT_REASON[job.error_reason] && <> {NO_ACCOUNT_REASON[job.error_reason]}</>}
         </p>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
       {(r || c) && (
-        <div role="tablist" aria-label="Reports" className="flex gap-1 border-b border-neutral-200">
-          {(
-            [
-              ["resolution", "Resolution report"],
-              ["changes", c?.since ? `What changed since v${c.since}` : "What changed"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              role="tab"
-              type="button"
-              aria-selected={tab === id}
-              onClick={() => setTab(id)}
-              className={`-mb-px border-b-2 px-2 pb-1.5 text-xs ${
-                tab === id ? "border-neutral-900 font-medium text-neutral-900" : "border-transparent text-neutral-500 hover:text-neutral-800"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <TabBar
+          label="Reports"
+          size="sm"
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { id: "resolution", label: "Resolution report" },
+            { id: "changes", label: c?.since ? `What changed since v${c.since}` : "What changed" },
+          ]}
+        />
       )}
       {tab === "resolution" && r && (
-        <section aria-label="Resolution report" className="flex flex-col gap-2 text-sm">
-          <p className="text-neutral-800">{r.summary}</p>
-          <ol className="flex flex-col gap-2">
+        <section aria-label="Resolution report" className="flex flex-col gap-2">
+          <p className="text-[15px] leading-[22px] font-medium text-text">{r.summary}</p>
+          <ol className="flex flex-col">
             {r.items.map((i) => (
-              <li key={i.feedback_id} className="rounded-md border border-neutral-200 bg-white px-3 py-2">
-                <div className="flex items-center gap-1.5">
-                  <StatusBadge status={i.status as FeedbackStatus} />
-                  {i.section_key && <span className="font-mono text-[11px] text-neutral-500">#{i.section_key}</span>}
+              <li key={i.feedback_id} className="border-b border-line py-2.5 last:border-b-0">
+                <div className="flex items-center gap-2">
+                  <FeedbackStatusChip status={i.status as FeedbackStatus} />
+                  {i.section_key && <span className="truncate font-mono text-[13px] text-text2">#{i.section_key}</span>}
                 </div>
-                <p className="mt-1 text-neutral-900">{i.summary}</p>
+                <p className="mt-1 text-[15px] leading-[22px] text-text">{i.summary}</p>
                 {(i.explanation || i.resolution_note) && (
-                  <p className="mt-1 text-xs text-neutral-700">{i.explanation || i.resolution_note}</p>
+                  <p className="mt-1 text-sm leading-5 text-text2">{i.explanation || i.resolution_note}</p>
                 )}
               </li>
             ))}
@@ -134,35 +141,37 @@ export function ReportsPanel({ doc, n, refreshKey }: { doc: string; n: number; r
         </section>
       )}
       {tab === "changes" && c && (
-        <section aria-label="What changed" className="flex flex-col gap-2 text-sm">
-          <p className="text-neutral-800">{c.summary}</p>
+        <section aria-label="What changed" className="flex flex-col gap-2">
+          <p className="text-[15px] leading-[22px] font-medium text-text">{c.summary}</p>
           {c.sections.length > 0 && (
-            <ul className="flex flex-col gap-1">
+            <ul className="flex flex-col">
               {c.sections.map((sec) => (
-                <li key={sec.section_key}>
-                  <a href={`#s-${sec.section_key}`} className="font-medium underline-offset-2 hover:underline">
+                <li key={sec.section_key} className="border-b border-line py-2 text-sm leading-5 last:border-b-0">
+                  <a href={sectionHref(doc, n, sec.section_key)} className="font-semibold text-accent-ink hover:underline">
                     {sec.heading}
                   </a>{" "}
-                  <span className="text-xs text-neutral-500">({sec.status})</span>
-                  {sec.summary && <span className="text-neutral-700">: {sec.summary}</span>}
+                  <span className="text-[13px] text-text2">({sec.status})</span>
+                  {sec.summary && <span className="text-text">: {sec.summary}</span>}
                 </li>
               ))}
             </ul>
           )}
           {c.new_sources.length > 0 && (
             <>
-              <h3 className="mt-1 text-xs font-semibold text-neutral-700">New sources in the baseline</h3>
-              <ul className="flex flex-col gap-1 text-xs text-neutral-700" data-testid="new-sources">
+              <h3 className="mt-1 text-[13px] font-semibold tracking-[0.02em] text-text2">New sources</h3>
+              <ul className="flex flex-col gap-1.5 text-sm leading-5 text-text" data-testid="new-sources">
                 {c.new_sources.map((src, i) => (
                   <li key={i}>
                     {src.url ? (
-                      <a href={src.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                      <a href={src.url} target="_blank" rel="noopener noreferrer" className="font-medium underline underline-offset-2">
                         {src.title}
                       </a>
                     ) : (
-                      src.title
+                      <span className="font-medium">{src.title}</span>
                     )}
-                    {src.about && ` (on ${src.about})`} · {src.kind} · added {formatDate(src.added_at)}
+                    <span className="text-text2">
+                      {src.about && ` (on ${src.about})`} · {src.kind} · added {formatDate(src.added_at)}
+                    </span>
                   </li>
                 ))}
               </ul>

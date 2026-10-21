@@ -38,7 +38,6 @@ from oracle.review.schemas import (
     PublicationOut,
     PublicationSummary,
     PublishCheckOut,
-    PublishIn,
     PublishRefused,
     ReviewPolicyIn,
     ReviewPolicyOut,
@@ -51,6 +50,7 @@ from oracle.review.schemas import (
     SectionPatchOut,
     SectionPatchReject,
     SectionStatesOut,
+    VersionPublishIn,
 )
 from oracle.review.service import ReviewError, get_document, get_version
 from oracle.v2.concurrency import VersionConflict
@@ -429,7 +429,7 @@ def _summary(row: DocumentPublication) -> dict[str, Any]:
     responses={409: {"model": PublishRefused, "description": "The publish was refused"}},
 )
 async def publish_version(
-    doc: str, n: int, body: PublishIn, principal: ApproverNow, db: TenantDB
+    doc: str, n: int, body: VersionPublishIn, principal: ApproverNow, db: TenantDB
 ) -> PublicationOut | JSONResponse:
     """Publish an approved version, immutably. Refused (409, nothing written) while
     the publish check lists a blocker."""

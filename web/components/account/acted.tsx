@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
-import { Button } from "@/components/ds/Button";
+import { Button } from "@/components/ds";
 
 /** How long an acted row keeps its outcome (and Undo) before the list settles. */
 export const SETTLE_MS = 1200;

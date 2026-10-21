@@ -2,9 +2,7 @@
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
 
-import { Button } from "@/components/ds/Button";
-import { Icon, type IconName } from "@/components/ds/Icon";
-import { Notice } from "@/components/ds/Layout";
+import { Button, Icon, type IconName, Notice } from "@/components/ds";
 
 export type Consequence = { icon?: IconName; text: ReactNode };
 

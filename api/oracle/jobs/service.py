@@ -21,7 +21,7 @@ from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.schemas import ImportProblem, VersionOut
 from oracle.jobs import kinds, prompting
-from oracle.jobs.models import JOB_KINDS, LlmJob, LlmSuggestion
+from oracle.jobs.models import LlmJob, LlmSuggestion
 from oracle.jobs.schemas import (
     ChangesReport,
     JobSettings,
@@ -41,7 +41,13 @@ JOB_LABELS = {
     "review_comments": "Review comments",
     "reporting": "Reporting",
     "refinement": "Refinement",
+    "intake_analysis": "Intake analysis",
+    "quality_review": "Quality review",
+    "refinement_batch": "Refinement",
 }
+#: Kinds that share another kind's per-document switch: the next-draft batch is
+#: refinement, so turning refinement off turns it off too.
+SWITCH = {"refinement_batch": "refinement"}
 
 
 class JobError(Exception):
@@ -128,7 +134,7 @@ async def job_out(db: AsyncSession, job: LlmJob) -> LlmJobOut:
 
 def settings_of(document: Document) -> JobSettings:
     off = set(document.disabled_llm_jobs or [])
-    return JobSettings(**{k: k not in off for k in JOB_KINDS})
+    return JobSettings(**{k: k not in off for k in JobSettings.model_fields})
 
 
 async def update_settings(
@@ -136,7 +142,7 @@ async def update_settings(
 ) -> JobSettings:
     document = await get_document(db, doc)
     before = settings_of(document)
-    document.disabled_llm_jobs = [k for k in JOB_KINDS if not getattr(settings, k)]
+    document.disabled_llm_jobs = [k for k in JobSettings.model_fields if not getattr(settings, k)]
     await db.flush()
     if before != settings:
         await audit.record(
@@ -151,7 +157,7 @@ async def update_settings(
 
 
 def enabled(document: Document, kind: str) -> bool:
-    return kind not in (document.disabled_llm_jobs or [])
+    return SWITCH.get(kind, kind) not in (document.disabled_llm_jobs or [])
 
 
 # --- queueing -------------------------------------------------------------------------
@@ -282,8 +288,8 @@ async def retry(db: AsyncSession, principal: "Principal", job_id: uuid.UUID) -> 
         raise JobError(404, f"job {job_id} not found")
     if job.status not in ("failed", "cancelled"):
         raise JobError(409, f"a {job.status} job cannot be retried")
-    document = await db.get(Document, job.document_id)
-    if not enabled(document, job.kind):
+    document = await db.get(Document, job.document_id) if job.document_id else None
+    if document is not None and not enabled(document, job.kind):
         raise JobError(409, f"{JOB_LABELS[job.kind]} is turned off for this document")
     before = job.status
     job.status = "queued"
@@ -337,8 +343,10 @@ async def _suggestion(db: AsyncSession, suggestion_id: uuid.UUID) -> LlmSuggesti
     return row
 
 
-def _clean_text(row: LlmSuggestion, text: str) -> str:
-    return prompting.clean_body(text).text if row.kind == "section_text" else text.strip()
+async def _clean_text(row: LlmSuggestion, text: str) -> str:
+    if row.kind != "section_text":
+        return text.strip()
+    return (await prompting.clean_body_in_thread(text)).text
 
 
 async def _check_section_open(db: AsyncSession, row: LlmSuggestion) -> None:
@@ -362,7 +370,7 @@ async def edit_suggestion(
         raise JobError(409, f"an {row.status} suggestion cannot be edited")
     if row.kind not in ("section_text", "answer"):
         raise JobError(422, "only proposed section text or an answer can be edited")
-    row.edited_text = _clean_text(row, text)
+    row.edited_text = await _clean_text(row, text)
     await db.flush()
     await audit.record(db, principal, "suggestion.edit", "llm_suggestion", row.id, {})
     return row
@@ -390,7 +398,7 @@ async def accept_suggestion(
     if text is not None:
         if row.kind not in ("section_text", "answer"):
             raise JobError(422, "only proposed section text or an answer can be edited")
-        row.edited_text = _clean_text(row, text)
+        row.edited_text = await _clean_text(row, text)
     row.status = "accepted"
     row.decided_by = principal.id
     row.decided_at = _now()
@@ -639,7 +647,9 @@ async def apply_refinement(
         raise JobError(409, f"section {key!r} is no longer in version {base.number}")
     new_heading = kinds.clean_heading(heading or "", out["heading"]) if heading else out["heading"]
     new_body = (
-        prompting.clean_body(body_md, new_heading).text if body_md is not None else out["body_md"]
+        (await prompting.clean_body_in_thread(body_md, new_heading)).text
+        if body_md is not None
+        else out["body_md"]
     )
     replace = {key: (new_heading, new_body)}
     points = out.get("data_points") or []
@@ -705,6 +715,9 @@ async def apply_refinement(
             principal,
             base_version=base.number,
             cause="patch_accepted",
+            # A roadmap's dates are checked in the sections this revision changes only (not
+            # the title): a flagged date elsewhere is the previous version's, marked there.
+            date_sections=set(replace),
         )
     except docs_service.DraftError as e:
         await db.rollback()

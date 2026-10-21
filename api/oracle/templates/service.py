@@ -3,6 +3,9 @@
 A template edit never changes a stored version: a new body is a new version, and
 documents keep pointing at the version they were started from. Delete archives, so a
 document whose template (or theme) is archived still resolves and still exports.
+
+Reads never write: the built-in templates and themes are seeded at startup, when a
+company is created, and on the write paths here (:func:`seed_builtins`).
 """
 
 import json
@@ -17,7 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.baseline.models import Entity
 from oracle.docs import service as docs_service
@@ -126,6 +129,13 @@ def _summary(t: Template, latest: TemplateVersion) -> dict[str, Any]:
     }
 
 
+async def seed_builtins(db: AsyncSession) -> None:
+    """Seed the built-in templates and themes, committed at once so the advisory lock is
+    held briefly. Write paths only (and startup, and company creation); never a read."""
+    if await ensure_builtins(db):
+        await db.commit()
+
+
 def _version_out(v: TemplateVersion) -> TemplateVersionOut:
     meta = version_meta(v.body)
     return TemplateVersionOut(
@@ -148,8 +158,6 @@ def _version_out(v: TemplateVersion) -> TemplateVersionOut:
 async def list_templates(
     db: AsyncSession, kind: str | None = None, include_archived: bool = False
 ) -> list[TemplateSummary]:
-    if await ensure_builtins(db):
-        await db.commit()
     stmt = select(Template).order_by(Template.kind, Template.builtin.desc(), Template.name)
     if kind:
         stmt = stmt.where(Template.kind == kind)
@@ -162,10 +170,6 @@ async def list_templates(
 
 async def _template_or_404(db: AsyncSession, key: str) -> Template:
     template = await db.scalar(select(Template).where(Template.key == key))
-    if template is None:
-        if await ensure_builtins(db):
-            await db.commit()
-            template = await db.scalar(select(Template).where(Template.key == key))
     if template is None:
         raise NotFoundError(f"template '{key}' not found")
     return template
@@ -204,9 +208,9 @@ async def _theme_keys(db: AsyncSession) -> set[str]:
 async def validate_template(
     db: AsyncSession, body: str, required_sections: list[str] | None = None
 ) -> TemplateValidateOut:
-    if await ensure_builtins(db):
-        await db.commit()
-    check = validation.check_template(body, theme_keys=await _theme_keys(db))
+    theme_keys = await _theme_keys(db)
+    # Off the event loop: the body is untrusted text (oracle.safe_yaml bounds its cost).
+    check = await safe_yaml.run_parse(validation.check_template, body, theme_keys=theme_keys)
     problems = list(check.problems)
     if required_sections is not None:
         problems += validation.check_required_sections(required_sections, check)
@@ -227,11 +231,12 @@ async def _checked_version(
     result = await validate_template(db, body, required)
     if not result.valid:
         raise InvalidError(f"template rejected: {len(result.problems)} problem(s)", result.problems)
-    check = version_meta(body)
+    check = await safe_yaml.run_parse(version_meta, body)
     return body, required if required is not None else check.default_required_sections()
 
 
 async def create_template(db: AsyncSession, data: TemplateCreate, principal: Principal):
+    await seed_builtins(db)  # the built-in themes a template may name
     body, required = await _checked_version(db, data.body, data.required_sections)
     if await db.scalar(select(Template.id).where(Template.key == data.key)):
         raise ConflictError(f"a template with key '{data.key}' exists (archived ones too)")
@@ -264,8 +269,7 @@ async def update_template(
     db: AsyncSession, key: str, data: TemplateUpdate, principal: Principal
 ) -> TemplateOut:
     # Seed first: an upgrade seeded after ``latest`` is read would take its version number.
-    if await ensure_builtins(db):
-        await db.commit()
+    await seed_builtins(db)
     template = await _template_or_404(db, key)
     latest = await db.scalar(
         select(TemplateVersion)
@@ -301,6 +305,7 @@ async def update_template(
 async def set_template_archived(
     db: AsyncSession, key: str, archived: bool, principal: Principal
 ) -> TemplateOut:
+    await seed_builtins(db)
     template = await _template_or_404(db, key)
     if archived and template.archived_at is None:
         template.archived_at = _now()
@@ -342,8 +347,6 @@ def _raise_if(problems: list[Problem], what: str) -> None:
 async def list_themes(
     db: AsyncSession, kind: str | None = None, include_archived: bool = False
 ) -> list[Theme]:
-    if await ensure_builtins(db):
-        await db.commit()
     stmt = select(Theme).order_by(Theme.builtin.desc(), Theme.name)
     if kind:
         stmt = stmt.where(Theme.kind.in_([kind, "any"]))
@@ -354,15 +357,13 @@ async def list_themes(
 
 async def theme_or_404(db: AsyncSession, key: str) -> Theme:
     theme = await db.scalar(select(Theme).where(Theme.key == key))
-    if theme is None and await ensure_builtins(db):
-        await db.commit()
-        theme = await db.scalar(select(Theme).where(Theme.key == key))
     if theme is None:
         raise NotFoundError(f"theme '{key}' not found")
     return theme
 
 
 async def create_theme(db: AsyncSession, data: ThemeCreate, principal: Principal) -> Theme:
+    await seed_builtins(db)  # a built-in key is taken before a company theme can claim it
     _raise_if(_check_theme(data.tokens, data.css, data.slide_css), "theme")
     if await db.scalar(select(Theme.id).where(Theme.key == data.key)):
         raise ConflictError(f"a theme with key '{data.key}' exists (archived ones too)")
@@ -390,6 +391,7 @@ async def create_theme(db: AsyncSession, data: ThemeCreate, principal: Principal
 
 
 async def update_theme(db: AsyncSession, key: str, data: ThemeUpdate, principal: Principal):
+    await seed_builtins(db)
     theme = await theme_or_404(db, key)
     tokens = data.tokens if data.tokens is not None else ThemeTokens.model_validate(theme.tokens)
     css = data.css if data.css is not None else theme.css
@@ -427,6 +429,7 @@ async def update_theme(db: AsyncSession, key: str, data: ThemeUpdate, principal:
 
 
 async def set_theme_archived(db: AsyncSession, key: str, archived: bool, principal: Principal):
+    await seed_builtins(db)
     theme = await theme_or_404(db, key)
     if archived and theme.archived_at is None:
         theme.archived_at = _now()
@@ -456,6 +459,7 @@ async def read_draft_defaults(db: AsyncSession) -> DraftDefaults:
 async def write_draft_defaults(
     db: AsyncSession, data: DraftDefaults, principal: Principal
 ) -> DraftDefaults:
+    await seed_builtins(db)
     problems: list[Problem] = []
     for kind in ("prd", "roadmap"):
         choice: Choice | None = getattr(data, kind)
@@ -825,6 +829,7 @@ def draft_skeleton(
 
 
 async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal) -> StartDraftOut:
+    await seed_builtins(db)
     template = await _template_or_404(db, data.template)
     if template.kind != data.kind:
         raise InvalidError(
@@ -901,7 +906,9 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
         {"template": template.key, "template_version": version.version, "theme": theme_key},
     )
     try:
-        result = await docs_service.import_draft(db, slug, markdown, principal)
+        # The skeleton's sections are the company template's: only the title the person
+        # typed is checked for dates (O4 'document dates').
+        result = await docs_service.import_draft(db, slug, markdown, principal, date_sections={""})
     except DraftError as e:
         await db.rollback()
         raise InvalidError(

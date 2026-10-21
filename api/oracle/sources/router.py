@@ -1,17 +1,33 @@
 """Sources, sync, uploads, items, snapshots and search (Lane B1).
 
 Sources are owned (S3 revised): every route acts for the signed-in user, who sees and
-syncs only their own sources and items. Another user's source or item is a 404.
+syncs only their own sources and items. Another user's source or item is a 404. A run
+token acting for its user never reads raw an item behind one of the user's intake
+findings not shared in full (S6, ``oracle.intake.evidence.run_withheld``): the item is
+left out of every list, count and search, and is a 404. Any run also reads in full text
+the items a finding shared in full released (``oracle.intake.evidence.run_shared``, owner
+2026-10-19), whoever owns them, unless an intake withholds them or they were deleted
+upstream: ``/v1/source-items/{id}`` returns them and ``/v1/search`` finds them, as
+``/v1/intakes/{id}/evidence`` does, only ever at the version sharing released (freeze
+at sharing: what the finding cited when its author shared it).
+
+Changing a source (adding, editing, deleting, pausing, syncing, uploading) also needs a
+role that may change things (commenter or above): a viewer, or an MCP client granted
+only ``oracle:read`` (which acts as a viewer), reads but cannot change sources.
 """
 
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi.responses import JSONResponse
+from sqlalchemy import func, or_, select
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
+from oracle.authz import require_role
+from oracle.connections.models import Connection
+from oracle.connections.providers import reconnect_reason
 from oracle.sources import items, service, store, uploads
 from oracle.sources import search as search_service
 from oracle.sources import sync as sync_engine
@@ -28,12 +44,19 @@ from oracle.sources.schemas import (
     SourceOut,
     SourcePatch,
     SyncResult,
+    UnavailableItem,
     UploadResult,
 )
 
 router = APIRouter(prefix="/v1", tags=["sources"])
 
 NOT_A_USER = "Sources belong to a user: sign in (API tokens do not act for a user yet)"
+READ_ONLY = (
+    "This sign-in can only read: approve the MCP client with oracle:write to add, edit, "
+    "sync or delete sources"
+)
+# Who may change a source: not a viewer, nor an MCP client limited to oracle:read.
+SourceWriter = Annotated[Principal, Depends(require_role("commenter"))]
 
 
 def _user(principal: Principal) -> uuid.UUID:
@@ -42,7 +65,40 @@ def _user(principal: Principal) -> uuid.UUID:
     return principal.user_id
 
 
+def _writer(principal: Principal) -> uuid.UUID:
+    """The user, for a route that changes their sources: refused for a read-only MCP
+    client (oracle:read), which reads as a viewer."""
+    user_id = _user(principal)
+    if principal.read_only:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, READ_ONLY)
+    return user_id
+
+
+async def _withheld(db: TenantDB, principal: Principal) -> set[uuid.UUID]:
+    """Items a run token may not read raw (empty for anyone else)."""
+    from oracle.intake.evidence import run_withheld
+
+    return await run_withheld(db, principal) or set()
+
+
+def _shared(principal: Principal) -> items.RunReads | None:
+    """A run's reads (``items.RunReads``): what it reads at the version a finding shared
+    in full released, its user's own items included, and every item ever frozen, read
+    only that way (None for anyone else)."""
+    from oracle.intake.evidence import run_shared
+
+    return run_shared(principal)
+
+
 def _http(exc: Exception) -> HTTPException:
+    if isinstance(exc, service.BadRequestError):
+        return HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    if isinstance(exc, service.RateLimitedError):
+        return HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            str(exc),
+            headers={"Retry-After": str(exc.retry_after)},
+        )
     if isinstance(exc, service.NotFoundError):
         return HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
     if isinstance(exc, service.ConflictError | sync_engine.SyncRefused):
@@ -54,29 +110,36 @@ _ERRORS = (
     service.NotFoundError,
     service.ConflictError,
     service.InvalidError,
+    service.RateLimitedError,
     sync_engine.SyncRefused,
 )
 
 
-def _source_out(source: Source, count: int = 0) -> SourceOut:
+def _source_out(source: Source, count: int = 0, conn: Connection | None = None) -> SourceOut:
     return SourceOut.model_validate(source).model_copy(
         update={
             "item_count": count,
             "connector_available": service.connector_available(source.kind),
+            "reconnect_reason": service.source_reconnect_reason(source, conn),
         }
     )
 
 
-async def _one_out(db: TenantDB, source: Source) -> SourceOut:
+async def _one_out(db: TenantDB, source: Source, principal: Principal) -> SourceOut:
     # Reload server-set columns (updated_at) the last flush expired.
     await db.refresh(source)
-    counts = await service.item_counts(db, [source.id])
-    return _source_out(source, counts.get(source.id, 0))
+    counts = await service.item_counts(db, [source.id], await _withheld(db, principal))
+    conns = await service.connections_by_id(db, source.owner_user_id, [source.connection_id])
+    conn = conns.get(source.connection_id) if source.connection_id else None
+    return _source_out(source, counts.get(source.id, 0), conn)
 
 
-async def _owned(db: TenantDB, principal: Principal, source_id: uuid.UUID) -> Source:
+async def _owned(
+    db: TenantDB, principal: Principal, source_id: uuid.UUID, *, write: bool = False
+) -> Source:
+    user_id = _writer(principal) if write else _user(principal)
     try:
-        return await service.get_source(db, _user(principal), source_id)
+        return await service.get_source(db, user_id, source_id)
     except service.NotFoundError as e:
         raise _http(e) from e
 
@@ -87,8 +150,15 @@ async def _owned(db: TenantDB, principal: Principal, source_id: uuid.UUID) -> So
 @router.get("/sources", response_model=list[SourceOut])
 async def list_sources(principal: CurrentPrincipal, db: TenantDB) -> list[SourceOut]:
     sources = await service.list_sources(db, _user(principal))
-    counts = await service.item_counts(db, [s.id for s in sources])
-    return [_source_out(s, counts.get(s.id, 0)) for s in sources]
+    # A run counts only what it may list (S6).
+    counts = await service.item_counts(db, [s.id for s in sources], await _withheld(db, principal))
+    conns = await service.connections_by_id(
+        db, _user(principal), [s.connection_id for s in sources]
+    )
+    return [
+        _source_out(s, counts.get(s.id, 0), conns.get(s.connection_id) if s.connection_id else None)
+        for s in sources
+    ]
 
 
 @router.get("/sources/kinds", response_model=list[SourceKindOut])
@@ -106,7 +176,12 @@ async def list_source_kinds(principal: CurrentPrincipal, db: TenantDB) -> list[S
                 provider=provider,
                 connector_available=service.connector_available(kind),
                 connections=[
-                    ConnectionChoice(id=c.id, account_label=c.account_label, status=c.status)
+                    ConnectionChoice(
+                        id=c.id,
+                        account_label=c.account_label,
+                        status=c.status,
+                        reconnect_reason=reconnect_reason(c.provider, list(c.scopes or [])),
+                    )
                     for c in conns
                 ],
             )
@@ -114,12 +189,17 @@ async def list_source_kinds(principal: CurrentPrincipal, db: TenantDB) -> list[S
     return out
 
 
-@router.post("/sources", response_model=SourceOut, status_code=status.HTTP_201_CREATED)
-async def create_source(body: SourceCreate, principal: CurrentPrincipal, db: TenantDB) -> SourceOut:
+@router.post(
+    "/sources",
+    response_model=SourceOut,
+    status_code=status.HTTP_201_CREATED,
+    responses={429: {"description": "The provider is rate limiting; retry after Retry-After"}},
+)
+async def create_source(body: SourceCreate, principal: SourceWriter, db: TenantDB) -> SourceOut:
     try:
         source = await service.create_source(
             db,
-            _user(principal),
+            _writer(principal),
             kind=body.kind,
             name=body.name,
             connection_id=body.connection_id,
@@ -127,48 +207,75 @@ async def create_source(body: SourceCreate, principal: CurrentPrincipal, db: Ten
         )
     except _ERRORS as e:
         raise _http(e) from e
-    return _source_out(source)
+    return await _one_out(db, source, principal)
 
 
 @router.get("/sources/{source_id}", response_model=SourceOut)
 async def get_source(source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB) -> SourceOut:
-    return await _one_out(db, await _owned(db, principal, source_id))
+    return await _one_out(db, await _owned(db, principal, source_id), principal)
 
 
-@router.patch("/sources/{source_id}", response_model=SourceOut)
+@router.patch(
+    "/sources/{source_id}",
+    response_model=SourceOut,
+    description=(
+        "Read the source first (get_source) and pass its `config_version` as `base_version`: "
+        "it is required whenever `config` or `connection_id` changes, and a source saved "
+        "since you read it is refused (409 source_changed). Without it a change of those is "
+        'refused with 422 {"code": "base_version_required"}. A rename or a pause needs '
+        "none, but if given it is checked."
+    ),
+    responses={
+        409: {
+            "description": "base_version is not the source's config_version, or the name is "
+            'taken: {"code": "source_changed", "message": ...} for the first'
+        },
+        429: {"description": "The provider is rate limiting; retry after Retry-After"},
+    },
+)
 async def update_source(
-    source_id: uuid.UUID, body: SourcePatch, principal: CurrentPrincipal, db: TenantDB
-) -> SourceOut:
-    source = await _owned(db, principal, source_id)
+    source_id: uuid.UUID, body: SourcePatch, principal: SourceWriter, db: TenantDB
+) -> SourceOut | JSONResponse:
+    source = await _owned(db, principal, source_id, write=True)
+    changes = body.model_dump(exclude_unset=True)
+    # Owner 2026-10-20: a change of config or connection says which version it read.
+    if ("connection_id" in changes or changes.get("config") is not None) and changes.get(
+        "base_version"
+    ) is None:
+        return JSONResponse(
+            {
+                "code": "base_version_required",
+                "message": "Say which version of the source you read (base_version); "
+                "get it from the source.",
+            },
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
     try:
-        source = await service.update_source(db, source, body.model_dump(exclude_unset=True))
+        source = await service.update_source(db, source, changes)
+    except service.StaleError as e:
+        return JSONResponse({"code": e.code, "message": str(e)}, status.HTTP_409_CONFLICT)
     except _ERRORS as e:
         raise _http(e) from e
-    return await _one_out(db, source)
+    return await _one_out(db, source, principal)
 
 
 @router.delete("/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_source(
-    source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
-) -> Response:
-    await service.delete_source(db, await _owned(db, principal, source_id), principal)
+async def delete_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> Response:
+    source = await _owned(db, principal, source_id, write=True)
+    await service.delete_source(db, source, actor=principal)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/sources/{source_id}/pause", response_model=SourceOut)
-async def pause_source(
-    source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
-) -> SourceOut:
-    source = await service.set_paused(db, await _owned(db, principal, source_id), True)
-    return await _one_out(db, source)
+async def pause_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> SourceOut:
+    source = await service.set_paused(db, await _owned(db, principal, source_id, write=True), True)
+    return await _one_out(db, source, principal)
 
 
 @router.post("/sources/{source_id}/resume", response_model=SourceOut)
-async def resume_source(
-    source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
-) -> SourceOut:
-    source = await service.set_paused(db, await _owned(db, principal, source_id), False)
-    return await _one_out(db, source)
+async def resume_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> SourceOut:
+    source = await service.set_paused(db, await _owned(db, principal, source_id, write=True), False)
+    return await _one_out(db, source, principal)
 
 
 @router.post(
@@ -179,12 +286,10 @@ async def resume_source(
         422: {"description": "No connector registered for the kind"},
     },
 )
-async def sync_source(
-    source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
-) -> SyncResult:
+async def sync_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> SyncResult:
     """Run the connector now. A rejected credential puts the source in status error;
     a rate limit stops cleanly and the next sync resumes from the saved cursor."""
-    source = await _owned(db, principal, source_id)
+    source = await _owned(db, principal, source_id, write=True)
     try:
         stats = await sync_engine.sync_source(db, source)
     except _ERRORS as e:
@@ -198,7 +303,8 @@ async def sync_source(
         checkpoints=stats.checkpoints,
         retry_after=stats.retry_after,
         error=stats.error,
-        source=await _one_out(db, source),
+        unavailable=[UnavailableItem(**u) for u in stats.unavailable],
+        source=await _one_out(db, source, principal),
     )
 
 
@@ -209,13 +315,13 @@ async def sync_source(
 )
 async def upload_files(
     source_id: uuid.UUID,
-    principal: CurrentPrincipal,
+    principal: SourceWriter,
     db: TenantDB,
     files: Annotated[list[UploadFile], File(description=".md, .txt or .pdf files")],
 ) -> UploadResult:
     """Add files to an upload source; each becomes an item of kind ``file``. A file
     with the name of an earlier one is a new version of it when its content changed."""
-    source = await _owned(db, principal, source_id)
+    source = await _owned(db, principal, source_id, write=True)
     if source.kind != "upload":
         raise HTTPException(status.HTTP_409_CONFLICT, "Only upload sources take files")
     if source.status == "paused":
@@ -240,9 +346,13 @@ async def upload_files(
 
     settings = await items.confidence_settings(db)
     ids = list(dict.fromkeys(item_ids))
-    rows = {r.item.id: r for r in await items.source_items(db, source, ids=ids, limit=len(ids))}
+    withheld = await _withheld(db, principal)
+    found = await items.source_items(db, source, ids=ids, limit=len(ids), exclude=withheld)
+    # A run reads a shared item as released, title included (S6, titles).
+    rows = {r.item.id: r for r in await items.as_released(db, found, _shared(principal))}
     return UploadResult(
-        items=[ItemOut(**items.item_out(rows[i], settings)) for i in ids],
+        # A run never reads back an item it may not read, even one it just rewrote.
+        items=[ItemOut(**items.item_out(rows[i], settings)) for i in ids if i in rows],
         unchanged=unchanged,
     )
 
@@ -259,10 +369,16 @@ async def list_source_items(
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ItemOut]:
+    """The source's items at their current versions. A run never lists a deleted item
+    (``include_deleted`` is ignored) and reads a shared item at the version released,
+    its title as shared (S6, owner 2026-10-19)."""
     source = await _owned(db, principal, source_id)
+    shared = _shared(principal)
+    # Left out and read as released before paging, so a run's pages are full.
     rows = await items.source_items(
-        db, source, include_deleted=include_deleted, limit=limit, offset=offset
-    )
+        db, source, include_deleted=include_deleted and shared is None, limit=limit,
+        offset=offset, exclude=await _withheld(db, principal), also=shared,
+    )  # fmt: skip
     settings = await items.confidence_settings(db)
     return [ItemOut(**items.item_out(r, settings)) for r in rows]
 
@@ -271,13 +387,44 @@ async def list_source_items(
 async def get_source_item(
     item_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
 ) -> ItemDetail:
-    row = await items.owned_item(db, _user(principal), item_id)
+    user_id = _user(principal)
+    shared = _shared(principal)
+    released = None
+    if shared is not None:
+        # A run reads a shared item at the version released only, never another
+        # (S6, freeze at sharing), and nothing deleted upstream.
+        frozen = shared.released.subquery()
+        released = await db.scalar(select(frozen.c.version_id).where(frozen.c.item_id == item_id))
+    if released is not None:
+        row = await items.item_row(db, item_id, released)
+    elif shared is not None and await db.scalar(
+        select(shared.frozen.where(shared.frozen.selected_columns[0] == item_id).exists())
+    ):
+        # Ever frozen, not readable now (deleted upstream or withheld): never read as
+        # the run's user's own item, as ``/v1/search`` never finds it.
+        row = None
+    else:
+        row = await items.owned_item(db, user_id, item_id)
+        if row is not None and principal.is_run and row.item.deleted_at is not None:
+            row = None
+        if row is not None and item_id in await _withheld(db, principal):
+            row = None
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
-    versions = await db.scalar(select(func.count()).where(SourceItemVersion.item_id == row.item.id))
+    versions = 1
+    if released is None:
+        versions = await db.scalar(
+            select(func.count()).where(SourceItemVersion.item_id == row.item.id)
+        )
+    foreign = released is not None and user_id != await db.scalar(
+        select(Source.owner_user_id).where(Source.id == row.item.source_id)
+    )
+    if released is not None:
+        # Its user's own item too reads as at release (S6, freeze at sharing).
+        row = items.ItemRow(row.item, row.version, row.source_kind, released=True)
     settings = await items.confidence_settings(db)
     return ItemDetail(
-        **items.item_out(row, settings),
+        **items.item_out(row, settings, foreign=foreign),
         content=row.version.content if row.version is not None else None,
         version_count=versions or 0,
     )
@@ -323,8 +470,22 @@ async def list_snapshots(principal: CurrentPrincipal, db: TenantDB) -> list[Snap
 
 
 async def _snapshot(db: TenantDB, principal: Principal, snapshot_id: uuid.UUID) -> Snapshot:
+    """A snapshot the user took, or the one a run they created is pinned to.
+
+    A run started from someone else's intake reads the intake's snapshot (S4), taken by
+    the intake's author; its creator (and the agents acting for them) may read it. The
+    items they see are still their own (AUD-9), never the author's."""
+    from oracle.runs.models import Run
+
+    user_id = _user(principal)
+    pinned_by_run = select(Run.snapshot_id).where(
+        Run.created_by == user_id, Run.snapshot_id.is_not(None)
+    )
     snapshot = await db.scalar(
-        select(Snapshot).where(Snapshot.id == snapshot_id, Snapshot.created_by == _user(principal))
+        select(Snapshot).where(
+            Snapshot.id == snapshot_id,
+            or_(Snapshot.created_by == user_id, Snapshot.id.in_(pinned_by_run)),
+        )
     )
     if snapshot is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
@@ -345,9 +506,16 @@ async def list_snapshot_items(
     db: TenantDB,
     source: uuid.UUID | None = None,
 ) -> list[ItemOut]:
-    """The user's items as they were at the snapshot (each at its pinned version)."""
+    """The user's items as they were at the snapshot (each at its pinned version). A run
+    reads a shared item at the version released whatever the snapshot, its title as
+    shared, and nothing deleted upstream (S6, owner 2026-10-19)."""
     snapshot = await _snapshot(db, principal, snapshot_id)
-    rows = await items.items_as_of(db, _user(principal), snapshot.as_of, source_id=source)
+    rows = await items.items_as_of(
+        db, _user(principal), snapshot.as_of, source_id=source,
+        txn_snapshot=snapshot.txn_snapshot, also=_shared(principal),
+    )  # fmt: skip
+    withheld = await _withheld(db, principal)
+    rows = [r for r in rows if r.item.id not in withheld]
     settings = await items.confidence_settings(db)
     return [ItemOut(**items.item_out(r, settings, now=snapshot.as_of)) for r in rows]
 
@@ -377,12 +545,15 @@ async def search_sources(
     as_of: datetime | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> SearchResults:
-    """Search the user's own items. Ranked by relevance x confidence weight; ``as_of``
-    searches the versions pinned at that time."""
+    """Search the user's own items (a run: also those a finding shared in full
+    released). Ranked by relevance x confidence weight; ``as_of`` searches the versions
+    pinned at that time, except a run's shared items: those are searched at the version
+    sharing released only, whatever ``as_of`` says (S6, freeze at sharing)."""
     user_id = _user(principal)
     if as_of is not None and as_of.tzinfo is None:
         as_of = as_of.replace(tzinfo=UTC)
     hits = await search_service.search(
-        db, user_id, q, kinds=_kinds(kinds), source_id=source, as_of=as_of, limit=limit
-    )
+        db, user_id, q, kinds=_kinds(kinds), source_id=source, as_of=as_of, limit=limit,
+        exclude=await _withheld(db, principal), also=_shared(principal),
+    )  # fmt: skip
     return SearchResults(query=q, as_of=as_of, hits=hits)  # type: ignore[arg-type]

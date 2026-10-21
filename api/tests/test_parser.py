@@ -51,8 +51,10 @@ def test_v1_sections_and_citations():
     goal = by_key["goal-trace"]
     assert goal.body_md.endswith("purchase [c:c1].")
     assert goal.body_text == ("Serves G1 (activation): more first-time buyers complete a purchase.")
-    assert "|" not in by_key["metrics"].body_text
-    assert "Checkout completion" in by_key["metrics"].body_text
+    # A table keeps its rows: cells joined by " | ", one row per line, no separator row.
+    assert by_key["metrics"].body_text == (
+        "Metric | Baseline | Target\nCheckout completion | 52% | 60%"
+    )
 
 
 def test_v2_resolutions():
@@ -105,6 +107,24 @@ def test_every_problem_is_reported():
     assert [p.line for p in missing] == [12, 20]
     assert "No id here" in missing[0].message
     assert "Also missing" in missing[1].message
+
+
+def test_oracle_baseline_citations_parse():
+    # A run's writer cites Oracle's own baseline (goals, decisions, constraints,
+    # features): source 'oracle', its ref free text naming the baseline item.
+    parsed = parse_draft(draft("prd_oracle_citations.md"))
+    assert [(c.id, c.source) for c in parsed.citations] == [
+        ("o-g1", "oracle"),
+        ("o-d-ship", "oracle"),
+        ("c1", "slack"),
+    ]
+    by_id = {c.id: c for c in parsed.citations}
+    assert by_id["o-g1"].ref == "baseline goal g1 (activation), locked"
+    assert by_id["o-d-ship"].ref.startswith("baseline decision show-shipping-early (D2)")
+    assert by_id["o-g1"].title == "Goal G1: raise first-order completion"
+    by_key = {s.section_key: s for s in parsed.sections}
+    assert by_key["goal"].citation_keys == ["o-g1", "c1"]
+    assert by_key["decisions"].citation_keys == ["o-d-ship"]
 
 
 def test_text_under_heading_without_id_is_not_citation_checked():
@@ -173,6 +193,81 @@ def test_body_text_strips_markdown_and_citations():
     assert body_text(md) == "Some bold and code, then a link.\none\ntwo"
 
 
+def test_body_text_keeps_table_rows():
+    # A literal pipe inside a cell stays escaped, so " | " always separates cells.
+    md = (
+        "Targets [c:c1]:\n\n"
+        "| Metric | Baseline | Target |\n"
+        "|:-------|---------:|:------:|\n"
+        "| **Checkout** completion [c:c1] | 52% | `60%` |\n"
+        "| Empty cell |  | 5 |\n"
+        "| Escaped \\| pipe | 1 | 2 |\n\n"
+        "After the table."
+    )
+    assert body_text(md) == (
+        "Targets:\n"
+        "Metric | Baseline | Target\n"
+        "Checkout completion | 52% | 60%\n"
+        "Empty cell |  | 5\n"
+        "Escaped \\| pipe | 1 | 2\n"
+        "After the table."
+    )
+
+
+def test_body_text_of_header_only_table():
+    assert body_text("| A | B |\n|---|---|") == "A | B"
+
+
 def test_title_falls_back_to_first_heading():
     parsed = parse_draft("---\ndocument: d\n---\n# From heading {#t}\n")
     assert parsed.title == "From heading"
+
+
+def test_citation_confidence_fields_parse():
+    # What a writer computed per citation is kept: the source item it read (on some),
+    # its confidence 0-1 (or null with a note saying why) and the low-confidence flag.
+    parsed = parse_draft(draft("prd_citation_confidence.md"))
+    by_id = {c.id: c for c in parsed.citations}
+    c1 = by_id["c1"]
+    assert c1.item == "3f1c2a4e-8b7d-4c1e-9a2b-5d6e7f809a1b"
+    assert (c1.confidence, c1.confidence_note, c1.low_confidence) == (
+        0.75,
+        "two sources agree; fresh",
+        False,
+    )
+    assert (by_id["c2"].confidence, by_id["c2"].low_confidence) == (0.3, True)
+    decision = by_id["o-d-ship"]
+    assert decision.item is None and decision.confidence is None
+    assert decision.confidence_note == "owner decision (confirmed, locked); not evidence-scored"
+    # A citation without them: no item, no confidence, not low.
+    c3 = by_id["c3"]
+    assert (c3.item, c3.confidence, c3.confidence_note, c3.low_confidence) == (
+        None,
+        None,
+        None,
+        False,
+    )
+
+
+@pytest.mark.parametrize("value", ["1.5", "-0.1", "nan", "high"])
+def test_citation_confidence_out_of_range_is_invalid(value):
+    citations = f"citations:\n  - id: c1\n    source: web\n    ref: x\n    confidence: {value}\n"
+    with pytest.raises(DraftError) as err:
+        parse_draft(_draft("# T {#t}\n\nA.\n", citations))
+    assert _codes(err.value) == [("invalid_citation", None, "c1")]
+    assert "confidence" in err.value.problems[0].message
+
+
+@pytest.mark.parametrize("value", ["0", "1", "0.0", "1.0"])
+def test_citation_confidence_bounds_are_inclusive(value):
+    citations = f"citations:\n  - id: c1\n    source: web\n    ref: x\n    confidence: {value}\n"
+    parsed = parse_draft(_draft("# T {#t}\n\nA [c:c1].\n", citations))
+    assert parsed.citations[0].confidence == float(value)
+
+
+def test_citation_item_that_is_not_a_uuid_still_parses():
+    # The item is checked against the company's sources on import (a warning there,
+    # never a refusal); the parser keeps whatever was written.
+    citations = "citations:\n  - id: c1\n    source: web\n    ref: x\n    item: not-a-uuid\n"
+    parsed = parse_draft(_draft("# T {#t}\n\nA [c:c1].\n", citations))
+    assert parsed.citations[0].item == "not-a-uuid"

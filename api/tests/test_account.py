@@ -764,6 +764,18 @@ async def test_a_read_only_mcp_client_cannot_revoke(client):
     assert resp.status_code == 403, resp.text
 
 
+@pytest.fixture
+def local_runtime():
+    """The local runtime: run tokens from any address, as tests.test_mcp's own fixture
+    (the egress check for SwarmCloud has its own tests)."""
+    from oracle.swarm import FakeRuntime, set_runtime
+
+    set_runtime(FakeRuntime())
+    yield
+    set_runtime(None)
+
+
+@pytest.mark.usefixtures("local_runtime")
 async def test_run_tokens_never_reach_account_tools(client):
     r = await seed(password=PASSWORD)
     admin_id = await _admin_id(r.tenant_id)

@@ -122,6 +122,7 @@ async def set_role(
     promotion never revives them."""
     from oracle.authz import has_role
     from oracle.review.state import lapse_approvals
+    from oracle.runs.service import void_owed_decisions
 
     await _gate(session, principal)
     user = await session.get(User, user_id, with_for_update=True)
@@ -144,16 +145,20 @@ async def set_role(
         )
     # C2: a demotion, like a disable, voids the spend approvals and checkpoint decisions
     # they gave that the new role could not give (pending ones only: they return to the
-    # Inbox). Their own runs go on (a disable cancels those).
+    # Inbox). Their own runs go on (a disable cancels those). Theirs in person and through
+    # their API tokens (which act with the person's role).
     if not has_role(role, before):
         via = {"via": "member.role", "member_id": str(user.id)}
-        acted_as = {
-            user.id,
-            *await session.scalars(select(ApiToken.id).where(ApiToken.user_id == user.id)),
-        }
+        tokens = set(await session.scalars(select(ApiToken.id).where(ApiToken.user_id == user.id)))
+        acted_as = {user.id, *tokens}
         if has_role(before, "owner"):
             await _void_spend_approvals(session, principal, acted_as, None, via)
         await _void_checkpoint_decisions(session, principal, acted_as, via, keep_role=role)
+        # A decision they recorded that is not delivered to its run yet, on a checkpoint
+        # the new role may not decide: never delivered now.
+        await void_owed_decisions(
+            session, principal, acted_as, f"its decider was demoted to {role}", via, role=role
+        )
     # Review gates read approvers' current roles; the change event tells every lane.
     await changes.record_change(
         session,
@@ -194,7 +199,7 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
     from oracle.review.publish import record_source_revocation
     from oracle.review.state import lapse_approvals
     from oracle.runs.models import Run
-    from oracle.runs.service import FINAL, stop_run
+    from oracle.runs.service import FINAL, stop_run, void_owed_decisions
     from oracle.sources.models import Source
 
     await _gate(session, principal)
@@ -268,6 +273,11 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
     jobs = await _cancel_llm_jobs(session, acted_as, at)
     voided = await _void_spend_approvals(session, principal, acted_as, user.id, via)
     decisions = await _void_checkpoint_decisions(session, principal, acted_as, via)
+    # Decisions recorded and not delivered to their run yet (SwarmCloud did not take the
+    # post): never delivered now.
+    decisions += await void_owed_decisions(
+        session, principal, acted_as, "its decider was removed (disabled)", via
+    )
     lapsed = await lapse_approvals(
         session, principal, reviewer_id=user.id, reason="member was removed (disabled)"
     )
@@ -691,16 +701,21 @@ async def run_follow_ups(
     http: "httpx.AsyncClient",
     *,
     member_id: uuid.UUID | None = None,
+    budget_seconds: float | None = None,
 ) -> int:
     """Make the pending follow-ups that are due (of ``member_id``, or all of the
     session's tenant), one transaction each, outside the review gate, within
-    :data:`FOLLOW_UP_TICK_BUDGET_SECONDS` in all: a call the budget cuts short is not
-    counted and waits for the next tick. A DB error in one rolls that one back; the
-    others still run. Returns how many ran (:func:`_attempt` records each outcome)."""
+    :data:`FOLLOW_UP_TICK_BUDGET_SECONDS` in all (or ``budget_seconds``, when less: the
+    time a scheduled tick has left): a call the budget cuts short is not counted and
+    waits for the next tick. A DB error in one rolls that one back; the others still
+    run. Returns how many ran (:func:`_attempt` records each outcome)."""
     import asyncio
 
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + FOLLOW_UP_TICK_BUDGET_SECONDS
+    budget = FOLLOW_UP_TICK_BUDGET_SECONDS
+    if budget_seconds is not None:
+        budget = min(budget, budget_seconds)
+    deadline = loop.time() + budget
     stmt = select(MemberFollowUp.id).where(
         MemberFollowUp.status == "pending",
         or_(
@@ -776,6 +791,14 @@ async def _attempt(
             )
             await session.commit()
         raise
+
+
+async def attempt_follow_up(
+    session: AsyncSession, follow_up_id: uuid.UUID
+) -> MemberFollowUp | None:
+    """Make a pending run_cancel follow-up now (the cancel that recorded it just
+    committed); a failure waits for the tick's retry. Commits."""
+    return await _attempt(session, None, None, follow_up_id, ("pending",))  # type: ignore[arg-type]
 
 
 async def _record_attempt(
@@ -945,6 +968,10 @@ async def _follow_up(
     from oracle.swarm import RuntimeUnavailable, get_runtime
 
     segment = await session.get(RunSegment, row.target_id)
+    if segment is not None and segment.status in ("pending", "running"):
+        # Re-queued (or running again) since its workflow was cancelled: its error is
+        # its own now (a queued submission's marker), not this cancel's.
+        segment = None
     try:
         async with _call_deadline(deadline):
             await get_runtime().cancel(row.workflow_id or "")

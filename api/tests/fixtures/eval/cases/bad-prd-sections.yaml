@@ -1,0 +1,27 @@
+id: bad-prd-sections
+description: >
+  Bad PRD sections: a one-line problem, a solution with vague acceptance language, no goals,
+  no metrics, no owner and no evidence. Every advisory criterion that applies is critical or
+  a warning, and still nothing blocks: only hard checks block (T2, §16 item 11).
+covers: [bad_section, advisory_never_blocks]
+document:
+  from: bad-prd.md
+expected:
+  problem_clarity: critical
+  goal_alignment: critical
+  evidence_provenance: critical
+  alternatives_tradeoffs: warning
+  blocker_feasibility: warning
+  scope_testability: critical
+  economics_scaling: not_applicable
+  validation_plan: critical
+  ownership_readiness: critical
+  downstream_consistency: not_applicable
+  security_policy: not_applicable
+  third_party_support: not_applicable
+blocked: false
+human_ratings:
+  - rater: synthetic-rater-1
+    ratings: {problem_clarity: critical, goal_alignment: critical, scope_testability: warning}
+  - rater: synthetic-rater-2
+    ratings: {problem_clarity: critical, validation_plan: critical}

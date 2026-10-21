@@ -213,6 +213,30 @@ def make_session_cookie(user: User) -> str:
     return _serializer().dumps({"u": str(user.id), "t": str(user.tenant_id), "i": issued})
 
 
+def _run_serializer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(get_settings().secret_key, salt="oracle-run-binding")
+
+
+def sign_run_binding(user_id: uuid.UUID, run_id: uuid.UUID) -> str:
+    """The value of ``x-oracle-run-id``: a run id signed by the server and bound to the
+    user whose credential carries it. Only the MCP layer mints one, for a run token's
+    in-process REST call; a bare run id from a client is not a run."""
+    return _run_serializer().dumps({"u": str(user_id), "r": str(run_id)})
+
+
+def read_run_binding(value: str, user_id: uuid.UUID | None) -> uuid.UUID | None:
+    """The run id of a valid, unexpired binding signed for ``user_id``, else None."""
+    if user_id is None:
+        return None
+    try:
+        data = _run_serializer().loads(value, max_age=get_settings().run_binding_max_age_seconds)
+        if uuid.UUID(data["u"]) != user_id:
+            return None
+        return uuid.UUID(data["r"])
+    except (BadSignature, KeyError, ValueError, TypeError, AttributeError):
+        return None
+
+
 @dataclass(frozen=True)
 class SessionCookie:
     user_id: uuid.UUID

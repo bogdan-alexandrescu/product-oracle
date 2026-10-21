@@ -6,12 +6,19 @@ import { useState } from "react";
 import { ActedCell, SETTLING, useActed } from "@/components/account/acted";
 import { ConfirmDialog, type Consequence } from "@/components/account/ConfirmDialog";
 import { Field, SELECT_FIELD } from "@/app/settings/_components/fields";
-import { Button } from "@/components/ds/Button";
-import { Chip, type ChipKind } from "@/components/ds/Chip";
-import { DataTable, type Column } from "@/components/ds/DataTable";
-import { InfoTip } from "@/components/ds/InfoTip";
-import { Notice, Page, PageHeader, Panel, Split } from "@/components/ds/Layout";
-import { SegmentedControl } from "@/components/ds/SegmentedControl";
+import {
+  Button,
+  Chip,
+  type ChipKind,
+  type Column,
+  DataTable,
+  InfoTip,
+  Notice,
+  PageHeader,
+  Panel,
+  SegmentedControl,
+  Split,
+} from "@/components/ds";
 import { api, unwrap, type ApiToken, type TokenKind } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
@@ -124,15 +131,15 @@ function revokeConsequences(t: ApiToken): Consequence[] {
 /** Settings > API tokens (owners): every credential of the company, filter by member and kind, revoke. */
 export function ApiTokensSettings({ initialMember }: { initialMember: string | null }) {
   const { role, loading } = useMe();
-  if (loading) return <Page><PageHeader title="API tokens" /></Page>;
+  if (loading) return <PageHeader title="API tokens" />;
   if (!hasRole(role, "owner")) {
     return (
-      <Page>
+      <>
         <PageHeader title="API tokens" />
         <p role="note" data-testid="role-note" className="rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink">
           Only owners see the company&apos;s tokens. Yours are in My account.
         </p>
-      </Page>
+      </>
     );
   }
   return <OwnerTokens initialMember={initialMember} />;
@@ -234,7 +241,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
   const revoked = rows?.filter((t) => t.revoked_at).length;
   const expired = rows?.filter((t) => tokenState(t) === "expired").length;
   return (
-    <Page>
+    <>
       <PageHeader
         title="API tokens"
         status={
@@ -325,6 +332,6 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
         onConfirm={() => confirming && revoke(confirming)}
         consequences={confirming ? revokeConsequences(confirming) : []}
       />
-    </Page>
+    </>
   );
 }

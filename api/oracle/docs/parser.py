@@ -15,13 +15,20 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
-import yaml
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from oracle import safe_yaml
+from oracle.config import get_settings
 from oracle.docs import layers
-from oracle.docs.schemas import CitationSource, ImportProblem
+from oracle.docs.schemas import (
+    CONFIDENCE_MAX,
+    CONFIDENCE_MIN,
+    CONFIDENCE_RANGE,
+    CitationSource,
+    ImportProblem,
+)
 from oracle.review.schemas import Resolution
 
 # Levels 1-3 start a section; deeper headings are part of the section body.
@@ -31,6 +38,18 @@ CITATION_RE = re.compile(r"\[c:([^\]\s]+)\]")
 # A citation marker plus the horizontal space before it, removed from body_text.
 CITATION_STRIP_RE = re.compile(r"[ \t]*\[c:[^\]\s]+\]")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+# The markers an export writes after a roadmap date that rests on no verified basis
+# (oracle.roadmap.doc_dates.annotate_markdown): dropped on import, so an exported body
+# imports as the text it was exported from.
+DATE_MARK_COMMENT_RE = re.compile(
+    r"[ \t]?(?:<!-- oracle: date (?:unverified|withdrawn) -->"
+    r"|# oracle: date (?:unverified|withdrawn)$)",
+    re.M,
+)
+# The banner line a markdown export writes after the front matter
+# (oracle.export.render.render_markdown), dropped on import with the markers above.
+EXPORT_BANNER_RE = re.compile(r"^<!-- Product Oracle export: [^\n]*? -->\n", re.M)
 
 _md = MarkdownIt("commonmark", {"html": False}).enable("table")
 
@@ -50,6 +69,19 @@ class CitationIn(BaseModel):
     title: str | None = None
     excerpt: str | None = None
     retrieved_at: datetime | None = None
+    # What the writer computed for this citation (owner decision 2026-10-20). ``item`` is
+    # kept as written: the import checks it against the company's source items and drops
+    # one it does not have with a warning, never a refusal.
+    item: str | None = None
+    confidence: float | None = Field(default=None, ge=CONFIDENCE_MIN, le=CONFIDENCE_MAX)
+    # Why there is no score, or how it was reached ("owner decision, locked").
+    confidence_note: str | None = None
+    low_confidence: bool = False
+
+    @field_validator("item", mode="before")
+    @classmethod
+    def _item_as_text(cls, value: Any) -> str | None:
+        return _optional_str(value)
 
 
 @dataclass
@@ -180,10 +212,23 @@ def _inline_text(token: Token) -> str:
 def body_text(body_md: str) -> str:
     """Plain text of a section body, as the reader sees it (citation markers removed).
 
+    A table keeps its rows: one line per row (header first, separator row dropped),
+    cells joined by ``" | "``; a literal ``|`` inside a cell is kept as ``\\|``. The
+    version diff rebuilds tables from these rows.
+
     Comment anchors (TextQuoteSelector) are relative to this text.
     """
     blocks: list[str] = []
+    row: list[str] | None = None
     for token in _md.parse(body_md):
+        if token.type == "tr_open":
+            row = []
+            continue
+        if token.type == "tr_close":
+            if row is not None and any(row):
+                blocks.append(" | ".join(row))
+            row = None
+            continue
         if token.type == "inline":
             text = _inline_text(token)
         elif token.type in ("fence", "code_block"):
@@ -191,7 +236,9 @@ def body_text(body_md: str) -> str:
         else:
             continue
         text = CITATION_STRIP_RE.sub("", text).strip()
-        if text:
+        if row is not None:
+            row.append(text.replace("|", "\\|"))
+        elif text:
             blocks.append(text)
     return "\n".join(blocks)
 
@@ -240,14 +287,14 @@ def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) ->
         )
         return {}
     try:
-        data = yaml.safe_load(yaml_text) or {}
-    except yaml.YAMLError as exc:
-        mark = getattr(exc, "problem_mark", None)
+        data = safe_yaml.load(yaml_text) or {}
+    except safe_yaml.SafeYamlError as exc:
+        # Invalid or refused (oracle.safe_yaml): too large, too deep, anchors, tags...
         problems.append(
             ImportProblem(
                 code="invalid_front_matter",
                 message=f"front matter is not valid YAML: {exc}",
-                line=mark.line + 2 if mark else None,
+                line=exc.line + 1 if exc.line else None,
             )
         )
         return {}
@@ -257,6 +304,17 @@ def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) ->
         )
         return {}
     return _jsonable(data)
+
+
+def _citation_field(error: Any) -> str:
+    """What is wrong with one field of a citation: the field, a source this Oracle does not
+    accept by name, and a confidence that is not a number from 0 to 1 (the run page groups
+    refused citations by it)."""
+    if tuple(error["loc"]) == ("source",) and error["type"] == "literal_error":
+        return f"source '{error['input']}' isn't accepted"
+    if tuple(error["loc"]) == ("confidence",):
+        return f"confidence must be {CONFIDENCE_RANGE}"
+    return ".".join(map(str, error["loc"]))
 
 
 def _parse_citations(raw: Any, problems: list[ImportProblem]) -> list[CitationIn]:
@@ -276,7 +334,7 @@ def _parse_citations(raw: Any, problems: list[ImportProblem]) -> list[CitationIn
                 {**item, "id": key} if isinstance(item, dict) else item
             )
         except ValidationError as exc:
-            fields = ", ".join(".".join(map(str, e["loc"])) for e in exc.errors())
+            fields = ", ".join(_citation_field(e) for e in exc.errors())
             problems.append(
                 ImportProblem(
                     code="invalid_citation",
@@ -418,8 +476,16 @@ def _check_citations(
 
 
 def parse_draft(markdown: str) -> ParsedDraft:
-    """Parse and validate a draft. Raises :class:`DraftError` listing every problem."""
-    text = normalize(markdown)
+    """Parse and validate a draft. Raises :class:`DraftError` listing every problem.
+
+    CPU-bound: async callers run it with :func:`parse_draft_async`."""
+    # The request body is capped (413); a run's file is not, so the draft is too.
+    limit = get_settings().max_body_bytes
+    if len(markdown.encode("utf-8")) > limit:
+        raise DraftError(
+            [ImportProblem(code="draft_too_large", message=f"draft is larger than {limit} bytes")]
+        )
+    text = normalize(EXPORT_BANNER_RE.sub("", DATE_MARK_COMMENT_RE.sub("", markdown)))
     problems: list[ImportProblem] = []
 
     yaml_text, body, offset = split_front_matter(text)
@@ -461,6 +527,15 @@ def parse_draft(markdown: str) -> ParsedDraft:
         content_hash=sha256(text),
         brief=layers.marked_brief(fm),
     )
+
+
+async def parse_draft_async(markdown: str) -> ParsedDraft:
+    """:func:`parse_draft` on the parse pool (:func:`oracle.safe_yaml.run_parse_within`), at
+    most ``PARSE_SECONDS``: the event loop never parses a draft (untrusted text)."""
+    try:
+        return await safe_yaml.run_parse_within(parse_draft, markdown, name="the draft")
+    except safe_yaml.ParseTimeout as exc:
+        raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from exc
 
 
 def is_uuid(value: str) -> bool:

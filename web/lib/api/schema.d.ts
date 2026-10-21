@@ -182,7 +182,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Version Markdown */
+        /**
+         * Get Version Markdown
+         * @description The version's markdown as stored; a roadmap's date that rests on no verified basis
+         *     now has ``<!-- oracle: date unverified -->`` (or ``date withdrawn``) after it, which
+         *     an import drops.
+         */
         get: operations["get_version_markdown"];
         put?: never;
         post?: never;
@@ -362,7 +367,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve Version */
+        /**
+         * Approve Version
+         * @description Approve (publish) a version. A PRD version is refused with a 409 naming the blocks
+         *     when its readiness verdict for purpose ``publish`` is blocked, or when it is not the
+         *     latest version; nothing is recorded then.
+         */
         post: operations["approve_version"];
         delete?: never;
         options?: never;
@@ -977,6 +987,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{doc}/staged-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Staged Changes
+         * @description Accepted suggestions waiting for the next draft, from whichever draft they were
+         *     raised on, with who accepted them and when, and the build in progress if any.
+         */
+        get: operations["list_staged_changes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/next-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Build Next Draft
+         * @description Build the next draft: one job rewrites every section the chosen staged suggestions
+         *     touch (default: all staged), over the latest version. Locked sections are refused
+         *     (409, naming them).
+         */
+        post: operations["build_next_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/next-draft/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Next Draft
+         * @description The combined preview: each revised section with its word diff, notes and
+         *     resolutions. Sections are empty until the build has finished.
+         */
+        get: operations["preview_next_draft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/next-draft/{job_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Next Draft
+         * @description Apply as ONE new version, without the dropped sections (they stay staged).
+         *     Refused (409) when a newer version appeared since the build started.
+         */
+        post: operations["apply_next_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/next-draft/{job_id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discard Next Draft
+         * @description Discard a build (cancel it while it runs); every staged item stays staged.
+         */
+        post: operations["discard_next_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{doc}/suggestions": {
         parameters: {
             query?: never;
@@ -1530,6 +1645,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections/google/picker-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Google Picker Config
+         * @description Client id, Cloud project number and browser API key for Google's Drive picker.
+         *     Never the client secret or anyone's token.
+         */
+        get: operations["google_picker_config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connections/{provider}/token": {
         parameters: {
             query?: never;
@@ -1621,6 +1757,122 @@ export interface paths {
          *     the provider needs a fresh sign-in, returns ``authorize_url`` instead.
          */
         post: operations["reconnect_connection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{connection_id}/slack/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Slack Channels
+         * @description Public channels and the private channels you are in, by name; never DMs.
+         *
+         *     Answers are cached for a minute per connection, and a connection may search Slack
+         *     a limited number of times a minute.
+         */
+        get: operations["list_slack_channels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{connection_id}/github/repos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Github Repos
+         * @description Repos your GitHub sign-in can read, matched on owner/name and description.
+         *
+         *     Answers are cached for a minute per connection, and a connection may search GitHub
+         *     a limited number of times a minute.
+         */
+        get: operations["list_github_repos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{connection_id}/google/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Google Drive Files
+         * @description List the Google Docs and folders in your Google Drive (and shared drives) that a
+         *     Google Docs source can pick: by name, or inside one folder, most recently modified
+         *     first. Each has the id to put in a source's ``docs`` or ``folders``.
+         *
+         *     Read through your own Google connection. Answers are cached for a minute, and you
+         *     may search Drive a limited number of times a minute.
+         */
+        get: operations["list_google_drive_files"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{connection_id}/google/shared-drives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Google Shared Drives
+         * @description The Google shared drives your Google connection can see, for an owner choosing the
+         *     company's shared drives (the ``company_shared_drives`` setting, S5): docs in a picked
+         *     folder in any other shared drive are skipped. At most :data:`MAX_SHARED_DRIVES`.
+         */
+        get: operations["list_google_shared_drives"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{connection_id}/notion/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Notion pages
+         * @description Lists the titles of every Notion page and database shared with Product Oracle
+         *     through this Notion connection, including pages that are in no source. Most recently
+         *     edited first (or by relevance with ``search``), 100 at a time, each with its parent.
+         *     Limited to 30 lists a minute per connection.
+         */
+        get: operations["list_notion_pages"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1767,7 +2019,10 @@ export interface paths {
         put?: never;
         /**
          * Sweep Claude Accounts
-         * @description Run the sweep now: reclaim holds, refresh credentials, read usage.
+         * @description Run the sweep now: reclaim holds, refresh credentials, read usage. Within five
+         *     minutes of the last sweep's completion only the holds are reclaimed
+         *     (``sweep_lease.not_due``): Claude's usage endpoint allows about five calls per five
+         *     minutes per account.
          */
         post: operations["sweep_claude_accounts"];
         delete?: never;
@@ -1936,7 +2191,10 @@ export interface paths {
         delete: operations["delete_source"];
         options?: never;
         head?: never;
-        /** Update Source */
+        /**
+         * Update Source
+         * @description Read the source first (get_source) and pass its `config_version` as `base_version`: it is required whenever `config` or `connection_id` changes, and a source saved since you read it is refused (409 source_changed). Without it a change of those is refused with 422 {"code": "base_version_required"}. A rename or a pause needs none, but if given it is checked.
+         */
         patch: operations["update_source"];
         trace?: never;
     };
@@ -2023,7 +2281,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Source Items */
+        /**
+         * List Source Items
+         * @description The source's items at their current versions. A run never lists a deleted item
+         *     (``include_deleted`` is ignored) and reads a shared item at the version released,
+         *     its title as shared (S6, owner 2026-10-19).
+         */
         get: operations["list_source_items"];
         put?: never;
         post?: never;
@@ -2098,7 +2361,9 @@ export interface paths {
         };
         /**
          * List Snapshot Items
-         * @description The user's items as they were at the snapshot (each at its pinned version).
+         * @description The user's items as they were at the snapshot (each at its pinned version). A run
+         *     reads a shared item at the version released whatever the snapshot, its title as
+         *     shared, and nothing deleted upstream (S6, owner 2026-10-19).
          */
         get: operations["list_snapshot_items"];
         put?: never;
@@ -2118,10 +2383,54 @@ export interface paths {
         };
         /**
          * Search Sources
-         * @description Search the user's own items. Ranked by relevance x confidence weight; ``as_of``
-         *     searches the versions pinned at that time.
+         * @description Search the user's own items (a run: also those a finding shared in full
+         *     released). Ranked by relevance x confidence weight; ``as_of`` searches the versions
+         *     pinned at that time, except a run's shared items: those are searched at the version
+         *     sharing released only, whatever ``as_of`` says (S6, freeze at sharing).
          */
         get: operations["search_sources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{connection_id}/fireflies/meetings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Fireflies Meetings
+         * @description Your meetings in Fireflies, newest first, a page at a time (search: in titles;
+         *     from/to: whole days in UTC).
+         */
+        get: operations["list_fireflies_meetings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{connection_id}/fireflies/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Fireflies Series
+         * @description Your meetings grouped into their calendar series, with counts and the last date
+         *     (from/to: whole days in UTC). Meetings on no calendar are in no series.
+         */
+        get: operations["list_fireflies_series"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2251,7 +2560,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Entity Revisions */
+        /**
+         * List Entity Revisions
+         * @description The entity's revisions, newest first; ``limit`` keeps only the newest (Home's trend).
+         */
         get: operations["list_entity_revisions"];
         put?: never;
         post?: never;
@@ -2963,12 +3275,37 @@ export interface paths {
         };
         /**
          * Runtime Status
-         * @description Call the agent runtime as Oracle and report what it answers: reachable, and as which
-         *     tenant. Owner only. Never shows a credential.
+         * @description Call the agent runtime as Oracle and report what it answers: reachable, as which
+         *     tenant, and which adapter v2 features are on (mcp, await_input, service_answer: on,
+         *     off or unknown; read briefly cached, never longer than the runtime's timeout). Owner
+         *     only. Never shows a credential.
          */
         get: operations["runtime_status"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runtime/mcp-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register Mcp Server
+         * @description Register Oracle's MCP server in the agent runtime, idempotently: created when
+         *     missing, its URL updated when ORACLE_PUBLIC_URL changed, else unchanged. Runs do this
+         *     on their own before the first run token is sent; this is for owners and the
+         *     switch-on check. Owner only.
+         */
+        post: operations["register_mcp_server"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3118,6 +3455,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Run
+         * @description Retry a run whose lost submission Oracle could neither find nor rule out (Inbox:
+         *     lookups): looked up once more, else the segment is submitted again.
+         */
+        post: operations["retry_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/cancel": {
         parameters: {
             query?: never;
@@ -3129,6 +3487,150 @@ export interface paths {
         put?: never;
         /** Cancel Run */
         post: operations["cancel_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/stop-cancelling": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Cancelling Run
+         * @description Stop cancelling a workflow whose cancel SwarmCloud keeps answering with a 404 that
+         *     proves nothing (Inbox: ``can_stop_cancelling``): the cancel calls stop and the Inbox
+         *     item clears. A run that has not ended ends (cancelled, the reason recorded) and no
+         *     second workflow starts for that segment; Oracle keeps reading the stopped workflow's
+         *     status and cost on every tick until it ends, and counts its spend on the run (P3d).
+         */
+        post: operations["stop_cancelling_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/retry-lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Lookup Run
+         * @description Read a workflow whose cost is unknown now (Inbox: ``can_retry_lookup``): its status
+         *     did not read past its search's end, or SwarmCloud answered it with 404s that prove
+         *     nothing, or its confirmed cancel still reads CANCELLING. Read, its cost is counted
+         *     on the run and it is followed until it ends. That workflow only, at most once per
+         *     30 s per run (429 sooner).
+         */
+        post: operations["retry_lookup_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/retry-import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Import Run
+         * @description Retry importing a step's output (Inbox: ``imports``, ``can_retry_import``): Oracle
+         *     stopped after its resumed advance failed 5 times in a row; the next tick tries again,
+         *     the count reset. Owners only; audited.
+         */
+        post: operations["retry_import_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/segments/{seq}/retry-draft-import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Draft Import
+         * @description Import a segment's draft again after its import at segment end was refused
+         *     (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``,
+         *     its problems ``draft_import.problems`` and their summary ``draft_import.summary``).
+         *     While the run waits at that segment's review: the review's approver role or above, and
+         *     nothing is decided (the review stays open for a person). After the run finished with
+         *     the review approved past the refusal: owners only, while no version from the run
+         *     exists; the run's checkpoints do not change. Imported, the run names the document and
+         *     the error is replaced by the import; refused again, by the new error (200 either way:
+         *     read ``draft_import``). 409 when there is nothing to retry (imported already, a version
+         *     from the run exists, no draft file, changes requested, the run cancelled or failed).
+         *     Audited. Not the stopped advance of ``retry_import_run``.
+         */
+        post: operations["retry_draft_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/cancel-again": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Again Run
+         * @description Cancel again (Inbox: ``cancel_again``): a workflow an approver stopped cancelling,
+         *     whose spend took the ended run over its ceiling, has Oracle's cancel calls turned
+         *     back on; its status and cost are still read until it ends, and nothing restarts
+         *     (P3d). An owner or the approver who created the run; audited.
+         */
+        post: operations["cancel_again_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/dismiss-overrun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Overrun Run
+         * @description Clear an ended run's overrun from the Inbox (``can_dismiss_overrun``: nothing of
+         *     the run is left to read). The overrun stays recorded on the run; audited.
+         */
+        post: operations["dismiss_overrun_run"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3147,7 +3649,8 @@ export interface paths {
         /**
          * Decide Checkpoint
          * @description Approve a checkpoint (the next segment starts) or request changes (the segment
-         *     runs again with the note).
+         *     runs again with the note). Approving is refused (409) while the draft its segment left
+         *     is not imported (``cannot_approve``): retry the import, or request changes.
          */
         post: operations["decide_checkpoint"];
         delete?: never;
@@ -3183,7 +3686,8 @@ export interface paths {
         /**
          * Get Inbox
          * @description What waits on me: checkpoints for my role, runs waiting for an owner's approval
-         *     or overrun decision, and open feedback on documents I can approve.
+         *     or overrun decision, and feedback on documents I can approve, by state (new, open,
+         *     staged for the next draft, declined, done) with the staged rows per document.
          */
         get: operations["get_inbox"];
         put?: never;
@@ -3429,7 +3933,12 @@ export interface paths {
          */
         get: operations["list_intakes"];
         put?: never;
-        post?: never;
+        /**
+         * Create Intake
+         * @description New product idea: a short brief, pinned to a snapshot of your sources, analysed
+         *     into gaps; the first short batch of questions is asked.
+         */
+        post: operations["create_intake"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3453,7 +3962,12 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Intake
+         * @description Rename, archive or reopen (the author or an approver); link to a PRD (an approver;
+         *     moving an intake with an unresolved critical blocker off its PRD: an owner).
+         */
+        patch: operations["update_intake"];
         trace?: never;
     };
     "/v1/gaps": {
@@ -3469,7 +3983,11 @@ export interface paths {
          */
         get: operations["list_knowledge_gaps"];
         put?: never;
-        post?: never;
+        /**
+         * Create Knowledge Gap
+         * @description Add a gap to an intake by hand; it is drafted as a question.
+         */
+        post: operations["create_knowledge_gap"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3493,7 +4011,12 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Knowledge Gap
+         * @description Triage a gap: importance, owner, sections, stop condition; defer or reopen.
+         *     Lowering a critical gap's importance takes an owner (B4).
+         */
+        patch: operations["update_knowledge_gap"];
         trace?: never;
     };
     "/v1/questions": {
@@ -3653,7 +4176,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Blocker Option
+         * @description Edit an option or record its compliance review (``lock_version`` required).
+         */
+        patch: operations["update_blocker_option"];
         trace?: never;
     };
     "/v1/feasibility-experiments": {
@@ -3693,7 +4220,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Feasibility Experiment
+         * @description Edit, start or conclude an experiment (a result is needed to conclude).
+         */
+        patch: operations["update_feasibility_experiment"];
         trace?: never;
     };
     "/v1/blocker-events": {
@@ -3810,7 +4341,11 @@ export interface paths {
         get: operations["get_section_link"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Section Link
+         * @description Remove a section link. An approved version's links are pinned (409).
+         */
+        delete: operations["delete_section_link"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4096,6 +4631,1723 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/intakes/{intake_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Intake Summary
+         * @description Opportunity and Gaps: extracted items, coverage, goals and features, conflicts,
+         *     stale evidence, assumptions, top uncertainties, the template and the review gate,
+         *     as the reader may see them (S6).
+         */
+        get: operations["get_intake_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze Intake
+         * @description Re-read the pinned snapshot and the baseline (the author only). Decided gaps are
+         *     never changed and answered questions never asked again.
+         */
+        post: operations["analyze_intake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/new-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Intake New Evidence
+         * @description Evidence added or changed since the pinned version (the author only; anyone else
+         *     sees neither the items nor their number).
+         */
+        get: operations["get_intake_new_evidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/repin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Repin Intake
+         * @description Pin a new snapshot and re-analyse (the author only); decided gaps stay as
+         *     decided.
+         */
+        post: operations["repin_intake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Intake Evidence
+         * @description Search your own source items as they were at the intake's pinned snapshot. A run
+         *     token (its author's or anyone's) searches, in full text, only the items the intake's
+         *     findings shared in full cite, less what any intake of the author withholds (S6,
+         *     owner 2026-10-19): exactly the items ``/v1/source-items/{id}`` and ``/v1/search``
+         *     give that run.
+         *
+         *     Results are untrusted data. Every query is audited (``intake.evidence_query``).
+         */
+        get: operations["search_intake_evidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/question-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Question Batch
+         * @description A batch of questions (default: the latest) with their gaps, evidence, answers
+         *     and answer paths, as the reader may see them (S6).
+         */
+        get: operations["get_question_batch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/question-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask Next Question Batch
+         * @description Ask the next short batch: the highest-ranked questions not asked yet (the author
+         *     or an approver).
+         */
+        post: operations["ask_next_question_batch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/composition-inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Intake Composition Inputs
+         * @description What the module composer reads from this intake (brief, signals, scope, baseline
+         *     links, pinned snapshots, open critical gaps).
+         */
+        get: operations["get_intake_composition_inputs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Intake Run
+         * @description Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs
+         *     until an approver estimates and starts it.
+         */
+        post: operations["start_intake_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Intake Proposals
+         * @description Research runs and PRD patches this intake proposed, newest first.
+         */
+        get: operations["list_intake_proposals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intake-proposals/{proposal_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Intake Proposal
+         * @description Accept: a research proposal becomes a draft run; a PRD patch becomes feedback on
+         *     the PRD's latest version.
+         */
+        post: operations["accept_intake_proposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intake-proposals/{proposal_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss Intake Proposal */
+        post: operations["dismiss_intake_proposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Intake Findings
+         * @description Findings drawn from the author's own sources and their sharing levels. The author
+         *     sees every one; anyone else those shared at counts or above, as far as each allows.
+         */
+        get: operations["list_intake_findings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/findings/{finding_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Intake Finding Sharing
+         * @description Set what others see of one finding: private, counts, summary or full (the
+         *     author only; audited; lower it again at any time).
+         */
+        patch: operations["set_intake_finding_sharing"];
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/findings/{finding_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Intake Finding Summary
+         * @description Confirm Oracle's draft line for the summary level (no ``text``) or write your own
+         *     (the author only, never a run; audited). Until then, the summary level shows others
+         *     only Oracle's fixed category line (S6).
+         */
+        put: operations["set_intake_finding_summary"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/findings/sharing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Intake Findings Sharing
+         * @description Set the sharing level of several findings at once (the author only; every change
+         *     is audited).
+         */
+        post: operations["set_intake_findings_sharing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/gaps/{gap_id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Knowledge Gap
+         * @description Accept an assumption or a risk, validate, or reject, with a rationale. On a
+         *     critical gap, accepting, validating it unanswered, or validating a hard blocker
+         *     needs an owner (B4).
+         */
+        post: operations["decide_knowledge_gap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/gaps/{gap_id}/research": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Gap Research
+         * @description Research this: propose a run that looks into the gap. Nothing runs until an
+         *     approver accepts it and starts the run.
+         */
+        post: operations["propose_gap_research"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/questions/{question_id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer Question
+         * @description Answer, or say "I don't know", defer, ask someone else, or "Research this". The
+         *     gap updates; what the answer implies elsewhere is proposed, never applied. The
+         *     question and gap come back as the reads show them to the caller (S6).
+         */
+        post: operations["answer_question"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/quality/criteria": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Quality Criteria
+         * @description The ten advisory quality criteria, then the hard checks this lane registers.
+         */
+        get: operations["list_quality_criteria"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Document Readiness
+         * @description The soft readiness dashboard of a version, criterion by criterion (stores nothing).
+         *
+         *     Every registered readiness check runs live. Advisory criteria never block (T2);
+         *     ``blocked`` is true only when a hard check is critical. The latest model review and
+         *     the human ratings of the version are shown beside each criterion, with agreement.
+         *     ``purpose=publish`` asks the checks what approve (publish) asks them; the Publish
+         *     screen does.
+         */
+        get: operations["get_document_readiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/evaluations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Evaluation Report
+         * @description Store a snapshot of the rules' evaluation of a version (evaluator ``rules``).
+         */
+        post: operations["create_evaluation_report"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/evaluations/human": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Human Rating
+         * @description A person's rating of some or all of the ten criteria, compared with the rules.
+         */
+        post: operations["create_human_rating"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/quality-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue Quality Review
+         * @description Queue the built-in model's quality review of a version.
+         *
+         *     Its answer is stored as an evaluation report labelled model output: shown beside the
+         *     rules, never ground truth, never a block.
+         */
+        post: operations["queue_quality_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Outcomes */
+        get: operations["list_outcomes"];
+        put?: never;
+        /**
+         * Create Outcome
+         * @description Track a launched PRD version, roadmap item or experiment against its goal.
+         */
+        post: operations["create_outcome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/outcomes/{outcome_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Outcome */
+        get: operations["get_outcome"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/outcomes/{outcome_id}/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assess Outcome
+         * @description Record whether the prediction held; returns drafted learnings to keep or drop.
+         */
+        post: operations["assess_outcome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/learnings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Learnings */
+        get: operations["list_learnings"];
+        put?: never;
+        /** Create Learning */
+        post: operations["create_learning"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/learnings/signals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Learning Signals
+         * @description Net signal of active learnings per module, question category or criterion.
+         *
+         *     Advisory input for module and question recommendations; it changes no document.
+         */
+        get: operations["get_learning_signals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/learnings/{learning_id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retire Learning */
+        post: operations["retire_learning"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Module Catalog
+         * @description Every module the company can compose with.
+         */
+        get: operations["list_module_catalog"];
+        put?: never;
+        /**
+         * Create Company Module
+         * @description Add a company module (not a built-in).
+         */
+        post: operations["create_company_module"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-catalog/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Module Catalog Entry
+         * @description One module with its effective contract and its release history.
+         */
+        get: operations["get_module_catalog_entry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-catalog/{key}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Module Override
+         * @description A company release of a module (an override of a built-in, or a new release of a
+         *     company module). Built-in upgrades never overwrite it.
+         */
+        post: operations["create_module_override"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Module Packs
+         * @description The built-in packs: General Tech Startup, the Multi-tenant AI Agent Platform and the
+         *     industry packs (O1h), each with its modules in order and their policy tier.
+         */
+        get: operations["list_module_packs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Module Policy
+         * @description Which modules the company makes mandatory, optional or disabled.
+         */
+        get: operations["get_module_policy"];
+        /**
+         * Put Module Policy
+         * @description Set the company module policy. Each document's composition in force gets a change
+         *     event saying what changed; a person re-confirms it to apply the policy.
+         */
+        put: operations["put_module_policy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/template-manifests/{template}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Template Manifest
+         * @description A template's module manifest: which module renders which of its sections, and the
+         *     sections no module claims (template-owned, preserved as-is). Empty for a template
+         *     without a manifest, which composes exactly as before.
+         */
+        get: operations["get_template_manifest"];
+        /**
+         * Put Template Manifest
+         * @description Replace a template's manifest. The template and its versions are not touched; a
+         *     company-edited manifest is never replaced by a packaged one.
+         */
+        put: operations["put_template_manifest"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compositions/recommend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recommend Composition
+         * @description Recommend a module composition for a document, an intake or a template, with the
+         *     reason, source and missing information behind each module. Changes nothing; pass
+         *     `changes` to preview adding, removing or reordering modules.
+         */
+        post: operations["recommend_composition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/composition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Document Composition
+         * @description The composition inspector: for each module, mandatory, suggested or optional; the
+         *     reason and the source or assumption behind it; missing information; brief/full
+         *     impact; dependencies and conflicts; version history; and the revision history. A
+         *     document without a composition is legacy and gets a recommendation instead.
+         */
+        get: operations["get_document_composition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/composition/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Composition Revision
+         * @description Confirm a composition revision, or save it as a working draft: who decided and
+         *     why. It starts from the newest revision, so earlier decisions carry. Mandatory
+         *     modules and dependencies are never removed silently. Confirming puts it in force and
+         *     records change events for the affected sections; a working draft supersedes nothing
+         *     and records none. An earlier decision set aside comes back in `problems`.
+         */
+        post: operations["confirm_composition_revision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/composition/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish Composition
+         * @description Pin the confirmed composition to an approved document version: template version,
+         *     module ids and versions, company overrides and inputs. Never changed afterwards.
+         */
+        post: operations["publish_composition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Version Trace
+         * @description A version's trace: its anchors (template, composition revision, snapshots), each
+         *     section's links to the baseline and the goals they serve, and the outputs that
+         *     depend on each section (artifacts, roadmap items) with their freshness.
+         */
+        get: operations["get_version_trace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Version Evidence
+         * @description The evidence inspector: each section's claim-to-source links (strongest source
+         *     first) and the draft's own per-claim citations. Rendered bodies carry none of these
+         *     (O1c); exports list them in the Sources and data points appendix.
+         */
+        get: operations["get_version_evidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Version Impact
+         * @description What this version changes for outputs built on earlier versions, why, and a
+         *     targeted regeneration plan (proposals only), with the changes recorded for it.
+         */
+        get: operations["get_version_impact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/section-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Section Links
+         * @description Link sections of a version to baseline items, evidence or source items (the
+         *     internal per-claim links behind O1c). Pinned to the section's current hash. An
+         *     approved version's links are pinned with it (409).
+         */
+        post: operations["create_section_links"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/entities/{entity_id}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Entity Trace
+         * @description A baseline node's trace: up to the goals it serves, down to requirements and
+         *     acceptance criteria, the sections linking it and the outputs built on it; for a
+         *     requirement, its assumptions, blockers, alternatives, experiments, decisions, owners
+         *     and risks. A feature serving no confirmed goal is flagged, with its priority.
+         */
+        get: operations["get_entity_trace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/entities/{entity_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Entity Impact
+         * @description What a change to this node would make potentially stale, why, and a targeted
+         *     regeneration plan. A preview: nothing is marked.
+         */
+        get: operations["get_entity_impact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trace/changes/{change_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Change Impact
+         * @description A recorded change: the outputs it marked potentially stale, why, and a targeted
+         *     regeneration plan (proposals only).
+         */
+        get: operations["get_change_impact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trace/staleness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Stale Outputs
+         * @description Outputs that are not fresh (potentially stale or under review by default), a page
+         *     at a time, stalest first, with the dependencies that make them so and why (from the
+         *     change that marked each); ``document_id`` filters by upstream document.
+         */
+        get: operations["list_stale_outputs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trace/staleness/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Act On Staleness
+         * @description Settle a stale output: ``review`` (someone is checking it), ``accept_regeneration``
+         *     (its regeneration proposal is accepted) or ``reconcile`` (confirmed still valid
+         *     against the current upstream, with a reason). Recorded and audited; the output's
+         *     content and approval are never changed.
+         */
+        post: operations["act_on_staleness"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trace/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Artifact Dependencies
+         * @description Record what an artifact version (or a derived document version) was made from:
+         *     document sections, whole document versions or baseline items, anchored at their
+         *     current hash. Idempotent per anchor.
+         */
+        post: operations["create_artifact_dependencies"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blockers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Blockers
+         * @description Blockers (baseline constraints with a strategy), most severe first. Third-party
+         *     limits filter by ``limit_kind``: capacity, eligibility, permission or policy.
+         */
+        get: operations["list_blockers"];
+        put?: never;
+        /**
+         * Create Blocker
+         * @description Record a blocker: an existing constraint entity (``entity_id``), or a new one.
+         *     Promoting a constraint an intake answer suggested as a blocker (its
+         *     ``attrs.proposed_blocker``, the "suggested blocker" mark, B4) clears that mark in the
+         *     same write; the form is pre-filled from the constraint and the mark.
+         */
+        post: operations["create_blocker"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blockers/{blocker_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Blocker Strategy
+         * @description The blocker strategy view: the blocker, evidence, options to compare (with policy
+         *     flags and the recommended compliant one), experiments, events and its gate.
+         */
+        get: operations["get_blocker_strategy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Blocker
+         * @description Edit a blocker. ``revision`` is the one you loaded; a stale one is a 409. The
+         *     status changes only through the status, risk and feasibility routes. B4: lowering a
+         *     blocker that gates (or gated when it was resolved), or removing a document it gates,
+         *     takes ``blocker_risk_acceptance_role`` (403 below it).
+         */
+        patch: operations["update_blocker"];
+        trace?: never;
+    };
+    "/v1/blockers/{blocker_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Blocker Status
+         * @description Open, mitigating or resolved (resolving needs a reason). Records a resolution
+         *     event and a ``blocker_status`` change event. B4: reopening a resolved blocker lowered
+         *     or narrowed since below the gate it had when resolved takes
+         *     ``blocker_risk_acceptance_role`` (403 below it).
+         */
+        post: operations["set_blocker_status"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blockers/{blocker_id}/accept-risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Blocker Risk
+         * @description Accept the risk of an unresolved blocker: who and why are recorded (an assumption
+         *     decision, a resolution event, an audit event) until the review date.
+         */
+        post: operations["accept_blocker_risk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blockers/{blocker_id}/feasibility-scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Feasibility Scope
+         * @description Proceed only as a scoped feasibility experiment (owner, success threshold and
+         *     decision gate required). If the experiment fails or is cancelled, the blocker
+         *     reopens.
+         */
+        post: operations["approve_feasibility_scope"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blockers/{blocker_id}/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Blocker Option
+         * @description Propose a solution option. It starts as ``needs_review``; text that evades platform
+         *     rules, abuses accounts or messages people without permission is stored as
+         *     ``non_compliant`` and ``rejected``, with the flags.
+         */
+        post: operations["create_blocker_option"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blocker-options/{item_id}/select": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Select Blocker Option
+         * @description Select a compliant option with a reason; a previous selection goes back to
+         *     evaluating.
+         */
+        post: operations["select_blocker_option"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blocker-options/{item_id}/fallback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Blocker Option Fallback
+         * @description Keep a compliant option as the fallback.
+         */
+        post: operations["mark_blocker_option_fallback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blocker-options/{item_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Blocker Option
+         * @description Reject an option with a reason (a selected one leaves the blocker unselected).
+         */
+        post: operations["reject_blocker_option"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blockers/{blocker_id}/experiments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Feasibility Experiment
+         * @description Plan a validation of the blocker or one of its options.
+         */
+        post: operations["create_feasibility_experiment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/blocker-strategy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Document Blocker Strategy
+         * @description Every blocker that gates this document (listed on the blocker or linked from a
+         *     section), most severe first, with the ``critical_blockers`` readiness outcome.
+         */
+        get: operations["get_document_blocker_strategy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/blocker-strategy/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Render Document Blocker Strategy
+         * @description The ``constraints.solutions`` module in the draft format: a brief section, a full
+         *     section, and the citations and appendix lines for Sources and data points (O1c).
+         */
+        get: operations["render_document_blocker_strategy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Roadmap Items
+         * @description A roadmap version's items (default: the latest version with items), each traced to
+         *     the exact PRD version, section, feature and requirements, with its blocker
+         *     dependencies, validation gates, economics, freshness and engineering status. The
+         *     brief view keeps the headline fields only.
+         */
+        get: operations["list_roadmap_items"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/versions/{n}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Import Roadmap Items
+         * @description Store ``roadmap_items.yaml`` as a roadmap version's items (the file a
+         *     ``prd_to_roadmap`` run writes), replacing any it had. Refused (422, with the
+         *     problems) on any problem, a date without a verified basis included; an approved
+         *     version's items cannot be replaced (409).
+         */
+        put: operations["import_roadmap_items"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/items/staleness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Act On Roadmap Item Staleness
+         * @description Settle potentially stale items: ``review`` (under review) or ``reconcile`` (still
+         *     valid, with a reason; re-anchored on the PRD's latest approved version). 409 when no
+         *     item is in a state the action applies to.
+         */
+        post: operations["act_on_roadmap_item_staleness"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/alignment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Roadmap Alignment
+         * @description The roadmap against the tracker's state, read-only (E1): per item aligned, drift
+         *     (ahead, date slip, overdue, cancelled), untracked or done, and tracker work no item
+         *     names. Works without any tracker write permission.
+         */
+        get: operations["get_roadmap_alignment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/schedule-bases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Schedule Bases */
+        get: operations["list_schedule_bases"];
+        put?: never;
+        /**
+         * Create Schedule Basis
+         * @description Record a verified estimate, capacity figure or commitment supporting a date for
+         *     one PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a
+         *     tracker issue is matched to (``tracker_key``). The approver recording it verifies it.
+         *     From a tracker record, the record's own target date must be that date, and the record
+         *     must be this PRD's.
+         */
+        post: operations["create_schedule_basis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/schedule-bases/{basis_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Schedule Basis
+         * @description Withdraw a basis: it supports nothing from now on. Milestones lose a date no other
+         *     verified basis supports, and roadmap items whose date rested on it go potentially
+         *     stale. 409 when already withdrawn.
+         */
+        post: operations["withdraw_schedule_basis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracker/connector": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tracker Connector
+         * @description The two-way tracker connector's gate: off, so Oracle makes no tracker writes.
+         */
+        get: operations["get_tracker_connector"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracker/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tracker Records */
+        get: operations["list_tracker_records"];
+        put?: never;
+        /**
+         * Import Tracker Records
+         * @description Record engineering status read from a tracker (latest state per issue). Read-only
+         *     toward the tracker: Oracle stores what was read and writes nothing back. The tracks
+         *     the records belong to are monitored again.
+         */
+        post: operations["import_tracker_records"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tracks
+         * @description Product tracks, newest first, each with its health and a one-line headline.
+         */
+        get: operations["list_tracks"];
+        put?: never;
+        /**
+         * Create Track
+         * @description Start the track of an accepted PRD (its latest approved version; approving a PRD
+         *     version starts it too). A PRD has one track: 409 when it already has one; 200 with
+         *     that track when a concurrent start made it first.
+         */
+        post: operations["create_track"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Track
+         * @description The track's overview: health, headline, the next milestone, items at risk
+         *     (blocked, stale or slipping), drift from engineering status where known, and
+         *     whether the PRD moved on since the roadmap was built.
+         */
+        get: operations["get_track"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Track */
+        patch: operations["update_track"];
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Monitor Track
+         * @description Check the track now: a ``product_track`` change event is recorded when its health,
+         *     its items at risk or its next milestone changed since the last check.
+         */
+        post: operations["monitor_track"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Track Changes
+         * @description The track's monitoring change events, newest first.
+         */
+        get: operations["list_track_changes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}/roadmap-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Track Roadmap Run
+         * @description Draft a ``prd_to_roadmap`` run (SwarmCloud) from the track's latest approved PRD
+         *     version into its roadmap. Nothing runs or is spent until it is estimated and started
+         *     (the $50 owner approval and the 1.5x pause apply as for every run).
+         */
+        post: operations["create_track_roadmap_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}/tracker-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Track Tracker Plan
+         * @description What a two-way tracker connector would create from the roadmap (an epic per Now
+         *     and Next item, an issue per requirement): a preview, never written.
+         */
+        get: operations["get_track_tracker_plan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}/tracker-push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push Track To Tracker
+         * @description Write the tracker plan to Linear or Jira. Refused: two-way sync is off (409), or
+         *     on but no connector is verified (501). Oracle makes no unattended external writes.
+         */
+        post: operations["push_track_to_tracker"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}/milestones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Track Milestones */
+        get: operations["list_track_milestones"];
+        put?: never;
+        /**
+         * Create Track Milestone
+         * @description Add a milestone. Undated by default; a date only in Now and only with verified
+         *     schedule bases that support exactly that date (422 otherwise).
+         */
+        post: operations["create_track_milestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/milestones/{milestone_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Milestone
+         * @description Edit a milestone. Setting or keeping a date re-checks its verified bases.
+         */
+        patch: operations["update_milestone"];
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -4320,6 +6572,16 @@ export interface components {
             refresh_sweep: components["schemas"]["RefreshSweepOut"];
             fallback: components["schemas"]["FallbackOut"] | null;
         };
+        /**
+         * AdvisoryIn
+         * @description An advisory signal for a conditional module (AI analysis or a priority score).
+         */
+        AdvisoryIn: {
+            /** Score */
+            score: number;
+            /** Rationale */
+            rationale: string;
+        };
         /** AgentRoleOut */
         AgentRoleOut: {
             /** Key */
@@ -4330,6 +6592,101 @@ export interface components {
             description: string;
             /** Base Usd */
             base_usd: number;
+        };
+        /** Agreement */
+        Agreement: {
+            /** Model */
+            model?: boolean | null;
+            /** Human */
+            human?: number | null;
+        };
+        /** AlignmentItem */
+        AlignmentItem: {
+            /** Item Key */
+            item_key: string;
+            /** Title */
+            title: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Milestone */
+            milestone: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Alignment
+             * @enum {string}
+             */
+            alignment: "aligned" | "drift" | "untracked" | "done";
+            /** Tracker */
+            tracker: components["schemas"]["TrackerRecordRef"][];
+            /** Drift */
+            drift: components["schemas"]["DriftEntry"][];
+        };
+        /**
+         * AlignmentReport
+         * @description The roadmap against the tracker's state, read-only: the path that works without
+         *     tracker write permission (E1).
+         */
+        AlignmentReport: {
+            /**
+             * Mode
+             * @default read_only
+             * @constant
+             */
+            mode: "read_only";
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            roadmap: components["schemas"]["DocumentRef"];
+            /** Track Id */
+            track_id: string | null;
+            connector: components["schemas"]["TrackerConnectorOut"];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Items */
+            items: components["schemas"]["AlignmentItem"][];
+            /** Unplanned */
+            unplanned: components["schemas"]["DriftEntry"][];
+        };
+        /** AnswerIn */
+        AnswerIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "answer" | "dont_know" | "defer" | "delegate" | "research";
+            /** Body */
+            body?: string | null;
+            /** Delegated To */
+            delegated_to?: string | null;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Knowledge State */
+            knowledge_state?: ("user_decision" | "verified_fact" | "hypothesis") | null;
+        };
+        /** AnswerResult */
+        AnswerResult: {
+            answer: components["schemas"]["StakeholderAnswerOut"];
+            question: components["schemas"]["StakeholderQuestionOut"];
+            gap: components["schemas"]["KnowledgeGapOut"] | null;
+            /** Proposals */
+            proposals: components["schemas"]["IntakeProposalOut"][];
+            /** Baseline Proposal Ids */
+            baseline_proposal_ids: string[];
+            /** Change Event Id */
+            change_event_id: string | null;
+            /** Next Actions */
+            next_actions: components["schemas"]["NextAction"][];
         };
         /**
          * ApiTokenOut
@@ -4433,6 +6790,12 @@ export interface components {
             upstream_section_hash?: string | null;
             /** Upstream Entity Id */
             upstream_entity_id?: string | null;
+            /** Upstream Snapshot */
+            upstream_snapshot?: {
+                [key: string]: unknown;
+            } | null;
+            /** Upstream Deleted At */
+            upstream_deleted_at?: string | null;
             /** Composition Revision */
             composition_revision?: number | null;
             /**
@@ -4624,6 +6987,53 @@ export interface components {
              */
             created_at: string;
         };
+        /** Assessment */
+        Assessment: {
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "held" | "partially_held" | "not_held" | "inconclusive";
+            /** Observed */
+            observed: string;
+            /** Note */
+            note?: string | null;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Assessed By */
+            assessed_by?: string | null;
+            /**
+             * Assessed At
+             * Format: date-time
+             */
+            assessed_at: string;
+        };
+        /** AssessmentIn */
+        AssessmentIn: {
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "held" | "partially_held" | "not_held" | "inconclusive";
+            /** Observed */
+            observed: string;
+            /** Note */
+            note?: string | null;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+        };
+        /** AssessmentResult */
+        AssessmentResult: {
+            outcome: components["schemas"]["OutcomeOut"];
+            /** Suggested Learnings */
+            suggested_learnings: components["schemas"]["LearningDraft"][];
+        };
         /** AssumptionDecisionOut */
         AssumptionDecisionOut: {
             /**
@@ -4661,6 +7071,22 @@ export interface components {
              */
             created_at: string;
         };
+        /** AtRiskItem */
+        AtRiskItem: {
+            /** Item Key */
+            item_key: string;
+            /** Title */
+            title: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Reasons */
+            reasons: {
+                [key: string]: string;
+            }[];
+        };
         /** AuthorizationServerMetadata */
         AuthorizationServerMetadata: {
             /** Issuer */
@@ -4696,6 +7122,263 @@ export interface components {
             label: string;
         };
         /**
+         * Basis
+         * @description One input that drove a decision: what was read, what it held, and how we know.
+         */
+        Basis: {
+            /** Path */
+            path: string;
+            /** Op */
+            op: string;
+            /** Expected */
+            expected?: unknown;
+            /** Actual */
+            actual?: unknown;
+            /** Holds */
+            holds: boolean;
+            /** Missing */
+            missing: boolean;
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Source */
+            source?: string | null;
+        };
+        /** BatchState */
+        BatchState: {
+            /** Current */
+            current: number | null;
+            /** Asked */
+            asked: number;
+            /** Answered */
+            answered: number;
+            /** Remaining */
+            remaining: number;
+        };
+        /**
+         * BlockerCitation
+         * @description A front matter ``citations`` entry (docs/mvp-app.md, Draft import format).
+         */
+        BlockerCitation: {
+            /** Id */
+            id: string;
+            /** Source */
+            source: string;
+            /** Ref */
+            ref: string;
+            /** Title */
+            title?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Retrieved At */
+            retrieved_at?: string | null;
+        };
+        /** BlockerCompliantPath */
+        BlockerCompliantPath: {
+            /** Approach */
+            approach: string;
+            /** Label */
+            label: string;
+            /** Guidance */
+            guidance: string;
+        };
+        /**
+         * BlockerCreate
+         * @description A new blocker: either an existing constraint entity (``entity_id``; a
+         *     ``statement`` or ``detail`` given replaces its title or body) or a new one (``key``
+         *     and ``statement``). Promoting a constraint an intake answer suggested as a blocker
+         *     clears its ``attrs.proposed_blocker`` mark in the same write (B4).
+         */
+        BlockerCreate: {
+            /** Detail */
+            detail?: string | null;
+            /** Limit Kind */
+            limit_kind?: ("capacity" | "eligibility" | "permission" | "policy" | "other") | null;
+            /** Third Party */
+            third_party?: string | null;
+            /** Severity */
+            severity?: ("critical" | "high" | "medium" | "low") | null;
+            /** Timing */
+            timing?: string | null;
+            /** Threshold */
+            threshold?: string | null;
+            /** Impacted Entity Ids */
+            impacted_entity_ids?: string[] | null;
+            /** Impacted Users */
+            impacted_users?: string[] | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Review At */
+            review_at?: string | null;
+            /** Document Ids */
+            document_ids?: string[] | null;
+            scaling?: components["schemas"]["BlockerScaling"] | null;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Key */
+            key?: string | null;
+            /** Statement */
+            statement?: string | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "hard" | "soft" | "unknown" | "temporary";
+            /**
+             * Status
+             * @default open
+             * @enum {string}
+             */
+            status: "open" | "mitigating";
+            /** Reason */
+            reason?: string | null;
+        };
+        /** BlockerDependency */
+        BlockerDependency: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Blocker Status */
+            blocker_status: string;
+            /** Severity */
+            severity?: string | null;
+            /** Blocker Type */
+            blocker_type?: string | null;
+            /** Resolved */
+            resolved: boolean;
+            /** Critical */
+            critical: boolean;
+        };
+        /** BlockerDocumentRef */
+        BlockerDocumentRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * BlockerGate
+         * @description This blocker's effect on readiness (the ``critical_blockers`` hard check).
+         */
+        BlockerGate: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warning" | "critical" | "not_applicable";
+            /** Rationale */
+            rationale: string;
+        };
+        /** BlockerImpactRef */
+        BlockerImpactRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * BlockerModuleRender
+         * @description The ``constraints.solutions`` module rendered in the draft format.
+         *
+         *     ``brief_markdown`` is one brief section, ``full_markdown`` the full-layer section with
+         *     one sub-section per blocker. Neither carries a citation: ``citations`` go in the
+         *     front matter, and ``evidence_by_section``, ``data_points`` and ``appendix_markdown``
+         *     in Sources and data points (O1c).
+         */
+        BlockerModuleRender: {
+            /** Module Key */
+            module_key: string;
+            /** Brief Section Id */
+            brief_section_id: string;
+            /** Full Section Id */
+            full_section_id: string;
+            /** Section Ids */
+            section_ids: string[];
+            /** Brief Markdown */
+            brief_markdown: string;
+            /** Full Markdown */
+            full_markdown: string;
+            /** Citations */
+            citations: components["schemas"]["BlockerCitation"][];
+            /** Evidence By Section */
+            evidence_by_section: {
+                [key: string]: string[];
+            };
+            /** Data Points */
+            data_points: string[];
+            /** Appendix Markdown */
+            appendix_markdown: string;
+        };
+        /** BlockerOptionCreate */
+        BlockerOptionCreate: {
+            /** Title */
+            title: string;
+            /**
+             * Approach
+             * @enum {string}
+             */
+            approach: "direct_remedy" | "alternative_workflow" | "architecture" | "partnership" | "operations" | "distribution";
+            /** Description */
+            description?: string | null;
+            /**
+             * Technical Feasibility
+             * @default unknown
+             * @enum {string}
+             */
+            technical_feasibility: "high" | "medium" | "low" | "unknown";
+            /**
+             * Policy Feasibility
+             * @default unknown
+             * @enum {string}
+             */
+            policy_feasibility: "high" | "medium" | "low" | "unknown";
+            /** @default {} */
+            details: components["schemas"]["BlockerOptionDetails"];
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+        };
+        /** BlockerOptionDecision */
+        BlockerOptionDecision: {
+            /** Lock Version */
+            lock_version: number;
+            /** Reason */
+            reason: string;
+        };
+        /**
          * BlockerOptionDetails
          * @description ``blocker_options.details``.
          */
@@ -4720,6 +7403,13 @@ export interface components {
             corrective_action?: string | null;
             /** Review At */
             review_at?: string | null;
+        };
+        /** BlockerOptionFallback */
+        BlockerOptionFallback: {
+            /** Lock Version */
+            lock_version: number;
+            /** Reason */
+            reason?: string | null;
         };
         /** BlockerOptionOut */
         BlockerOptionOut: {
@@ -4784,6 +7474,241 @@ export interface components {
              */
             updated_at: string;
         };
+        /** BlockerOptionPatch */
+        BlockerOptionPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Title */
+            title?: string | null;
+            /** Approach */
+            approach?: ("direct_remedy" | "alternative_workflow" | "architecture" | "partnership" | "operations" | "distribution") | null;
+            /** Description */
+            description?: string | null;
+            /** Technical Feasibility */
+            technical_feasibility?: ("high" | "medium" | "low" | "unknown") | null;
+            /** Policy Feasibility */
+            policy_feasibility?: ("high" | "medium" | "low" | "unknown") | null;
+            /** Compliance */
+            compliance?: ("compliant" | "needs_review" | "non_compliant") | null;
+            details?: components["schemas"]["BlockerOptionDetails"] | null;
+            /** Evidence Ids */
+            evidence_ids?: string[] | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * BlockerOptionView
+         * @description An option as the strategy view compares it.
+         */
+        BlockerOptionView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Blocker Id
+             * Format: uuid
+             */
+            blocker_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Approach
+             * @enum {string}
+             */
+            approach: "direct_remedy" | "alternative_workflow" | "architecture" | "partnership" | "operations" | "distribution";
+            /** Description */
+            description?: string | null;
+            /**
+             * Technical Feasibility
+             * @enum {string}
+             */
+            technical_feasibility: "high" | "medium" | "low" | "unknown";
+            /**
+             * Policy Feasibility
+             * @enum {string}
+             */
+            policy_feasibility: "high" | "medium" | "low" | "unknown";
+            /**
+             * Compliance
+             * @enum {string}
+             */
+            compliance: "compliant" | "needs_review" | "non_compliant";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "evaluating" | "selected" | "fallback" | "rejected";
+            details: components["schemas"]["BlockerOptionDetails"];
+            /** Evidence Ids */
+            evidence_ids: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Selected Reason */
+            selected_reason?: string | null;
+            /** Created By */
+            created_by?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Policy Flags
+             * @default []
+             */
+            policy_flags: components["schemas"]["BlockerPolicyFlag"][];
+            /**
+             * Recommended
+             * @default false
+             */
+            recommended: boolean;
+        };
+        /** BlockerOut */
+        BlockerOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Statement */
+            statement: string;
+            /** Detail */
+            detail?: string | null;
+            /** Entity Status */
+            entity_status: string;
+            /** Locked */
+            locked: boolean;
+            /** Confidence */
+            confidence?: number | null;
+            /**
+             * Evidence Count
+             * @default 0
+             */
+            evidence_count: number;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "hard" | "soft" | "unknown" | "temporary";
+            /**
+             * Limit Kind
+             * @enum {string}
+             */
+            limit_kind: "capacity" | "eligibility" | "permission" | "policy" | "other";
+            /** Limit Kind Label */
+            limit_kind_label: string;
+            /** Third Party */
+            third_party?: string | null;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "critical" | "high" | "medium" | "low";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "mitigating" | "resolved" | "accepted_risk" | "feasibility_only";
+            /** Timing */
+            timing?: string | null;
+            /** Threshold */
+            threshold?: string | null;
+            /** Impacted Entity Ids */
+            impacted_entity_ids: string[];
+            /**
+             * Impacted
+             * @default []
+             */
+            impacted: components["schemas"]["BlockerImpactRef"][];
+            /** Impacted Users */
+            impacted_users: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Review At */
+            review_at?: string | null;
+            /** Document Ids */
+            document_ids: string[];
+            scaling: components["schemas"]["BlockerScaling"];
+            /** Selected Option Id */
+            selected_option_id?: string | null;
+            /** Revision */
+            revision: number;
+            gate: components["schemas"]["BlockerGate"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** BlockerPatch */
+        BlockerPatch: {
+            /** Detail */
+            detail?: string | null;
+            /** Limit Kind */
+            limit_kind?: ("capacity" | "eligibility" | "permission" | "policy" | "other") | null;
+            /** Third Party */
+            third_party?: string | null;
+            /** Severity */
+            severity?: ("critical" | "high" | "medium" | "low") | null;
+            /** Timing */
+            timing?: string | null;
+            /** Threshold */
+            threshold?: string | null;
+            /** Impacted Entity Ids */
+            impacted_entity_ids?: string[] | null;
+            /** Impacted Users */
+            impacted_users?: string[] | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Review At */
+            review_at?: string | null;
+            /** Document Ids */
+            document_ids?: string[] | null;
+            scaling?: components["schemas"]["BlockerScaling"] | null;
+            /** Revision */
+            revision: number;
+            /** Statement */
+            statement?: string | null;
+            /** Type */
+            type?: ("hard" | "soft" | "unknown" | "temporary") | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Confirm Decision
+             * @default false
+             */
+            confirm_decision: boolean;
+        };
+        /** BlockerPolicyFlag */
+        BlockerPolicyFlag: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "evasion" | "identity_abuse" | "unauthorized_messaging";
+            /** Match */
+            match: string;
+            /** Message */
+            message: string;
+        };
         /** BlockerResolutionEventOut */
         BlockerResolutionEventOut: {
             /**
@@ -4822,6 +7747,122 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Summary
+             * @description One line for a history list. Events that record no status change (a
+             *     reclassification, a gate snapshot, an experiment) have no from/to status.
+             */
+            readonly summary: string;
+        };
+        /** BlockerRiskAcceptanceIn */
+        BlockerRiskAcceptanceIn: {
+            /** Reason */
+            reason: string;
+            /**
+             * Review At
+             * Format: date-time
+             */
+            review_at: string;
+        };
+        /**
+         * BlockerScaling
+         * @description Scaling characteristics, when they apply (§6).
+         */
+        BlockerScaling: {
+            /** Tenants */
+            tenants?: string | null;
+            /** Agents */
+            agents?: string | null;
+            /** Channels */
+            channels?: string | null;
+            /** Quotas */
+            quotas?: string | null;
+            /** Cost */
+            cost?: string | null;
+            /** Blast Radius */
+            blast_radius?: string | null;
+        };
+        /** BlockerStatusIn */
+        BlockerStatusIn: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "mitigating" | "resolved";
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * BlockerStrategy
+         * @description Everything the blocker strategy view shows for one blocker.
+         */
+        BlockerStrategy: {
+            blocker: components["schemas"]["BlockerOut"];
+            gate: components["schemas"]["BlockerGate"];
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceOut"][];
+            /** Options */
+            options: components["schemas"]["BlockerOptionView"][];
+            /** Recommended Option Id */
+            recommended_option_id?: string | null;
+            /** Compliant Paths */
+            compliant_paths: components["schemas"]["BlockerCompliantPath"][];
+            /** Prohibited */
+            prohibited: string;
+            /** Experiments */
+            experiments: components["schemas"]["FeasibilityExperimentOut"][];
+            /** Events */
+            events: components["schemas"]["BlockerResolutionEventOut"][];
+            risk_acceptance?: components["schemas"]["AssumptionDecisionOut"] | null;
+            /** Documents */
+            documents: components["schemas"]["BlockerDocumentRef"][];
+        };
+        /**
+         * BlockerSummary
+         * @description One row of ``GET /v1/blockers``.
+         */
+        BlockerSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Statement */
+            statement: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "hard" | "soft" | "unknown" | "temporary";
+            /**
+             * Limit Kind
+             * @enum {string}
+             */
+            limit_kind: "capacity" | "eligibility" | "permission" | "policy" | "other";
+            /** Third Party */
+            third_party?: string | null;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "critical" | "high" | "medium" | "low";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "mitigating" | "resolved" | "accepted_risk" | "feasibility_only";
+            /** Selected Option Id */
+            selected_option_id?: string | null;
+            /** Document Ids */
+            document_ids: string[];
+            gate: components["schemas"]["BlockerGate"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** Body_oauth_revoke */
         Body_oauth_revoke: {
@@ -4958,6 +7999,105 @@ export interface components {
             /** Lock Version */
             lock_version: number;
         };
+        /** CancelAgain */
+        CancelAgain: {
+            /** Workflow Id */
+            workflow_id: string;
+        };
+        /** CatalogModuleDetail */
+        CatalogModuleDetail: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /** Builtin */
+            builtin: boolean;
+            /** Archived */
+            archived: boolean;
+            /** Version */
+            version: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "builtin" | "company";
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Company Policy */
+            company_policy?: ("required" | "optional" | "disabled") | null;
+            /** Applies To */
+            applies_to: string[];
+            /** Depends On */
+            depends_on: string[];
+            /** Conflicts With */
+            conflicts_with: string[];
+            /** Section Ids */
+            section_ids: string[];
+            /** Brief Layer */
+            brief_layer: boolean;
+            /** Full Layer */
+            full_layer: boolean;
+            /** Required Review Role */
+            required_review_role: string;
+            /** Upgrade Available */
+            upgrade_available?: string | null;
+            /** Versions */
+            versions: components["schemas"]["ModuleVersionSummary"][];
+            /** Contract */
+            contract: {
+                [key: string]: unknown;
+            };
+        };
+        /** CatalogModuleOut */
+        CatalogModuleOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /** Builtin */
+            builtin: boolean;
+            /** Archived */
+            archived: boolean;
+            /** Version */
+            version: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "builtin" | "company";
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Company Policy */
+            company_policy?: ("required" | "optional" | "disabled") | null;
+            /** Applies To */
+            applies_to: string[];
+            /** Depends On */
+            depends_on: string[];
+            /** Conflicts With */
+            conflicts_with: string[];
+            /** Section Ids */
+            section_ids: string[];
+            /** Brief Layer */
+            brief_layer: boolean;
+            /** Full Layer */
+            full_layer: boolean;
+            /** Required Review Role */
+            required_review_role: string;
+            /** Upgrade Available */
+            upgrade_available?: string | null;
+            /** Versions */
+            versions: components["schemas"]["ModuleVersionSummary"][];
+        };
         /** ChangeEventOut */
         ChangeEventOut: {
             /**
@@ -4969,7 +8109,7 @@ export interface components {
              * Subject Kind
              * @enum {string}
              */
-            subject_kind: "document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version" | "member";
+            subject_kind: "document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version" | "member" | "product_track";
             /** Subject Id */
             subject_id?: string | null;
             /** Subject Ref */
@@ -5009,6 +8149,21 @@ export interface components {
              */
             summary: string;
         };
+        /** ChangesIn */
+        ChangesIn: {
+            /**
+             * Add
+             * @default []
+             */
+            add: string[];
+            /**
+             * Remove
+             * @default []
+             */
+            remove: string[];
+            /** Order */
+            order?: string[] | null;
+        };
         /** ChangesReport */
         ChangesReport: {
             /** Since */
@@ -5026,9 +8181,31 @@ export interface components {
              * Decision
              * @enum {string}
              */
-            decision: "approved" | "changes_requested";
+            decision: "approved" | "changes_requested" | "confirm" | "redo" | "continue";
             /** Note */
             note?: string | null;
+        };
+        /**
+         * CheckpointDelivery
+         * @description A decision recorded in Oracle that has not reached the run's workflow yet (owner,
+         *     2026-10-20: a recorded decision is final; Oracle sends it again on every tick until
+         *     SwarmCloud takes it). The decision is the checkpoint's ``status``, ``decided_by`` and
+         *     ``decided_at``. None once delivered: the checkpoint then shows its decided state.
+         */
+        CheckpointDelivery: {
+            /** Decided By Name */
+            decided_by_name?: string | null;
+            /** Since */
+            since?: string | null;
+            /**
+             * Tries
+             * @default 0
+             */
+            tries: number;
+            /** Last Error */
+            last_error?: string | null;
+            /** Last Tried At */
+            last_tried_at?: string | null;
         };
         /** CheckpointOut */
         CheckpointOut: {
@@ -5079,6 +8256,10 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /** Cannot Approve */
+            cannot_approve?: string | null;
+            console?: components["schemas"]["ConsoleAnswer"] | null;
+            delivery?: components["schemas"]["CheckpointDelivery"] | null;
         };
         /** Choice */
         Choice: {
@@ -5100,7 +8281,7 @@ export interface components {
              * Source
              * @enum {string}
              */
-            source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web";
+            source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web" | "oracle";
             /** Ref */
             ref: string;
             /** Title */
@@ -5109,6 +8290,17 @@ export interface components {
             excerpt?: string | null;
             /** Retrieved At */
             retrieved_at?: string | null;
+            /** Item Id */
+            item_id?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Confidence Note */
+            confidence_note?: string | null;
+            /**
+             * Low Confidence
+             * @default false
+             */
+            low_confidence: boolean;
         };
         /** ClaimIn */
         ClaimIn: {
@@ -5123,6 +8315,24 @@ export interface components {
             source_kind?: string | null;
             /** Observed At */
             observed_at?: string | null;
+        };
+        /** ClaimOut */
+        ClaimOut: {
+            /** Value */
+            value: unknown;
+            /** Source Kind */
+            source_kind?: string | null;
+            /** Source Class */
+            source_class?: string | null;
+            /** Observed At */
+            observed_at?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["EvidenceRef"][];
         };
         /**
          * ClaudeSweepSummary
@@ -5258,6 +8468,133 @@ export interface components {
             body?: string | null;
         };
         /**
+         * ComposedModule
+         * @description A module in a composition, with everything the inspector explains (§4.5).
+         */
+        ComposedModule: {
+            /** Key */
+            key: string;
+            /** Version */
+            version: string;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Included */
+            included: boolean;
+            /** Reason */
+            reason: string;
+            /** Order */
+            order: number;
+            /**
+             * Section Ids
+             * @default []
+             */
+            section_ids: string[];
+            /**
+             * Driven By
+             * @default []
+             */
+            driven_by: string[];
+            /** Score */
+            score?: number | null;
+            /** Overridden By */
+            overridden_by?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Origin
+             * @default builtin
+             */
+            origin: string;
+            /**
+             * Selection
+             * @default optional
+             * @enum {string}
+             */
+            selection: "mandatory" | "suggested" | "optional";
+            /**
+             * Decided By
+             * @default none
+             * @enum {string}
+             */
+            decided_by: "policy" | "template" | "condition" | "dependency" | "user" | "conflict" | "none";
+            /**
+             * Policy Source
+             * @default catalog
+             * @enum {string}
+             */
+            policy_source: "company" | "pack" | "template" | "catalog";
+            /**
+             * Explanation
+             * @default []
+             */
+            explanation: string[];
+            /**
+             * Basis
+             * @default []
+             */
+            basis: components["schemas"]["Basis"][];
+            /**
+             * Missing Information
+             * @default []
+             */
+            missing_information: string[];
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["QuestionRef"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Required By
+             * @default []
+             */
+            required_by: string[];
+            /**
+             * Conflicts With
+             * @default []
+             */
+            conflicts_with: string[];
+            /**
+             * @default {
+             *       "brief_sections": [],
+             *       "full_sections": [],
+             *       "new_sections": [],
+             *       "template_sections": [],
+             *       "absent_template_sections": []
+             *     }
+             */
+            layer_impact: components["schemas"]["LayerImpact"];
+            /**
+             * Field Problems
+             * @default []
+             */
+            field_problems: components["schemas"]["FieldProblem"][];
+            /** Condition Error */
+            condition_error?: string | null;
+            /** User Reason */
+            user_reason?: string | null;
+            /**
+             * Ordered By User
+             * @default false
+             */
+            ordered_by_user: boolean;
+            /**
+             * Required Review Role
+             * @default approver
+             */
+            required_review_role: string;
+        };
+        /**
          * CompositionInputs
          * @description What a composition was computed from (§4.3 step 1). Conditions read these roots.
          */
@@ -5377,6 +8714,67 @@ export interface components {
             /** Overridden By */
             overridden_by?: string | null;
         };
+        /** CompositionProblem */
+        CompositionProblem: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Module */
+            module?: string | null;
+            /**
+             * Fatal
+             * @default true
+             */
+            fatal: boolean;
+        };
+        /**
+         * CompositionRecommendIn
+         * @description Recommend for a document (id or slug), an intake, or neither (a template alone).
+         */
+        CompositionRecommendIn: {
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: number | null;
+            /** Packs */
+            packs?: string[] | null;
+            /** Intake Id */
+            intake_id?: string | null;
+            /**
+             * Inputs
+             * @default {}
+             */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /**
+             * Provenance
+             * @default {}
+             */
+            provenance: {
+                [key: string]: components["schemas"]["ProvenanceIn"];
+            };
+            /**
+             * Advisory
+             * @default {}
+             */
+            advisory: {
+                [key: string]: components["schemas"]["AdvisoryIn"];
+            };
+            /**
+             * Field Values
+             * @default {}
+             */
+            field_values: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            changes?: components["schemas"]["ChangesIn"] | null;
+            /** Document */
+            document?: string | null;
+        };
         /** CompositionRevisionOut */
         CompositionRevisionOut: {
             /**
@@ -5416,6 +8814,19 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** CompositionSummary */
+        CompositionSummary: {
+            /** Mandatory */
+            mandatory: number;
+            /** Suggested */
+            suggested: number;
+            /** Optional */
+            optional: number;
+            /** Included */
+            included: number;
+            /** Excluded */
+            excluded: number;
         };
         /** ConfidenceOut */
         ConfidenceOut: {
@@ -5489,6 +8900,13 @@ export interface components {
              */
             created_at: string;
         };
+        /** ConflictRecommendation */
+        ConflictRecommendation: {
+            /** Winner */
+            winner?: number | null;
+            /** Reason */
+            reason: string;
+        };
         /** ConflictResolve */
         ConflictResolve: {
             /** Claim */
@@ -5543,6 +8961,32 @@ export interface components {
             /** Current Body Md */
             current_body_md?: string | null;
         };
+        /** ConflictView */
+        ConflictView: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "source" | "baseline";
+            /** Topic */
+            topic: string;
+            /** Claims */
+            claims: components["schemas"]["ClaimOut"][];
+            recommendation: components["schemas"]["ConflictRecommendation"];
+            /** Material */
+            material: boolean;
+            /** Conflict Id */
+            conflict_id?: string | null;
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Sharing */
+            sharing?: ("private" | "counts" | "summary" | "full") | null;
+            /**
+             * Summary Only
+             * @default false
+             */
+            summary_only: boolean;
+        };
         /** ConnectionChoice */
         ConnectionChoice: {
             /**
@@ -5554,6 +8998,8 @@ export interface components {
             account_label: string | null;
             /** Status */
             status: string;
+            /** Reconnect Reason */
+            reconnect_reason?: string | null;
         };
         /** ConnectionOut */
         ConnectionOut: {
@@ -5596,6 +9042,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Reconnect Reason */
+            reconnect_reason?: string | null;
         };
         /** ConsentDecisionIn */
         ConsentDecisionIn: {
@@ -5644,6 +9092,147 @@ export interface components {
             effective_role: "viewer" | "commenter" | "approver" | "owner";
         };
         /**
+         * ConsoleAnswer
+         * @description What SwarmCloud's console recorded for a checkpoint still open in the Inbox (W5):
+         *     an answer that does not count (its answerer is not an Oracle member with the
+         *     checkpoint's role), a counted change request the workflow had no revision step for,
+         *     an answer Oracle could not read, or one it has not read yet (``unread``: SwarmCloud
+         *     errors, a 404 or a lagging record; read again on every tick).
+         */
+        ConsoleAnswer: {
+            /** Answered By */
+            answered_by?: string | null;
+            /** On Behalf Of */
+            on_behalf_of?: string | null;
+            /** Answered At */
+            answered_at?: string | null;
+            /** Via */
+            via?: string | null;
+            /** Verdict */
+            verdict?: ("MERGE" | "NOT_YET") | null;
+            /**
+             * Findings
+             * @default []
+             */
+            findings: string[];
+            /** Counted */
+            counted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Needs
+             * @enum {string}
+             */
+            needs: "confirm" | "redo_or_continue" | "unreadable" | "unread";
+            /**
+             * Revise
+             * @default false
+             */
+            revise: boolean;
+            /** Redo Segment */
+            redo_segment?: string | null;
+            /** Redo Cost Usd */
+            redo_cost_usd?: number | null;
+            /**
+             * Can Redo
+             * @default false
+             */
+            can_redo: boolean;
+        };
+        /** Coverage */
+        Coverage: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "covered" | "partial" | "missing";
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /** Reason */
+            reason: string;
+            /**
+             * Entity Ids
+             * @default []
+             */
+            entity_ids: string[];
+            /** Gap Id */
+            gap_id?: string | null;
+        };
+        /** CriterionInfo */
+        CriterionInfo: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Question */
+            question: string;
+            /** Hard */
+            hard: boolean;
+            /** Reads */
+            reads: string[];
+        };
+        /**
+         * DateMarkOut
+         * @description A date written in a roadmap's text, checked against its PRD's schedule bases now
+         *     (O4 'document dates', oracle.roadmap.doc_dates). ``label`` is the marker shown next
+         *     to the date (``unverified``, ``date withdrawn``); None for a verified date. The
+         *     text itself is never rewritten.
+         */
+        DateMarkOut: {
+            /** Section Key */
+            section_key: string;
+            /** Text */
+            text: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "verified" | "unverified" | "withdrawn";
+            /** Label */
+            label?: string | null;
+            /**
+             * Bases
+             * @default []
+             */
+            bases: string[];
+            /**
+             * Where
+             * @default body
+             * @enum {string}
+             */
+            where: "title" | "heading" | "body";
+        };
+        /** DecisionIn */
+        DecisionIn: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "accept_assumption" | "accept_risk" | "validate" | "reject";
+            /** Rationale */
+            rationale: string;
+            /** Review At */
+            review_at?: string | null;
+        };
+        /** DecisionResult */
+        DecisionResult: {
+            decision: components["schemas"]["AssumptionDecisionOut"];
+            gap: components["schemas"]["KnowledgeGapOut"];
+        };
+        /**
          * DeckOut
          * @description The brief layer as slides, for Present mode: one slide per brief section after a
          *     title slide, Sources and data points slides last when the version has sources.
@@ -5680,6 +9269,15 @@ export interface components {
             /** Slides */
             slides: components["schemas"]["SlideOut"][];
         };
+        /** DependenciesCreate */
+        DependenciesCreate: {
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /** Upstream */
+            upstream: components["schemas"]["TraceUpstreamRef"][];
+        };
         /** DiffOut */
         DiffOut: {
             /**
@@ -5693,6 +9291,18 @@ export interface components {
             to_version: number;
             /** Sections */
             sections: components["schemas"]["SectionDiff"][];
+        };
+        /** DismissIn */
+        DismissIn: {
+            /** Reason */
+            reason?: string | null;
+        };
+        /** DocumentBlockerStrategy */
+        DocumentBlockerStrategy: {
+            document: components["schemas"]["BlockerDocumentRef"];
+            readiness: components["schemas"]["BlockerGate"];
+            /** Blockers */
+            blockers: components["schemas"]["BlockerStrategy"][];
         };
         /** DocumentCompositionOut */
         DocumentCompositionOut: {
@@ -5774,6 +9384,22 @@ export interface components {
              */
             versions: components["schemas"]["VersionSummary"][];
         };
+        /** DocumentRef */
+        DocumentRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version?: number | null;
+            /** Approved */
+            approved?: boolean | null;
+        };
         /** DocumentSectionLinkOut */
         DocumentSectionLinkOut: {
             /**
@@ -5821,6 +9447,16 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** DocumentSectionsOut */
+        DocumentSectionsOut: {
+            /** Version */
+            version?: number | null;
+            /**
+             * Unmapped
+             * @default []
+             */
+            unmapped: string[];
         };
         /** DocumentSummary */
         DocumentSummary: {
@@ -5893,8 +9529,56 @@ export interface components {
             warnings: string[];
             /** Error */
             error?: string | null;
+            /**
+             * Problems
+             * @default []
+             */
+            problems: components["schemas"]["ImportProblem"][];
+            /** Summary */
+            summary?: string | null;
             source?: components["schemas"]["VersionSource"] | null;
             prd_links?: components["schemas"]["PrdLinks"] | null;
+        };
+        /** DriftEntry */
+        DriftEntry: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "ahead" | "date_slip" | "overdue" | "cancelled" | "unplanned";
+            /** Detail */
+            detail: string;
+            /** Item Key */
+            item_key?: string | null;
+            /** Tracker Ref */
+            tracker_ref?: string | null;
+        };
+        /** DriveFileOut */
+        DriveFileOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "doc" | "folder";
+            /** Modified Time */
+            modified_time: string | null;
+            /** Url */
+            url: string | null;
+            /** Owner */
+            owner: string | null;
+            /** In Shared Drive */
+            in_shared_drive: boolean;
+        };
+        /** DriveFilePage */
+        DriveFilePage: {
+            /** Files */
+            files: components["schemas"]["DriveFileOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /** EdgeCreate */
         EdgeCreate: {
@@ -6280,6 +9964,47 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** EntityRef */
+        EntityRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+        };
+        /** EntityTrace */
+        EntityTrace: {
+            entity: components["schemas"]["TraceEntityRef"];
+            /** Flags */
+            flags: string[];
+            /** Goals */
+            goals: components["schemas"]["TraceEntityRef"][];
+            /** Upstream */
+            upstream: components["schemas"]["TraceChainStep"][];
+            /** Downstream */
+            downstream: components["schemas"]["TraceChainStep"][];
+            related: components["schemas"]["TraceRelated"];
+            /** Evidence */
+            evidence: components["schemas"]["TraceEvidenceRef"][];
+            /** Sections */
+            sections: components["schemas"]["TraceSectionRef"][];
+            /** Outputs */
+            outputs: components["schemas"]["TraceOutput"][];
+            priority?: components["schemas"]["RankedFeature"] | null;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
         /**
          * EntityWriteOut
          * @description A write either applied (``entity``) or became a proposal (the item is locked).
@@ -6438,6 +10163,24 @@ export interface components {
             created_at: string;
         };
         /**
+         * EvidenceCitation
+         * @description A ``[c:id]`` marker the stored draft carries in this section (its per-claim link).
+         */
+        EvidenceCitation: {
+            /** Cite Key */
+            cite_key: string;
+            /** Source */
+            source: string;
+            /** Ref */
+            ref: string;
+            /** Title */
+            title?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Retrieved At */
+            retrieved_at?: string | null;
+        };
+        /**
          * EvidenceCreate
          * @description Evidence from one of your own source items (url, ref and an excerpt are copied
          *     from it unless given), or free-standing (url / ref / excerpt only).
@@ -6453,6 +10196,63 @@ export interface components {
             ref?: string | null;
             /** Retrieved At */
             retrieved_at?: string | null;
+        };
+        /** EvidenceHit */
+        EvidenceHit: {
+            /**
+             * Source Item Id
+             * Format: uuid
+             */
+            source_item_id: string;
+            /** Visible */
+            visible: boolean;
+            /** Source Kind */
+            source_kind: string;
+            /** Item Kind */
+            item_kind?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Fetched At */
+            fetched_at?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Data Excerpt */
+            data_excerpt?: string | null;
+            /**
+             * Untrusted
+             * @default true
+             * @constant
+             */
+            untrusted: true;
+            /** Snippet */
+            snippet?: string | null;
+            /** Relevance */
+            relevance: number;
+        };
+        /** EvidenceInspector */
+        EvidenceInspector: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Document Slug */
+            document_slug: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Number */
+            number: number;
+            /** Approved */
+            approved: boolean;
+            /** Snapshot */
+            snapshot?: string | null;
+            /** Sections */
+            sections: components["schemas"]["SectionEvidence"][];
         };
         /** EvidenceLinkCreate */
         EvidenceLinkCreate: {
@@ -6492,6 +10292,11 @@ export interface components {
              * @default false
              */
             source_item_private: boolean;
+            /**
+             * Source Removed
+             * @default false
+             */
+            source_removed: boolean;
             /** Confidence */
             confidence?: number | null;
             /**
@@ -6514,6 +10319,58 @@ export interface components {
             note?: string | null;
             link?: components["schemas"]["LinkSnapshotOut"] | null;
         };
+        /**
+         * EvidenceRef
+         * @description A source item behind a claim, as it was at the pinned snapshot.
+         *
+         *     Only its owner sees the title, link and excerpt (AUD-9). The excerpt is untrusted
+         *     data from an outside source: show it, never follow it.
+         */
+        EvidenceRef: {
+            /**
+             * Source Item Id
+             * Format: uuid
+             */
+            source_item_id: string;
+            /** Visible */
+            visible: boolean;
+            /** Source Kind */
+            source_kind: string;
+            /** Item Kind */
+            item_kind?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Fetched At */
+            fetched_at?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Data Excerpt */
+            data_excerpt?: string | null;
+            /**
+             * Untrusted
+             * @default true
+             * @constant
+             */
+            untrusted: true;
+        };
+        /** EvidenceSearch */
+        EvidenceSearch: {
+            /**
+             * Intake Id
+             * Format: uuid
+             */
+            intake_id: string;
+            /** Q */
+            q: string;
+            /** Pinned Version */
+            pinned_version: number;
+            /** As Of */
+            as_of: string | null;
+            /** Hits */
+            hits: components["schemas"]["EvidenceHit"][];
+        };
         /** EvidenceUsed */
         EvidenceUsed: {
             /** Id */
@@ -6522,6 +10379,11 @@ export interface components {
             confidence: number | null;
             /** Ref */
             ref: string | null;
+            /**
+             * Source Removed
+             * @default false
+             */
+            source_removed: boolean;
         };
         /** ExchangeIn */
         ExchangeIn: {
@@ -6565,6 +10427,35 @@ export interface components {
             /** Order */
             order?: string[];
         };
+        /** ExtractedItem */
+        ExtractedItem: {
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "users" | "problem" | "outcomes" | "scope" | "non_goals" | "dependencies" | "blockers";
+            /** Text */
+            text: string;
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "brief" | "source" | "baseline" | "llm";
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["EvidenceRef"][];
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Sharing */
+            sharing?: ("private" | "counts" | "summary" | "full") | null;
+        };
         /** FactorOut */
         FactorOut: {
             /** Value */
@@ -6591,6 +10482,26 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** FeasibilityExperimentCreate */
+        FeasibilityExperimentCreate: {
+            /** Hypothesis */
+            hypothesis: string;
+            /** Option Id */
+            option_id?: string | null;
+            /** Method */
+            method?: string | null;
+            /** Success Threshold */
+            success_threshold?: string | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Decision Gate At */
+            decision_gate_at?: string | null;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
         };
         /** FeasibilityExperimentOut */
         FeasibilityExperimentOut: {
@@ -6637,6 +10548,66 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** FeasibilityExperimentPatch */
+        FeasibilityExperimentPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Hypothesis */
+            hypothesis?: string | null;
+            /** Method */
+            method?: string | null;
+            /** Success Threshold */
+            success_threshold?: string | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Decision Gate At */
+            decision_gate_at?: string | null;
+            /** Status */
+            status?: ("planned" | "running" | "succeeded" | "failed" | "inconclusive" | "cancelled") | null;
+            /** Result */
+            result?: string | null;
+            /** Evidence Ids */
+            evidence_ids?: string[] | null;
+        };
+        /** FeasibilityScopeIn */
+        FeasibilityScopeIn: {
+            /**
+             * Experiment Id
+             * Format: uuid
+             */
+            experiment_id: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * FeatureTrace
+         * @description A feature the intake touches: from the baseline (``key``) or the brief.
+         */
+        FeatureTrace: {
+            /** Title */
+            title: string;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Key */
+            key?: string | null;
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["GoalLink"][];
+            /**
+             * Flags
+             * @default []
+             */
+            flags: string[];
+            /** Rationale */
+            rationale: string;
         };
         /** FeedbackItemOut */
         FeedbackItemOut: {
@@ -6690,6 +10661,14 @@ export interface components {
              */
             updated_at: string;
             suggestion?: components["schemas"]["SuggestionOut"] | null;
+            /**
+             * State
+             * @default open
+             * @enum {string}
+             */
+            state: "open" | "staged" | "declined" | "done";
+            /** Staged For Version */
+            staged_for_version?: number | null;
         };
         /**
          * FeedbackPackage
@@ -6729,6 +10708,142 @@ export interface components {
             addressed_in_version?: number | null;
             /** Severity */
             severity?: ("critical" | "major" | "minor") | null;
+        };
+        /** FieldProblem */
+        FieldProblem: {
+            /** Field */
+            field: string;
+            /** Kind */
+            kind: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * FindingCount
+         * @description Findings shared as counts and categories only (S6).
+         */
+        FindingCount: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "item" | "gap" | "conflict" | "stale";
+            /** Category */
+            category?: string | null;
+            /** Count */
+            count: number;
+            /** Label */
+            label: string;
+        };
+        /**
+         * FindingOut
+         * @description A finding drawn from the author's own sources and what others see of it (S6).
+         *
+         *     The author sees every finding. Anyone else sees those shared at "counts" or above:
+         *     the kind and category; from "summary" its line and the gap; at "full" the source
+         *     items it cites. ``summary``: the line the summary level shows, the one its author
+         *     confirmed or wrote, else Oracle's fixed category line. ``draft_summary``: Oracle's
+         *     draft, for the author only. At "full", others see the items it released when it was
+         *     shared; ``unshared_item_ids`` (the author only): what it cites now that sharing did
+         *     not release (a later analysis added them; "N new sources since you shared", share
+         *     it in full again to release them).
+         */
+        FindingOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "item" | "gap" | "conflict" | "stale";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "model" | "rules";
+            /** Category */
+            category?: string | null;
+            /**
+             * Sharing
+             * @enum {string}
+             */
+            sharing: "private" | "counts" | "summary" | "full";
+            /** Summary */
+            summary?: string | null;
+            /** Summary Confirmed */
+            summary_confirmed?: boolean | null;
+            /** Draft Summary */
+            draft_summary?: string | null;
+            /** Gap Id */
+            gap_id?: string | null;
+            /**
+             * Source Item Ids
+             * @default []
+             */
+            source_item_ids: string[];
+            /**
+             * Unshared Item Ids
+             * @default []
+             */
+            unshared_item_ids: string[];
+        };
+        /**
+         * FindingSummaryIn
+         * @description The line others see at the summary level: omit ``text`` to confirm Oracle's draft
+         *     as it stands.
+         */
+        FindingSummaryIn: {
+            /** Text */
+            text?: string | null;
+        };
+        /** FirefliesMeetingOut */
+        FirefliesMeetingOut: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Date */
+            date: string | null;
+            /** Duration */
+            duration: number | null;
+            /** Organizer */
+            organizer: string | null;
+            /** Attendee Count */
+            attendee_count: number;
+            /** Series Key */
+            series_key: string | null;
+            /** Series Title */
+            series_title: string;
+        };
+        /** FirefliesMeetingPage */
+        FirefliesMeetingPage: {
+            /** Meetings */
+            meetings: components["schemas"]["FirefliesMeetingOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** FirefliesSeriesList */
+        FirefliesSeriesList: {
+            /** Series */
+            series: components["schemas"]["FirefliesSeriesOut"][];
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** FirefliesSeriesOut */
+        FirefliesSeriesOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Meeting Count */
+            meeting_count: number;
+            /** Last Date */
+            last_date: string | null;
+            /** Organizer */
+            organizer: string | null;
         };
         /** FlowCatalog */
         FlowCatalog: {
@@ -6841,6 +10956,120 @@ export interface components {
             /** Dismissed By */
             dismissed_by?: string | null;
         };
+        /** GapCreate */
+        GapCreate: {
+            /**
+             * Intake Id
+             * Format: uuid
+             */
+            intake_id: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling";
+            /** Statement */
+            statement: string;
+            /**
+             * Importance
+             * @enum {string}
+             */
+            importance: "critical" | "high" | "medium" | "low";
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+        };
+        /** GapPatch */
+        GapPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Importance */
+            importance?: ("critical" | "high" | "medium" | "low") | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Status */
+            status?: ("unknown" | "deferred") | null;
+            /** Section Keys */
+            section_keys?: string[] | null;
+            /** Stop Condition */
+            stop_condition?: string | null;
+        };
+        /**
+         * GateView
+         * @description The review gate as everyone sees it. ``private_blocking_gap_ids``: for the author
+         *     only, their private critical blockers, which gate nothing until shared at counts or
+         *     above (S6).
+         */
+        GateView: {
+            /** Open Critical */
+            open_critical: number;
+            /** Blocking Gap Ids */
+            blocking_gap_ids: string[];
+            /**
+             * Gate
+             * @enum {string}
+             */
+            gate: "clear" | "blocked";
+            /**
+             * Private Blocking Gap Ids
+             * @default []
+             */
+            private_blocking_gap_ids: string[];
+        };
+        /** GithubRepoOut */
+        GithubRepoOut: {
+            /** Full Name */
+            full_name: string;
+            /** Owner */
+            owner: string;
+            /** Name */
+            name: string;
+            /** Is Private */
+            is_private: boolean;
+            /** Is Archived */
+            is_archived: boolean;
+            /** Description */
+            description: string | null;
+            /** Pushed At */
+            pushed_at: string | null;
+        };
+        /** GithubRepoPage */
+        GithubRepoPage: {
+            /** Repos */
+            repos: components["schemas"]["GithubRepoOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Sso Hint */
+            sso_hint?: string | null;
+        };
+        /** GoalLink */
+        GoalLink: {
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Matched On
+             * @enum {string}
+             */
+            matched_on: "brief" | "feature";
+        };
         /** GoalTerm */
         GoalTerm: {
             /** Goal */
@@ -6928,6 +11157,98 @@ export interface components {
             holders: components["schemas"]["HolderOut"][];
         };
         /**
+         * HumanRatingIn
+         * @description A person's rating of the ten criteria (all or some), for comparison with the rules.
+         */
+        HumanRatingIn: {
+            /** Ratings */
+            ratings: components["schemas"]["HumanRatingItem"][];
+            /** Note */
+            note?: string | null;
+        };
+        /** HumanRatingItem */
+        HumanRatingItem: {
+            /** Criterion */
+            criterion: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warning" | "critical" | "not_applicable";
+            /** Rationale */
+            rationale: string;
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+        };
+        /** HumanView */
+        HumanView: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warning" | "critical" | "not_applicable";
+            /** Rationale */
+            rationale: string;
+            /** Rater Id */
+            rater_id?: string | null;
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ImpactReport */
+        ImpactReport: {
+            subject: components["schemas"]["ImpactSubject"];
+            change?: components["schemas"]["ChangeEventOut"] | null;
+            /**
+             * Changes
+             * @default []
+             */
+            changes: components["schemas"]["ChangeEventOut"][];
+            /** Preview */
+            preview: boolean;
+            /** Affected */
+            affected: components["schemas"]["TraceOutput"][];
+            /**
+             * Affected Entities
+             * @default []
+             */
+            affected_entities: components["schemas"]["TraceEntityRef"][];
+            /** Plan */
+            plan: components["schemas"]["RegenerationProposal"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /** ImpactSubject */
+        ImpactSubject: {
+            /** Kind */
+            kind: string;
+            /** Id */
+            id?: string | null;
+            /** Ref */
+            ref?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+        };
+        /**
          * ImportErrorResponse
          * @description 422 body when a draft cannot be imported. Lists every problem, not just the first.
          */
@@ -7008,6 +11329,10 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /** Cannot Approve */
+            cannot_approve?: string | null;
+            console?: components["schemas"]["ConsoleAnswer"] | null;
+            delivery?: components["schemas"]["CheckpointDelivery"] | null;
             /**
              * Flow
              * @enum {string}
@@ -7019,6 +11344,34 @@ export interface components {
             document_slug?: string | null;
             /** Segment Title */
             segment_title?: string | null;
+        };
+        /** InboxCounts */
+        InboxCounts: {
+            /**
+             * New
+             * @default 0
+             */
+            new: number;
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+            /**
+             * Staged
+             * @default 0
+             */
+            staged: number;
+            /**
+             * Declined
+             * @default 0
+             */
+            declined: number;
+            /**
+             * Done
+             * @default 0
+             */
+            done: number;
         };
         /** InboxDocument */
         InboxDocument: {
@@ -7035,8 +11388,42 @@ export interface components {
             latest_version?: number | null;
             /** Open Count */
             open_count: number;
+            counts?: components["schemas"]["InboxFeedbackCounts"];
+            /** First Section Key */
+            first_section_key?: string | null;
             /** Items */
             items: components["schemas"]["InboxFeedbackItem"][];
+        };
+        /**
+         * InboxFeedbackCounts
+         * @description What a document's open items wait for; the five add up to ``open_count``.
+         */
+        InboxFeedbackCounts: {
+            /**
+             * Suggestions
+             * @default 0
+             */
+            suggestions: number;
+            /**
+             * Accepted
+             * @default 0
+             */
+            accepted: number;
+            /**
+             * Comments
+             * @default 0
+             */
+            comments: number;
+            /**
+             * Verdicts
+             * @default 0
+             */
+            verdicts: number;
+            /**
+             * Other
+             * @default 0
+             */
+            other: number;
         };
         /** InboxFeedbackItem */
         InboxFeedbackItem: {
@@ -7047,6 +11434,11 @@ export interface components {
             id: string;
             /** Summary */
             summary: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "comment" | "section_review" | "general";
             /** Section Key */
             section_key?: string | null;
             /** Raised On Version */
@@ -7056,15 +11448,66 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Document Id */
+            document_id?: string | null;
+            /** Slug */
+            slug?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Latest Version */
+            latest_version?: number | null;
+            /**
+             * State
+             * @default open
+             * @enum {string}
+             */
+            state: "new" | "open" | "staged" | "declined" | "done";
+            /** Updated At */
+            updated_at?: string | null;
+            /** Resolution Note */
+            resolution_note?: string | null;
+            /** Addressed In Version */
+            addressed_in_version?: number | null;
+            /** Staged For Version */
+            staged_for_version?: number | null;
+            /** Suggestion Status */
+            suggestion_status?: ("open" | "accepted" | "dismissed" | "applied" | "superseded") | null;
+            /** Suggestion Kind */
+            suggestion_kind?: string | null;
         };
         /** InboxOut */
         InboxOut: {
             /** Checkpoints */
             checkpoints: components["schemas"]["InboxCheckpoint"][];
+            /**
+             * Deliveries
+             * @default []
+             */
+            deliveries: components["schemas"]["InboxCheckpoint"][];
             /** Approvals */
             approvals: components["schemas"]["RunSummary"][];
             /** Overruns */
             overruns: components["schemas"]["RunSummary"][];
+            /**
+             * Lookups
+             * @default []
+             */
+            lookups: components["schemas"]["RunSummary"][];
+            /**
+             * Searches
+             * @default []
+             */
+            searches: components["schemas"]["RunSummary"][];
+            /**
+             * Revising
+             * @default []
+             */
+            revising: components["schemas"]["RunSummary"][];
+            /**
+             * Imports
+             * @default []
+             */
+            imports: components["schemas"]["RunSummary"][];
             /** Feedback */
             feedback: components["schemas"]["InboxDocument"][];
             /**
@@ -7074,6 +11517,33 @@ export interface components {
             revoke_failures: components["schemas"]["InboxRevokeFailure"][];
             /** Total */
             total: number;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["InboxFeedbackItem"][];
+            /**
+             * @default {
+             *       "new": 0,
+             *       "open": 0,
+             *       "staged": 0,
+             *       "declined": 0,
+             *       "done": 0
+             *     }
+             */
+            counts: components["schemas"]["InboxCounts"];
+            /**
+             * Staged
+             * @default []
+             */
+            staged: components["schemas"]["InboxStaged"][];
+            /**
+             * Needs Me
+             * @default 0
+             */
+            needs_me: number;
+            /** Last Seen At */
+            last_seen_at?: string | null;
         };
         /**
          * InboxRevokeFailure
@@ -7122,6 +11592,211 @@ export interface components {
              * Format: date-time
              */
             retry_until: string;
+        };
+        /**
+         * InboxStaged
+         * @description 'N changes staged for draft N+1' on one document, with the build action.
+         */
+        InboxStaged: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Latest Version */
+            latest_version?: number | null;
+            /** Next Version */
+            next_version: number;
+            /** Count */
+            count: number;
+            /**
+             * Gone Count
+             * @default 0
+             */
+            gone_count: number;
+            /** Draft Job Id */
+            draft_job_id?: string | null;
+            /** Draft Job Status */
+            draft_job_status?: string | null;
+        };
+        /** InspectedModule */
+        InspectedModule: {
+            /** Key */
+            key: string;
+            /** Version */
+            version: string;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Included */
+            included: boolean;
+            /** Reason */
+            reason: string;
+            /** Order */
+            order: number;
+            /**
+             * Section Ids
+             * @default []
+             */
+            section_ids: string[];
+            /**
+             * Driven By
+             * @default []
+             */
+            driven_by: string[];
+            /** Score */
+            score?: number | null;
+            /** Overridden By */
+            overridden_by?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Origin
+             * @default builtin
+             */
+            origin: string;
+            /**
+             * Selection
+             * @default optional
+             * @enum {string}
+             */
+            selection: "mandatory" | "suggested" | "optional";
+            /**
+             * Decided By
+             * @default none
+             * @enum {string}
+             */
+            decided_by: "policy" | "template" | "condition" | "dependency" | "user" | "conflict" | "none";
+            /**
+             * Policy Source
+             * @default catalog
+             * @enum {string}
+             */
+            policy_source: "company" | "pack" | "template" | "catalog";
+            /**
+             * Explanation
+             * @default []
+             */
+            explanation: string[];
+            /**
+             * Basis
+             * @default []
+             */
+            basis: components["schemas"]["Basis"][];
+            /**
+             * Missing Information
+             * @default []
+             */
+            missing_information: string[];
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["QuestionRef"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Required By
+             * @default []
+             */
+            required_by: string[];
+            /**
+             * Conflicts With
+             * @default []
+             */
+            conflicts_with: string[];
+            /**
+             * @default {
+             *       "brief_sections": [],
+             *       "full_sections": [],
+             *       "new_sections": [],
+             *       "template_sections": [],
+             *       "absent_template_sections": []
+             *     }
+             */
+            layer_impact: components["schemas"]["LayerImpact"];
+            /**
+             * Field Problems
+             * @default []
+             */
+            field_problems: components["schemas"]["FieldProblem"][];
+            /** Condition Error */
+            condition_error?: string | null;
+            /** User Reason */
+            user_reason?: string | null;
+            /**
+             * Ordered By User
+             * @default false
+             */
+            ordered_by_user: boolean;
+            /**
+             * Required Review Role
+             * @default approver
+             */
+            required_review_role: string;
+            /**
+             * Sections Present
+             * @default []
+             */
+            sections_present: string[];
+            /**
+             * Sections Missing
+             * @default []
+             */
+            sections_missing: string[];
+            /**
+             * Versions
+             * @default []
+             */
+            versions: components["schemas"]["ModuleVersionSummary"][];
+            /** Latest Version */
+            latest_version?: string | null;
+            /** Upgrade Available */
+            upgrade_available?: string | null;
+        };
+        /**
+         * InspectorOut
+         * @description Everything the composition inspector shows for one document (§4.5).
+         */
+        InspectorOut: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Legacy */
+            legacy: boolean;
+            /** Composition Id */
+            composition_id?: string | null;
+            /** Lock Version */
+            lock_version?: number | null;
+            /** Head Revision */
+            head_revision?: number | null;
+            current?: components["schemas"]["RevisionDetail"] | null;
+            working?: components["schemas"]["RevisionDetail"] | null;
+            recommendation?: components["schemas"]["RecommendationOut"] | null;
+            /** Revisions */
+            revisions: components["schemas"]["RevisionSummary"][];
+            sections: components["schemas"]["DocumentSectionsOut"];
+            /**
+             * Problems
+             * @default []
+             */
+            problems: components["schemas"]["CompositionProblem"][];
         };
         /**
          * IntakeAnalysis
@@ -7182,6 +11857,200 @@ export interface components {
             conflicts: {
                 [key: string]: unknown;
             }[];
+        };
+        /** IntakeCreate */
+        IntakeCreate: {
+            /** Title */
+            title: string;
+            /** Brief */
+            brief: string;
+            /** Snapshot Id */
+            snapshot_id?: string | null;
+            /**
+             * Source Ids
+             * @default []
+             */
+            source_ids: string[];
+            /** Document */
+            document?: string | null;
+            /**
+             * Ai Extraction
+             * @default true
+             */
+            ai_extraction: boolean;
+            /**
+             * Batch Size
+             * @default 5
+             */
+            batch_size: number;
+        };
+        /** IntakeOut */
+        IntakeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Brief */
+            brief: string;
+            /** Author Id */
+            author_id?: string | null;
+            /** Source Snapshot Ids */
+            source_snapshot_ids: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "analyzing" | "awaiting_answers" | "ready" | "converted" | "archived";
+            analysis: components["schemas"]["IntakeAnalysis"];
+            /** Document Id */
+            document_id?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Source Ids
+             * @default []
+             */
+            source_ids: string[];
+        };
+        /** IntakePatch */
+        IntakePatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Title */
+            title?: string | null;
+            /** Document */
+            document?: string | null;
+            /** Status */
+            status?: ("archived" | "awaiting_answers") | null;
+        };
+        /** IntakeProposalOut */
+        IntakeProposalOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Intake Id
+             * Format: uuid
+             */
+            intake_id: string;
+            /** Gap Id */
+            gap_id?: string | null;
+            /** Question Id */
+            question_id?: string | null;
+            /** Answer Id */
+            answer_id?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "research_run" | "prd_patch";
+            /** Title */
+            title: string;
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "accepted" | "dismissed";
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
+            /** Created By */
+            created_by?: string | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decision Note */
+            decision_note?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** IntakeRunIn */
+        IntakeRunIn: {
+            /** Document */
+            document?: string | null;
+            /**
+             * @default {
+             *       "depth": "standard",
+             *       "roles": {},
+             *       "checkpoints": {}
+             *     }
+             */
+            knobs: components["schemas"]["KnobsIn"];
+        };
+        /**
+         * IntakeSummary
+         * @description The Opportunity and Gaps summary, as the reader may see it (S6).
+         */
+        IntakeSummary: {
+            intake: components["schemas"]["IntakeOut"];
+            pinned: components["schemas"]["Pinned"];
+            new_evidence: components["schemas"]["NewEvidence"];
+            /** Extracted */
+            extracted: components["schemas"]["ExtractedItem"][];
+            /** Coverage */
+            coverage: components["schemas"]["Coverage"][];
+            /** Goals */
+            goals: components["schemas"]["GoalLink"][];
+            /** Missing Goals */
+            missing_goals: boolean;
+            /** Features */
+            features: components["schemas"]["FeatureTrace"][];
+            /** Conflicts */
+            conflicts: components["schemas"]["ConflictView"][];
+            /** Stale */
+            stale: components["schemas"]["StaleEvidence"][];
+            /** Assumptions */
+            assumptions: components["schemas"]["RankedGap"][];
+            /** Top Uncertainties */
+            top_uncertainties: components["schemas"]["RankedGap"][];
+            /** Gaps */
+            gaps: components["schemas"]["RankedGap"][];
+            /** Next Actions */
+            next_actions: components["schemas"]["NextAction"][];
+            template: components["schemas"]["TemplateHint"];
+            readiness: components["schemas"]["GateView"];
+            batch: components["schemas"]["BatchState"];
+            /** Proposals */
+            proposals: components["schemas"]["IntakeProposalOut"][];
+            /**
+             * Shared Counts
+             * @default []
+             */
+            shared_counts: components["schemas"]["FindingCount"][];
+            /**
+             * Is Author
+             * @default false
+             */
+            is_author: boolean;
         };
         /** InviteCreate */
         InviteCreate: {
@@ -7314,6 +12183,38 @@ export interface components {
             fetched_at: string | null;
             confidence: components["schemas"]["ConfidenceOut"];
         };
+        /** ItemProblem */
+        ItemProblem: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Item */
+            item?: string | null;
+        };
+        /** ItemStalenessAction */
+        ItemStalenessAction: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "review" | "reconcile";
+            /** Version */
+            version?: number | null;
+            /** Item Keys */
+            item_keys?: string[];
+            /** Reason */
+            reason?: string | null;
+        };
+        /** ItemStalenessOut */
+        ItemStalenessOut: {
+            /** Changed */
+            changed: {
+                [key: string]: unknown;
+            }[];
+            /** Items */
+            items: components["schemas"]["RoadmapItemOut"][];
+        };
         /**
          * ItemsCheck
          * @description The check of roadmap_items.yaml (oracle.runs.roadmap).
@@ -7327,6 +12228,32 @@ export interface components {
             };
             /** Problems */
             problems: components["schemas"]["ItemsProblem"][];
+        };
+        /**
+         * ItemsImport
+         * @description ``roadmap_items.yaml`` for a roadmap version (the format the run writes).
+         */
+        ItemsImport: {
+            /** Yaml */
+            yaml: string;
+        };
+        /** ItemsImportOut */
+        ItemsImportOut: {
+            roadmap: components["schemas"]["DocumentRef"];
+            source: components["schemas"]["DocumentRef"] | null;
+            /** Track Id */
+            track_id: string | null;
+            /**
+             * View
+             * @enum {string}
+             */
+            view: "brief" | "full";
+            /** Items */
+            items: components["schemas"]["RoadmapItemOut"][];
+            /** Problems */
+            problems: components["schemas"]["ItemProblem"][];
+            /** Refused Dates */
+            refused_dates: string[];
         };
         /** ItemsProblem */
         ItemsProblem: {
@@ -7372,6 +12299,11 @@ export interface components {
              * @default true
              */
             refinement: boolean;
+            /**
+             * Quality Review
+             * @default true
+             */
+            quality_review: boolean;
         };
         /** KnobsIn */
         KnobsIn: {
@@ -7454,7 +12386,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "unknown" | "under_investigation" | "asked" | "answered" | "validated" | "deferred" | "accepted_risk";
+            status: "unknown" | "under_investigation" | "asked" | "answered" | "answered_pending_review" | "validated" | "deferred" | "accepted_risk";
             /** Owner Id */
             owner_id?: string | null;
             /** Related Modules */
@@ -7479,6 +12411,165 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * LayerImpact
+         * @description Where the module shows up in the document (O1f brief and full layers).
+         */
+        LayerImpact: {
+            /**
+             * Brief Sections
+             * @default []
+             */
+            brief_sections: string[];
+            /**
+             * Full Sections
+             * @default []
+             */
+            full_sections: string[];
+            /**
+             * New Sections
+             * @default []
+             */
+            new_sections: string[];
+            /**
+             * Template Sections
+             * @default []
+             */
+            template_sections: string[];
+            /**
+             * Absent Template Sections
+             * @default []
+             */
+            absent_template_sections: string[];
+        };
+        /** LearningCreate */
+        LearningCreate: {
+            /** Outcome Id */
+            outcome_id?: string | null;
+            /** Statement */
+            statement: string;
+            /**
+             * Applies To
+             * @enum {string}
+             */
+            applies_to: "module" | "question_category" | "criterion";
+            /** Target */
+            target: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "recommend_more" | "recommend_less" | "note";
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
+        };
+        /**
+         * LearningDraft
+         * @description A learning Oracle suggests from an assessment; a person decides to keep it.
+         */
+        LearningDraft: {
+            /** Outcome Id */
+            outcome_id?: string | null;
+            /** Statement */
+            statement: string;
+            /**
+             * Applies To
+             * @enum {string}
+             */
+            applies_to: "module" | "question_category" | "criterion";
+            /** Target */
+            target: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "recommend_more" | "recommend_less" | "note";
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
+        };
+        /** LearningOut */
+        LearningOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Outcome Id */
+            outcome_id?: string | null;
+            /** Statement */
+            statement: string;
+            /**
+             * Applies To
+             * @enum {string}
+             */
+            applies_to: "module" | "question_category" | "criterion";
+            /** Target */
+            target: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "recommend_more" | "recommend_less" | "note";
+            /** Weight */
+            weight: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "retired";
+            /** Retired Reason */
+            retired_reason?: string | null;
+            /** Created By */
+            created_by?: string | null;
+            /** Retired By */
+            retired_by?: string | null;
+            /** Retired At */
+            retired_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** LearningRetire */
+        LearningRetire: {
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * LearningSignal
+         * @description The net recommendation signal for one module, question category or criterion.
+         *
+         *     ``score``: sum of weights, + for recommend_more, - for recommend_less, 0 for notes.
+         *     Advisory input for future module and question recommendations; it never changes a
+         *     published document.
+         */
+        LearningSignal: {
+            /**
+             * Applies To
+             * @enum {string}
+             */
+            applies_to: "module" | "question_category" | "criterion";
+            /** Target */
+            target: string;
+            /** Score */
+            score: number;
+            /** Learning Ids */
+            learning_ids: string[];
+            /** Statements */
+            statements: string[];
         };
         /**
          * LinkErrorOut
@@ -7580,12 +12671,11 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement";
-            /**
-             * Document Id
-             * Format: uuid
-             */
-            document_id: string;
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis";
+            /** Document Id */
+            document_id?: string | null;
+            /** Intake Id */
+            intake_id?: string | null;
             /** Version Number */
             version_number?: number | null;
             /** Section Key */
@@ -7668,6 +12758,78 @@ export interface components {
             /** Approved */
             approved: boolean;
         };
+        /** ManifestIn */
+        ManifestIn: {
+            /** Modules */
+            modules: components["schemas"]["ManifestModuleIn"][];
+        };
+        /** ManifestModuleIn */
+        ManifestModuleIn: {
+            /** Module Key */
+            module_key: string;
+            /**
+             * Section Ids
+             * @default []
+             */
+            section_ids: string[];
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Module Version */
+            module_version?: string | null;
+            /** Display Order */
+            display_order?: number | null;
+        };
+        /** ManifestModuleOut */
+        ManifestModuleOut: {
+            /** Module Key */
+            module_key: string;
+            /** Module Version */
+            module_version?: string | null;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Display Order */
+            display_order: number;
+            /** Section Ids */
+            section_ids: string[];
+            /**
+             * Sections Present
+             * @default []
+             */
+            sections_present: string[];
+            /**
+             * Sections Absent
+             * @default []
+             */
+            sections_absent: string[];
+            /** Created By */
+            created_by?: string | null;
+        };
+        /** ManifestOut */
+        ManifestOut: {
+            /** Template */
+            template: string;
+            /**
+             * Template Id
+             * Format: uuid
+             */
+            template_id: string;
+            /** Template Version */
+            template_version: number;
+            /** Edited */
+            edited: boolean;
+            /** Manifest Format */
+            manifest_format: number;
+            /** Modules */
+            modules: components["schemas"]["ManifestModuleOut"][];
+            /** Unmapped Sections */
+            unmapped_sections: string[];
+        };
         /**
          * McpClientOut
          * @description An MCP client you authorized: one OAuth grant (its access and refresh tokens).
@@ -7701,6 +12863,21 @@ export interface components {
             expires_at: string;
             /** Revoked At */
             revoked_at?: string | null;
+        };
+        /**
+         * McpServerRegistration
+         * @description Oracle's MCP server in the runtime (``oracle``, at ORACLE_PUBLIC_URL + /mcp).
+         */
+        McpServerRegistration: {
+            /** Name */
+            name: string;
+            /** Url */
+            url: string;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "created" | "updated" | "unchanged";
         };
         /** Me */
         Me: {
@@ -7772,6 +12949,141 @@ export interface components {
              */
             role: "viewer" | "commenter" | "approver" | "owner";
         };
+        /** MilestoneCreate */
+        MilestoneCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Horizon
+             * @default now
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Target Date */
+            target_date?: string | null;
+            /** Basis Ids */
+            basis_ids?: string[];
+            /** Item Keys */
+            item_keys?: string[];
+        };
+        /** MilestoneOut */
+        MilestoneOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Track Id
+             * Format: uuid
+             */
+            track_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Target Date */
+            target_date: string | null;
+            /** Basis Ids */
+            basis_ids: string[];
+            /** Item Keys */
+            item_keys: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "planned" | "done" | "dropped";
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** MilestonePatch */
+        MilestonePatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Name */
+            name?: string | null;
+            /** Horizon */
+            horizon?: ("now" | "next" | "later") | null;
+            /** Target Date */
+            target_date?: string | null;
+            /** Basis Ids */
+            basis_ids?: string[] | null;
+            /** Item Keys */
+            item_keys?: string[] | null;
+            /** Status */
+            status?: ("planned" | "done" | "dropped") | null;
+        };
+        /** ModelReviewInfo */
+        ModelReviewInfo: {
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /** Job Id */
+            job_id?: string | null;
+            /** Model */
+            model?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Label
+             * @default model_output
+             * @constant
+             */
+            label: "model_output";
+            /** Disclaimer */
+            disclaimer: string;
+        };
+        /**
+         * ModelView
+         * @description The built-in quality review job's view of one criterion. Model output, not fact.
+         */
+        ModelView: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warning" | "critical" | "not_applicable";
+            /** Rationale */
+            rationale: string;
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+        };
+        /**
+         * ModuleContractIn
+         * @description A module contract (oracle.v2.contract.ModuleContract) as JSON.
+         */
+        ModuleContractIn: {
+            /** Contract */
+            contract: {
+                [key: string]: unknown;
+            };
+        };
         /** ModuleDefinitionOut */
         ModuleDefinitionOut: {
             /**
@@ -7796,6 +13108,76 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ModuleHint */
+        ModuleHint: {
+            /** Key */
+            key: string;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional";
+            /** Reason */
+            reason: string;
+            /**
+             * Gap Ids
+             * @default []
+             */
+            gap_ids: string[];
+        };
+        /** ModulePolicyOut */
+        ModulePolicyOut: {
+            /**
+             * Required
+             * @default []
+             */
+            required: string[];
+            /**
+             * Optional
+             * @default []
+             */
+            optional: string[];
+            /**
+             * Disabled
+             * @default []
+             */
+            disabled: string[];
+            /**
+             * Default Packs
+             * @default []
+             */
+            default_packs: string[];
+            /** Is Default */
+            is_default: boolean;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
+         * ModulePolicySettings
+         * @description The ``module_policy`` company setting (owner writes).
+         */
+        ModulePolicySettings: {
+            /**
+             * Required
+             * @default []
+             */
+            required: string[];
+            /**
+             * Optional
+             * @default []
+             */
+            optional: string[];
+            /**
+             * Disabled
+             * @default []
+             */
+            disabled: string[];
+            /**
+             * Default Packs
+             * @default []
+             */
+            default_packs: string[];
         };
         /** ModuleVersionOut */
         ModuleVersionOut: {
@@ -7829,6 +13211,33 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ModuleVersionSummary */
+        ModuleVersionSummary: {
+            /** Version */
+            version: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "builtin" | "company";
+            /** Contract Hash */
+            contract_hash: string;
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** MonitorOut */
+        MonitorOut: {
+            overview: components["schemas"]["TrackOverview"];
+            /** Change Event Id */
+            change_event_id: string | null;
+            /** Changed */
+            changed: string[];
         };
         /**
          * MyAccountOut
@@ -7867,6 +13276,60 @@ export interface components {
              */
             signed_in_via: "browser" | "api_token" | "mcp_client";
         };
+        /**
+         * NewEvidence
+         * @description New evidence since the pinned version, shown before anything is redrafted.
+         */
+        NewEvidence: {
+            /** Since Version */
+            since_version: number;
+            /** As Of */
+            as_of?: string | null;
+            /** Count */
+            count: number | null;
+            /** Visible */
+            visible: boolean;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["NewEvidenceItem"][];
+        };
+        /** NewEvidenceItem */
+        NewEvidenceItem: {
+            /**
+             * Source Item Id
+             * Format: uuid
+             */
+            source_item_id: string;
+            /** Visible */
+            visible: boolean;
+            /** Source Kind */
+            source_kind: string;
+            /** Item Kind */
+            item_kind?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Fetched At */
+            fetched_at?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Data Excerpt */
+            data_excerpt?: string | null;
+            /**
+             * Untrusted
+             * @default true
+             * @constant
+             */
+            untrusted: true;
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "new" | "changed" | "deleted";
+        };
         /** NewSource */
         NewSource: {
             /** Title */
@@ -7882,6 +13345,195 @@ export interface components {
              * Format: date-time
              */
             added_at: string;
+        };
+        /** NextAction */
+        NextAction: {
+            /**
+             * Gap Id
+             * Format: uuid
+             */
+            gap_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "answer" | "research" | "delegate" | "accept_assumption" | "accept_risk" | "validate";
+            /** Label */
+            label: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "commenter" | "approver" | "owner";
+        };
+        /** NextDraftApply */
+        NextDraftApply: {
+            /**
+             * Drop Sections
+             * @default []
+             */
+            drop_sections: string[];
+            /**
+             * Edits
+             * @default {}
+             */
+            edits: {
+                [key: string]: string;
+            };
+        };
+        /** NextDraftDataPoint */
+        NextDraftDataPoint: {
+            /** Value */
+            value: string;
+            /**
+             * As Of
+             * @default
+             */
+            as_of: string;
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+        };
+        /** NextDraftFeedback */
+        NextDraftFeedback: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Summary */
+            summary: string;
+        };
+        /** NextDraftIn */
+        NextDraftIn: {
+            /** Suggestion Ids */
+            suggestion_ids?: string[] | null;
+        };
+        /**
+         * NextDraftPreview
+         * @description The combined preview of a next-draft build: one entry per revised section.
+         *
+         *     Sections are empty until the job has succeeded (``job.status`` says where it is).
+         */
+        NextDraftPreview: {
+            job: components["schemas"]["LlmJobOut"];
+            /** Base Version */
+            base_version?: number | null;
+            /** Next Version */
+            next_version?: number | null;
+            /** Latest Version */
+            latest_version?: number | null;
+            /**
+             * Stale
+             * @default false
+             */
+            stale: boolean;
+            /** Applied Version */
+            applied_version?: number | null;
+            /**
+             * Discarded
+             * @default false
+             */
+            discarded: boolean;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Sections
+             * @default []
+             */
+            sections: components["schemas"]["NextDraftSection"][];
+            /**
+             * Skipped
+             * @default []
+             */
+            skipped: components["schemas"]["SkippedSection"][];
+        };
+        /** NextDraftResolution */
+        NextDraftResolution: {
+            /**
+             * Feedback Id
+             * Format: uuid
+             */
+            feedback_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "addressed" | "declined";
+            /** Note */
+            note?: string | null;
+        };
+        /** NextDraftSection */
+        NextDraftSection: {
+            /** Section Key */
+            section_key: string;
+            /** Heading */
+            heading: string;
+            /** Before Heading */
+            before_heading: string;
+            /** Before Body Md */
+            before_body_md: string;
+            /** Body Md */
+            body_md: string;
+            /** Words */
+            words: components["schemas"]["WordOp"][];
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * O1C Fixes
+             * @default []
+             */
+            o1c_fixes: string[];
+            /**
+             * Data Points
+             * @default []
+             */
+            data_points: components["schemas"]["NextDraftDataPoint"][];
+            /**
+             * Resolutions
+             * @default []
+             */
+            resolutions: components["schemas"]["NextDraftResolution"][];
+            /**
+             * Suggestion Ids
+             * @default []
+             */
+            suggestion_ids: string[];
+            /**
+             * Feedback
+             * @default []
+             */
+            feedback: components["schemas"]["NextDraftFeedback"][];
+        };
+        /** NextMilestone */
+        NextMilestone: {
+            /** Name */
+            name: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Target Date */
+            target_date: string | null;
+            /** Dated */
+            dated: boolean;
+            /** Bases */
+            bases: {
+                [key: string]: unknown;
+            }[];
+            /** Items */
+            items: number;
+            /** Milestone Id */
+            milestone_id?: string | null;
         };
         /** NotificationOut */
         NotificationOut: {
@@ -7929,12 +13581,184 @@ export interface components {
             /** Marked */
             marked: number;
         };
+        /** NotionPageOut */
+        NotionPageOut: {
+            /** Id */
+            id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "page" | "database";
+            /** Title */
+            title: string;
+            /** Icon */
+            icon: string | null;
+            /**
+             * Parent Type
+             * @enum {string}
+             */
+            parent_type: "workspace" | "page" | "database" | "block";
+            /** Parent Id */
+            parent_id: string | null;
+            /** Last Edited At */
+            last_edited_at: string | null;
+            /** Url */
+            url: string;
+        };
+        /** NotionPagesOut */
+        NotionPagesOut: {
+            /** Items */
+            items: components["schemas"]["NotionPageOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /** OAuthErrorOut */
         OAuthErrorOut: {
             /** Error */
             error: string;
             /** Error Description */
             error_description?: string | null;
+        };
+        /** OutcomeCreate */
+        OutcomeCreate: {
+            /** Title */
+            title: string;
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /** Outcome Entity Id */
+            outcome_entity_id?: string | null;
+            /** Prd Version Id */
+            prd_version_id?: string | null;
+            /** Roadmap Version Id */
+            roadmap_version_id?: string | null;
+            /** Roadmap Item Key */
+            roadmap_item_key?: string | null;
+            /** Experiment Id */
+            experiment_id?: string | null;
+            prediction: components["schemas"]["Prediction"];
+            /**
+             * Module Keys
+             * @default []
+             */
+            module_keys: string[];
+            /**
+             * Gap Categories
+             * @default []
+             */
+            gap_categories: ("customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling")[];
+            /** Owner Id */
+            owner_id?: string | null;
+        };
+        /** OutcomeOut */
+        OutcomeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /** Outcome Entity Id */
+            outcome_entity_id?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /** Prd Version Id */
+            prd_version_id?: string | null;
+            /** Roadmap Version Id */
+            roadmap_version_id?: string | null;
+            /** Roadmap Item Key */
+            roadmap_item_key?: string | null;
+            /** Experiment Id */
+            experiment_id?: string | null;
+            prediction: components["schemas"]["Prediction"];
+            /** Module Keys */
+            module_keys: string[];
+            /** Gap Categories */
+            gap_categories: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "tracking" | "held" | "partially_held" | "not_held" | "inconclusive";
+            /** Observed */
+            observed?: string | null;
+            /** Assessments */
+            assessments: components["schemas"]["Assessment"][];
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Created By */
+            created_by?: string | null;
+            /** Assessed At */
+            assessed_at?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** OutlineEntry */
+        OutlineEntry: {
+            /** Section Id */
+            section_id: string;
+            /** Heading */
+            heading: string;
+            /** Level */
+            level: number;
+            /**
+             * Layer
+             * @enum {string}
+             */
+            layer: "brief" | "full";
+            /** Module */
+            module?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "template" | "module";
+        };
+        /** PackModuleOut */
+        PackModuleOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+        };
+        /** PackOut */
+        PackOut: {
+            /** Id */
+            id: string;
+            /** Version */
+            version: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Categories */
+            categories: string[];
+            /** Modules */
+            modules: components["schemas"]["PackModuleOut"][];
         };
         /** PasswordChange */
         PasswordChange: {
@@ -7965,6 +13789,61 @@ export interface components {
             secret: string;
         };
         /**
+         * PickerConfigOut
+         * @description What the browser needs to open Google's Drive picker. All of it is public.
+         */
+        PickerConfigOut: {
+            /** Client Id */
+            client_id: string;
+            /** App Id */
+            app_id: string;
+            /** Developer Key */
+            developer_key: string;
+        };
+        /**
+         * Pinned
+         * @description The snapshot the intake reads ("version" counts its pins from 1).
+         */
+        Pinned: {
+            /** Version */
+            version: number;
+            /** Snapshot Id */
+            snapshot_id?: string | null;
+            /** As Of */
+            as_of?: string | null;
+            /**
+             * Versions
+             * @default []
+             */
+            versions: components["schemas"]["PinnedVersion"][];
+        };
+        /** PinnedVersion */
+        PinnedVersion: {
+            /** Version */
+            version: number;
+            /**
+             * Snapshot Id
+             * Format: uuid
+             */
+            snapshot_id: string;
+            /** As Of */
+            as_of?: string | null;
+        };
+        /** PrdAnchor */
+        PrdAnchor: {
+            document: components["schemas"]["DocumentRef"] | null;
+            /** Section Key */
+            section_key: string | null;
+            /** Section Hash */
+            section_hash: string | null;
+            /** Link */
+            link: string | null;
+            /** Reconciled Version */
+            reconciled_version?: number | null;
+            /** Reconciled Section Hash */
+            reconciled_section_hash?: string | null;
+        };
+        /**
          * PrdAnswers
          * @description At most four questions (docs/research/prd-formats.md, template picker).
          */
@@ -7993,6 +13872,22 @@ export interface components {
              * @default []
              */
             unresolved: string[];
+        };
+        /**
+         * Prediction
+         * @description What the PRD predicted for the goal, in its own words and numbers.
+         */
+        Prediction: {
+            /** Metric */
+            metric: string;
+            /** Baseline */
+            baseline?: string | null;
+            /** Predicted */
+            predicted: string;
+            /** Threshold */
+            threshold?: string | null;
+            /** By */
+            by?: string | null;
         };
         /**
          * Preferences
@@ -8111,6 +14006,16 @@ export interface components {
             line?: number | null;
             /** Section Key */
             section_key?: string | null;
+        };
+        /**
+         * ProblemsOut
+         * @description A refused request: every problem found, each with a stable code.
+         */
+        ProblemsOut: {
+            /** Detail */
+            detail: string;
+            /** Problems */
+            problems: components["schemas"]["CompositionProblem"][];
         };
         /**
          * ProblemsResponse
@@ -8241,6 +14146,21 @@ export interface components {
             /** Resource Name */
             resource_name: string;
         };
+        /** ProvenanceIn */
+        ProvenanceIn: {
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Source */
+            source?: string | null;
+        };
         /** ProviderOut */
         ProviderOut: {
             /** Key */
@@ -8342,6 +14262,37 @@ export interface components {
             has_brief: boolean;
         };
         /**
+         * PublishBlock
+         * @description One reason a publish is refused.
+         */
+        PublishBlock: {
+            /** Key */
+            key: string;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Rationale */
+            rationale: string;
+        };
+        /**
+         * PublishBlockedOut
+         * @description 409 from approve: the PRD version may not be published (T2 publish gate, C5), or
+         *     the roadmap version writes dates that rest on no verified basis (O4 'document dates',
+         *     owner 2026-10-20: ``dates`` lists them).
+         */
+        PublishBlockedOut: {
+            /** Detail */
+            detail: string;
+            /** Blocking */
+            blocking: components["schemas"]["PublishBlock"][];
+            /**
+             * Dates
+             * @default []
+             */
+            dates: components["schemas"]["DateMarkOut"][];
+        };
+        /**
          * PublishCheckOut
          * @description Whether a version can be published, and everything that blocks it.
          */
@@ -8391,10 +14342,8 @@ export interface components {
         };
         /** PublishIn */
         PublishIn: {
-            /** Content Hash */
-            content_hash?: string | null;
-            /** Note */
-            note?: string | null;
+            /** Version */
+            version: number;
         };
         /** PublishProblem */
         PublishProblem: {
@@ -8452,6 +14401,47 @@ export interface components {
             /** Confidence */
             confidence?: number | null;
         };
+        /** QuestionBatch */
+        QuestionBatch: {
+            /**
+             * Intake Id
+             * Format: uuid
+             */
+            intake_id: string;
+            /** Batch */
+            batch: number | null;
+            /** Questions */
+            questions: components["schemas"]["QuestionCard"][];
+            /** Remaining */
+            remaining: number;
+        };
+        /** QuestionCard */
+        QuestionCard: {
+            question: components["schemas"]["StakeholderQuestionOut"];
+            gap: components["schemas"]["KnowledgeGapOut"] | null;
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceRef"][];
+            /** Answer Paths */
+            answer_paths: ("answer" | "dont_know" | "defer" | "delegate" | "research")[];
+            /** Answers */
+            answers: components["schemas"]["StakeholderAnswerOut"][];
+        };
+        /** QuestionRef */
+        QuestionRef: {
+            /** Key */
+            key: string;
+            /** Prompt */
+            prompt: string;
+            /** Category */
+            category: string;
+            /** Importance */
+            importance: string;
+            /**
+             * Fills
+             * @default []
+             */
+            fills: string[];
+        };
         /** RankedFeature */
         RankedFeature: {
             /** Rank */
@@ -8478,6 +14468,85 @@ export interface components {
             dependents: string[];
             explanation: components["schemas"]["Explanation"];
         };
+        /** RankedGap */
+        RankedGap: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling";
+            /** Statement */
+            statement: string;
+            /** Impact */
+            impact: ("goals" | "feasibility" | "scope" | "economics" | "risks" | "module_selection")[];
+            /**
+             * Importance
+             * @enum {string}
+             */
+            importance: "critical" | "high" | "medium" | "low";
+            /** Evidence Ids */
+            evidence_ids: string[];
+            /** Confidence */
+            confidence?: string | null;
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "unknown" | "under_investigation" | "asked" | "answered" | "answered_pending_review" | "validated" | "deferred" | "accepted_risk";
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Related Modules */
+            related_modules: string[];
+            /** Stop Condition */
+            stop_condition?: string | null;
+            /** Entity Ids */
+            entity_ids: string[];
+            /** Section Keys */
+            section_keys: string[];
+            /** Created By */
+            created_by?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Rank */
+            rank: number;
+            /** Score */
+            score: number;
+            /** Rank Reason */
+            rank_reason: string;
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["EvidenceRef"][];
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Sharing */
+            sharing?: ("private" | "counts" | "summary" | "full") | null;
+        };
         /** RankingCounts */
         RankingCounts: {
             /** Features */
@@ -8488,6 +14557,99 @@ export interface components {
             unscored: number;
             /** In Cycles */
             in_cycles: number;
+        };
+        /**
+         * ReadinessDashboard
+         * @description The soft readiness dashboard of one document version, criterion by criterion.
+         */
+        ReadinessDashboard: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Version */
+            version: number;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            /**
+             * Policy
+             * @default advisory
+             * @constant
+             */
+            policy: "advisory";
+            /** Policy Note */
+            policy_note: string;
+            /**
+             * Purpose
+             * @default advisory
+             * @enum {string}
+             */
+            purpose: "advisory" | "publish";
+            /**
+             * Evaluated At
+             * Format: date-time
+             */
+            evaluated_at: string;
+            /** Blocked */
+            blocked: boolean;
+            /** Blocking */
+            blocking: string[];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Items */
+            items: components["schemas"]["ReadinessItem"][];
+            model_review?: components["schemas"]["ModelReviewInfo"] | null;
+            latest_report?: components["schemas"]["ReportRef"] | null;
+        };
+        /** ReadinessItem */
+        ReadinessItem: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Question */
+            question: string;
+            /** Hard */
+            hard: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warning" | "critical" | "not_applicable";
+            /** Rationale */
+            rationale: string;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+            /** Error */
+            error?: string | null;
+            model?: components["schemas"]["ModelView"] | null;
+            /**
+             * Human
+             * @default []
+             */
+            human: components["schemas"]["HumanView"][];
+            /** @default {} */
+            agreement: components["schemas"]["Agreement"];
         };
         /** ReadinessResultOut */
         ReadinessResultOut: {
@@ -8556,6 +14718,29 @@ export interface components {
             /** Themes */
             themes: components["schemas"]["ThemeOption"][];
         };
+        /** RecommendationOut */
+        RecommendationOut: {
+            /** Document Id */
+            document_id?: string | null;
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: string | null;
+            /** Packs */
+            packs: string[];
+            /** Valid */
+            valid: boolean;
+            summary: components["schemas"]["CompositionSummary"];
+            /** Modules */
+            modules: components["schemas"]["ComposedModule"][];
+            /** Problems */
+            problems: components["schemas"]["CompositionProblem"][];
+            /** Outline */
+            outline: components["schemas"]["OutlineEntry"][];
+            inputs: components["schemas"]["CompositionInputs"];
+        };
         /** ReconnectIn */
         ReconnectIn: {
             /** Token */
@@ -8623,6 +14808,58 @@ export interface components {
             /** Readable */
             readable: boolean;
         };
+        /**
+         * RegenerationProposal
+         * @description A targeted regeneration proposal (§11.5). Nothing runs until a person accepts it,
+         *     and an approved output is never overwritten: regenerating makes a new version.
+         */
+        RegenerationProposal: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "artifact_version" | "document_version";
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "engineering_spec" | "wireframe" | "prototype" | "acceptance_tests" | "roadmap" | "document";
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "regenerate" | "review";
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+            /**
+             * Entity Ids
+             * @default []
+             */
+            entity_ids: string[];
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+            /** Approved */
+            approved: boolean;
+            /**
+             * Keeps Approved Version
+             * @default true
+             */
+            keeps_approved_version: boolean;
+            /** How */
+            how: string;
+        };
         /** RegisterIn */
         RegisterIn: {
             /** Label */
@@ -8671,6 +14908,19 @@ export interface components {
              * @default
              */
             explanation: string;
+        };
+        /** ReportRef */
+        ReportRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** RescoreResult */
         RescoreResult: {
@@ -8839,6 +15089,132 @@ export interface components {
              */
             overdue: boolean;
         };
+        /** RevisionDetail */
+        RevisionDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "working" | "confirmed" | "published" | "superseded";
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Parent Number */
+            parent_number?: number | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            diff: components["schemas"]["RevisionDiff"];
+            /** Lock Version */
+            lock_version: number;
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: string | null;
+            /**
+             * Packs
+             * @default []
+             */
+            packs: string[];
+            inputs: components["schemas"]["CompositionInputs"];
+            /** Modules */
+            modules: components["schemas"]["InspectedModule"][];
+            summary: components["schemas"]["CompositionSummary"];
+        };
+        /** RevisionDiff */
+        RevisionDiff: {
+            /**
+             * Added
+             * @default []
+             */
+            added: string[];
+            /**
+             * Removed
+             * @default []
+             */
+            removed: string[];
+            /**
+             * Version Changed
+             * @default []
+             */
+            version_changed: components["schemas"]["VersionChange"][];
+            /**
+             * Reordered
+             * @default false
+             */
+            reordered: boolean;
+            /**
+             * Material
+             * @default false
+             */
+            material: boolean;
+            /**
+             * Affected Sections
+             * @default []
+             */
+            affected_sections: string[];
+        };
+        /** RevisionIn */
+        RevisionIn: {
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: number | null;
+            /** Packs */
+            packs?: string[] | null;
+            /** Intake Id */
+            intake_id?: string | null;
+            /**
+             * Inputs
+             * @default {}
+             */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /**
+             * Provenance
+             * @default {}
+             */
+            provenance: {
+                [key: string]: components["schemas"]["ProvenanceIn"];
+            };
+            /**
+             * Advisory
+             * @default {}
+             */
+            advisory: {
+                [key: string]: components["schemas"]["AdvisoryIn"];
+            };
+            /**
+             * Field Values
+             * @default {}
+             */
+            field_values: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            changes?: components["schemas"]["ChangesIn"] | null;
+            /** Base Revision */
+            base_revision?: number | null;
+            /** Reason */
+            reason: string;
+            /**
+             * Status
+             * @default confirmed
+             * @enum {string}
+             */
+            status: "confirmed" | "working";
+        };
         /** RevisionOut */
         RevisionOut: {
             /**
@@ -8868,6 +15244,32 @@ export interface components {
              */
             created_at: string;
         };
+        /** RevisionSummary */
+        RevisionSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "working" | "confirmed" | "published" | "superseded";
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Parent Number */
+            parent_number?: number | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            diff: components["schemas"]["RevisionDiff"];
+        };
         /**
          * RoadmapAnswers
          * @description docs/research/roadmap-formats.md, questions the template picker should ask.
@@ -8891,6 +15293,107 @@ export interface components {
             show_capacity?: boolean | null;
             /** Public Version */
             public_version?: boolean | null;
+        };
+        /** RoadmapItemOut */
+        RoadmapItemOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Item Key */
+            item_key: string;
+            /** Position */
+            position: number;
+            /** Title */
+            title: string;
+            /** Outcome */
+            outcome: string | null;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Milestone */
+            milestone: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Freshness
+             * @enum {string}
+             */
+            freshness: "fresh" | "potentially_stale" | "under_review" | "reconciled";
+            /** Stale Reasons */
+            stale_reasons: string[];
+            /** Stale Since */
+            stale_since: string | null;
+            /** Caused By Change Id */
+            caused_by_change_id: string | null;
+            prd: components["schemas"]["PrdAnchor"];
+            /** Track Id */
+            track_id: string | null;
+            feature?: components["schemas"]["EntityRef"] | null;
+            /**
+             * Requirements
+             * @default []
+             */
+            requirements: components["schemas"]["EntityRef"][];
+            /**
+             * Blockers
+             * @default []
+             */
+            blockers: components["schemas"]["BlockerDependency"][];
+            /**
+             * Trace
+             * @default []
+             */
+            trace: components["schemas"]["TraceLink"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Validation Gates
+             * @default []
+             */
+            validation_gates: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Economics
+             * @default {}
+             */
+            economics: {
+                [key: string]: unknown;
+            };
+            /** Priority */
+            priority?: {
+                [key: string]: unknown;
+            } | null;
+            /** Confidence */
+            confidence?: string | null;
+            /**
+             * Engineering
+             * @default []
+             */
+            engineering: components["schemas"]["TrackerRecordRef"][];
+            /** Note */
+            note?: string | null;
+        };
+        /** RoadmapItemsOut */
+        RoadmapItemsOut: {
+            roadmap: components["schemas"]["DocumentRef"];
+            source: components["schemas"]["DocumentRef"] | null;
+            /** Track Id */
+            track_id: string | null;
+            /**
+             * View
+             * @enum {string}
+             */
+            view: "brief" | "full";
+            /** Items */
+            items: components["schemas"]["RoadmapItemOut"][];
         };
         /** RunCreate */
         RunCreate: {
@@ -8967,6 +15470,49 @@ export interface components {
             waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
             /** Error */
             error?: string | null;
+            /** Stuck */
+            stuck?: string | null;
+            /**
+             * Can Retry
+             * @default false
+             */
+            can_retry: boolean;
+            /**
+             * Can Stop Cancelling
+             * @default false
+             */
+            can_stop_cancelling: boolean;
+            /**
+             * Can Retry Lookup
+             * @default false
+             */
+            can_retry_lookup: boolean;
+            /**
+             * Cancel Again
+             * @default []
+             */
+            cancel_again: string[];
+            /**
+             * Can Dismiss Overrun
+             * @default false
+             */
+            can_dismiss_overrun: boolean;
+            /** Searching */
+            searching?: string | null;
+            /** Import Failed */
+            import_failed?: string | null;
+            /**
+             * Can Retry Import
+             * @default false
+             */
+            can_retry_import: boolean;
+            /** Draft Rejected */
+            draft_rejected?: string | null;
+            /** Delivering */
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
+            /** Sent Back */
+            sent_back?: string | null;
+            progress?: components["schemas"]["RunProgress"] | null;
             knobs: components["schemas"]["KnobsOut"];
             /** Snapshot Id */
             snapshot_id?: string | null;
@@ -8988,6 +15534,11 @@ export interface components {
             segments: components["schemas"]["SegmentOut"][];
             /** Checkpoints */
             checkpoints: components["schemas"]["CheckpointOut"][];
+            /**
+             * Token Read Only
+             * @default false
+             */
+            token_read_only: boolean;
         };
         /** RunPatch */
         RunPatch: {
@@ -9002,6 +15553,18 @@ export interface components {
             /** Theme */
             theme?: string | null;
             knobs?: components["schemas"]["KnobsIn"] | null;
+        };
+        /**
+         * RunProgress
+         * @description Segments done of the run's total, and what it does now: Home's In flight row.
+         */
+        RunProgress: {
+            /** Done */
+            done: number;
+            /** Total */
+            total: number;
+            /** Now */
+            now?: string | null;
         };
         /** RunSummary */
         RunSummary: {
@@ -9052,6 +15615,74 @@ export interface components {
             waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
             /** Error */
             error?: string | null;
+            /** Stuck */
+            stuck?: string | null;
+            /**
+             * Can Retry
+             * @default false
+             */
+            can_retry: boolean;
+            /**
+             * Can Stop Cancelling
+             * @default false
+             */
+            can_stop_cancelling: boolean;
+            /**
+             * Can Retry Lookup
+             * @default false
+             */
+            can_retry_lookup: boolean;
+            /**
+             * Cancel Again
+             * @default []
+             */
+            cancel_again: string[];
+            /**
+             * Can Dismiss Overrun
+             * @default false
+             */
+            can_dismiss_overrun: boolean;
+            /** Searching */
+            searching?: string | null;
+            /** Import Failed */
+            import_failed?: string | null;
+            /**
+             * Can Retry Import
+             * @default false
+             */
+            can_retry_import: boolean;
+            /** Draft Rejected */
+            draft_rejected?: string | null;
+            /** Delivering */
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
+            /** Sent Back */
+            sent_back?: string | null;
+            progress?: components["schemas"]["RunProgress"] | null;
+        };
+        /**
+         * RuntimeFeatures
+         * @description Adapter v2's switches in the runtime: caller MCP (#1433), waits for a person
+         *     (#1436), and Oracle's principal answering them.
+         */
+        RuntimeFeatures: {
+            /**
+             * Mcp
+             * @default unknown
+             * @enum {string}
+             */
+            mcp: "on" | "off" | "unknown";
+            /**
+             * Await Input
+             * @default unknown
+             * @enum {string}
+             */
+            await_input: "on" | "off" | "unknown";
+            /**
+             * Service Answer
+             * @default unknown
+             * @enum {string}
+             */
+            service_answer: "on" | "off" | "unknown";
         };
         /**
          * RuntimeStatusOut
@@ -9069,12 +15700,116 @@ export interface components {
             /** Can Reach Oracle */
             can_reach_oracle: boolean;
             /**
+             * @default {
+             *       "mcp": "unknown",
+             *       "await_input": "unknown",
+             *       "service_answer": "unknown"
+             *     }
+             */
+            features: components["schemas"]["RuntimeFeatures"];
+            /**
+             * Feature Reasons
+             * @default {}
+             */
+            feature_reasons: {
+                [key: string]: string;
+            };
+            /**
              * Notes
              * @default []
              */
             notes: string[];
             /** Error */
             error?: string | null;
+        };
+        /**
+         * ScheduleBasisCreate
+         * @description A verified estimate, capacity figure or commitment. Recording it is the
+         *     verification: the approver says this source supports this date, for this PRD's
+         *     roadmap items (O4).
+         */
+        ScheduleBasisCreate: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "estimate" | "capacity" | "commitment";
+            /** Reference */
+            reference: string;
+            /**
+             * Supports Date
+             * Format: date
+             */
+            supports_date: string;
+            /** Detail */
+            detail?: string | null;
+            /** Prd */
+            prd: string;
+            /** Item Key */
+            item_key?: string | null;
+            /** Tracker Key */
+            tracker_key?: string | null;
+            /** Tracker Record Id */
+            tracker_record_id?: string | null;
+        };
+        /** ScheduleBasisOut */
+        ScheduleBasisOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "estimate" | "capacity" | "commitment";
+            /** Reference */
+            reference: string;
+            /**
+             * Supports Date
+             * Format: date
+             */
+            supports_date: string;
+            /** Detail */
+            detail: string | null;
+            /**
+             * Prd Document Id
+             * Format: uuid
+             */
+            prd_document_id: string;
+            /** Item Key */
+            item_key: string | null;
+            /** Tracker Key */
+            tracker_key: string | null;
+            /** Tracker Record Id */
+            tracker_record_id: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "verified" | "withdrawn";
+            /** Verified By */
+            verified_by: string | null;
+            /**
+             * Verified At
+             * Format: date-time
+             */
+            verified_at: string;
+            /** Withdrawn By */
+            withdrawn_by: string | null;
+            /** Withdrawn At */
+            withdrawn_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ScheduleBasisWithdraw */
+        ScheduleBasisWithdraw: {
+            /** Reason */
+            reason: string;
         };
         /** ScopeOut */
         ScopeOut: {
@@ -9217,6 +15952,23 @@ export interface components {
              */
             resolutions: components["schemas"]["Resolution"][];
         };
+        /** SectionEvidence */
+        SectionEvidence: {
+            /** Section Key */
+            section_key: string;
+            /** Heading */
+            heading: string;
+            /** Level */
+            level: number;
+            /** Layer */
+            layer: string;
+            /** Section Hash */
+            section_hash: string;
+            /** Links */
+            links: components["schemas"]["SectionLinkView"][];
+            /** Citations */
+            citations: components["schemas"]["EvidenceCitation"][];
+        };
         /** SectionInvalidation */
         SectionInvalidation: {
             /**
@@ -9228,6 +15980,112 @@ export interface components {
             change_id?: string | null;
             /** Revision */
             revision?: string | null;
+        };
+        /** SectionLinkCreate */
+        SectionLinkCreate: {
+            /** Section Key */
+            section_key: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "implements" | "evidences" | "claims" | "tests" | "mentions";
+            /**
+             * Precision
+             * @default section
+             * @enum {string}
+             */
+            precision: "section" | "paragraph" | "claim";
+            /** Claim */
+            claim?: string | null;
+            /** Module Key */
+            module_key?: string | null;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Evidence Id */
+            evidence_id?: string | null;
+            /** Source Item Id */
+            source_item_id?: string | null;
+        };
+        /** SectionLinkTarget */
+        SectionLinkTarget: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "entity" | "evidence" | "source_item";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title?: string | null;
+            /** Entity Type */
+            entity_type?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Locked */
+            locked?: boolean | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Url */
+            url?: string | null;
+            /** Ref */
+            ref?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Source Kind */
+            source_kind?: string | null;
+            /**
+             * Restricted
+             * @default false
+             */
+            restricted: boolean;
+            /**
+             * Source Removed
+             * @default false
+             */
+            source_removed: boolean;
+        };
+        /** SectionLinkView */
+        SectionLinkView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "implements" | "evidences" | "claims" | "tests" | "mentions";
+            /**
+             * Precision
+             * @enum {string}
+             */
+            precision: "section" | "paragraph" | "claim";
+            /** Claim */
+            claim?: string | null;
+            /** Module Key */
+            module_key?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            /** Current */
+            current: boolean;
+            target: components["schemas"]["SectionLinkTarget"];
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** SectionLinksCreate */
+        SectionLinksCreate: {
+            /** Links */
+            links: components["schemas"]["SectionLinkCreate"][];
         };
         /** SectionOut */
         SectionOut: {
@@ -9246,7 +16104,10 @@ export interface components {
             heading: string;
             /** Body Md */
             body_md: string;
-            /** Body Text */
+            /**
+             * Body Text
+             * @description Plain text of the body, citation markers removed. A table is one line per row (header first, no separator row), cells joined by ' | '; a literal '|' in a cell is '\|'.
+             */
             body_text: string;
             /** Content Hash */
             content_hash: string;
@@ -9581,6 +16442,27 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** SectionTrace */
+        SectionTrace: {
+            /** Section Key */
+            section_key: string;
+            /** Heading */
+            heading: string;
+            /** Level */
+            level: number;
+            /** Layer */
+            layer: string;
+            /** Section Hash */
+            section_hash: string;
+            /** Links */
+            links: components["schemas"]["SectionLinkView"][];
+            /** Entities */
+            entities: components["schemas"]["TraceEntityRef"][];
+            /** Goals */
+            goals: components["schemas"]["TraceEntityRef"][];
+            /** Downstream */
+            downstream: components["schemas"]["TraceOutput"][];
+        };
         /**
          * SectionVerdict
          * @description Latest verdict for a section in this version.
@@ -9620,6 +16502,10 @@ export interface components {
             cost_usd: number;
             /** Note */
             note?: string | null;
+            /** Note By */
+            note_by?: string | null;
+            /** Not Applied */
+            not_applied?: string | null;
             /** State */
             state?: string | null;
         };
@@ -9676,6 +16562,16 @@ export interface components {
             /** Attempts */
             attempts: components["schemas"]["SegmentAttempt"][];
             draft_import?: components["schemas"]["DraftImport"] | null;
+            /**
+             * Sent Back
+             * @default false
+             */
+            sent_back: boolean;
+            /**
+             * Can Retry Draft Import
+             * @default false
+             */
+            can_retry_draft_import: boolean;
             items_check?: components["schemas"]["ItemsCheck"] | null;
             /** Started At */
             started_at?: string | null;
@@ -9702,6 +16598,44 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
         };
+        /** SharedDriveList */
+        SharedDriveList: {
+            /** Drives */
+            drives: components["schemas"]["SharedDriveOut"][];
+        };
+        /** SharedDriveOut */
+        SharedDriveOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** SharingBulkIn */
+        SharingBulkIn: {
+            /** Changes */
+            changes: components["schemas"]["SharingChange"][];
+        };
+        /** SharingChange */
+        SharingChange: {
+            /**
+             * Finding Id
+             * Format: uuid
+             */
+            finding_id: string;
+            /**
+             * Sharing
+             * @enum {string}
+             */
+            sharing: "private" | "counts" | "summary" | "full";
+        };
+        /** SharingIn */
+        SharingIn: {
+            /**
+             * Sharing
+             * @enum {string}
+             */
+            sharing: "private" | "counts" | "summary" | "full";
+        };
         /**
          * SignedOutEverywhere
          * @description Every session signed before ``sessions_valid_after`` is refused, this one too;
@@ -9726,6 +16660,40 @@ export interface components {
              * @default 0
              */
             runs_tokens_revoked: number;
+        };
+        /** SkippedSection */
+        SkippedSection: {
+            /** Section Key */
+            section_key?: string | null;
+            /**
+             * Suggestion Ids
+             * @default []
+             */
+            suggestion_ids: string[];
+            /** Reason */
+            reason: string;
+        };
+        /** SlackChannelOut */
+        SlackChannelOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Is Private */
+            is_private: boolean;
+            /** Is Archived */
+            is_archived: boolean;
+            /** Num Members */
+            num_members: number | null;
+            /** Topic */
+            topic: string | null;
+        };
+        /** SlackChannelPage */
+        SlackChannelPage: {
+            /** Channels */
+            channels: components["schemas"]["SlackChannelOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /** SlideOut */
         SlideOut: {
@@ -9857,7 +16825,12 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "active" | "paused" | "error";
+            status: "active" | "paused" | "error" | "needs_attention";
+            /**
+             * Config Version
+             * @default 1
+             */
+            config_version: number;
             /** Last Error */
             last_error: string | null;
             /** Last Synced At */
@@ -9882,6 +16855,10 @@ export interface components {
              * @default true
              */
             connector_available: boolean;
+            /** Unavailable Items */
+            unavailable_items?: components["schemas"]["UnavailableItem"][];
+            /** Reconnect Reason */
+            reconnect_reason?: string | null;
         };
         /** SourcePatch */
         SourcePatch: {
@@ -9893,6 +16870,8 @@ export interface components {
             config?: {
                 [key: string]: unknown;
             } | null;
+            /** Base Version */
+            base_version?: number | null;
         };
         /** SpanOut */
         SpanOut: {
@@ -9916,6 +16895,74 @@ export interface components {
             swapped_to: string | null;
             /** Swapped To Reason */
             swapped_to_reason: string | null;
+        };
+        /**
+         * StagedChange
+         * @description An accepted section-text suggestion not applied in any draft yet.
+         */
+        StagedChange: {
+            /**
+             * Suggestion Id
+             * Format: uuid
+             */
+            suggestion_id: string;
+            /**
+             * Feedback Item Id
+             * Format: uuid
+             */
+            feedback_item_id: string;
+            /** Section Key */
+            section_key: string;
+            /** Section Heading */
+            section_heading: string;
+            /** Feedback Summary */
+            feedback_summary: string;
+            /** Text */
+            text: string;
+            /** Accepted By */
+            accepted_by?: string | null;
+            /** Accepted By Name */
+            accepted_by_name?: string | null;
+            /** Accepted At */
+            accepted_at?: string | null;
+            /** Raised On Version */
+            raised_on_version: number;
+            /** Suggested On Version */
+            suggested_on_version: number;
+            /**
+             * Section Gone
+             * @default false
+             */
+            section_gone: boolean;
+            /**
+             * Section Locked
+             * @default false
+             */
+            section_locked: boolean;
+        };
+        /** StagedChanges */
+        StagedChanges: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Latest Version */
+            latest_version?: number | null;
+            /** Next Version */
+            next_version: number;
+            /** Items */
+            items: components["schemas"]["StagedChange"][];
+            /**
+             * Gone Count
+             * @default 0
+             */
+            gone_count: number;
+            /** Estimate Usd */
+            estimate_usd?: number | null;
+            draft_job?: components["schemas"]["LlmJobOut"] | null;
         };
         /** StakeholderAnswerOut */
         StakeholderAnswerOut: {
@@ -10002,6 +17049,58 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** StaleEvidence */
+        StaleEvidence: {
+            evidence: components["schemas"]["EvidenceRef"];
+            /** Reason */
+            reason: string;
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Sharing */
+            sharing?: ("private" | "counts" | "summary" | "full") | null;
+        };
+        /**
+         * StaleOutputsPage
+         * @description A page of outputs that are not fresh, stalest first.
+         */
+        StaleOutputsPage: {
+            /** Items */
+            items: components["schemas"]["TraceOutput"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Next Offset */
+            next_offset?: number | null;
+        };
+        /**
+         * StalenessAction
+         * @description A person's decision on a downstream output's staleness.
+         *
+         *     ``review``: someone is checking it (under_review). ``accept_regeneration``: the
+         *     regeneration proposal is accepted (under_review until the new version arrives).
+         *     ``reconcile``: confirmed still valid against the current upstream, with a reason.
+         */
+        StalenessAction: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "review" | "accept_regeneration" | "reconcile";
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /**
+             * Dependency Ids
+             * @default []
+             */
+            dependency_ids: string[];
+            /** Reason */
+            reason?: string | null;
         };
         /** StartDraftIn */
         StartDraftIn: {
@@ -10170,7 +17269,7 @@ export interface components {
              * Outcome
              * @enum {string}
              */
-            outcome: "completed" | "rate_limited" | "error";
+            outcome: "completed" | "rate_limited" | "error" | "superseded" | "needs_attention";
             /**
              * Upserted
              * @default 0
@@ -10195,6 +17294,8 @@ export interface components {
             retry_after?: number | null;
             /** Error */
             error?: string | null;
+            /** Unavailable */
+            unavailable?: components["schemas"]["UnavailableItem"][];
             source: components["schemas"]["SourceOut"];
         };
         /** TemplateCreate */
@@ -10214,6 +17315,22 @@ export interface components {
             body: string;
             /** Required Sections */
             required_sections?: string[] | null;
+        };
+        /**
+         * TemplateHint
+         * @description An existing PRD template (O1d picker) and module hints for the composer.
+         */
+        TemplateHint: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string;
+            /** Theme */
+            theme?: string | null;
+            /** Modules */
+            modules: components["schemas"]["ModuleHint"][];
         };
         /** TemplateModuleAssignmentOut */
         TemplateModuleAssignmentOut: {
@@ -10710,6 +17827,156 @@ export interface components {
             /** Scope */
             scope: string;
         };
+        /** TraceAlternativeRef */
+        TraceAlternativeRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Blocker Id
+             * Format: uuid
+             */
+            blocker_id: string;
+            /** Title */
+            title: string;
+            /** Approach */
+            approach: string;
+            /** Status */
+            status: string;
+            /** Compliance */
+            compliance: string;
+        };
+        /** TraceAssumptionDecisionRef */
+        TraceAssumptionDecisionRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Statement */
+            statement: string;
+            /** Decision */
+            decision: string;
+            /** Rationale */
+            rationale: string;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+        };
+        /** TraceChainStep */
+        TraceChainStep: {
+            entity: components["schemas"]["TraceEntityRef"];
+            /**
+             * Edge Id
+             * Format: uuid
+             */
+            edge_id: string;
+            /** Edge Type */
+            edge_type: string;
+            /** Edge Status */
+            edge_status: string;
+            /**
+             * Via
+             * Format: uuid
+             */
+            via: string;
+            /** Depth */
+            depth: number;
+        };
+        /** TraceDependency */
+        TraceDependency: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Freshness
+             * @enum {string}
+             */
+            freshness: "fresh" | "potentially_stale" | "under_review" | "reconciled";
+            upstream: components["schemas"]["TraceUpstream"];
+            /** Caused By Change Id */
+            caused_by_change_id?: string | null;
+            /** Stale Since */
+            stale_since?: string | null;
+            /** Reconciled By */
+            reconciled_by?: string | null;
+            /** Reconciled At */
+            reconciled_at?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+        };
+        /** TraceEntityRef */
+        TraceEntityRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Locked */
+            locked: boolean;
+            /** Confidence */
+            confidence?: number | null;
+        };
+        /** TraceEvidenceRef */
+        TraceEvidenceRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ref */
+            ref?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Kind */
+            kind?: string | null;
+            /** Rank */
+            rank: number;
+        };
+        /** TraceExperimentRef */
+        TraceExperimentRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Blocker Id
+             * Format: uuid
+             */
+            blocker_id: string;
+            /** Option Id */
+            option_id?: string | null;
+            /** Hypothesis */
+            hypothesis: string;
+            /** Status */
+            status: string;
+        };
         /** TraceFeature */
         TraceFeature: {
             /**
@@ -10788,6 +18055,129 @@ export interface components {
             /** Contribution */
             contribution: number;
         };
+        /** TraceLink */
+        TraceLink: {
+            /**
+             * Target
+             * @enum {string}
+             */
+            target: "feature" | "requirement" | "blocker";
+            /** Id */
+            id?: string | null;
+            /** Key */
+            key: string;
+            /** Via */
+            via?: ("declared" | "section_link" | "key_match" | "graph") | null;
+            /**
+             * Unresolved
+             * @default false
+             */
+            unresolved: boolean;
+        };
+        /**
+         * TraceOutput
+         * @description A derived output: an artifact version or a document version (a roadmap).
+         */
+        TraceOutput: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "artifact_version" | "document_version";
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "engineering_spec" | "wireframe" | "prototype" | "acceptance_tests" | "roadmap" | "document";
+            /** Artifact Kind */
+            artifact_kind?: ("tech_brief" | "engineering_spec" | "user_flow" | "wireframe" | "prototype" | "acceptance_tests" | "figma_design") | null;
+            /** Document Kind */
+            document_kind?: string | null;
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /** Document Slug */
+            document_slug?: string | null;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Approved */
+            approved: boolean;
+            /**
+             * Freshness
+             * @enum {string}
+             */
+            freshness: "fresh" | "potentially_stale" | "under_review" | "reconciled";
+            /**
+             * Dependencies
+             * @default []
+             */
+            dependencies: components["schemas"]["TraceDependency"][];
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+        };
+        /**
+         * TraceRelated
+         * @description What §7 links to a requirement besides the chain itself.
+         */
+        TraceRelated: {
+            /**
+             * Assumptions
+             * @default []
+             */
+            assumptions: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Blockers
+             * @default []
+             */
+            blockers: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Alternatives
+             * @default []
+             */
+            alternatives: components["schemas"]["TraceAlternativeRef"][];
+            /**
+             * Experiments
+             * @default []
+             */
+            experiments: components["schemas"]["TraceExperimentRef"][];
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Owners
+             * @default []
+             */
+            owners: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Risks
+             * @default []
+             */
+            risks: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Assumption Decisions
+             * @default []
+             */
+            assumption_decisions: components["schemas"]["TraceAssumptionDecisionRef"][];
+        };
         /** TraceReport */
         TraceReport: {
             /** Low */
@@ -10799,6 +18189,33 @@ export interface components {
             /** Goals */
             goals: components["schemas"]["TraceGoal"][];
             summary: components["schemas"]["TraceSummary"];
+        };
+        /** TraceSectionRef */
+        TraceSectionRef: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Document Slug */
+            document_slug: string;
+            /** Document Kind */
+            document_kind: string;
+            /** Version Id */
+            version_id?: string | null;
+            /** Version Number */
+            version_number?: number | null;
+            /** Section Key */
+            section_key: string;
+            /**
+             * Link Id
+             * Format: uuid
+             */
+            link_id: string;
+            /** Link Kind */
+            link_kind: string;
+            /** Entity Id */
+            entity_id?: string | null;
         };
         /** TraceSummary */
         TraceSummary: {
@@ -10816,6 +18233,390 @@ export interface components {
             confirmed_goals: number;
             /** Uncovered Goals */
             uncovered_goals: number;
+        };
+        /**
+         * TraceUpstream
+         * @description What a dependency points at (its version anchor).
+         */
+        TraceUpstream: {
+            /** Document Id */
+            document_id?: string | null;
+            /** Document Slug */
+            document_slug?: string | null;
+            /** Document Kind */
+            document_kind?: string | null;
+            /** Version Id */
+            version_id?: string | null;
+            /** Version Number */
+            version_number?: number | null;
+            /** Section Key */
+            section_key?: string | null;
+            /** Section Hash */
+            section_hash?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            entity?: components["schemas"]["TraceEntityRef"] | null;
+            /**
+             * Deleted
+             * @default false
+             */
+            deleted: boolean;
+            /** Deleted At */
+            deleted_at?: string | null;
+        };
+        /**
+         * TraceUpstreamRef
+         * @description A dependency's upstream: a document version (a section of it, or all of it), or a
+         *     baseline entity.
+         */
+        TraceUpstreamRef: {
+            /** Version Id */
+            version_id?: string | null;
+            /** Section Key */
+            section_key?: string | null;
+            /** Entity Id */
+            entity_id?: string | null;
+        };
+        /** TrackChange */
+        TrackChange: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Cause */
+            cause: string;
+            /** Actor */
+            actor: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** TrackCreate */
+        TrackCreate: {
+            /** Prd */
+            prd: string;
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * TrackOverview
+         * @description One calm overview per track: health, the next milestone, what needs attention.
+         */
+        TrackOverview: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "closed";
+            /** Owner Id */
+            owner_id: string | null;
+            prd: components["schemas"]["DocumentRef"];
+            /** Started Version */
+            started_version: number | null;
+            /** Current Version */
+            current_version: number | null;
+            /** Latest Approved Version */
+            latest_approved_version: number | null;
+            roadmap: components["schemas"]["DocumentRef"] | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Monitored At */
+            monitored_at: string | null;
+            /**
+             * Health
+             * @enum {string}
+             */
+            health: "on_track" | "at_risk" | "off_track" | "no_roadmap" | "paused" | "closed";
+            /** Headline */
+            headline: string;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            next_milestone: components["schemas"]["NextMilestone"] | null;
+            /** At Risk */
+            at_risk: components["schemas"]["AtRiskItem"][];
+            /** Drift */
+            drift: components["schemas"]["DriftEntry"][];
+            /** Engineering Known */
+            engineering_known: boolean;
+            /** Prd Moved */
+            prd_moved: boolean;
+            /** Milestones */
+            milestones: components["schemas"]["MilestoneOut"][];
+        };
+        /** TrackPatch */
+        TrackPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Title */
+            title?: string | null;
+            /** Status */
+            status?: ("active" | "paused" | "closed") | null;
+            /** Owner Id */
+            owner_id?: string | null;
+        };
+        /** TrackSummary */
+        TrackSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "closed";
+            /** Owner Id */
+            owner_id: string | null;
+            prd: components["schemas"]["DocumentRef"];
+            /** Started Version */
+            started_version: number | null;
+            /** Current Version */
+            current_version: number | null;
+            /** Latest Approved Version */
+            latest_approved_version: number | null;
+            roadmap: components["schemas"]["DocumentRef"] | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Monitored At */
+            monitored_at: string | null;
+            /**
+             * Health
+             * @enum {string}
+             */
+            health: "on_track" | "at_risk" | "off_track" | "no_roadmap" | "paused" | "closed";
+            /** Headline */
+            headline: string;
+        };
+        /**
+         * TrackerConnectorOut
+         * @description The two-way tracker connector's gate (E1, §11.1): off unless verified.
+         */
+        TrackerConnectorOut: {
+            /** Two Way Enabled */
+            two_way_enabled: boolean;
+            /** Writes Allowed */
+            writes_allowed: boolean;
+            /** Read Only Alignment */
+            read_only_alignment: boolean;
+            /** Reason */
+            reason: string;
+        };
+        /** TrackerImportOut */
+        TrackerImportOut: {
+            /** Created */
+            created: number;
+            /** Updated */
+            updated: number;
+            /** Records */
+            records: components["schemas"]["TrackerRecordOut"][];
+        };
+        /** TrackerPlanEpic */
+        TrackerPlanEpic: {
+            /** Item Key */
+            item_key: string;
+            /** Title */
+            title: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Description */
+            description: string | null;
+            /** Prd Link */
+            prd_link: string | null;
+            /** Issues */
+            issues: components["schemas"]["TrackerPlanIssue"][];
+        };
+        /** TrackerPlanIssue */
+        TrackerPlanIssue: {
+            /** Title */
+            title: string;
+            /** Requirement Key */
+            requirement_key?: string | null;
+        };
+        /**
+         * TrackerPlanOut
+         * @description What a two-way connector would create: a preview only, never written.
+         */
+        TrackerPlanOut: {
+            /**
+             * Track Id
+             * Format: uuid
+             */
+            track_id: string;
+            /**
+             * Would Write
+             * @default false
+             * @constant
+             */
+            would_write: false;
+            connector: components["schemas"]["TrackerConnectorOut"];
+            /** Epics */
+            epics: components["schemas"]["TrackerPlanEpic"][];
+        };
+        /** TrackerRecordIn */
+        TrackerRecordIn: {
+            /** External Ref */
+            external_ref: string;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "todo" | "in_progress" | "done" | "cancelled" | "unknown";
+            /** Raw Status */
+            raw_status?: string | null;
+            /** Estimate */
+            estimate?: number | string | null;
+            /** Estimate Unit */
+            estimate_unit?: string | null;
+            /** Target Date */
+            target_date?: string | null;
+            /** Observed At */
+            observed_at?: string | null;
+            /** Track Id */
+            track_id?: string | null;
+            /** Item Key */
+            item_key?: string | null;
+        };
+        /** TrackerRecordOut */
+        TrackerRecordOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tracker
+             * @enum {string}
+             */
+            tracker: "linear" | "jira" | "github" | "other";
+            /** External Ref */
+            external_ref: string;
+            /** Title */
+            title: string | null;
+            /** Url */
+            url: string | null;
+            /** Track Id */
+            track_id: string | null;
+            /** Item Key */
+            item_key: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "todo" | "in_progress" | "done" | "cancelled" | "unknown";
+            /** Raw Status */
+            raw_status: string | null;
+            /** Estimate */
+            estimate: string | null;
+            /** Estimate Unit */
+            estimate_unit: string | null;
+            /** Target Date */
+            target_date: string | null;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /** Recorded By */
+            recorded_by: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** TrackerRecordRef */
+        TrackerRecordRef: {
+            /**
+             * Tracker
+             * @enum {string}
+             */
+            tracker: "linear" | "jira" | "github" | "other";
+            /** External Ref */
+            external_ref: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "todo" | "in_progress" | "done" | "cancelled" | "unknown";
+            /** Raw Status */
+            raw_status?: string | null;
+            /** Target Date */
+            target_date?: string | null;
+            /** Estimate */
+            estimate?: string | null;
+            /** Url */
+            url?: string | null;
+        };
+        /**
+         * TrackerRecordsImport
+         * @description Engineering status as read from a tracker, posted by an approver (an export, the
+         *     CLI, an MCP client acting for them; not a run's token). Oracle stores it; it never
+         *     writes back.
+         */
+        TrackerRecordsImport: {
+            /**
+             * Tracker
+             * @enum {string}
+             */
+            tracker: "linear" | "jira" | "github" | "other";
+            /** Records */
+            records: components["schemas"]["TrackerRecordIn"][];
+        };
+        /** UnavailableItem */
+        UnavailableItem: {
+            /** External Id */
+            external_id: string;
+            /** Reason */
+            reason: string;
+            /** Name */
+            name?: string | null;
+            /**
+             * Status
+             * @default unavailable
+             * @enum {string}
+             */
+            status: "unavailable" | "skipped" | "flagged" | "limited";
         };
         /** UploadResult */
         UploadResult: {
@@ -10836,6 +18637,60 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * VersionAnchors
+         * @description The version anchors of §7 for one document version.
+         */
+        VersionAnchors: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Document Slug */
+            document_slug: string;
+            /** Document Kind */
+            document_kind: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Number */
+            number: number;
+            /** Content Hash */
+            content_hash: string;
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            /** Composition Status */
+            composition_status?: string | null;
+            /** Baseline Snapshot Id */
+            baseline_snapshot_id?: string | null;
+            /**
+             * Source Snapshot Ids
+             * @default []
+             */
+            source_snapshot_ids: string[];
+            /** Snapshot */
+            snapshot?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Source Version Id */
+            source_version_id?: string | null;
+        };
+        /** VersionChange */
+        VersionChange: {
+            /** Key */
+            key: string;
+            /** Before */
+            before: string;
+            /** After */
+            after: string;
         };
         /** VersionOut */
         VersionOut: {
@@ -10903,6 +18758,18 @@ export interface components {
              * @default []
              */
             citations: components["schemas"]["CitationOut"][];
+            /**
+             * Date Marks
+             * @default []
+             */
+            date_marks: components["schemas"]["DateMarkOut"][];
+        };
+        /** VersionPublishIn */
+        VersionPublishIn: {
+            /** Content Hash */
+            content_hash?: string | null;
+            /** Note */
+            note?: string | null;
         };
         /** VersionReports */
         VersionReports: {
@@ -10996,6 +18863,24 @@ export interface components {
              */
             created_at: string;
         };
+        /** VersionTrace */
+        VersionTrace: {
+            anchors: components["schemas"]["VersionAnchors"];
+            /** Sections */
+            sections: components["schemas"]["SectionTrace"][];
+            /** Whole Version Downstream */
+            whole_version_downstream: components["schemas"]["TraceOutput"][];
+            /**
+             * Upstream
+             * @default []
+             */
+            upstream: components["schemas"]["TraceDependency"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
         /**
          * VersionWarning
          * @description A non-fatal import finding stored on the version.
@@ -11022,6 +18907,14 @@ export interface components {
             resets_at: string;
             /** Reset */
             reset: boolean;
+        };
+        /** WithdrawOut */
+        WithdrawOut: {
+            basis: components["schemas"]["ScheduleBasisOut"];
+            /** Undated Milestones */
+            undated_milestones: string[];
+            /** Stale Items */
+            stale_items: string[];
         };
         /** WordOp */
         WordOp: {
@@ -11376,6 +19269,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ConflictResponse"];
                 };
+            };
+            /** @description Draft larger than 1 MiB (ORACLE_MAX_BODY_BYTES) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Draft rejected */
             422: {
@@ -11823,6 +19723,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApproveOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishBlockedOut"];
                 };
             };
             /** @description Validation Error */
@@ -12513,7 +20422,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PublishIn"];
+                "application/json": components["schemas"]["VersionPublishIn"];
             };
         };
         responses: {
@@ -13027,6 +20936,175 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_staged_changes: {
+        parameters: {
+            query?: {
+                /** @description Also list staged items whose section is gone */
+                include_gone?: boolean;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StagedChanges"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    build_next_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NextDraftIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_next_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextDraftPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_next_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NextDraftApply"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_next_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
                 };
             };
             /** @description Validation Error */
@@ -14044,6 +22122,33 @@ export interface operations {
             };
         };
     };
+    google_picker_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickerConfigOut"];
+                };
+            };
+            /** @description The Drive picker is not configured */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     connect_with_token: {
         parameters: {
             query?: never;
@@ -14075,14 +22180,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description A token Oracle will not use (a Slack bot token) */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -14218,6 +22321,60 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description A token Oracle will not use (a Slack bot token) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_slack_channels: {
+        parameters: {
+            query?: {
+                search?: string;
+                cursor?: string | null;
+                include_archived?: boolean;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackChannelPage"];
+                };
+            };
+            /** @description Slack refused the request (the connection stays usable) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not one of your Slack connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection needs reconnecting, or holds a bot token */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -14226,6 +22383,268 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Slack is rate limiting, or this connection searched too often; retry after Retry-After seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_github_repos: {
+        parameters: {
+            query?: {
+                search?: string;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GithubRepoPage"];
+                };
+            };
+            /** @description GitHub refused the request (the connection stays usable) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not one of your GitHub connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection needs reconnecting */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description GitHub is rate limiting, or this connection searched too often; retry after Retry-After seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_google_drive_files: {
+        parameters: {
+            query?: {
+                /** @description Text the name contains */
+                q?: string;
+                /** @description A folder id: list what is in it */
+                folder?: string | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriveFilePage"];
+                };
+            };
+            /** @description folder is not a Drive folder id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a person (an API token without a user), or a read-only credential (oracle:read) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not one of your Google connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection needs reconnecting (or lacks Drive access) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Drive is rate limiting, or you searched too often; retry after Retry-After seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_google_shared_drives: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedDriveList"];
+                };
+            };
+            /** @description Not a person (an API token without a user), or a read-only credential (oracle:read) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not one of your Google connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection needs reconnecting (or lacks Drive access) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Drive is rate limiting, or you asked too often */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_notion_pages: {
+        parameters: {
+            query?: {
+                search?: string;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotionPagesOut"];
+                };
+            };
+            /** @description Not one of your connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a Notion connection, it needs reconnecting, or the integration lacks a capability */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too many lists, or Notion's rate limit; retry after ``Retry-After`` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Notion did not answer */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -14732,6 +23151,13 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The provider is rate limiting; retry after Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     list_source_kinds: {
@@ -14838,6 +23264,13 @@ export interface operations {
                     "application/json": components["schemas"]["SourceOut"];
                 };
             };
+            /** @description base_version is not the source's config_version, or the name is taken: {"code": "source_changed", "message": ...} for the first */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -14846,6 +23279,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description The provider is rate limiting; retry after Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -15201,6 +23641,132 @@ export interface operations {
             };
         };
     };
+    list_fireflies_meetings: {
+        parameters: {
+            query?: {
+                search?: string;
+                from?: string | null;
+                to?: string | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirefliesMeetingPage"];
+                };
+            };
+            /** @description Not one of your Fireflies connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection cannot be used (reconnect it), or Fireflies refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Fireflies limit reached, try later: Fireflies is rate limiting the API key, or this connection has browsed its daily share; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fireflies did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_fireflies_series: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirefliesSeriesList"];
+                };
+            };
+            /** @description Not one of your Fireflies connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection cannot be used (reconnect it), or Fireflies refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Fireflies limit reached, try later: Fireflies is rate limiting the API key, or this connection has browsed its daily share; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fireflies did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_graph: {
         parameters: {
             query?: never;
@@ -15510,7 +24076,9 @@ export interface operations {
     };
     list_entity_revisions: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number | null;
+            };
             header?: never;
             path: {
                 entity_id: string;
@@ -16388,6 +24956,22 @@ export interface operations {
                     "application/json": components["schemas"]["YamlImportResult"];
                 };
             };
+            /** @description A change the caller's role may not make */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YamlImportError"];
+                };
+            };
+            /** @description File larger than 1 MiB (ORACLE_MAX_BODY_BYTES) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description File rejected */
             422: {
                 headers: {
@@ -17202,6 +25786,26 @@ export interface operations {
             };
         };
     };
+    register_mcp_server: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerRegistration"];
+                };
+            };
+        };
+    };
     list_flows: {
         parameters: {
             query?: never;
@@ -17476,7 +26080,229 @@ export interface operations {
             };
         };
     };
+    retry_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     cancel_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_cancelling_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_lookup_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_import_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_draft_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_again_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelAgain"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_overrun_run: {
         parameters: {
             query?: never;
             header?: never;
@@ -17578,7 +26404,10 @@ export interface operations {
     };
     get_inbox: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Record this visit as my last one (what 'new' is measured from) */
+                mark_seen?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -17592,6 +26421,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -17973,6 +26811,39 @@ export interface operations {
             };
         };
     };
+    create_intake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntakeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_intake: {
         parameters: {
             query?: never;
@@ -18004,12 +26875,47 @@ export interface operations {
             };
         };
     };
+    update_intake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntakePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_knowledge_gaps: {
         parameters: {
             query?: {
                 intake_id?: string | null;
                 document_id?: string | null;
-                status?: ("unknown" | "under_investigation" | "asked" | "answered" | "validated" | "deferred" | "accepted_risk") | null;
+                status?: ("unknown" | "under_investigation" | "asked" | "answered" | "answered_pending_review" | "validated" | "deferred" | "accepted_risk") | null;
                 category?: ("customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling") | null;
                 importance?: ("critical" | "high" | "medium" | "low") | null;
                 limit?: number;
@@ -18028,6 +26934,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeGapOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_knowledge_gap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GapCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeGapOut"];
                 };
             };
             /** @description Validation Error */
@@ -18072,6 +27011,41 @@ export interface operations {
             };
         };
     };
+    update_knowledge_gap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GapPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeGapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_stakeholder_questions: {
         parameters: {
             query?: {
@@ -18079,6 +27053,7 @@ export interface operations {
                 document_id?: string | null;
                 gap_id?: string | null;
                 status?: ("draft" | "asked" | "answered" | "deferred" | "delegated" | "researching" | "withdrawn") | null;
+                asked_to?: "me" | null;
                 limit?: number;
                 offset?: number;
             };
@@ -18334,6 +27309,41 @@ export interface operations {
             };
         };
     };
+    update_blocker_option: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerOptionPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerOptionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_feasibility_experiments: {
         parameters: {
             query?: {
@@ -18379,6 +27389,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeasibilityExperimentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_feasibility_experiment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeasibilityExperimentPatch"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -18467,7 +27512,7 @@ export interface operations {
     list_change_events: {
         parameters: {
             query?: {
-                subject_kind?: ("document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version" | "member") | null;
+                subject_kind?: ("document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version" | "member" | "product_track") | null;
                 subject_id?: string | null;
                 document_id?: string | null;
                 limit?: number;
@@ -18585,6 +27630,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DocumentSectionLinkOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_section_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -19041,6 +28115,3023 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ArtifactReviewEventOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_intake_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_intake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_intake_new_evidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewEvidence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    repin_intake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_intake_evidence: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceSearch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_question_batch: {
+        parameters: {
+            query?: {
+                batch?: number | null;
+            };
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionBatch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_next_question_batch: {
+        parameters: {
+            query?: {
+                size?: number;
+            };
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionBatch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_intake_composition_inputs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompositionInputs"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_intake_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntakeRunIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_intake_proposals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeProposalOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_intake_proposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeProposalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_intake_proposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DismissIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeProposalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_intake_findings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_intake_finding_sharing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_intake_finding_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingSummaryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_intake_findings_sharing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharingBulkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_knowledge_gap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gap_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_gap_research: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gap_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeProposalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    answer_question: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_quality_criteria: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CriterionInfo"][];
+                };
+            };
+        };
+    };
+    get_document_readiness: {
+        parameters: {
+            query?: {
+                purpose?: "advisory" | "publish";
+            };
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadinessDashboard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_evaluation_report: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationReportDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_human_rating: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HumanRatingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationReportDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queue_quality_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_outcomes: {
+        parameters: {
+            query?: {
+                goal_id?: string | null;
+                document_id?: string | null;
+                status?: ("tracking" | "held" | "partially_held" | "not_held" | "inconclusive") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutcomeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assess_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_learnings: {
+        parameters: {
+            query?: {
+                applies_to?: ("module" | "question_category" | "criterion") | null;
+                target?: string | null;
+                status?: ("active" | "retired") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_learning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearningCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_learning_signals: {
+        parameters: {
+            query?: {
+                applies_to?: ("module" | "question_category" | "criterion") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningSignal"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retire_learning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                learning_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearningRetire"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_module_catalog: {
+        parameters: {
+            query?: {
+                pack?: string | null;
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModuleOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_company_module: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModuleContractIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModuleDetail"];
+                };
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    get_module_catalog_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModuleDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_module_override: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModuleContractIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModuleDetail"];
+                };
+            };
+            /** @description No such module */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    list_module_packs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackOut"][];
+                };
+            };
+        };
+    };
+    get_module_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModulePolicyOut"];
+                };
+            };
+        };
+    };
+    put_module_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModulePolicySettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModulePolicyOut"];
+                };
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    get_template_manifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManifestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_template_manifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManifestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManifestOut"];
+                };
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    recommend_composition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompositionRecommendIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationOut"];
+                };
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    get_document_composition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_composition_revision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectorOut"];
+                };
+            };
+            /** @description Changed since loaded, or not in a state that allows this */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    publish_composition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompositionRevisionOut"];
+                };
+            };
+            /** @description Changed since loaded, or not in a state that allows this */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_version_trace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionTrace"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_version_evidence: {
+        parameters: {
+            query?: {
+                section?: string | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceInspector"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_version_impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_section_links: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionLinksCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSectionLinkOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_entity_trace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityTrace"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_entity_impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_change_impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_stale_outputs: {
+        parameters: {
+            query?: {
+                document_id?: string | null;
+                freshness?: ("fresh" | "potentially_stale" | "under_review" | "reconciled") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleOutputsPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    act_on_staleness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StalenessAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TraceOutput"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_artifact_dependencies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependenciesCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactDependencyOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_blockers: {
+        parameters: {
+            query?: {
+                document_id?: string | null;
+                status?: ("open" | "mitigating" | "resolved" | "accepted_risk" | "feasibility_only") | null;
+                type?: ("hard" | "soft" | "unknown" | "temporary") | null;
+                severity?: ("critical" | "high" | "medium" | "low") | null;
+                limit_kind?: ("capacity" | "eligibility" | "permission" | "policy" | "other") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_blocker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_blocker_strategy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_blocker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_blocker_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerStatusIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_blocker_risk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerRiskAcceptanceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_feasibility_scope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeasibilityScopeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_blocker_option: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerOptionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerOptionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_blocker_option: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerOptionDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_blocker_option_fallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerOptionFallback"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerOptionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_blocker_option: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerOptionDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerOptionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_feasibility_experiment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeasibilityExperimentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeasibilityExperimentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_document_blocker_strategy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    render_document_blocker_strategy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerModuleRender"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_roadmap_items: {
+        parameters: {
+            query?: {
+                version?: number | null;
+                view?: "brief" | "full";
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoadmapItemsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_roadmap_items: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemsImport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemsImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    act_on_roadmap_item_staleness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemStalenessAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemStalenessOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_roadmap_alignment: {
+        parameters: {
+            query?: {
+                version?: number | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlignmentReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_schedule_bases: {
+        parameters: {
+            query?: {
+                prd?: string | null;
+                status?: ("verified" | "withdrawn") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleBasisOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_schedule_basis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleBasisCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleBasisOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_schedule_basis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                basis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleBasisWithdraw"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WithdrawOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tracker_connector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerConnectorOut"];
+                };
+            };
+        };
+    };
+    list_tracker_records: {
+        parameters: {
+            query?: {
+                track_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerRecordOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_tracker_records: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrackerRecordsImport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tracks: {
+        parameters: {
+            query?: {
+                status?: ("active" | "paused" | "closed") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_track: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrackCreate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_track: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_track: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrackPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    monitor_track: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_track_changes: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackChange"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_track_roadmap_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["KnobsIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_track_tracker_plan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerPlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    push_track_to_tracker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_track_milestones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_track_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MilestoneCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MilestonePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneOut"];
                 };
             };
             /** @description Validation Error */

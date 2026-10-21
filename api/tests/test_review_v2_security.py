@@ -28,12 +28,13 @@ from oracle.tenancy import tenant_session, unscoped_session
 from oracle.v2.models import ChangeEvent, DocumentSectionLink
 from tests.connection_helpers import add_connection, clear_provider_http, use_provider_http
 from tests.legacy.helpers import run_cli
-from tests.review_v2_helpers import (
+from tests.review_v2_helpers import (  # noqa: F401 (local_runtime: a fixture)
     DOC,
     DRAFT,
     approve_all,
     edit,
     import_md,
+    local_runtime,
     person,
     replace,
     setup,
@@ -112,10 +113,16 @@ async def test_a_cited_source_deleted_blocks_publish(client):
     assert resp.status_code == 409
     assert resp.json()["check"]["blockers"][0]["code"] == "source_permission_revoked"
     async with tenant_session(ctx.tenant_id) as s:
-        [event] = (await s.scalars(select(ChangeEvent))).all()
+        # One tombstone; the sections it reaches are recorded as changes of their own
+        # (oracle.trace).
+        [event] = (
+            await s.scalars(
+                select(ChangeEvent).where(ChangeEvent.subject_kind == "source_permission")
+            )
+        ).all()
         assert (event.subject_kind, event.cause, event.subject_id) == (
             "source_permission",
-            "source_revoked",
+            "source_deleted",
             source_id,
         )
         assert str(item_id) in event.data["item_ids"]
@@ -324,6 +331,7 @@ async def test_an_owner_resolves_only_their_sections_feedback(client):
 # --- M3: AI text never replaces approved text without a patch ----------------------------
 
 
+@pytest.mark.usefixtures("local_runtime")
 async def test_a_run_token_push_is_an_agent_draft(client):
     """MCP push_draft under a run token carries the run: the approved-section hold
     applies even though the REST call is made for the run's creator."""
@@ -344,7 +352,7 @@ async def test_a_run_token_push_is_an_agent_draft(client):
     agent = replace(DRAFT, "Teams miss shared deadlines.", "The agent's problem.")
     async with mcp_session(token) as c:
         tools = {t.name: t for t in (await c.list_tools()).tools}
-        assert "base_version" in tools["push_draft"].input_schema["required"]
+        assert "base_version" not in tools["push_draft"].input_schema["required"]
         pushed = await c.call_tool("push_draft", {"doc": DOC, "markdown": agent, "base_version": 1})
         assert not pushed.is_error, pushed.content
         via_rest = await c.call_tool(
@@ -463,7 +471,11 @@ async def test_a_citation_change_changes_the_revision_and_invalidates(client):
     assert s2["goal-trace"]["status"] == "approval_stale"
     assert s2["problem"]["status"] == "approved"
     async with tenant_session(ctx.tenant_id) as s:
-        keys = [e.data["section_key"] for e in await s.scalars(select(ChangeEvent))]
+        keys = [
+            e.data["section_key"]
+            for e in await s.scalars(select(ChangeEvent))
+            if e.subject_kind == "document_section"
+        ]
     assert keys == ["goal-trace"]
 
 
@@ -622,8 +634,51 @@ async def test_mcp_push_draft_creates_a_document_with_base_zero(client):
             },
         )
         assert again.is_error
-        missing = await c.call_tool("push_draft", {"doc": "other-doc", "markdown": other})
-        assert missing.is_error and "base_version" in str(missing.content)
+        # base_version is optional (the latest version): an unchanged draft still imports.
+        left_out = await c.call_tool("push_draft", {"doc": "other-doc", "markdown": other})
+        assert not left_out.is_error, left_out.content
+        no_doc = await c.call_tool("push_draft", {"doc": "", "markdown": other})
+        assert no_doc.is_error and "doc" in str(no_doc.content)
+
+
+async def test_mcp_push_draft_without_a_base_takes_the_latest_version(client):
+    """base_version is optional: left out, the draft is taken as written on the document's
+    latest version (a new document when it has none)."""
+    from tests.legacy.helpers import mcp_session
+
+    ctx = await setup(client)  # team-calendar has version 1
+    async with tenant_session(ctx.tenant_id) as s:
+        _, raw = await create_api_token(s, "agent")
+        await s.commit()
+    async with mcp_session(raw) as c:
+        schema = next(t for t in (await c.list_tools()).tools if t.name == "push_draft")
+        assert schema.input_schema["required"] == ["doc", "markdown"]
+        assert "base_version" in schema.input_schema["properties"]
+        changed = replace(DRAFT, "Owner: product.", "Owner: growth.")
+        pushed = await c.call_tool("push_draft", {"doc": "team-calendar", "markdown": changed})
+        assert not pushed.is_error, pushed.content
+        assert pushed.structured_content["number"] == 2
+        fresh = replace(DRAFT, "document: team-calendar", "document: brand-new")
+        created = await c.call_tool("push_draft", {"doc": "brand-new", "markdown": fresh})
+        assert not created.is_error, created.content
+        assert created.structured_content["number"] == 1
+
+
+async def test_mcp_push_draft_with_a_stale_base_is_still_a_conflict(client):
+    from tests.legacy.helpers import mcp_session
+
+    ctx = await setup(client)
+    v2 = replace(DRAFT, "Teams miss shared deadlines.", "Teams miss deadlines (v2).")
+    assert (await import_md(client, ctx.auth, v2, base=1)).status_code == 201
+    async with tenant_session(ctx.tenant_id) as s:
+        _, raw = await create_api_token(s, "agent")
+        await s.commit()
+    stale = replace(DRAFT, "Calendar sync may lag.", "Calendar sync lags.")
+    async with mcp_session(raw) as c:
+        result = await c.call_tool(
+            "push_draft", {"doc": "team-calendar", "markdown": stale, "base_version": 1}
+        )
+        assert result.is_error and "version_conflict" in str(result.content), result.content
 
 
 async def test_publications_refuse_delete_but_a_company_delete_cascades(client):

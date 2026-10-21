@@ -162,11 +162,12 @@ async def test_full_sync_messages_threads_and_pagination():
     events = await collect(connector(fake), {"channels": ["C0PRODUCT"]})
 
     items = [e for e in events if isinstance(e, ItemUpsert)]
-    assert [(i.external_id, i.kind) for i in items] == [
+    assert sorted((i.external_id, i.kind) for i in items) == [
         ("C0PRODUCT:1760000100.000100", "message"),
         ("C0PRODUCT:1760000200.000200", "thread"),
         ("C0PRODUCT:1760000300.000300", "message"),
-    ]  # oldest first; the channel_join is skipped
+    ]  # the channel_join is skipped
+    items.sort(key=lambda i: i.external_id)
     first, thread, bot = items
     assert first.author == "Ada"
     assert first.content == "Ada: Kickoff notes for the onboarding revamp are in the doc."
@@ -186,12 +187,15 @@ async def test_full_sync_messages_threads_and_pagination():
 
     assert events[-1] == CursorCheckpoint(
         {
+            "range": {},
             "channels": {
                 "C0PRODUCT": {
+                    "name": "product",
                     "oldest": "1760000300.000300",
                     "threads": {"1760000200.000200": "1760000260.000600"},
+                    "messages": ["1760000100.000100", "1760000300.000300"],
                 }
-            }
+            },
         }
     )
     # Two history pages, one replies call, each user looked up once.
@@ -230,9 +234,12 @@ async def test_incremental_sync_updates_threads_with_new_replies():
         "Ada (2025-10-09 08:59): Update: legal signed off on the pricing copy."
     )
     assert edited.source_updated_at == datetime.fromtimestamp(1760000410, UTC)
+    # A cursor from before deletes were tracked: the messages it covers count as known.
     assert events[-1].cursor["channels"]["C0PRODUCT"] == {
+        "name": "product",
         "oldest": "1760000400.000400",
         "threads": {"1760000200.000200": "1760000350.000700"},
+        "messages": ["1760000100.000100", "1760000300.000300", "1760000400.000400"],
     }
 
     # Nothing new: no items, no replies fetched.
@@ -250,5 +257,69 @@ async def test_checkpoint_per_channel_keeps_other_channels():
     assert item.acl["is_private"] is True
     assert events[-1].cursor["channels"] == {
         "C0OTHER": {"oldest": "1750000000.000000", "threads": {}},
-        "C0ROADMAP": {"oldest": "1760000500.000500", "threads": {}},
+        "C0ROADMAP": {
+            "name": "roadmap",
+            "oldest": "1760000500.000500",
+            "threads": {},
+            "messages": ["1760000500.000500"],
+        },
     }
+
+
+SINCE_EPOCH = datetime(2025, 10, 10, tzinfo=UTC).timestamp()
+
+
+@pytest.mark.parametrize("since", ["not-a-date", 20251010, "2025-13-01"])
+async def test_validate_refuses_a_bad_since(since):
+    fake = FakeSlack(BASE_ROUTES)
+    with pytest.raises(ConnectorConfigError, match="since"):
+        await connector(fake).validate({"channels": ["C0PRODUCT"], "since": since}, CREDENTIAL)
+    assert fake.calls == []
+
+
+async def test_validate_accepts_since_or_none():
+    for since in ("2025-10-10", None):
+        fake = FakeSlack(BASE_ROUTES)
+        await connector(fake).validate({"channels": ["C0PRODUCT"], "since": since}, CREDENTIAL)
+
+
+async def test_since_reads_no_message_before_it():
+    fake = FakeSlack(
+        {
+            **BASE_ROUTES,
+            # Slack would honour ``oldest``; the fake does not, so the connector's own
+            # filter is checked too.
+            "conversations.history": "history_C0PRODUCT_page1",
+            "conversations.history:bmV4dF90czoxNzYwMDAwMTAw": "history_C0PRODUCT_page2",
+        }
+    )
+    events = await collect(connector(fake), {"channels": ["C0PRODUCT"], "since": "2025-10-10"})
+    history = next(p for m, p in fake.calls if m == "conversations.history")
+    assert float(history["oldest"]) == SINCE_EPOCH
+    assert [e for e in events if isinstance(e, ItemUpsert)] == []
+    assert fake.count("conversations.replies") == 0
+    assert fake.count("users.info") == 0
+
+
+async def test_since_keeps_messages_on_or_after_it():
+    fake = FakeSlack(
+        {
+            **BASE_ROUTES,
+            "conversations.history": "history_C0PRODUCT_page1",
+            "conversations.history:bmV4dF90czoxNzYwMDAwMTAw": "history_C0PRODUCT_page2",
+            "conversations.replies:1760000200.000200": "replies_1760000200",
+        }
+    )
+    events = await collect(connector(fake), {"channels": ["C0PRODUCT"], "since": "2025-10-09"})
+    history = next(p for m, p in fake.calls if m == "conversations.history")
+    assert float(history["oldest"]) == datetime(2025, 10, 9, tzinfo=UTC).timestamp()
+    assert len([e for e in events if isinstance(e, ItemUpsert)]) == 3
+
+
+async def test_since_bounds_the_thread_lookback_of_an_incremental_sync():
+    # The cursor's lookback would reach back before ``since``: ``since`` wins.
+    cursor = {"channels": {"C0PRODUCT": {"oldest": f"{SINCE_EPOCH + 3600:.6f}", "threads": {}}}}
+    fake = FakeSlack({**BASE_ROUTES, "conversations.history": "history_C0PRODUCT_page2"})
+    await collect(connector(fake), {"channels": ["C0PRODUCT"], "since": "2025-10-10"}, cursor)
+    history = next(p for m, p in fake.calls if m == "conversations.history")
+    assert float(history["oldest"]) == SINCE_EPOCH

@@ -8,9 +8,12 @@ import type { Schemas } from "@/lib/api/client";
 import { wordDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
+import { KIND as BATCH, nextDraftRoute, runBatch, stateOf } from "./next-draft";
+
 type Job = Schemas["LlmJobOut"];
 type Suggestion = Schemas["SuggestionOut"];
-type Feedback = Schemas["FeedbackItemOut"];
+/** A stored feedback item; its C1e state is derived on the way out (withSuggestion). */
+type Feedback = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version">;
 type Role = Schemas["Me"]["role"];
 type Section = { section_key: string; level: number; heading: string; body_md: string; body_text: string };
 type Version = { id: string; document_id: string; number: number; created_at: string; sections: Section[] };
@@ -43,13 +46,27 @@ export type LlmContext = {
     body: string,
     resolutions: { feedback_id: string; status: "addressed" | "declined"; note: string | null }[],
   ) => Version;
+  /** C1e: imports the next version with several sections replaced, and applies the resolutions. */
+  importSections: (
+    doc: Doc,
+    base: Version,
+    replace: Record<string, { heading: string; body: string }>,
+    resolutions: { feedback_id: string; status: "addressed" | "declined"; note: string | null }[],
+  ) => Version;
+  /** A member's name (their email) for "accepted by". */
+  memberName?: (id: string) => string | null;
 };
 
-const KINDS: Job["kind"][] = ["review_comments", "reporting", "refinement"];
+/** The per-document switches; the next-draft batch is refinement and shares its switch. */
+const KINDS: (keyof Schemas["JobSettings"])[] = ["review_comments", "reporting", "refinement", "quality_review"];
+const SWITCH: Partial<Record<Job["kind"], keyof Schemas["JobSettings"]>> = { refinement_batch: "refinement" };
 const LABEL: Record<Job["kind"], string> = {
   review_comments: "Review comments",
   reporting: "Reporting",
   refinement: "Refinement",
+  intake_analysis: "Intake analysis",
+  quality_review: "Quality review",
+  refinement_batch: "Refinement",
 };
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
@@ -117,9 +134,10 @@ function suggestion(ctx: LlmContext, f: Feedback, job: Job, extra: Partial<Sugge
 const live = (db: LlmDb, feedbackId: string) =>
   db.suggestions.filter((s) => s.feedback_item_id === feedbackId && s.status !== "superseded").at(-1) ?? null;
 
-/** The feedback item with Oracle's suggestion, as GET /feedback returns it. */
-export function withSuggestion(db: LlmDb | undefined, f: Feedback): Feedback {
-  return { ...f, suggestion: db ? live(db, f.id) : null };
+/** The feedback item with Oracle's suggestion and its C1e state, as GET /feedback returns it. */
+export function withSuggestion(db: LlmDb | undefined, f: Feedback, latest: number | null = null): Schemas["FeedbackItemOut"] {
+  const suggestion = db ? live(db, f.id) : null;
+  return { ...f, suggestion, ...stateOf(f, suggestion, latest) };
 }
 
 function versionsOf(ctx: LlmContext, doc: Doc) {
@@ -300,7 +318,8 @@ export function tick(ctx: LlmContext) {
     else if (job.kind === "reporting") {
       const since = (job.input.since as number | undefined) ?? (v.number > 1 ? v.number - 1 : null);
       finish(ctx, job, runReports(ctx, doc, v, since));
-    } else finish(ctx, job, runRefinement(ctx, job, doc, v));
+    } else if (job.kind === BATCH) finish(ctx, job, runBatch(ctx, job, v));
+    else finish(ctx, job, runRefinement(ctx, job, doc, v));
   }
 }
 
@@ -394,7 +413,90 @@ export function seedLlm(ctx: Omit<LlmContext, "db"> & { db?: LlmDb }): LlmDb {
       next_reset_at: null,
     }),
   );
+  seedOutreach(c);
   return db;
+}
+
+/**
+ * C1e on Clinic outreach (Galatia-like, draft 5): two accepted changes staged for draft 6
+ * (Goal trace from v4, F-38 Outbound check from v5), one declined with its note, one open
+ * with a suggestion to review.
+ */
+function seedOutreach(c: LlmContext) {
+  const doc = c.documents.find((d) => d.slug === "clinic-outreach");
+  const v = doc && versionsOf(c, doc).at(-1);
+  if (!doc || !v) return;
+  const find = (text: string) => c.feedback.find((f) => f.document_id === doc.id && f.summary.includes(text));
+  const review = makeJob(c, doc, "review_comments", v, { created_at: "2026-10-19T09:31:00Z", requested_by: null });
+  finish(c, review, { handled: 4, groups: 4, duplicates: 0, pushbacks: 0 });
+  Object.assign(review, { started_at: "2026-10-19T09:31:02Z", finished_at: "2026-10-19T09:31:40Z" });
+  c.db.jobs.push(review);
+  const accepted = { status: "accepted" as const, decided_by: c.userId, decided_at: "2026-10-19T20:10:00Z" };
+  const goal = find("G2 retention");
+  if (goal) {
+    c.db.suggestions.push(
+      suggestion(c, goal, review, {
+        classification: "change_request",
+        kind: "section_text",
+        section_key: "goal-trace",
+        version_number: 4,
+        text: "Serves G2 retention: patients who missed a visit come back within 14 days.",
+        rationale: "Returning patients are a retention goal.",
+        created_at: "2026-10-09T15:05:00Z",
+        ...accepted,
+      }),
+    );
+  }
+  const check = find("before the call is placed");
+  if (check) {
+    c.db.suggestions.push(
+      suggestion(c, check, review, {
+        classification: "change_request",
+        kind: "section_text",
+        section_key: "f-38",
+        text: "Before each outbound call is placed, the agent checks the patient's consent and the clinic's calling hours; the call is blocked when either check fails, and the outcome is recorded.",
+        rationale: "A check after the call cannot stop a call that should not happen.",
+        created_at: "2026-10-19T09:31:40Z",
+        ...accepted,
+        decided_at: "2026-10-19T20:12:00Z",
+      }),
+    );
+  }
+  const figure = find("40% figure");
+  if (figure) {
+    c.db.suggestions.push(
+      suggestion(c, figure, review, {
+        classification: "factual_correction",
+        kind: "section_text",
+        section_key: "problem",
+        text: "Most missed visits are never rebooked. Front desks in the three pilot clinics call back when they have time, from paper lists.",
+        status: "dismissed",
+        decided_by: c.userId,
+        decided_at: "2026-10-19T20:14:00Z",
+        created_at: "2026-10-19T09:31:40Z",
+      }),
+    );
+    Object.assign(figure, {
+      status: "declined",
+      resolution_note: "The 2024 audit is still the latest count; keep the figure.",
+      addressed_in_version: v.number,
+      updated_at: "2026-10-19T20:14:00Z",
+    });
+  }
+  const metric = find("outbound check works");
+  if (metric) {
+    const metrics = v.sections.find((s) => s.section_key === "metrics")!;
+    c.db.suggestions.push(
+      suggestion(c, metric, review, {
+        classification: "change_request",
+        kind: "section_text",
+        section_key: "metrics",
+        text: `${metrics.body_md}\n- Calls blocked by the outbound check: counted weekly.`,
+        rationale: "Counts what the check stops.",
+        created_at: "2026-10-19T09:31:40Z",
+      }),
+    );
+  }
 }
 
 // ------------------------------------------------------------------ routes
@@ -428,18 +530,31 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
   const { db } = ctx;
   const approver = atLeast(ctx.role, "approver");
   const findDoc = (ref: string) => ctx.documents.find((d) => d.slug === ref || d.id === ref);
-  const enabled = (doc: Doc, kind: Job["kind"]) => !(db.disabled[doc.id] ?? []).includes(kind);
+  const enabled = (doc: Doc, kind: Job["kind"]) => !(db.disabled[doc.id] ?? []).includes(SWITCH[kind] ?? kind);
   const jobRoute = p[1] === "llm-jobs" && p[2];
   const suggestionRoute = p[1] === "suggestions" && p[2];
   const docRoute =
     p[1] === "documents" &&
     p[2] &&
-    (p[3] === "llm-jobs" || p[3] === "suggestions" || (p[3] === "versions" && (p[5] === "reports" || p[7] === "refine")));
+    (p[3] === "llm-jobs" ||
+      p[3] === "suggestions" ||
+      p[3] === "staged-changes" ||
+      p[3] === "next-draft" ||
+      (p[3] === "versions" && (p[5] === "reports" || p[7] === "refine")));
   if (!jobRoute && !suggestionRoute && !docRoute) return null;
   if (m !== "GET" && !approver && !(docRoute && p[4] === "settings")) return fail(403, "Requires the approver role");
 
   // Reading runs the queue, as the worker would have by now.
   tick(ctx);
+
+  const batch = await nextDraftRoute(ctx, req, p, q, {
+    makeJob: (doc, v, input) => makeJob(ctx, doc, BATCH, v, { input: { version: v.number, ...input } }),
+    enabled: (doc) => enabled(doc, BATCH),
+    onImported: (doc, v) => {
+      if (enabled(doc, "reporting")) db.jobs.push(makeJob(ctx, doc, "reporting", v));
+    },
+  });
+  if (batch) return batch;
 
   if (jobRoute) {
     const job = db.jobs.find((j) => j.id === p[2]);

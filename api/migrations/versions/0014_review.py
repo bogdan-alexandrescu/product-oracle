@@ -17,11 +17,12 @@ docs/product-oracle-v2/08-review-and-publish.md.
 The integrator re-chains this revision onto the head in merge order.
 
 Revision ID: 0014_review
-Revises: 0013
+Revises: 0018_source_unavailable_items
 """
 
 import hashlib
 import json
+import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
@@ -30,7 +31,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0014_review"
-down_revision: str | None = "0013"
+down_revision: str | None = "0018_source_unavailable_items"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -50,22 +51,37 @@ $$ LANGUAGE plpgsql
 """
 
 
-# change_events.subject_kind as of 0013.
-CHANGE_SUBJECTS = (
-    "document_section",
-    "requirement",
-    "decision",
-    "source_permission",
-    "blocker_status",
-    "composition_revision",
-    "document_version",
-    "entity",
-    "artifact_version",
-)
+# change_events.subject_kind gains this; every other value is read from the live
+# constraint (other lanes widen it too), never rebuilt from a fixed list.
+MEMBER_SUBJECT = "member"
+SUBJECT_KIND_CHECK = "ck_change_events_subject_kind"
 
 
 def _quoted(values: tuple[str, ...]) -> str:
     return ", ".join(f"'{v}'" for v in values)
+
+
+def _subject_kinds() -> tuple[str, ...]:
+    """The values ``ck_change_events_subject_kind`` admits now, in their order."""
+    definition = op.get_bind().scalar(
+        sa.text(
+            "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c "
+            "JOIN pg_class t ON t.oid = c.conrelid "
+            "WHERE c.conname = :name AND t.relname = 'change_events' "
+            "AND t.relnamespace = to_regnamespace(current_schema())"
+        ),
+        {"name": SUBJECT_KIND_CHECK},
+    )
+    if definition is None:
+        raise RuntimeError(f"{SUBJECT_KIND_CHECK} is missing on change_events")
+    return tuple(dict.fromkeys(re.findall(r"'((?:[^']|'')*)'", definition)))
+
+
+def _set_subject_kinds(values: tuple[str, ...]) -> None:
+    op.drop_constraint(op.f(SUBJECT_KIND_CHECK), "change_events", type_="check")
+    op.create_check_constraint(
+        op.f(SUBJECT_KIND_CHECK), "change_events", f"subject_kind IN ({_quoted(values)})"
+    )
 
 
 def _instant(value: datetime | None) -> str | None:
@@ -539,12 +555,10 @@ def upgrade() -> None:
     op.alter_column("sections", "revision", nullable=False)
     # A member's role change or removal is a change event (approvals count only while
     # the approver still is one).
-    op.drop_constraint(op.f("ck_change_events_subject_kind"), "change_events", type_="check")
-    op.create_check_constraint(
-        op.f("ck_change_events_subject_kind"),
-        "change_events",
-        f"subject_kind IN ({_quoted(CHANGE_SUBJECTS + ('member',))})",
-    )
+    # Widened additively: the values the constraint has now, and "member".
+    kinds = _subject_kinds()
+    if MEMBER_SUBJECT not in kinds:
+        _set_subject_kinds((*kinds, MEMBER_SUBJECT))
     # A publication is immutable: later edits and source updates never change it, and
     # only deleting its document or company removes it.
     op.execute(IMMUTABLE_FUNCTION)
@@ -557,12 +571,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DELETE FROM change_events WHERE subject_kind = 'member'")
-    op.drop_constraint(op.f("ck_change_events_subject_kind"), "change_events", type_="check")
-    op.create_check_constraint(
-        op.f("ck_change_events_subject_kind"),
-        "change_events",
-        f"subject_kind IN ({_quoted(CHANGE_SUBJECTS)})",
-    )
+    kinds = _subject_kinds()
+    if MEMBER_SUBJECT in kinds:
+        _set_subject_kinds(tuple(k for k in kinds if k != MEMBER_SUBJECT))
     op.execute("DROP TRIGGER IF EXISTS document_publications_immutable ON document_publications")
     op.execute("DROP FUNCTION IF EXISTS oracle_refuse_publication_update()")
     op.execute(

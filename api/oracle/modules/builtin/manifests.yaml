@@ -1,0 +1,79 @@
+# Module manifests for the seven built-in PRD templates (build prompt §4.1, AUD-3).
+#
+# Each maps a module to the template's existing {#id} sections, only where the mapping is
+# unambiguous. Sections not listed (title, "Features by milestone", milestones, feature
+# detail, template-specific sections) stay template-owned and are preserved as-is. The
+# templates themselves are never rewritten: manifests live in the
+# template_module_assignments sidecar, keyed by template key; a section a company removed
+# from its edited copy simply resolves as absent.
+#
+# Policy is derived when seeding: required when a mapped section is a level 1-2 heading
+# (the template's spine), optional otherwise.
+format: 1
+version: 1.0.0
+templates:
+  oracle-default:
+    decision.executive: [summary, decisions]
+    strategy.alignment: [goal-trace]
+    problem.opportunity: [problem, why-now]
+    users.jtbd: [audience]
+    goals.outcomes: [success]
+    scope.non-goals: [non-goals]
+    requirements.functional: [requirements, edge-cases]
+    risks.register: [top-risks, risks]
+    release.rollout: [launch]
+    sources.data-points: [sources, sources-list, sources-data, sources-evidence]
+  one-pager:
+    decision.executive: [summary, decisions, next-step]
+    strategy.alignment: [goal-trace]
+    problem.opportunity: [problem, why]
+    users.jtbd: [audience]
+    goals.outcomes: [success]
+    scope.non-goals: [non-goals]
+    risks.register: [top-risks]
+    sources.data-points: [sources, sources-list, sources-data, sources-evidence]
+  pr-faq:
+    decision.executive: [summary, decisions]
+    strategy.alignment: [goal-trace, faq-goal-trace]
+    problem.opportunity: [problem, pr-problem]
+    goals.outcomes: [faq-success]
+    scope.non-goals: [not-doing]
+    economics.value: [faq-opportunity, faq-cost]
+    risks.register: [top-risks, faq-risks]
+    sources.data-points: [sources, sources-list, sources-data, sources-evidence]
+  narrative-memo:
+    decision.executive: [decision, recommendation, decisions]
+    strategy.alignment: [goal-trace]
+    problem.opportunity: [problem, trigger]
+    solution.alternatives: [options]
+    scope.non-goals: [not-doing]
+    risks.register: [top-risks, risks]
+    sources.data-points: [sources, sources-list, sources-data, sources-evidence]
+  shape-up-pitch:
+    decision.executive: [summary, decisions]
+    strategy.alignment: [goal-trace]
+    problem.opportunity: [problem]
+    scope.non-goals: [no-gos]
+    risks.register: [top-risks, rabbit-holes]
+    sources.data-points: [sources, sources-list, sources-data, sources-evidence]
+  prd-rfc:
+    decision.executive: [summary, decisions]
+    strategy.alignment: [goal-trace]
+    problem.opportunity: [problem, background]
+    goals.outcomes: [success]
+    scope.non-goals: [not-doing]
+    requirements.functional: [requirements]
+    solution.alternatives: [alternatives]
+    requirements.nonfunctional: [cross-cutting]
+    risks.register: [top-risks]
+    release.rollout: [delivery]
+    sources.data-points: [sources, sources-list, sources-data, sources-evidence]
+  ai-feature:
+    decision.executive: [summary, decisions]
+    strategy.alignment: [goal-trace]
+    problem.opportunity: [problem]
+    goals.outcomes: [success]
+    scope.non-goals: [not-doing]
+    risks.register: [top-risks, risks]
+    validation.plan: [evals]
+    sources.data-points: [sources, sources-list, sources-data, sources-evidence]

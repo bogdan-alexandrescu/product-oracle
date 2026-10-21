@@ -304,6 +304,16 @@ body {
     --fade-r: 32px;
   }
 }
+/* Phone sheets (ds Sheet): every control is a 44 px touch target. */
+@utility touch-44 {
+  & :is(button, select, summary, input:not([type="checkbox"], [type="radio"]), a[data-testid="feedback-goto"]) {
+    min-height: 44px;
+  }
+  & a[data-testid="feedback-goto"] {
+    display: inline-flex;
+    align-items: center;
+  }
+}
 /* The rail sets --focus-ring to its sky (#7cc8f8); elsewhere the ring is the accent. */
 :focus-visible {
   outline: 2px solid var(--focus-ring, var(--accent));
@@ -429,6 +439,28 @@ mark.hl-active {
 mark.hl-pending {
   background: var(--color-sky-100);
   color: inherit;
+}
+
+/* O4 'document dates': the marker after a roadmap date with no verified basis now. */
+.date-mark {
+  margin-left: 0.35em;
+  padding: 0 0.4em;
+  border-radius: 4px;
+  font-size: 0.75em;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: 0.1em;
+  background: var(--warn-bg);
+  color: var(--warn);
+  border: 1px solid currentColor;
+}
+.date-mark[data-date-mark="withdrawn"] {
+  background: var(--crit-bg);
+  color: var(--crit);
+}
+pre .date-mark,
+code .date-mark {
+  font-family: var(--font-sans, inherit);
 }
 
 /* Word-level diff. */

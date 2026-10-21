@@ -105,7 +105,8 @@ export function seedAccount(members: Member[], uuid: () => string): AccountDb {
       scopes: ["read:baseline", "read:documents", "read:sources", "write:drafts"],
       created_at: "2026-10-20T08:00:00Z",
       last_used_at: "2026-10-20T08:20:00Z",
-      expires_at: "2026-10-21T08:00:00Z",
+      // Its run is still going: the token lives on for a day from now, whatever today is.
+      expires_at: new Date(Date.now() + 86_400_000).toISOString(),
       run_id: uuid(),
     }),
     personal(admin, "Claude Desktop", {
