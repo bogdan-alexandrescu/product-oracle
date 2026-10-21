@@ -423,3 +423,33 @@ test("a decision SwarmCloud has not taken yet: recorded, shown as delivering, fi
   await expect(segment.getByTestId("checkpoint-baseline_confirm")).toContainText("Approved");
   await expect(status(page)).toHaveText("Running");
 });
+
+test("a run delivering a decision reads Delivering decision: header, side panel and runs list", async ({ page }) => {
+  // Owner decision 2026-10-20: amber, with a clock, as other in-progress states.
+  await page.addInitScript((key) => localStorage.setItem(key, "undelivered"), MOCK_SCENARIO_KEY);
+  await openRuns(page);
+  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
+  await expect(page.getByTestId("segment-baseline").getByTestId("checkpoint-delivering")).toBeVisible();
+
+  const amber = (scope: Page | ReturnType<Page["getByTestId"]>) =>
+    scope.locator('[data-kind="warn"]').filter({ has: page.getByTestId("run-status") });
+  // The header chip.
+  await expect(status(page)).toHaveText("Delivering decision");
+  await expect(amber(page).filter({ visible: true }).locator("svg")).toHaveCount(1);
+  // The side panel.
+  const panel = page.getByRole("complementary", { name: "Run" }).filter({ visible: true });
+  await expect(panel).toContainText("Run · delivering decision");
+  await expect(panel).not.toContainText("waiting for review");
+  // The runs list: the row's chip.
+  await page.getByTestId("nav-runs").click();
+  const row = page.getByTestId("run-row").filter({ hasText: "team-onboarding" });
+  await expect(row.getByTestId("run-status")).toHaveText("Delivering decision");
+  await expect(amber(row).locator("svg")).toHaveCount(1);
+  await expect(row).not.toContainText("Waiting for review");
+
+  // Delivered: the run reads Running again.
+  await row.getByRole("link").first().click();
+  await page.getByRole("button", { name: "Check agents now" }).click();
+  await expect(status(page)).toHaveText("Running");
+});

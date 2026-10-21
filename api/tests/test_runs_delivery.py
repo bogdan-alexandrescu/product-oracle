@@ -399,3 +399,22 @@ async def test_the_inbox_shows_an_undelivered_decision_to_its_approvers(client, 
     assert theirs["deliveries"] == [], theirs
     await tick(client, auth)
     assert (await client.get("/v1/inbox", headers=auth)).json()["deliveries"] == []
+
+
+async def test_a_run_delivering_a_decision_says_so(client, owner):
+    """Owner decision 2026-10-20: while its recorded decision is being delivered, the run
+    reads "Delivering decision" (header, side panel, runs list). Its status stays
+    awaiting_checkpoint; ``delivering`` names the checkpoint, in the run and in the list,
+    and clears once the decision is delivered."""
+    tenant_id, auth = owner
+    swarm = on()
+    run, cp = await _refused_decision(client, auth, tenant_id, swarm)
+    got = await get(client, auth, run["id"])
+    assert got["status"] == "awaiting_checkpoint", got["status"]
+    assert got["delivering"] == cp["kind"] and got["waiting_on"] is None, got
+    listed = (await client.get("/v1/runs", headers=auth)).json()
+    [row] = [r for r in listed if r["id"] == run["id"]]
+    assert row["delivering"] == cp["kind"], row
+    await tick(client, auth)
+    got = await get(client, auth, run["id"])
+    assert got["delivering"] is None, got
