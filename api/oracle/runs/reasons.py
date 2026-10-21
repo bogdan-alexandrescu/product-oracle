@@ -15,6 +15,7 @@ blockers, the comparison base and the PRD's newer section hashes. Moved, new and
 come from the one item diff (:func:`oracle.roadmap.diff.diff_items`).
 """
 
+import math
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -24,6 +25,7 @@ from typing import Any, NamedTuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import safe_yaml
 from oracle.baseline import trace as baseline_trace
 from oracle.baseline.models import Entity
 from oracle.blockers.service import UNRESOLVED
@@ -94,7 +96,7 @@ class ReasonContext:
     base: dict[str, Any] | None = None
     # item id -> {"horizon", "raw"} of the base, in its order.
     base_items: dict[str, dict[str, Any]] = field(default_factory=dict)
-    # section key -> (the newer PRD version's number, the section is gone there).
+    # section key -> (the newest PRD version where it differs, the section is gone there).
     section_changes: dict[str, tuple[int, bool]] = field(default_factory=dict)
     # item id -> the heading of its PRD section.
     prd_titles: dict[str, str] = field(default_factory=dict)
@@ -161,6 +163,22 @@ def _day(value: Any) -> str:
         return value.date().isoformat()
     if isinstance(value, date):
         return value.isoformat()
+    return str(value)
+
+
+def _plain(value: Any) -> Any:
+    """``value`` as plain JSON: reasons are stored as JSONB, and an item's raw YAML values
+    (a date, a datetime) or a non-finite number would fail the segment's flush."""
+    if value is None or isinstance(value, str | bool | int):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+    if isinstance(value, dict):
+        return {str(k): _plain(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_plain(v) for v in value]
+    if isinstance(value, set | frozenset):
+        return sorted(str(v) for v in value)
     return str(value)
 
 
@@ -312,8 +330,8 @@ def _reason(
         "severity": entry.severity if entry else BLOCKING,
         "label": label,
         "text": text,
-        "data": data or {},
-        "fixes": fixes,
+        "data": _plain(data or {}),
+        "fixes": _plain(fixes),
     }
 
 
@@ -365,7 +383,7 @@ def _blocking(
         return r(
             CATALOGUE[code].sentence.format(horizon=_h(horizon)),
             [remove_date(key), move(key, "now")],
-            {"horizon": horizon},
+            {"horizon": roadmap._text(horizon)},
         )
     if code == "undated_source":
         return r(CATALOGUE[code].sentence, [remove_date(key)])
@@ -417,7 +435,7 @@ def _blocking(
     if code == "duplicate_id":
         return r(f"Two items use {key}.", [drop(key, "Drop this one")])
     if code == "invalid_horizon":
-        value = item.get("horizon")
+        value = roadmap._text(item.get("horizon"))
         return r(
             f"{value} is not Now, Next or Later.",
             [_fix("Set horizon", "edit", key, "horizon", None)],
@@ -686,12 +704,16 @@ async def _base(
     db: AsyncSession, run: Run, previous: dict[str, Any] | None
 ) -> tuple[dict[str, Any] | None, dict[str, dict[str, Any]]]:
     """The comparison base: the previous attempt's file, else the latest version of the
-    target roadmap with items, else none."""
+    target roadmap with items, else none. The previous file is agent output: it is read on
+    the parse pool, at most ``PARSE_SECONDS``, as the check reads the new one; a refused or
+    too slow file is no base."""
     text = ((previous or {}).get("files") or {}).get(ITEMS_FILE)
     if isinstance(text, str):
         try:
-            data = roadmap.load_items_yaml(text)
-        except roadmap.ItemsYamlError:
+            data = await safe_yaml.run_parse_within(
+                roadmap.load_items_yaml, text, name=ITEMS_FILE, seconds=roadmap.PARSE_SECONDS
+            )
+        except (roadmap.ItemsYamlError, safe_yaml.SafeYamlError):
             data = None
         raw_items = data.get("items") if isinstance(data, dict) else None
         if isinstance(raw_items, list):
@@ -762,24 +784,32 @@ async def reason_context(
         prd_version = version.number
         mine = await _sections(db, version.id)
         headings = {k: s.heading for k, s in mine.items()}
+        # Every newer version, not only the newest: a section changed in v3 and put back
+        # in v4 still changed after this item was derived. The newest that differs is named.
         newer = (
             await db.execute(
-                select(DocumentVersion.id, DocumentVersion.number)
-                .where(
+                select(DocumentVersion.id, DocumentVersion.number).where(
                     DocumentVersion.document_id == version.document_id,
                     DocumentVersion.number > version.number,
                 )
-                .order_by(DocumentVersion.number.desc())
-                .limit(1)
             )
-        ).first()
-        if newer is not None:
-            theirs = await _sections(db, newer.id)
+        ).all()
+        hashes: dict[uuid.UUID, dict[str, str | None]] = {v.id: {} for v in newer}
+        if newer:
+            rows = await db.execute(
+                select(Section.version_id, Section.section_key, Section.content_hash).where(
+                    Section.version_id.in_([v.id for v in newer])
+                )
+            )
+            for version_id, key, content_hash in rows:
+                hashes[version_id][key] = content_hash
+        for v in sorted(newer, key=lambda v: v.number):
+            theirs = hashes[v.id]
             for key, section in mine.items():
                 if key not in theirs:
-                    section_changes[key] = (newer.number, True)
-                elif theirs[key].content_hash != section.content_hash:
-                    section_changes[key] = (newer.number, False)
+                    section_changes[key] = (v.number, True)
+                elif theirs[key] != section.content_hash:
+                    section_changes[key] = (v.number, False)
 
     report = await baseline_trace.report(db)
     flags = {f.id: f for f in report.features}
