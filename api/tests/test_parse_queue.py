@@ -131,3 +131,64 @@ async def test_a_tick_without_a_worker_retries_on_the_next_tick(client, runtime,
         assert current["status"] != "failed", current.get("error")
     assert saw_busy and calls["n"] >= 2
     assert current["segments"][3]["draft_import"]["version"] is not None
+
+
+async def test_cancelled_callers_keep_the_slot_until_the_workers_finish():
+    release = threading.Event()
+    running = []
+
+    def work():
+        running.append(1)
+        release.wait(30)
+        return 1
+
+    with safe_yaml.parse_owner("r126e-cancel"):
+        tasks = [asyncio.create_task(safe_yaml.run_parse(work)) for _ in range(2)]
+        for _ in range(500):
+            if len(running) == 2:
+                break
+            await asyncio.sleep(0.01)
+        assert len(running) == 2
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        with pytest.raises(safe_yaml.ParseBusy) as busy:
+            await safe_yaml.run_parse(lambda: 1)
+        assert busy.value.status == 429
+        release.set()
+        for _ in range(500):
+            if "r126e-cancel" not in safe_yaml._active:
+                break
+            await asyncio.sleep(0.01)
+        assert await safe_yaml.run_parse(lambda: 2) == 2
+
+
+async def test_submit_failure_frees_the_slot(monkeypatch):
+    class Dead:
+        def submit(self, *a, **k):
+            raise RuntimeError("cannot schedule new futures after shutdown")
+
+    monkeypatch.setattr(safe_yaml, "_EXECUTOR", Dead())
+    with safe_yaml.parse_owner("r126e-submit"):
+        with pytest.raises(RuntimeError):
+            await safe_yaml.run_parse(lambda: 1)
+    assert "r126e-submit" not in safe_yaml._active
+
+
+async def test_busy_response_has_retry_after(client, monkeypatch):
+    tenant, auth = await seed_auth()
+    gate = Gate(monkeypatch)
+    posts = [asyncio.create_task(import_draft(client, auth, f"BLOCK {i}")) for i in range(3)]
+    await gate.until(2)
+    done, pending = await asyncio.wait(posts, timeout=5, return_when=asyncio.FIRST_COMPLETED)
+    resp = next(iter(done)).result()
+    assert resp.status_code == 429 and resp.headers["retry-after"] == "5"
+    gate.release.set()
+    await asyncio.gather(*pending)
+
+
+def test_nested_citation_markers_are_stripped_to_nothing():
+    from oracle.docs.parser import strip_citations
+
+    assert strip_citations("claim [c:[c:x]a] end") == "claim end"
+    assert strip_citations("plain [c:x]") == "plain"
