@@ -5,20 +5,41 @@ a stalled API. Against Postgres.
 
 The large document is what ``parse_draft`` still accepts: 1 MB of ``[[[[a]]]] `` in
 19,000-character lines (before this change its dates took about 19 s of CPU on every read
-of the version, its HTML export another 4.4 s, all on the event loop)."""
+of the version, its HTML export another 4.4 s, all on the event loop).
+
+Security review of PR #134 (2026-10-20): a dates job is given up on its own CPU time, not
+the wall clock (other companies' work slows it); an export holds no database connection
+while it waits, a full queue is "busy" (503), not "too large" (422), and one person or one
+company cannot fill the export pool; the kept dates are compact, an entry too large to keep
+evicts nothing, an import refuses a pathological number of dates, and one company runs at
+most two date jobs at once."""
 
 import asyncio
 import contextlib
 import hashlib
+import threading
 import time
+import uuid
+from datetime import UTC, date, datetime
+from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import select
 
+from oracle.db import get_engine
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.export import offload
+from oracle.export import router as export_router
 from oracle.roadmap import doc_dates
 from oracle.tenancy import tenant_session
+from tests.conftest import make_tenant, seed_company
 from tests.fixtures import import_draft, seed_auth
-from tests.test_brief import doc  # noqa: F401 - fixture
+from tests.test_brief import (
+    DRAFT,
+    _import,
+    doc,  # noqa: F401 - fixture
+)
 from tests.test_priorities import _token
 
 # How long the event loop may go without running another task.
@@ -169,18 +190,25 @@ async def test_a_read_waits_for_dates_at_most_its_cap_then_they_are_served(clien
     assert finds[0] == 1
 
 
+def burn(seconds: float) -> None:
+    """Spend ``seconds`` of this thread's CPU."""
+    end = time.thread_time() + seconds
+    while time.thread_time() < end:
+        pass
+
+
 async def test_a_version_whose_dates_take_past_the_job_cap_is_refused_without_reparsing(
     client, monkeypatch
 ):
-    """A job that ran past ``JOB_SECONDS`` gives up: that read and the next are 422, and
-    the next one parses nothing."""
+    """A job whose worker spent more than ``JOB_SECONDS`` of its own CPU gives up: that
+    read and the next are 422, and the next one parses nothing."""
     tenant_id, auth = await seed_auth()
     markdown = "---\ntitle: Slow plan\nkind: roadmap\n---\n\n# Slow plan {#plan}\n\nNo dates yet.\n"
     assert (await import_draft(client, auth, markdown, "slow-plan")).status_code == 201
     real = doc_dates.find
 
     def slow(*args, **kwargs):
-        time.sleep(0.6)
+        burn(0.6)
         return real(*args, **kwargs)
 
     monkeypatch.setattr(doc_dates, "find", slow)
@@ -302,14 +330,20 @@ EXPORTS = [
 
 
 def test_the_export_cap_and_pool_are_the_owner_s():
-    """Owner decision 2026-10-20: every export format waits at most 60 s, on its own
-    2-thread pool (not the parse pool)."""
+    """Owner decisions 2026-10-20: every export format renders for at most 60 s, counted
+    from when its render starts, on its own 2-thread pool (not the parse pool); a wait of
+    more than 10 s for a worker is "busy"; one export per person and two per company at
+    a time."""
     from oracle import safe_yaml
-    from oracle.export import offload
 
     assert offload.SECONDS == 60.0
+    assert offload.QUEUE_SECONDS == 10.0
+    assert offload.EXPORTS_PER_PERSON == 1
+    assert offload.EXPORTS_PER_COMPANY == 2
     assert offload.POOL._max_workers == 2
     assert offload.POOL is not safe_yaml._EXECUTOR
+    assert offload.BUSY == "Oracle is busy with other exports. Try again in a moment."
+    assert offload.BUSY_YOU == "Your previous export is still running"
 
 
 @pytest.mark.parametrize("path", EXPORTS)
@@ -323,8 +357,6 @@ async def test_an_export_past_its_time_cap_is_refused(client, tenant_id, doc, mo
 
 async def test_exports_render_off_the_event_loop(client, tenant_id, doc, monkeypatch):  # noqa: F811
     """Every export renders on the export pool's threads, never on the loop's."""
-    import threading
-
     from oracle.export import render
 
     seen: list[str] = []
@@ -339,3 +371,472 @@ async def test_exports_render_off_the_event_loop(client, tenant_id, doc, monkeyp
     resp = await client.get("/v1/documents/checkout/versions/1/export?format=html", headers=viewer)
     assert resp.status_code == 200, resp.text
     assert seen and all(name != threading.main_thread().name for name in seen), seen
+
+
+# --------------------------------------------------------------------------- dates: CPU, not wall
+
+
+async def _slow_plan_v2(client, tenant_id, auth) -> str:
+    """Version 2 of ``slow-plan``, whose dates no read has found yet."""
+    markdown = "---\ntitle: Slow plan\nkind: roadmap\n---\n\n# Slow plan {#plan}\n\nNo dates yet.\n"
+    assert (await import_draft(client, auth, markdown, "slow-plan")).status_code == 201
+    await _store_copy(tenant_id, "slow-plan")
+    return "/v1/documents/slow-plan/versions/2"
+
+
+def _given_up_versions() -> set:
+    return {k[1] for k in doc_dates._KEPT.gave_up if k and k[0] == "version"}
+
+
+async def test_a_job_slowed_by_contention_but_under_its_cpu_cap_is_never_given_up(
+    client, monkeypatch
+):
+    """Wall time is how busy the server is, not what the document costs: a job that takes
+    three times ``JOB_SECONDS`` on the clock while its worker spends almost no CPU (as when
+    other companies' threads hold the GIL; ``time.sleep`` here) is served, never given up."""
+    tenant_id, auth = await seed_auth()
+    real = doc_dates.find
+
+    def slowed(*args, **kwargs):
+        time.sleep(0.6)  # the clock runs, this thread's CPU does not
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(doc_dates, "find", slowed)
+    monkeypatch.setattr(doc_dates, "JOB_SECONDS", 0.2)
+    finds = count_calls(monkeypatch, doc_dates, "find")
+    url = await _slow_plan_v2(client, tenant_id, auth)
+
+    resp = await until_ready(client, url, auth)
+    assert resp.status_code == 200, resp.text
+    assert finds[0] == 1
+    assert uuid.UUID(resp.json()["id"]) not in _given_up_versions()
+
+
+async def test_the_wall_backstop_never_gives_a_version_up(client, monkeypatch):
+    """A job past the wall backstop (``JOB_WALL_SECONDS``: liveness, not cost) stops being
+    waited for: the read is 503 (try again), the version is not given up, and the next read
+    finds its dates."""
+    tenant_id, auth = await seed_auth()
+    real = doc_dates.find
+    calls = [0]
+
+    def first_slow(*args, **kwargs):
+        calls[0] += 1
+        if calls[0] == 1:
+            time.sleep(0.6)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(doc_dates, "find", first_slow)
+    monkeypatch.setattr(doc_dates, "JOB_WALL_SECONDS", 0.2)
+    url = await _slow_plan_v2(client, tenant_id, auth)
+
+    first = await client.get(url, headers=auth)
+    assert first.status_code == 503, first.text
+    assert first.headers["retry-after"]
+    assert not _given_up_versions()
+    resp = await until_ready(client, url, auth)
+    assert resp.status_code == 200, resp.text
+    assert calls[0] == 2
+
+
+# --------------------------------------------------------------------------- dates: the cache
+
+
+def _version(tenant_id: uuid.UUID | None = None, created: datetime | None = None):
+    """A stored version as found_for_version reads it."""
+    return SimpleNamespace(
+        id=uuid.uuid4(),
+        tenant_id=tenant_id or uuid.uuid4(),
+        created_at=created or datetime.now(UTC),
+        front_matter={},
+    )
+
+
+PARTS = (doc_dates._Part("plan", 1, "Plan", "Kickoff 2026-11-30."),)
+
+
+def test_an_entry_too_large_to_keep_evicts_nothing(monkeypatch):
+    """An entry above 1/8 of ``KEPT_BYTES`` is not kept, and every other entry stays (an
+    oversized entry used to empty the cache and stay alone)."""
+    monkeypatch.setattr(doc_dates, "KEPT_BYTES", 8_000)
+    kept = doc_dates._Kept()
+    small = frozenset({("plan", "2026-11-30")})
+    for k in range(3):
+        assert kept.put(("template", k), small) is True
+    big = frozenset((f"s{k}", "2026-11-30") for k in range(100))
+    assert kept.put(("template", "big"), big) is False
+    assert kept.get(("template", "big")) is doc_dates._MISSING
+    assert all(kept.get(("template", k)) == small for k in range(3))
+    assert kept.weight <= doc_dates.KEPT_BYTES
+
+
+def test_kept_dates_are_compact():
+    """What a version keeps is packed: well under the 512 bytes a date took as objects."""
+    body = "\n\n".join(f"Step {i} ships 2026-11-{i % 28 + 1:02d}." for i in range(1000))
+    parts = (doc_dates._Part("plan", 1, "Plan", body),)
+    ref = date(2026, 10, 20)
+    found = tuple(doc_dates.find(parts, ref=ref))
+    assert len(found) == 1000
+    vid = uuid.uuid4()
+    doc_dates.keep_for_version(vid, ref, found)
+    _, weight = doc_dates._KEPT.values[("version", vid, ref, doc_dates.RENDERER)]
+    assert weight < 200 * len(found), weight
+
+
+async def test_kept_dates_read_back_exactly_what_was_found():
+    body = (
+        "| Item | Ships |\n|---|---|\n| [Payment](#now-payment-step) | 2026-11-30 |\n\n"
+        "```\nfreeze 2026-12-01\n```\n\nThe 3rd of December, and 05/06/2026.\n"
+    )
+    parts = (doc_dates._Part("plan", 1, "Plan 2026-11-29", body),)
+    created = datetime(2026, 10, 20, 12, tzinfo=UTC)
+    version = _version(created=created)
+    version.front_matter = {"title": "Plan for 2026-12-24"}
+    found = tuple(doc_dates.find(parts, title="Plan for 2026-12-24", ref=created.date()))
+    assert len(found) >= 5
+    doc_dates.keep_for_version(version.id, created.date(), found)
+    assert await doc_dates.found_for_version(version, parts) == found
+
+
+async def test_a_stored_version_past_the_date_cap_is_refused_and_not_kept(monkeypatch):
+    """A version stored before the import cap (or by any other path) with more than
+    ``MAX_DATES`` dates: refused (422) and given up, never kept nor parsed again."""
+    monkeypatch.setattr(doc_dates, "MAX_DATES", 2)
+    finds = count_calls(monkeypatch, doc_dates, "find")
+    parts = (doc_dates._Part("plan", 1, "Plan", "A 2026-11-30, B 2026-12-01, C 2026-12-02."),)
+    version = _version()
+    for _ in range(2):
+        with pytest.raises(doc_dates.DatesUnavailable) as e:
+            await doc_dates.found_for_version(version, parts)
+        assert e.value.status_code == 422
+    assert finds[0] == 1
+    assert not [k for k in doc_dates._KEPT.values if k[1] == version.id]
+
+
+async def test_a_roadmap_import_with_more_dates_than_the_cap_is_refused(client):
+    """A clear refusal at import, well above any real roadmap (Galatia's writes dozens)."""
+    assert doc_dates.MAX_DATES >= 1_000
+    _, auth = await seed_auth()
+    body = " ".join(["2026-11-30"] * (doc_dates.MAX_DATES + 1))
+    markdown = f"---\ntitle: Plan\nkind: roadmap\n---\n\n# Plan {{#plan}}\n\n{body}\n"
+    resp = await import_draft(client, auth, markdown, "plan")
+    assert resp.status_code == 422, resp.text
+    errors = resp.json()["errors"]
+    assert [p["code"] for p in errors] == ["too_many_dates"], errors
+    assert f"{doc_dates.MAX_DATES:,}" in errors[0]["message"]
+
+
+async def until(cond, seconds: float = 15.0) -> None:
+    deadline = time.monotonic() + seconds
+    while not cond():
+        assert time.monotonic() < deadline, "timed out waiting"
+        await asyncio.sleep(0.01)
+
+
+async def until_found(version) -> tuple:
+    deadline = time.monotonic() + 30
+    while True:
+        try:
+            return await doc_dates.found_for_version(version, PARTS)
+        except doc_dates.DatesUnavailable as e:
+            assert e.status_code == 503 and time.monotonic() < deadline
+            await asyncio.sleep(0.02)
+
+
+async def test_a_company_runs_at_most_two_date_jobs_at_once(monkeypatch):
+    """One company cycling large versions cannot fill the 4-thread parse pool: its third
+    concurrent job is refused (503, try again) without starting; another company's runs."""
+    gate = threading.Event()
+    started: list[int] = []
+    real = doc_dates.find
+
+    def held(*args, **kwargs):
+        started.append(1)
+        gate.wait(30)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(doc_dates, "find", held)
+    monkeypatch.setattr(doc_dates, "WAIT_SECONDS", 0.05)
+    assert doc_dates.DATE_JOBS_PER_COMPANY == 2
+    company = uuid.uuid4()
+    mine = [_version(company) for _ in range(3)]
+    theirs = _version()
+    try:
+        for v in mine[:2]:
+            with pytest.raises(doc_dates.DatesUnavailable) as e:
+                await doc_dates.found_for_version(v, PARTS)
+            assert e.value.status_code == 503
+        await until(lambda: len(started) == 2)
+        with pytest.raises(doc_dates.DatesUnavailable) as e:
+            await doc_dates.found_for_version(mine[2], PARTS)
+        assert e.value.status_code == 503
+        assert e.value.headers["Retry-After"]
+        assert e.value.detail == doc_dates.DATES_BUSY
+        with pytest.raises(doc_dates.DatesUnavailable):
+            await doc_dates.found_for_version(theirs, PARTS)
+        await until(lambda: len(started) == 3)
+        await asyncio.sleep(0.1)
+        assert len(started) == 3  # the refused job never started
+    finally:
+        gate.set()
+    for v in [*mine, theirs]:
+        await until_found(v)
+
+
+def test_a_key_given_up_again_moves_to_the_end_of_the_list():
+    kept = doc_dates._Kept()
+    kept.give_up("again")
+    for k in range(1023):
+        kept.give_up(k)
+    kept.give_up("again")
+    kept.give_up("new")  # 1025 keys: the oldest goes
+    assert kept.given_up("again")
+    assert not kept.given_up(0)
+
+
+async def test_a_failed_date_job_is_remembered_briefly(monkeypatch):
+    """A job that failed (not a timeout) is not run again by every read: its error is
+    served for ``FAILED_SECONDS``, then the next read tries again."""
+    calls = [0]
+
+    def broken(*args, **kwargs):
+        calls[0] += 1
+        raise ValueError("unreadable")
+
+    monkeypatch.setattr(doc_dates, "find", broken)
+    version = _version()
+    for _ in range(3):
+        with pytest.raises(ValueError, match="unreadable"):
+            await doc_dates.found_for_version(version, PARTS)
+    assert calls[0] == 1
+    monkeypatch.setattr(doc_dates, "FAILED_SECONDS", 0.0)
+    with pytest.raises(ValueError):
+        await doc_dates.found_for_version(version, PARTS)
+    assert calls[0] == 2
+
+
+def test_after_an_empty_leading_code_block_a_date_is_in_its_own_block():
+    """The one intended difference from main: an empty leading code block and the
+    paragraph after it compared equal (both empty blocks at 0), so the date was read as the
+    code block's (no text, no item). It is its paragraph's: its item and its text."""
+    body = "```\n```\n\n[Payment](#now-payment-step) ships 2026-11-30.\n"
+    (f,) = doc_dates.find([doc_dates._Part("plan", 1, "Plan", body)], ref=date(2026, 10, 20))
+    assert f.owner == "payment-step"
+    assert f.block == "Payment ships 2026-11-30."
+
+
+async def test_approve_takes_the_document_lock_only_once_the_dates_are_found(client, monkeypatch):
+    """Approving a roadmap version whose dates are still being found does not hold the
+    document's row lock meanwhile (an import waits on that lock)."""
+    tenant_id, auth = await seed_auth()
+    url = await _slow_plan_v2(client, tenant_id, auth)
+    gate = threading.Event()
+    entered = threading.Event()
+    real = doc_dates.find
+
+    def held(*args, **kwargs):
+        entered.set()
+        gate.wait(30)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(doc_dates, "find", held)
+    approving = asyncio.create_task(client.post(f"{url}/approve", headers=auth))
+    try:
+        await until(entered.is_set)
+        await asyncio.sleep(0.2)
+        async with tenant_session(tenant_id) as s:
+            # NOWAIT: an error if approve holds the row.
+            await s.execute(
+                select(Document.id).where(Document.slug == "slow-plan").with_for_update(nowait=True)
+            )
+            await s.rollback()
+    finally:
+        gate.set()
+        resp = await approving  # its transaction ends before the test's cleanup
+    assert resp.status_code in (200, 503), resp.text
+    if resp.status_code == 503:  # it waited WAIT_SECONDS: the dates are kept by now
+        resp = await until_approved(client, f"{url}/approve", auth)
+    assert resp.status_code == 200, resp.text
+
+
+async def until_approved(client, url: str, auth: dict):
+    deadline = time.monotonic() + PATIENCE
+    resp = await client.post(url, headers=auth)
+    while resp.status_code == 503 and time.monotonic() < deadline:
+        await asyncio.sleep(0.2)
+        resp = await client.post(url, headers=auth)
+    return resp
+
+
+# --------------------------------------------------------------------------- exports: fair share
+
+URL = "/v1/documents/checkout/versions/1/export?format=html"
+
+
+class Held:
+    """Exports whose render waits until ``release()`` (on the export pool's threads)."""
+
+    def __init__(self, monkeypatch) -> None:
+        self.gate = threading.Event()
+        self.lock = threading.Lock()
+        self.started = 0
+        monkeypatch.setattr(export_router, "render_export", self)
+
+    def __call__(self, ev, layer, fmt):
+        with self.lock:
+            self.started += 1
+        self.gate.wait(30)
+        return "<p>rendered</p>"
+
+    def release(self) -> None:
+        self.gate.set()
+
+
+async def _company(client, name: str) -> uuid.UUID:
+    """A company with the ``checkout`` PRD."""
+    tenant = await make_tenant(name)
+    await seed_company(tenant)
+    resp = await _import(client, await _token(tenant, "approver"), DRAFT)
+    assert resp.status_code == 201, resp.text
+    return tenant
+
+
+def _busy(resp, code: str) -> dict:
+    body = resp.json()
+    assert body["code"] == code, body
+    assert body["detail"] == body["message"]
+    return body
+
+
+async def test_one_person_s_second_concurrent_export_is_refused_at_once(
+    client,
+    tenant_id,
+    doc,  # noqa: F811
+    monkeypatch,
+):
+    held = Held(monkeypatch)
+    viewer = await _token(tenant_id, "viewer")
+    first = asyncio.create_task(client.get(URL, headers=viewer))
+    try:
+        await until(lambda: held.started == 1)
+        second = await client.get(URL, headers=viewer)
+        assert second.status_code == 429, second.text
+        body = _busy(second, "export_busy_you")
+        assert body["message"] == "Your previous export is still running"
+        assert held.started == 1  # refused before it rendered anything
+    finally:
+        held.release()
+    assert (await first).status_code == 200
+    # Once it is done, the same person exports again.
+    assert (await client.get(URL, headers=viewer)).status_code == 200
+
+
+async def test_a_company_runs_two_exports_and_a_third_company_is_not_starved(client, monkeypatch):
+    held = Held(monkeypatch)
+    a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
+    a_people = [await _token(a, "viewer") for _ in range(3)]
+    b_people = [await _token(b, "viewer") for _ in range(3)]
+    tasks = []
+    try:
+        tasks += [asyncio.create_task(client.get(URL, headers=h)) for h in a_people[:2]]
+        await until(lambda: held.started == 2)
+        tasks += [asyncio.create_task(client.get(URL, headers=h)) for h in b_people[:2]]
+        await until(lambda: offload.in_flight(b) == 2)
+        assert offload.in_flight(a) == 2
+        # A and B flood: refused at once, nothing queued for them.
+        for h in (a_people[2], b_people[2]):
+            resp = await client.get(URL, headers=h)
+            assert resp.status_code == 429, resp.text
+            _busy(resp, "export_busy_you")
+        assert offload.in_flight(a) == offload.in_flight(b) == 2
+        # C waits behind at most two companies' share, never behind a flood.
+        tasks.append(asyncio.create_task(client.get(URL, headers=await _token(c, "viewer"))))
+        await until(lambda: offload.in_flight(c) == 1)
+    finally:
+        held.release()
+    for t in tasks:
+        assert (await t).status_code == 200
+    assert held.started == 5
+
+
+async def test_a_wait_for_a_worker_past_ten_seconds_is_busy_not_too_large(client, monkeypatch):
+    held = Held(monkeypatch)
+    monkeypatch.setattr(offload, "QUEUE_SECONDS", 0.2)
+    a, b = await _company(client, "A Co"), await _company(client, "B Co")
+    blockers = [
+        asyncio.create_task(client.get(URL, headers=await _token(a, "viewer"))) for _ in range(2)
+    ]
+    try:
+        await until(lambda: held.started == 2)
+        resp = await client.get(URL, headers=await _token(b, "viewer"))
+        assert resp.status_code == 503, resp.text
+        assert resp.headers["retry-after"]
+        body = _busy(resp, "export_busy")
+        assert body["message"] == "Oracle is busy with other exports. Try again in a moment."
+    finally:
+        held.release()
+    for t in blockers:
+        assert (await t).status_code == 200
+    # The refused export never renders, and its share is free again.
+    await until(lambda: offload.in_flight(b) == 0)
+    assert held.started == 2
+
+
+async def test_the_render_cap_counts_from_when_the_render_starts(client, monkeypatch):
+    """Queued 1.5 s behind a full pool, then rendered at once: served, although the
+    request took longer than the render cap (1 s here)."""
+    held = Held(monkeypatch)
+    monkeypatch.setattr(offload, "SECONDS", 1.0)
+    a, b = await _company(client, "A Co"), await _company(client, "B Co")
+    blockers = [
+        asyncio.create_task(client.get(URL, headers=await _token(a, "viewer"))) for _ in range(2)
+    ]
+    try:
+        await until(lambda: held.started == 2)
+        queued = asyncio.create_task(client.get(URL, headers=await _token(b, "viewer")))
+        await asyncio.sleep(1.5)
+    finally:
+        held.release()
+    resp = await queued
+    assert resp.status_code == 200, resp.text
+    for t in blockers:  # each rendered for 1.5 s: past the cap
+        blocked = await t
+        assert blocked.status_code == 422, blocked.text
+        assert blocked.json()["detail"] == "This document is too large to export quickly"
+
+
+async def test_exports_waiting_for_the_pool_hold_no_database_connection(client, monkeypatch):
+    held = Held(monkeypatch)
+    a, b = await _company(client, "A Co"), await _company(client, "B Co")
+    reader = await _token(a, "viewer")
+    people = [await _token(t, "viewer") for t in (a, a, b, b)]
+    tasks = [asyncio.create_task(client.get(URL, headers=h)) for h in people]
+    try:
+        await until(lambda: held.started == 2 and offload.in_flight(a) + offload.in_flight(b) == 4)
+        await asyncio.sleep(0.1)
+        assert get_engine().pool.checkedout() == 0
+        other = await client.get("/v1/documents/checkout/versions/1", headers=reader)
+        assert other.status_code == 200, other.text
+    finally:
+        held.release()
+    for t in tasks:
+        assert (await t).status_code == 200
+
+
+async def test_an_export_renders_rows_no_session_holds(client, tenant_id, doc, monkeypatch):  # noqa: F811
+    """The render reads copies: no row it reads is attached to the request's session (which
+    ends before a render that outlives its request)."""
+    attached: list[bool] = []
+    real = export_router.render_export
+
+    def spy(ev, layer, fmt):
+        rows = [ev.document, ev.version, *ev.sections, *ev.all_sections, *ev.citations]
+        rows += [ev.theme] if ev.theme is not None else []
+        attached.extend(sa_inspect(r).session is not None for r in rows)
+        return real(ev, layer, fmt)
+
+    monkeypatch.setattr(export_router, "render_export", spy)
+    viewer = await _token(tenant_id, "viewer")
+    resp = await client.get(URL, headers=viewer)
+    assert resp.status_code == 200, resp.text
+    assert attached and not any(attached)
