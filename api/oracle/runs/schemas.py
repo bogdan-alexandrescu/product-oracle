@@ -246,6 +246,23 @@ class ConsoleAnswer(BaseModel):
     can_redo: bool = False
 
 
+class CheckpointDelivery(BaseModel):
+    """A decision recorded in Oracle that has not reached the run's workflow yet (owner,
+    2026-10-20: a recorded decision is final; Oracle sends it again on every tick until
+    SwarmCloud takes it). The decision is the checkpoint's ``status``, ``decided_by`` and
+    ``decided_at``. None once delivered: the checkpoint then shows its decided state."""
+
+    # Who decided: their email, or the API token's name.
+    decided_by_name: str | None = None
+    # When Oracle recorded it.
+    since: datetime | None = None
+    # Tries that did not deliver it (0 while the first is under way).
+    tries: int = 0
+    # What SwarmCloud answered the last of them (redacted, at most 200 characters).
+    last_error: str | None = None
+    last_tried_at: datetime | None = None
+
+
 class CheckpointOut(BaseModel):
     id: uuid.UUID
     run_id: uuid.UUID
@@ -265,6 +282,8 @@ class CheckpointOut(BaseModel):
     cannot_approve: str | None = None
     # An open checkpoint answered in SwarmCloud's console, waiting on an approver (W5).
     console: ConsoleAnswer | None = None
+    # A decided checkpoint whose decision Oracle has not delivered to the run yet.
+    delivery: CheckpointDelivery | None = None
 
 
 class RunProgress(BaseModel):
@@ -510,6 +529,10 @@ class InboxCounts(BaseModel):
 
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
+    # Those with the checkpoint's approver role: decisions recorded and not delivered to
+    # the run yet (``delivery``), until SwarmCloud takes them. Shown only: nothing to
+    # decide, not in ``total``.
+    deliveries: list[InboxCheckpoint] = []
     # Owners only: runs waiting for cost approval, and runs paused on overrun.
     approvals: list[RunSummary]
     overruns: list[RunSummary]
