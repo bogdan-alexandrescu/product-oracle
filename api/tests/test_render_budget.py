@@ -169,6 +169,35 @@ async def test_a_read_waits_for_dates_at_most_its_cap_then_they_are_served(clien
     assert finds[0] == 1
 
 
+async def test_a_version_whose_dates_take_past_the_job_cap_is_refused_without_reparsing(
+    client, monkeypatch
+):
+    """A job that ran past ``JOB_SECONDS`` gives up: that read and the next are 422, and
+    the next one parses nothing."""
+    tenant_id, auth = await seed_auth()
+    markdown = "---\ntitle: Slow plan\nkind: roadmap\n---\n\n# Slow plan {#plan}\n\nNo dates yet.\n"
+    assert (await import_draft(client, auth, markdown, "slow-plan")).status_code == 201
+    real = doc_dates.find
+
+    def slow(*args, **kwargs):
+        time.sleep(0.6)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(doc_dates, "find", slow)
+    monkeypatch.setattr(doc_dates, "JOB_SECONDS", 0.2)
+    finds = count_calls(monkeypatch, doc_dates, "find")
+    await _store_copy(tenant_id, "slow-plan")
+    url = "/v1/documents/slow-plan/versions/2"
+
+    for _ in range(2):
+        resp = await client.get(url, headers=auth)
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"] == "This roadmap is too large to check its dates quickly"
+    markdown_view = await client.get(f"{url}/markdown", headers=auth)
+    assert markdown_view.status_code == 422
+    assert finds[0] == 1
+
+
 async def _store_copy(tenant_id, slug: str) -> None:
     """Version 2 of ``slug``: version 1's text, stored without an import (no dates found
     for it yet)."""

@@ -69,6 +69,7 @@ import asyncio
 import bisect
 import hashlib
 import re
+import time
 import unicodedata
 import uuid
 from array import array
@@ -859,8 +860,10 @@ RENDERER = 1
 # (too_slow), a stored version's read answers 503 while its dates are still being found.
 WAIT_SECONDS = safe_yaml.PARSE_SECONDS
 # Finding a stored version's dates gives up after this long: that version's reads are
-# then refused (422) without parsing it again.
+# then refused (422) for GIVE_UP_SECONDS without parsing it again. A job that spent most
+# of that time waiting for a busy pool is not given up on (the next read tries again).
 JOB_SECONDS = 4 * safe_yaml.PARSE_SECONDS
+GIVE_UP_SECONDS = 600.0
 # Roughly what the kept results may hold, in bytes (least recently used out first).
 KEPT_BYTES = 32 * 1024 * 1024
 STILL_CHECKING = "This roadmap's dates are still being checked; try again in a few seconds"
@@ -927,7 +930,7 @@ class _Kept:
     def __init__(self) -> None:
         self.values: OrderedDict[Hashable, tuple[Any, int]] = OrderedDict()
         self.weight = 0
-        self.gave_up: OrderedDict[Hashable, None] = OrderedDict()
+        self.gave_up: OrderedDict[Hashable, float] = OrderedDict()  # key -> when
         self.running: dict[Hashable, asyncio.Task[Any]] = {}
 
     def get(self, key: Hashable) -> Any:
@@ -949,22 +952,40 @@ class _Kept:
             self.weight -= dropped
 
     def give_up(self, key: Hashable) -> None:
-        self.gave_up[key] = None
+        self.gave_up[key] = time.monotonic()
         while len(self.gave_up) > 1024:
             self.gave_up.popitem(last=False)
+
+    def given_up(self, key: Hashable) -> bool:
+        at = self.gave_up.get(key)
+        if at is None:
+            return False
+        if time.monotonic() - at > GIVE_UP_SECONDS:
+            del self.gave_up[key]
+            return False
+        return True
 
 
 _KEPT = _Kept()
 
 
 async def _job(key: Hashable, fn: Callable[..., Any], args: tuple[Any, ...]) -> Any:
+    started: list[float] = []  # when the pool started it
+
+    def timed(*a: Any) -> Any:
+        started.append(time.monotonic())
+        return fn(*a)
+
     try:
         value = await safe_yaml.run_parse_within(
-            fn, *args, name="the roadmap's dates", seconds=JOB_SECONDS
+            timed, *args, name="the roadmap's dates", seconds=JOB_SECONDS
         )
     except safe_yaml.ParseTimeout:
-        _KEPT.give_up(key)
-        raise DatesUnavailable(pending=False) from None
+        # The cap counts a wait for a busy pool too: given up only when it ran most of it.
+        if started and time.monotonic() - started[0] >= JOB_SECONDS / 2:
+            _KEPT.give_up(key)
+            raise DatesUnavailable(pending=False) from None
+        raise DatesUnavailable(pending=True) from None
     finally:
         if _KEPT.running.get(key) is asyncio.current_task():
             del _KEPT.running[key]
@@ -979,7 +1000,7 @@ async def _kept(key: Hashable, fn: Callable[..., Any], *args: Any) -> Any:
     value = _KEPT.get(key)
     if value is not _MISSING:
         return value
-    if key in _KEPT.gave_up:
+    if _KEPT.given_up(key):
         raise DatesUnavailable(pending=False)
     loop = asyncio.get_running_loop()
     job = _KEPT.running.get(key)
