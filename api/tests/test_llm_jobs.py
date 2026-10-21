@@ -1,9 +1,11 @@
 """Built-in model jobs: review comments, reporting and refinement on a fake transport."""
 
 import json
+import re
 import uuid
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -1012,6 +1014,22 @@ async def test_an_owner_turns_job_kinds_off_per_document(client, ctx, pool, fake
     # Reporting stays on: a second version queues its reports.
     await import_draft(client, ctx, DRAFT_V1.replace("Owner: product.", "Owner: growth."))
     assert [j["kind"] for j in await jobs(client, ctx)] == ["reporting"]
+
+
+# D15: the History fold names these four switches in plain words; the keys stay the API's.
+SETTING_KEYS = {"review_comments", "reporting", "refinement", "quality_review"}
+MOCK_LLM_JOBS = Path(__file__).resolve().parents[2] / "web" / "lib" / "api" / "mock" / "llm-jobs.ts"
+
+
+async def test_the_settings_keys_the_plain_labels_map_to_are_the_apis_and_the_mocks(client, ctx):
+    await import_draft(client, ctx)
+    resp = await client.get(f"/v1/documents/{SLUG}/llm-jobs/settings", headers=ctx["headers"])
+    assert resp.status_code == 200, resp.text
+    assert set(resp.json()) == SETTING_KEYS
+    # The mock's per-document switches (its settings fixture) that the Playwright tests drive.
+    kinds = re.search(r"const KINDS[^=]*=\s*\[([^\]]*)\]", MOCK_LLM_JOBS.read_text())
+    assert kinds, "the mock's KINDS list moved"
+    assert set(re.findall(r'"([a-z_]+)"', kinds.group(1))) == SETTING_KEYS
 
 
 async def test_roles(client, ctx, pool, fake):

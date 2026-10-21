@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { feedbackState, login, openSection, showAll } from "./helpers";
+import { feedbackState, login, openSection, openTab, showAll } from "./helpers";
 
 /**
  * C1e: accepting a suggestion stages it; "Build draft N+1" builds every staged change in
@@ -213,11 +213,11 @@ test("Inbox: arriving marks items seen; they stay New for this visit, Open on th
 
 test("with the Refinement switch off the build button is disabled and says why", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/clinic-outreach");
-  const refinement = page.getByTestId("llm-job-settings").getByLabel("Refinement");
+  await page.goto("/documents/clinic-outreach/v/5");
+  await openTab(page, "History");
+  const refinement = page.getByTestId("llm-job-settings").filter({ visible: true }).getByLabel("Rewrite sections and build drafts");
   await refinement.uncheck();
   await expect(refinement).not.toBeChecked();
-  await page.locator('a[href$="/clinic-outreach/v/5"]').filter({ visible: true }).first().click();
   await expect(buildButton(page)).toBeDisabled();
   await expect(buildButton(page)).toHaveAttribute("title", "Refinement jobs are switched off");
 });
