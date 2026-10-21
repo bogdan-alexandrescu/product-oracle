@@ -787,7 +787,9 @@ async def _free_slug(db: AsyncSession, base: str) -> str:
     return f"{base}-{n}"
 
 
-_TITLE_LINE = re.compile(r"^(#\s+)(.*?)(\s*\{#[A-Za-z0-9][A-Za-z0-9_.:-]*\}\s*)$", re.M)
+# Linear: the marker's whitespace is taken once (possessive), and the title ends on a
+# non-space, so the anchor's leading whitespace is scanned from one place, not every one.
+_TITLE_LINE = re.compile(r"^(#\s++)((?:.*?\S)??)(\s*\{#[A-Za-z0-9][A-Za-z0-9_.:-]*\}\s*)$", re.M)
 
 
 def _yaml_scalar(value: str) -> str:
