@@ -4169,6 +4169,115 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Checkpoint Draft
+         * @description A checkpoint's shared draft decision (D8), any member: the items of the file it
+         *     reviews with their reasons (recomputed on every read) and the actions people staged or
+         *     suggested, the tally, the note to the agents, the revision to decide with, the time
+         *     the SwarmCloud wait has left and what I may do. Kinds with no item file: ``items: []``.
+         */
+        get: operations["get_checkpoint_draft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Checkpoint Action
+         * @description Stage (the checkpoint's approver role or above) or suggest (commenters) one action
+         *     on one item: one per item, kind and field, so the same again replaces it (a commenter
+         *     replaces only their own suggestion). A ``question`` asks the named member about the
+         *     item (C2). 422 names the rule a value breaks; 409 once the checkpoint is decided.
+         */
+        post: operations["create_checkpoint_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage Checkpoint Action
+         * @description Stage a suggestion (the checkpoint's approver role or above): it keeps who
+         *     suggested it.
+         */
+        post: operations["stage_checkpoint_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Checkpoint Action
+         * @description Undo an action: its author, or the checkpoint's approver role or above. A question
+         *     is withdrawn while nobody answered it.
+         */
+        delete: operations["delete_checkpoint_action"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Checkpoint Note
+         * @description Set the draft's note to the agents (the checkpoint's approver role or above); a
+         *     decision without a note of its own sends it.
+         */
+        put: operations["set_checkpoint_note"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/segments/{seq}/artifacts/{name}": {
         parameters: {
             query?: never;
@@ -8220,6 +8329,29 @@ export interface components {
             fallback: components["schemas"]["FallbackOut"] | null;
         };
         /**
+         * ActionIn
+         * @description One action on one item of a pending checkpoint's shared draft (D8). ``kind``,
+         *     ``field`` and ``value`` are checked against the checkpoint kind's vocabulary
+         *     (oracle.runs.actions.VOCABULARY); a wrong one is 422 naming the rule.
+         */
+        ActionIn: {
+            /** Item Key */
+            item_key: string;
+            /** Kind */
+            kind: string;
+            /** Field */
+            field?: string | null;
+            /** Value */
+            value?: unknown;
+            /**
+             * Answers
+             * @default []
+             */
+            answers: string[];
+            /** Note */
+            note?: string | null;
+        };
+        /**
          * AdvisoryIn
          * @description An advisory signal for a conditional module (AI analysis or a priority score).
          */
@@ -10146,6 +10278,8 @@ export interface components {
             decision: "approved" | "changes_requested" | "confirm" | "redo" | "continue";
             /** Note */
             note?: string | null;
+            /** Expected Revision */
+            expected_revision?: number | null;
         };
         /**
          * CheckpointDelivery
@@ -10237,6 +10371,75 @@ export interface components {
             cannot_approve?: string | null;
             console?: components["schemas"]["ConsoleAnswer"] | null;
             delivery?: components["schemas"]["CheckpointDelivery"] | null;
+        };
+        /**
+         * CheckpointReview
+         * @description A checkpoint's shared draft decision (D8): its items with their reasons and actions,
+         *     the note to the agents, the revision a decision is sent with, the wait's time left and
+         *     what the reader may do. Checkpoint kinds with no item file serve ``items: []``.
+         */
+        CheckpointReview: {
+            /**
+             * Checkpoint Id
+             * Format: uuid
+             */
+            checkpoint_id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "changes_requested" | "skipped";
+            /** Approver Role */
+            approver_role: string;
+            /** Attempt */
+            attempt?: number | null;
+            /** Revision */
+            revision: number;
+            wait: components["schemas"]["WaitInfo"];
+            file?: components["schemas"]["ReviewFile"] | null;
+            /**
+             * File Problems
+             * @default []
+             */
+            file_problems: components["schemas"]["ItemsProblem"][];
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ReviewItem"][];
+            tally: components["schemas"]["ReviewTally"];
+            /** Note */
+            note?: string | null;
+            /**
+             * Can Read
+             * @default true
+             */
+            can_read: boolean;
+            /**
+             * Can Suggest
+             * @default false
+             */
+            can_suggest: boolean;
+            /**
+             * Can Stage
+             * @default false
+             */
+            can_stage: boolean;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
         };
         /** Choice */
         Choice: {
@@ -12171,6 +12374,11 @@ export interface components {
             summary?: string | null;
             source?: components["schemas"]["VersionSource"] | null;
             prd_links?: components["schemas"]["PrdLinks"] | null;
+        };
+        /** DraftNoteIn */
+        DraftNoteIn: {
+            /** Note */
+            note?: string | null;
         };
         /** DriftEntry */
         DriftEntry: {
@@ -19596,6 +19804,64 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** ReviewAction */
+        ReviewAction: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Item Key */
+            item_key: string;
+            /** Kind */
+            kind: string;
+            /** Field */
+            field?: string | null;
+            /** Value */
+            value?: unknown;
+            /**
+             * Answers
+             * @default []
+             */
+            answers: string[];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "staged" | "suggested";
+            /** Note */
+            note?: string | null;
+            created_by?: components["schemas"]["ReviewPerson"] | null;
+            updated_by?: components["schemas"]["ReviewPerson"] | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            question?: components["schemas"]["ReviewQuestion"] | null;
+        };
+        /** ReviewAnswer */
+        ReviewAnswer: {
+            /** Kind */
+            kind: string;
+            /** Body */
+            body?: string | null;
+            answered_by?: components["schemas"]["ReviewAnswerer"] | null;
+        };
+        /** ReviewAnswerer */
+        ReviewAnswerer: {
+            /** Id */
+            id?: string | null;
+            /** Name */
+            name: string;
+        };
+        /** ReviewFile */
+        ReviewFile: {
+            /** Name */
+            name: string;
+            /** Seq */
+            seq: number;
+        };
         /** ReviewIn */
         ReviewIn: {
             /**
@@ -19607,6 +19873,69 @@ export interface components {
             note: string;
             /** Next Review At */
             next_review_at?: string | null;
+        };
+        /**
+         * ReviewItem
+         * @description One item of the reviewed file, its reasons (recomputed on every read) and its
+         *     actions. ``state``: ``needs_you`` (an open reason no staged action answers),
+         *     ``handled`` (every reason answered by a staged action), ``waiting`` (only open
+         *     questions) or ``fine`` (no reasons). An item only the reasons or the actions name (a
+         *     dropped item, the whole file "*") has no ``position``.
+         */
+        ReviewItem: {
+            /** Key */
+            key: string;
+            /** Position */
+            position?: number | null;
+            /** Title */
+            title?: string | null;
+            /** Horizon */
+            horizon?: string | null;
+            milestone?: components["schemas"]["ReviewMilestone"] | null;
+            /** Confidence */
+            confidence?: string | null;
+            /** Rank */
+            rank?: number | null;
+            /** Outcome */
+            outcome?: string | null;
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /** Prd Section */
+            prd_section?: string | null;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ItemReason"][];
+            /**
+             * Actions
+             * @default []
+             */
+            actions: components["schemas"]["ReviewAction"][];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "needs_you" | "handled" | "waiting" | "fine";
+        };
+        /** ReviewMilestone */
+        ReviewMilestone: {
+            /** Name */
+            name?: string | null;
+            /** Date */
+            date?: string | null;
+        };
+        /** ReviewPerson */
+        ReviewPerson: {
+            /** Id */
+            id?: string | null;
+            /** Name */
+            name: string;
+            /** Role */
+            role?: string | null;
         };
         /** ReviewPolicyIn */
         ReviewPolicyIn: {
@@ -19676,6 +20005,23 @@ export interface components {
             lock_version?: number | null;
         };
         /**
+         * ReviewQuestion
+         * @description The stakeholder question a ``question`` action asked (C2), with its latest answer.
+         */
+        ReviewQuestion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+            /** Text */
+            text: string;
+            asked_to?: components["schemas"]["ReviewAnswerer"] | null;
+            answer?: components["schemas"]["ReviewAnswer"] | null;
+        };
+        /**
          * ReviewQueueItem
          * @description A section the caller owns or reviews, in the latest version of its document.
          */
@@ -19717,6 +20063,39 @@ export interface components {
              * @default false
              */
             overdue: boolean;
+        };
+        /** ReviewTally */
+        ReviewTally: {
+            /**
+             * Need You
+             * @default 0
+             */
+            need_you: number;
+            /**
+             * Handled
+             * @default 0
+             */
+            handled: number;
+            /**
+             * Blocking Open
+             * @default 0
+             */
+            blocking_open: number;
+            /**
+             * To Confirm Open
+             * @default 0
+             */
+            to_confirm_open: number;
+            /**
+             * Waiting On
+             * @default []
+             */
+            waiting_on: components["schemas"]["WaitingOn"][];
+            /**
+             * Suggested
+             * @default 0
+             */
+            suggested: number;
         };
         /** RevisionDetail */
         RevisionDetail: {
@@ -24637,6 +25016,35 @@ export interface components {
              * @default []
              */
             section_keys: string[];
+        };
+        /**
+         * WaitInfo
+         * @description The SwarmCloud wait of the checkpoint: ``open`` (``ends_at``, ``seconds_left``),
+         *     ``ended`` (deciding continues the run as a new workflow) or ``none`` (one workflow per
+         *     segment: the checkpoint waits in the Inbox with no end).
+         */
+        WaitInfo: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "open" | "ended" | "none";
+            /** Ends At */
+            ends_at?: string | null;
+            /** Seconds Left */
+            seconds_left?: number | null;
+        };
+        /** WaitingOn */
+        WaitingOn: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+            /** Count */
+            count: number;
         };
         /** WaiveIn */
         WaiveIn: {
@@ -33105,6 +33513,176 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_checkpoint_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckpointReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_checkpoint_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckpointReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stage_checkpoint_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckpointReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_checkpoint_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckpointReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_checkpoint_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftNoteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckpointReview"];
                 };
             };
             /** @description Validation Error */

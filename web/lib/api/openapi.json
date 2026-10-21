@@ -14242,6 +14242,356 @@
         }
       }
     },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Checkpoint Draft",
+        "description": "A checkpoint's shared draft decision (D8), any member: the items of the file it\nreviews with their reasons (recomputed on every read) and the actions people staged or\nsuggested, the tally, the note to the agents, the revision to decide with, the time\nthe SwarmCloud wait has left and what I may do. Kinds with no item file: ``items: []``.",
+        "operationId": "get_checkpoint_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Create Checkpoint Action",
+        "description": "Stage (the checkpoint's approver role or above) or suggest (commenters) one action\non one item: one per item, kind and field, so the same again replaces it (a commenter\nreplaces only their own suggestion). A ``question`` asks the named member about the\nitem (C2). 422 names the rule a value breaks; 409 once the checkpoint is decided.",
+        "operationId": "create_checkpoint_action",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Stage Checkpoint Action",
+        "description": "Stage a suggestion (the checkpoint's approver role or above): it keeps who\nsuggested it.",
+        "operationId": "stage_checkpoint_action",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          },
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}": {
+      "delete": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Delete Checkpoint Action",
+        "description": "Undo an action: its author, or the checkpoint's approver role or above. A question\nis withdrawn while nobody answered it.",
+        "operationId": "delete_checkpoint_action",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          },
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note": {
+      "put": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Set Checkpoint Note",
+        "description": "Set the draft's note to the agents (the checkpoint's approver role or above); a\ndecision without a note of its own sends it.",
+        "operationId": "set_checkpoint_note",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftNoteIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/runs/{run_id}/segments/{seq}/artifacts/{name}": {
       "get": {
         "tags": [
@@ -28535,6 +28885,65 @@
         ],
         "title": "AccountsPage"
       },
+      "ActionIn": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Item Key"
+          },
+          "kind": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Kind"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "value": {
+            "title": "Value"
+          },
+          "answers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Answers",
+            "default": []
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "kind"
+        ],
+        "title": "ActionIn",
+        "description": "One action on one item of a pending checkpoint's shared draft (D8). ``kind``,\n``field`` and ``value`` are checked against the checkpoint kind's vocabulary\n(oracle.runs.actions.VOCABULARY); a wrong one is 422 naming the rule."
+      },
       "AdvisoryIn": {
         "properties": {
           "score": {
@@ -34204,6 +34613,17 @@
               }
             ],
             "title": "Note"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Revision"
           }
         },
         "type": "object",
@@ -34448,6 +34868,140 @@
           "created_at"
         ],
         "title": "CheckpointOut"
+      },
+      "CheckpointReview": {
+        "properties": {
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checkpoint Id"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "baseline_confirm",
+              "feature_set",
+              "priority_order",
+              "prd_review",
+              "eng_review",
+              "roadmap_items",
+              "roadmap_review",
+              "strategy_review",
+              "launch_review"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "changes_requested",
+              "skipped"
+            ],
+            "title": "Status"
+          },
+          "approver_role": {
+            "type": "string",
+            "title": "Approver Role"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "wait": {
+            "$ref": "#/components/schemas/WaitInfo"
+          },
+          "file": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "file_problems": {
+            "items": {
+              "$ref": "#/components/schemas/ItemsProblem"
+            },
+            "type": "array",
+            "title": "File Problems",
+            "default": []
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "tally": {
+            "$ref": "#/components/schemas/ReviewTally"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "can_read": {
+            "type": "boolean",
+            "title": "Can Read",
+            "default": true
+          },
+          "can_suggest": {
+            "type": "boolean",
+            "title": "Can Suggest",
+            "default": false
+          },
+          "can_stage": {
+            "type": "boolean",
+            "title": "Can Stage",
+            "default": false
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkpoint_id",
+          "run_id",
+          "kind",
+          "status",
+          "approver_role",
+          "revision",
+          "wait",
+          "tally"
+        ],
+        "title": "CheckpointReview",
+        "description": "A checkpoint's shared draft decision (D8): its items with their reasons and actions,\nthe note to the agents, the revision a decision is sent with, the wait's time left and\nwhat the reader may do. Checkpoint kinds with no item file serve ``items: []``."
       },
       "Choice": {
         "properties": {
@@ -39666,6 +40220,24 @@
         },
         "type": "object",
         "title": "DraftImport"
+      },
+      "DraftNoteIn": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "DraftNoteIn"
       },
       "DriftEntry": {
         "properties": {
@@ -60006,6 +60578,185 @@
         "title": "ResolutionReport",
         "description": "How each feedback item raised on earlier versions was handled, as of ``version``."
       },
+      "ReviewAction": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "value": {
+            "title": "Value"
+          },
+          "answers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Answers",
+            "default": []
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "suggested"
+            ],
+            "title": "State"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewQuestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "item_key",
+          "kind",
+          "state",
+          "updated_at"
+        ],
+        "title": "ReviewAction"
+      },
+      "ReviewAnswer": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "answered_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewAnswerer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "ReviewAnswer"
+      },
+      "ReviewAnswerer": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ReviewAnswerer"
+      },
+      "ReviewFile": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "seq"
+        ],
+        "title": "ReviewFile"
+      },
       "ReviewIn": {
         "properties": {
           "verdict": {
@@ -60042,6 +60793,206 @@
           "note"
         ],
         "title": "ReviewIn"
+      },
+      "ReviewItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "horizon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon"
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewMilestone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On",
+            "default": []
+          },
+          "prd_section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Section"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ItemReason"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewAction"
+            },
+            "type": "array",
+            "title": "Actions",
+            "default": []
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "needs_you",
+              "handled",
+              "waiting",
+              "fine"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "state"
+        ],
+        "title": "ReviewItem",
+        "description": "One item of the reviewed file, its reasons (recomputed on every read) and its\nactions. ``state``: ``needs_you`` (an open reason no staged action answers),\n``handled`` (every reason answered by a staged action), ``waiting`` (only open\nquestions) or ``fine`` (no reasons). An item only the reasons or the actions name (a\ndropped item, the whole file \"*\") has no ``position``."
+      },
+      "ReviewMilestone": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "title": "ReviewMilestone"
+      },
+      "ReviewPerson": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ReviewPerson"
       },
       "ReviewPolicyIn": {
         "properties": {
@@ -60185,6 +61136,51 @@
         ],
         "title": "ReviewPolicyOut"
       },
+      "ReviewQuestion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "asked_to": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewAnswerer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "text"
+        ],
+        "title": "ReviewQuestion",
+        "description": "The stakeholder question a ``question`` action asked (C2), with its latest answer."
+      },
       "ReviewQueueItem": {
         "properties": {
           "document_id": {
@@ -60268,6 +61264,45 @@
         ],
         "title": "ReviewQueueItem",
         "description": "A section the caller owns or reviews, in the latest version of its document."
+      },
+      "ReviewTally": {
+        "properties": {
+          "need_you": {
+            "type": "integer",
+            "title": "Need You",
+            "default": 0
+          },
+          "handled": {
+            "type": "integer",
+            "title": "Handled",
+            "default": 0
+          },
+          "blocking_open": {
+            "type": "integer",
+            "title": "Blocking Open",
+            "default": 0
+          },
+          "to_confirm_open": {
+            "type": "integer",
+            "title": "To Confirm Open",
+            "default": 0
+          },
+          "waiting_on": {
+            "items": {
+              "$ref": "#/components/schemas/WaitingOn"
+            },
+            "type": "array",
+            "title": "Waiting On",
+            "default": []
+          },
+          "suggested": {
+            "type": "integer",
+            "title": "Suggested",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ReviewTally"
       },
       "RevisionDetail": {
         "properties": {
@@ -74522,6 +75557,72 @@
         ],
         "title": "VersionWarning",
         "description": "A non-fatal import finding stored on the version."
+      },
+      "WaitInfo": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "ended",
+              "none"
+            ],
+            "title": "State"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "seconds_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds Left"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "WaitInfo",
+        "description": "The SwarmCloud wait of the checkpoint: ``open`` (``ends_at``, ``seconds_left``),\n``ended`` (deciding continues the run as a new workflow) or ``none`` (one workflow per\nsegment: the checkpoint waits in the Inbox with no end)."
+      },
+      "WaitingOn": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "name",
+          "count"
+        ],
+        "title": "WaitingOn"
       },
       "WaiveIn": {
         "properties": {
