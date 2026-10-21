@@ -4933,6 +4933,14 @@ async def decide_checkpoint(
     refusal = await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
     if refusal is not None:
         raise Forbidden(refusal)
+    if cp.status in DECIDED:
+        # A recorded decision is final (owner, 2026-10-20), delivered to the run or not
+        # yet: the same decision again, or the other one, changes nothing. A different
+        # verdict entered in SwarmCloud's console is still taken as a correction.
+        raise RunError(
+            f"already decided: this checkpoint is {cp.status.replace('_', ' ')}; a recorded "
+            "decision is final"
+        )
     if cp.status != "pending" or run.status != "awaiting_checkpoint":
         raise RunError(f"checkpoint is {cp.status}; run is {run.status}")
     note = (note or "").strip() or None

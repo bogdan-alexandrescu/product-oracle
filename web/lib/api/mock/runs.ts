@@ -674,6 +674,10 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (action === "checkpoints" && p[5] === "decide" && m === "POST") {
     const cp = r.checkpoints.find((c) => c.id === p[4]);
     if (!cp) return fail(404, "checkpoint not found");
+    if (cp.status === "approved" || cp.status === "changes_requested") {
+      // A recorded decision is final, delivered to the run or not yet.
+      return fail(409, `already decided: this checkpoint is ${cp.status.replace("_", " ")}; a recorded decision is final`);
+    }
     if (cp.status !== "pending" || r.status !== "awaiting_checkpoint") return fail(409, `checkpoint is ${cp.status}`);
     const { decision, note } = await body<Schemas["CheckpointDecision"]>();
     const blocked = cannotApprove(cp);
