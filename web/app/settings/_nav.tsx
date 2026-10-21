@@ -14,6 +14,7 @@ const ITEMS = [
   { label: "Notifications", href: "/settings/notifications", testId: "nav-notifications" },
   { label: "Templates", href: "/settings/templates", testId: "nav-templates" },
   { label: "Themes", href: "/settings/themes", testId: "nav-themes" },
+  { label: "Autonomy", href: "/settings/autonomy", testId: "nav-autonomy" },
 ];
 
 /**

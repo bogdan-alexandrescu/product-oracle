@@ -523,6 +523,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     // The weekly alignment reports and their failed posts: the server adds them (./reports.ts).
     reports: [],
     report_failures: [],
+    oracle_actions: [],
     // Every new or open item (C1e, 2026-10-20): the server adds the feedback items' New + Open (./next-draft.ts).
     total: checkpoints.length + approvals.length + overruns.length + lookups.length + imports.length,
     // Feedback states (C1e) are added by the server, which holds the suggestions (./next-draft.ts).

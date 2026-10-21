@@ -48,6 +48,7 @@ MCP_TOOLS = {
     "with each feature's depends_on and dependents",
     "get_feedback_package": "a version's open feedback items and locked sections",
     "propose_change": "propose a baseline change (locked items become proposals)",
+    "get_autonomy": "how far Oracle may go on its own, per responsibility (H11)",
     "push_draft": "hand back a draft for import as the document's next version",
     "get_run_output": "a file an earlier segment of this run wrote (seq and name), or with "
     "attempt a segment's previous attempt",
@@ -73,6 +74,12 @@ READ_DECISIONS_FIRST = (
     "Before you start, read the run's checkpoint decisions with get_checkpoint_review: "
     "approvals made after this workflow was planned are only there. Follow them; if one "
     "conflicts with your task, say so in your output."
+)
+
+
+# Segment tasks that can change the baseline say this (H11 Autonomy).
+AUTONOMY_SENTENCE = (
+    "Read get_autonomy: where a responsibility is below Act, propose instead of writing."
 )
 
 
@@ -251,6 +258,7 @@ FLOWS: dict[str, FlowDef] = {
                         "get_baseline",
                         "propose_change",
                         "get_checkpoint_review",
+                        "get_autonomy",
                     ),
                 ),
                 SegmentDef(
@@ -272,6 +280,7 @@ FLOWS: dict[str, FlowDef] = {
                         "get_source_item",
                         "propose_change",
                         "get_checkpoint_review",
+                        "get_autonomy",
                     ),
                 ),
                 SegmentDef(
@@ -288,6 +297,7 @@ FLOWS: dict[str, FlowDef] = {
                         "trace_feature",
                         "propose_change",
                         "get_checkpoint_review",
+                        "get_autonomy",
                     ),
                 ),
                 SegmentDef(
@@ -803,6 +813,9 @@ def step_prompt(
             "prompt and say which claims you could not check. Tools it will offer:"
         )
     lines += [f"- {t}: {MCP_TOOLS[t]}" for t in segment.tools]
+    if "get_autonomy" in segment.tools:
+        # H11: the server enforces the levels; the agent is told so it does not waste work.
+        lines.append(AUTONOMY_SENTENCE)
     if ctx.mcp_reachable and len(flow.segments) > 1:
         lines += ["", READ_DECISIONS_FIRST]
     lines += [

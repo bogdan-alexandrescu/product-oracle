@@ -19,6 +19,7 @@ import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
+import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
@@ -100,6 +101,8 @@ export interface Db {
   reports?: ReportsDb;
   /** H4: drift findings and the strategy stack (./strategy.ts); the "strategy" scenario only. */
   strategy?: StrategyDb;
+  /** H11: the owner's autonomy levels and the "Oracle did" rows (./autonomy.ts); absent in older saved data. */
+  autonomy?: AutonomyDb;
 }
 
 type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
@@ -204,6 +207,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * "questions" in a company of 25 members (zoe.zimmer@example.com last by email);
  * "launches" as the default company plus three launches (Ready, Planned, Launched) with their
  * checklists, notes and changelog entries (./launches.ts);
+ * "oracle-did" as the default company plus one thing Oracle did on its own, told to the
+ * signed-in owner (./autonomy.ts);
  * "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json).
@@ -1038,6 +1043,8 @@ function load(): Db {
   // Launches (H6): three synthetic launches in the "launches" scenario; none otherwise, so
   // other specs' Inbox counts stay as they were.
   if (scenario === "launches") db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
+  db.autonomy = emptyAutonomy();
+  if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   save(db);
   return db;
 }
@@ -1752,6 +1759,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   const fireflies = routeFirefliesBrowse(p, q);
   if (fireflies) return fireflies;
+  // How far Oracle goes on its own (H11): everyone reads, owners change; its Inbox rows.
+  db.autonomy ??= emptyAutonomy();
+  const autonomy = await routeAutonomy(db.autonomy, req, p, me);
+  if (autonomy) return autonomy;
   // Company settings are the owner's, as in the API (tenant_settings_api.py).
   if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
   const browse = sourceBrowseRoute(req, p, q);
@@ -1954,16 +1965,20 @@ async function route(db: Db, req: Request): Promise<Response> {
       ? db.revoke_failures.filter((r) => !r.dismissed).map((r) => ({ ...r, dismissed: undefined }))
       : [];
     // Owners also get the weekly alignment reports and the posts Slack refused (F6), and
-    // one strategy drift row however many findings are open (H4).
+    // one strategy drift row however many findings are open (H4). Those Oracle told: what
+    // it did on its own (H11); unopened rows count.
     const reported = inboxReports(ensureReports(db, db.user_id), me);
     const strategy = inboxStrategy(db.strategy, me.role);
+    const did = inboxActions((db.autonomy ??= emptyAutonomy()), me.id);
+    const open = did.filter((a) => a.counts).length;
     return json(200, {
       ...inbox,
       revoke_failures: failures,
       reports: reported.reports,
       report_failures: reported.report_failures,
       strategy,
-      total: inbox.total + failures.length + reported.unread + (strategy ? 1 : 0),
+      oracle_actions: did,
+      total: inbox.total + failures.length + reported.unread + (strategy ? 1 : 0) + open,
     });
   }
   if (runs) return runs;

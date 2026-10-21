@@ -130,7 +130,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, confidence, safe_yaml
+from oracle import audit, autonomy, confidence, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -767,6 +767,7 @@ def _segment_out(
     art = segment.artifacts or {}
     imp = art.get("import")
     check = art.get("items_check")
+    merged = art.get("baseline_import") or {}
     return SegmentOut(
         id=segment.id,
         seq=segment.seq,
@@ -791,6 +792,7 @@ def _segment_out(
         )
         if isinstance(previous := art.get("previous"), dict)
         else None,
+        autonomy_note=(merged.get("autonomy") or {}).get("note"),
         started_at=segment.started_at,
         finished_at=segment.finished_at,
         error=segment.error,
@@ -3314,9 +3316,20 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
     except LookupError as exc:
         return {"error": str(exc)}
     async with tenant_session(tenant_id) as s:
+        # H11: how far Oracle may go with the baseline, read now (a change applies to the
+        # next merge). Below Act every write is a proposal; at Observe nothing is merged.
+        level = await autonomy.level(s, "baseline")
+        if level == "observe":
+            return {"skipped": True, "autonomy": _baseline_autonomy(level)}
         try:
             result = await yaml_io.import_yaml(
-                s, principal, text, run_id=run.id, origin="agent", reason="Run baseline.yaml"
+                s,
+                principal,
+                text,
+                run_id=run.id,
+                origin="agent",
+                reason="Run baseline.yaml",
+                proposals_only=level != "act",
             )
         except yaml_io.YamlInvalid as exc:
             problems = "; ".join(
@@ -3325,7 +3338,19 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
             )
             return {"error": f"baseline.yaml was rejected: {problems}"}
         await s.commit()
-    return result.model_dump(mode="json")
+    out = result.model_dump(mode="json")
+    if level != "act":
+        out["autonomy"] = _baseline_autonomy(level)
+    return out
+
+
+def _baseline_autonomy(level: str) -> dict[str, str]:
+    """What the run page says when the baseline's level changed the merge (H11)."""
+    if level == "observe":
+        note = "Baseline merge skipped: Oracle is set to observe the baseline"
+    else:
+        note = f"Baseline changes became proposals: Oracle is set to {level} for the baseline"
+    return {"level": level, "note": note}
 
 
 def _current_attempt(art: dict[str, Any], segment: RunSegment) -> dict[str, Any]:
@@ -7796,6 +7821,10 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.launches import service as launches_service
 
     launch_rows = await launches_service.inbox_rows(db, principal)
+    # H11: what Oracle did on its own, for those it notified (open ones count).
+    from oracle.autonomy_router import inbox_actions
+
+    oracle_actions = await inbox_actions(db, principal)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -7814,6 +7843,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         reports=reports,
         report_failures=report_failures,
         strategy=strategy,
+        oracle_actions=oracle_actions,
         # Every new or open item (C1e, owner 2026-10-20): the rail badge, = New + Open.
         total=len(checkpoints)
         + len(approvals)
@@ -7827,7 +7857,8 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + len(report_failures)
         # Strategy drift: one row, however many findings.
         + (1 if strategy else 0)
-        + sum(1 for r in launch_rows if r.counted),
+        + sum(1 for r in launch_rows if r.counted)
+        + sum(a.counts for a in oracle_actions),
         launches=launch_rows,
         items=states,
         counts=counts,

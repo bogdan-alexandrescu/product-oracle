@@ -36,6 +36,8 @@ READ_AREAS = {
         "launches",
         "launch-tasks",
         "changelog",
+        # H11: how far Oracle may go per responsibility (get_autonomy).
+        "autonomy",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }

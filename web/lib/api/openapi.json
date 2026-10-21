@@ -6143,6 +6143,200 @@
         ]
       }
     },
+    "/v1/autonomy": {
+      "get": {
+        "tags": [
+          "autonomy"
+        ],
+        "summary": "Get Autonomy",
+        "description": "How far Oracle may go on its own, per responsibility: the level, what it means,\nthe ceiling and the limits.",
+        "operationId": "get_autonomy",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/autonomy/{key}": {
+      "put": {
+        "tags": [
+          "autonomy"
+        ],
+        "summary": "Set Autonomy",
+        "description": "Set how far Oracle may go for one responsibility (owner), with a reason.",
+        "operationId": "set_autonomy",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutonomyIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyItem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown responsibility"
+          },
+          "422": {
+            "description": "Above the ceiling, a bad or fixed limit, or no reason"
+          }
+        }
+      }
+    },
+    "/v1/oracle-actions/{action_id}/open": {
+      "post": {
+        "tags": [
+          "autonomy"
+        ],
+        "summary": "Open Oracle Action",
+        "description": "Mark an \"Oracle did\" row opened, for me only: it stops counting in my Inbox.",
+        "operationId": "open_oracle_action",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxOracleAction"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/oracle-actions/{action_id}/undo": {
+      "post": {
+        "tags": [
+          "autonomy"
+        ],
+        "summary": "Undo Oracle Action",
+        "description": "Undo what Oracle did: call the route the behaviour stored, as me (my role and\nchecks apply), and record that I undid it. A refusal of that route is returned as is\nand records nothing.",
+        "operationId": "undo_oracle_action",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxOracleAction"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Nothing to undo, or already undone"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/claude-accounts": {
       "get": {
         "tags": [
@@ -9722,7 +9916,7 @@
           "baseline"
         ],
         "summary": "Create Proposal",
-        "description": "Suggest a change; an approver accepts or rejects it. A run's proposal records\nthe run.",
+        "description": "Suggest a change; an approver accepts or rejects it. A run's proposal records\nthe run, and is refused while Oracle is set to observe the baseline (H11); a\nperson's never is.",
         "operationId": "create_proposal",
         "security": [
           {
@@ -28573,6 +28767,244 @@
         ],
         "title": "AuthorizeIn"
       },
+      "AutonomyIn": {
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "observe",
+              "draft",
+              "recommend",
+              "act"
+            ],
+            "title": "Level"
+          },
+          "limits": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limits"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "level",
+          "reason"
+        ],
+        "title": "AutonomyIn"
+      },
+      "AutonomyItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "group": {
+            "type": "string",
+            "title": "Group"
+          },
+          "group_title": {
+            "type": "string",
+            "title": "Group Title"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "observe",
+              "draft",
+              "recommend",
+              "act"
+            ],
+            "title": "Level"
+          },
+          "default": {
+            "type": "string",
+            "enum": [
+              "observe",
+              "draft",
+              "recommend",
+              "act"
+            ],
+            "title": "Default"
+          },
+          "ceiling": {
+            "type": "string",
+            "enum": [
+              "observe",
+              "draft",
+              "recommend",
+              "act"
+            ],
+            "title": "Ceiling"
+          },
+          "allowed": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "observe",
+                "draft",
+                "recommend",
+                "act"
+              ]
+            },
+            "type": "array",
+            "title": "Allowed"
+          },
+          "levels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Levels"
+          },
+          "ceiling_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ceiling Reason"
+          },
+          "limits": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limits"
+          },
+          "limits_schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limits Schema"
+          },
+          "fixed_limits": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fixed Limits",
+            "default": []
+          },
+          "limits_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limits Summary"
+          },
+          "wired": {
+            "type": "boolean",
+            "title": "Wired"
+          },
+          "wired_by": {
+            "type": "string",
+            "title": "Wired By"
+          },
+          "wired_by_name": {
+            "type": "string",
+            "title": "Wired By Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "group",
+          "group_title",
+          "level",
+          "default",
+          "ceiling",
+          "allowed",
+          "levels",
+          "wired",
+          "wired_by",
+          "wired_by_name"
+        ],
+        "title": "AutonomyItem"
+      },
+      "AutonomyOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AutonomyItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "stays_with_people": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Stays With People"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "stays_with_people"
+        ],
+        "title": "AutonomyOut"
+      },
       "Basis": {
         "properties": {
           "path": {
@@ -42218,6 +42650,86 @@
         "title": "InboxLaunch",
         "description": "A launch row of the Inbox: Ready to launch (owner), Set tier (approvers), Notes\nto send (owner) are counted; Shipped (a member's personal note) is shown only."
       },
+      "InboxOracleAction": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "responsibility": {
+            "type": "string",
+            "title": "Responsibility"
+          },
+          "responsibility_title": {
+            "type": "string",
+            "title": "Responsibility Title"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "subject": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Subject",
+            "default": {}
+          },
+          "undo": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Undo"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "done"
+            ],
+            "title": "State"
+          },
+          "counts": {
+            "type": "boolean",
+            "title": "Counts"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "undone_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Undone At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "responsibility",
+          "responsibility_title",
+          "summary",
+          "state",
+          "counts",
+          "created_at"
+        ],
+        "title": "InboxOracleAction",
+        "description": "\"Oracle did\": what Oracle did on its own account (H11, ``oracle.autonomy.acted``),\nfor one of the people it notified. Counted until that person opens it."
+      },
       "InboxOut": {
         "properties": {
           "checkpoints": {
@@ -42321,6 +42833,14 @@
                 "type": "null"
               }
             ]
+          },
+          "oracle_actions": {
+            "items": {
+              "$ref": "#/components/schemas/InboxOracleAction"
+            },
+            "type": "array",
+            "title": "Oracle Actions",
+            "default": []
           },
           "total": {
             "type": "integer",
@@ -60642,6 +61162,17 @@
                 "type": "null"
               }
             ]
+          },
+          "autonomy_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Autonomy Note"
           },
           "started_at": {
             "anyOf": [

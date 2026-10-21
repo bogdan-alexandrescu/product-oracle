@@ -289,6 +289,9 @@ class SegmentOut(BaseModel):
     can_retry_draft_import: bool = False
     items_check: ItemsCheck | None = None
     previous_attempt: PreviousAttempt | None = None
+    # H11: the baseline's level changed this segment's merge (skipped at observe, or
+    # every change a proposal): one line saying so, else None.
+    autonomy_note: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error: str | None = None
@@ -645,6 +648,24 @@ class InboxStaged(BaseModel):
     draft_job_status: str | None = None
 
 
+class InboxOracleAction(BaseModel):
+    """ "Oracle did": what Oracle did on its own account (H11, ``oracle.autonomy.acted``),
+    for one of the people it notified. Counted until that person opens it."""
+
+    id: uuid.UUID
+    responsibility: str
+    responsibility_title: str
+    summary: str
+    subject: dict[str, Any] = {}
+    # {method, path, body} of the route that reverses it, when the behaviour gave one.
+    undo: dict[str, Any] | None = None
+    # open: not opened by me yet; done: opened (or undone).
+    state: Literal["open", "done"]
+    counts: bool
+    created_at: datetime
+    undone_at: datetime | None = None
+
+
 class InboxCounts(BaseModel):
     new: int = 0
     open: int = 0
@@ -699,6 +720,8 @@ class InboxOut(BaseModel):
     report_failures: list[InboxReportFailure] = []
     # Owners only: open strategy drift findings (H4); null when none or not an owner.
     strategy: InboxStrategy | None = None
+    # Those it notified: what Oracle did on its own (H11), newest first; open ones count.
+    oracle_actions: list[InboxOracleAction] = []
     total: int
     # Approvers and owners: feedback in every state, newest first (declined and done
     # capped to the most recent), the counts per state, and the staged rows.
