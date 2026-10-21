@@ -996,3 +996,18 @@ def test_owned_outside():
     assert owned_outside(mine, []) == "no_domains"
     assert owned_outside(shared, ["example.com"]) == "shared_drive"
     assert owned_outside(shared, [], ["0AShared00000"]) is None
+
+
+async def test_a_stored_source_with_bad_names_still_syncs(tenant_id, drive):
+    """Saves refuse unpicked or oversized names, but a config already stored with them must
+    not fail its sync with a config error: the sync ignores or trims them."""
+    drive.doc(DOC_A, "A")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A]})
+    await _reset_cursor(
+        tenant_id,
+        source["id"],
+        {"docs": [DOC_A], "names": {DOC_A: "x" * 900, DOC_B: "never picked"}},
+    )
+    result = await _sync(pat, source)
+    assert result["outcome"] == "completed", result
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
