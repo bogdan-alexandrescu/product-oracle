@@ -34,7 +34,7 @@ export type VersionSeed = {
 export type DocumentSeed = {
   slug: string;
   title: string;
-  kind?: "prd" | "roadmap";
+  kind?: "prd" | "roadmap" | "vision" | "strategy";
   template?: string;
   template_version?: string;
   theme?: string;

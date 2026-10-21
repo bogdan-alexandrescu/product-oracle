@@ -110,7 +110,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
 };
 
 const THRESHOLD = 50;
-const KIND_NAME: Record<Kind, string> = { prd: "PRD", roadmap: "roadmap" };
+const KIND_NAME: Record<Kind, string> = { prd: "PRD", roadmap: "roadmap", vision: "vision", strategy: "product strategy" };
 // O4: a roadmap starts from Now / Next / Later on the roadmap board unless a run names others.
 const ROADMAP_DEFAULTS = { template: "now-next-later", theme: "roadmap-board" };
 const FACTOR = 1.5;

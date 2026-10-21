@@ -175,6 +175,7 @@ export type NeedGroup =
   | "lookups"
   | "imports"
   | "revoke-failures"
+  | "strategy"
   | "feedback"
   | "questions"
   | "searches"
@@ -391,6 +392,33 @@ export function revokeNeeds(failures: RevokeFailure[], busy: string | null, act:
       ),
     };
   });
+}
+
+/** Owners only (H4): open strategy drift findings, one row however many, opening Company ›
+ * Strategy where each is read and waived. */
+export function strategyNeeds(strategy: InboxOut["strategy"]): Need[] {
+  if (!strategy) return [];
+  const high = strategy.high ? ` · ${strategy.high} high` : "";
+  return [
+    {
+      key: "strategy-drift",
+      icon: "alert",
+      kind: "Strategy drift",
+      item: (
+        <span className="truncate" title={`Strategy drift · ${strategy.new_findings} new${high}`}>
+          Strategy drift · {strategy.new_findings} new
+          {strategy.high > 0 && <span className="text-crit">{high}</span>}
+        </span>
+      ),
+      context: <span className="block truncate text-text2">Goals and roadmap items against the product strategy</span>,
+      at: strategy.since,
+      action: (
+        <LinkButton href={strategy.href} aria-label="Open strategy drift">
+          Open
+        </LinkButton>
+      ),
+    },
+  ];
 }
 
 /**
@@ -765,6 +793,7 @@ export function allNeeds(
     ...stated(n.lookups, "lookups"),
     ...stated(n.imports, "imports"),
     ...stated(revokeNeeds(inbox.revoke_failures ?? [], busy, act), "revoke-failures"),
+    ...stated(strategyNeeds(inbox.strategy), "strategy"),
     ...feedbackNeeds(inbox, seenBefore),
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.

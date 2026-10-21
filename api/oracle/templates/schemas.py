@@ -195,7 +195,8 @@ class ThemeValidateOut(BaseModel):
 
 
 class ThemePreviewIn(ThemeValidateIn):
-    kind: TemplateKind = "prd"
+    # The sample previewed: a PRD or a roadmap.
+    kind: PickerKind = "prd"
     # "slides": the sample as Present mode slides (16:9), with ``slide_css`` applied
     # after the shared slide layout.
     view: Literal["document", "slides"] = "document"

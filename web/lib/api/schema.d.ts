@@ -3068,7 +3068,7 @@ export interface paths {
         /**
          * Start Draft
          * @description Create the document (kind, template + version, theme) and its version 1 from the
-         *     template skeleton.
+         *     template skeleton. A vision or a product strategy is an owner's to start (403).
          */
         post: operations["start_draft"];
         delete?: never;
@@ -6180,6 +6180,88 @@ export interface paths {
         patch: operations["update_milestone"];
         trace?: never;
     };
+    "/v1/strategy/stack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Strategy Stack
+         * @description The approved vision and strategy: focus choices with their goals, the stop list,
+         *     the roadmap items under each, and the goals and items not under the strategy.
+         */
+        get: operations["get_strategy_stack"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/strategy/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Strategy Findings
+         * @description Drift findings, open by default; high first, then the newest.
+         */
+        get: operations["list_strategy_findings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/strategy/findings/{finding_id}/waive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Waive Strategy Finding
+         * @description Waive an open finding with a reason (owners; approvers for outside_strategy). It
+         *     stays waived until its subject changes again.
+         */
+        post: operations["waive_strategy_finding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/strategy/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Strategy Check
+         * @description Recompute the drift findings now.
+         */
+        post: operations["run_strategy_check"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -7985,6 +8067,13 @@ export interface components {
             /** New Sources */
             new_sources: components["schemas"]["NewSource"][];
         };
+        /** CheckOut */
+        CheckOut: {
+            /** Opened */
+            opened: number;
+            /** Resolved */
+            resolved: number;
+        };
         /** CheckpointDecision */
         CheckpointDecision: {
             /**
@@ -8033,7 +8122,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review";
             /**
              * Status
              * @enum {string}
@@ -9166,7 +9255,7 @@ export interface components {
              * @default prd
              * @enum {string}
              */
-            kind: "prd" | "roadmap";
+            kind: "prd" | "roadmap" | "vision" | "strategy";
             /** Template */
             template?: string | null;
             /** Template Version */
@@ -9289,7 +9378,7 @@ export interface components {
              * @default prd
              * @enum {string}
              */
-            kind: "prd" | "roadmap";
+            kind: "prd" | "roadmap" | "vision" | "strategy";
             /** Template */
             template?: string | null;
             /** Template Version */
@@ -9327,7 +9416,7 @@ export interface components {
             /** Slug */
             slug?: string | null;
             /** Kind */
-            kind?: ("prd" | "roadmap") | null;
+            kind?: ("prd" | "roadmap" | "vision" | "strategy") | null;
             /** Version */
             version?: number | null;
             /** Created */
@@ -9588,7 +9677,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person" | "outcome" | "acceptance_criterion" | "assumption" | "risk";
+            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person" | "outcome" | "acceptance_criterion" | "assumption" | "risk" | "strategy_choice";
             /** Key */
             key: string;
             /** Title */
@@ -9626,7 +9715,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person" | "outcome" | "acceptance_criterion" | "assumption" | "risk";
+            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person" | "outcome" | "acceptance_criterion" | "assumption" | "risk" | "strategy_choice";
             /** Key */
             key: string;
             /** Title */
@@ -9704,7 +9793,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person" | "outcome" | "acceptance_criterion" | "assumption" | "risk";
+            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person" | "outcome" | "acceptance_criterion" | "assumption" | "risk" | "strategy_choice";
             /** Key */
             key: string;
             /** Title */
@@ -10680,7 +10769,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "strategy_draft";
             /** Title */
             title: string;
             /** Description */
@@ -10688,9 +10777,9 @@ export interface components {
             /** Requires Document */
             requires_document: boolean;
             /** Target Kind */
-            target_kind?: ("prd" | "roadmap") | null;
+            target_kind?: ("prd" | "roadmap" | "vision" | "strategy") | null;
             /** Source Kind */
-            source_kind?: ("prd" | "roadmap") | null;
+            source_kind?: ("prd" | "roadmap" | "vision" | "strategy") | null;
             /** Segments */
             segments: components["schemas"]["FlowSegmentOut"][];
         };
@@ -10710,7 +10799,7 @@ export interface components {
              * Checkpoint
              * @enum {string}
              */
-            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review";
+            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review";
             /**
              * Approver Role
              * @enum {string}
@@ -11106,7 +11195,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review";
             /**
              * Status
              * @enum {string}
@@ -11147,7 +11236,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "strategy_draft";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -11325,6 +11414,7 @@ export interface components {
              * @default []
              */
             revoke_failures: components["schemas"]["InboxRevokeFailure"][];
+            strategy?: components["schemas"]["InboxStrategy"] | null;
             /** Total */
             total: number;
             /**
@@ -11432,6 +11522,23 @@ export interface components {
             draft_job_id?: string | null;
             /** Draft Job Status */
             draft_job_status?: string | null;
+        };
+        /**
+         * InboxStrategy
+         * @description Owners: open strategy drift findings (H4), one Inbox row however many.
+         */
+        InboxStrategy: {
+            /** New Findings */
+            new_findings: number;
+            /** High */
+            high: number;
+            /** Href */
+            href: string;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
         };
         /** InspectedModule */
         InspectedModule: {
@@ -14399,7 +14506,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap";
+            kind: "prd" | "roadmap" | "vision" | "strategy";
             template: components["schemas"]["TemplateOption"];
             /** Reason */
             reason: string;
@@ -15105,7 +15212,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "strategy_draft";
             /** Document */
             document?: string | null;
             /** Source */
@@ -15136,7 +15243,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "strategy_draft";
             /** Flow Title */
             flow_title: string;
             /**
@@ -15149,7 +15256,7 @@ export interface components {
             /** Document Slug */
             document_slug?: string | null;
             /** Document Kind */
-            document_kind?: ("prd" | "roadmap") | null;
+            document_kind?: ("prd" | "roadmap" | "vision" | "strategy") | null;
             source?: components["schemas"]["VersionSource"] | null;
             /** Template */
             template?: string | null;
@@ -15171,7 +15278,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review") | null;
             /** Error */
             error?: string | null;
             /** Stuck */
@@ -15213,7 +15320,7 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
@@ -15281,7 +15388,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "strategy_draft";
             /** Flow Title */
             flow_title: string;
             /**
@@ -15294,7 +15401,7 @@ export interface components {
             /** Document Slug */
             document_slug?: string | null;
             /** Document Kind */
-            document_kind?: ("prd" | "roadmap") | null;
+            document_kind?: ("prd" | "roadmap" | "vision" | "strategy") | null;
             source?: components["schemas"]["VersionSource"] | null;
             /** Template */
             template?: string | null;
@@ -15316,7 +15423,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review") | null;
             /** Error */
             error?: string | null;
             /** Stuck */
@@ -15358,7 +15465,7 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
@@ -16252,7 +16359,7 @@ export interface components {
              * Checkpoint
              * @enum {string}
              */
-            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review";
+            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review";
             /** Checkpoint On */
             checkpoint_on: boolean;
             /** Estimate Usd */
@@ -16575,6 +16682,105 @@ export interface components {
             /** Swapped To Reason */
             swapped_to_reason: string | null;
         };
+        /** StackBelief */
+        StackBelief: {
+            /** Id */
+            id: string;
+            /** Statement */
+            statement: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "supported" | "untested" | "strained";
+            /** Evidence */
+            evidence: number;
+        };
+        /** StackChoice */
+        StackChoice: {
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Stance
+             * @enum {string}
+             */
+            stance: "focus" | "stop";
+            /** Goals */
+            goals: components["schemas"]["StackNode"][];
+            /** Features */
+            features: components["schemas"]["StackNode"][];
+            /** Items */
+            items: number;
+            /** Open Findings */
+            open_findings: number;
+        };
+        /** StackCounts */
+        StackCounts: {
+            /** Open */
+            open: number;
+            /** High */
+            high: number;
+            /** Waived */
+            waived: number;
+        };
+        /** StackDocument */
+        StackDocument: {
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+            /** Approved At */
+            approved_at: string | null;
+        };
+        /** StackNode */
+        StackNode: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
+        /** StackStrategy */
+        StackStrategy: {
+            document: components["schemas"]["StackDocument"];
+            /** Summary */
+            summary: string | null;
+            /**
+             * Review On
+             * Format: date
+             */
+            review_on: string;
+            /** Choices */
+            choices: components["schemas"]["StackChoice"][];
+        };
+        /** StackVision */
+        StackVision: {
+            document: components["schemas"]["StackDocument"];
+            /** Headline */
+            headline: string | null;
+            /** Horizon Years */
+            horizon_years?: number | null;
+            /** Beliefs */
+            beliefs: components["schemas"]["StackBelief"][];
+            /**
+             * Review On
+             * Format: date
+             */
+            review_on: string;
+        };
         /**
          * StagedChange
          * @description An accepted section-text suggestion not applied in any draft yet.
@@ -16787,7 +16993,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap";
+            kind: "prd" | "roadmap" | "vision" | "strategy";
             /** Title */
             title: string;
             /** Slug */
@@ -16814,7 +17020,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap";
+            kind: "prd" | "roadmap" | "vision" | "strategy";
             /** Template */
             template: string;
             /** Template Version */
@@ -16839,6 +17045,73 @@ export interface components {
             account: components["schemas"]["AccountOut"];
             /** Moving */
             moving: number;
+        };
+        /** StrategyFindingOut */
+        StrategyFindingOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "goal_without_strategy" | "focus_without_goal" | "outside_strategy" | "stopped_but_planned" | "strategy_review_due" | "vision_review_due" | "no_strategy";
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "info" | "warning" | "high";
+            /**
+             * Subject Kind
+             * @enum {string}
+             */
+            subject_kind: "entity" | "roadmap_item" | "document";
+            /** Subject Id */
+            subject_id: string | null;
+            /** Subject Ref */
+            subject_ref: string;
+            /** Strategy Version Id */
+            strategy_version_id: string | null;
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "resolved" | "waived";
+            /** Waived By */
+            waived_by: string | null;
+            /** Waived At */
+            waived_at: string | null;
+            /** Waive Reason */
+            waive_reason: string | null;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Resolved At */
+            resolved_at: string | null;
+        };
+        /**
+         * StrategyStackOut
+         * @description The approved vision and strategy, the choices with their goals and items, and what
+         *     is not under the strategy.
+         */
+        StrategyStackOut: {
+            vision: components["schemas"]["StackVision"] | null;
+            strategy: components["schemas"]["StackStrategy"] | null;
+            unaligned: components["schemas"]["Unaligned"];
+            counts: components["schemas"]["StackCounts"];
         };
         /** SuggestionAccept */
         SuggestionAccept: {
@@ -16987,7 +17260,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap";
+            kind: "prd" | "roadmap" | "vision" | "strategy";
             /** Description */
             description?: string | null;
             /** Body */
@@ -17080,7 +17353,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap";
+            kind: "prd" | "roadmap" | "vision" | "strategy";
             /** Description */
             description: string | null;
             /** Builtin */
@@ -17116,7 +17389,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap";
+            kind: "prd" | "roadmap" | "vision" | "strategy";
             /** Description */
             description: string | null;
             /** Builtin */
@@ -17239,7 +17512,7 @@ export interface components {
              * @default any
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "any";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "any";
             /** Description */
             description?: string | null;
             tokens?: components["schemas"]["ThemeTokens"];
@@ -17302,7 +17575,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "any";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "any";
         };
         /** ThemeOut */
         ThemeOut: {
@@ -17319,7 +17592,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "any";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "any";
             /** Description */
             description: string | null;
             tokens: components["schemas"]["ThemeTokens"];
@@ -17409,7 +17682,7 @@ export interface components {
             /** Name */
             name?: string | null;
             /** Kind */
-            kind?: ("prd" | "roadmap" | "any") | null;
+            kind?: ("prd" | "roadmap" | "vision" | "strategy" | "any") | null;
             /** Description */
             description?: string | null;
             tokens?: components["schemas"]["ThemeTokens"] | null;
@@ -18282,6 +18555,31 @@ export interface components {
             /** Records */
             records: components["schemas"]["TrackerRecordIn"][];
         };
+        /** Unaligned */
+        Unaligned: {
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["StackNode"][];
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["UnalignedItem"][];
+        };
+        /** UnalignedItem */
+        UnalignedItem: {
+            /**
+             * Roadmap Item Id
+             * Format: uuid
+             */
+            roadmap_item_id: string;
+            /** Title */
+            title: string;
+            /** Draft */
+            draft: boolean;
+        };
         /** UnavailableItem */
         UnavailableItem: {
             /** External Id */
@@ -18486,7 +18784,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap";
+            kind: "prd" | "roadmap" | "vision" | "strategy";
             /** Version */
             version: number;
             /**
@@ -18574,6 +18872,11 @@ export interface components {
              * @default []
              */
             section_keys: string[];
+        };
+        /** WaiveIn */
+        WaiveIn: {
+            /** Reason */
+            reason: string;
         };
         /** WindowOut */
         WindowOut: {
@@ -18815,7 +19118,7 @@ export interface operations {
     list_documents: {
         parameters: {
             query?: {
-                kind?: ("prd" | "roadmap") | null;
+                kind?: ("prd" | "roadmap" | "vision" | "strategy") | null;
             };
             header?: never;
             path?: never;
@@ -23183,7 +23486,7 @@ export interface operations {
     list_entities: {
         parameters: {
             query?: {
-                type?: ("goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person" | "outcome" | "acceptance_criterion" | "assumption" | "risk") | null;
+                type?: ("goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person" | "outcome" | "acceptance_criterion" | "assumption" | "risk" | "strategy_choice") | null;
                 status?: ("proposed" | "confirmed" | "rejected") | null;
             };
             header?: never;
@@ -24505,7 +24808,7 @@ export interface operations {
     list_templates: {
         parameters: {
             query?: {
-                kind?: ("prd" | "roadmap") | null;
+                kind?: ("prd" | "roadmap" | "vision" | "strategy") | null;
                 include_archived?: boolean;
             };
             header?: never;
@@ -24770,7 +25073,7 @@ export interface operations {
     list_themes: {
         parameters: {
             query?: {
-                kind?: ("prd" | "roadmap" | "any") | null;
+                kind?: ("prd" | "roadmap" | "vision" | "strategy" | "any") | null;
                 include_archived?: boolean;
             };
             header?: never;
@@ -30534,6 +30837,114 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_strategy_stack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyStackOut"];
+                };
+            };
+        };
+    };
+    list_strategy_findings: {
+        parameters: {
+            query?: {
+                status?: ("open" | "resolved" | "waived") | null;
+                kind?: ("goal_without_strategy" | "focus_without_goal" | "outside_strategy" | "stopped_but_planned" | "strategy_review_due" | "vision_review_due" | "no_strategy") | null;
+                subject_kind?: ("entity" | "roadmap_item" | "document") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyFindingOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    waive_strategy_finding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaiveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyFindingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_strategy_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckOut"];
                 };
             };
         };

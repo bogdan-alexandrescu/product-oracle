@@ -12,14 +12,14 @@ import { login, openSection } from "./helpers";
  * green does not prove>.
  */
 
-/** A company with an approved vision and product strategy, and three open drift findings. */
+/** A company with an approved vision and product strategy, and four open drift findings (two high). */
 const withStrategy = (page: Page) => page.addInitScript((key) => localStorage.setItem(key, "strategy"), MOCK_SCENARIO_KEY);
 const as = (page: Page, role: string) =>
   page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, role] as const);
 
 const STRATEGY_V2 = "/documents/product-strategy/v/2";
 
-// protects=owners see "Strategy drift · 3 new" with the high count and a way to the findings;
+// protects=owners see "Strategy drift · 4 new" with the high count and a way to the findings;
 // fails_when=the row is missing, miscounts, or counts once per finding in Needs you;
 // no_claim=the Company › Strategy page it opens (lane 3).
 test("strategy: an owner's Inbox shows the strategy drift row, counted once", async ({ page }) => {
@@ -30,8 +30,8 @@ test("strategy: an owner's Inbox shows the strategy drift row, counted once", as
   const group = page.getByTestId("inbox-strategy");
   const row = group.getByRole("row").filter({ hasText: "Strategy drift" });
   await expect(row).toHaveCount(1);
-  await expect(row).toContainText("Strategy drift · 3 new");
-  await expect(row).toContainText("1 high");
+  await expect(row).toContainText("Strategy drift · 4 new");
+  await expect(row).toContainText("2 high");
   await expect(row.getByRole("link", { name: "Open strategy drift" })).toHaveAttribute("href", "/company/strategy");
 });
 

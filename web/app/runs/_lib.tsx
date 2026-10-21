@@ -76,6 +76,7 @@ export const CHECKPOINT_LABEL: Record<CheckpointKind, string> = {
   eng_review: "Engineering review",
   roadmap_items: "Roadmap items",
   roadmap_review: "Roadmap review",
+  strategy_review: "Vision or strategy review",
 };
 
 export const SEGMENT_STATUS_KIND: Record<SegmentOut["status"], ChipKind> = {

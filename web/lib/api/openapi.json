@@ -213,7 +213,9 @@
                 {
                   "enum": [
                     "prd",
-                    "roadmap"
+                    "roadmap",
+                    "vision",
+                    "strategy"
                   ],
                   "type": "string"
                 },
@@ -7794,7 +7796,8 @@
                     "outcome",
                     "acceptance_criterion",
                     "assumption",
-                    "risk"
+                    "risk",
+                    "strategy_choice"
                   ],
                   "type": "string"
                 },
@@ -10119,7 +10122,9 @@
                 {
                   "enum": [
                     "prd",
-                    "roadmap"
+                    "roadmap",
+                    "vision",
+                    "strategy"
                   ],
                   "type": "string"
                 },
@@ -10565,6 +10570,8 @@
                   "enum": [
                     "prd",
                     "roadmap",
+                    "vision",
+                    "strategy",
                     "any"
                   ],
                   "type": "string"
@@ -11037,7 +11044,7 @@
           "drafts"
         ],
         "summary": "Start Draft",
-        "description": "Create the document (kind, template + version, theme) and its version 1 from the\ntemplate skeleton.",
+        "description": "Create the document (kind, template + version, theme) and its version 1 from the\ntemplate skeleton. A vision or a product strategy is an owner's to start (403).",
         "operationId": "start_draft",
         "requestBody": {
           "content": {
@@ -22045,6 +22052,242 @@
         }
       }
     },
+    "/v1/strategy/stack": {
+      "get": {
+        "tags": [
+          "strategy"
+        ],
+        "summary": "Get Strategy Stack",
+        "description": "The approved vision and strategy: focus choices with their goals, the stop list,\nthe roadmap items under each, and the goals and items not under the strategy.",
+        "operationId": "get_strategy_stack",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyStackOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/strategy/findings": {
+      "get": {
+        "tags": [
+          "strategy"
+        ],
+        "summary": "List Strategy Findings",
+        "description": "Drift findings, open by default; high first, then the newest.",
+        "operationId": "list_strategy_findings",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "resolved",
+                    "waived"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "open",
+              "title": "Status"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "goal_without_strategy",
+                    "focus_without_goal",
+                    "outside_strategy",
+                    "stopped_but_planned",
+                    "strategy_review_due",
+                    "vision_review_due",
+                    "no_strategy"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "subject_kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "entity",
+                    "roadmap_item",
+                    "document"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subject Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StrategyFindingOut"
+                  },
+                  "title": "Response List Strategy Findings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/strategy/findings/{finding_id}/waive": {
+      "post": {
+        "tags": [
+          "strategy"
+        ],
+        "summary": "Waive Strategy Finding",
+        "description": "Waive an open finding with a reason (owners; approvers for outside_strategy). It\nstays waived until its subject changes again.",
+        "operationId": "waive_strategy_finding",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "finding_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Finding Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaiveIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyFindingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/strategy/check": {
+      "post": {
+        "tags": [
+          "strategy"
+        ],
+        "summary": "Run Strategy Check",
+        "description": "Recompute the drift findings now.",
+        "operationId": "run_strategy_check",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
     "/.well-known/oauth-protected-resource": {
       "get": {
         "tags": [
@@ -27457,6 +27700,24 @@
         ],
         "title": "ChangesReport"
       },
+      "CheckOut": {
+        "properties": {
+          "opened": {
+            "type": "integer",
+            "title": "Opened"
+          },
+          "resolved": {
+            "type": "integer",
+            "title": "Resolved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "opened",
+          "resolved"
+        ],
+        "title": "CheckOut"
+      },
       "CheckpointDecision": {
         "properties": {
           "decision": {
@@ -27568,7 +27829,8 @@
               "prd_review",
               "eng_review",
               "roadmap_items",
-              "roadmap_review"
+              "roadmap_review",
+              "strategy_review"
             ],
             "title": "Kind"
           },
@@ -30495,7 +30757,9 @@
             "type": "string",
             "enum": [
               "prd",
-              "roadmap"
+              "roadmap",
+              "vision",
+              "strategy"
             ],
             "title": "Kind",
             "default": "prd"
@@ -30851,7 +31115,9 @@
             "type": "string",
             "enum": [
               "prd",
-              "roadmap"
+              "roadmap",
+              "vision",
+              "strategy"
             ],
             "title": "Kind",
             "default": "prd"
@@ -31001,7 +31267,9 @@
                 "type": "string",
                 "enum": [
                   "prd",
-                  "roadmap"
+                  "roadmap",
+                  "vision",
+                  "strategy"
                 ]
               },
               {
@@ -31724,7 +31992,8 @@
               "outcome",
               "acceptance_criterion",
               "assumption",
-              "risk"
+              "risk",
+              "strategy_choice"
             ],
             "title": "Type"
           },
@@ -31834,7 +32103,8 @@
               "outcome",
               "acceptance_criterion",
               "assumption",
-              "risk"
+              "risk",
+              "strategy_choice"
             ],
             "title": "Type"
           },
@@ -32011,7 +32281,8 @@
               "outcome",
               "acceptance_criterion",
               "assumption",
-              "risk"
+              "risk",
+              "strategy_choice"
             ],
             "title": "Type"
           },
@@ -34882,7 +35153,8 @@
             "enum": [
               "baseline_to_prd",
               "feedback_loop",
-              "prd_to_roadmap"
+              "prd_to_roadmap",
+              "strategy_draft"
             ],
             "title": "Key"
           },
@@ -34904,7 +35176,9 @@
                 "type": "string",
                 "enum": [
                   "prd",
-                  "roadmap"
+                  "roadmap",
+                  "vision",
+                  "strategy"
                 ]
               },
               {
@@ -34919,7 +35193,9 @@
                 "type": "string",
                 "enum": [
                   "prd",
-                  "roadmap"
+                  "roadmap",
+                  "vision",
+                  "strategy"
                 ]
               },
               {
@@ -34986,7 +35262,8 @@
               "prd_review",
               "eng_review",
               "roadmap_items",
-              "roadmap_review"
+              "roadmap_review",
+              "strategy_review"
             ],
             "title": "Checkpoint"
           },
@@ -36150,7 +36427,8 @@
               "prd_review",
               "eng_review",
               "roadmap_items",
-              "roadmap_review"
+              "roadmap_review",
+              "strategy_review"
             ],
             "title": "Kind"
           },
@@ -36271,7 +36549,8 @@
             "enum": [
               "baseline_to_prd",
               "feedback_loop",
-              "prd_to_roadmap"
+              "prd_to_roadmap",
+              "strategy_draft"
             ],
             "title": "Flow"
           },
@@ -36701,6 +36980,16 @@
             "title": "Revoke Failures",
             "default": []
           },
+          "strategy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InboxStrategy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "total": {
             "type": "integer",
             "title": "Total"
@@ -36951,6 +37240,36 @@
         ],
         "title": "InboxStaged",
         "description": "'N changes staged for draft N+1' on one document, with the build action."
+      },
+      "InboxStrategy": {
+        "properties": {
+          "new_findings": {
+            "type": "integer",
+            "title": "New Findings"
+          },
+          "high": {
+            "type": "integer",
+            "title": "High"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Since"
+          }
+        },
+        "type": "object",
+        "required": [
+          "new_findings",
+          "high",
+          "href",
+          "since"
+        ],
+        "title": "InboxStrategy",
+        "description": "Owners: open strategy drift findings (H4), one Inbox row however many."
       },
       "InspectedModule": {
         "properties": {
@@ -44816,7 +45135,9 @@
             "type": "string",
             "enum": [
               "prd",
-              "roadmap"
+              "roadmap",
+              "vision",
+              "strategy"
             ],
             "title": "Kind"
           },
@@ -46786,7 +47107,8 @@
             "enum": [
               "baseline_to_prd",
               "feedback_loop",
-              "prd_to_roadmap"
+              "prd_to_roadmap",
+              "strategy_draft"
             ],
             "title": "Flow"
           },
@@ -46881,7 +47203,8 @@
             "enum": [
               "baseline_to_prd",
               "feedback_loop",
-              "prd_to_roadmap"
+              "prd_to_roadmap",
+              "strategy_draft"
             ],
             "title": "Flow"
           },
@@ -46932,7 +47255,9 @@
                 "type": "string",
                 "enum": [
                   "prd",
-                  "roadmap"
+                  "roadmap",
+                  "vision",
+                  "strategy"
                 ]
               },
               {
@@ -47040,7 +47365,8 @@
                   "prd_review",
                   "eng_review",
                   "roadmap_items",
-                  "roadmap_review"
+                  "roadmap_review",
+                  "strategy_review"
                 ]
               },
               {
@@ -47148,7 +47474,8 @@
                   "prd_review",
                   "eng_review",
                   "roadmap_items",
-                  "roadmap_review"
+                  "roadmap_review",
+                  "strategy_review"
                 ]
               },
               {
@@ -47414,7 +47741,8 @@
             "enum": [
               "baseline_to_prd",
               "feedback_loop",
-              "prd_to_roadmap"
+              "prd_to_roadmap",
+              "strategy_draft"
             ],
             "title": "Flow"
           },
@@ -47465,7 +47793,9 @@
                 "type": "string",
                 "enum": [
                   "prd",
-                  "roadmap"
+                  "roadmap",
+                  "vision",
+                  "strategy"
                 ]
               },
               {
@@ -47573,7 +47903,8 @@
                   "prd_review",
                   "eng_review",
                   "roadmap_items",
-                  "roadmap_review"
+                  "roadmap_review",
+                  "strategy_review"
                 ]
               },
               {
@@ -47681,7 +48012,8 @@
                   "prd_review",
                   "eng_review",
                   "roadmap_items",
-                  "roadmap_review"
+                  "roadmap_review",
+                  "strategy_review"
                 ]
               },
               {
@@ -50197,7 +50529,8 @@
               "prd_review",
               "eng_review",
               "roadmap_items",
-              "roadmap_review"
+              "roadmap_review",
+              "strategy_review"
             ],
             "title": "Checkpoint"
           },
@@ -51190,6 +51523,268 @@
         ],
         "title": "SpanOut"
       },
+      "StackBelief": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "statement": {
+            "type": "string",
+            "title": "Statement"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "untested",
+              "strained"
+            ],
+            "title": "Status"
+          },
+          "evidence": {
+            "type": "integer",
+            "title": "Evidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "statement",
+          "status",
+          "evidence"
+        ],
+        "title": "StackBelief"
+      },
+      "StackChoice": {
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "stance": {
+            "type": "string",
+            "enum": [
+              "focus",
+              "stop"
+            ],
+            "title": "Stance"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/StackNode"
+            },
+            "type": "array",
+            "title": "Goals"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/StackNode"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          },
+          "open_findings": {
+            "type": "integer",
+            "title": "Open Findings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_id",
+          "id",
+          "title",
+          "stance",
+          "goals",
+          "features",
+          "items",
+          "open_findings"
+        ],
+        "title": "StackChoice"
+      },
+      "StackCounts": {
+        "properties": {
+          "open": {
+            "type": "integer",
+            "title": "Open"
+          },
+          "high": {
+            "type": "integer",
+            "title": "High"
+          },
+          "waived": {
+            "type": "integer",
+            "title": "Waived"
+          }
+        },
+        "type": "object",
+        "required": [
+          "open",
+          "high",
+          "waived"
+        ],
+        "title": "StackCounts"
+      },
+      "StackDocument": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "title",
+          "version",
+          "approved_at"
+        ],
+        "title": "StackDocument"
+      },
+      "StackNode": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title"
+        ],
+        "title": "StackNode"
+      },
+      "StackStrategy": {
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/StackDocument"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "review_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Review On"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/StackChoice"
+            },
+            "type": "array",
+            "title": "Choices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document",
+          "summary",
+          "review_on",
+          "choices"
+        ],
+        "title": "StackStrategy"
+      },
+      "StackVision": {
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/StackDocument"
+          },
+          "headline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headline"
+          },
+          "horizon_years": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon Years"
+          },
+          "beliefs": {
+            "items": {
+              "$ref": "#/components/schemas/StackBelief"
+            },
+            "type": "array",
+            "title": "Beliefs"
+          },
+          "review_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Review On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document",
+          "headline",
+          "beliefs",
+          "review_on"
+        ],
+        "title": "StackVision"
+      },
       "StagedChange": {
         "properties": {
           "suggestion_id": {
@@ -51787,7 +52382,9 @@
             "type": "string",
             "enum": [
               "prd",
-              "roadmap"
+              "roadmap",
+              "vision",
+              "strategy"
             ],
             "title": "Kind"
           },
@@ -51864,7 +52461,9 @@
             "type": "string",
             "enum": [
               "prd",
-              "roadmap"
+              "roadmap",
+              "vision",
+              "strategy"
             ],
             "title": "Kind"
           },
@@ -51943,6 +52542,203 @@
           "moving"
         ],
         "title": "StateOut"
+      },
+      "StrategyFindingOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "goal_without_strategy",
+              "focus_without_goal",
+              "outside_strategy",
+              "stopped_but_planned",
+              "strategy_review_due",
+              "vision_review_due",
+              "no_strategy"
+            ],
+            "title": "Kind"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warning",
+              "high"
+            ],
+            "title": "Severity"
+          },
+          "subject_kind": {
+            "type": "string",
+            "enum": [
+              "entity",
+              "roadmap_item",
+              "document"
+            ],
+            "title": "Subject Kind"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          },
+          "subject_ref": {
+            "type": "string",
+            "title": "Subject Ref"
+          },
+          "strategy_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Version Id"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Detail"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved",
+              "waived"
+            ],
+            "title": "Status"
+          },
+          "waived_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waived By"
+          },
+          "waived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waived At"
+          },
+          "waive_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waive Reason"
+          },
+          "first_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "First Seen At"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Seen At"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "severity",
+          "subject_kind",
+          "subject_id",
+          "subject_ref",
+          "strategy_version_id",
+          "detail",
+          "status",
+          "waived_by",
+          "waived_at",
+          "waive_reason",
+          "first_seen_at",
+          "last_seen_at",
+          "resolved_at"
+        ],
+        "title": "StrategyFindingOut"
+      },
+      "StrategyStackOut": {
+        "properties": {
+          "vision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StackVision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "strategy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StackStrategy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unaligned": {
+            "$ref": "#/components/schemas/Unaligned"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/StackCounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "vision",
+          "strategy",
+          "unaligned",
+          "counts"
+        ],
+        "title": "StrategyStackOut",
+        "description": "The approved vision and strategy, the choices with their goals and items, and what\nis not under the strategy."
       },
       "SuggestionAccept": {
         "properties": {
@@ -52334,7 +53130,9 @@
             "type": "string",
             "enum": [
               "prd",
-              "roadmap"
+              "roadmap",
+              "vision",
+              "strategy"
             ],
             "title": "Kind"
           },
@@ -52599,7 +53397,9 @@
             "type": "string",
             "enum": [
               "prd",
-              "roadmap"
+              "roadmap",
+              "vision",
+              "strategy"
             ],
             "title": "Kind"
           },
@@ -52705,7 +53505,9 @@
             "type": "string",
             "enum": [
               "prd",
-              "roadmap"
+              "roadmap",
+              "vision",
+              "strategy"
             ],
             "title": "Kind"
           },
@@ -53066,6 +53868,8 @@
             "enum": [
               "prd",
               "roadmap",
+              "vision",
+              "strategy",
               "any"
             ],
             "title": "Kind",
@@ -53220,6 +54024,8 @@
             "enum": [
               "prd",
               "roadmap",
+              "vision",
+              "strategy",
               "any"
             ],
             "title": "Kind"
@@ -53254,6 +54060,8 @@
             "enum": [
               "prd",
               "roadmap",
+              "vision",
+              "strategy",
               "any"
             ],
             "title": "Kind"
@@ -53511,6 +54319,8 @@
                 "enum": [
                   "prd",
                   "roadmap",
+                  "vision",
+                  "strategy",
                   "any"
                 ]
               },
@@ -56091,6 +56901,52 @@
         "title": "TrackerRecordsImport",
         "description": "Engineering status as read from a tracker, posted by an approver (an export, the\nCLI, an MCP client acting for them; not a run's token). Oracle stores it; it never\nwrites back."
       },
+      "Unaligned": {
+        "properties": {
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/StackNode"
+            },
+            "type": "array",
+            "title": "Goals",
+            "default": []
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UnalignedItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "Unaligned"
+      },
+      "UnalignedItem": {
+        "properties": {
+          "roadmap_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Roadmap Item Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "draft": {
+            "type": "boolean",
+            "title": "Draft"
+          }
+        },
+        "type": "object",
+        "required": [
+          "roadmap_item_id",
+          "title",
+          "draft"
+        ],
+        "title": "UnalignedItem"
+      },
       "UnavailableItem": {
         "properties": {
           "external_id": {
@@ -56626,7 +57482,9 @@
             "type": "string",
             "enum": [
               "prd",
-              "roadmap"
+              "roadmap",
+              "vision",
+              "strategy"
             ],
             "title": "Kind"
           },
@@ -56847,6 +57705,20 @@
         ],
         "title": "VersionWarning",
         "description": "A non-fatal import finding stored on the version."
+      },
+      "WaiveIn": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "WaiveIn"
       },
       "WindowOut": {
         "properties": {
