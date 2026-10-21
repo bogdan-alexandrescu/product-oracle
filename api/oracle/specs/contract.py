@@ -34,11 +34,13 @@ from typing import Any, Literal
 import yaml
 from markdown_it import MarkdownIt
 
+from oracle import parse_budget
 from oracle.docs import layers
 from oracle.docs.parser import (
     CITATION_STRIP_RE,
     DraftError,
     ParsedDraft,
+    body_problems,
     parse_draft,
     prepared,
     split_front_matter,
@@ -58,7 +60,8 @@ Part = Literal[
 Depth = Literal["brief", "full"]
 DEPTHS: tuple[str, ...] = ("brief", "full")
 
-# Limits on what the agents hand back.
+# Limits on what the agents hand back. MAX_SPEC_BYTES also caps a spec version: as Oracle
+# composes it (with its labels, as served) and as an edit submits it.
 MAX_SPEC_BYTES = 200_000
 MAX_SECTION_CHARS = 20_000
 
@@ -468,9 +471,17 @@ def compose(agent_md: str, inputs: SpecInputs) -> Composed:
         return Composed(None, problems + after)
     # M3: and it can be served with its labels (refused at import, not a 500 when served).
     try:
-        label_markdown(markdown, False, None)
+        served = label_markdown(markdown, False, None)
     except DraftError as exc:
         return Composed(None, problems + [_problem(p) for p in exc.problems])
+    # As served (its longest labels, every citation named), within what an edit may submit:
+    # every version Oracle writes can be downloaded, edited and imported back.
+    if len(served.encode("utf-8")) > MAX_SPEC_BYTES:
+        return Composed(
+            None,
+            problems
+            + [Problem("too_large", f"the spec version is over {MAX_SPEC_BYTES} bytes as served")],
+        )
     return Composed(markdown, problems)
 
 
@@ -621,9 +632,10 @@ def _refuse(code: str, message: str, key: str | None = None) -> DraftError:
 
 
 def _fenced_lines(body: str, offset: int) -> set[int]:
-    """0-based lines (of the whole file) inside code blocks, fenced or indented."""
+    """0-based lines (of the whole file) inside code blocks, fenced or indented (the block
+    structure alone: no inline parse)."""
     out: set[int] = set()
-    for tok in _parse_blocks(body):
+    for tok in _BLOCKS_ONLY.parse(body):
         if tok.type in ("fence", "code_block") and tok.map:
             out.update(range(tok.map[0] + offset, tok.map[1] + offset))
     return out
@@ -717,7 +729,13 @@ def strip_state_labels(markdown: str) -> str:
     inside code blocks are left alone. (A body that started right under its heading keeps
     the blank line :func:`label_markdown` put after the label: the same sections.) The
     text is read as :func:`parse_draft` reads it (:func:`prepared`), so the import parses
-    the result once."""
+    the result once.
+
+    The first reader of a spec edit (:func:`oracle.docs.service.import_version`): refuses
+    one over :data:`MAX_SPEC_BYTES` or with a body line over :data:`MAX_LINE` characters
+    (:func:`spec_text_problems`) before any parse."""
+    if refused := spec_text_problems(markdown):
+        raise DraftError(refused)
     text = prepared(markdown)
     lines = text.split("\n")
     fm, body, offset = split_front_matter(text)
@@ -747,27 +765,53 @@ PRD_PART_TITLES = {k: SECTIONS_BY_KEY[k].title for k in PRD_PARTS}
 # accents dropped, look-alike letters of any script folded to the Latin letter they look
 # like, lower case). Only ever compared with Oracle's few fixed phrases, so non-Latin text
 # is refused only when it reads as one of them.
-_PLAIN_MD = MarkdownIt("commonmark", {"html": False}).enable("strikethrough")
-# Blocks as the views read them (tables on). Never with HTML on: markdown-it's inline
-# HTML rule is quadratic on many unclosed '<!--' (or '<?', '<a b="'), and a spec holds no
-# raw HTML anyway (:func:`_html_and_data` finds it in the text tokens, linearly).
-_BLOCK_MD = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
-# markdown-it's parse is quadratic on one long line of tag-like text even with HTML off
-# ('<b>' x 300k, 900 KB, takes ~12 s), so a line over this many characters is refused
-# (``line_too_long``) before any parse, and the parse run off the event loop is given a
-# time cap (:func:`oracle.safe_yaml.run_parse_within`).
-MAX_LINE = 20_000
-_LONG_LINE = re.compile(rf"[^\n]{{{MAX_LINE + 1}}}")
+#
+# Every parser here reads untrusted text, so each is guarded (:mod:`oracle.parse_budget`:
+# a parse stops at its CPU budget), and a spec's text reaches them only after the linear
+# checks of its entry point (:func:`spec_text_problems`, :func:`parse_draft`: no line over
+# ``MAX_LINE`` characters, no paragraph with too many open brackets). Never with HTML on:
+# markdown-it's inline HTML rule is quadratic on many unclosed '<!--' (or '<?', '<a b="'),
+# and a spec holds no raw HTML anyway (:func:`_html_and_data` finds it in the text tokens).
+_PLAIN_MD = parse_budget.guard(MarkdownIt("commonmark", {"html": False}).enable("strikethrough"))
+# Blocks as the views read them (tables on).
+_BLOCK_MD = parse_budget.guard(
+    MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
+)
+# The block structure alone (code blocks, headings): no inline parse.
+_BLOCKS_ONLY = parse_budget.guard(
+    MarkdownIt("commonmark", {"html": False})
+    .enable(["table", "strikethrough"])
+    .disable(["inline", "text_join"])
+)
+# Every link, image, autolink and reference definition, whatever its scheme: the views'
+# parser refuses a javascript: destination (it stays text), but its raw text is what the
+# markdown export and an agent reading the markdown get, so :func:`_html_and_data` reads
+# the destinations themselves (entities and escapes decoded, as markdown-it does).
+_SCAN_MD = parse_budget.guard(
+    MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
+)
+_SCAN_MD.validateLink = lambda url: True  # type: ignore[method-assign]
+_SCAN_MD.normalizeLink = lambda url: url  # type: ignore[method-assign]
 
 
-def _has_long_line(text: str) -> bool:
-    return _LONG_LINE.search(text) is not None
+def spec_text_problems(markdown: str) -> list[ImportProblem]:
+    """What refuses a spec version's text before it is read: over :data:`MAX_SPEC_BYTES`,
+    or a body line over :data:`MAX_LINE` characters. Linear; every entry point of a spec's
+    text (an edit's import, :func:`edit_check`) runs it once, first."""
+    if len(markdown.encode("utf-8")) > MAX_SPEC_BYTES:
+        return [
+            ImportProblem(
+                code="too_large",
+                message=f"A spec version may be at most {MAX_SPEC_BYTES:,} bytes: move detail "
+                "to linked documents.",
+            )
+        ]
+    return body_problems(prepared(markdown))
 
 
 def _parse_blocks(text: str) -> list:
-    """``_BLOCK_MD``'s tokens for ``text``; none for a text with an over-long line (the
-    structure check refuses it, :func:`structure_problems`, so no output is built from it)."""
-    return [] if _has_long_line(text) else _BLOCK_MD.parse(text)
+    """``_BLOCK_MD``'s tokens for ``text``."""
+    return _BLOCK_MD.parse(text)
 
 
 _EMPHASIS = re.compile(r"[*_`~]+")
@@ -802,8 +846,6 @@ def skeleton(text: str) -> str:
 
 
 def _inline_plain(text: str) -> str:
-    if _has_long_line(text):  # refused by structure_problems; not parsed (quadratic)
-        return text
     out: list[str] = []
     for block in _PLAIN_MD.parseInline(text):
         for tok in block.children or []:
@@ -926,19 +968,13 @@ def _comment_spans(text: str) -> bool:
 
 
 _HEADING_LINE = re.compile(r"^ {0,3}#{1,6}(?:\s|$)", re.M)
-# A data: URL as a link or image destination, or a reference definition, as written (a
-# data: URL markdown-it does not accept stays text here but may render elsewhere).
-_DATA_DEST = re.compile(
-    r"(?<!\\)(?:\\\\)*\]\(\s*(?:<\s*)?data:|^ {0,3}\[[^\]\n]+\]:\s*(?:<\s*)?data:", re.I | re.M
-)
-# The same for javascript: and vbscript: (a destination markdown-it refuses stays text
-# here, but the raw text is what an export or another reader may link).
-_SCRIPT_DEST = re.compile(
-    r"(?<!\\)(?:\\\\)*\]\(\s*(?:<\s*)?(?:javascript|vbscript):"
-    r"|^ {0,3}\[[^\]\n]+\]:\s*(?:<\s*)?(?:javascript|vbscript):",
-    re.I | re.M,
-)
 _URL_JUNK = re.compile(r"[\x00-\x20\x7f-\x9f]")
+# The backstop for a destination no CommonMark parser takes as one (markdown-it stops a
+# destination at a control character) but a looser reader of the raw markdown might: in
+# the text with its entities decoded and its spaces and control characters dropped (as a
+# browser drops them from a URL), an unescaped ']' followed by '(' or ':', or a '<',
+# right before a javascript:, vbscript: or data: scheme.
+_RAW_DEST = re.compile(r"(?<!\\)(?:\\\\)*(?:\]\(|\]:|<)(javascript|vbscript|data):", re.I)
 
 
 def _scheme_of(url: str | None) -> str:
@@ -948,14 +984,6 @@ def _scheme_of(url: str | None) -> str:
     return head.split(":", 1)[0] if ":" in head else ""
 
 
-def _is_data_url(url: str | None) -> bool:
-    return _scheme_of(url) == "data"
-
-
-def _is_script_url(url: str | None) -> bool:
-    return _scheme_of(url) in ("javascript", "vbscript")
-
-
 # Text markdown-it with HTML on would read as HTML (a block or an inline tag): an open or
 # closing tag ('<span', '</div'), a comment, declaration or CDATA ('<!'), a processing
 # instruction ('<?'). Not an autolink ('<https://...>', '<a@b.c>').
@@ -963,27 +991,34 @@ _TAG_LIKE = re.compile(r"<(?:/?[A-Za-z][A-Za-z0-9-]*(?=[\s/>]|$)|[!?])")
 
 
 def _html_and_data(text: str) -> tuple[bool, bool, bool]:
-    """(raw HTML, a data: URL, a javascript:/vbscript: URL) in ``text``: tag-like text
-    outside code (as markdown-it with HTML on would read it, a block or an inline tag;
-    text a backslash escapes ('\\<span>') counts, entity-escaped text ('&lt;b&gt;') does
-    not: it renders literally), and an image or link whose URL has one of those schemes.
-    Linear in the text's lines, each at most ``MAX_LINE`` long (the caller refuses a longer
-    one first: markdown-it's parse is quadratic on a long line)."""
-    data_found = bool(_DATA_DEST.search(text))
-    script_found = bool(_SCRIPT_DEST.search(text))
-    if not _TAG_LIKE.search(text):
-        # No tag-like text at all: nothing to tell apart from code, no parse.
-        return False, data_found, script_found
+    """(raw HTML, a data: URL, a javascript:/vbscript: URL) in ``text``.
+
+    Raw HTML: tag-like text outside code (as markdown-it with HTML on would read it, a
+    block or an inline tag; text a backslash escapes ('\\<span>') counts, entity-escaped
+    text ('&lt;b&gt;') does not: it renders literally).
+
+    The URLs, so that no reader of the raw markdown (the .md export, an agent reading
+    ``get_document_markdown``) is handed one: every destination of a link, an image, an
+    autolink or a reference definition (in a quote or a list too, with an escaped or
+    multi-line label) as one markdown-it parse reads it, whatever its scheme (entities and
+    escapes decoded; the scheme read as a browser reads it, :func:`_scheme_of`), plus the
+    :data:`_RAW_DEST` backstop on the decoded text. One parse, bounded like every other
+    (:mod:`oracle.parse_budget`); the caller has refused an over-long line before."""
+    scheme_text = _URL_JUNK.sub("", html.unescape(text))
+    schemes = {m.group(1).lower() for m in _RAW_DEST.finditer(scheme_text)}
+    env: dict[str, Any] = {}
+    urls: list[str] = []
     html_found = False
-    for tok in _parse_blocks(text):
+    for tok in _SCAN_MD.parse(text, env):
         for child in tok.children or []:
             if child.type == "text" and _TAG_LIKE.search(child.content):
                 html_found = True
             elif child.type in ("image", "link_open"):
-                url = child.attrGet("src") or child.attrGet("href")
-                data_found = data_found or _is_data_url(url)
-                script_found = script_found or _is_script_url(url)
-    return html_found, data_found, script_found
+                urls.append(str(child.attrGet("src") or child.attrGet("href") or ""))
+    urls += [str(ref.get("href") or "") for ref in (env.get("references") or {}).values()]
+    for url in urls:
+        schemes.update({_scheme_of(url), _scheme_of(html.unescape(url))})
+    return html_found, "data" in schemes, bool(schemes & {"javascript", "vbscript"})
 
 
 def _renderings(text: str) -> list[str]:
@@ -1066,16 +1101,7 @@ def structure_problems(markdown: str, draft: ParsedDraft | None = None) -> list[
                 )
             )
             continue
-        if _has_long_line(text):
-            problems.append(
-                Problem(
-                    "line_too_long",
-                    f"A spec line may not be over {MAX_LINE:,} characters: break it into "
-                    "paragraphs or list items.",
-                    s.section_key,
-                )
-            )
-            continue
+        # (A line over MAX_LINE characters never gets here: parse_draft refuses it.)
         raw_html, data_url, script_url = _html_and_data(text)
         if raw_html:
             problems.append(
@@ -1347,6 +1373,8 @@ def edit_check(
     version can be served with its labels (:func:`label_markdown`, M3: refused here
     rather than a 500 on every read). ``draft``: ``markdown`` as the import already parsed
     it (an API edit is parsed once)."""
+    if refused := spec_text_problems(markdown):
+        return EditCheck([Problem(p.code, p.message, p.section_key) for p in refused], {}, [])
     if draft is None or draft.markdown != markdown:
         try:
             draft = parse_draft(markdown)

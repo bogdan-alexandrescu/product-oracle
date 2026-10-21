@@ -525,20 +525,46 @@ def _render_citation(renderer, tokens, idx, options, env) -> str:
     return html
 
 
-def _render_image(self, tokens, idx, options, env) -> str:
-    """Owner decision (2026-10-20): an image loads only when Oracle stores it (a path of
-    this app, '/uploads/...'). A remote image is a link showing its alt text and host
-    ('chart (example.com)'): an export's reader never contacts an outside host."""
-    tok = tokens[idx]
-    src = tok.attrGet("src") or ""
-    alt = escape(tok.content or "")
+# Owner decision (2026-10-20): an image loads only when Oracle stores it, a path of this
+# app under STORED_IMAGES. One a browser could read as another host ('/\evil.com', a
+# control character) or that leaves the prefix (a dot segment, '%2e%2e') is not one.
+STORED_IMAGES = "/uploads/"
+_URL_UNSAFE = re.compile(r"[\\\x00-\x20\x7f-\x9f]")
+_DOT_SEGMENT = re.compile(r"(?:^|/)(?:\.|%2e){1,2}(?:/|$)", re.I)
+
+
+def stored_image(src: str) -> bool:
+    """``src`` is an image Oracle stores: a path under :data:`STORED_IMAGES`, with no
+    backslash, control character, space or dot segment."""
+    if not src.startswith(STORED_IMAGES) or _URL_UNSAFE.search(src):
+        return False
     parts = urlsplit(src)
-    if src.startswith("/") and not src.startswith("//"):
-        return self.renderToken(tokens, idx, options, env)
-    if parts.scheme in ("http", "https") and parts.hostname:
-        label = f"{alt} ({escape(parts.hostname)})" if alt else escape(parts.hostname)
-        return f'<a href="{escape(src)}" rel="noopener noreferrer">{label}</a>'
-    return alt
+    return not (parts.scheme or parts.netloc or _DOT_SEGMENT.search(parts.path))
+
+
+def image_label(src: str, alt: str) -> tuple[str, str | None]:
+    """How an image that does not load shows (owner decision, 2026-10-20): its alt text and
+    the host of an http(s) URL ('chart (example.com)'), with the URL to link; just its alt
+    text, with nothing to link, for anything else."""
+    parts = urlsplit(src)
+    if parts.scheme in ("http", "https") and parts.hostname and not _URL_UNSAFE.search(src):
+        return (f"{alt} ({parts.hostname})" if alt else parts.hostname), src
+    return alt, None
+
+
+def _render_image(self, tokens, idx, options, env) -> str:
+    """A stored image as an image with its alt text; any other as :func:`image_label`: an
+    export's reader never contacts an outside host. Plain strings: a ``Markup`` here would
+    escape the HTML rendered around it."""
+    tok = tokens[idx]
+    src = str(tok.attrGet("src") or "")
+    alt = self.renderInlineAsText(tok.children or [], options, env)
+    if stored_image(src):
+        return f'<img src="{escape(src)}" alt="{escape(alt)}">'
+    label, href = image_label(src, alt)
+    if href is None:
+        return str(escape(label))
+    return f'<a href="{escape(href)}" rel="noopener noreferrer">{escape(label)}</a>'
 
 
 @cache

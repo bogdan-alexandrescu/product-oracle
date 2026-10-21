@@ -19,7 +19,7 @@ from markdown_it import MarkdownIt
 from markdown_it.token import Token
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from oracle import safe_yaml
+from oracle import parse_budget, safe_yaml
 from oracle.config import get_settings
 from oracle.docs import layers
 from oracle.docs.schemas import CitationSource, ImportProblem
@@ -45,7 +45,47 @@ DATE_MARK_COMMENT_RE = re.compile(
 # (oracle.export.render.render_markdown), dropped on import with the markers above.
 EXPORT_BANNER_RE = re.compile(r"^<!-- Product Oracle export: [^\n]*? -->\n", re.M)
 
-_md = MarkdownIt("commonmark", {"html": False}).enable("table")
+# Every parse of a draft is of untrusted text: guarded (oracle.parse_budget), so a parse
+# stops at its CPU budget. The sections come from the block structure alone (headings and
+# their lines need no inline parse); a section's body text from a full parse of its body.
+_md = parse_budget.guard(MarkdownIt("commonmark", {"html": False}).enable("table"))
+_blocks = parse_budget.guard(
+    MarkdownIt("commonmark", {"html": False}).enable("table").disable(["inline", "text_join"])
+)
+
+# The longest line a draft's body may hold (owner decision, 2026-10-20). Checked once,
+# linearly, before any markdown parse: markdown-it's inline parse is quadratic on one long
+# line of tag-like text ('<b>' x 300k, 900 KB, took ~40 s).
+MAX_LINE = 20_000
+# The most '[' an inline block (a paragraph, heading or table cell) may leave open at once:
+# markdown-it's own nesting limit (``maxNesting``), past which it no longer parses nested
+# links as written. Many open brackets are what makes its link scan slow ('![' x 500k
+# took ~35 s), so such a block is refused before its inline parse.
+MAX_OPEN_BRACKETS = 20
+_BRACKET_OR_ESCAPE = re.compile(r"\\.|[\[\]]", re.S)
+
+
+def long_line(text: str) -> int | None:
+    """The 1-based number of the first line of ``text`` over :data:`MAX_LINE` characters,
+    or None. Linear."""
+    for number, line in enumerate(text.split("\n"), start=1):
+        if len(line) > MAX_LINE:
+            return number
+    return None
+
+
+def too_many_open_brackets(text: str) -> bool:
+    """``text`` (one inline block) leaves more than :data:`MAX_OPEN_BRACKETS` '[' open at
+    some point (a backslash-escaped bracket does not count). Linear."""
+    depth = 0
+    for m in _BRACKET_OR_ESCAPE.finditer(text):
+        if m.group() == "[":
+            depth += 1
+            if depth > MAX_OPEN_BRACKETS:
+                return True
+        elif m.group() == "]" and depth:
+            depth -= 1
+    return False
 
 
 class DraftError(ValueError):
@@ -325,7 +365,25 @@ def _parse_sections(
     # (heading line index, body start index, level, heading text or None, key or None)
     heads: list[tuple[int, int, int, str, str | None]] = []
     shape: dict[int, tuple[str, int]] = {}
-    for token_index, token in enumerate(tokens := _md.parse(body)):
+    tokens = _blocks.parse(body)
+    crowded = next(
+        (t for t in tokens if t.type == "inline" and too_many_open_brackets(t.content)), None
+    )
+    if crowded is not None:
+        # Refused before any inline parse (the body text below is one per section).
+        line = crowded.map[0] + 1 + line_offset if crowded.map else None
+        raise DraftError(
+            [
+                *problems,
+                ImportProblem(
+                    code="too_many_open_brackets",
+                    message=f"a paragraph leaves more than {MAX_OPEN_BRACKETS} '[' open: "
+                    "close them, or write a literal one as '\\['",
+                    line=line,
+                ),
+            ]
+        )
+    for token_index, token in enumerate(tokens):
         if token.type != "heading_open" or token.map is None:
             continue
         level = int(token.tag[1])
@@ -424,10 +482,51 @@ def prepared(markdown: str) -> str:
     return normalize(EXPORT_BANNER_RE.sub("", DATE_MARK_COMMENT_RE.sub("", markdown)))
 
 
+def body_problems(text: str) -> list[ImportProblem]:
+    """What refuses a draft (``text`` as :func:`prepared` reads it) before any markdown
+    parse: a body line over :data:`MAX_LINE` characters. Linear. (The front matter is
+    YAML, with caps of its own: :mod:`oracle.safe_yaml`.)"""
+    _, body, offset = split_front_matter(text)
+    number = long_line(body)
+    if number is None:
+        return []
+    return [
+        ImportProblem(
+            code="line_too_long",
+            message=f"line {number + offset} is over {MAX_LINE:,} characters: break it into "
+            "paragraphs or list items",
+            line=number + offset,
+        )
+    ]
+
+
 def parse_draft(markdown: str) -> ParsedDraft:
     """Parse and validate a draft. Raises :class:`DraftError` listing every problem.
 
-    CPU-bound: async callers run it with :func:`parse_draft_async`."""
+    Bounded: a body line over :data:`MAX_LINE` characters is refused before any markdown
+    parse, a paragraph with too many open brackets before its inline parse, and the parse
+    stops at its CPU budget (:mod:`oracle.parse_budget`: the caller's, else
+    ``PARSE_SECONDS`` of its own, refused as ``too_slow``). CPU-bound: async callers run it
+    with :func:`parse_draft_async`."""
+    if parse_budget.active():
+        return _parse_draft(markdown)
+    seconds = safe_yaml.PARSE_SECONDS
+    try:
+        with parse_budget.limit(seconds):
+            return _parse_draft(markdown)
+    except parse_budget.Exceeded:
+        raise DraftError(
+            [
+                ImportProblem(
+                    code="too_slow",
+                    message=f"the draft took more than {seconds:g} s to read; keep it small "
+                    "and plain",
+                )
+            ]
+        ) from None
+
+
+def _parse_draft(markdown: str) -> ParsedDraft:
     # The request body is capped (413); a run's file is not, so the draft is too.
     limit = get_settings().max_body_bytes
     if len(markdown.encode("utf-8")) > limit:
@@ -435,6 +534,8 @@ def parse_draft(markdown: str) -> ParsedDraft:
             [ImportProblem(code="draft_too_large", message=f"draft is larger than {limit} bytes")]
         )
     text = prepared(markdown)
+    if refused := body_problems(text):
+        raise DraftError(refused)
     problems: list[ImportProblem] = []
 
     yaml_text, body, offset = split_front_matter(text)

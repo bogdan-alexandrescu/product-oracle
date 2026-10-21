@@ -423,13 +423,34 @@ lands, only that function changes.
 An edit and a run's import are refused (422, every problem at once,
 `oracle.specs.contract.structure_problems`) when a section's heading or body holds raw HTML
 (an HTML block or inline tag, including one a backslash escapes, `\<span>`), HTML comment
-syntax (`<!--` or `-->`, code included), a data:, javascript: or vbscript: URL in an image
-or link, or a line over 20,000 characters (`line_too_long`). Text escaped as entities
-(`&lt;script&gt;`) is not refused: it renders literally. markdown-it's parse is quadratic on
-one long line of tag-like text, so such a line is refused before any parse, and an import's
-or edit's parse also runs under the draft parse time cap (`too_slow`). The web renders a
-link only for http, https, mailto and relative or anchor destinations; any other scheme
-shows as plain text. Images load only when Oracle stores them (a path of the app, `/uploads/...`): a remote image, in the web and in exports, is a link showing its alt text and host (`chart (example.com)`), never an `<img>` (owner, 2026-10-20); data: images stay refused at import. The label check reads each
+syntax (`<!--` or `-->`, code included), or a data:, javascript: or vbscript: URL in any
+spelling a reader of the raw markdown may follow (`script_url`, `data_url`): every link,
+image, autolink (`<javascript:...>`) and reference definition (in a quote or a list too,
+with an escaped or multi-line label) as markdown-it reads it, entities and escapes decoded
+(`&#106;avascript:`), the scheme read as a browser reads it (control characters and spaces
+in it ignored), plus the decoded raw text (an unescaped `](`, `]:` or `<` right before such a
+scheme, after any spaces or control characters). Text escaped as entities
+(`&lt;script&gt;`) or with a backslash (`\[x\](javascript:...)`) is not refused: it renders
+literally. The web renders a link only for http, https, mailto and relative or anchor
+destinations; any other scheme shows as plain text. Images load only when Oracle stores
+them: a path of the app under `/uploads/` (no backslash, control character, other origin or
+dot segment: a browser reads `/\evil.com/p.png` as evil.com). A remote http(s) image, in the
+web and in exports, is a link showing its alt text and host (`chart (example.com)`), never
+an `<img>`; any other image shows its alt text (owner, 2026-10-20); data: images stay
+refused at import.
+
+Every parse of a draft or edit is bounded (r7 re-review, 2026-10-20). A line over 20,000
+characters (`line_too_long`, any draft's body, not only a spec's) is refused by one linear
+check before any markdown parse (markdown-it's parse is quadratic on one long line of
+tag-like text). A paragraph that leaves more than 20 `[` open (`too_many_open_brackets`,
+markdown-it's own nesting limit) is refused before its inline parse: open brackets are
+what makes markdown-it's link scan slow, about 15 µs per character, whatever the paragraph
+size. Anything else is bounded by the parse cap (`too_slow`, `oracle.parse_budget`): each
+parse may use `PARSE_SECONDS` (5 s) of CPU time in markdown-it from the moment it starts,
+checked as it runs, and stops there, freeing its worker of the parse pool; a wait for a free
+worker does not count. A spec version is at most 200,000 bytes (`too_large`,
+`MAX_SPEC_BYTES`): an edit as submitted, and a version a run composes as it is served. The
+label check reads each
 block as it renders in every output: the body, the body without citation markers, and
 `layers.slide_body(body)` with and without them. Images are no visible text; a task-list
 box or footnote marker before a label, emphasis ending right after 'Decided' or 'Proposed',

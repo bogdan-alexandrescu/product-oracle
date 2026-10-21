@@ -27,11 +27,32 @@ export type Block =
   | { t: "table"; head: Inline[][]; rows: Inline[][][] };
 
 // Citation ids are those the API accepts ([A-Za-z0-9_.:-]); an image is matched before a
-// link, so its alt text never shows as link text. Alt and link text and a destination are
-// length-bounded, so many unclosed `![` or `[` scan a bounded stretch each (linear overall,
-// not quadratic); a longer one reads as plain text.
+// link, so its alt text never shows as link text. Alt and link text, a destination and
+// emphasized text are length-bounded, so many unclosed `![`, `[`, `*` or `_` scan a bounded
+// stretch each (linear overall, not quadratic); a longer one reads as plain text.
 const INLINE =
-  /\[c:([\w.:-]+)\]|!\[([^\]]{0,500})\]\(([^)\s]{1,1000})\)|`([^`]+)`|\*\*(.+?)\*\*|\[([^\]]{1,500})\]\(([^)\s]{1,1000})\)|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])|(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)/g;
+  /\[c:([\w.:-]+)\]|!\[([^\]]{0,500})\]\(([^)\s]{1,1000})\)|`([^`]+)`|\*\*(.{1,500}?)\*\*|\[([^\]]{1,500})\]\(([^)\s]{1,1000})\)|(?<![\w*])\*(?!\s)(.{1,500}?)(?<!\s)\*(?![\w*])|(?<!\w)_(?!\s)(.{1,500}?)(?<!\s)_(?!\w)/g;
+
+/**
+ * Owner decision (2026-10-20): an image loads only when Oracle stores it, a path of this
+ * app under STORED_IMAGES. The path a stored image loads from, or null for anything else:
+ * a backslash or control character (a browser reads `/\evil.com/p.png` as evil.com), another
+ * origin, or a path that leaves the prefix once resolved (`/uploads/../v1/me`, `%2e%2e`).
+ */
+export const STORED_IMAGES = "/uploads/";
+
+export function storedImageSrc(src: string): string | null {
+  if (!src.startsWith(STORED_IMAGES) || /[\\\u0000-\x20\u007f-\u009f]/.test(src)) return null;
+  const origin = typeof window !== "undefined" ? window.location.origin : "http://oracle.invalid";
+  let url: URL;
+  try {
+    url = new URL(src, origin);
+  } catch {
+    return null;
+  }
+  if (url.origin !== origin || !url.pathname.startsWith(STORED_IMAGES)) return null;
+  return url.pathname + url.search;
+}
 
 /**
  * Whether a link destination may render as a link: http, https, mailto, or relative or an

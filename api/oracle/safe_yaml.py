@@ -20,8 +20,9 @@ Every failure, including a ``RecursionError``/``ValueError``/``OverflowError`` f
 inside the loader, is one :class:`SafeYamlError` (a ``yaml.YAMLError``) whose ``problem``
 says what is wrong and whose ``code`` names it for a problem list (``duplicate_key``,
 ``too_large``...). :func:`run_parse` runs a parse on a small dedicated thread pool, so a
-slow one never blocks the event loop; :func:`run_parse_within` also gives up after
-``PARSE_SECONDS`` (a run's roadmap files, a draft), as a :class:`ParseTimeout`.
+slow one never blocks the event loop; :func:`run_parse_within` also caps it at
+``PARSE_SECONDS`` from the moment it starts (a run's roadmap files, a draft, a spec edit),
+refused as a :class:`ParseTimeout`.
 """
 
 import asyncio
@@ -41,6 +42,8 @@ from yaml.events import AliasEvent, DocumentStartEvent, ScalarEvent
 from yaml.nodes import MappingNode
 from yaml.resolver import Resolver
 
+from oracle import parse_budget
+
 try:  # libyaml's event parser: the same events, much faster than the pure-Python one.
     from yaml.cyaml import CParser as _EventParser
 
@@ -57,8 +60,12 @@ MAX_DEPTH = 32
 MAX_NODES = 50_000
 MAX_SCALAR_CHARS = 256 * 1024
 MAX_DIGITS = 30
-# run_parse_within waits at most this long for a parse (the whole wait, queue included).
+# run_parse_within's cap on one parse: this much CPU time of its markdown parses
+# (oracle.parse_budget), counted from the moment the parse starts; a queue wait does not
+# count. As a backstop for anything else, it stops waiting WALL_FACTOR times this long
+# after the parse started.
 PARSE_SECONDS = 5.0
+WALL_FACTOR = 4
 
 # What YAML's reader accepts (tab, LF, CR and printable Unicode); anything else is refused,
 # in the input and in the value of an escaped ("\x00") double-quoted scalar.
@@ -347,12 +354,33 @@ async def run_parse_within[T](
     seconds: float | None = None,
     **kwargs: Any,
 ) -> T:
-    """:func:`run_parse`, waiting at most ``seconds`` (``PARSE_SECONDS``): a run's file or a
-    draft that is too slow to read is a refusal (:class:`ParseTimeout`, ``name`` starts its
-    message), never a stalled tick. The abandoned parse finishes on the pool; its cost is
-    bounded by :func:`load`'s caps."""
+    """:func:`run_parse`, capped at ``seconds`` (``PARSE_SECONDS``) from the moment the
+    parse starts on the pool: a run's file, a draft or an edit too slow to read is a refusal
+    (:class:`ParseTimeout`, ``name`` starts its message), never a stalled tick.
+
+    The cap is CPU time of its markdown parses (:mod:`oracle.parse_budget`): a parse past
+    it stops where it is and frees its worker, so slow posts can not hold the pool. Waiting
+    for a free worker does not count, so a queue never refuses an honest parse. As a
+    backstop for work outside markdown (bounded by :func:`load`'s caps and the linear
+    checks), the wait also ends ``WALL_FACTOR`` times the cap after the parse started."""
     limit = PARSE_SECONDS if seconds is None else seconds
+    loop = asyncio.get_running_loop()
+    started = loop.create_future()
+
+    def mark_started() -> None:
+        if not started.done():
+            started.set_result(None)
+
+    def job() -> T:
+        loop.call_soon_threadsafe(mark_started)
+        with parse_budget.limit(limit):
+            return fn(*args, **kwargs)
+
+    parse = asyncio.ensure_future(run_parse(job))
+    # An abandoned parse's outcome is read, never reported as unretrieved.
+    parse.add_done_callback(lambda f: f.cancelled() or f.exception())
     try:
-        return await asyncio.wait_for(run_parse(fn, *args, **kwargs), timeout=limit)
-    except TimeoutError:
+        await asyncio.wait({started, parse}, return_when=asyncio.FIRST_COMPLETED)
+        return await asyncio.wait_for(asyncio.shield(parse), timeout=limit * WALL_FACTOR)
+    except (TimeoutError, parse_budget.Exceeded):
         raise ParseTimeout(name, limit) from None

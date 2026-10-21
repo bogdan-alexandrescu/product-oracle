@@ -4,7 +4,7 @@ import { Fragment, type ReactNode } from "react";
 import { CitationChip } from "@/components/CitationChip";
 import { IGNORE_ATTR } from "@/lib/anchor";
 import type { CitationOut, DateMarkOut } from "@/lib/api/client";
-import { isSafeHref, type Block, type Inline } from "@/lib/markdown";
+import { isSafeHref, storedImageSrc, type Block, type Inline } from "@/lib/markdown";
 import { sectionHash, sectionHref } from "@/lib/section-link";
 
 /** A highlighted span of a section's anchorable text. */
@@ -59,6 +59,7 @@ function docLinkHref(href: string): string | null {
 
 /** The host of an http(s) URL, or null (a remote image is shown as a link, never loaded). */
 function remoteHost(src: string): string | null {
+  if (/[\\\u0000-\x20\u007f-\u009f]/.test(src)) return null;
   try {
     const u = new URL(src);
     return u.protocol === "https:" || u.protocol === "http:" ? u.hostname : null;
@@ -228,18 +229,25 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
       }
       case "img": {
         // Owner decision (2026-10-20): an image loads only when Oracle stores it (a path
-        // of this app, '/uploads/...'). A remote image is a link showing its alt text and
-        // host, never an <img>: a reviewer's browser contacts no outside host. The alt
-        // text is an attribute, not anchorable text (the API checks a spec's labels the
-        // same way: an image is no visible text).
-        if (n.src.startsWith("/") && !n.src.startsWith("//")) {
+        // of this app under /uploads/, storedImageSrc). A remote image is a link showing
+        // its alt text and host, never an <img>: a reviewer's browser contacts no outside
+        // host; anything else shows its alt text. The alt text is not anchorable text (the
+        // API checks a spec's labels the same way: an image is no visible text).
+        const stored = storedImageSrc(n.src);
+        if (stored) {
           // eslint-disable-next-line @next/next/no-img-element
-          return <img key={k} src={n.src} alt={n.alt} loading="lazy" className="max-w-full" />;
+          return <img key={k} src={stored} alt={n.alt} loading="lazy" className="max-w-full" />;
         }
         const host = remoteHost(n.src);
-        if (!host) return null;
+        if (!host) {
+          return n.alt ? (
+            <span key={k} {...ignore} data-image-alt="">
+              {n.alt}
+            </span>
+          ) : null;
+        }
         return (
-          <a key={k} href={n.src} target="_blank" rel="noopener noreferrer" data-remote-image="">
+          <a key={k} {...ignore} href={n.src} target="_blank" rel="noopener noreferrer" data-remote-image="">
             {n.alt ? `${n.alt} (${host})` : host}
           </a>
         );

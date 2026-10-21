@@ -20,6 +20,7 @@ from pptx.util import Emu, Inches, Pt
 
 from oracle.docs.parser import CITATION_STRIP_RE
 from oracle.export.deck import Deck, Slide
+from oracle.export.render import image_label, stored_image
 
 WIDTH, HEIGHT = Inches(13.333), Inches(7.5)
 MARGIN = Inches(0.8)
@@ -89,6 +90,14 @@ def _runs(children) -> list[Run]:
             italic = True
         elif t.type == "em_close":
             italic = False
+        elif t.type == "image":
+            # A slide holds no image: a stored one shows its alt text, any other its label
+            # (owner decision, 2026-10-20: 'chart (example.com)'), as the HTML export does.
+            alt = "".join(c.content for c in t.children or [] if c.type in ("text", "code_inline"))
+            src = str(t.attrGet("src") or "")
+            text = alt if stored_image(src) else image_label(src, alt)[0]
+            if text:
+                runs.append(Run(text, bold, italic))
     return runs
 
 
