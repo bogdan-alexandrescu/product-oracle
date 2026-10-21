@@ -6,13 +6,21 @@ Pure tests build :class:`ReasonContext` by hand; the integration tests advance a
 ``prd_to_roadmap`` run on the FakeRuntime against Postgres.
 """
 
+import asyncio
+import json
+import threading
+import time
 import uuid
+from datetime import date
 
 from sqlalchemy import select, text
 
 from oracle.baseline.models import Entity
+from oracle.docs.models import DocumentVersion
 from oracle.roadmap import diff as item_diff
+from oracle.roadmap.models import RoadmapItem
 from oracle.runs import reasons as reasons_mod
+from oracle.runs import roadmap as roadmap_mod
 from oracle.runs.models import Run
 from oracle.runs.reasons import (
     TOP_RANKS,
@@ -26,6 +34,7 @@ from oracle.runs.reasons import (
 from oracle.runs.roadmap import check_items
 from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
+from tests.conftest import make_tenant
 from tests.fixtures import draft, import_draft
 from tests.roadmap_helpers import seed_trace
 from tests.test_roadmap import (  # noqa: F401 - fixtures
@@ -214,6 +223,25 @@ def test_stale_section_when_its_hash_moved_or_it_is_gone():
     assert out[1]["text"] == (
         "Section s-2 is gone from Checkout redesign PRD v3; this item was derived from v2."
     )
+
+
+def test_every_reason_payload_is_plain_json():
+    """A raw YAML value (a date for a horizon, a non-finite confidence) never reaches a
+    reason as is: the reasons are stored as JSONB."""
+    body = """\
+  - {id: a, title: A, outcome: o, horizon: 2026-01-01, prd_section: s-1}
+  - {id: b, title: B, outcome: o, horizon: 2026-02-01, prd_section: s-1,
+     milestone: {name: Beta, date: 2026-03-01, source: ENG-1}}
+"""
+    items, problems = check(FILE.format(items=body))
+    items.append(item("c", confidence=float("-inf"), horizon=date(2026, 1, 1)))
+    out = reasons_for(items, problems, ctx(base=ROADMAP_V1, base_items={}))
+    json.dumps(out, allow_nan=False)
+    by = {(r["item"], r["code"]): r for r in out}
+    assert by[("a", "invalid_horizon")]["data"] == {"value": "2026-01-01"}
+    assert by[("a", "invalid_horizon")]["text"] == "2026-01-01 is not Now, Next or Later."
+    assert by[("b", "date_outside_now")]["data"] == {"horizon": "2026-02-01"}
+    assert by[("c", "low_confidence")]["data"]["confidence"] == "-inf"
 
 
 # --------------------------------------------------------------------------- blocking
@@ -528,3 +556,108 @@ async def test_a_failing_reason_context_keeps_the_tick_and_the_blocking_reasons(
     ]
     assert (check["blocking"], check["to_confirm"]) == (1, 0)
     assert pending(run)["payload"]["items_check"] == check
+
+
+async def test_a_date_horizon_reaches_the_checkpoint(client, owner, runtime):  # noqa: F811
+    """horizon: 2026-01-01 is a date to YAML: its reason is stored, and the run waits at
+    its checkpoint (the segment's JSONB never sees a date)."""
+    _, auth = owner
+    await approved_prd(client, auth)
+    dated = SECOND.replace("    horizon: later\n", "    horizon: 2026-01-01\n", 1)
+    run, check = await roadmap_items_check(client, auth, runtime, dated)
+    found = only(check["reasons"], "invalid_horizon")
+    assert (found["item"], found["data"]) == ("mobile-push", {"value": "2026-01-01"})
+    assert pending(run)["payload"]["items_check"] == check
+
+
+async def test_stale_section_compares_with_every_newer_prd_version(client, owner, runtime):  # noqa: F811
+    """v2 changes the shipping section, v3 puts it back: the item was still derived before
+    a change, found in v2 though the newest version matches."""
+    _, auth = owner
+    await approved_prd(client, auth)
+    v2 = draft("prd_v1.md").replace(SHIPPING_V1, "Show an estimated shipping cost, by postcode.")
+    assert (await import_draft(client, auth, v2)).status_code == 201
+    v3 = draft("prd_v1.md").replace("Status: draft for review.", "Status: in review.")
+    resp = await import_draft(client, auth, v3)
+    assert resp.status_code == 201, resp.text
+    _, check = await roadmap_items_check(client, auth, runtime, SECOND)
+    stale = [r for r in check["reasons"] if r["code"] == "stale_section"]
+    assert [(r["item"], r["data"]["version"], r["data"]["gone"]) for r in stale] == [
+        ("mobile-push", 2, False)
+    ]
+
+
+async def test_another_companys_roadmap_is_never_the_base(client, owner, runtime):  # noqa: F811
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    async with tenant_session(tenant_id) as s:
+        version = await s.get(
+            DocumentVersion, await s.scalar(select(RoadmapItem.roadmap_version_id).limit(1))
+        )
+        document_id = version.document_id
+        slug = (await s.get(reasons_mod.Document, document_id)).slug
+        mine = await reasons_mod._base(s, Run(document_id=document_id, knobs={}), None)
+    assert mine[0] == ROADMAP_V1 and mine[1]
+
+    other = await make_tenant("Other Co")
+    async with tenant_session(other) as s:
+        by_id = await reasons_mod._base(s, Run(document_id=document_id, knobs={}), None)
+        by_slug = await reasons_mod._base(
+            s, Run(document_id=None, knobs={"document_slug": slug}), None
+        )
+    assert by_id == (None, {})
+    assert by_slug == (None, {})
+
+
+def _previous(text_: str) -> dict:
+    return {"attempt": 1, "files": {reasons_mod.ITEMS_FILE: text_}}
+
+
+async def test_a_slow_previous_file_is_refused_within_the_cap(db, monkeypatch):
+    """The previous attempt's file is agent output: it is read on the parse pool, at most
+    PARSE_SECONDS, and a slow one is no base, never a stalled event loop."""
+
+    def slow(text_):
+        time.sleep(3)
+        return {"items": [{"id": "a", "horizon": "now"}]}
+
+    monkeypatch.setattr(roadmap_mod, "load_items_yaml", slow)
+    monkeypatch.setattr(roadmap_mod, "PARSE_SECONDS", 0.3)
+    beats = 0
+
+    async def heartbeat():
+        nonlocal beats
+        while True:
+            await asyncio.sleep(0.02)
+            beats += 1
+
+    beating = asyncio.create_task(heartbeat())
+    started = time.monotonic()
+    try:
+        got = await reasons_mod._base(db, Run(document_id=None, knobs={}), _previous("x"))
+    finally:
+        beating.cancel()
+    assert got == (None, {})
+    assert time.monotonic() - started < 2
+    assert beats >= 5
+
+
+async def test_a_huge_previous_file_is_refused_off_the_event_loop(db, monkeypatch):
+    threads: list[str] = []
+    load = roadmap_mod.load_items_yaml
+
+    def spy(text_):
+        threads.append(threading.current_thread().name)
+        return load(text_)
+
+    monkeypatch.setattr(roadmap_mod, "load_items_yaml", spy)
+    huge = "items:\n" + "  - {id: a, title: '" + "x" * (2 * 1024 * 1024) + "'}\n"
+    got = await reasons_mod._base(db, Run(document_id=None, knobs={}), _previous(huge))
+    assert got == (None, {})
+    assert threads and threads[0] != threading.main_thread().name
+    # A good previous file is still the base.
+    good = FILE.format(items="  - {id: a, title: A, outcome: o, horizon: now, prd_section: s}")
+    base, items = await reasons_mod._base(db, Run(document_id=None, knobs={}), _previous(good))
+    assert base == {"kind": "attempt", "label": "attempt 1", "version": None, "attempt": 1}
+    assert list(items) == ["a"]
