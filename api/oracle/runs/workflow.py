@@ -12,7 +12,9 @@ verdict), so:
 - the checkpoint of the workflow's **last** segment has two rounds, the contract's shape:
   ``work -> review1 -> revise1 (always runs) -> review2 -> revise2 (when review2 is
   NOT_YET)``; a NOT_YET after revise2 opens a checkpoint in the Inbox only, and deciding
-  it continues the run as a new workflow;
+  it continues the run as a new workflow. A draft refused at import when review1 opens
+  goes back to the writer first: Oracle answers review1 itself with NOT_YET and the
+  import's problems (:func:`import_findings`; oracle.runs.service._send_back);
 - an **earlier** segment's checkpoint has one round: the next segment depends on it and
   runs once Oracle answers MERGE. A change request there is not posted: Oracle cancels the
   workflow and re-runs the segment as a new workflow (today's flow).
@@ -43,6 +45,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
+from oracle.docs.schemas import citation_contract
 from oracle.runs import flows
 from oracle.runtokens import SCOPES
 from oracle.swarm.runtime import AWAIT_PROFILE, NOT_YET, StepSpec
@@ -149,6 +152,79 @@ def revise_note(round_: int) -> str:
         "every finding in a new version of the files; if it is MERGE, write the files "
         "unchanged."
     )
+
+
+# A refused draft goes back to the writer before a person is asked (owner, 2026-10-20):
+# the import's problems as review findings, grouped in plain words, each group with what
+# a valid draft does. (label, problem codes, what to do).
+FINDING_GROUPS: tuple[tuple[str, tuple[str, ...], str], ...] = (
+    (
+        "Citations",
+        ("invalid_citation", "duplicate_citation", "unknown_citation"),
+        citation_contract(),
+    ),
+    (
+        "Front matter",
+        (
+            "missing_front_matter",
+            "invalid_front_matter",
+            "invalid_document",
+            "document_mismatch",
+            "kind_mismatch",
+            "missing_title",
+        ),
+        "The file starts with YAML front matter between --- lines: the document's title "
+        "and the fields the task names, for this run's document.",
+    ),
+    (
+        "Headings and section ids",
+        (
+            "missing_section_id",
+            "duplicate_section_id",
+            "content_before_heading",
+            "no_sections",
+            "sources_not_last",
+        ),
+        "A heading follows the front matter, every heading of levels 1 to 3 ends with a "
+        "{#id} used once, and Sources and data points is the last section.",
+    ),
+    (
+        "Feedback resolutions",
+        ("invalid_resolution", "unknown_feedback_item"),
+        "The resolutions list names each open feedback item by its feedback_id, with status "
+        "addressed or declined and a note.",
+    ),
+    (
+        "The file",
+        ("missing_draft", "draft_too_large", "invalid_encoding"),
+        "Write the whole draft as one UTF-8 markdown file.",
+    ),
+)
+
+
+def import_findings(name: str, problems: list[dict[str, Any]]) -> list[str]:
+    """The review findings for a draft the import refused: a lead line, then one finding
+    per group of problems (every problem's message, then what a valid draft does)."""
+    out = [
+        f"Oracle could not import {name} as the document's next version, so it sent the "
+        "draft back before a person reviews it. Fix every problem below and write the whole "
+        "file again; keep the rest as it is."
+    ]
+    groups: dict[str, list[str]] = {}
+    hints: dict[str, str] = {}
+    for p in problems:
+        code = str(p.get("code") or "")
+        label, hint = next(
+            ((g, h) for g, codes, h in FINDING_GROUPS if code in codes), ("Other problems", "")
+        )
+        message = str(p.get("message") or code)
+        groups.setdefault(label, []).append(message.removesuffix("."))
+        hints[label] = hint
+    order = [g for g, _, _ in FINDING_GROUPS] + ["Other problems"]
+    for label in sorted(groups, key=order.index):
+        text = f"{label}: {'; '.join(groups[label])}."
+        out.append(f"{text} {hints[label]}" if hints[label] else text)
+    return out
 
 
 def build_plan(

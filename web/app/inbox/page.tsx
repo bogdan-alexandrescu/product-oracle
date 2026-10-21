@@ -72,6 +72,7 @@ const GROUPS: { id: NeedGroup; title: string }[] = [
   { id: "imports", title: "Couldn't import" },
   { id: "feedback", title: "Feedback" },
   { id: "questions", title: "Questions" },
+  { id: "revising", title: "Sent back by Oracle" },
   { id: "searches", title: "Looking for earlier submissions" },
 ];
 

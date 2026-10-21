@@ -14,6 +14,7 @@ import {
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   RETRY_CONFIRM,
+  SENT_BACK_STATE,
   STOP_CANCELLING_CONFIRM,
   age,
   shortId,
@@ -152,7 +153,7 @@ export const STATE_TABS: { id: InboxState; label: string }[] = [
  * new or open, by the rail badge); a document's 'N changes staged' row and 'Looking' rows
  * are not items.
  */
-export type NeedGroup = "checkpoints" | "approvals" | "overruns" | "lookups" | "imports" | "feedback" | "questions" | "searches";
+export type NeedGroup = "checkpoints" | "approvals" | "overruns" | "lookups" | "imports" | "feedback" | "questions" | "searches" | "revising";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
 
 type FeedbackRow = InboxOut["items"][number];
@@ -538,7 +539,25 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     action: null,
   }));
 
-  return { checkpoints, approvals, overruns, lookups, imports, searches };
+  // A refused draft Oracle sent back to the writer itself (owner, 2026-10-20): the review's
+  // state while the revision runs, as the run page shows it, never a decision request. Shown
+  // only, like Looking: not counted in the total, on Home or by the badge.
+  const revising: Need[] = (inbox.revising ?? []).map((r) => ({
+    key: `revising-${r.id}`,
+    icon: "clock",
+    kind: "Revising",
+    item: (
+      <span className="truncate" title={r.sent_back ?? undefined} data-testid="inbox-revising-state">
+        {SENT_BACK_STATE}
+      </span>
+    ),
+    context: runContext(r),
+    run: shortId(r.id),
+    at: r.started_at ?? r.created_at,
+    action: openRun(r),
+  }));
+
+  return { checkpoints, approvals, overruns, lookups, imports, searches, revising };
 }
 
 /**
@@ -595,6 +614,7 @@ export function allNeeds(
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.
     ...stated(n.searches, "searches", false).map((r) => ({ ...r, state: "open" as const })),
+    ...stated(n.revising, "revising", false).map((r) => ({ ...r, state: "open" as const })),
   ];
 }
 

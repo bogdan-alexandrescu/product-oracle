@@ -10183,6 +10183,11 @@ export interface components {
              */
             searches: components["schemas"]["RunSummary"][];
             /**
+             * Revising
+             * @default []
+             */
+            revising: components["schemas"]["RunSummary"][];
+            /**
              * Imports
              * @default []
              */
@@ -13631,6 +13636,8 @@ export interface components {
             can_retry_import: boolean;
             /** Draft Rejected */
             draft_rejected?: string | null;
+            /** Sent Back */
+            sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
             knobs: components["schemas"]["KnobsOut"];
             /** Snapshot Id */
@@ -13772,6 +13779,8 @@ export interface components {
             can_retry_import: boolean;
             /** Draft Rejected */
             draft_rejected?: string | null;
+            /** Sent Back */
+            sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
         };
         /**
@@ -14297,6 +14306,11 @@ export interface components {
             /** Attempts */
             attempts: components["schemas"]["SegmentAttempt"][];
             draft_import?: components["schemas"]["DraftImport"] | null;
+            /**
+             * Sent Back
+             * @default false
+             */
+            sent_back: boolean;
             /**
              * Can Retry Draft Import
              * @default false

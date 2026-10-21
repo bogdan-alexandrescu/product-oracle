@@ -171,7 +171,8 @@ async def test_a_draft_still_rejected_keeps_the_new_error(client, owner, runtime
     seg = run["segments"][3]
     after = seg["draft_import"]["error"]
     assert after != before and "prd.md was rejected" in after and "front_matter" in after
-    # The new problems and their summary replace the old ones too.
+    # The new problems (the findings if the draft goes back to the writer) and their
+    # summary replace the old ones too.
     imp = pending(run)["payload"]["import"]
     assert set(imp) == {"error", "problems", "summary"} and imp["error"] == after
     assert [p["code"] for p in imp["problems"]] == ["missing_front_matter"]

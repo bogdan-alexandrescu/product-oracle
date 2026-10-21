@@ -32958,6 +32958,14 @@
             "title": "Searches",
             "default": []
           },
+          "revising": {
+            "items": {
+              "$ref": "#/components/schemas/RunSummary"
+            },
+            "type": "array",
+            "title": "Revising",
+            "default": []
+          },
           "imports": {
             "items": {
               "$ref": "#/components/schemas/RunSummary"
@@ -42403,6 +42411,17 @@
             ],
             "title": "Draft Rejected"
           },
+          "sent_back": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent Back"
+          },
           "progress": {
             "anyOf": [
               {
@@ -42904,6 +42923,17 @@
               }
             ],
             "title": "Draft Rejected"
+          },
+          "sent_back": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent Back"
           },
           "progress": {
             "anyOf": [
@@ -44440,6 +44470,11 @@
                 "type": "null"
               }
             ]
+          },
+          "sent_back": {
+            "type": "boolean",
+            "title": "Sent Back",
+            "default": false
           },
           "can_retry_draft_import": {
             "type": "boolean",
