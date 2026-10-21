@@ -347,3 +347,21 @@ async def test_every_documents_review_export_and_search_get_route_misses_it(clie
         f"/v1/comments/{comment.json()['id']}/replies", json={"body": "me too"}, headers=commenter
     )
     assert resp.status_code == 404, resp.text
+
+
+async def test_the_approval_decision_follows_the_update(client, ctx):
+    """protects=the decision an owner's approval of an update captures ("Publish <update>
+    v<n>") is absent from a commenter's decision log, its direct read and the Inbox, and
+    shown to an approver; fails_when=a commenter reads the update's title through the
+    decision log; no_claim=decisions about other documents (unchanged)."""
+    slug, doc_id = await _update(client, ctx)
+    resp = await client.post(f"/v1/documents/{slug}/versions/2/approve", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    listed = (await client.get("/v1/decisions", headers=ctx.as_("approver"))).json()
+    (mine,) = [d for d in listed if "Investor update" in d["title"]]
+    commenter = ctx.as_("commenter")
+    resp = await client.get("/v1/decisions", headers=commenter)
+    assert resp.status_code == 200 and not _leaks(resp.text, slug, doc_id)
+    assert (await client.get(f"/v1/decisions/{mine['id']}", headers=commenter)).status_code == 404
+    inbox = await client.get("/v1/inbox", headers=commenter)
+    assert not _leaks(inbox.text, slug, doc_id)

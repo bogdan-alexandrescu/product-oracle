@@ -2345,7 +2345,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // H8: who sees the document (owners only, with a reason; the API audits it).
   if (p[3] === "visibility" && p.length === 4 && m === "PATCH") {
-    if (me.role !== "owner") return json(403, { detail: "Only an owner can change who sees a document" });
+    if (me.role !== "owner") return json(403, { detail: "Requires the owner role" });
     const input = await body<Partial<Schemas["VisibilityIn"]>>();
     if (!input?.reason?.trim()) return json(422, { detail: "Give a reason for the change" });
     if (input.visibility !== "company" && input.visibility !== "approvers") return json(422, { detail: "visibility is company or approvers" });
@@ -2453,7 +2453,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (sub === "sections" && p[7] === "review" && m === "PUT") {
     if (!v.sections.some((s) => s.section_key === p[6])) return notFound("Section");
     // H8: approvers comment and suggest on an update; owners set its verdicts.
-    if (doc.kind === "update" && me.role !== "owner") return json(403, { detail: "Only an owner can review a section of an update" });
+    if (doc.kind === "update" && me.role !== "owner") return json(403, { detail: "Only an owner can set a section verdict on an update" });
     const r = addReview(db, v, p[6], await body<Schemas["SectionReviewIn"]>(), { reviewer_id: me.id });
     touch(db, doc.id);
     if (r.feedback_item_id) onFeedback(llm, doc.id, v.number);

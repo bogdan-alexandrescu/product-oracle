@@ -18,19 +18,20 @@ The rule lives here only:
   the ORM cannot forget it.
 
 A read that reaches a document's rows without selecting :class:`Document` (a comment by
-id, an Inbox row) checks :func:`hidden_document_ids` or joins the document.
+id, an Inbox row) checks :func:`hidden_document_ids` or joins the document. The decision
+an approval captured ("Publish <document> v<n>", H1) follows its document the same way.
 """
 
 import uuid
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import ColumnElement, event, select, true
+from sqlalchemy import ColumnElement, event, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import ORMExecuteState, Session, with_loader_criteria
 
 from oracle.authz import has_role
-from oracle.docs.models import Document
+from oracle.docs.models import Document, DocumentVersion
 from oracle.tenancy import TenantSession
 
 COMPANY = "company"
@@ -94,6 +95,27 @@ def _add_visibility_criteria(state: ORMExecuteState) -> None:
     principal = state.session.info.get(PRINCIPAL_KEY)
     if not restricted(principal):
         return
+    from oracle.decisions.models import Decision
+
     state.statement = state.statement.options(
-        with_loader_criteria(Document, lambda cls: cls.visibility == COMPANY, include_aliases=True)
+        with_loader_criteria(Document, lambda cls: cls.visibility == COMPANY, include_aliases=True),
+        # The decision an approval of such a document captured (H1) names it: absent too.
+        with_loader_criteria(Decision, _decision_visible, include_aliases=True),
+    )
+
+
+def _decision_visible(cls: Any) -> ColumnElement[bool]:
+    # Core tables, not the mapped classes: the Document criterion above must not apply
+    # inside this subquery.
+    versions = DocumentVersion.__table__
+    documents = Document.__table__
+    hidden = (
+        select(versions.c.id)
+        .join(documents, documents.c.id == versions.c.document_id)
+        .where(documents.c.visibility != COMPANY)
+    )
+    return or_(
+        cls.source_kind.is_(None),
+        cls.source_kind != "document_version",
+        cls.source_id.not_in(hidden),
     )
