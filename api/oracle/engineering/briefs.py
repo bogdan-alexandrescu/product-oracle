@@ -3,8 +3,9 @@
 The architect step of F4's Engineering check writes it (:data:`oracle.runs.flows.
 TECH_BRIEF_TASK`); F4's Engineering dates stop reads the same file later in the run.
 :func:`check` lists its problems for the Engineering check's file-level error card;
-:func:`parse` reads a file whose entries are well formed (registration,
-:mod:`oracle.engineering.store`); :func:`render_markdown` writes ``brief.md``.
+:func:`parse` reads a file whose entries are well formed and :func:`parse_checked` also
+checks it (registration, :mod:`oracle.engineering.store`); :func:`render_markdown`
+writes ``brief.md``.
 
 The file is untrusted text: it is parsed with :mod:`oracle.safe_yaml`, capped at
 :data:`MAX_BYTES`, :data:`MAX_FEATURES` features and :data:`MAX_QUESTIONS` questions
@@ -27,7 +28,7 @@ Format (``version: 1``)::
 from collections.abc import Collection
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from oracle import safe_yaml
 
@@ -155,6 +156,8 @@ ENTRY_FIELDS = {
     "depends_on": (False, *_STRINGS),
     "assumptions": (False, *_STRINGS),
 }
+# YAML reads an unquoted digits-only commit as a number and an ISO timestamp as a date.
+REPO_FIELDS = {"repo": _TEXT, "commit": _OPT_TEXT, "as_of": _OPT_TEXT}
 TOUCH_FIELDS = {"area": _TEXT, "kind": _TEXT, "change": _TEXT, "ref": _OPT_TEXT}
 RISK_FIELDS = {"risk": _TEXT, "level": _TEXT, "mitigation": _OPT_TEXT}
 QUESTION_FIELDS = {
@@ -220,8 +223,11 @@ def _check(
     else:
         used = cm["used"]
         repos = cm.get("repos", [])
-        if not _list_of(repos, dict) or any(not _text(r.get("repo")) for r in repos):
+        if not _list_of(repos, dict):
             out.append(_p("bad_entry", "code_map.repos must be a list of {repo, commit, as_of}"))
+        else:
+            for j, repo in enumerate(repos):
+                out += _shape(repo, REPO_FIELDS, f"code_map.repos[{j}]", None)
     features = data.get("features")
     if not _list_of(features, dict):
         return [*out, _p("bad_entry", "features must be a list of briefs")]
@@ -332,6 +338,22 @@ def parse(text: str) -> TechBriefs:
     data, problems = _load(text)
     if data is None:
         raise BriefsInvalid(problems)
+    return _parse(data)
+
+
+def parse_checked(
+    text: str, feature_keys: Collection[str], code_map: Collection[str] | None
+) -> tuple[TechBriefs, list[Problem]]:
+    """:func:`parse` and :func:`check` on one load of the file: the briefs and the
+    problems :func:`check` lists (the file's entries are well formed, so none is
+    ``bad_entry`` or ``too_large``)."""
+    data, problems = _load(text)
+    if data is None:
+        raise BriefsInvalid(problems)
+    return _parse(data), _check(data, feature_keys, code_map)
+
+
+def _parse(data: dict[str, Any]) -> TechBriefs:
     features = data.get("features")
     keys = [f.get("feature") for f in features] if _list_of(features, dict) else []
     structural = [
@@ -341,7 +363,13 @@ def parse(text: str) -> TechBriefs:
     ]
     if structural:
         raise BriefsInvalid(structural)
-    return TechBriefs.model_validate(data)
+    try:
+        return TechBriefs.model_validate(data)
+    except ValidationError as exc:
+        # Last line: a shape _check does not know yet is a bad entry, never a crash.
+        raise BriefsInvalid(
+            [_p("bad_entry", f"{'.'.join(map(str, e['loc']))}: {e['msg']}") for e in exc.errors()]
+        ) from None
 
 
 def _label(value: str) -> str:

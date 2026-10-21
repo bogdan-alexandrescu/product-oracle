@@ -441,10 +441,11 @@ async def test_a_new_prd_gets_its_briefs_with_the_prd_draft_import(client, eng_f
 
 
 async def test_with_the_engineering_check_off_briefs_are_registered_as_drafts(
-    client, eng_flow, runtime
+    client, eng_flow, no_map_runtime
 ):
     # protects=status 'approved' only when the check was approved; fails_when=a brief
-    # no one approved reads as approved.
+    # no one approved reads as approved. Without the check, a ref is checked against the
+    # run's code map, which no run records yet (F5-2): the briefs here have no map.
     tenant_id, auth = await seed_auth()
     await seed_features(tenant_id)
     run = await start(client, auth, "unchecked-prd", checkpoints={"eng_review": False})

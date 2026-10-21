@@ -174,12 +174,35 @@ class Prepared:
     answers: list[dict[str, Any]]
 
 
+@dataclasses.dataclass(frozen=True)
+class Against:
+    """What a brief is checked against when no one checked it (the Engineering check
+    turned off): the feature set's keys and the ids of the code map the run used (None:
+    no code map was available to the run)."""
+
+    feature_keys: frozenset[str]
+    code_map: frozenset[str] | None
+
+
+# The problems that refuse an unchecked brief (the file's shape is refused whole).
+REFUSING = ("unknown_feature", "unknown_ref")
+
+
 def _prepare(
-    text: str, decided: Decided | None, skip: Collection[str] = ()
+    text: str, decided: Decided | None, skip: Collection[str] = (), against: Against | None = None
 ) -> tuple[briefs.TechBriefs, list[Prepared]]:
-    """Parse ``text`` once and render the briefs of the features not in ``skip``.
-    Untrusted text: :func:`prepare` runs this on the parse pool."""
-    parsed = briefs.parse(text)
+    """Parse ``text`` once and render the briefs of the features not in ``skip``; with
+    ``against``, also not those :data:`REFUSING` refuses. Untrusted text: :func:`prepare`
+    runs this on the parse pool."""
+    if against is None:
+        parsed = briefs.parse(text)
+    else:
+        parsed, problems = briefs.parse_checked(text, against.feature_keys, against.code_map)
+        refused = {p.feature for p in problems if p.code in REFUSING}
+        if refused:
+            log.warning("%s: briefs refused: %s", briefs.FILE, "; ".join(
+                p.message for p in problems if p.code in REFUSING))  # fmt: skip
+        skip = {*skip, *refused}
     out = []
     for entry in parsed.features:
         if entry.feature in skip:
@@ -200,12 +223,27 @@ def _prepare(
 
 
 async def prepare(
-    text: str, decided: Decided | None, skip: Collection[str] = ()
+    text: str, decided: Decided | None, skip: Collection[str] = (), against: Against | None = None
 ) -> tuple[briefs.TechBriefs, list[Prepared]]:
     """:func:`_prepare` on the parse pool (:func:`oracle.safe_yaml.run_parse_within`), at
     most ``PARSE_SECONDS``: the event loop never parses or renders the briefs. Raises
     :class:`briefs.BriefsInvalid` or :class:`oracle.safe_yaml.ParseTimeout`."""
-    return await safe_yaml.run_parse_within(_prepare, text, decided, skip, name=briefs.FILE)
+    return await safe_yaml.run_parse_within(
+        _prepare, text, decided, skip, against, name=briefs.FILE
+    )
+
+
+async def _against(db: AsyncSession, cp: Checkpoint | None) -> Against | None:
+    """What to check the briefs against when the Engineering check was turned off, else
+    None (the lead checked them). The feature set: the baseline's features not rejected.
+    The code map: none until the run records the one it used (F5-2), so any ref of an
+    unchecked brief is unknown_ref."""
+    if cp is None or cp.status != "skipped":
+        return None
+    keys = await db.scalars(
+        select(Entity.key).where(Entity.type == "feature", Entity.status != "rejected")
+    )
+    return Against(frozenset(keys), None)
 
 
 async def _existing(db: AsyncSession, run_id: uuid.UUID, seq: int) -> dict[str, ArtifactRequest]:
@@ -238,7 +276,9 @@ async def _register(
         return []
     existing = await _existing(db, run.id, segment.seq)
     try:
-        parsed, fresh = await prepare(text, _decided(cp), frozenset(existing))
+        parsed, fresh = await prepare(
+            text, _decided(cp), frozenset(existing), await _against(db, cp)
+        )
     except (briefs.BriefsInvalid, safe_yaml.ParseTimeout) as exc:
         # The Engineering check shows the file's problems; nothing is registered.
         log.warning("run %s: %s not registered: %s", run.id, briefs.FILE, exc)
@@ -365,7 +405,8 @@ async def on_draft_imported(
 ) -> list[ArtifactVersion]:
     """With a run's PRD draft import (in its transaction; the caller commits): register
     the run's briefs not yet registered and give those registered at the approval this
-    draft version. Only briefs whose check was approved, or turned off, are registered."""
+    draft version. Only briefs whose check was approved, or turned off, are registered;
+    with the check off, not a brief with an unknown_feature or unknown_ref problem."""
     if document.kind != "prd":
         return []
     run = await db.get(Run, run_id)
