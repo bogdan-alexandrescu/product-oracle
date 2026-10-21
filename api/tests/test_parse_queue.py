@@ -5,6 +5,7 @@ the next tick."""
 import asyncio
 import threading
 import time
+import uuid
 
 import pytest
 
@@ -192,3 +193,117 @@ def test_nested_citation_markers_are_stripped_to_nothing():
 
     assert strip_citations("claim [c:[c:x]a] end") == "claim end"
     assert strip_citations("plain [c:x]") == "plain"
+
+
+def test_blocker_lines_strip_nested_citation_markers():
+    from oracle.blockers.render import _inline
+
+    assert _inline("claim [c:[c:x]a] end") == "claim end"
+
+
+async def test_the_budget_is_in_force_inside_the_parse():
+    from oracle import parse_budget
+
+    assert await safe_yaml.run_parse_within(parse_budget.active, seconds=1) is True
+
+
+async def test_a_parse_past_its_budget_is_refused_near_the_cap_and_frees_the_slot():
+    from oracle import parse_budget
+
+    ended = threading.Event()
+
+    def spin():
+        # Busy CPU work between budget checks; gives up on its own after 3 s so a broken
+        # budget can not hold the worker for the rest of the session.
+        try:
+            stop = time.perf_counter() + 3
+            while time.perf_counter() < stop:
+                parse_budget.check()
+            return "ran to the end"
+        finally:
+            ended.set()
+
+    with safe_yaml.parse_owner("r126f-budget"):
+        start = time.perf_counter()
+        with pytest.raises(safe_yaml.ParseTimeout):
+            await safe_yaml.run_parse_within(spin, seconds=0.2)
+        took = time.perf_counter() - start
+    # Refused by the CPU budget (0.2 s), not by the caller's wall (4 x 0.2 s).
+    assert took < 0.5, took
+    assert ended.wait(1)
+    for _ in range(100):
+        if "r126f-budget" not in safe_yaml._active:
+            break
+        await asyncio.sleep(0.01)
+    assert "r126f-budget" not in safe_yaml._active
+
+
+async def test_a_caller_cancelled_while_queued_does_not_run_its_parse(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+
+    pool = ThreadPoolExecutor(max_workers=1)
+    monkeypatch.setattr(safe_yaml, "_EXECUTOR", pool)
+    release = threading.Event()
+    ran = []
+    try:
+        busy = asyncio.create_task(safe_yaml.run_parse(release.wait, 30))
+        await asyncio.sleep(0.05)
+        queued = asyncio.create_task(safe_yaml.run_parse(lambda: ran.append(1)))
+        await asyncio.sleep(0.05)
+        queued.cancel()
+        await asyncio.gather(queued, return_exceptions=True)
+        release.set()
+        await busy
+        await asyncio.get_running_loop().run_in_executor(pool, lambda: None)
+        assert ran == []
+    finally:
+        release.set()
+        pool.shutdown(wait=True)
+
+
+async def test_a_submit_that_fails_after_queueing_does_not_run_the_parse(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+
+    pool = ThreadPoolExecutor(max_workers=1)
+    release = threading.Event()
+    pool.submit(release.wait, 30)
+    queued = []
+
+    class Flaky:
+        def submit(self, fn, *a, **k):
+            queued.append(pool.submit(fn, *a, **k))  # queued behind the blocker ...
+            raise RuntimeError("can't start new thread")  # ... then submit fails
+
+    monkeypatch.setattr(safe_yaml, "_EXECUTOR", Flaky())
+    ran = []
+    try:
+        with safe_yaml.parse_owner("r126f-submit"):
+            with pytest.raises(RuntimeError):
+                await safe_yaml.run_parse(lambda: ran.append(1))
+        assert "r126f-submit" not in safe_yaml._active
+        release.set()
+        with pytest.raises(safe_yaml.ParseBusy):
+            queued[0].result(5)
+        assert ran == []
+    finally:
+        release.set()
+        pool.shutdown(wait=True)
+
+
+def test_the_design_check_stops_at_its_budget():
+    # The design check refuses as 'took over N seconds' (specs.service): it must check the
+    # budget as it goes, or that refusal only comes at the caller's wall (4 x N).
+    from oracle import parse_budget
+    from oracle.specs.design import check_design
+    from oracle.specs.sanitize import sanitize_svg, sanitize_wireframe
+    from tests.specs_helpers import FLOW_SVG, design_json, wireframe_html
+
+    reqs, sections = [str(uuid.uuid4())], ["s-1"]
+    text = design_json(reqs, sections, screens=2)
+    with parse_budget.limit(-1):
+        with pytest.raises(parse_budget.Exceeded):
+            check_design(text, prd_sections=set(sections), requirement_ids=set(reqs), screens=2)
+        with pytest.raises(parse_budget.Exceeded):
+            sanitize_svg(FLOW_SVG, title="t")
+        with pytest.raises(parse_budget.Exceeded):
+            sanitize_wireframe(wireframe_html(1), title="t", annotations=[])
