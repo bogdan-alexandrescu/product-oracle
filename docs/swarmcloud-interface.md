@@ -251,6 +251,12 @@ stays read-only (W5) until review2's checkpoint stands. An earlier segment's che
 (one round, no revise step) is never answered this way; neither is a wait already
 answered or closed, one with too little credential left for the revision (the tail rule),
 or one SwarmCloud did not take the answer for (tried twice): the review waits for a person.
+While the revision runs, the run page reads "Revising: sent back by Oracle", not "Draft
+rejected" (`SegmentOut.sent_back`; `RunSummary.sent_back` carries the refusal's summary and
+`draft_rejected` is null), and the Inbox shows the run under Open as that state with
+nothing to decide (`InboxOut.revising`, for the review's approver role and above, not in
+`total`). It clears when the revision is imported, when it is still refused (review2 then
+waits in the Inbox, "Draft rejected"), or when the run ends.
 
 No case runs a segment in two workflows unless an approver chose Redo: a workflow is
 cancelled before its successor is submitted, and a cancel SwarmCloud does not confirm

@@ -26,7 +26,8 @@ notes say which.
     running --wait opens--> awaiting_checkpoint (the workflow parked on its step)
     running --review1 of the last segment opens, its draft refused at import--> running
             (Oracle answers NOT_YET with the import's problems, :func:`_send_back`; the
-            revision's draft is imported when review2 opens, for a person)
+            revision's draft is imported when review2 opens, for a person. Meanwhile the
+            run reads "Revising: sent back by Oracle", :func:`_sent_back`)
             --approved / changes posted--> running (the same workflow goes on)
             --already answered, the workflow ran what the decision needs (same verdict,
               or an approval)--> running (the workflow goes on)
@@ -132,7 +133,7 @@ from oracle.baseline.models import Edge, Entity
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
-from oracle.docs.schemas import VersionSource
+from oracle.docs.schemas import ImportProblem, VersionSource
 from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
 from oracle.review import inbox as inbox_states
@@ -442,16 +443,34 @@ def _summary(
         import_failed=_import_failed_text(run, refs),
         can_retry_import=_import_failed(run) is not None,
         progress=_progress(run, segments) if segments is not None else None,
-        draft_rejected=_draft_rejected(segments) if segments is not None else None,
+        draft_rejected=_refused(run, segments, False) if segments is not None else None,
+        sent_back=_refused(run, segments, True) if segments is not None else None,
     )
 
 
-def _draft_rejected(segments: list[RunSegment]) -> str | None:
-    """The summary of a draft the run's segments left that Oracle refused to import (the
-    runs list's "Draft rejected"), else None."""
+def _sent_back(run: Run, segment: RunSegment) -> bool:
+    """Oracle sent the segment's refused draft back to the writer (:func:`_send_back`), and
+    the revision is not imported yet: its attempt is Oracle's send-back and was not
+    advanced, on a run that has not ended. The run page and the Inbox read "Revising: sent
+    back by Oracle", not "Draft rejected": nothing waits for a person until the revision is
+    imported (cleared) or still refused (review2's checkpoint, "Draft rejected")."""
+    art = segment.artifacts or {}
+    imp = art.get("import")
+    if run.status in FINAL or not isinstance(imp, dict) or not imp.get("error"):
+        return False
+    if not art.get("attempts"):
+        return False
+    attempt = _current_attempt(art, segment)
+    return attempt.get("sent_back") is True and attempt.get("advanced") is not True
+
+
+def _refused(run: Run, segments: list[RunSegment], sent_back: bool) -> str | None:
+    """The summary of a draft the run's segments left that Oracle refused to import, else
+    None: one Oracle sent back to the writer and is being revised (``sent_back``, the
+    runs list's "Revising"), or one that is not (the runs list's "Draft rejected")."""
     for s in segments:
         imp = (s.artifacts or {}).get("import")
-        if isinstance(imp, dict) and imp.get("error"):
+        if isinstance(imp, dict) and imp.get("error") and _sent_back(run, s) is sent_back:
             return imp.get("summary") or imp["error"]
     return None
 
@@ -668,6 +687,7 @@ def _segment_out(
         artifacts=sorted((art.get("files") or {}).keys()),
         attempts=[SegmentAttempt(**a) for a in art.get("attempts") or []],
         draft_import=DraftImport(**imp) if imp else None,
+        sent_back=_sent_back(run, segment),
         can_retry_draft_import=can_retry_draft_import,
         items_check=ItemsCheck(**check) if check else None,
         started_at=segment.started_at,
@@ -2615,10 +2635,15 @@ async def _advance(
         name = flows.draft_file(kind)
         markdown = art["files"].get(name)
         if markdown is None:
-            missing = f"the segment left no {name}"
+            # The same shape as a refusal (_import_draft): the run page, the Inbox, MCP
+            # and the send-back findings read it alike.
+            missing = [
+                ImportProblem(code=rejection.MISSING_DRAFT, message=f"the segment left no {name}")
+            ]
             imported = {
-                "error": missing,
-                "problems": [{"code": "missing_draft", "message": missing}],
+                "error": missing[0].message,
+                "problems": [p.model_dump(mode="json") for p in missing],
+                "summary": rejection.summary(name, missing),
             }
         else:
             # Committed first: the import runs in its own transaction.
@@ -2824,6 +2849,11 @@ async def _send_back(
         note="\n".join(findings),
         note_by=SENT_BACK_BY,
     )
+    # The revision's attempt is Oracle's send-back: the run reads "Revising: sent back by
+    # Oracle" until it is imported (_sent_back).
+    art = _art(segment)
+    art["attempts"][-1]["sent_back"] = True
+    _set_art(segment, art)
     return True
 
 
@@ -5848,6 +5878,39 @@ def _waits_for(item: FeedbackItem, suggestion: str | None) -> str:
     return "other"
 
 
+async def _revising(db: AsyncSession, principal: Principal) -> list[RunSummary]:
+    """The Inbox's Revising rows (owner, 2026-10-20): runs whose refused draft Oracle sent
+    back to the writer itself (:func:`_sent_back`), for those with that review's approver
+    role or above, who would decide it otherwise. Shown only: nothing to decide, so not
+    counted. Each carries ``sent_back``, the summary of what Oracle refused."""
+    rows = (
+        await db.execute(
+            select(Run, RunSegment)
+            .join(RunSegment, RunSegment.run_id == Run.id)
+            .where(Run.status.not_in(FINAL), RunSegment.artifacts.has_key("import"))
+            .order_by(Run.created_at, Run.id, RunSegment.seq)
+        )
+    ).all()
+    runs: dict[uuid.UUID, Run] = {}
+    for run, segment in rows:
+        role = _flow(run).segment(segment.name).approver_role
+        if _sent_back(run, segment) and has_role(principal.role, role):  # type: ignore[arg-type]
+            runs.setdefault(run.id, run)
+    if not runs:
+        return []
+    refs = await _refs(db, list(runs.values()))
+    segments: dict[uuid.UUID, list[RunSegment]] = {i: [] for i in runs}
+    for seg in await db.scalars(
+        select(RunSegment).where(RunSegment.run_id.in_(runs)).order_by(RunSegment.seq)
+    ):
+        segments[seg.run_id].append(seg)
+    # Embedded in the Inbox: without its progress, as the Inbox's other run rows.
+    return [
+        _summary(r, refs, None, segments[r.id]).model_copy(update={"progress": None})
+        for r in runs.values()
+    ]
+
+
 async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False) -> InboxOut:
     """``mark_seen``: record this visit as my last one (after reading what was new)."""
     pending = list(
@@ -5998,6 +6061,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         ]
         failed_refs = await _refs(db, failed_runs)
         imports = [_summary(r, failed_refs, None) for r in failed_runs]
+    revising = await _revising(db, principal)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -6007,6 +6071,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         overruns=overruns,
         lookups=lookups,
         searches=searches,
+        revising=revising,
         imports=imports,
         feedback=feedback,
         # Every new or open item (C1e, owner 2026-10-20): the rail badge, = New + Open.

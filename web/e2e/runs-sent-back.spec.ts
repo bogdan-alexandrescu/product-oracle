@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login } from "./helpers";
+import { login, seedSentBack, SENT_BACK_RUN, SENT_BACK_SUMMARY } from "./helpers";
 
 /**
  * A refused draft goes back to the writer before a person is asked (owner, 2026-10-20). While
@@ -9,82 +9,13 @@ import { login } from "./helpers";
  * revision clears it: the review opens for a person with the draft imported.
  */
 
-const ID = "7a11c0de-0000-4000-8000-0000000000e1";
-const SUMMARY = "Oracle refused prd.md: 2 citations use source 'jira', which isn't accepted; 3 references fail because of them.";
+const ID = SENT_BACK_RUN;
+const SUMMARY = SENT_BACK_SUMMARY;
 const REVISING = "Revising: sent back by Oracle";
 
 /** The run's status badge (Next keeps the list page mounted but hidden). */
 function status(page: Page) {
   return page.getByTestId("run-status").filter({ visible: true });
-}
-
-/**
- * Seeds the mock with a run whose PRD draft Oracle refused at import and sent back to the
- * writer itself: no checkpoint stands for that review, the revision runs as attempt 2 with
- * Oracle's findings, and the refused import stays on the segment until the revision lands.
- */
-async function seedSentBack(page: Page): Promise<string> {
-  return page.evaluate(
-    ({ id, summary }) => {
-      const key = "po-mock-db-v2";
-      const db = JSON.parse(localStorage.getItem(key)!);
-      type S = Record<string, unknown> & { seq: number; checkpoint: string };
-      const base = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
-      const at = "2026-10-17T09:00:00Z";
-      const wf = "mock-wf-sent-back";
-      // As the API stores the refusal: two citations of source 'jira', cited three times.
-      const problems: Record<string, unknown>[] = [
-        { code: "invalid_citation", message: "citation #1 (j1) is invalid: source 'jira' isn't accepted", section_key: null, cite_key: "j1", line: null },
-        { code: "invalid_citation", message: "citation #2 (j2) is invalid: source 'jira' isn't accepted", section_key: null, cite_key: "j2", line: null },
-        { code: "unknown_citation", message: "[c:j1] in section 'problem' is not defined in front matter 'citations'", section_key: "problem", cite_key: "j1", line: 14 },
-        { code: "unknown_citation", message: "[c:j2] in section 'problem' is not defined in front matter 'citations'", section_key: "problem", cite_key: "j2", line: 14 },
-        { code: "unknown_citation", message: "[c:j1] in section 'goals' is not defined in front matter 'citations'", section_key: "goals", cite_key: "j1", line: 20 },
-      ];
-      const error = `prd.md was rejected: ${problems.map((p) => `[${p.code}] ${p.message}`).join("; ")}`;
-      const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "guest-checkout", document_id: null, created_at: at, started_at: at };
-      const segments: S[] = run.segments;
-      for (const s of segments) {
-        Object.assign(s, {
-          id: crypto.randomUUID(),
-          status: "succeeded",
-          cost_usd: 1,
-          attempts: [{ attempt: 1, workflow_id: wf, submitted_at: at, cost_usd: 1, note: null, note_by: null, state: "succeeded" }],
-        });
-      }
-      const findings = [
-        "Oracle could not import prd.md as the document's next version, so it sent the draft back before a person reviews it.",
-        "Citations: citation #1 (j1) is invalid: source 'jira' isn't accepted; citation #2 (j2) is invalid: source 'jira' isn't accepted.",
-      ].join("\n");
-      Object.assign(segments[3], {
-        status: "running",
-        artifacts: ["prd.md"],
-        draft_import: { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems, summary, source: null, prd_links: null },
-      });
-      (segments[3].attempts as unknown[]).push({ attempt: 2, workflow_id: wf, submitted_at: at, cost_usd: 0, note: findings, note_by: "Oracle", state: "running" });
-      // Oracle answered the PRD review itself: no checkpoint stands for it.
-      run.checkpoints = segments.slice(0, 3).map((s) => ({
-        id: crypto.randomUUID(),
-        run_id: id,
-        kind: s.checkpoint,
-        status: "approved",
-        approver_role: "approver",
-        segment_seq: s.seq,
-        decided_by: null,
-        decided_at: at,
-        note: null,
-        payload: {},
-        created_at: at,
-        can_decide: false,
-        cannot_approve: null,
-      }));
-      Object.assign(run, { status: "running", waiting_on: null });
-      db.runs.runs.push(run);
-      db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Guest checkout PRD\n---\n\n# Guest checkout PRD {#title}\n";
-      localStorage.setItem(key, JSON.stringify(db));
-      return id;
-    },
-    { id: ID, summary: SUMMARY },
-  );
 }
 
 test("a draft Oracle sent back reads Revising on the run page and the runs list, with nothing to decide", async ({ page }) => {
