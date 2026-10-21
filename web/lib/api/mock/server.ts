@@ -58,8 +58,10 @@ type InviteRow = Schemas["InviteOut"];
 type Role = MemberRow["role"];
 
 export interface Db {
-  /** Email of the signed-in mock member. */
+  /** Email of the signed-in mock member (the last sign-in in any tab). */
   session: string | null;
+  /** D8: each tab's own sign-in, by the tab's id (sessionStorage). */
+  tab_sessions?: Record<string, string>;
   tenant_id: string;
   /** The seed owner (admin@example.com): author of the seeded comments and verdicts. */
   user_id: string;
@@ -237,20 +239,31 @@ export const MOCK_FAIL_KEY = "po-mock-fail";
  */
 export const MOCK_REVIEW_CHANGE_KEY = "po-mock-review-change";
 /**
- * Each tab keeps its own sign-in (sessionStorage): the mock's data is one browser context's
- * localStorage, so a second reviewer is a second tab of it signed in as someone else (D8).
+ * Each tab keeps its own sign-in (D8): the mock's data is one browser context's localStorage,
+ * so a second reviewer is a second tab of it signed in as someone else. A tab's id lives in
+ * its sessionStorage, its sign-in in the data (clearing the data signs every tab out).
  */
-const TAB_SESSION_KEY = "po-mock-tab-session";
+const TAB_ID_KEY = "po-mock-tab";
+
+function tabId(): string {
+  let id = sessionStorage.getItem(TAB_ID_KEY);
+  if (!id) {
+    id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    sessionStorage.setItem(TAB_ID_KEY, id);
+  }
+  return id;
+}
 
 /** The signed-in member's email: this tab's sign-in, else the last one in any tab. */
 function sessionOf(db: Db): string | null {
-  return sessionStorage.getItem(TAB_SESSION_KEY) ?? db.session;
+  return db.tab_sessions?.[tabId()] ?? db.session;
 }
 
 function setSession(db: Db, email: string | null) {
   db.session = email;
-  if (email) sessionStorage.setItem(TAB_SESSION_KEY, email);
-  else sessionStorage.removeItem(TAB_SESSION_KEY);
+  db.tab_sessions ??= {};
+  if (email) db.tab_sessions[tabId()] = email;
+  else delete db.tab_sessions[tabId()];
 }
 const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approver", "owner"];
 
@@ -1928,7 +1941,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       defaultPassword: MOCK_LOGIN.password,
       uuid,
       now,
-      endSession: () => setSession(db, null),
+      // Every tab's sign-in ends (sign out everywhere, a changed password).
+      endSession: () => {
+        setSession(db, null);
+        db.tab_sessions = {};
+      },
     },
     req,
     p,
