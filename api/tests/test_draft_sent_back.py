@@ -200,13 +200,18 @@ async def test_a_draft_still_refused_after_the_revision_opens_the_inbox(client, 
     assert run["sent_back"] is None and run["draft_rejected"] == seg["draft_import"]["summary"]
     assert inbox["revising"] == []
 
-    # The person requests changes: posted for them, and revise2 runs.
+    # The person requests changes: posted for them, and revise2 runs. The draft is still
+    # refused, so the import's problems follow the note (D5 Re-run keeps its output).
     run = await decide(client, auth, run, "changes_requested", note="Cite the Slack thread")
     assert run["status"] == "running"
     assert swarm.answers[-1]["step_id"] == "next_draft-review2"
     assert swarm.answers[-1]["payload"] == {
         "verdict": "NOT_YET",
-        "findings": ["Cite the Slack thread"],
+        "findings": [
+            "Cite the Slack thread",
+            "Oracle's check found these problems in prd.md; fix each one:",
+            cp["payload"]["import"]["summary"],
+        ],
     }
 
 

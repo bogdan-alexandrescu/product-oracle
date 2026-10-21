@@ -265,6 +265,12 @@ _RUN_OUTPUT_SCHEMA = {
             "description": "The segment's number in this run (1 is the first)",
         },
         "name": {"type": "string", "description": "The file name, e.g. baseline.yaml"},
+        "attempt": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optional: the attempt whose file to read, the current one or "
+            "the previous one a send-back kept. Left out, the current attempt's.",
+        },
     },
     "required": ["seq", "name"],
 }
@@ -284,7 +290,14 @@ async def _run_output(app, caller, ops, args) -> types.CallToolResult:
         raise ToolError("seq must be a whole number from 1 (the segment's number in this run).")
     if not _plain_file_name(name):
         raise ToolError("name must be a plain file name such as baseline.yaml (no '/', no '..').")
-    call = {"run_id": str(caller.run_id), "seq": seq, "name": name}
+    call: dict[str, Any] = {"run_id": str(caller.run_id), "seq": seq, "name": name}
+    attempt = args.get("attempt")
+    if attempt is not None:
+        if isinstance(attempt, str) and attempt.isascii() and attempt.isdigit():
+            attempt = int(attempt)
+        if isinstance(attempt, bool) or not isinstance(attempt, int) or attempt < 1:
+            raise ToolError("attempt must be a whole number from 1.")
+        call["attempt"] = attempt
     return to_result(await call_operation(app, caller, ops["op"], call, check_scopes=False))
 
 
@@ -431,8 +444,9 @@ CURATED: tuple[Curated, ...] = (
         name="get_run_output",
         description=(
             "Read a file an earlier segment of this run wrote (by segment number and file "
-            "name), e.g. the baseline proposal or the feature set a later step builds on. "
-            "Only the run's own files."
+            "name), e.g. the baseline proposal or the feature set a later step builds on, "
+            "or with attempt, a segment's previous attempt that a reviewer sent back. Only "
+            "the run's own files."
         ),
         needs={"op": _by("GET", ("get_run_artifact",))},
         schema=lambda ops: copy.deepcopy(_RUN_OUTPUT_SCHEMA),

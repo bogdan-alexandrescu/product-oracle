@@ -12258,6 +12258,24 @@
               "type": "string",
               "title": "Name"
             }
+          },
+          {
+            "name": "attempt",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The attempt whose file to read: the current one, or the previous one a send-back kept. Older attempts are not kept (404).",
+              "title": "Attempt"
+            },
+            "description": "The attempt whose file to read: the current one, or the previous one a send-back kept. Older attempts are not kept (404)."
           }
         ],
         "responses": {
@@ -42890,6 +42908,28 @@
         "type": "object",
         "title": "PreferencesUpdate"
       },
+      "PreviousAttempt": {
+        "properties": {
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt"
+          },
+          "artifacts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Artifacts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempt",
+          "artifacts"
+        ],
+        "title": "PreviousAttempt",
+        "description": "The attempt before the current one, kept when a person sent the segment back (D5):\nits number and file names (read with ``?attempt=``)."
+      },
       "PriorityRanking": {
         "properties": {
           "method": {
@@ -50541,6 +50581,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ItemsCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "previous_attempt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreviousAttempt"
               },
               {
                 "type": "null"

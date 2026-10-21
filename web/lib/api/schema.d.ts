@@ -13692,6 +13692,17 @@ export interface components {
             /** Document View */
             document_view?: ("brief" | "full") | null;
         };
+        /**
+         * PreviousAttempt
+         * @description The attempt before the current one, kept when a person sent the segment back (D5):
+         *     its number and file names (read with ``?attempt=``).
+         */
+        PreviousAttempt: {
+            /** Attempt */
+            attempt: number;
+            /** Artifacts */
+            artifacts: string[];
+        };
         /** PriorityRanking */
         PriorityRanking: {
             /**
@@ -16409,6 +16420,7 @@ export interface components {
              */
             can_retry_draft_import: boolean;
             items_check?: components["schemas"]["ItemsCheck"] | null;
+            previous_attempt?: components["schemas"]["PreviousAttempt"] | null;
             /** Started At */
             started_at?: string | null;
             /** Finished At */
@@ -25904,7 +25916,10 @@ export interface operations {
     };
     get_run_artifact: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The attempt whose file to read: the current one, or the previous one a send-back kept. Older attempts are not kept (404). */
+                attempt?: number | null;
+            };
             header?: never;
             path: {
                 run_id: string;
