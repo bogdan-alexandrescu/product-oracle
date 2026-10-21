@@ -190,6 +190,26 @@ async def test_a_refused_post_leaves_the_decision_recorded_for_the_tick(client, 
     assert len(swarm.answers) == 1  # never answered twice
 
 
+async def test_the_tick_keeps_what_a_runs_searches_counted(client, owner):
+    """PR #128 minor: a run's searches pause it on its ceiling (a pause the tick counts);
+    the run's own pass then calls SwarmCloud and runs again (_replay): the pause the
+    searches counted stays counted."""
+    tenant_id, auth = owner
+    swarm = on()
+    set_runtime(swarm.runtime())
+    run = await started(client, auth)
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Run, uuid.UUID(run["id"]))
+        entry = {"id": "wf_1", "seq": 1, "label": "oracle-r-baseline-1", "cancel": False}
+        row.knobs = {**row.knobs, "spend_ceiling_usd": "0.01", "searches": [entry]}
+        await s.commit()
+    swarm.workflows["wf_1"].steps[0].cost += 1.0
+    resp = await client.post("/v1/internal/tick", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert (await get(client, auth, run["id"]))["status"] == "paused_overrun"
+    assert resp.json()["runs_paused"] == 1, resp.json()
+
+
 async def test_a_lost_answer_is_replayed_by_the_tick_never_doubled(client, owner):
     tenant_id, auth = owner
     swarm = on()
