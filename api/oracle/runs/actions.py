@@ -297,9 +297,12 @@ async def _writable(
     stage: bool,
 ) -> tuple[Run, Checkpoint]:
     """The run (row locked: draft writes and decisions land one at a time) and the pending
-    checkpoint; the caller holds the role a write needs, read now."""
+    checkpoint; the caller holds the role a write needs, read now under the review gate
+    (CR-06: a disable or a demotion that commits first wins), as decide reads it."""
     from oracle.auth.service import caller_refusal
+    from oracle.review import publish
 
+    await publish.gate_lock(db, shared=True)
     run = await service._get_run(db, run_id, lock=True)
     cp = await db.scalar(
         select(Checkpoint)

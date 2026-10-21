@@ -611,3 +611,40 @@ async def test_the_routes_are_mcp_tools_and_run_tokens_get_none():
         assert scopes.required_scope(method, path) is None
     decision = spec["components"]["schemas"]["CheckpointDecision"]["properties"]
     assert "expected_revision" in decision
+
+
+async def test_a_demoted_approvers_staged_actions_need_an_approver_again(review):
+    """protects=what someone staged counts only while they hold the approver role (C2:
+    demotion and disable voiding); fails_when=their actions stay staged after a demotion or
+    a disable, or someone else's do; no_claim=decisions already made (members tests)."""
+    got = await review.act("approver", item_key="mobile-push", kind="accept")
+    got = await review.act("commenter", item_key="gift-cards", kind="drop")
+    [suggestion] = item_of(got, "gift-cards")["actions"]
+    got = await review.stage("approver", suggestion["id"])
+    other = await person(review.tenant_id, "approver", "ada")
+    resp = await review.client.post(
+        f"{review.base}/actions",
+        json={"item_key": "payment-step", "kind": "accept"},
+        headers=other.headers,
+    )
+    assert resp.status_code == 200, resp.text
+    revision = resp.json()["revision"]
+    resp = await review.client.patch(
+        f"/v1/members/{review.id('approver')}", json={"role": "commenter"}, headers=review.auth
+    )
+    assert resp.status_code == 200, resp.text
+    got = await review.get()
+    states = {k: [a["state"] for a in item_of(got, k)["actions"]] for k in ITEMS}
+    assert states == {
+        "mobile-push": ["suggested"],
+        "gift-cards": ["suggested"],
+        "payment-step": ["staged"],
+    }
+    assert got["revision"] == revision + 2
+    # A disable does the same.
+    resp = await review.client.post(
+        f"/v1/members/{other.user_id}/disable", headers={**review.auth, "Origin": "http://test"}
+    )
+    assert resp.status_code == 200, resp.text
+    got = await review.get()
+    assert [a["state"] for a in item_of(got, "payment-step")["actions"]] == ["suggested"]
