@@ -127,6 +127,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tab, setTab] = useState<PanelTab>("feedback");
   const [filters, setFilters] = useState<FeedbackFilters>(DEFAULT_FILTERS);
+  // D13: "Comment on the whole draft" is open in the Feedback tab.
+  const [generalOpen, setGeneralOpen] = useState(false);
   // A link with ?feedback=open (the Inbox's): the Feedback tab on every section's open items,
   // the first one brought into view, once (ffb19 lane).
   const [feedbackFocus, setFeedbackFocus] = useState(false);
@@ -472,6 +474,13 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     docQ.reload();
   }
 
+  /** Feedback on the whole draft (D13): a General item, shown under General. */
+  async function submitGeneral(body: string) {
+    await unwrap(api.POST("/v1/documents/{doc}/versions/{n}/feedback", { params: { path: { doc, n } }, body: { body } }));
+    await feedbackQ.reload();
+    docQ.reload();
+  }
+
   async function reply(id: string, body: string) {
     await unwrap(api.POST("/v1/comments/{comment_id}/replies", { params: { path: { comment_id: id } }, body: { body } }));
     await commentsQ.reload();
@@ -779,6 +788,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         },
         onReply: reply,
         onResolve: resolve,
+        generalOpen,
+        setGeneralOpen,
+        onGeneral: canComment && !readOnly ? submitGeneral : undefined,
         // A decision on an item: its counts, and the comment it may have resolved.
         onChanged: () => {
           void feedbackQ.reload();
@@ -886,6 +898,18 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             <LinkButton icon="monitor" href={`/documents/${doc}/v/${n}/present`}>
               Present
             </LinkButton>
+          )}
+          {canComment && !readOnly && (
+            <Button
+              icon="comment"
+              data-testid="doc-general-feedback"
+              onClick={() => {
+                setGeneralOpen(true);
+                showFeedback();
+              }}
+            >
+              Comment on the whole draft
+            </Button>
           )}
           <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
           {document_?.kind === "prd" && n === latest && !canDecide && (

@@ -25,6 +25,7 @@ from oracle.review.schemas import (
     FeedbackPackage,
     FeedbackPatch,
     FeedbackStatus,
+    GeneralFeedbackCreate,
     PublishBlockedOut,
     ReplyCreate,
     ResolutionReport,
@@ -67,6 +68,22 @@ async def create_comment(
     # Oracle's review-comments job picks the new item up (when it is on for the document).
     version = await service.get_version(db, doc, n)
     await jobs_service.on_feedback(db, version.document_id, n)
+    await db.commit()
+    return out
+
+
+@router.post(
+    VERSION + "/feedback", response_model=FeedbackItemOut, status_code=status.HTTP_201_CREATED
+)
+async def create_general_feedback(
+    doc: str, n: int, body: GeneralFeedbackCreate, principal: Commenter, db: TenantDB
+) -> FeedbackItemOut:
+    """Feedback on the whole draft, not one section: a ``general`` item (no section)."""
+    out = await _call(
+        service.create_general_feedback(db, principal, doc, n, body.body, body.severity)
+    )
+    # Oracle's review-comments job picks it up as any new item (when on for the document).
+    await jobs_service.on_feedback(db, out.document_id, n)
     await db.commit()
     return out
 

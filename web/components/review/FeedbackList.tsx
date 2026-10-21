@@ -12,12 +12,15 @@ import {
 } from "@/components/SuggestionCard";
 import { Avatar, Button, Chip, Empty, FilterChips, type ChipKind } from "@/components/ds";
 import { LayerChip, Quote, SELECT, TEXTAREA, VerdictChip } from "@/components/review/parts";
+import { ErrorNote } from "@/components/ui";
 import type { CommentOut, Suggestion } from "@/lib/api/client";
 import {
   FEEDBACK_KIND_LABEL,
   FEEDBACK_KINDS,
   FEEDBACK_STATE_LABEL,
   FEEDBACK_STATES,
+  GENERAL_FEEDBACK_MAX,
+  isGeneralFeedback,
   type FeedbackEntry,
   type FeedbackKind,
   type FeedbackState,
@@ -27,7 +30,7 @@ import { formatDateTime } from "@/lib/format";
 /** A comment thread placed in its section: the heading, and whether its quote was found. */
 export type PlacedComment = CommentOut & { heading: string; anchored: boolean };
 
-export type FeedbackScope = "auto" | "section" | "all";
+export type FeedbackScope = "auto" | "section" | "all" | "general";
 export type FeedbackFilters = { state: FeedbackState; scope: FeedbackScope; kind: FeedbackKind | "all" };
 export const DEFAULT_FILTERS: FeedbackFilters = { state: "open", scope: "auto", kind: "all" };
 
@@ -102,6 +105,62 @@ function ReplyForm({ onReply, onClose }: { onReply: (body: string) => Promise<vo
   );
 }
 
+/** Feedback on the whole draft (D13): a remark that belongs to no one section. */
+function GeneralForm({ onAdd, onClose }: { onAdd: (body: string) => Promise<void>; onClose: () => void }) {
+  const [body, setBody] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const text = body.trim();
+  const submit = async () => {
+    if (!text || text.length > GENERAL_FEEDBACK_MAX) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onAdd(text);
+      setBody("");
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not add the feedback");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <form
+      data-testid="general-feedback-form"
+      className="flex w-full flex-col gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
+      <textarea
+        autoFocus
+        aria-label="Comment on the whole draft"
+        placeholder="Feedback on the whole draft, not one section"
+        rows={3}
+        maxLength={GENERAL_FEEDBACK_MAX}
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
+          if (e.key === "Escape") onClose();
+        }}
+        className={TEXTAREA}
+      />
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <div className="flex gap-2">
+        <Button type="submit" variant="solid" disabled={saving || !text}>
+          Add
+        </Button>
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 /** The approver's decision on an open suggestion (ffb19 lane: SuggestionActions / SuggestionForm). */
 function SuggestionDecision({
   s,
@@ -125,6 +184,8 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
   const [replying, setReplying] = useState(false);
   const placed = comment ? ctx.placed.get(comment.id) : undefined;
   const mine = !!comment && ctx.userId !== null && comment.author_id === ctx.userId;
+  const general = isGeneralFeedback(item);
+  const generalMine = general && ctx.userId !== null && item.author_id === ctx.userId;
   const live = !ctx.readOnly;
   const onChanged = () => ctx.onChanged(item.id);
   const openSuggestion = !!item.suggestion && item.suggestion.status === "open" && item.status === "open";
@@ -172,7 +233,12 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
               Section removed
             </Chip>
           )}
-          <Chip kind="line">{KIND_LABEL[kind]}</Chip>
+          {general && (
+            <Chip kind="line" data-testid="feedback-general-chip">
+              General
+            </Chip>
+          )}
+          {!(general && kind === "comment") && <Chip kind="line">{KIND_LABEL[kind]}</Chip>}
           {item.verdict && <VerdictChip verdict={item.verdict} />}
           <Chip kind={STATE_KIND[state]} data-testid="feedback-state-chip">
             {FEEDBACK_STATE_LABEL[state]}
@@ -225,6 +291,17 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
               )}
             </div>
           </div>
+        ) : general ? (
+          <div className="mt-2 flex items-start gap-2.5">
+            <Avatar name={generalMine ? "You" : "Reviewer"} initials={generalMine ? "Me" : "R"} tone={generalMine ? "me" : "default"} />
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] leading-4 font-semibold text-text2" data-testid="feedback-author">
+                {generalMine ? "You" : "Reviewer"}
+              </p>
+              <p className="mt-1 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">{item.summary}</p>
+              <p className="tnum mt-1 text-[13px] text-text2">{formatDateTime(item.created_at)}</p>
+            </div>
+          </div>
         ) : (
           <>
             <p className="mt-1.5 text-[15px] leading-[22px] break-words text-text">{item.summary}</p>
@@ -258,7 +335,8 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
 
 /**
  * The Feedback tab: comments, Oracle suggestions and section reviews in ONE list, by state
- * (Open, Staged, Declined, Done) and scope (this section or all), with a kind filter. A
+ * (Open, Staged, Declined, Done) and scope (this section, all, or General: the whole-draft
+ * items), with a kind filter; commenters add whole-draft feedback at its top. A
  * suggestion just decided stays in view, in its new state, until a filter changes; a
  * resolved item leaves the Open list at once.
  */
@@ -269,8 +347,16 @@ export function FeedbackList({
   setFilters,
   focus = false,
   onFocused,
+  generalOpen = false,
+  setGeneralOpen,
+  onGeneral,
   ...ctx
 }: Ctx & {
+  /** "Comment on the whole draft" is open (the header's action opens it too). */
+  generalOpen?: boolean;
+  setGeneralOpen?: (open: boolean) => void;
+  /** Adds a whole-draft item; absent: no entry (read-only or below commenter). */
+  onGeneral?: (body: string) => Promise<void>;
   entries: FeedbackEntry[];
   /** The open section and the detail shown inside it; null: no section open. */
   scopeKeys: ReadonlySet<string> | null;
@@ -293,12 +379,16 @@ export function FeedbackList({
   const inSection = (e: FeedbackEntry) => !!scopeKeys && !!e.item.section_key && scopeKeys.has(e.item.section_key);
   const sectionHas = entries.some(inSection);
   // "auto": this section, or every section when this one has no feedback at all.
-  const scope = filters.scope === "auto" ? (scopeKeys && sectionHas ? "section" : "all") : filters.scope;
+  // "This section" with no section open reads as every section.
+  const scope =
+    filters.scope === "auto" ? (scopeKeys && sectionHas ? "section" : "all") : filters.scope === "section" && !scopeKeys ? "all" : filters.scope;
   const ofKind = (e: FeedbackEntry) => filters.kind === "all" || e.kind === filters.kind;
-  const inScope = (e: FeedbackEntry) => scope === "all" || inSection(e);
+  const scoped = (e: FeedbackEntry, sc: "section" | "all" | "general") =>
+    sc === "all" || (sc === "general" ? isGeneralFeedback(e.item) : inSection(e));
+  const inScope = (e: FeedbackEntry) => scoped(e, scope);
   const stateCount = (st: FeedbackState) => entries.filter((e) => e.state === st && ofKind(e) && inScope(e)).length;
-  const scopeCount = (sc: "section" | "all") =>
-    entries.filter((e) => e.state === filters.state && ofKind(e) && (sc === "all" || inSection(e))).length;
+  const scopeCount = (sc: "section" | "all" | "general") =>
+    entries.filter((e) => e.state === filters.state && ofKind(e) && scoped(e, sc)).length;
   const shown = entries.filter((e) => ofKind(e) && inScope(e) && (e.state === filters.state || kept.has(e.item.id)));
 
   const listRef = useRef<HTMLOListElement>(null);
@@ -325,6 +415,22 @@ export function FeedbackList({
 
   return (
     <div className="flex flex-col gap-3">
+      {onGeneral &&
+        (generalOpen ? (
+          <GeneralForm
+            onAdd={async (body) => {
+              await onGeneral(body);
+              setFilters({ ...filters, state: "open", scope: "general" });
+            }}
+            onClose={() => setGeneralOpen?.(false)}
+          />
+        ) : (
+          <div>
+            <Button icon="comment" onClick={() => setGeneralOpen?.(true)} data-testid="general-feedback-open">
+              Comment on the whole draft
+            </Button>
+          </div>
+        ))}
       <div className="flex flex-col gap-2">
         <FilterChips<FeedbackState>
           label="Feedback state"
@@ -334,18 +440,17 @@ export function FeedbackList({
           items={FEEDBACK_STATES.map((st) => ({ value: st, label: FEEDBACK_STATE_LABEL[st], count: stateCount(st) }))}
         />
         <div className="flex flex-wrap items-center gap-2">
-          {scopeKeys && (
-            <FilterChips<"section" | "all">
-              label="Show"
-              testId="inspector-scope"
-              value={scope}
-              onChange={(sc) => setFilters({ ...filters, scope: sc })}
-              items={[
-                { value: "section", label: "This section", count: scopeCount("section") },
-                { value: "all", label: "All sections", count: scopeCount("all") },
-              ]}
-            />
-          )}
+          <FilterChips<"section" | "all" | "general">
+            label="Show"
+            testId="inspector-scope"
+            value={scope}
+            onChange={(sc) => setFilters({ ...filters, scope: sc })}
+            items={[
+              ...(scopeKeys ? [{ value: "section" as const, label: "This section", count: scopeCount("section") }] : []),
+              { value: "all", label: "All sections", count: scopeCount("all") },
+              { value: "general", label: "General", count: scopeCount("general") },
+            ]}
+          />
           <label className="flex min-w-0 flex-1 basis-32">
             <span className="sr-only">Kind</span>
             <select
@@ -367,7 +472,8 @@ export function FeedbackList({
       </div>
       {shown.length === 0 ? (
         <Empty testId="feedback-empty">
-          No {FEEDBACK_STATE_LABEL[filters.state].toLowerCase()} feedback{scope === "section" ? " on this section" : ""}
+          No {FEEDBACK_STATE_LABEL[filters.state].toLowerCase()} feedback
+          {scope === "section" ? " on this section" : scope === "general" ? " on the whole draft" : ""}
         </Empty>
       ) : (
         <ol ref={listRef} className="flex flex-col" aria-label="Feedback items">

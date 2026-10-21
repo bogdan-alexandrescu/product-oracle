@@ -93,3 +93,11 @@ export function openBySection(entries: FeedbackEntry[]): Map<string, number> {
   for (const e of entries) if (e.open && e.item.section_key) m.set(e.item.section_key, (m.get(e.item.section_key) ?? 0) + 1);
   return m;
 }
+
+/** Feedback on the whole draft (D13): an item about no one section. */
+export function isGeneralFeedback(f: Pick<FeedbackItem, "section_key">): boolean {
+  return !f.section_key;
+}
+
+/** A whole-draft remark's longest body (the API's limit). */
+export const GENERAL_FEEDBACK_MAX = 4000;
