@@ -1386,3 +1386,23 @@ async def test_an_export_renders_rows_no_session_holds(client, tenant_id, doc, m
     resp = await client.get(URL, headers=viewer)
     assert resp.status_code == 200, resp.text
     assert attached and not any(attached)
+
+
+async def test_a_date_job_the_pool_turns_away_frees_its_company_s_place(monkeypatch):
+    """protects: a company's date places. fails_when: a date job the parse pool refused before
+    it ran (ParseBusy: the person's share used, or no worker within the wait) still counts as
+    running, or is kept as a failure of that version, so the company's later reads are busy
+    until the API restarts. no_claim: a job that did run keeps its place until it ends."""
+    from oracle import safe_yaml
+
+    async def refused(*_args, **_kwargs):
+        raise safe_yaml.ParseBusy("parse_busy")
+
+    monkeypatch.setattr(safe_yaml, "run_parse", refused)
+    company = "company-refused-by-the-pool"
+    for n in range(doc_dates.DATE_JOBS_PER_COMPANY + 1):
+        key = ("test-refused-by-the-pool", n)
+        with pytest.raises(safe_yaml.ParseBusy):
+            await doc_dates._kept(key, lambda: (), company=company)
+        assert doc_dates._KEPT.failure(key) is None
+    assert doc_dates._KEPT.busy(company) == 0
