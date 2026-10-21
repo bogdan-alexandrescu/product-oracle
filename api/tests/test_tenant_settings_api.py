@@ -44,6 +44,8 @@ async def test_defaults_and_unknown_keys(client, owner):
         "blocker_risk_review_max_days": 90,
         "company_email_domains": [],
         "company_shared_drives": [],
+        # H11: every responsibility at its default (written through /v1/autonomy).
+        "autonomy": {},
     }
     assert all(s["is_default"] for s in listed)
     assert (await client.get("/v1/settings/nope", headers=owner.headers)).status_code == 404
