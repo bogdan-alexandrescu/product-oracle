@@ -19,6 +19,7 @@ import {
   STATE_FILTERS,
   STATE_KIND,
   STATE_LABEL,
+  SUBJECT_LABEL,
   isCheckpoint,
   shortDate,
   type ClassFilter,
@@ -73,7 +74,8 @@ function Decisions() {
   const from = params.get("from") ?? "";
   const q = params.get("q") ?? "";
   const [search, setSearch] = useState(q);
-  const [proposing, setProposing] = useState(false);
+  // ?propose=1 (a section's or a blocker's "Record a decision") opens the form about it.
+  const [proposing, setProposing] = useState(params.get("propose") === "1");
   const [sheetOpen, setSheetOpen] = useState(false);
   const picked = params.get("d");
 
@@ -81,8 +83,8 @@ function Decisions() {
     if (!subjectParam) return null;
     const [kind, ...rest] = subjectParam.split(":");
     const id = rest.join(":");
-    return kind && id ? ({ kind, id } as Schemas["Subject"]) : null;
-  }, [subjectParam]);
+    return kind && id ? ({ kind, id, ref: params.get("ref") } as Schemas["Subject"]) : null;
+  }, [subjectParam, params]);
 
   const fromDef = FROM.find((f) => f.value === from);
   const query = {
@@ -275,7 +277,7 @@ function Decisions() {
             </div>
             {(run || subject) && (
               <p className="flex flex-wrap items-center gap-2 text-sm text-text2">
-                {run ? "Decisions in this run" : `About ${subject?.kind} ${subject?.id.slice(0, 8)}`}
+                {run ? "Decisions in this run" : `About ${SUBJECT_LABEL[subject?.kind ?? ""]?.toLowerCase() ?? "it"}${subject?.ref ? ` ${subject.ref}` : ""}`}
                 <Button variant="ghost" onClick={() => setParams({ run: null, subject: null, d: null })}>
                   Show every decision
                 </Button>
@@ -304,14 +306,17 @@ function Decisions() {
           {inspector}
         </Sheet>
       )}
-      {proposing && (
+      {proposing && hasRole(role, "commenter") && (
         <ProposeDialog
           people={people}
           subject={subject}
-          onClose={() => setProposing(false)}
+          onClose={() => {
+            setProposing(false);
+            if (params.get("propose")) setParams({ propose: null });
+          }}
           onProposed={async (d) => {
             setProposing(false);
-            setParams({ d: String(d.number), state: "all" });
+            setParams({ d: String(d.number), state: "all", propose: null });
             await changed(d);
           }}
         />

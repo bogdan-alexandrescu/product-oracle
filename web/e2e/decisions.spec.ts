@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login, seedDecidedRun } from "./helpers";
+import { login, openSection, sectionAction, seedDecidedRun } from "./helpers";
 
 /*
  * H1 Decision log, driven through the UI on the mock layer. The mock seeds five judgement
@@ -177,4 +177,28 @@ test("the run page's Decisions in this run opens the log on Checkpoints with tha
   ]) {
     await expect(row(page, `${title} · Checkout redesign PRD run`)).toHaveCount(1);
   }
+});
+
+test("a section's Record a decision opens Propose decision about that section", async ({ page }) => {
+  // protects=a commenter starts a decision from a document section's ⋯ menu; the proposal is
+  // about that section and the log, opened for it, lists it; fails_when=the subject is lost
+  // on the way or the new decision is not findable by its subject; no_claim=the mock's
+  // section ids stand in for the API's.
+  await login(page, COMMENTER);
+  await page.goto("/documents/checkout-redesign/v/2");
+  const goalTrace = await openSection(page, "goal-trace");
+  await sectionAction(goalTrace, "1. Goal trace", "Record a decision about 1. Goal trace");
+  await expect(page).toHaveURL(/\/company\/decisions\?subject=section/);
+  const dialog = page.getByRole("dialog", { name: "Propose decision" });
+  await expect(dialog).toContainText("About: Section 1. Goal trace");
+  await dialog.getByLabel("Decision", { exact: true }).fill("Trace the retention goal to repeat orders");
+  await dialog.getByLabel("Option 1", { exact: true }).fill("Repeat orders in 30 days");
+  await dialog.getByLabel("Option 2", { exact: true }).fill("Monthly active buyers");
+  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: APPROVER });
+  await dialog.getByRole("button", { name: "Propose", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(rows(page)).toHaveCount(1);
+  await expect(row(page, "Trace the retention goal to repeat orders")).toContainText("Proposed");
+  const inspector = page.getByTestId("decision-inspector").filter({ visible: true });
+  await expect(inspector).toContainText("Section 1. Goal trace");
 });

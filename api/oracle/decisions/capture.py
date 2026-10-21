@@ -8,6 +8,10 @@ against Oracle's order) are reviewed in 90 days and sync to the baseline graph.
 Checkpoint records (a run's stop approved or sent back) record the run's decision and
 nothing more: no review date, no Inbox row, no baseline entity.
 
+Captured calls name what they are about in ``subjects`` only, never ``entity_ids``: their
+baseline entity gets no ``affects`` edges, so recording a call made elsewhere never adds a
+change of its own to the graph (the source already recorded its change).
+
 Every hook runs in the transaction of the decision it records; the caller commits.
 """
 
@@ -238,6 +242,8 @@ async def gap_decided(
         )
     if decision.document_id is not None:
         subjects.append({"kind": "document", "id": str(decision.document_id)})
+    if decision.entity_id is not None:
+        subjects.append({"kind": "entity", "id": str(decision.entity_id)})
     return await capture(
         db,
         principal,
@@ -251,7 +257,6 @@ async def gap_decided(
         rationale=decision.rationale,
         approver_id=approver,
         review_at=decision.review_at,
-        entity_ids=[decision.entity_id] if decision.entity_id else [],
         subjects=subjects,
     )
 
@@ -305,7 +310,6 @@ async def blocker_decided(
         approver_id=approver,
         review_at=review_at,
         evidence_ids=[e for o in rows for e in o.evidence_ids or []],
-        entity_ids=[entity.id],
         subjects=[{"kind": "blocker", "id": str(entity.id), "ref": f"constraint:{entity.key}"}],
     )
 
