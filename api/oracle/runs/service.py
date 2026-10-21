@@ -5483,14 +5483,15 @@ async def _console_member(
     cp: Checkpoint,
     answered_by: str | None,
     *,
-    flow: str,
+    flow: str = "",
     altered: bool = False,
 ) -> tuple[User | None, str | None]:
     """The Oracle member who answered in SwarmCloud, and why their answer does not count
     (None when it does): matched by ``answered_by`` only, never one that redaction
     altered. Emails match case-insensitively; an exact match wins, and two members that
     differ only by case with neither exact is no match (the same answer every time). An
-    engineering stop with a lead named counts only a lead's or an owner's (A3)."""
+    engineering stop with a lead named counts only a lead's or an owner's (A3); ``flow``
+    is the run's (prd_to_spec keeps its own rule)."""
     if not answered_by:
         return None, "SwarmCloud recorded no answerer"
     if altered:
