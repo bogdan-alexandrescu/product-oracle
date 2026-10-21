@@ -137,13 +137,14 @@ from oracle.baseline import yaml_io
 from oracle.baseline.models import Edge, Entity
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
-from oracle.docs.parser import DraftError, is_uuid, parse_draft
+from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
 from oracle.jobs.models import LlmSuggestion
 from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
 from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
+from oracle.review.schemas import Resolution
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import schedule
 from oracle.runs import flows, rejection, roadmap, workflow
@@ -3098,7 +3099,7 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
         if run.flow == "feedback_loop" and (
             knobs.get("suggestion_ids") or knobs.get("feedback_ids")
         ):
-            await _settle_sent_items(s, run, result.version.number, markdown)
+            await _settle_sent_items(s, run, result.version.number, result.resolutions)
         document = await s.get(Document, result.version.document_id)
         out: dict[str, Any] = {
             "document_id": str(result.version.document_id),
@@ -3115,14 +3116,17 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
     return out
 
 
-async def _settle_sent_items(s: AsyncSession, run: Run, number: int, markdown: str) -> None:
+async def _settle_sent_items(
+    s: AsyncSession, run: Run, number: int, resolutions: list[Resolution]
+) -> None:
     """D12: what a feedback loop started from Build next draft was sent, once its draft
     is version ``number``: the accepted section-text changes are applied in it (as the
     built-in path's apply records them), and the items staged for the agents that the
     draft's resolutions answer leave Staged. Their status is the import's: an agent never
-    closes a whole-draft item itself, so a person confirms it in the version's review."""
+    closes a whole-draft item itself, so a person confirms it in the version's review.
+    ``resolutions`` are the import's own parse of the draft: it is not parsed again."""
     knobs = run.knobs or {}
-    answered = {str(r.feedback_id) for r in parse_draft(markdown).resolutions}
+    answered = {str(r.feedback_id) for r in resolutions}
     sent = [uuid.UUID(str(i)) for i in knobs.get("feedback_ids") or [] if str(i) in answered]
     items = list(
         await s.scalars(
