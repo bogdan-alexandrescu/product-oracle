@@ -69,12 +69,21 @@ async def list_members(db: TenantDB) -> list[MemberOut]:
 @router.patch(
     "/members/{user_id}",
     response_model=MemberOut,
-    responses={409: {"description": "Would demote the last owner"}},
+    responses={
+        409: {"description": "Would demote the last owner"},
+        422: {"description": "Neither field sent, or a viewer named engineering lead"},
+    },
 )
 async def update_member(
     user_id: uuid.UUID, body: MemberPatch, principal: Owner, db: TenantDB
 ) -> MemberOut:
-    user = await _call(service.set_role(db, principal, user_id, body.role))
+    """Change a member's role, name them engineering lead or clear it (A3), or both in
+    one change, role first. A viewer is never the engineering lead: naming one is a 422,
+    and a demotion to viewer clears the flag. Clearing it returns the engineering-stop
+    decisions they gave that are not delivered yet to the Inbox."""
+    user = await _call(
+        service.update_member(db, principal, user_id, body.role, body.engineering_lead)
+    )
     await db.commit()
     return (await service.members_out(db, [user]))[0]
 
@@ -193,8 +202,11 @@ async def list_invites(
     responses={409: {"description": "Already a member, or an open invite exists"}},
 )
 async def create_invite(body: InviteCreate, principal: Owner, db: TenantDB) -> InviteOut:
-    """Pre-assign a role to an email: its first Google sign-in lands with that role."""
-    invite = await _call(service.create_invite(db, principal, body.email, body.role))
+    """Pre-assign a role to an email: its first Google sign-in lands with that role, and as
+    an engineering lead when ``engineering_lead`` (never with role viewer: 422)."""
+    invite = await _call(
+        service.create_invite(db, principal, body.email, body.role, body.engineering_lead)
+    )
     await db.commit()
     await db.refresh(invite)
     return service.invite_out(invite)

@@ -87,7 +87,9 @@ WHO = {
     "commenter": Principal(
         tenant_id=uuid.uuid4(), kind="user", role="commenter", user_id=uuid.uuid4()
     ),
-    "lead_commenter": Principal(tenant_id=uuid.uuid4(), kind="user", role="commenter", user_id=LEAD),
+    "lead_commenter": Principal(
+        tenant_id=uuid.uuid4(), kind="user", role="commenter", user_id=LEAD
+    ),
     "lead_approver": Principal(tenant_id=uuid.uuid4(), kind="user", role="approver", user_id=LEAD),
     # The lead through a read-only token: acts as a viewer, decides nothing.
     "lead_read_only": Principal(tenant_id=uuid.uuid4(), kind="user", role="viewer", user_id=LEAD),
@@ -155,9 +157,7 @@ async def test_the_owner_names_a_commenter_engineering_lead(client, owner):
     resp = await _flag(client, auth, lead.user_id)
     assert resp.status_code == 200, resp.text
     assert resp.json()["engineering_lead"] is True and resp.json()["role"] == "commenter"
-    assert await _events(tenant_id, "member.engineering_lead") == [
-        {"before": False, "after": True}
-    ]
+    assert await _events(tenant_id, "member.engineering_lead") == [{"before": False, "after": True}]
     listed = (await client.get("/v1/members", headers=auth)).json()
     flags = {m["id"]: m["engineering_lead"] for m in listed}
     assert flags[str(lead.user_id)] is True
@@ -319,9 +319,9 @@ async def test_with_a_lead_named_leads_and_owners_decide_the_engineering_stop(cl
 
 async def test_an_owner_decides_the_engineering_stop_with_a_lead_named(client, owner):
     # protects=AC8, owners decide every stop; fails_when=an owner is refused once a lead is
-    # named; no_claim=the lead's own decision (above).
+    # named; no_claim=eng_dates in a run (F4 lane B adds the kind; the truth table covers it).
     tenant_id, auth = owner
-    run = await _eng_stop(client, auth, tenant_id, on(), kind="eng_dates")
+    run = await _eng_stop(client, auth, tenant_id, on())
     lead = await person(tenant_id, "approver", "lead")
     assert (await _flag(client, auth, lead.user_id)).status_code == 200
     resp = await _decide_raw(client, auth, run, "approved")

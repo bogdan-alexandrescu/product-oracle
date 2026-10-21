@@ -98,7 +98,8 @@ def test_up_down_up_keeps_members_and_invites(scratch_db):
         t=tenant,
     )
     _run(
-        "INSERT INTO invites (id, tenant_id, email, role) VALUES (:i, :t, 'c@example.com', 'viewer')",
+        "INSERT INTO invites (id, tenant_id, email, role) "
+        "VALUES (:i, :t, 'c@example.com', 'viewer')",
         i=uuid.uuid4(),
         t=tenant,
     )

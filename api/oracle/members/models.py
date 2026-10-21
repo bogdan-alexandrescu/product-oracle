@@ -1,10 +1,21 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Index, Integer, LargeBinary, Text, Uuid, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Index,
+    Integer,
+    LargeBinary,
+    Text,
+    Uuid,
+    false,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
-from oracle.auth.models import ROLES
+from oracle.auth.models import ENGINEERING_LEAD_ROLE, ROLES
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
@@ -16,6 +27,7 @@ class Invite(TenantScoped, Base):
     __table_args__ = (
         CheckConstraint(_in("role", ROLES), name="role"),
         CheckConstraint("email = lower(email)", name="email_lowercase"),
+        CheckConstraint(ENGINEERING_LEAD_ROLE, name="engineering_lead_role"),
         # One open invite per email; accepted and revoked ones are history.
         Index(
             "uq_invites_tenant_id_email_open",
@@ -28,6 +40,10 @@ class Invite(TenantScoped, Base):
 
     email: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(Text, nullable=False)
+    # A3: the first sign-in lands as an engineering lead (never with role viewer).
+    engineering_lead: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     # User id or API token id; no FK because it can be either.
     invited_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

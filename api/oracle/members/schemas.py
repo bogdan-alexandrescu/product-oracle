@@ -18,6 +18,8 @@ class MemberOut(BaseModel):
     id: uuid.UUID
     email: str
     role: Role
+    # A3: speaks for engineering (decides the engineering stops, verifies dates).
+    engineering_lead: bool = False
     created_at: datetime
     # A removed member is disabled (C2): kept, so history keeps their name.
     disabled_at: datetime | None = None
@@ -35,12 +37,17 @@ class MemberOut(BaseModel):
 
 
 class MemberPatch(BaseModel):
-    role: Role
+    """A role, the engineering lead flag, or both (applied in one change, role first)."""
+
+    role: Role | None = None
+    engineering_lead: bool | None = None
 
 
 class InviteCreate(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     role: Role
+    # A3: their first sign-in lands as an engineering lead (never with role viewer).
+    engineering_lead: bool = False
 
     @field_validator("email")
     @classmethod
@@ -58,6 +65,7 @@ class InviteOut(BaseModel):
     id: uuid.UUID
     email: str
     role: Role
+    engineering_lead: bool = False
     status: InviteStatus
     invited_by: uuid.UUID | None = None
     created_at: datetime
