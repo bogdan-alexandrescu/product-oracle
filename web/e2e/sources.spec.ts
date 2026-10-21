@@ -19,14 +19,14 @@ test("settings › sources: my sources, status and last error, sync, allowlist, 
   await chat.getByRole("button", { name: "Sync now" }).click();
   await expect(chat.getByRole("status")).toContainText("Synced: 2 item(s) seen, 1 new version(s)");
 
-  // Edit allowlist and Delete sit in the row's More menu.
+  // Edit channels and Delete sit in the row's More menu.
   await chat.getByRole("button", { name: "More actions for Product chat" }).click();
-  await chat.getByRole("menuitem", { name: "Edit allowlist" }).click();
+  await chat.getByRole("menuitem", { name: "Edit channels" }).click();
   await chat.getByRole("button", { name: "Paste ids" }).click();
   await chat.getByLabel("Channel ids (one per line)").fill("C0123PRODUCT\nC0789ROADMAP");
-  await chat.getByRole("button", { name: "Save allowlist" }).click();
-  await expect(chat.getByRole("status")).toHaveText("Allowlist saved.");
-  await expect(chat).toContainText("C0123PRODUCT, C0789ROADMAP");
+  await chat.getByRole("button", { name: "Save channels" }).click();
+  await expect(chat.getByRole("status")).toHaveText("Channels saved.");
+  await expect(chat.getByTestId("source-picks")).toHaveText("#product, C0789ROADMAP");
 
   await chat.getByRole("button", { name: "Pause" }).click();
   await expect(chat).toContainText("Paused");

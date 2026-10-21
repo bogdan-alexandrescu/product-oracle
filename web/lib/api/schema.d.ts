@@ -16466,7 +16466,10 @@ export interface components {
             name: string;
             /** Connection Id */
             connection_id?: string | null;
-            /** Config */
+            /**
+             * Config
+             * @description What the source reads, by kind. github: {"repos": ["owner/name"]}. slack: {"channels": [channel id], "since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD", "labels"?: {channel id: "#name"}}. notion: {"roots": [page id], "labels"?: {page id: title}}. labels only name the picks for people to read (at most 200 characters each; names of ids not picked are dropped): a save that changes labels alone reads nothing again and asks the provider nothing. Pick ids from the browse lists (list_slack_channels, list_notion_pages). Never secrets.
+             */
             config?: {
                 [key: string]: unknown;
             };
@@ -16574,7 +16577,10 @@ export interface components {
             name?: string | null;
             /** Connection Id */
             connection_id?: string | null;
-            /** Config */
+            /**
+             * Config
+             * @description What the source reads, by kind. github: {"repos": ["owner/name"]}. slack: {"channels": [channel id], "since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD", "labels"?: {channel id: "#name"}}. notion: {"roots": [page id], "labels"?: {page id: title}}. labels only name the picks for people to read (at most 200 characters each; names of ids not picked are dropped): a save that changes labels alone reads nothing again and asks the provider nothing. Pick ids from the browse lists (list_slack_channels, list_notion_pages). Never secrets.
+             */
             config?: {
                 [key: string]: unknown;
             } | null;

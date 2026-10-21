@@ -99,11 +99,12 @@ class _Superseded(Exception):
 def fingerprint(
     config: dict[str, Any], connection_id: uuid.UUID | None, account_id: str | None = None
 ) -> str:
-    """What identifies a selection: the config, the connection it is read through and
-    the account that connection signs in to."""
+    """What identifies a selection: the config (its ``labels`` aside: they only name
+    things, base.selection), the connection it is read through and the account that
+    connection signs in to."""
     raw = json.dumps(
         {
-            "config": config,
+            "config": base.selection(config),
             "connection": str(connection_id) if connection_id else None,
             "account": account_id,
         },
@@ -174,7 +175,8 @@ async def _company(db: AsyncSession, tenant_id: uuid.UUID | None) -> Company:
 
 async def _hold(db: AsyncSession, start: _Start) -> None:
     """Lock the source's row until the transaction's next commit, and raise
-    :class:`_Superseded` when the source no longer has the config, connection and
+    :class:`_Superseded` when the source no longer has the selection (the config, its
+    ``labels`` aside: base.selection), connection and
     connection account the sync started with or, for Google Docs, the company's Drive
     settings changed. An owner's narrowing of those settings locks every Google Docs
     source row before it deletes anything (oracle.sources.service.hide_outside_company),
@@ -209,7 +211,7 @@ async def _hold(db: AsyncSession, start: _Start) -> None:
             narrowed = not set(domains) <= set(now_domains) or not set(drives) <= set(now_drives)
     if (
         row is None
-        or dict(row.config or {}) != start.config
+        or base.selection(dict(row.config or {})) != base.selection(start.config)
         or row.connection_id != start.connection_id
         or row.account_id != start.account_id
         or changed
@@ -230,7 +232,9 @@ async def _write(db: AsyncSession, start: _Start, **values: Any) -> None:
         update(Source)
         .where(
             Source.id == start.source_id,
-            Source.config == cast(start.config, JSONB),
+            # New names alone (labels) are not a new selection.
+            Source.config.op("-", return_type=JSONB)("labels")
+            == cast(base.selection(start.config), JSONB),
             Source.connection_id.is_not_distinct_from(start.connection_id),
             account.is_not_distinct_from(start.account_id),
         )
@@ -323,7 +327,10 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
     # The caller loaded the source before another request changed its config or
     # connection: the sync it asked for is of a selection that no longer exists. Nothing
     # runs; the next sync reads the new one.
-    if start.config != dict(source.config or {}) or start.connection_id != source.connection_id:
+    if (
+        base.selection(start.config) != base.selection(dict(source.config or {}))
+        or start.connection_id != source.connection_id
+    ):
         await db.rollback()
         stats.outcome = "superseded"
         return stats

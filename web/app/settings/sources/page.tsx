@@ -25,8 +25,8 @@ import { formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
-import { Field, INPUT, SELECT_FIELD, TEXTAREA } from "../_components/fields";
-import type { PickerProps } from "./_browse-list";
+import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
+import { labelsOf, type PickerProps } from "./_browse-list";
 import { GithubPicker } from "./_github-picker";
 import { SlackPicker } from "./_slack-picker";
 import { CompanyDriveSettings } from "./CompanyDrive";
@@ -47,17 +47,20 @@ type Kind = Source["kind"];
 type KindOption = Schemas["SourceKindOut"];
 type Choice = Schemas["ConnectionChoice"];
 
-// The config key holding each kind's allowlist (as its connector reads it), and what one
-// entry looks like. Notion's roots are ticked in the page picker, not typed; Fireflies
-// sources are picked in a browse panel instead (FirefliesPicker).
+// The config key holding each kind's picks (as its connector reads it), the row's label
+// for them and the word for them in the menu, button and notice. Every kind is picked in
+// a picker (S5); Fireflies sources in a browse panel of their own (FirefliesPicker).
 type ListKind = Exclude<Kind, "upload" | "fireflies">;
-const ALLOWLIST: Record<ListKind, { key: string; label: string; example: string }> = {
-  github: { key: "repos", label: "Repositories", example: "example-org/example-app" },
-  slack: { key: "channels", label: "Channel ids", example: "C0123PRODUCT" },
-  notion: { key: "roots", label: "Pages", example: "" },
+const ALLOWLIST: Record<ListKind, { key: string; label: string; noun: string }> = {
+  github: { key: "repos", label: "Repositories", noun: "repositories" },
+  slack: { key: "channels", label: "Channels", noun: "channels" },
+  notion: { key: "roots", label: "Pages", noun: "pages" },
   // Picked in Google's Drive picker (DriveFiles): "docs" and "folders".
-  google_docs: { key: "docs", label: "Files", example: "1AbC…" },
+  google_docs: { key: "docs", label: "Files", noun: "files" },
 };
+
+const SAVE_TIP =
+  "Saving fewer channels (or repositories, or pages), or a shorter date range, removes what they no longer cover at once. The next sync reads only what remains, and anything new.";
 
 // Kinds chosen in a picker (browse, search, tick) rather than typed ids (S5).
 const PICKER: Partial<Record<Kind, ComponentType<PickerProps>>> = {
@@ -84,7 +87,7 @@ const NEW_FIREFLIES: FirefliesConfig = { mode: "all", series: [], meetings: [], 
 type RowNotice = { tone: "pass" | "warn"; text: string };
 
 /**
- * A row's rarely used actions (Edit allowlist, Delete) behind one "More" button, so the
+ * A row's rarely used actions (Edit channels, Delete) behind one "More" button, so the
  * row's actions stay on one line on a phone.
  */
 function RowMenu({ label, items }: { label: string; items: { label: string; onSelect: () => void; danger?: boolean }[] }) {
@@ -152,10 +155,6 @@ function entries(config: Record<string, unknown>, key: string): string[] {
   if (key === "roots") return notionRoots(config);
   const value = config[key];
   return Array.isArray(value) ? value.map(String) : [];
-}
-
-function parseLines(text: string): string[] {
-  return [...new Set(text.split(/[\n,]/).map((l) => l.trim()).filter(Boolean))];
 }
 
 function useAction() {
@@ -230,9 +229,7 @@ function AllowlistEditor({
   onSaved: (s: Source) => void;
   onReload: (s: Source) => void;
 }) {
-  const id = useId();
   const spec = ALLOWLIST[source.kind as ListKind];
-  const [text, setText] = useState(entries(source.config, spec.key).join("\n"));
   const Picker = PICKER[source.kind];
   const [picked, setPicked] = useState(source.config);
   const { act, error, busy, stale } = useAction();
@@ -240,13 +237,12 @@ function AllowlistEditor({
 
   async function save(e: FormEvent) {
     e.preventDefault();
-    const config = Picker ? picked : { ...source.config, [spec.key]: parseLines(text) };
     // base_version: the version this form loaded; a source saved since refuses the save.
     const saved = await act(() =>
       unwrap(
         api.PATCH("/v1/sources/{source_id}", {
           params: { path: { source_id: source.id } },
-          body: { config, base_version: source.config_version },
+          body: { config: picked, base_version: source.config_version },
         }),
       ),
     );
@@ -261,36 +257,15 @@ function AllowlistEditor({
 
   return (
     <form onSubmit={save} className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3">
-      {Picker ? (
-        <Picker connectionId={source.connection_id} config={picked} onChange={setPicked} />
-      ) : (
-        <Field
-          label={`${spec.label} (one per line)`}
-          htmlFor={id}
-          tip={
-            <InfoTip label="saving the allowlist" align="start">
-              Saving a narrower allowlist removes what it no longer covers (a removed channel or repo, messages outside a narrower date range) at once. The next sync reads only what remains, and anything new.
-            </InfoTip>
-          }
-        >
-          <textarea
-            id={id}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={4}
-            placeholder={spec.example}
-            className={`${TEXTAREA} font-mono`}
-          />
-        </Field>
-      )}
+      {Picker && <Picker connectionId={source.connection_id} config={picked} onChange={setPicked} />}
       {error && <SaveError error={error} stale={stale} busy={busy} onReload={reload} />}
       <div className="flex items-center gap-1.5">
         <Button type="submit" variant="solid" disabled={busy || (notion && notionRoots(picked).length === 0)}>
-          Save allowlist
+          Save {spec.noun}
         </Button>
-        {Picker && !notion && (
-          <InfoTip label="saving the allowlist" align="start">
-            Saving a narrower allowlist removes what it no longer covers (a removed channel or repo, messages outside a narrower date range) at once. The next sync reads only what remains, and anything new.
+        {!notion && (
+          <InfoTip label={`saving the ${spec.noun}`} align="start">
+            {SAVE_TIP}
           </InfoTip>
         )}
       </div>
@@ -516,10 +491,13 @@ function SourceRow({
     if (fresh) onChange(fresh);
   }
 
+  // Picks by name where the source saved one (labels), else by id (a source saved before
+  // names were kept shows ids until it is next saved).
+  const names = labelsOf(source.config);
   const items = drive
     ? picked.filter((f) => f.kind === "doc").map((f) => f.name)
     : allowlist
-      ? entries(source.config, allowlist.key)
+      ? entries(source.config, allowlist.key).map((id) => names[id] ?? id)
       : [];
   const attention = source.status === "needs_attention";
   const synced = source.last_synced_at
@@ -585,7 +563,11 @@ function SourceRow({
               ...(allowlist
                 ? [
                     {
-                      label: drive ? (editing ? "Close files and folders" : "Edit files and folders") : editing ? "Close allowlist" : "Edit allowlist",
+                      label: drive
+                        ? editing
+                          ? "Close files and folders"
+                          : "Edit files and folders"
+                        : `${editing ? "Close" : "Edit"} ${allowlist.noun}`,
                       onSelect: () => setEditing((v) => !v),
                     },
                   ]
@@ -614,8 +596,8 @@ function SourceRow({
         {allowlist && (items.length > 0 || folders.length === 0) && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">{allowlist.label}</Label>
-            <span className={`min-w-0 truncate text-text ${drive || source.kind === "notion" ? "" : "font-mono"}`} title={items.join(", ")}>
-              {source.kind === "notion" ? `${items.length} picked` : items.length ? items.join(", ") : "none yet"}
+            <span className="min-w-0 truncate text-text" title={items.join(", ")} data-testid="source-picks">
+              {items.length ? items.join(", ") : "none yet"}
             </span>
           </span>
         )}
@@ -710,7 +692,8 @@ function SourceRow({
           onSaved={(s) => {
             onChange(s);
             setEditing(false);
-            setNotice({ tone: "pass", text: "Allowlist saved." });
+            const noun = ALLOWLIST[source.kind as ListKind].noun;
+            setNotice({ tone: "pass", text: `${noun[0].toUpperCase()}${noun.slice(1)} saved.` });
           }}
         />
       )}
@@ -718,16 +701,23 @@ function SourceRow({
   );
 }
 
-/** Notion in the PICKER registry: its roots, ticked in the page picker once there is a connection. */
+/** Notion in the PICKER registry: its roots, ticked in the page picker once there is a
+ * connection, and their titles (`labels`) for the source's row. */
 function NotionSourcePicker({ connectionId, config, onChange }: PickerProps) {
   if (!connectionId) return null;
   return (
-    <ChoosePages connectionId={connectionId} value={notionRoots(config)} onChange={(roots) => onChange({ ...config, roots })} />
+    <ChoosePages
+      connectionId={connectionId}
+      value={notionRoots(config)}
+      onChange={(roots) => onChange({ ...config, roots })}
+      labels={labelsOf(config)}
+      onLabels={(labels) => onChange({ ...config, labels })}
+    />
   );
 }
 
 /** The Notion page picker under its label: a source's roots, ticked rather than typed. */
-function ChoosePages(props: { connectionId: string; value: string[]; onChange: (roots: string[]) => void }) {
+function ChoosePages(props: Parameters<typeof NotionPicker>[0]) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5" role="group" aria-label="Choose pages">
       <span className="flex items-center gap-1.5">
@@ -746,7 +736,6 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
   const [kind, setKind] = useState<Kind>("upload");
   const [name, setName] = useState("");
   const [connection, setConnection] = useState("");
-  const [allow, setAllow] = useState("");
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [picked, setPicked] = useState<Record<string, unknown>>({});
   const [meetings, setMeetings] = useState<FirefliesConfig>(NEW_FIREFLIES);
@@ -774,15 +763,12 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
             ? driveConfig({}, files)
             : Picker
               ? picked
-              : spec
-                ? { [spec.key]: parseLines(allow) }
-                : {},
+              : {},
     };
     const s = await act(() => unwrap(api.POST("/v1/sources", { body })));
     if (s) {
       onAdded(s);
       setName("");
-      setAllow("");
       setFiles([]);
       setPicked({});
       setMeetings(NEW_FIREFLIES);
@@ -834,7 +820,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
             onChange={(e) => {
               setConnection(e.target.value);
               // Picks belong to the account they were listed from; the date range stays.
-              setPicked((p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== spec?.key)));
+              setPicked((p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== spec?.key && k !== "labels")));
             }}
             className={SELECT_FIELD}
           >
@@ -868,17 +854,6 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
         <FirefliesPicker key={connectionId} connectionId={connectionId} value={meetings} onChange={setMeetings} />
       )}
       {Picker && usable.length > 0 && <Picker key={`${kind}:${connectionId}`} connectionId={connectionId} config={picked} onChange={setPicked} />}
-      {!Picker && spec && !drive && usable.length > 0 && (
-        <Field label={`${spec.label} to pull in (one per line)`}>
-          <textarea
-            value={allow}
-            onChange={(e) => setAllow(e.target.value)}
-            rows={3}
-            placeholder={spec.example}
-            className={`${TEXTAREA} font-mono`}
-          />
-        </Field>
-      )}
       {error && <Notice tone="error">{error}</Notice>}
       <div>
         <Button type="submit" variant="solid" icon="plus" disabled={busy || blocked || !name.trim()}>

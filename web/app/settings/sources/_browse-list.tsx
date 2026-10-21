@@ -37,6 +37,32 @@ export function listOf(config: Record<string, unknown>, key: string): string[] {
   return Array.isArray(value) ? value.map(String) : [];
 }
 
+/** A config's `labels`: the display names of its picks, by id (only for people to read). */
+export function labelsOf(config: Record<string, unknown>): Record<string, string> {
+  const value = config.labels;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter((e): e is [string, string] => typeof e[1] === "string"));
+}
+
+/** The names of `picked`, from what a list showed (`listed`) or else what was saved. */
+export function pickedLabels(
+  picked: string[],
+  listed: (id: string) => string | undefined,
+  saved: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const id of picked) {
+    const name = listed(id) ?? saved[id];
+    if (name) out[id] = name;
+  }
+  return out;
+}
+
+export function sameLabels(a: Record<string, string>, b: Record<string, string>): boolean {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
+}
+
 function parseLines(text: string): string[] {
   return [...new Set(text.split(/[\n,]/).map((l) => l.trim()).filter(Boolean))];
 }
@@ -75,7 +101,10 @@ function Row({ item, checked, onToggle }: { item: BrowseItem; checked: boolean; 
 /**
  * A searchable checkbox list over a provider's browse endpoint, with a selected count,
  * "Load more" for the next page and a "Paste ids" fallback. Picks are ids; an id the
- * list has not shown (pasted, or past the loaded pages) is still listed, by id.
+ * list has not shown (pasted, or past the loaded pages) is still listed, by its saved
+ * name or else by id. `onLabels` gets the picks' names whenever the picks change or a
+ * loaded page names a pick that had none (so a source saved before names were kept
+ * gets them by opening the editor).
  */
 export function BrowseList({
   label,
@@ -85,6 +114,8 @@ export function BrowseList({
   connectionId,
   picked,
   onPicked,
+  labels = {},
+  onLabels,
   load,
   extra,
 }: {
@@ -97,6 +128,9 @@ export function BrowseList({
   connectionId: string | null;
   picked: string[];
   onPicked: (ids: string[]) => void;
+  /** The picks' saved names, by id. */
+  labels?: Record<string, string>;
+  onLabels?: (labels: Record<string, string>) => void;
   load: (search: string, cursor: string | null) => Promise<BrowsePage>;
   /** More fields under the list (Slack's "Since"). */
   extra?: ReactNode;
@@ -114,10 +148,20 @@ export function BrowseList({
   // Every item listed so far, so a pick the current list does not show keeps its name.
   const [seen, setSeen] = useState<Record<string, BrowseItem>>({});
   const loadRef = useRef(load);
+  const labelsRef = useRef({ labels, onLabels });
   const run = useRef(0);
   useEffect(() => {
     loadRef.current = load;
+    labelsRef.current = { labels, onLabels };
   });
+
+  useEffect(() => {
+    const { labels: saved, onLabels: report } = labelsRef.current;
+    if (!report) return;
+    const next = pickedLabels(picked, (id) => seen[id]?.label, saved);
+    if (!sameLabels(next, saved)) report(next);
+    // Reports only a change, so a new array of the same picks settles at once.
+  }, [picked, seen]);
 
   async function fetchPage(q: string, cursor: string | null) {
     const mine = ++run.current;
@@ -154,7 +198,7 @@ export function BrowseList({
     ? []
     : picked
         .filter((id) => !listed.has(id))
-        .map((id) => seen[id] ?? { id, label: id, isPrivate: false });
+        .map((id) => seen[id] ?? { id, label: labels[id] ?? id, isPrivate: false });
 
   return (
     <div role="group" aria-label={label} className="flex min-w-0 flex-col gap-2.5">
