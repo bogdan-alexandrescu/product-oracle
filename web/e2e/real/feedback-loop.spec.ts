@@ -37,7 +37,7 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
   // One section is open at a time: open each from the outline before using it.
   await openSection(page, "solution");
   await selectText(page, "solution", "Each row has a download link");
-  await page.getByRole("button", { name: /^Comment/ }).click();
+  await page.getByRole("button", { name: /^Comment(\s+c)?$/ }).click();
   const dialog = page.getByRole("dialog", { name: "New comment" });
   await dialog.getByLabel("Comment").fill("Finance leads need many invoices at once. Can they download in bulk?");
   await dialog.getByRole("button", { name: /^Comment/ }).click();

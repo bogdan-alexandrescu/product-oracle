@@ -100,6 +100,9 @@ class FeedbackItem(TenantScoped, Base):
     )
     section_key: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
+    # Who raised it: a user id or an API token id (no FK, as Comment.author_id). Null on
+    # items raised before 0020 without a comment or verdict, and on ones Oracle raised.
+    author_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="open")
     addressed_in_version: Mapped[int | None] = mapped_column(Integer)
     resolution_note: Mapped[str | None] = mapped_column(Text)

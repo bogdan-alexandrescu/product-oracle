@@ -235,6 +235,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{doc}/versions/{n}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create General Feedback
+         * @description Feedback on the whole draft, not one section: a ``general`` item (no section).
+         */
+        post: operations["create_general_feedback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/comments/{comment_id}/replies": {
         parameters: {
             query?: never;
@@ -10447,6 +10467,8 @@ export interface components {
             section_key?: string | null;
             /** Summary */
             summary: string;
+            /** Author Id */
+            author_id?: string | null;
             anchor?: components["schemas"]["TextQuoteSelector"] | null;
             /** Verdict */
             verdict?: ("approved" | "changes_requested" | "rejected") | null;
@@ -10849,6 +10871,16 @@ export interface components {
              * @default []
              */
             private_blocking_gap_ids: string[];
+        };
+        /**
+         * GeneralFeedbackCreate
+         * @description Feedback on the whole draft rather than one section: a ``general`` item.
+         */
+        GeneralFeedbackCreate: {
+            /** Body */
+            body: string;
+            /** Severity */
+            severity?: ("critical" | "major" | "minor") | null;
         };
         /** GithubRepoOut */
         GithubRepoOut: {
@@ -19271,6 +19303,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_general_feedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneralFeedbackCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackItemOut"];
                 };
             };
             /** @description Validation Error */
