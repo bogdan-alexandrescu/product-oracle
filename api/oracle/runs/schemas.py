@@ -391,6 +391,8 @@ class RunOut(RunSummary):
     # W5: while a console answer that did not count waits for an approver, the run's
     # token is read-only (its agents' writes are refused "waiting for approval").
     token_read_only: bool = False
+    # The baseline proposals this run made that wait for a person (B3).
+    open_proposals: int = 0
 
 
 class CheckpointDecision(BaseModel):

@@ -18,11 +18,11 @@ The caller commits.
 """
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +40,7 @@ from oracle.baseline.models import (
     Evidence,
     Proposal,
 )
+from oracle.baseline.schemas import ProposalRun
 from oracle.v2 import links
 from oracle.v2.models import DocumentSectionLink
 
@@ -366,15 +367,48 @@ async def awaits_answer(db: AsyncSession, payload: dict[str, Any]) -> bool:
     return gap is not None and gap.intake_id is not None and gap.category == attrs["category"]
 
 
-async def list_proposals(db: AsyncSession, status: str | None = None) -> list[Proposal]:
+async def list_proposals(
+    db: AsyncSession,
+    status: str | None = None,
+    run_id: uuid.UUID | Literal["none"] | None = None,
+) -> list[Proposal]:
     """Proposals, newest first; a withdrawn one (its finding lowered back to private,
-    S6) is never listed."""
+    S6) is never listed. ``run_id`` keeps one run's, or ``"none"`` those of no run."""
     stmt = (
         select(Proposal).where(Proposal.status != "withdrawn").order_by(Proposal.created_at.desc())
     )
     if status:
         stmt = stmt.where(Proposal.status == status)
+    if run_id == "none":
+        stmt = stmt.where(Proposal.run_id.is_(None))
+    elif run_id is not None:
+        stmt = stmt.where(Proposal.run_id == run_id)
     return list((await db.scalars(stmt)).all())
+
+
+async def proposal_runs(
+    db: AsyncSession, run_ids: Iterable[uuid.UUID | None]
+) -> dict[uuid.UUID, ProposalRun]:
+    """{run id: ProposalRun} for the runs that made these proposals, in one query."""
+    from oracle.runs.flows import FLOWS
+    from oracle.runs.models import Run
+
+    ids = {i for i in run_ids if i is not None}
+    if not ids:
+        return {}
+    rows = await db.execute(
+        select(Run.id, Run.flow, Run.status, Run.created_at).where(Run.id.in_(ids))
+    )
+    return {
+        r.id: ProposalRun(
+            id=r.id,
+            flow=r.flow,
+            flow_title=FLOWS[r.flow].title if r.flow in FLOWS else r.flow,
+            status=r.status,
+            created_at=r.created_at,
+        )
+        for r in rows
+    }
 
 
 async def lock_proposal(db: AsyncSession, proposal_id: uuid.UUID) -> Proposal | None:

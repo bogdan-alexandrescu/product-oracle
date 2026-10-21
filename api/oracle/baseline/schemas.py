@@ -288,6 +288,16 @@ class ProposalCreate(BaseModel):
     reason: str | None = None
 
 
+class ProposalRun(BaseModel):
+    """The run that made a proposal, enough to name it and link to it."""
+
+    id: uuid.UUID
+    flow: str
+    flow_title: str
+    status: str
+    created_at: datetime
+
+
 class ProposalOut(ORM):
     id: uuid.UUID
     entity_id: uuid.UUID | None = None
@@ -295,6 +305,8 @@ class ProposalOut(ORM):
     # {"op", "kind", "fields", "reason", "origin"}
     payload: dict[str, Any]
     run_id: uuid.UUID | None = None
+    # Null when no run made it, or the run was deleted.
+    run: ProposalRun | None = None
     actor: str | None = None
     status: ProposalStatus
     decided_by: uuid.UUID | None = None
