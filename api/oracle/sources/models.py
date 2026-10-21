@@ -70,6 +70,11 @@ class Source(TenantScoped, Base):
     # The owner's allowlist: repos, channel ids, root pages. Never secrets.
     config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     status: Mapped[str] = mapped_column(Text, nullable=False, default="active")
+    # Bumped by a save that changes the config, the connection or the name (never by a
+    # sync or a status update): a save that loaded an older version is refused (409).
+    config_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
     last_error: Mapped[str | None] = mapped_column(Text)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Connector-defined incremental sync position (oracle.sources.base.CursorCheckpoint).

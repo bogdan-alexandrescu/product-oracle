@@ -20,7 +20,7 @@ import {
   Split,
   type ChipKind,
 } from "@/components/ds";
-import { api, type Schemas, unwrap } from "@/lib/api/client";
+import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
@@ -157,19 +157,58 @@ function useAction() {
   const onAuth = useAuthRedirect();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The save loaded an older version of the source (409 source_changed).
+  const [stale, setStale] = useState(false);
   async function act<T>(fn: () => Promise<T>): Promise<T | undefined> {
     setBusy(true);
     setError(null);
+    setStale(false);
     try {
       return await fn();
     } catch (e) {
-      if (!onAuth(e)) setError(errorMessage(e));
+      if (!onAuth(e)) {
+        setError(errorMessage(e));
+        setStale(e instanceof ApiError && e.code === "source_changed");
+      }
       return undefined;
     } finally {
       setBusy(false);
     }
   }
-  return { act, error, setError, busy };
+  return { act, error, setError, busy, stale };
+}
+
+/** A save's error. A stale one (the source changed since the form opened) offers Reload,
+ * which refetches the source and reopens the form on its current picks. */
+function SaveError({
+  error,
+  stale,
+  busy,
+  onReload,
+}: {
+  error: string;
+  stale: boolean;
+  busy: boolean;
+  onReload: () => void;
+}) {
+  if (!stale) return <Notice tone="error">{error}</Notice>;
+  return (
+    <Notice
+      tone="error"
+      action={
+        <Button onClick={onReload} disabled={busy}>
+          Reload
+        </Button>
+      }
+    >
+      {error} Nothing was saved. Reloading discards the picks you changed here.
+    </Notice>
+  );
+}
+
+/** Refetches a source (the Reload of a stale save). */
+function fetchSource(id: string) {
+  return unwrap(api.GET("/v1/sources/{source_id}", { params: { path: { source_id: id } } }));
 }
 
 /** A one-line warning (warn tokens): a connector that is not there yet. */
@@ -177,22 +216,40 @@ function Warn({ children }: { children: ReactNode }) {
   return <p className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn">{children}</p>;
 }
 
-function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Source) => void }) {
+function AllowlistEditor({
+  source,
+  onSaved,
+  onReload,
+}: {
+  source: Source;
+  onSaved: (s: Source) => void;
+  onReload: (s: Source) => void;
+}) {
   const id = useId();
   const spec = ALLOWLIST[source.kind as ListKind];
   const [text, setText] = useState(entries(source.config, spec.key).join("\n"));
   const Picker = PICKER[source.kind];
   const [picked, setPicked] = useState(source.config);
-  const { act, error, busy } = useAction();
+  const { act, error, busy, stale } = useAction();
   const notion = source.kind === "notion";
 
   async function save(e: FormEvent) {
     e.preventDefault();
     const config = Picker ? picked : { ...source.config, [spec.key]: parseLines(text) };
+    // base_version: the version this form loaded; a source saved since refuses the save.
     const saved = await act(() =>
-      unwrap(api.PATCH("/v1/sources/{source_id}", { params: { path: { source_id: source.id } }, body: { config } })),
+      unwrap(
+        api.PATCH("/v1/sources/{source_id}", {
+          params: { path: { source_id: source.id } },
+          body: { config, base_version: source.config_version },
+        }),
+      ),
     );
     if (saved) onSaved(saved);
+  }
+  async function reload() {
+    const fresh = await act(() => fetchSource(source.id));
+    if (fresh) onReload(fresh);
   }
 
   if (notion && !source.connection_id) return <ReconnectNotion picked={notionRoots(source.config).length} />;
@@ -221,7 +278,7 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
           />
         </Field>
       )}
-      {error && <Notice tone="error">{error}</Notice>}
+      {error && <SaveError error={error} stale={stale} busy={busy} onReload={reload} />}
       <div className="flex items-center gap-1.5">
         <Button type="submit" variant="solid" disabled={busy || (notion && notionRoots(picked).length === 0)}>
           Save allowlist
@@ -236,18 +293,35 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
   );
 }
 
-function FirefliesEditor({ source, onSaved }: { source: Source; onSaved: (s: Source) => void }) {
+function FirefliesEditor({
+  source,
+  onSaved,
+  onReload,
+}: {
+  source: Source;
+  onSaved: (s: Source) => void;
+  onReload: (s: Source) => void;
+}) {
   const initial = readFirefliesConfig(source.config);
   const [value, setValue] = useState<FirefliesConfig>(initial.value);
-  const { act, error, busy } = useAction();
+  const { act, error, busy, stale } = useAction();
 
   async function save(e: FormEvent) {
     e.preventDefault();
     const config = firefliesConfigToSave(value);
     const saved = await act(() =>
-      unwrap(api.PATCH("/v1/sources/{source_id}", { params: { path: { source_id: source.id } }, body: { config } })),
+      unwrap(
+        api.PATCH("/v1/sources/{source_id}", {
+          params: { path: { source_id: source.id } },
+          body: { config, base_version: source.config_version },
+        }),
+      ),
     );
     if (saved) onSaved(saved);
+  }
+  async function reload() {
+    const fresh = await act(() => fetchSource(source.id));
+    if (fresh) onReload(fresh);
   }
 
   return (
@@ -261,7 +335,7 @@ function FirefliesEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
       ) : (
         <Warn>This source has no connection: reconnect Fireflies first.</Warn>
       )}
-      {error && <Notice tone="error">{error}</Notice>}
+      {error && <SaveError error={error} stale={stale} busy={busy} onReload={reload} />}
       <div className="flex items-center gap-2.5">
         <Button type="submit" variant="solid" disabled={busy || !firefliesReady(value) || !source.connection_id}>
           Save meetings
@@ -500,7 +574,9 @@ function SourceRow({
       )}
       {editing && fireflies && (
         <FirefliesEditor
+          key={source.config_version}
           source={source}
+          onReload={onChange}
           onSaved={(s) => {
             onChange(s);
             setEditing(false);
@@ -510,7 +586,9 @@ function SourceRow({
       )}
       {editing && allowlist && (
         <AllowlistEditor
+          key={source.config_version}
           source={source}
+          onReload={onChange}
           onSaved={(s) => {
             onChange(s);
             setEditing(false);

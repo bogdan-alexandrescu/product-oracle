@@ -66,7 +66,9 @@ test("the meetings editor of a Fireflies source refuses a stale save too", async
   await calls.getByRole("button", { name: "More actions for Customer calls" }).click();
   await calls.getByRole("menuitem", { name: "Edit meetings" }).click();
   const form = calls.getByRole("form", { name: "Meetings of Customer calls" });
-  await expect(form).toBeVisible();
+  const picker = form.getByTestId("fireflies-picker");
+  await picker.getByLabel("Search meetings").fill("customer");
+  await picker.getByRole("group", { name: "Meetings" }).getByLabel("Customer interview: Acme").check();
   await changeUnderneath(page, "Customer calls", { from_date: "2026-10-01", title_contains: ["Customer interview"] });
   await form.getByRole("button", { name: "Save meetings" }).click();
   await expect(calls.getByRole("alert")).toContainText(MESSAGE);

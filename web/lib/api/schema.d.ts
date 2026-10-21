@@ -14694,6 +14694,11 @@ export interface components {
              * @enum {string}
              */
             status: "active" | "paused" | "error" | "needs_attention";
+            /**
+             * Config Version
+             * @default 1
+             */
+            config_version: number;
             /** Last Error */
             last_error: string | null;
             /** Last Synced At */
@@ -14729,6 +14734,8 @@ export interface components {
             config?: {
                 [key: string]: unknown;
             } | null;
+            /** Base Version */
+            base_version?: number | null;
         };
         /** SpanOut */
         SpanOut: {
@@ -19467,6 +19474,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SourceOut"];
                 };
+            };
+            /** @description base_version is not the source's config_version, or the name is taken: {"code": "source_changed", "message": ...} for the first */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

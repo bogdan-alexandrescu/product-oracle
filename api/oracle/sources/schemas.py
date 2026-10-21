@@ -25,6 +25,10 @@ class SourcePatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     connection_id: uuid.UUID | None = None
     config: dict[str, Any] | None = None
+    # The config_version the form loaded. When given and the source has changed since
+    # (another save), the save is refused with 409 source_changed and nothing changes.
+    # Omitted: last write wins.
+    base_version: int | None = Field(default=None, ge=1)
 
 
 class SourceOut(ORM):
@@ -34,6 +38,9 @@ class SourceOut(ORM):
     connection_id: uuid.UUID | None
     config: dict[str, Any]
     status: SourceStatus
+    # Counts the saves that changed the config, connection or name; send it back as
+    # base_version when saving.
+    config_version: int = 1
     last_error: str | None
     last_synced_at: datetime | None
     created_at: datetime

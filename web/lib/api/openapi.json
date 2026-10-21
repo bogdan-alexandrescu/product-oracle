@@ -4651,6 +4651,9 @@
               }
             }
           },
+          "409": {
+            "description": "base_version is not the source's config_version, or the name is taken: {\"code\": \"source_changed\", \"message\": ...} for the first"
+          },
           "429": {
             "description": "The provider is rate limiting; retry after Retry-After"
           },
@@ -45765,6 +45768,11 @@
             ],
             "title": "Status"
           },
+          "config_version": {
+            "type": "integer",
+            "title": "Config Version",
+            "default": 1
+          },
           "last_error": {
             "anyOf": [
               {
@@ -45862,6 +45870,18 @@
               }
             ],
             "title": "Config"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
           }
         },
         "type": "object",

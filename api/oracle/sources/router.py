@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_, select
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
@@ -182,14 +183,22 @@ async def get_source(source_id: uuid.UUID, principal: CurrentPrincipal, db: Tena
 @router.patch(
     "/sources/{source_id}",
     response_model=SourceOut,
-    responses={429: {"description": "The provider is rate limiting; retry after Retry-After"}},
+    responses={
+        409: {
+            "description": "base_version is not the source's config_version, or the name is "
+            'taken: {"code": "source_changed", "message": ...} for the first'
+        },
+        429: {"description": "The provider is rate limiting; retry after Retry-After"},
+    },
 )
 async def update_source(
     source_id: uuid.UUID, body: SourcePatch, principal: SourceWriter, db: TenantDB
-) -> SourceOut:
+) -> SourceOut | JSONResponse:
     source = await _owned(db, principal, source_id)
     try:
         source = await service.update_source(db, source, body.model_dump(exclude_unset=True))
+    except service.StaleError as e:
+        return JSONResponse({"code": e.code, "message": str(e)}, status.HTTP_409_CONFLICT)
     except _ERRORS as e:
         raise _http(e) from e
     return await _one_out(db, source, principal)

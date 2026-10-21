@@ -46,6 +46,17 @@ class ConflictError(Exception):
     pass
 
 
+class StaleError(Exception):
+    """The save loaded an older ``config_version`` than the source has now (answered 409)."""
+
+    code = "source_changed"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This source changed since you opened it. Reload to see the current picks."
+        )
+
+
 class InvalidError(Exception):
     """The request cannot be carried out as asked (answered 422)."""
 
@@ -288,10 +299,12 @@ async def create_source(
 
 
 async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any]) -> Source:
+    changes = dict(changes)
+    base_version = changes.pop("base_version", None)
     if changes.get("config") is not None:
         changes = {**changes, "config": normalize_config(source.kind, changes["config"])}
     asks = "connection_id" in changes or changes.get("config") is not None
-    if asks:
+    if asks or base_version is not None:
         # The row was loaded when the request started (sessions do not expire on
         # commit): a sync, or another save, may have changed it since. Read it again,
         # locked until the commit below, and compare what is asked with THAT copy (a
@@ -300,6 +313,7 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         # before it writes items (sync._hold), so this sweep and its checkpoints never
         # wait on each other's rows.
         await db.refresh(source, with_for_update=True)
+        _check_base(source, base_version)
         reconnect, reconfigure, narrowing = _what_changed(source, changes)
         if reconnect or (reconfigure and not narrowing):
             connection_id = changes["connection_id"] if reconnect else source.connection_id
@@ -312,6 +326,7 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
             conn = await _check_connection(db, source.owner_user_id, source.kind, connection_id)
             await _validate(db, source.kind, config, conn)
             await db.refresh(source, with_for_update=True)
+            _check_base(source, base_version)  # another save may have landed meanwhile
             reconnect, reconfigure, narrowing = _what_changed(source, changes)
         old_config = dict(source.config or {})
         connection_id = changes.get("connection_id", source.connection_id)
@@ -339,10 +354,21 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         if source.status in ("error", "needs_attention"):
             source.status = "active"
             source.last_error = None
-    if "name" in changes and changes["name"] is not None:
-        source.name = changes["name"].strip()
+    name = changes.get("name")
+    renamed = name is not None and name.strip() != source.name
+    if renamed:
+        source.name = name.strip()
+    if reconnect or reconfigure or renamed:
+        source.config_version += 1
     await _commit_unique(db)
     return source
+
+
+def _check_base(source: Source, base_version: int | None) -> None:
+    """Refuse (nothing is changed yet) a save that loaded another version than the
+    locked row has. Omitted: last write wins."""
+    if base_version is not None and base_version != source.config_version:
+        raise StaleError
 
 
 def _what_changed(source: Source, changes: dict[str, Any]) -> tuple[bool, bool, bool]:
