@@ -37,13 +37,13 @@ from markdown_it import MarkdownIt
 from oracle import parse_budget
 from oracle.docs import layers
 from oracle.docs.parser import (
-    CITATION_STRIP_RE,
     DraftError,
     ParsedDraft,
     body_problems,
     parse_draft,
     prepared,
     split_front_matter,
+    strip_citations,
 )
 from oracle.docs.schemas import ImportProblem
 from oracle.runs.flows import prd_link
@@ -256,7 +256,7 @@ def _agent_bodies(text: str, problems: list[Problem]) -> dict[str, str]:
     deeper headings stay in the body). Citation markers are dropped: a spec's evidence is
     its PRD."""
     _, body, _ = split_front_matter(text.replace("\r\n", "\n"))
-    body = CITATION_STRIP_RE.sub("", body)
+    body = strip_citations(body)
     # Only blank lines are stripped: stripping spaces would turn an indented code line
     # followed by '---' into a setext heading (M1).
     wrapped = "---\ntitle: spec\n---\n\n" + body.strip("\n") + "\n"
@@ -1030,11 +1030,7 @@ def _renderings(text: str) -> list[str]:
     footnote numbers), and as slides and exports show it (:func:`layers.slide_body`, no
     notes blocks or comments), with and without its citation markers."""
     slide = layers.slide_body(text)
-    return list(
-        dict.fromkeys(
-            (text, CITATION_STRIP_RE.sub("", text), slide, CITATION_STRIP_RE.sub("", slide))
-        )
-    )
+    return list(dict.fromkeys((text, strip_citations(text), slide, strip_citations(slide))))
 
 
 def _body_takes_label(text: str) -> bool:
@@ -1045,7 +1041,7 @@ def _body_takes_label(text: str) -> bool:
 
 def _heading_plain(heading: str) -> str:
     """A heading without its citation markers (they render as chips or numbers)."""
-    return CITATION_STRIP_RE.sub("", heading).strip()
+    return strip_citations(heading).strip()
 
 
 def _editable_text(key: str, body: str) -> str:

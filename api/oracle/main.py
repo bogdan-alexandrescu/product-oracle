@@ -141,7 +141,11 @@ def create_app() -> FastAPI:
     async def parse_busy(_request: Request, exc: ParseBusy) -> JSONResponse:
         # The parse pool would not take an import now (owner, 2026-10-20): 429 for a person
         # with two parses already, 503 after a 10 s wait for a free worker.
-        return JSONResponse({"code": exc.code, "message": exc.message}, exc.status)
+        return JSONResponse(
+            {"code": exc.code, "message": exc.message},
+            exc.status,
+            headers={"Retry-After": "5"},
+        )
 
     @app.get("/healthz", response_model=Health, tags=["health"])
     async def healthz(response: Response) -> Health:

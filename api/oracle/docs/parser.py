@@ -37,6 +37,19 @@ SECTION_ID_RE = re.compile(r"(?<!\s)\s*\{#([A-Za-z0-9][A-Za-z0-9_.:-]*)\}\s*$")
 CITATION_RE = re.compile(r"\[c:([^\[\]\s]+)\]")
 # A citation marker plus the horizontal space before it, removed from body_text.
 CITATION_STRIP_RE = re.compile(r"(?<![ \t])[ \t]*\[c:[^\[\]\s]+\]")
+
+
+def strip_citations(text: str) -> str:
+    """``text`` without its ``[c:id]`` markers. A nested ``[c:[c:x]a]`` leaves ``[c:a]``
+    after one pass, so strip until the text stops changing (at most 3 passes)."""
+    for _ in range(3):
+        stripped = CITATION_STRIP_RE.sub("", text)
+        if stripped == text:
+            break
+        text = stripped
+    return text
+
+
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 # The markers an export writes after a roadmap date that rests on no verified basis
@@ -247,7 +260,7 @@ def body_text(body_md: str) -> str:
             text = token.content.rstrip("\n")
         else:
             continue
-        text = CITATION_STRIP_RE.sub("", text).strip()
+        text = strip_citations(text).strip()
         if row is not None:
             row.append(text.replace("|", "\\|"))
         elif text:

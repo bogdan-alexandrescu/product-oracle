@@ -18,7 +18,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Emu, Inches, Pt
 
-from oracle.docs.parser import CITATION_STRIP_RE
+from oracle.docs.parser import strip_citations
 from oracle.export.deck import Deck, Slide
 from oracle.export.render import image_label, stored_image
 
@@ -104,7 +104,7 @@ def _runs(children) -> list[Run]:
 def parse_blocks(markdown: str) -> Blocks:
     """Slide body markdown as paragraphs and tables."""
     out = Blocks()
-    tokens = _md.parse(CITATION_STRIP_RE.sub("", markdown or ""))
+    tokens = _md.parse(strip_citations(markdown or ""))
     lists: list[list] = []  # stack of [kind, counter]
     table: list[list[str]] | None = None
     row: list[str] | None = None

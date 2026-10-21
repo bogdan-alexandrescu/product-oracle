@@ -351,6 +351,7 @@ PARSE_OWNER: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "parse_owner", default=None
 )
 _active: dict[str, int] = {}
+_active_lock = threading.Lock()
 
 
 @contextlib.contextmanager
@@ -449,9 +450,10 @@ async def _queued[T](call: Callable[[], T], *, wall: float | None) -> T:
     fix/roadmap-render-budget) must call one of them so it is counted here."""
     owner = PARSE_OWNER.get()
     if owner is not None:
-        if _active.get(owner, 0) >= MAX_PER_OWNER:
-            raise ParseBusy("parse_busy_you")
-        _active[owner] = _active.get(owner, 0) + 1
+        with _active_lock:
+            if _active.get(owner, 0) >= MAX_PER_OWNER:
+                raise ParseBusy("parse_busy_you")
+            _active[owner] = _active.get(owner, 0) + 1
     loop = asyncio.get_running_loop()
     started = loop.create_future()
     abandoned = threading.Event()
@@ -463,28 +465,37 @@ async def _queued[T](call: Callable[[], T], *, wall: float | None) -> T:
     def job() -> T:
         if abandoned.is_set():  # its caller gave up while it was queued
             raise ParseBusy("parse_busy")
-        loop.call_soon_threadsafe(mark_started)
+        with contextlib.suppress(RuntimeError):  # the loop is gone (shutdown)
+            loop.call_soon_threadsafe(mark_started)
         return call()
 
     def release(_: object) -> None:
-        # The slot is free when the parse is over (or never began), not when its caller
-        # stops waiting: a worker still running a parse is still that person's.
+        # The slot is free when the job is over (finished, or cancelled before it ever
+        # started), not when its caller stops waiting: a worker still running a parse is
+        # still that person's. Runs on the worker thread (or the cancelling thread).
         if owner is not None:
-            left = _active.get(owner, 1) - 1
-            if left > 0:
-                _active[owner] = left
-            else:
-                _active.pop(owner, None)
+            with _active_lock:
+                left = _active.get(owner, 1) - 1
+                if left > 0:
+                    _active[owner] = left
+                else:
+                    _active.pop(owner, None)
 
-    parse = asyncio.ensure_future(loop.run_in_executor(_EXECUTOR, job))
-    parse.add_done_callback(release)
+    try:
+        job_future = _EXECUTOR.submit(job)
+    except BaseException:
+        release(None)  # never submitted: nothing will run to free the slot
+        raise
+    job_future.add_done_callback(release)
+    parse = asyncio.wrap_future(job_future, loop=loop)
     # An abandoned parse's outcome is read, never reported as unretrieved.
     parse.add_done_callback(lambda f: f.cancelled() or f.exception())
     await asyncio.wait({started, parse}, timeout=QUEUE_SECONDS, return_when=asyncio.FIRST_COMPLETED)
     if not started.done() and not parse.done():
         abandoned.set()
-        parse.cancel()
+        parse.cancel()  # frees the slot only if the job had not started (else at its end)
         raise ParseBusy("parse_busy")
     if wall is None:
-        return await parse
+        # shield: a cancelled caller must not cancel the future the slot hangs on
+        return await asyncio.shield(parse)
     return await asyncio.wait_for(asyncio.shield(parse), timeout=wall)

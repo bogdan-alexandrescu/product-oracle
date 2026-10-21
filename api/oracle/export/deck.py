@@ -23,7 +23,7 @@ from markupsafe import Markup, escape
 
 from oracle.docs import layers
 from oracle.docs.models import Section
-from oracle.docs.parser import CITATION_STRIP_RE
+from oracle.docs.parser import strip_citations
 from oracle.export.render import (
     _HEADING_ID,
     STATIC,
@@ -122,7 +122,7 @@ def _plain_heading(s: Section) -> str:
 
 def _render_md(md_text: str, present: set[str]) -> Markup:
     md = _themed_markdown(False)
-    html = md.render(CITATION_STRIP_RE.sub("", md_text), {"numbers": {}})
+    html = md.render(strip_citations(md_text), {"numbers": {}})
     return Markup(_mark_expand(absolute_doc_links(unlink_missing(_decorate(html), present))))
 
 

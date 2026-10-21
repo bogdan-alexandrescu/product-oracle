@@ -14,7 +14,6 @@ Nothing is ever rewritten: a stale spec, flow or wireframe gets a proposed regen
 (a draft run), never an automatic one.
 """
 
-import asyncio
 import json
 import uuid
 from datetime import UTC, datetime
@@ -778,10 +777,10 @@ async def _check_design_off_loop(text: str | None, **kwargs: Any) -> DesignCheck
     """:func:`check_design` in a worker thread, capped at DESIGN_CHECK_SECONDS: a design
     that takes longer is refused (the thread is left to finish on its own)."""
     try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(check_design, text, **kwargs), timeout=DESIGN_CHECK_SECONDS
+        return await safe_yaml.run_parse_within(
+            check_design, text, name="design.json", seconds=DESIGN_CHECK_SECONDS, **kwargs
         )
-    except TimeoutError:
+    except (safe_yaml.ParseTimeout, TimeoutError):
         return DesignCheck(
             problems=[
                 Problem(
