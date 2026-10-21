@@ -2008,6 +2008,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sources/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Source Coverage
+         * @description What Oracle read from each of your sources: live and removed items, what it left
+         *     out (by status), how fresh the items are against each kind's half-life, and how often
+         *     they are used as baseline evidence, citations and section links.
+         */
+        get: operations["list_source_coverage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sources/coverage/company": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Company Source Coverage
+         * @description Owners only: per active member and source kind, the number of sources, live
+         *     items, freshness and the newest sync. Counts only: never a source name, an item or
+         *     what was left out (owner 2026-10-21, A2 "Coverage").
+         */
+        get: operations["get_company_source_coverage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sources/{source_id}/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Source Coverage
+         * @description One of your sources' coverage: its items by kind, every entry it did not read
+         *     with the reason, and its uses newest first (``limit`` at a time).
+         */
+        get: operations["get_source_coverage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sources/{source_id}": {
         parameters: {
             query?: never;
@@ -8278,6 +8343,65 @@ export interface components {
             body?: string | null;
         };
         /**
+         * CompanyCoverage
+         * @description Owners only (A2, owner 2026-10-21 "Coverage"): counts per active member and source
+         *     kind. Nothing here can carry a source name, config, external id, item or not-read
+         *     entry.
+         */
+        CompanyCoverage: {
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            /** Members Total */
+            members_total: number;
+            /** Members With Sources */
+            members_with_sources: number;
+            /** Members */
+            members: components["schemas"]["CompanyMemberCoverage"][];
+        };
+        /**
+         * CompanyKindCoverage
+         * @description One member's sources of one kind, as counts: never a name, id or item.
+         */
+        CompanyKindCoverage: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "upload" | "github" | "slack" | "notion" | "fireflies" | "google_docs";
+            /** Sources */
+            sources: number;
+            /** Items */
+            items: number;
+            /** Fresh Share */
+            fresh_share: number | null;
+            freshness: components["schemas"]["FreshnessCounts"];
+            /** Last Synced At */
+            last_synced_at: string | null;
+        };
+        /** CompanyMember */
+        CompanyMember: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /** Name */
+            name?: string | null;
+            /** Role */
+            role: string;
+        };
+        /** CompanyMemberCoverage */
+        CompanyMemberCoverage: {
+            member: components["schemas"]["CompanyMember"];
+            /** Kinds */
+            kinds: components["schemas"]["CompanyKindCoverage"][];
+        };
+        /**
          * ComposedModule
          * @description A module in a composition, with everything the inspector explains (§4.5).
          */
@@ -8975,6 +9099,16 @@ export interface components {
             entity_ids: string[];
             /** Gap Id */
             gap_id?: string | null;
+        };
+        /** CoverageList */
+        CoverageList: {
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            /** Sources */
+            sources: components["schemas"]["SourceCoverage"][];
         };
         /** CriterionInfo */
         CriterionInfo: {
@@ -10766,6 +10900,27 @@ export interface components {
             /** Dismissed By */
             dismissed_by?: string | null;
         };
+        /**
+         * FreshnessCounts
+         * @description Live items by age: fresh up to one half-life, aging up to two, stale older.
+         */
+        FreshnessCounts: {
+            /**
+             * Fresh
+             * @default 0
+             */
+            fresh: number;
+            /**
+             * Aging
+             * @default 0
+             */
+            aging: number;
+            /**
+             * Stale
+             * @default 0
+             */
+            stale: number;
+        };
         /** GapCreate */
         GapCreate: {
             /**
@@ -12115,6 +12270,17 @@ export interface components {
              */
             quality_review: boolean;
         };
+        /** KindCoverage */
+        KindCoverage: {
+            /** Kind */
+            kind: string;
+            /** Items */
+            items: number;
+            /** Newest At */
+            newest_at: string | null;
+            /** Half Life Days */
+            half_life_days: number;
+        };
         /** KnobsIn */
         KnobsIn: {
             /**
@@ -13266,6 +13432,32 @@ export interface components {
             items: number;
             /** Milestone Id */
             milestone_id?: string | null;
+        };
+        /**
+         * NotReadCounts
+         * @description Entries of ``unavailable_items`` by status (a missing status is unavailable).
+         */
+        NotReadCounts: {
+            /**
+             * Skipped
+             * @default 0
+             */
+            skipped: number;
+            /**
+             * Unavailable
+             * @default 0
+             */
+            unavailable: number;
+            /**
+             * Flagged
+             * @default 0
+             */
+            flagged: number;
+            /**
+             * Limited
+             * @default 0
+             */
+            limited: number;
         };
         /** NotificationOut */
         NotificationOut: {
@@ -16426,6 +16618,95 @@ export interface components {
              */
             created_at: string;
         };
+        /** SourceCoverage */
+        SourceCoverage: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "upload" | "github" | "slack" | "notion" | "fireflies" | "google_docs";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "error" | "needs_attention";
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /**
+             * Items
+             * @default 0
+             */
+            items: number;
+            /**
+             * Removed
+             * @default 0
+             */
+            removed: number;
+            not_read?: components["schemas"]["NotReadCounts"];
+            /** Newest At */
+            newest_at?: string | null;
+            /** Oldest At */
+            oldest_at?: string | null;
+            freshness?: components["schemas"]["FreshnessCounts"];
+            used?: components["schemas"]["UsedCounts"];
+        };
+        /** SourceCoverageDetail */
+        SourceCoverageDetail: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "upload" | "github" | "slack" | "notion" | "fireflies" | "google_docs";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "error" | "needs_attention";
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /**
+             * Items
+             * @default 0
+             */
+            items: number;
+            /**
+             * Removed
+             * @default 0
+             */
+            removed: number;
+            not_read?: components["schemas"]["NotReadCounts"];
+            /** Newest At */
+            newest_at?: string | null;
+            /** Oldest At */
+            oldest_at?: string | null;
+            freshness?: components["schemas"]["FreshnessCounts"];
+            used?: components["schemas"]["UsedCounts"];
+            /** By Kind */
+            by_kind?: components["schemas"]["KindCoverage"][];
+            /** Not Read Items */
+            not_read_items?: components["schemas"]["UnavailableItem"][];
+            /** Used In */
+            used_in?: components["schemas"]["UsedIn"][];
+            /**
+             * Used In Total
+             * @default 0
+             */
+            used_in_total: number;
+        };
         /** SourceCreate */
         SourceCreate: {
             /**
@@ -18309,6 +18590,93 @@ export interface components {
             items: components["schemas"]["ItemOut"][];
             /** Unchanged */
             unchanged: string[];
+        };
+        /** UsedCounts */
+        UsedCounts: {
+            /**
+             * Evidence
+             * @default 0
+             */
+            evidence: number;
+            /**
+             * Citations
+             * @default 0
+             */
+            citations: number;
+            /**
+             * Section Links
+             * @default 0
+             */
+            section_links: number;
+            /**
+             * Documents
+             * @default 0
+             */
+            documents: number;
+        };
+        /** UsedDocument */
+        UsedDocument: {
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Kind */
+            kind: string;
+        };
+        /** UsedEntity */
+        UsedEntity: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * UsedIn
+         * @description One use of one of the source's items: baseline evidence (on an entity, or on an
+         *     edge, shown on its source entity), a citation in a document version, or a section's
+         *     evidence link.
+         */
+        UsedIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "evidence" | "citation" | "section_link";
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            item: components["schemas"]["UsedItem"];
+            entity?: components["schemas"]["UsedEntity"] | null;
+            document?: components["schemas"]["UsedDocument"] | null;
+            /** Version */
+            version?: number | null;
+            /** Cite Key */
+            cite_key?: string | null;
+            /** Section Key */
+            section_key?: string | null;
+            /** Section Title */
+            section_title?: string | null;
+        };
+        /** UsedItem */
+        UsedItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -22575,6 +22943,87 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SourceKindOut"][];
+                };
+            };
+        };
+    };
+    list_source_coverage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverageList"];
+                };
+            };
+        };
+    };
+    get_company_source_coverage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyCoverage"];
+                };
+            };
+            /** @description Not an owner, or a run */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_source_coverage: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceCoverageDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
