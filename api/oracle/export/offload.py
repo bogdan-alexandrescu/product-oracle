@@ -1,7 +1,7 @@
 """Export rendering off the event loop: a fair share of a small pool, within a time cap.
 
 Rendering an export (markdown-it, Jinja, WeasyPrint, python-pptx) is CPU-bound: seconds
-for a large document. It never runs on the event loop: on the export pool (2 threads), its
+for a large document. It never runs on the event loop: on the export pool (4 threads), its
 own, not the parse pool: a PDF of a long document takes seconds, and the parse pool's 4
 threads read every draft an import or a run brings.
 
@@ -10,7 +10,10 @@ Owner decisions 2026-10-20 (security review of PR #134):
 - One export per person at a time (``EXPORTS_PER_PERSON``) and two per company, running
   or queued (``EXPORTS_PER_COMPANY``): one more is refused at once, 429
   ``export_busy_you``. An export keeps its place until its render ends, even after its
-  request gave up: a request that gave up never frees a worker that is still busy.
+  request gave up: a request that gave up never frees a worker that is still busy. With
+  4 workers, one company never holds every worker.
+- Present mode's deck (``/deck``) is not counted against these caps; it renders on the
+  same pool, within the same waits.
 - A wait of more than ``QUEUE_SECONDS`` for a free worker is 503 ``export_busy`` (``BUSY``),
   never "too large"; the export it refused never renders.
 - ``SECONDS`` caps the render itself, counted from when it starts (not its wait): past it,
@@ -41,10 +44,11 @@ from fastapi.responses import JSONResponse
 if TYPE_CHECKING:
     from oracle.auth.deps import Principal
 
-POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="export")
-# Owner decisions 2026-10-20: a render may take 60 s, counted from when it starts (every
-# format alike); a wait of more than 10 s for a free worker is "busy"; at most 1 export per
-# person at a time and 2 per company, running or queued.
+# Owner decisions 2026-10-20: 4 workers; a render may take 60 s, counted from when it
+# starts (every format alike); a wait of more than 10 s for a free worker is "busy"; at
+# most 1 export per person at a time and 2 per company, running or queued (so one company
+# never holds every worker).
+POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="export")
 SECONDS = 60.0
 QUEUE_SECONDS = 10.0
 EXPORTS_PER_PERSON = 1
@@ -137,8 +141,9 @@ def _started(future: asyncio.Future[None]) -> None:
         future.set_result(None)
 
 
-async def run[T](held: Place, fn: Callable[..., T], /, *args: Any) -> T:
-    """``fn(*args)`` on the export pool, in ``held``'s place. Refused when no worker is free
+async def run[T](held: Place | None, fn: Callable[..., T], /, *args: Any) -> T:
+    """``fn(*args)`` on the export pool, in ``held``'s place (None: counted against no
+    cap, as Present mode's deck). Refused when no worker is free
     within ``QUEUE_SECONDS`` (:class:`Refused`, 503 ``export_busy``: it never renders);
     past ``SECONDS`` from its start, an HTTP 422 (``TOO_LARGE``). Exceptions from ``fn``
     propagate unchanged."""
@@ -161,13 +166,16 @@ async def run[T](held: Place, fn: Callable[..., T], /, *args: Any) -> T:
             finally:
                 state["took"] = time.monotonic() - state["at"]
         finally:
-            held.leave()
+            if held is not None:
+                held.leave()
 
-    held.hold()
+    if held is not None:
+        held.hold()
     try:
         work = loop.run_in_executor(POOL, call)
     except BaseException:
-        held.leave()
+        if held is not None:
+            held.leave()
         raise
     # Its outcome is read even when nobody waits for it any more.
     work.add_done_callback(lambda f: f.cancelled() or f.exception())
@@ -179,7 +187,7 @@ async def run[T](held: Place, fn: Callable[..., T], /, *args: Any) -> T:
             abandoned = "at" not in state
             if abandoned:
                 state["abandoned"] = True
-        if abandoned:
+        if abandoned and held is not None:
             held.leave()  # the render's hold: it will not render
         if isinstance(exc, asyncio.CancelledError):
             raise

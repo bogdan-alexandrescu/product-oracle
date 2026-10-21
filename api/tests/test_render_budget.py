@@ -331,16 +331,17 @@ EXPORTS = [
 
 def test_the_export_cap_and_pool_are_the_owner_s():
     """Owner decisions 2026-10-20: every export format renders for at most 60 s, counted
-    from when its render starts, on its own 2-thread pool (not the parse pool); a wait of
+    from when its render starts, on its own 4-thread pool (not the parse pool); a wait of
     more than 10 s for a worker is "busy"; one export per person and two per company at
-    a time."""
+    a time, so one company never holds every worker."""
     from oracle import safe_yaml
 
     assert offload.SECONDS == 60.0
     assert offload.QUEUE_SECONDS == 10.0
     assert offload.EXPORTS_PER_PERSON == 1
     assert offload.EXPORTS_PER_COMPANY == 2
-    assert offload.POOL._max_workers == 2
+    assert offload.POOL._max_workers == 4
+    assert offload.EXPORTS_PER_COMPANY < offload.POOL._max_workers
     assert offload.POOL is not safe_yaml._EXECUTOR
     assert offload.BUSY == "Oracle is busy with other exports. Try again in a moment."
     assert offload.BUSY_YOU == "Your previous export is still running"
@@ -731,6 +732,34 @@ async def test_one_person_s_second_concurrent_export_is_refused_at_once(
     assert (await client.get(URL, headers=viewer)).status_code == 200
 
 
+async def _fill(client, *companies: uuid.UUID) -> list[asyncio.Task]:
+    """Two exports of each company, rendering (held) or queued."""
+    tasks = []
+    for company in companies:
+        for _ in range(2):
+            headers = await _token(company, "viewer")
+            tasks.append(asyncio.create_task(client.get(URL, headers=headers)))
+    await until(lambda: sum(offload.in_flight(c) for c in companies) == 2 * len(companies))
+    return tasks
+
+
+async def test_a_company_holding_its_two_exports_leaves_two_workers_to_others(client, monkeypatch):
+    """Owner decision 2026-10-20: 4 workers, 2 exports per company: whatever one company
+    runs, two workers are left for the others."""
+    held = Held(monkeypatch)
+    a, b = await _company(client, "A Co"), await _company(client, "B Co")
+    tasks = []
+    try:
+        tasks += await _fill(client, a)
+        await until(lambda: held.started == 2)
+        tasks += await _fill(client, b)
+        await until(lambda: held.started == 4)  # B's two render at once, beside A's
+    finally:
+        held.release()
+    for t in tasks:
+        assert (await t).status_code == 200
+
+
 async def test_a_company_runs_two_exports_and_a_third_company_is_not_starved(client, monkeypatch):
     held = Held(monkeypatch)
     a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
@@ -739,10 +768,8 @@ async def test_a_company_runs_two_exports_and_a_third_company_is_not_starved(cli
     tasks = []
     try:
         tasks += [asyncio.create_task(client.get(URL, headers=h)) for h in a_people[:2]]
-        await until(lambda: held.started == 2)
         tasks += [asyncio.create_task(client.get(URL, headers=h)) for h in b_people[:2]]
-        await until(lambda: offload.in_flight(b) == 2)
-        assert offload.in_flight(a) == 2
+        await until(lambda: held.started == 4)
         # A and B flood: refused at once, nothing queued for them.
         for h in (a_people[2], b_people[2]):
             resp = await client.get(URL, headers=h)
@@ -762,26 +789,25 @@ async def test_a_company_runs_two_exports_and_a_third_company_is_not_starved(cli
 async def test_a_wait_for_a_worker_past_ten_seconds_is_busy_not_too_large(client, monkeypatch):
     held = Held(monkeypatch)
     monkeypatch.setattr(offload, "QUEUE_SECONDS", 0.2)
-    a, b = await _company(client, "A Co"), await _company(client, "B Co")
-    blockers = [
-        asyncio.create_task(client.get(URL, headers=await _token(a, "viewer"))) for _ in range(2)
-    ]
+    a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
+    blockers = []
     try:
-        await until(lambda: held.started == 2)
-        resp = await client.get(URL, headers=await _token(b, "viewer"))
+        blockers += await _fill(client, a, b)
+        await until(lambda: held.started == 4)
+        resp = await client.get(URL, headers=await _token(c, "viewer"))
         assert resp.status_code == 503, resp.text
         assert resp.headers["retry-after"]
         body = _busy(resp, "export_busy")
         assert body["message"] == "Oracle is busy with other exports. Try again in a moment."
-        assert offload.in_flight(b) == 0  # refused: its place is free at once
+        assert offload.in_flight(c) == 0  # refused: its place is free at once
     finally:
         held.release()
     for t in blockers:
         assert (await t).status_code == 200
     # The refused export never renders: the pool reaches it before this one (first in,
     # first out), and only this one renders.
-    assert (await client.get(URL, headers=await _token(b, "viewer"))).status_code == 200
-    assert held.started == 3
+    assert (await client.get(URL, headers=await _token(c, "viewer"))).status_code == 200
+    assert held.started == 5
 
 
 async def test_the_render_cap_counts_from_when_the_render_starts(client, monkeypatch):
@@ -789,13 +815,12 @@ async def test_the_render_cap_counts_from_when_the_render_starts(client, monkeyp
     request took longer than the render cap (1 s here)."""
     held = Held(monkeypatch)
     monkeypatch.setattr(offload, "SECONDS", 1.0)
-    a, b = await _company(client, "A Co"), await _company(client, "B Co")
-    blockers = [
-        asyncio.create_task(client.get(URL, headers=await _token(a, "viewer"))) for _ in range(2)
-    ]
+    a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
+    blockers = []
     try:
-        await until(lambda: held.started == 2)
-        queued = asyncio.create_task(client.get(URL, headers=await _token(b, "viewer")))
+        blockers += await _fill(client, a, b)
+        await until(lambda: held.started == 4)
+        queued = asyncio.create_task(client.get(URL, headers=await _token(c, "viewer")))
         await asyncio.sleep(1.5)
     finally:
         held.release()
@@ -809,12 +834,12 @@ async def test_the_render_cap_counts_from_when_the_render_starts(client, monkeyp
 
 async def test_exports_waiting_for_the_pool_hold_no_database_connection(client, monkeypatch):
     held = Held(monkeypatch)
-    a, b = await _company(client, "A Co"), await _company(client, "B Co")
+    a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
     reader = await _token(a, "viewer")
-    people = [await _token(t, "viewer") for t in (a, a, b, b)]
-    tasks = [asyncio.create_task(client.get(URL, headers=h)) for h in people]
+    tasks = []
     try:
-        await until(lambda: held.started == 2 and offload.in_flight(a) + offload.in_flight(b) == 4)
+        tasks += await _fill(client, a, b, c)  # four rendering, two queued
+        await until(lambda: held.started == 4)
         await asyncio.sleep(0.1)
         assert get_engine().pool.checkedout() == 0
         other = await client.get("/v1/documents/checkout/versions/1", headers=reader)
@@ -823,6 +848,28 @@ async def test_exports_waiting_for_the_pool_hold_no_database_connection(client, 
         held.release()
     for t in tasks:
         assert (await t).status_code == 200
+
+
+async def test_present_works_while_the_person_s_own_export_runs(
+    client,
+    tenant_id,
+    doc,  # noqa: F811
+    monkeypatch,
+):
+    """Owner decision 2026-10-20: Present mode's deck is not counted against the export
+    caps (it still renders on the export pool, within its time cap)."""
+    held = Held(monkeypatch)
+    viewer = await _token(tenant_id, "viewer")
+    exporting = asyncio.create_task(client.get(URL, headers=viewer))
+    try:
+        await until(lambda: held.started == 1)
+        deck = await client.get("/v1/documents/checkout/versions/1/deck", headers=viewer)
+        assert deck.status_code == 200, deck.text
+        assert deck.json()["slides"]
+        assert offload.in_flight(tenant_id) == 1  # only the export holds a place
+    finally:
+        held.release()
+    assert (await exporting).status_code == 200
 
 
 async def test_an_export_renders_rows_no_session_holds(client, tenant_id, doc, monkeypatch):  # noqa: F811

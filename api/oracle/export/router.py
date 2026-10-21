@@ -6,7 +6,8 @@ the brief as slides (PDF, PPTX; HTML is the page the PDF is printed from).
 ``/deck`` returns the slides as JSON for Present mode.
 
 Every format renders on the export pool, never on the event loop (oracle.export.offload):
-one export per person and two per company at a time (more: 429 ``export_busy_you``), a
+one export per person and two per company at a time (more: 429 ``export_busy_you``;
+``/deck``, Present mode, is not counted: owner decision 2026-10-20), a
 wait of more than ``offload.QUEUE_SECONDS`` for a worker is 503 ``export_busy``, and a
 render that takes longer than ``offload.SECONDS`` from its start is refused: 422 "This
 document is too large to export quickly". The request ends its transaction before it waits
@@ -129,15 +130,16 @@ async def export_version(
 
 
 @router.get("/documents/{doc}/versions/{n}/deck", response_model=DeckOut)
-async def get_deck(doc: str, n: int, db: TenantDB, principal: CurrentPrincipal) -> Any:
+async def get_deck(doc: str, n: int, db: TenantDB) -> Any:
     """The brief layer as slides in the document's theme (its slide variant), with
     presenter notes and the detail each slide can expand. 422 when the version has no
     brief sections."""
+    # Present mode: on the export pool, within its waits, but counted against no export
+    # cap (owner decision 2026-10-20).
+    ev = detached(await _load(db, doc, n, "deck"))
+    await db.commit()  # no connection held while it waits for the pool
     try:
-        with offload.place(principal) as held:
-            ev = detached(await _load(db, doc, n, "deck"))
-            await db.commit()  # no connection held while it waits for the pool
-            deck = await offload.run(held, build_deck, ev)
+        deck = await offload.run(None, build_deck, ev)
     except offload.Refused as e:
         return e.response()
     return DeckOut(
