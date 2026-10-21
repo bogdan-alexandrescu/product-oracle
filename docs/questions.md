@@ -150,7 +150,7 @@ Facts checked against SwarmCloud's live catalogue on 2026-10-16 (`swarm_profiles
 
 From the product-shape review (end-to-end journey, head-of-product research, 64 candidate items). Each pick gets its own spec.
 
-| # | Question | Status | Answer |
+| ID | Question | Status | Answer |
 |---|----------|--------|--------|
 | PS1 | A roadmap draft for every PRD draft? | answered | Owner, 2026-10-20: **yes, items only**: each PRD draft gets its own roadmap draft of items (no separate roadmap prose). |
 | PS2 | "Approve with edits" without an agent round? | answered | Owner, 2026-10-20: **yes, Oracle applies the edits** itself when the approver approves with edits; no new agent round. |
