@@ -165,7 +165,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * next tick (recorded, the decide call answers 503; ./runs.ts); "questions" as the default
  * company plus an "Oracle asks" question on an intake with no PRD and an "Approver asks"
  * question on a PRD section, both asked of the signed-in owner, and one delegated to
- * approver@example.com (C2).
+ * approver@example.com (C2); "private-finding" as "questions" plus a private finding (S6) on
+ * the clinic waitlist, its question asked of the signed-in owner, its author.
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -324,6 +325,28 @@ function seedQuestions(): Db {
       asked_to: approver.id, asked_by: db.user_id, section_key: "metrics", status: "delegated", ...at("2026-10-18T10:00:00Z"),
     },
   );
+  return db;
+}
+
+/** "questions" plus a private finding (S6): only its author, the signed-in owner, is asked. */
+function seedPrivateFinding(): Db {
+  const db = seedQuestions();
+  const v2 = ensureV2(db);
+  const intake = v2.intakes.find((i) => i.title === "Clinic waitlist")!;
+  const gap = uuid();
+  const at = { created_at: "2026-10-02T09:00:00Z", updated_at: "2026-10-02T09:00:00Z" };
+  v2.gaps.push({
+    id: gap, intake_id: intake.id, document_id: null, category: "release_rollout", statement: "Is the pilot limited to two clinics?",
+    impact: ["risks", "scope"], importance: "high", evidence_ids: [], confidence: null, knowledge_state: "ai_inference",
+    status: "asked", owner_id: null, related_modules: ["launch.rollout"], stop_condition: null, entity_ids: [], section_keys: [],
+    created_by: null, lock_version: 1, ...at,
+  });
+  v2.private_gap_ids = [gap];
+  v2.questions.push({
+    id: uuid(), gap_id: gap, intake_id: intake.id, document_id: null, checkpoint_id: null, item_ref: null, entity_id: null,
+    category: "release_rollout", prompt: "Is the pilot limited to two clinics?", rationale: null, priority: 20, batch: 1,
+    asked_to: db.user_id, asked_by: db.user_id, module_key: null, section_key: null, status: "asked", ...at,
+  });
   return db;
 }
 
@@ -863,7 +886,9 @@ function load(): Db {
           ? seedBigPrd
           : scenario === "questions"
             ? seedQuestions
-            : seed,
+            : scenario === "private-finding"
+              ? seedPrivateFinding
+              : seed,
   );
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];

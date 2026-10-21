@@ -701,7 +701,10 @@ async def answer_question(
 ) -> AnswerResult:
     """Answer, or say "I don't know", defer, ask someone else, or "Research this". The
     gap updates; what the answer implies elsewhere is proposed, never applied. The
-    question and gap come back as the reads show them to the caller (S6)."""
+    question and gap come back as the reads show them to the caller (S6). Ask someone
+    else (``delegate``) takes an active member who can answer (422) and, on a private
+    finding's question, its author only (409); "Research this" takes a gap's question
+    (422 on a general one)."""
     try:
         question = await service.get_question(db, question_id)
         result = await answers.answer(db, principal, question, body)

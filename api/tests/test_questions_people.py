@@ -21,7 +21,7 @@ from oracle.members.names import display_name
 from oracle.models import AuditEvent
 from oracle.runs.models import Checkpoint, Run
 from oracle.tenancy import tenant_session
-from oracle.v2.models import StakeholderQuestion
+from oracle.v2.models import KnowledgeGap, StakeholderAnswer, StakeholderQuestion
 from tests.baseline_helpers import entity, make_item
 from tests.claude_account_helpers import add_account, window
 from tests.intake_helpers import answer, company, create_intake
@@ -598,13 +598,9 @@ async def test_delegating_a_private_findings_question_is_refused(client, fake):
     async with tenant_session(ctx.tenant_id) as s:
         row = await s.get(StakeholderQuestion, q.id)
         assert (row.status, row.asked_to) == ("asked", ctx.users["author"].id)
-        from oracle.v2.models import KnowledgeGap, StakeholderAnswer
-
         assert (await s.get(KnowledgeGap, row.gap_id)).owner_id != ctx.users["approver"].id
         assert (
-            await s.scalars(
-                select(StakeholderAnswer).where(StakeholderAnswer.question_id == q.id)
-            )
+            await s.scalars(select(StakeholderAnswer).where(StakeholderAnswer.question_id == q.id))
         ).all() == []
     assert str(q.id) in {r["question"]["id"] for r in await inbox(client, ctx, "author")}
     assert await inbox(client, ctx, "approver") == []

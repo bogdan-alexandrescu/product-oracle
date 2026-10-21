@@ -4,8 +4,8 @@ from the Inbox.
 - **Who can be asked**: an active member whose role is commenter or above (viewers
   cannot answer); anyone else is 422 "Ask someone who can answer".
 - **Private findings stay private** (S6): a question whose gap is hidden from everyone
-  but the intake's author is asked of the author only; anyone else is 409 "Share this
-  finding first to ask someone else".
+  but the intake's author is asked of, reassigned or delegated to the author only;
+  anyone else is 409 "Share this finding first to ask someone else".
 - **Ask a teammate** (:func:`create`): a commenter or above asks a named person about an
   intake, a document section, a run checkpoint item or a baseline entity. These are
   ``general`` questions with no gap ("<name> asks"); the engine's are "Oracle asks".
@@ -30,7 +30,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion, Section
-from oracle.intake import sharing, views
+from oracle.intake import engine, sharing, views
 from oracle.intake.schemas import (
     ANSWER_PATHS,
     CheckpointItemSubject,
@@ -72,9 +72,9 @@ CHECKPOINT_LABEL = {
 async def answerer(db: AsyncSession, user_id: uuid.UUID) -> User:
     """The person to ask: an active member who can answer (commenter or above)."""
     user = await db.get(User, user_id)
-    if user is None or user.disabled_at is not None or not has_role(user.role, "commenter"):
+    if not engine.can_answer(user):
         raise IntakeError(422, CANNOT_ANSWER)
-    return user
+    return user  # type: ignore[return-value]
 
 
 def private_gap(intake: ProductIntake | None, gap: KnowledgeGap | None) -> bool:

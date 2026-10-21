@@ -201,8 +201,10 @@ test("private finding: Ask someone is refused until it is shared, and the questi
   await expect(row).not.toContainText("Asked Approver ✓");
   await expect(badge(page)).toHaveText(before!);
 
-  // Still mine after a reload; the approver is never asked it.
+  // Still mine after a reload (under Open, as a question already opened); the approver is
+  // never asked it.
   await page.reload();
+  await tab(page, "Open").click();
   await expect(questionRow(page, hidden)).toContainText("Oracle asks");
   await signOut(page);
   await login(page, "approver@example.com");

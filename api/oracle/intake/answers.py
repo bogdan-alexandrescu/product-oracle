@@ -46,7 +46,6 @@ from oracle.intake.service import (
     actor_user,
     create_run,
     get_intake,
-    member,
 )
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
@@ -61,6 +60,7 @@ from oracle.v2.models import (
 
 # B4: the longest an accepted critical gap goes before its review.
 MAX_REVIEW_DAYS = 90
+DELEGATE_TO = "Delegate to a person of this company who can answer"
 ANSWERABLE = frozenset({"draft", "asked", "delegated", "deferred", "researching"})
 # Answer kind -> (question status, gap status or None to keep).
 EFFECTS: dict[str, tuple[str, str | None]] = {
@@ -183,6 +183,28 @@ async def _check_evidence(
     return list(dict.fromkeys(ids))
 
 
+async def _check_delegate(
+    db: AsyncSession,
+    intake: ProductIntake | None,
+    gap: KnowledgeGap | None,
+    user_id: uuid.UUID | None,
+) -> None:
+    """The delegate may be asked this question, as a reassignment checks it (C2): 422
+    when they are not an active member who can answer, 409 when its gap is a private
+    finding and they are not the intake's author (S6)."""
+    # Here, not at the top: oracle.intake.questions reads the views, which read this module.
+    from oracle.intake.questions import PRIVATE, check_assignee
+
+    if user_id is None:
+        raise IntakeError(422, DELEGATE_TO)
+    try:
+        await check_assignee(db, intake, gap, user_id)
+    except IntakeError as e:
+        if e.status == 409:
+            raise IntakeError(409, PRIVATE) from None
+        raise IntakeError(422, DELEGATE_TO) from None
+
+
 async def answer(
     db: AsyncSession, principal: Principal, question: StakeholderQuestion, body: AnswerIn
 ) -> dict[str, Any]:
@@ -202,10 +224,10 @@ async def answer(
         raise IntakeError(403, "This question was asked of someone else")
     if body.kind == "answer" and not (body.body or "").strip():
         raise IntakeError(422, "An answer needs a body")
+    if body.kind == "research" and gap is None:
+        raise IntakeError(422, "Only a question about an intake's gap can be researched")
     if body.kind == "delegate":
-        target = await member(db, body.delegated_to) if body.delegated_to else None
-        if target is None or not has_role(target.role, "commenter"):  # type: ignore[arg-type]
-            raise IntakeError(422, "Delegate to a person of this company who can answer")
+        await _check_delegate(db, intake, gap, body.delegated_to)
     evidence = await _check_evidence(db, principal, body.evidence_ids)
     state = body.knowledge_state or ("unknown" if body.kind != "answer" else "user_decision")
     if state == "verified_fact" and not evidence:
