@@ -6,10 +6,7 @@ Pure tests build :class:`ReasonContext` by hand; the integration tests advance a
 ``prd_to_roadmap`` run on the FakeRuntime against Postgres.
 """
 
-import asyncio
 import json
-import threading
-import time
 import uuid
 from datetime import date
 
@@ -20,7 +17,6 @@ from oracle.docs.models import DocumentVersion
 from oracle.roadmap import diff as item_diff
 from oracle.roadmap.models import RoadmapItem
 from oracle.runs import reasons as reasons_mod
-from oracle.runs import roadmap as roadmap_mod
 from oracle.runs.models import Run
 from oracle.runs.reasons import (
     TOP_RANKS,
@@ -545,7 +541,7 @@ async def test_a_failing_reason_context_keeps_the_tick_and_the_blocking_reasons(
     _, auth = owner
     await approved_prd(client, auth)
 
-    async def broken(db, run, items, previous=None):
+    async def broken(db, run, items):
         await db.execute(text("SELECT * FROM no_such_table"))
 
     monkeypatch.setattr(reasons_mod, "reason_context", broken)
@@ -597,67 +593,41 @@ async def test_another_companys_roadmap_is_never_the_base(client, owner, runtime
         )
         document_id = version.document_id
         slug = (await s.get(reasons_mod.Document, document_id)).slug
-        mine = await reasons_mod._base(s, Run(document_id=document_id, knobs={}), None)
+        mine = await reasons_mod._base(s, Run(document_id=document_id, knobs={}))
     assert mine[0] == ROADMAP_V1 and mine[1]
 
     other = await make_tenant("Other Co")
     async with tenant_session(other) as s:
-        by_id = await reasons_mod._base(s, Run(document_id=document_id, knobs={}), None)
-        by_slug = await reasons_mod._base(
-            s, Run(document_id=None, knobs={"document_slug": slug}), None
-        )
+        by_id = await reasons_mod._base(s, Run(document_id=document_id, knobs={}))
+        by_slug = await reasons_mod._base(s, Run(document_id=None, knobs={"document_slug": slug}))
     assert by_id == (None, {})
     assert by_slug == (None, {})
 
 
-def _previous(text_: str) -> dict:
-    return {"attempt": 1, "files": {reasons_mod.ITEMS_FILE: text_}}
+async def test_the_base_is_the_latest_roadmap_version_or_none(client, owner, runtime):  # noqa: F811
+    """D2 compares with the latest stored roadmap version only, or nothing before the
+    first roadmap. A previous attempt's file is no base here: keeping it is D5's (#163)."""
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    async with tenant_session(tenant_id) as s:
+        assert await reasons_mod._base(s, Run(document_id=None, knobs={})) == (None, {})
+    await built_roadmap(client, auth, runtime)
+    async with tenant_session(tenant_id) as s:
+        document_id = await s.scalar(
+            select(DocumentVersion.document_id).where(
+                DocumentVersion.id == select(RoadmapItem.roadmap_version_id).limit(1)
+            )
+        )
+        base, items = await reasons_mod._base(s, Run(document_id=document_id, knobs={}))
+    assert base == ROADMAP_V1 and items
 
 
-async def test_a_slow_previous_file_is_refused_within_the_cap(db, monkeypatch):
-    """The previous attempt's file is agent output: it is read on the parse pool, at most
-    PARSE_SECONDS, and a slow one is no base, never a stalled event loop."""
-
-    def slow(text_):
-        time.sleep(3)
-        return {"items": [{"id": "a", "horizon": "now"}]}
-
-    monkeypatch.setattr(roadmap_mod, "load_items_yaml", slow)
-    monkeypatch.setattr(roadmap_mod, "PARSE_SECONDS", 0.3)
-    beats = 0
-
-    async def heartbeat():
-        nonlocal beats
-        while True:
-            await asyncio.sleep(0.02)
-            beats += 1
-
-    beating = asyncio.create_task(heartbeat())
-    started = time.monotonic()
-    try:
-        got = await reasons_mod._base(db, Run(document_id=None, knobs={}), _previous("x"))
-    finally:
-        beating.cancel()
-    assert got == (None, {})
-    assert time.monotonic() - started < 2
-    assert beats >= 5
-
-
-async def test_a_huge_previous_file_is_refused_off_the_event_loop(db, monkeypatch):
-    threads: list[str] = []
-    load = roadmap_mod.load_items_yaml
-
-    def spy(text_):
-        threads.append(threading.current_thread().name)
-        return load(text_)
-
-    monkeypatch.setattr(roadmap_mod, "load_items_yaml", spy)
-    huge = "items:\n" + "  - {id: a, title: '" + "x" * (2 * 1024 * 1024) + "'}\n"
-    got = await reasons_mod._base(db, Run(document_id=None, knobs={}), _previous(huge))
-    assert got == (None, {})
-    assert threads and threads[0] != threading.main_thread().name
-    # A good previous file is still the base.
-    good = FILE.format(items="  - {id: a, title: A, outcome: o, horizon: now, prd_section: s}")
-    base, items = await reasons_mod._base(db, Run(document_id=None, knobs={}), _previous(good))
-    assert base == {"kind": "attempt", "label": "attempt 1", "version": None, "attempt": 1}
-    assert list(items) == ["a"]
+async def test_a_prd_with_the_slug_is_never_the_target_roadmap(client, owner):  # noqa: F811
+    """The slug knob names a roadmap: a PRD's slug resolves to no target, as in
+    oracle.roadmap.doc_dates."""
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    async with tenant_session(tenant_id) as s:
+        prd = await s.scalar(select(reasons_mod.Document).where(reasons_mod.Document.kind == "prd"))
+        run = Run(document_id=None, knobs={"document_slug": prd.slug})
+        assert await reasons_mod._target_document(s, run) is None
