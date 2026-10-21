@@ -150,6 +150,9 @@ class FakeSwarmCloud:
         self.fail_next_server_write: httpx.Response | None = None
         # Agent steps run per poll (None: all that can).
         self.steps_per_poll: int | None = None
+        # Step id -> task fields served instead of the real ones (None drops a field): a
+        # task row another SwarmCloud worker rewrote, which Oracle must not trust alone.
+        self.forged: dict[str, dict[str, Any]] = {}
         # Other tasks of Oracle's, newer than any workflow here (for paging).
         self.other_tasks = 0
         # Other tasks of Oracle's, a day older than any workflow here (listed after them).
@@ -714,6 +717,11 @@ class FakeSwarmCloud:
                     "opened_at": s.opened_at.isoformat(),
                     "expires_at": s.expires_at.isoformat() if s.expires_at else None,
                 }
+            for k, v in self.forged.get(s.step_id, {}).items():
+                if v is None:
+                    task.pop(k, None)
+                else:
+                    task[k] = v
             tasks.append(task)
         return {
             "workflow": {
