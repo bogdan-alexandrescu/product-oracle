@@ -592,12 +592,13 @@ class GoogleDocsConnector:
         }
         all_folders = set(cursor.get("folders") or []) | set(folders)
 
-        def checkpoint() -> CursorCheckpoint:
+        def checkpoint(listing_done: bool = True) -> CursorCheckpoint:
             return CursorCheckpoint(
                 {
                     "modified_since": modified_since,
                     "files": dict(known),
-                    "listing": dict(listing),
+                    # Not done: the next sync lists again (a failed export retries).
+                    "listing": dict(listing) if listing_done else {},
                     "tree": {k: list(v) for k, v in tree.items()},
                     "folders": sorted(all_folders),
                     "notes": [dict(n) for n in notes],
@@ -735,6 +736,10 @@ class GoogleDocsConnector:
                     del known[file_id]
                 for note in notes:
                     yield ItemUnavailable(**note)
+                # Commit the deletes and hides now, before any export: a doc that keeps
+                # failing to export must not roll them back on every relist. The listing
+                # is not marked done, so a failed export is retried next sync.
+                yield checkpoint(listing_done=False)
 
             # Oldest change first, so each checkpoint covers everything before it.
             changed = sorted(

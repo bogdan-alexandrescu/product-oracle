@@ -567,7 +567,7 @@ async def tidy_drive_source(db: AsyncSession, source_id: uuid.UUID) -> int:
     if get_settings().drive_docs_owned_outside == "skip":
         domains, drives = await company_scope(db, source.tenant_id)
         gone |= google_docs.outside_company(
-            source.config or {}, items, domains, drives, unknown_outside=False
+            source.config or {}, items, domains, drives, unknown_outside=True
         )
     hidden = await _hide_items(db, source, gone)
     await db.commit()
