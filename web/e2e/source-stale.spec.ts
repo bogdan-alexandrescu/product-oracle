@@ -24,7 +24,7 @@ async function openPicker(page: Page): Promise<Locator> {
   await page.goto("/settings/sources");
   const chat = page.getByRole("listitem", { name: "Product chat" });
   await chat.getByRole("button", { name: "More actions for Product chat" }).click();
-  await chat.getByRole("menuitem", { name: "Edit allowlist" }).click();
+  await chat.getByRole("menuitem", { name: "Edit channels" }).click();
   await expect(chat.getByRole("group", { name: "Slack channels" }).getByTestId("picked-count")).toHaveText("2 selected");
   return chat;
 }
@@ -37,7 +37,7 @@ test("a stale save shows the message, nothing is applied, and Reload shows the c
 
   await picker.getByRole("checkbox", { name: "#customer-feedback" }).uncheck();
   await picker.getByRole("checkbox", { name: "#roadmap" }).check();
-  await chat.getByRole("button", { name: "Save allowlist" }).click();
+  await chat.getByRole("button", { name: "Save channels" }).click();
 
   const alert = chat.getByRole("alert");
   await expect(alert).toContainText(MESSAGE);
@@ -55,8 +55,8 @@ test("a stale save shows the message, nothing is applied, and Reload shows the c
 
   // Saving from the reloaded form works.
   await fresh.getByRole("checkbox", { name: "#roadmap" }).check();
-  await chat.getByRole("button", { name: "Save allowlist" }).click();
-  await expect(chat.getByRole("status")).toHaveText("Allowlist saved.");
+  await chat.getByRole("button", { name: "Save channels" }).click();
+  await expect(chat.getByRole("status")).toHaveText("Channels saved.");
 });
 
 test("the meetings editor of a Fireflies source refuses a stale save too", async ({ page }) => {

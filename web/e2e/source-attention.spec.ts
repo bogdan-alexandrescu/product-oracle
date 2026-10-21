@@ -28,14 +28,14 @@ test("settings › sources: a source needing attention shows why, refuses to syn
   const picker = row.getByRole("group", { name: "Slack channels" });
   await expect(picker.getByTestId("picked-count")).toHaveText("120 selected");
   await expect(picker.getByTestId("too-many-channels")).toHaveText("A source takes at most 100 channels: untick 20 to save it.");
-  await row.getByRole("button", { name: "Save allowlist" }).click();
+  await row.getByRole("button", { name: "Save channels" }).click();
   await expect(row.getByRole("alert").filter({ hasText: "allowlist at most 100 channels" })).toBeVisible();
 
   // Back within the rules: active again, and the next sync goes through.
   await picker.getByRole("button", { name: "Paste ids" }).click();
   await row.getByLabel("Channel ids (one per line)").fill("C0100GENERAL\nC0109RELEASES");
-  await row.getByRole("button", { name: "Save allowlist" }).click();
-  await expect(row.getByRole("status")).toHaveText("Allowlist saved.");
+  await row.getByRole("button", { name: "Save channels" }).click();
+  await expect(row.getByRole("status")).toHaveText("Channels saved.");
   await expect(row).toContainText("Active");
   await expect(row.getByTestId("needs-attention")).toHaveCount(0);
   await expect(page.getByTestId("sources-attention")).toHaveCount(0);
