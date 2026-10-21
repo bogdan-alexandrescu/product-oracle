@@ -440,7 +440,7 @@ const CP_KIND: Record<CheckpointOut["status"], ChipKind> = {
   skipped: "na",
 };
 /** A checkpoint name in full: it wraps to a second line rather than truncating. */
-const WRAP_CHIP = "h-auto min-h-[26px] py-1 leading-4 whitespace-normal";
+const WRAP_CHIP = "h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left max-[600px]:max-w-[9.5rem]";
 const CP_LABEL = { pending: "Waiting", approved: "Approved", changes_requested: "Changes requested", skipped: "Skipped" } as const;
 
 function SegmentItem({
@@ -528,12 +528,12 @@ function SegmentItem({
         <span className="flex min-w-0 flex-wrap gap-1.5 max-[600px]:col-span-full max-[600px]:col-start-2">
           {checkpoints.length === 0 &&
             (s.checkpoint_on ? (
-              <Chip kind="line" title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className={WRAP_CHIP}>
+              <Chip kind="line" title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className={WRAP_CHIP} data-testid="segment-checkpoint">
                 <span className="sr-only">Stops for </span>
                 {CHECKPOINT_LABEL[kind]}
               </Chip>
             ) : (
-              <Chip kind="na" title={`${CHECKPOINT_LABEL[kind]}: off`} className={WRAP_CHIP}>
+              <Chip kind="na" title={`${CHECKPOINT_LABEL[kind]}: off`} className={WRAP_CHIP} data-testid="segment-checkpoint">
                 {CHECKPOINT_LABEL[kind]}: off
               </Chip>
             ))}

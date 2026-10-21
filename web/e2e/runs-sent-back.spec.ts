@@ -110,3 +110,25 @@ test("a clean revision clears Revising: the draft is imported and the review wai
   await expect(row.getByTestId("run-sent-back")).toHaveCount(0);
   await expect(row.getByTestId("run-draft-rejected")).toHaveCount(0);
 });
+
+for (const [name, width, height] of [["desktop", 1366, 820], ["phone", 390, 844]] as const) {
+  test(`the Revising state chip wraps inside its column and clears the checkpoint chip (${name})`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await login(page);
+    const id = await seedSentBack(page);
+    await page.goto(`/runs/${id}`);
+    const prd = page.getByTestId("segment-prd_draft");
+    const state = prd.getByTestId("segment-state").locator("xpath=..");
+    const checkpoint = prd.getByTestId("segment-checkpoint");
+    await expect(state).toBeVisible();
+    await expect(checkpoint).toBeVisible();
+    const a = (await state.boundingBox())!;
+    const b = (await checkpoint.boundingBox())!;
+    const apart = a.x + a.width <= b.x + 0.5 || b.x + b.width <= a.x + 0.5 || a.y + a.height <= b.y + 0.5 || b.y + b.height <= a.y + 0.5;
+    expect(apart, `state ${JSON.stringify(a)} overlaps checkpoint ${JSON.stringify(b)}`).toBe(true);
+    // The chip holds its own text: its width never exceeds its grid cell, so nothing spills.
+    const cell = (await state.locator("xpath=..").boundingBox())!;
+    expect(a.x + a.width).toBeLessThanOrEqual(cell.x + cell.width + 0.5);
+    if (width > 600) expect(a.height).toBeGreaterThan(26);
+  });
+}
