@@ -69,7 +69,9 @@ for (const width of [1366, 390]) {
       const theirs = oracleWork(page).getByTestId("llm-job-settings");
       for (const label of PLAIN) await expect(theirs.getByLabel(label, { exact: true })).toBeDisabled();
       await theirs.getByTestId("info-tip").click();
-      await expect(page.getByText("Oracle reads new feedback and writes reports by itself. Owners turn each off.")).toBeVisible();
+      await expect(page.getByRole("tooltip").filter({ visible: true })).toHaveText(
+        "Oracle reads new feedback and writes reports by itself. Owners turn each off.",
+      );
     });
 
     test("Suggest changes now and Write reports now queue jobs named in plain words", async ({ page }) => {

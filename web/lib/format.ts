@@ -56,10 +56,11 @@ export const STATUS_LABEL: Record<FeedbackStatus, string> = {
 
 export const DOC_STATUS_LABEL = { draft: "Draft", in_review: "In review", approved: "Approved" } as const;
 
+/** A job's name in Oracle's work (History), in plain words. */
 export const JOB_KIND_LABEL: Record<LlmJobKind, string> = {
-  review_comments: "Review comments",
-  reporting: "Reporting",
-  refinement: "Refinement",
+  review_comments: "Suggestions",
+  reporting: "Reports",
+  refinement: "Section rewrite",
   intake_analysis: "Intake analysis",
   quality_review: "Quality review",
   refinement_batch: "Next draft",

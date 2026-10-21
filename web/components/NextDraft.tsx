@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { usePolling } from "@/components/JobsPanel";
+import { onJobSettingsChanged, usePolling } from "@/components/JobsPanel";
 import { Button, Chip, CostFigure, Icon, InfoTip, Notice } from "@/components/ds";
 import { JobStatusChip } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -39,11 +39,14 @@ export function BuildDraftButton({ doc }: { doc: string }) {
       }),
     ),
   );
-  // The Refinement switch (Built-in jobs): off means a build would be refused with a 409.
-  const sw = useQuery(`llm-settings|${doc}`, () =>
+  // The refinement switch (History › Oracle's work): off means a build would be refused with a 409.
+  // An owner may flip it in History on this page: read it again then.
+  const [swReload, setSwReload] = useState(0);
+  const sw = useQuery(`llm-settings|${doc}|${swReload}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/llm-jobs/settings", { params: { path: { doc } } })),
   );
   const refinementOff = sw.data?.refinement === false;
+  useEffect(() => onJobSettingsChanged(doc, () => setSwReload((k) => k + 1)), [doc]);
   // The sheet opens on arrival from the Inbox's "Build draft" (?build=1); the button shows
   // only once the staged list has loaded on the client, so the server render never differs.
   const [open, setOpen] = useState(
