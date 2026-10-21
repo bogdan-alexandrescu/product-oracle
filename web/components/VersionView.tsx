@@ -9,7 +9,7 @@ import { CommentPopover, SelectionButton, type PageRect } from "@/components/Com
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { DocCrumb } from "@/components/DocToolbar";
 import { Button, Chip, Empty, Icon, InfoTip, LinkButton, Page, PageHeader, SegmentedControl, Sheet } from "@/components/ds";
-import type { GoTo } from "@/components/FeedbackPanel";
+import { SectionQuestions, type GoTo } from "@/components/FeedbackPanel";
 import { DEFAULT_FILTERS, type FeedbackFilters, type PlacedComment } from "@/components/review/FeedbackList";
 import {
   OutlineRail,
@@ -571,6 +571,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     changedLock: changedLocks.has(s.section_key),
     evidenceTargets: canComment ? graphQ.data?.entities : undefined,
     refine: canDecide && !readOnly && n === latest ? refine : undefined,
+    ask: canComment && !readOnly && n === latest && document_ ? { documentId: document_.id } : undefined,
     onHighlightClick,
     onVerdict,
     showLayer: hasBrief,
@@ -724,6 +725,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       goTo={goTo}
       refreshKey={refreshKey}
       shortcuts={variant === "side" ? shortcuts : undefined}
+      questions={document_ && scopeKeys ? <SectionQuestions documentId={document_.id} sectionKeys={scopeKeys} /> : undefined}
       feedback={{
         entries,
         error: feedbackQ.error || commentsQ.error,

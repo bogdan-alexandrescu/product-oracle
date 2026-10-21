@@ -4918,6 +4918,81 @@
         }
       }
     },
+    "/v1/people": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "List People",
+        "description": "The company's active members for a person picker, matched on email (``q``):\neach one's name (from their email), email, role and whether they can write\n(commenter or above: answer, comment, be asked). Disabled members are not listed;\nthe full member list (``GET /v1/members``) stays the owner's.",
+        "operationId": "list_people",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PersonOut"
+                  },
+                  "title": "Response List People"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/connections": {
       "get": {
         "tags": [
@@ -13869,6 +13944,54 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Create Question",
+        "description": "Ask a teammate: a named person (commenter or above) is asked a question about an\nintake, a document section, a run checkpoint item or a baseline entity. It lands in\ntheir Inbox as \"<your name> asks\"; you see the answer on the subject. 422 when the\nsubject does not exist or the person cannot answer. Audited (``question.asked``).",
+        "operationId": "create_question",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StakeholderQuestionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/questions/{item_id}": {
@@ -16755,7 +16878,7 @@
           "intake"
         ],
         "summary": "Ask Next Question Batch",
-        "description": "Ask the next short batch: the highest-ranked questions not asked yet (the author\nor an approver).",
+        "description": "Ask the next short batch: the highest-ranked questions not asked yet (the author\nor an approver). Each is asked of the person ``assign`` names for it, else its gap's\nowner, else the intake's author (C2); a person who cannot answer is 422 and a\nprivate finding's question asked of anyone but the author 409, and then nothing is\nasked. ``size``: in the body or, as before, the query.",
         "operationId": "ask_next_question_batch",
         "security": [
           {
@@ -16789,6 +16912,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/QuestionBatchAsk"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -17481,6 +17621,102 @@
             }
           }
         }
+      }
+    },
+    "/v1/questions/{question_id}": {
+      "patch": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Update Question",
+        "description": "Reassign a question (``asked_to``) or withdraw it (``status: withdrawn``): the\nperson who asked, the intake's author or an approver. A withdrawn question leaves\nthe Inbox at once. 409 for an answered or withdrawn question, and for asking a\nprivate finding's question of anyone but the intake's author (S6).",
+        "operationId": "update_question",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StakeholderQuestionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/inbox/questions": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "List Inbox Questions",
+        "description": "The questions asked of me and still open (asked, or delegated to me), oldest\nfirst: who asks (\"Oracle asks\" or a person), what about and where it opens, the gap\nas I may see it, and the answer paths. A question I may not see never appears.",
+        "operationId": "list_inbox_questions",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InboxQuestion"
+                  },
+                  "type": "array",
+                  "title": "Response List Inbox Questions"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
       }
     },
     "/v1/questions/{question_id}/answers": {
@@ -27547,6 +27783,33 @@
         "title": "CheckpointDelivery",
         "description": "A decision recorded in Oracle that has not reached the run's workflow yet (owner,\n2026-10-20: a recorded decision is final; Oracle sends it again on every tick until\nSwarmCloud takes it). The decision is the checkpoint's ``status``, ``decided_by`` and\n``decided_at``. None once delivered: the checkpoint then shows its decided state."
       },
+      "CheckpointItemSubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "checkpoint_item",
+            "title": "Kind"
+          },
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checkpoint Id"
+          },
+          "item_ref": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Item Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "checkpoint_id",
+          "item_ref"
+        ],
+        "title": "CheckpointItemSubject"
+      },
       "CheckpointOut": {
         "properties": {
           "id": {
@@ -30798,6 +31061,33 @@
         ],
         "title": "DocumentSectionLinkOut"
       },
+      "DocumentSectionSubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "document_section",
+            "title": "Kind"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "section_key": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Section Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "document_id",
+          "section_key"
+        ],
+        "title": "DocumentSectionSubject"
+      },
       "DocumentSectionsOut": {
         "properties": {
           "version": {
@@ -32261,6 +32551,26 @@
           "status"
         ],
         "title": "EntityRef"
+      },
+      "EntitySubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "entity",
+            "title": "Kind"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "entity_id"
+        ],
+        "title": "EntitySubject"
       },
       "EntityTrace": {
         "properties": {
@@ -36759,6 +37069,67 @@
         ],
         "title": "InboxOut"
       },
+      "InboxQuestion": {
+        "properties": {
+          "question": {
+            "$ref": "#/components/schemas/StakeholderQuestionOut"
+          },
+          "asked_by": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OracleAsker"
+              },
+              {
+                "$ref": "#/components/schemas/PersonAsker"
+              }
+            ],
+            "title": "Asked By",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "oracle": "#/components/schemas/OracleAsker",
+                "person": "#/components/schemas/PersonAsker"
+              }
+            }
+          },
+          "subject": {
+            "$ref": "#/components/schemas/InboxSubject"
+          },
+          "gap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KnowledgeGapOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "answer_paths": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "answer",
+                "dont_know",
+                "defer",
+                "delegate",
+                "research"
+              ]
+            },
+            "type": "array",
+            "title": "Answer Paths"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "asked_by",
+          "subject",
+          "gap",
+          "answer_paths"
+        ],
+        "title": "InboxQuestion"
+      },
       "InboxRevokeFailure": {
         "properties": {
           "id": {
@@ -36951,6 +37322,42 @@
         ],
         "title": "InboxStaged",
         "description": "'N changes staged for draft N+1' on one document, with the build action."
+      },
+      "InboxSubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "intake",
+              "document_section",
+              "checkpoint_item",
+              "entity"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "href": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Href"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "title",
+          "href"
+        ],
+        "title": "InboxSubject"
       },
       "InspectedModule": {
         "properties": {
@@ -37840,6 +38247,26 @@
         },
         "type": "object",
         "title": "IntakeRunIn"
+      },
+      "IntakeSubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "intake",
+            "title": "Kind"
+          },
+          "intake_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intake Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "intake_id"
+        ],
+        "title": "IntakeSubject"
       },
       "IntakeSummary": {
         "properties": {
@@ -41910,6 +42337,19 @@
         ],
         "title": "OAuthErrorOut"
       },
+      "OracleAsker": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "oracle",
+            "title": "Kind",
+            "default": "oracle"
+          }
+        },
+        "type": "object",
+        "title": "OracleAsker",
+        "description": "The intake engine's question: \"Oracle asks\"."
+      },
       "OutcomeCreate": {
         "properties": {
           "title": {
@@ -42367,6 +42807,73 @@
           "modules"
         ],
         "title": "PackOut"
+      },
+      "PersonAsker": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "person",
+            "title": "Kind",
+            "default": "person"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "PersonAsker",
+        "description": "A person's question to a teammate: \"<name> asks\"."
+      },
+      "PersonOut": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          },
+          "can_write": {
+            "type": "boolean",
+            "title": "Can Write"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "name",
+          "email",
+          "role",
+          "can_write"
+        ],
+        "title": "PersonOut",
+        "description": "A member as the member directory shows them to everyone (``GET /v1/people``):\nno other field, so a picker never learns more than whom it may name."
       },
       "PickerConfigOut": {
         "properties": {
@@ -44005,6 +44512,33 @@
         ],
         "title": "QuestionBatch"
       },
+      "QuestionBatchAsk": {
+        "properties": {
+          "size": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Size",
+            "default": 5
+          },
+          "assign": {
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "type": "object",
+            "maxProperties": 50,
+            "title": "Assign",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "title": "QuestionBatchAsk",
+        "description": "Ask the next batch; ``assign``: question id -> the person to ask instead of the\ndefault (the gap's owner, else the intake's author)."
+      },
       "QuestionCard": {
         "properties": {
           "question": {
@@ -44058,6 +44592,98 @@
           "answers"
         ],
         "title": "QuestionCard"
+      },
+      "QuestionCreate": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Prompt"
+          },
+          "asked_to": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asked To"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "subject": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/IntakeSubject"
+              },
+              {
+                "$ref": "#/components/schemas/DocumentSectionSubject"
+              },
+              {
+                "$ref": "#/components/schemas/CheckpointItemSubject"
+              },
+              {
+                "$ref": "#/components/schemas/EntitySubject"
+              }
+            ],
+            "title": "Subject",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "checkpoint_item": "#/components/schemas/CheckpointItemSubject",
+                "document_section": "#/components/schemas/DocumentSectionSubject",
+                "entity": "#/components/schemas/EntitySubject",
+                "intake": "#/components/schemas/IntakeSubject"
+              }
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "asked_to",
+          "subject"
+        ],
+        "title": "QuestionCreate",
+        "description": "Ask a named teammate (commenter or above) a question about a subject."
+      },
+      "QuestionPatch": {
+        "properties": {
+          "asked_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asked To"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "withdrawn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "title": "QuestionPatch",
+        "description": "Reassign (``asked_to``) or withdraw (``status``), one at a time."
       },
       "QuestionRef": {
         "properties": {
@@ -51492,6 +52118,41 @@
             ],
             "title": "Document Id"
           },
+          "checkpoint_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Id"
+          },
+          "item_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Ref"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
           "category": {
             "type": "string",
             "enum": [
@@ -51511,7 +52172,8 @@
               "release_rollout",
               "evaluation_criteria",
               "third_party_policy",
-              "configurability_scaling"
+              "configurability_scaling",
+              "general"
             ],
             "title": "Category"
           },

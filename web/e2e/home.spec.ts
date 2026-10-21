@@ -40,7 +40,7 @@ test("Home: needs you lists the inbox and the questions asked of me, one action 
   await expect(rows.filter({ hasText: "Confirm the baseline" }).getByRole("link", { name: "Decide" })).toBeVisible();
   await expect(rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" })).toBeVisible();
   await expect(rows.filter({ hasText: "$14.20 / $9.00" }).getByRole("link", { name: "Decide" })).toBeVisible();
-  await expect(rows.filter({ hasText: "Asked you" })).toHaveCount(1);
+  await expect(rows.filter({ hasText: "Oracle asks" })).toHaveCount(1);
   await expect(needs.getByText("Decisions 3")).toBeVisible();
   // Each feedback item counts, not one per document.
   await expect(needs.getByText("Reviews 5")).toBeVisible();
@@ -58,9 +58,9 @@ test("Home: needs you lists the inbox and the questions asked of me, one action 
   await expect(page).toHaveURL(/\/inbox$/);
   // Both questions asked of me wait in the Inbox.
   const questions = page.getByTestId("inbox-questions");
-  await expect(questions.locator("tr[data-row]").filter({ hasText: "Which metric shows repeat checkout got faster?" })).toContainText("Asked you");
+  await expect(questions.locator("tr[data-row]").filter({ hasText: "Which metric shows repeat checkout got faster?" })).toContainText("Oracle asks");
   // The deposits PRD's blocker question is asked of the signed-in owner too.
-  await expect(questions.locator("tr[data-row]").filter({ hasText: "Same-day cancellation refund?" })).toContainText("Asked you");
+  await expect(questions.locator("tr[data-row]").filter({ hasText: "Same-day cancellation refund?" })).toContainText("Oracle asks");
 });
 
 test("Home: in flight rows select into the inspector", async ({ page }) => {

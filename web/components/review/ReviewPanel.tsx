@@ -40,6 +40,7 @@ export function ReviewPanel({
   shortcuts,
   variant,
   goTo,
+  questions,
 }: {
   version: VersionOut | undefined;
   doc: string;
@@ -55,6 +56,8 @@ export function ReviewPanel({
   variant: "side" | "sheet";
   /** Section links in History open here. */
   goTo?: GoTo;
+  /** The questions asked about the open section (C2), above its feedback. */
+  questions?: ReactNode;
 }) {
   const uid = useId();
   const idFor = (t: PanelTab) => `${uid}-${t}`;
@@ -106,6 +109,7 @@ export function ReviewPanel({
           variant === "side" ? "min-[1101px]:min-h-0 min-[1101px]:flex-1 min-[1101px]:overflow-y-auto min-[1101px]:overscroll-contain" : ""
         }`}
       >
+        {tab === "feedback" && questions}
         {tab === "feedback" &&
           (error ? <ErrorNote>{error}</ErrorNote> : !entries ? <Loading /> : <FeedbackList entries={entries} {...list} />)}
         {tab === "sources" && version && <SourcesTab version={version} />}

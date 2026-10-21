@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useId, type ReactNode } from "react";
 
 import { Button, Chip, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
-import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { BUILD_PARAM } from "@/components/NextDraft";
 import { sectionHref } from "@/lib/section-link";
@@ -36,6 +36,10 @@ export type Need = {
   action: ReactNode;
   /** The row's Inbox state (new, open, staged, declined, done), when it has one. */
   state?: string;
+  /** Whether it counts as an item (a question settled in place does not, until it moves to Done). */
+  counted?: boolean;
+  /** Drawn under the row, across it: the row opened in place (a question's answer form). */
+  detail?: ReactNode;
 };
 
 export const NEED_COLUMNS: Column<Need>[] = [
@@ -126,6 +130,7 @@ export function NeedTable({
         rowKey={(n) => n.key}
         hideHeader
         rowProps={(n) => ({ "data-need": n.kind, "data-state": n.state })}
+        detail={(n) => n.detail}
       />
     </section>
   );
@@ -688,33 +693,6 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
 }
 
 /**
- * The questions asked of the signed-in person (I3), one row each with the document they are
- * about: Home's Needs you and the Inbox's Questions group draw the same rows.
- */
-export function questionNeeds(questions: Schemas["StakeholderQuestionOut"][], docs: DocumentSummary[]): Need[] {
-  return questions.map((q) => {
-    const doc = docs.find((d) => d.id === q.document_id);
-    return {
-      key: q.id,
-      icon: "ask",
-      kind: "Asked you",
-      item: (
-        <span className="truncate" title={q.prompt}>
-          {q.prompt}
-        </span>
-      ),
-      context: <span className="block truncate">{doc?.title ?? "–"}</span>,
-      at: q.created_at,
-      action: doc ? (
-        <LinkButton href={`/documents/${doc.slug}`} aria-label={`Open ${doc.title}`}>
-          Open
-        </LinkButton>
-      ) : null,
-    };
-  });
-}
-
-/**
  * My sources that need attention: saved before a newer rule they break (more than 100 Slack
  * channels, a date out of range), so they are not synced until edited. GET /v1/sources
  * filtered here; each row opens the source on Settings › Sources, where Edit is.
@@ -756,8 +734,14 @@ export function allNeeds(
   compact = false,
 ): StatedNeed[] {
   const n = inboxNeeds(inbox, busy, act, compact);
+  // A row may carry its own state and count (a question answered in place: ./_questions).
   const stated = (rows: Need[], group: NeedGroup, counted = true): StatedNeed[] =>
-    rows.map((r) => ({ ...r, state: isNew(r.at, seenBefore) ? "new" : "open", counted, group }));
+    rows.map((r) => ({
+      ...r,
+      state: (r.state as InboxState | undefined) ?? (isNew(r.at, seenBefore) ? "new" : "open"),
+      counted: r.counted ?? counted,
+      group,
+    }));
   return [
     ...stated(n.checkpoints, "checkpoints"),
     ...stated(n.approvals, "approvals"),

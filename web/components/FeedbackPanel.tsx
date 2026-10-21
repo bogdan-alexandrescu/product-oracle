@@ -1,14 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+
+import { QUESTIONS_CHANGED } from "@/components/AskTeammate";
+import { findPeople } from "@/components/PersonPicker";
 
 import { SuggestionActions, SuggestionCard, SuggestionForm, useSuggestionDecision } from "@/components/SuggestionCard";
 import { FeedbackStateChip } from "@/components/review/FeedbackState";
 import { Button, Chip, Empty } from "@/components/ds";
 import { FeedbackStatusChip, InlineError, Quote, VerdictChip } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type FeedbackItem, type FeedbackStatus, type Suggestion } from "@/lib/api/client";
+import { api, unwrap, type FeedbackItem, type FeedbackStatus, type Schemas, type Suggestion } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
 import { sectionHref } from "@/lib/section-link";
 import { useQuery } from "@/lib/use-query";
@@ -258,5 +261,78 @@ export function ResolutionPanel({
         ))}
       </ol>
     </div>
+  );
+}
+
+/** What became of an asked question, in the asker's words. */
+const ANSWER_KIND: Record<Schemas["AnswerIn"]["kind"], string> = {
+  answer: "Answered",
+  dont_know: "Doesn't know",
+  defer: "Deferred",
+  delegate: "Asked someone else",
+  research: "Research proposed",
+};
+
+type SectionQuestion = { q: Schemas["StakeholderQuestionOut"]; answer: Schemas["StakeholderAnswerOut"] | null };
+
+/**
+ * The questions asked about these sections (C2), on the Feedback tab: who it waits on
+ * ("Waiting on <name>") or the answer and who gave it. Reads again when a question is asked
+ * here (AskTeammate) or the panel reopens.
+ */
+export function SectionQuestions({ documentId, sectionKeys }: { documentId: string; sectionKeys: ReadonlySet<string> }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const again = () => setTick((t) => t + 1);
+    window.addEventListener(QUESTIONS_CHANGED, again);
+    return () => window.removeEventListener(QUESTIONS_CHANGED, again);
+  }, []);
+  const keys = [...sectionKeys].sort().join(",");
+  const q = useQuery(`section-questions|${documentId}|${keys}|${tick}`, async () => {
+    const rows = await unwrap(api.GET("/v1/questions", { params: { query: { document_id: documentId, limit: 500 } } }));
+    const mine = rows.filter((x) => !!x.section_key && sectionKeys.has(x.section_key) && x.status !== "draft" && x.status !== "withdrawn");
+    const [people, answers] = await Promise.all([
+      mine.length ? findPeople("") : Promise.resolve([]),
+      Promise.all(
+        mine.map((x) =>
+          x.status === "asked" || x.status === "delegated"
+            ? Promise.resolve([])
+            : unwrap(api.GET("/v1/answers", { params: { query: { question_id: x.id, limit: 20 } } })),
+        ),
+      ),
+    ]);
+    const names = new Map(people.map((p) => [p.user_id, p.name]));
+    return {
+      names,
+      rows: mine.map((x, i): SectionQuestion => ({ q: x, answer: answers[i].find((a) => a.kind !== "delegate") ?? answers[i][0] ?? null })),
+    };
+  });
+  if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
+  if (!q.data || q.data.rows.length === 0) return null;
+  const name = (id: string | null | undefined) => (id && q.data!.names.get(id)) || "someone";
+  return (
+    <section aria-label="Questions" data-testid="section-questions" className="mb-3 border-b border-line pb-2">
+      <h3 className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Questions</h3>
+      <ol className="flex flex-col">
+        {q.data.rows.map(({ q: x, answer }) => (
+          <li key={x.id} data-testid="section-question" data-status={x.status} className="border-b border-line py-2.5 last:border-b-0">
+            <p className="text-[15px] leading-[22px] text-text">{x.prompt}</p>
+            {x.status === "asked" || x.status === "delegated" ? (
+              <p className="mt-1">
+                <Chip kind="warn">Waiting on {name(x.asked_to)}</Chip>
+              </p>
+            ) : (
+              <p className="mt-1 text-sm leading-5 text-text2">
+                <span className="font-semibold text-text">
+                  {answer ? ANSWER_KIND[answer.kind] : "Answered"} by {name(answer?.answered_by)}
+                  {answer?.body ? ":" : ""}
+                </span>{" "}
+                {answer?.body}
+              </p>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }

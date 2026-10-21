@@ -9,7 +9,8 @@ import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
 
-import { allNeeds, CountChip, NeedTable, questionNeeds, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
+import { allNeeds, CountChip, NeedTable, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
+import { useQuestionRows } from "../inbox/_questions";
 import { goalViews, historyOf, shownGoals, type Point } from "./_goals";
 import { GoalsPanel } from "./_goals-panel";
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
@@ -129,10 +130,14 @@ export default function HomePage() {
     }
   }
   const inbox = inboxQ.data;
-  // The API filters (asked of me, still asked): Home counts exactly what the badge counts.
-  const questions = questionNeeds(questionsQ.data ?? [], docs);
-  // Needs you: the Inbox's New and Open items, each once (owner, 2026-10-20).
-  const needs = inbox ? waitingNeeds(allNeeds(inbox, questions, busy, act, inbox.last_seen_at ?? null, true)) : [];
+  // The API filters (asked of me, still open): Home counts exactly what the badge counts.
+  // Answered here, a question stays in its line with its outcome (C2).
+  const questionRows = useQuestionRows(questionsQ.data ?? [], questionsQ.reload);
+  // Needs you: the Inbox's New and Open items, each once (owner, 2026-10-20); a question
+  // answered here stays shown, no longer counted.
+  const all = inbox ? allNeeds(inbox, questionRows.rows, busy, act, inbox.last_seen_at ?? null, true) : [];
+  const needs = waitingNeeds(all);
+  const visible = all.filter((r) => needs.includes(r) || (r.group === "questions" && !r.counted && r.state !== "done"));
   const decisions = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "overruns");
   // Stuck runs and failed imports: counted in the badge, so drawn here too (searches are not).
   const runs = needs.filter((r) => r.group === "lookups" || r.group === "imports");
@@ -140,7 +145,7 @@ export default function HomePage() {
   const access = needs.filter((r) => r.group === "revoke-failures");
   const reviews = needs.filter((r) => r.group === "feedback");
   const asked = needs.filter((r) => r.group === "questions");
-  const shownNeeds = pickNeeds(needs, MAX_NEEDS);
+  const shownNeeds = pickNeeds(visible, MAX_NEEDS);
   // The rail badge's count: the Inbox's New + Open items.
   const waiting = inbox ? needs.length : undefined;
   const openItems = new Map((inbox?.feedback ?? []).map((d) => [d.document_id, d.open_count]));
@@ -219,6 +224,7 @@ export default function HomePage() {
             <Empty testId="home-needs-empty">Nothing waiting</Empty>
           )}
           <NeedTable title="Needs you" testId="home-needs-table" rows={shownNeeds} compact />
+          {questionRows.sheet}
 
           <section aria-label="In flight" data-testid="home-in-flight" className="border-t border-line">
             <div data-testid="home-in-flight-phone-title" className="hidden min-h-12 items-center border-b border-line bg-surface2 px-3 max-[600px]:flex">

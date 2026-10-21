@@ -1443,6 +1443,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List People
+         * @description The company's active members for a person picker, matched on email (``q``):
+         *     each one's name (from their email), email, role and whether they can write
+         *     (commenter or above: answer, comment, be asked). Disabled members are not listed;
+         *     the full member list (``GET /v1/members``) stays the owner's.
+         */
+        get: operations["list_people"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connections": {
         parameters: {
             query?: never;
@@ -3864,7 +3887,14 @@ export interface paths {
          */
         get: operations["list_stakeholder_questions"];
         put?: never;
-        post?: never;
+        /**
+         * Create Question
+         * @description Ask a teammate: a named person (commenter or above) is asked a question about an
+         *     intake, a document section, a run checkpoint item or a baseline entity. It lands in
+         *     their Inbox as "<your name> asks"; you see the answer on the subject. 422 when the
+         *     subject does not exist or the person cannot answer. Audited (``question.asked``).
+         */
+        post: operations["create_question"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4607,7 +4637,10 @@ export interface paths {
         /**
          * Ask Next Question Batch
          * @description Ask the next short batch: the highest-ranked questions not asked yet (the author
-         *     or an approver).
+         *     or an approver). Each is asked of the person ``assign`` names for it, else its gap's
+         *     owner, else the intake's author (C2); a person who cannot answer is 422 and a
+         *     private finding's question asked of anyone but the author 409, and then nothing is
+         *     asked. ``size``: in the body or, as before, the query.
          */
         post: operations["ask_next_question_batch"];
         delete?: never;
@@ -4838,6 +4871,51 @@ export interface paths {
          *     approver accepts it and starts the run.
          */
         post: operations["propose_gap_research"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/questions/{question_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Question
+         * @description Reassign a question (``asked_to``) or withdraw it (``status: withdrawn``): the
+         *     person who asked, the intake's author or an approver. A withdrawn question leaves
+         *     the Inbox at once. 409 for an answered or withdrawn question, and for asking a
+         *     private finding's question of anyone but the intake's author (S6).
+         */
+        patch: operations["update_question"];
+        trace?: never;
+    };
+    "/v1/inbox/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Inbox Questions
+         * @description The questions asked of me and still open (asked, or delegated to me), oldest
+         *     first: who asks ("Oracle asks" or a person), what about and where it opens, the gap
+         *     as I may see it, and the answer paths. A question I may not see never appears.
+         */
+        get: operations["list_inbox_questions"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -8017,6 +8095,21 @@ export interface components {
             /** Last Tried At */
             last_tried_at?: string | null;
         };
+        /** CheckpointItemSubject */
+        CheckpointItemSubject: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "checkpoint_item";
+            /**
+             * Checkpoint Id
+             * Format: uuid
+             */
+            checkpoint_id: string;
+            /** Item Ref */
+            item_ref: string;
+        };
         /** CheckpointOut */
         CheckpointOut: {
             /**
@@ -9258,6 +9351,21 @@ export interface components {
              */
             created_at: string;
         };
+        /** DocumentSectionSubject */
+        DocumentSectionSubject: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "document_section";
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Section Key */
+            section_key: string;
+        };
         /** DocumentSectionsOut */
         DocumentSectionsOut: {
             /** Version */
@@ -9789,6 +9897,19 @@ export interface components {
             title: string;
             /** Status */
             status: string;
+        };
+        /** EntitySubject */
+        EntitySubject: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "entity";
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
         };
         /** EntityTrace */
         EntityTrace: {
@@ -11355,6 +11476,16 @@ export interface components {
             /** Last Seen At */
             last_seen_at?: string | null;
         };
+        /** InboxQuestion */
+        InboxQuestion: {
+            question: components["schemas"]["StakeholderQuestionOut"];
+            /** Asked By */
+            asked_by: components["schemas"]["OracleAsker"] | components["schemas"]["PersonAsker"];
+            subject: components["schemas"]["InboxSubject"];
+            gap: components["schemas"]["KnowledgeGapOut"] | null;
+            /** Answer Paths */
+            answer_paths: ("answer" | "dont_know" | "defer" | "delegate" | "research")[];
+        };
         /**
          * InboxRevokeFailure
          * @description A provider revoke a member's disable still owes, whose last attempt did not
@@ -11432,6 +11563,18 @@ export interface components {
             draft_job_id?: string | null;
             /** Draft Job Status */
             draft_job_status?: string | null;
+        };
+        /** InboxSubject */
+        InboxSubject: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "intake" | "document_section" | "checkpoint_item" | "entity";
+            /** Title */
+            title: string;
+            /** Href */
+            href: string | null;
         };
         /** InspectedModule */
         InspectedModule: {
@@ -11815,6 +11958,19 @@ export interface components {
              *     }
              */
             knobs: components["schemas"]["KnobsIn"];
+        };
+        /** IntakeSubject */
+        IntakeSubject: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "intake";
+            /**
+             * Intake Id
+             * Format: uuid
+             */
+            intake_id: string;
         };
         /**
          * IntakeSummary
@@ -13352,6 +13508,17 @@ export interface components {
             /** Error Description */
             error_description?: string | null;
         };
+        /**
+         * OracleAsker
+         * @description The intake engine's question: "Oracle asks".
+         */
+        OracleAsker: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "oracle";
+        };
         /** OutcomeCreate */
         OutcomeCreate: {
             /** Title */
@@ -13491,6 +13658,47 @@ export interface components {
             categories: string[];
             /** Modules */
             modules: components["schemas"]["PackModuleOut"][];
+        };
+        /**
+         * PersonAsker
+         * @description A person's question to a teammate: "<name> asks".
+         */
+        PersonAsker: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "person";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * PersonOut
+         * @description A member as the member directory shows them to everyone (``GET /v1/people``):
+         *     no other field, so a picker never learns more than whom it may name.
+         */
+        PersonOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+            /** Email */
+            email: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+            /** Can Write */
+            can_write: boolean;
         };
         /**
          * PickerConfigOut
@@ -14119,6 +14327,25 @@ export interface components {
             /** Remaining */
             remaining: number;
         };
+        /**
+         * QuestionBatchAsk
+         * @description Ask the next batch; ``assign``: question id -> the person to ask instead of the
+         *     default (the gap's owner, else the intake's author).
+         */
+        QuestionBatchAsk: {
+            /**
+             * Size
+             * @default 5
+             */
+            size: number;
+            /**
+             * Assign
+             * @default {}
+             */
+            assign: {
+                [key: string]: string;
+            };
+        };
         /** QuestionCard */
         QuestionCard: {
             question: components["schemas"]["StakeholderQuestionOut"];
@@ -14129,6 +14356,33 @@ export interface components {
             answer_paths: ("answer" | "dont_know" | "defer" | "delegate" | "research")[];
             /** Answers */
             answers: components["schemas"]["StakeholderAnswerOut"][];
+        };
+        /**
+         * QuestionCreate
+         * @description Ask a named teammate (commenter or above) a question about a subject.
+         */
+        QuestionCreate: {
+            /** Prompt */
+            prompt: string;
+            /**
+             * Asked To
+             * Format: uuid
+             */
+            asked_to: string;
+            /** Rationale */
+            rationale?: string | null;
+            /** Subject */
+            subject: components["schemas"]["IntakeSubject"] | components["schemas"]["DocumentSectionSubject"] | components["schemas"]["CheckpointItemSubject"] | components["schemas"]["EntitySubject"];
+        };
+        /**
+         * QuestionPatch
+         * @description Reassign (``asked_to``) or withdraw (``status``), one at a time.
+         */
+        QuestionPatch: {
+            /** Asked To */
+            asked_to?: string | null;
+            /** Status */
+            status?: "withdrawn" | null;
         };
         /** QuestionRef */
         QuestionRef: {
@@ -16692,11 +16946,17 @@ export interface components {
             intake_id?: string | null;
             /** Document Id */
             document_id?: string | null;
+            /** Checkpoint Id */
+            checkpoint_id?: string | null;
+            /** Item Ref */
+            item_ref?: string | null;
+            /** Entity Id */
+            entity_id?: string | null;
             /**
              * Category
              * @enum {string}
              */
-            category: "customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling";
+            category: "customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling" | "general";
             /** Prompt */
             prompt: string;
             /** Rationale */
@@ -21463,6 +21723,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_people: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"][];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -26476,6 +26768,39 @@ export interface operations {
             };
         };
     };
+    create_question: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StakeholderQuestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_stakeholder_question: {
         parameters: {
             query?: never;
@@ -27723,7 +28048,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["QuestionBatchAsk"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -28108,6 +28437,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_question: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StakeholderQuestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_inbox_questions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxQuestion"][];
                 };
             };
         };

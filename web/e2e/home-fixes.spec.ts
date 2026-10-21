@@ -144,8 +144,8 @@ test("Questions asked of me: rail badge, Home and the Inbox count the same", asy
   await expect(questions).toContainText("Same-day cancellation refund?");
   const row = questions.locator("tr[data-row]").filter({ hasText: "Which metric" });
   await expect(row).toContainText("Which metric shows repeat checkout got faster?");
-  await expect(row).toContainText("Asked you");
-  await expect(row.getByRole("link", { name: "Open Checkout redesign PRD" })).toHaveAttribute("href", "/documents/checkout-redesign");
+  await expect(row).toContainText("Oracle asks");
+  await expect(row.getByRole("link", { name: "Open Before drafting · Saved addresses" })).toHaveAttribute("href", "/documents/checkout-redesign");
   // A first visit: all ten under New, the questions with them.
   await expect(page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^New/ })).toHaveText("New10");
   await expect(page.getByTestId("inbox-tab-new").getByTestId("inbox-questions")).toBeVisible();
@@ -157,7 +157,7 @@ test("Questions asked of me: Home shows one with 7 or more inbox items, and only
   const needs = page.getByTestId("home-needs");
   const rows = needs.getByTestId("home-needs-table").locator("tr[data-row]");
   await expect(rows).toHaveCount(7);
-  await expect(rows.filter({ hasText: "Asked you" })).toHaveCount(1);
+  await expect(rows.filter({ hasText: "Oracle asks" })).toHaveCount(1);
   await expect(needs.getByText("Questions 6")).toBeVisible();
   await expect(needs).not.toContainText("Who owns the pricing page?");
   const waiting = await page.getByTestId("nav-inbox-badge").textContent();
@@ -202,7 +202,7 @@ test("Home reloads the questions asked of me after an action", async ({ page }) 
 });
 
 test("Questions asked of me: a failing call shows the block's error, never an empty list", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("po-mock-fail", "/v1/questions"));
+  await page.addInitScript(() => localStorage.setItem("po-mock-fail", "/v1/inbox/questions"));
   await openHome(page);
   const needs = page.getByTestId("home-needs");
   await expect(needs.getByTestId("home-questions-error")).toContainText("Mock failure");

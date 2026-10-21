@@ -65,6 +65,7 @@ export function DataTable<T>({
   rowProps,
   testId,
   hideHeader = false,
+  detail,
 }: {
   /** Accessible name of the table. */
   label: string;
@@ -82,6 +83,8 @@ export function DataTable<T>({
   rowProps?: (row: T) => Record<string, string | undefined>;
   testId?: string;
   hideHeader?: boolean;
+  /** A row opened in place: drawn under it across every column (the Inbox's answer form). */
+  detail?: (row: T) => ReactNode;
 }) {
   const body = useRef<HTMLTableSectionElement>(null);
   const selectable = !!onSelect;
@@ -170,6 +173,7 @@ export function DataTable<T>({
             const header = !!group && (i === 0 || g !== groups[i - 1]);
             // Roving tabindex: the selected row (or the first) is the table's one tab stop.
             const tabbable = selectable && (selIndex >= 0 ? i === selIndex : i === 0);
+            const extra = detail?.(row);
             return (
               <Fragment key={k}>
                 {header && (
@@ -214,6 +218,13 @@ export function DataTable<T>({
                     );
                   })}
                 </tr>
+                {extra != null && extra !== false && (
+                  <tr role="row" data-detail={k} className="max-[600px]:block">
+                    <td role="cell" colSpan={visibleCols} className="px-4 pt-1 pb-3 max-[600px]:block max-[600px]:px-3">
+                      {extra}
+                    </td>
+                  </tr>
+                )}
               </Fragment>
             );
           })}

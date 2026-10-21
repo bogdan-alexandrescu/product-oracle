@@ -3,6 +3,7 @@
 import { memo, useMemo, useState, type ReactNode } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
+import { AskTeammate } from "@/components/AskTeammate";
 import { Button, Chip } from "@/components/ds";
 import { DateMarker, MarkdownBody, unplacedMarks, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { RefineSection } from "@/components/RefineSection";
@@ -17,11 +18,11 @@ const HEADING_CLASS: Record<number, string> = {
   3: "font-display tracking-heading text-lg leading-6 font-bold",
 };
 
-type Tool = "evidence" | "refine";
+type Tool = "evidence" | "refine" | "ask";
 
 /**
  * One section of a version. The open section (one at a time) carries the review bar and a
- * ⋯ menu with Add evidence link and Refine section; a `nested` section (detail shown in
+ * ⋯ menu with Add evidence link, Refine section and Ask a teammate; a `nested` section (detail shown in
  * place inside a brief section) shows its content only and offers to review it in the
  * full document.
  */
@@ -35,6 +36,7 @@ export const SectionView = memo(function SectionView({
   changedLock,
   evidenceTargets,
   refine,
+  ask,
   onHighlightClick,
   onVerdict,
   onReviewInFull,
@@ -55,6 +57,8 @@ export const SectionView = memo(function SectionView({
   evidenceTargets?: EntityOut[];
   /** Set for approvers on the latest version: offers "Refine section" (never on locked ones). */
   refine?: { doc: string; n: number };
+  /** Set for commenters and above: offers "Ask a teammate" about this section (C2). */
+  ask?: { documentId: string };
   onHighlightClick: (id: string) => void;
   onVerdict: (key: string, verdict: Verdict, note: string) => Promise<void>;
   /** Nested: open this section in the full document, where it has its own review bar. */
@@ -125,7 +129,7 @@ export const SectionView = memo(function SectionView({
                 </Button>
               )
             : headTools}
-          {!nested && (evidenceTargets || canRefine) && (
+          {!nested && (evidenceTargets || canRefine || ask) && (
             <Menu label={`Actions for ${section.heading}`} icon="more" iconOnly>
               {(closeMenu) => (
                 <span role="menu" aria-label={`Actions for ${section.heading}`} className="flex min-w-44 flex-col gap-0.5">
@@ -149,6 +153,17 @@ export const SectionView = memo(function SectionView({
                       }}
                     >
                       Refine section
+                    </MenuItem>
+                  )}
+                  {ask && (
+                    <MenuItem
+                      label={`Ask a teammate about ${section.heading}`}
+                      onClick={() => {
+                        closeMenu();
+                        pick("ask");
+                      }}
+                    >
+                      Ask a teammate
                     </MenuItem>
                   )}
                 </span>
@@ -198,6 +213,14 @@ export const SectionView = memo(function SectionView({
             onClose={close}
           />
         </div>
+      )}
+      {!nested && tool?.kind === "ask" && ask && (
+        <AskTeammate
+          key={tool.n}
+          subject={{ kind: "document_section", document_id: ask.documentId, section_key: section.section_key }}
+          context={section.heading}
+          onClose={close}
+        />
       )}
       {!nested && tool?.kind === "refine" && canRefine && (
         <RefineSection
