@@ -711,6 +711,11 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
             # without calling the provider. What only the provider can tell (a Fireflies
             # series, a Notion sub-page) goes on the next sync's pass.
             await _sweep(db, source, old_config, config)
+            if source.kind == "github":
+                # F5-2: a repo the source no longer lists takes its code maps with it.
+                from oracle.engineering import codemaps
+
+                await codemaps.drop_outside(db, source)
         # A config change keeps the cursor: the next sync sees the selection changed (its
         # fingerprint, oracle.sources.sync), sweeps again (nothing left by then) and asks
         # the connector how much of the cursor still holds (rescope_cursor), so it only

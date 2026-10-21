@@ -6,7 +6,9 @@ segment after ``/v1`` names the area.
 
 READ_AREAS = {
     # Requester notes quote what people asked: source text (H6).
-    "read:sources": {"sources", "search", "snapshots", "requester-notes"},
+    # Code capability maps are drawn from a person's source (S6): a run reads shared
+    # ones only (oracle.engineering.codemaps.visible).
+    "read:sources": {"sources", "search", "snapshots", "requester-notes", "code-maps"},
     # Intakes, the gap registry and the question ledger (oracle.intake) are baseline
     # knowledge; reading source text through an intake still needs read:sources.
     # Blockers are baseline constraints (CR-04): their strategy, options, experiments

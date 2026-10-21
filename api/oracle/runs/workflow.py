@@ -298,7 +298,8 @@ def build_plan(
             "seq": seq,
             "name": sdef.name,
             "work": keys,
-            "checkpoint": knobs.checkpoints.get(sdef.checkpoint, True),
+            "checkpoint": sdef.checkpoint is not None
+            and knobs.checkpoints.get(sdef.checkpoint, True),
             "reviews": [],
             "revises": [],
             "round": 1,

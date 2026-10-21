@@ -199,8 +199,15 @@ async def github_source(tenant_id, person, repos=(REPO,), name="App repo") -> uu
         return source.id
 
 
-async def tick(client, headers) -> None:
-    resp = await client.post("/v1/internal/tick", headers=headers)
+_TICKERS: dict[uuid.UUID, dict[str, str]] = {}
+
+
+async def tick(client, tenant_id: uuid.UUID) -> None:
+    """The company's tick, as its owner (the tick is the owner's or an API token's)."""
+    if tenant_id not in _TICKERS:
+        person = await make_person(tenant_id, f"ticker-{uuid.uuid4().hex[:6]}@example.com")
+        _TICKERS[tenant_id] = person.headers
+    resp = await client.post("/v1/internal/tick", headers=_TICKERS[tenant_id])
     assert resp.status_code == 200 and resp.json()["errors"] == [], resp.text
 
 
@@ -215,7 +222,7 @@ async def built_map(client, tenant_id, owner) -> dict:
     source_id = await github_source(tenant_id, owner)
     resp = await request_map(client, owner, source_id)
     assert resp.status_code == 201, resp.text
-    await tick(client, owner.headers)
+    await tick(client, tenant_id)
     got = await client.get(f"/v1/code-maps/{resp.json()['id']}", headers=owner.headers)
     assert got.status_code == 200, got.text
     return got.json()
@@ -244,7 +251,7 @@ async def test_the_sources_owner_maps_the_code(client, map_runtime):
     # A second request while one builds is refused.
     assert (await request_map(client, owner, source_id)).status_code == 409
 
-    await tick(client, owner.headers)
+    await tick(client, tenant_id)
     got = (await client.get(f"/v1/code-maps/{out['id']}", headers=owner.headers)).json()
     assert got["status"] == "ready" and got["commit_sha"] == "3f2c9a1"
     assert got["as_of"].startswith("2026-10-18T10:00:00")
@@ -265,7 +272,7 @@ async def test_an_invalid_map_is_stored_failed_with_its_problems(client, bad_map
     owner = await make_person(tenant_id, "dev@example.com", "viewer")
     source_id = await github_source(tenant_id, owner)
     out = (await request_map(client, owner, source_id)).json()
-    await tick(client, owner.headers)
+    await tick(client, tenant_id)
     got = (await client.get(f"/v1/code-maps/{out['id']}", headers=owner.headers)).json()
     assert got["status"] == "failed" and got["content"] is None
     assert "unresolved_ref" in got["error"] and "module:no" in got["error"]
@@ -310,8 +317,8 @@ async def test_a_run_that_fails_marks_its_map_failed(client):
         owner = await make_person(tenant_id, "dev@example.com", "owner")
         source_id = await github_source(tenant_id, owner)
         out = (await request_map(client, owner, source_id)).json()
-        await tick(client, owner.headers)
-        await tick(client, owner.headers)
+        await tick(client, tenant_id)
+        await tick(client, tenant_id)
         got = (await client.get(f"/v1/code-maps/{out['id']}", headers=owner.headers)).json()
         assert got["status"] == "failed" and got["error"]
     finally:
@@ -383,9 +390,8 @@ async def test_list_filters_by_repo_and_status(client, map_runtime):
     owner = await make_person(tenant_id, "dev@example.com", "viewer")
     got = await built_map(client, tenant_id, owner)
     h = owner.headers
-    assert [m["id"] for m in (await client.get("/v1/code-maps?status=ready", headers=h)).json()] == [
-        got["id"]
-    ]
+    ready = (await client.get("/v1/code-maps?status=ready", headers=h)).json()
+    assert [m["id"] for m in ready] == [got["id"]]
     assert (await client.get("/v1/code-maps?status=failed", headers=h)).json() == []
     assert (await client.get("/v1/code-maps?repo=example-org/none", headers=h)).json() == []
     listed = (await client.get(f"/v1/code-maps?repo={REPO}", headers=h)).json()
@@ -414,10 +420,10 @@ async def test_deleting_or_narrowing_the_source_deletes_its_maps(client, map_run
     # protects=S5's narrowing rule: a repo dropped from the source's allowlist, or the
     # source deleted, takes its maps with it; fails_when=a map outlives its source.
     tenant_id = await make_tenant()
-    owner = await make_person(tenant_id, "dev@example.com", "viewer")
+    owner = await make_person(tenant_id, "dev@example.com", "commenter")
     source_id = await github_source(tenant_id, owner, repos=(REPO, "example-org/web"))
     first = (await request_map(client, owner, source_id)).json()
-    await tick(client, owner.headers)
+    await tick(client, tenant_id)
     async with tenant_session(tenant_id) as s:
         from oracle.engineering import codemaps
 
@@ -490,7 +496,7 @@ async def test_a_merge_marks_the_map_stale_and_the_tick_refreshes_it_once(
     # fails_when=a merge goes unnoticed, the tick starts two runs, or refreshes more than
     # hourly; no_claim=the pull request's base branch (the GitHub list does not say it).
     tenant_id = await make_tenant()
-    owner = await make_person(tenant_id, "dev@example.com", "viewer")
+    owner = await make_person(tenant_id, "dev@example.com", "commenter")
     got = await built_map(client, tenant_id, owner)
     source_id = got["source_id"]
     await age(tenant_id, got["id"], 2)
@@ -506,27 +512,29 @@ async def test_a_merge_marks_the_map_stale_and_the_tick_refreshes_it_once(
     await sync(client, owner, source_id)
     assert [m.status for m in await maps_of(tenant_id)] == ["stale"]
 
-    set_runtime(FakeRuntime({"index": [Outcome(artifacts={codemap.FILE: text(MAP)}, polls=5)]}))
-    await tick(client, owner.headers)
+    # The refresh reads the merged commit.
+    refreshed = text(changed(commit="4a5b6c7"))
+    set_runtime(FakeRuntime({"index": [Outcome(artifacts={codemap.FILE: refreshed}, polls=5)]}))
+    await tick(client, tenant_id)
     rows = await maps_of(tenant_id)
     assert [m.status for m in rows] == ["stale", "building"]
     async with tenant_session(tenant_id) as s:
         runs = list(await s.scalars(select(Run).where(Run.flow == "code_map")))
         assert len(runs) == 2 and runs[-1].created_by == owner.user.id
-    await tick(client, owner.headers)
+    await tick(client, tenant_id)
     assert len(await maps_of(tenant_id)) == 2
 
     # Merges during the refresh: one follow-up, once the refresh ends.
     events += [merged_pr(3, datetime.now(UTC)), merged_pr(4, datetime.now(UTC))]
     await sync(client, owner, source_id)
     for _ in range(6):
-        await tick(client, owner.headers)
+        await tick(client, tenant_id)
     rows = await maps_of(tenant_id)
     assert [m.status for m in rows][:2] == ["stale", "stale"]
     # The refresh started within the hour: no run yet.
     assert len(rows) == 2
     await age(tenant_id, str(rows[1].id), 2)
-    await tick(client, owner.headers)
+    await tick(client, tenant_id)
     assert [m.status for m in await maps_of(tenant_id)][-1] == "building"
     assert len(await maps_of(tenant_id)) == 3
 
@@ -535,7 +543,7 @@ async def test_a_refresh_keeps_the_maps_sharing(client, map_runtime, monkeypatch
     # protects=a refreshed map is shared as the one it replaces; fails_when=a refresh
     # makes a shared map private (runs lose it) or a private one shared.
     tenant_id = await make_tenant()
-    owner = await make_person(tenant_id, "dev@example.com", "viewer")
+    owner = await make_person(tenant_id, "dev@example.com", "commenter")
     got = await built_map(client, tenant_id, owner)
     await client.post(f"/v1/code-maps/{got['id']}/sharing", json={"sharing": "full"},
                       headers=owner.headers)  # fmt: skip
@@ -543,9 +551,10 @@ async def test_a_refresh_keeps_the_maps_sharing(client, map_runtime, monkeypatch
     events = [merged_pr(9, datetime.now(UTC))]
     sync_yielding(monkeypatch, events)
     await sync(client, owner, got["source_id"])
-    set_runtime(FakeRuntime({"index": [Outcome(artifacts={codemap.FILE: text(MAP)})]}))
-    await tick(client, owner.headers)
-    await tick(client, owner.headers)
+    refreshed = text(changed(commit="4a5b6c7"))
+    set_runtime(FakeRuntime({"index": [Outcome(artifacts={codemap.FILE: refreshed})]}))
+    await tick(client, tenant_id)
+    await tick(client, tenant_id)
     rows = await maps_of(tenant_id)
     assert [(m.status, m.sharing) for m in rows] == [("stale", "full"), ("ready", "full")]
 
@@ -604,6 +613,27 @@ async def test_a_run_records_the_code_maps_it_used_and_briefs_are_checked_agains
     await advance_to(client, auth, run["id"], "prd_review")
     rows = await brief_rows(tenant_id)
     assert sorted(req.params["feature_key"] for req, _ in rows) == ["feature-a", "feature-b"]
+
+
+async def test_a_brief_citing_a_docs_only_map_is_marked_partial(client, eng_flow, briefs_runtime):
+    # protects=briefs cite a docs-only map with its label: Oracle sets partial on the
+    # brief's repo from the map the run recorded, never from the file; fails_when=a
+    # brief resting on the docs reads as resting on the code.
+    from tests.test_tech_briefs import advance_to, start
+
+    tenant_id, auth = await seed_auth()
+    await seed_features(tenant_id)
+    # SAMPLE cites org/app; the shared map of org/app was built from the docs only.
+    await shared_map(tenant_id, {**MAP, "repo": "org/app", "partial": True}, repo="org/app")
+    run = await start(client, auth, "docs-only-prd", checkpoints={"eng_review": False})
+    await advance_to(client, auth, run["id"], "prd_review")
+    listed = (await client.get("/v1/tech-briefs", headers=auth)).json()
+    assert len(listed) == 2
+    for brief in listed:
+        assert brief["code_map"]["repos"] == [
+            {"repo": "org/app", "commit": "3f2c9a1", "as_of": "2026-10-18T10:00:00Z",
+             "partial": True}
+        ]  # fmt: skip
 
 
 async def test_a_private_map_is_not_recorded_for_a_run(client, eng_flow, briefs_runtime):

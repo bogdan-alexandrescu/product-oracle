@@ -30,6 +30,8 @@ FLOWS = (
     "request_triage",
     "strategy_draft",
     "launch_kit",
+    # F5-2 (migration 0022_code_maps): one repo's code capability map.
+    "code_map",
 )
 RUN_STATUSES = (
     "draft",
