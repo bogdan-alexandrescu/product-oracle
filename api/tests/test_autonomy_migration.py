@@ -83,7 +83,9 @@ def test_upgrade_creates_oracle_actions_and_downgrade_drops_it(scratch_db):
     )
     [row] = _run("SELECT subject, notify_ids, opened_by, undo, undone_by FROM oracle_actions")
     assert row == ({}, [], [], None, None)
-    indexes = {r[0] for r in _run("SELECT indexname FROM pg_indexes WHERE tablename = 'oracle_actions'")}
+    indexes = {
+        r[0] for r in _run("SELECT indexname FROM pg_indexes WHERE tablename = 'oracle_actions'")
+    }
     assert "ix_oracle_actions_recent" in indexes
     _run("DELETE FROM tenants WHERE id = :t", t=tenant)
     assert _run("SELECT count(*) FROM oracle_actions")[0][0] == 0

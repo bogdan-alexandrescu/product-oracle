@@ -255,9 +255,7 @@ async def test_put_refuses_levels_above_the_ceiling_bad_limits_and_no_reason(cli
     r = await put(client, owner, "vision", level="recommend", reason="More help")
     assert r.status_code == 422
     assert r.json()["detail"] == "Draft is the highest level for Draft the vision"
-    r = await put(
-        client, owner, "priorities", level="act", limits={"max_rank_move": 9}, reason="x"
-    )
+    r = await put(client, owner, "priorities", level="act", limits={"max_rank_move": 9}, reason="x")
     assert r.status_code == 422 and "max_rank_move" in r.json()["detail"]
     r = await put(
         client, owner, "priorities", level="act", limits={"within_goal": False}, reason="x"

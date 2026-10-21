@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from oracle.auth.router import router as auth_router
+from oracle.autonomy_router import router as autonomy_router
 from oracle.baseline.router import router as baseline_router
 from oracle.blockers.router import router as blockers_router
 from oracle.claude_accounts.router import router as claude_accounts_router
@@ -149,6 +150,8 @@ def create_app() -> FastAPI:
     app.include_router(drive_browse_router)
     app.include_router(notion_pages_router)
     app.include_router(settings_router)
+    # H11: how far Oracle goes on its own, per responsibility, and its "Oracle did" rows.
+    app.include_router(autonomy_router)
     app.include_router(claude_accounts_router)
     app.include_router(sources_router)
     app.include_router(fireflies_browse_router)

@@ -47,9 +47,16 @@ MCP_TOOLS = {
     "with each feature's depends_on and dependents",
     "get_feedback_package": "a version's open feedback items and locked sections",
     "propose_change": "propose a baseline change (locked items become proposals)",
+    "get_autonomy": "how far Oracle may go on its own, per responsibility (H11)",
     "push_draft": "hand back a draft for import as the document's next version",
     "get_run_output": "a file an earlier segment of this run wrote (seq and name)",
 }
+
+
+# Segment tasks that can change the baseline say this (H11 Autonomy).
+AUTONOMY_SENTENCE = (
+    "Read get_autonomy: where a responsibility is below Act, propose instead of writing."
+)
 
 
 @dataclass(frozen=True)
@@ -169,7 +176,13 @@ FLOWS: dict[str, FlowDef] = {
                     "entities and edges, as get_baseline and `oracle baseline pull` give it) "
                     "and a one-page summary to summary.md. Oracle merges baseline.yaml into "
                     "the baseline when the segment ends: locked items become proposals.",
-                    tools=("search", "get_source_item", "get_baseline", "propose_change"),
+                    tools=(
+                        "search",
+                        "get_source_item",
+                        "get_baseline",
+                        "propose_change",
+                        "get_autonomy",
+                    ),
                 ),
                 SegmentDef(
                     name="feature_set",
@@ -188,6 +201,7 @@ FLOWS: dict[str, FlowDef] = {
                         "search",
                         "get_source_item",
                         "propose_change",
+                        "get_autonomy",
                     ),
                 ),
                 SegmentDef(
@@ -199,7 +213,7 @@ FLOWS: dict[str, FlowDef] = {
                     checkpoint="priority_order",
                     task="Order the approved feature set by goal-weighted priority, respecting "
                     "dependencies. Explain every number. Write the order to priority.yaml.",
-                    tools=("get_baseline", "trace_feature", "propose_change"),
+                    tools=("get_baseline", "trace_feature", "propose_change", "get_autonomy"),
                 ),
                 SegmentDef(
                     name="prd_draft",
@@ -523,6 +537,9 @@ def step_prompt(
             "prompt and say which claims you could not check. Tools it will offer:"
         )
     lines += [f"- {t}: {MCP_TOOLS[t]}" for t in segment.tools]
+    if "get_autonomy" in segment.tools:
+        # H11: the server enforces the levels; the agent is told so it does not waste work.
+        lines.append(AUTONOMY_SENTENCE)
     lines += [
         "",
         "Evidence: every source item and piece of evidence carries a confidence score "

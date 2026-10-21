@@ -20,6 +20,9 @@ The known keys and how each value is checked:
   providers (gmail.com, outlook.com, gmx.de, ...) are refused: anyone has an address there.
 - ``company_shared_drives`` (S5): ``[{"id", "name"}]``, the Google shared drives that are
   the company's. A doc in a picked folder in any other shared drive is skipped.
+- ``autonomy`` (H11): how far Oracle goes on its own, per responsibility
+  (``oracle.autonomy``); ``{}`` is every default. Written only through
+  ``PUT /v1/autonomy/{key}`` (each change carries a reason); here it can only be reset.
 
 Removing a domain or a shared drive (or resetting either) takes effect on save (S5, owner
 2026-10-20): the docs in picked folders that now fall outside are deleted (soft delete)
@@ -64,6 +67,8 @@ DEFAULTS: dict[str, Any] = {
     # S5 (owner, 2026-10-20): explicit, never inferred in production.
     "company_email_domains": [],
     "company_shared_drives": [],
+    # H11: every responsibility at its default (oracle.autonomy.REGISTRY).
+    "autonomy": {},
 }
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
@@ -191,6 +196,11 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         return validate_company_domains(value)
     if key == "company_shared_drives":
         return validate_shared_drives(value)
+    if key == "autonomy":
+        raise InvalidSetting(
+            "autonomy changes one responsibility at a time, with a reason: use "
+            "PUT /v1/autonomy/{key} (a null value here resets every default)"
+        )
     raise KeyError(key)
 
 

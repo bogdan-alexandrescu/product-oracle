@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import inspect
 
+from oracle import autonomy
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import recheck_caller, require_role, require_role_now
 from oracle.baseline import conflicts, evidence, public_links, scoring, service, trace, yaml_io
@@ -61,6 +62,8 @@ Reader = Annotated[Principal, Depends(require_role("viewer"))]
 Commenter = Annotated[Principal, Depends(require_role("commenter"))]
 Approver = Annotated[Principal, Depends(require_role("approver"))]
 ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
+# H11: a run's propose_change while the baseline is at observe.
+OBSERVING_BASELINE = "Oracle is set to observe the baseline"
 
 
 async def _fresh(db, *rows):
@@ -548,7 +551,10 @@ async def list_proposals(
 
 @router.post("/proposals", response_model=ProposalOut, status_code=status.HTTP_201_CREATED)
 async def create_proposal(body: ProposalCreate, principal: Commenter, db: TenantDB) -> ProposalOut:
-    """Suggest a change; an approver accepts or rejects it."""
+    """Suggest a change; an approver accepts or rejects it. A run's proposal is refused
+    while Oracle is set to observe the baseline (H11); a person's never is."""
+    if principal.is_run and await autonomy.level(db, "baseline") == "observe":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, OBSERVING_BASELINE)
     writer = service.Writer(principal, "agent", run_id=body.run_id, reason=body.reason)
     try:
         proposal = await service.submit_proposal(

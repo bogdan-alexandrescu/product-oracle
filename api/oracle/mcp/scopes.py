@@ -22,6 +22,8 @@ READ_AREAS = {
         "blocker-options",
         "feasibility-experiments",
         "blocker-events",
+        # H11: how far Oracle may go per responsibility (get_autonomy).
+        "autonomy",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }
