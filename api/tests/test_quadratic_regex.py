@@ -94,3 +94,51 @@ def test_regexes_keep_their_behaviour_on_normal_text():
     m = SECTION_ID_RE.search(text)
     assert m and m.group(1) == "goals" and text[: m.start()] == "Goals"
     assert SECTION_ID_RE.search("{#a}") and SECTION_ID_RE.search("x {#a} y") is None
+
+
+def _fast(fn, limit=0.15):
+    start = time.process_time()
+    fn()
+    took = time.process_time() - start
+    assert took < limit, f"took {took:.2f}s of CPU"
+
+
+def test_citation_re_is_linear_on_open_markers():
+    from oracle.docs.parser import CITATION_RE
+
+    text = ("[c:" * 6_600 + "\n") * 50
+    _fast(lambda: list(CITATION_RE.finditer(text)))
+    assert CITATION_RE.findall("a [c:c1] b [c:c2]") == ["c1", "c2"]
+
+
+def test_quality_bullets_are_linear_on_blank_lines():
+    from oracle.quality.text import _BULLET
+
+    for text in ("\n" * 20_000, " \n" * 10_000, "\n" * 20_000 + "x", "-" + " \n" * 10_000 + "x"):
+        _fast(lambda text=text: list(_BULLET.finditer(text)))
+    found = _BULLET.findall("- one\n  * two  \n3. three\n4) four\nnot - a bullet\n")
+    assert [b.strip() for b in found] == ["one", "two", "three", "four"]
+
+
+def test_template_title_line_is_linear():
+    from oracle.templates.service import draft_skeleton
+
+    def skeleton(body: str) -> str:
+        return draft_skeleton(
+            "---\ntitle: T\n---\n" + body,
+            slug="s",
+            title="My title",
+            kind="prd",
+            template="t",
+            version=1,
+            theme=None,
+        )
+
+    for body in (
+        "# a" + " " * 20_000 + "b\n",
+        ("#" + " " * 100 + "\n") * 200,
+        "# " + "{#" * 10_000,
+    ):
+        _fast(lambda body=body: skeleton(body))
+    assert "# My title {#goals}" in skeleton("# Old   {#goals}\n\ntext\n")
+    assert "# My title {#goals}" in skeleton("# {#goals}\n")
