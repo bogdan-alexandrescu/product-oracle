@@ -131,6 +131,25 @@ async def world(client) -> World:
             member_id=member_id, kind="provider_revoke", target_id=uuid.uuid4(), provider="github"
         )
         s.add(follow_up)
+        # An approved PRD scope (C6) for GET /v1/documents/{doc}/scope.
+        from oracle.docs.models import Document
+        from oracle.runs.models import Run
+        from oracle.runs.scope_models import PrdScope
+
+        doc_id = await s.scalar(select(Document.id).where(Document.slug == "checkout-redesign"))
+        run = Run(flow="baseline_to_prd", knobs={"document_slug": "checkout-redesign"})
+        s.add(run)
+        await s.flush()
+        s.add(
+            PrdScope(
+                run_id=run.id,
+                segment_seq=2,
+                attempt=1,
+                status="approved",
+                document_id=doc_id,
+                check_result={},
+            )
+        )
         await s.commit()
     return World(
         r.tenant_id,
@@ -182,6 +201,9 @@ MATRIX: list[tuple[str, str, str, dict]] = [
     ("POST", V2 + "/feedback", "commenter", {"json": {"body": "Add a rollout section."}}),
     ("GET", "/v1/documents/{doc}/feedback", "viewer", {}),
     ("PATCH", "/v1/feedback/{feedback_id}", "approver", {"json": {"status": "declined"}}),
+    ("POST", "/v1/feedback/{feedback_id}/stage-for-agents", "approver", {}),
+    ("DELETE", "/v1/feedback/{feedback_id}/stage-for-agents", "approver", {}),
+    ("GET", "/v1/documents/{doc}/scope", "viewer", {}),
     ("GET", V2 + "/feedback-package", "viewer", {}),
     ("GET", V2 + "/resolution-report", "viewer", {}),
     ("POST", V2 + "/approve", "approver", {}),
