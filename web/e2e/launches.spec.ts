@@ -19,9 +19,9 @@ async function start(page: Page, role?: "viewer" | "approver") {
   await login(page);
 }
 
-/** From the Roadmap page header, as a person gets there. */
+/** From the Roadmap documents page header (Plan › Roadmap documents), as a person gets there. */
 async function openLaunches(page: Page) {
-  await page.goto("/roadmap");
+  await page.goto("/plan/documents");
   await page.getByTestId("roadmap-launches-link").click();
   await expect(page).toHaveURL(/\/roadmap\/launches$/);
   await expect(page.getByTestId("launches-table")).toBeVisible();
@@ -168,7 +168,7 @@ test("12e: the changelog shows the launch's entry under Added; Publish and Expor
   // fails_when=the entry is not under Added, stays Draft, or the export misses it (or carries a draft);
   // no_claim=posting it anywhere (a person does).
   await start(page);
-  await page.goto("/roadmap");
+  await page.goto("/plan/documents");
   await page.getByTestId("roadmap-changelog-link").click();
   await expect(page).toHaveURL(/\/roadmap\/changelog$/);
   const added = page.getByTestId("changelog-category").filter({ has: page.getByRole("heading", { name: "Added" }) });
