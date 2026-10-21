@@ -631,3 +631,31 @@ async def test_a_prd_with_the_slug_is_never_the_target_roadmap(client, owner):  
         prd = await s.scalar(select(reasons_mod.Document).where(reasons_mod.Document.kind == "prd"))
         run = Run(document_id=None, knobs={"document_slug": prd.slug})
         assert await reasons_mod._target_document(s, run) is None
+
+
+class _CountingItems(list):
+    """A list that counts full passes over it (``for`` and ``enumerate``)."""
+
+    passes = 0
+
+    def __iter__(self):
+        type(self).passes += 1
+        return super().__iter__()
+
+
+def test_dependency_problems_do_not_rescan_the_items_for_each_problem():
+    """Each dependency problem used to find its item with a scan of every item, so a file
+    with many of them cost items x problems on the event loop. The number of passes over
+    the items must not grow with the number of problems."""
+    body = "\n".join(
+        f"  - {{id: i{n}, title: T{n}, outcome: o, horizon: later, prd_section: s-1, "
+        f"depends_on: [missing{n}]}}"
+        for n in range(120)
+    )
+    items, problems = check(FILE.format(items=body))
+    assert sum(1 for p in problems if p["code"] == "unknown_dependency") == 120
+    counted = _CountingItems(items)
+    _CountingItems.passes = 0
+    out = reasons_for(counted, problems, None)
+    assert codes(out).count("unknown_dependency") == 120
+    assert _CountingItems.passes < 10, _CountingItems.passes
