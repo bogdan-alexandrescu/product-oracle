@@ -260,7 +260,7 @@ test("my account: sign out everywhere ends the session, personal tokens, MCP cli
   await expect(dialog).toContainText("this one too");
   await expect(dialog).toContainText("Your personal API token is revoked");
   await expect(dialog).toContainText("Your MCP client loses");
-  await expect(dialog).toContainText("Runs you started that are still going lose their tokens; the runs go on");
+  await expect(dialog).toContainText("Runs you started that are still going lose their current tokens; they keep running, and their next segment gets a new token");
   await dialog.getByRole("button", { name: "Sign out everywhere" }).click();
   await expect(page).toHaveURL(/\/login/);
   await page.goto("/account");

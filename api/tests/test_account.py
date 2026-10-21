@@ -517,7 +517,9 @@ async def test_tokens_never_mint_tokens(client):
             headers={"Authorization": f"Bearer {secret}"},
         )
         assert refused.status_code == 403, refused.text
-        assert "browser" in refused.json()["detail"]
+        # A read-only token is refused before the route runs; a writing one by AC1.
+        why = "browser" if "oracle:write" in scopes else "oracle:read"
+        assert why in refused.json()["detail"]
     async with tenant_session(r.tenant_id) as s:
         names = set(await s.scalars(select(ApiToken.name)))
     assert "child" not in names
@@ -977,3 +979,200 @@ async def test_a_sign_in_racing_a_password_change_does_not_survive_it(client):
         await change.commit()
     resp = await asyncio.wait_for(login, timeout=10)
     assert resp.status_code == 401, resp.text
+
+
+# --- Security review (PR #104): read-only tokens, Origin, rate-limit race, scopes -------
+
+
+async def _personal(tenant_id: uuid.UUID, user_id: uuid.UUID, scope: str | None) -> str:
+    async with tenant_session(tenant_id) as s:
+        _, raw = await create_api_token(s, f"pat {scope}", user_id=user_id, scope=scope)
+        await s.commit()
+    return raw
+
+
+@pytest.mark.parametrize("scope", ["oracle:read", "", "admin"])
+async def test_a_read_only_personal_token_changes_no_preference(client, scope):
+    """A personal token without oracle:write (empty or unknown scopes fail closed) reads
+    and changes nothing, as a read-only MCP client."""
+    r = await seed(password=PASSWORD)
+    raw = await _personal(r.tenant_id, await _admin_id(r.tenant_id), scope)
+    headers = {"Authorization": f"Bearer {raw}"}
+    assert (await client.get("/v1/me/preferences", headers=headers)).status_code == 200
+    resp = await client.patch("/v1/me/preferences", json={"document_view": "full"}, headers=headers)
+    assert resp.status_code == 403, resp.text
+    assert "oracle:write" in resp.json()["detail"]
+    full = await _personal(r.tenant_id, await _admin_id(r.tenant_id), "oracle:read oracle:write")
+    ok = await client.patch(
+        "/v1/me/preferences",
+        json={"document_view": "full"},
+        headers={"Authorization": f"Bearer {full}"},
+    )
+    assert ok.status_code == 200, ok.text
+
+
+async def test_a_read_only_personal_token_is_read_only_through_mcp(client):
+    r = await seed(password=PASSWORD)
+    raw = await _personal(r.tenant_id, await _admin_id(r.tenant_id), "oracle:read")
+    async with mcp_client(raw) as c:
+        read = await c.call_tool("get_preferences", {})
+        write = await c.call_tool("update_preferences", {"body": {"document_view": "full"}})
+    assert not read.is_error, text_of(read)
+    assert write.is_error and "HTTP 403" in text_of(write), text_of(write)
+    assert "oracle:write" in text_of(write)
+    async with tenant_session(r.tenant_id) as s:
+        from oracle.preferences.models import UserPreference
+
+        assert (await s.scalars(select(UserPreference))).all() == []
+
+
+def test_an_empty_scope_grants_nothing():
+    from oracle.members.tokens import FULL_SCOPES, scopes_of
+
+    assert scopes_of("") == [] and scopes_of("  ") == []
+    assert scopes_of(None) == FULL_SCOPES  # a token made before scopes existed
+    assert scopes_of("oracle:write oracle:read") == FULL_SCOPES
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [{"Origin": "https://evil.example.net"}, {"Origin": "null"}, {"Sec-Fetch-Site": "cross-site"}],
+)
+async def test_password_change_and_token_creation_refuse_another_origin(client, headers):
+    """A body without a Content-Type is parsed as JSON, so a cross-site fetch needs no
+    preflight: both routes check the origin as sign-out-everywhere does."""
+    import json
+
+    r = await seed(password=PASSWORD)
+    await _login(client)
+    token = json.dumps({"name": "cross", "scopes": ["oracle:read", "oracle:write"]})
+    password = json.dumps({"current_password": PASSWORD, "new_password": _phrase("fresh")})
+    for path, body in (("/v1/me/tokens", token), ("/v1/me/password", password)):
+        for content_type in ({"Content-Type": "application/json"}, {}):
+            resp = await client.post(path, content=body, headers={**headers, **content_type})
+            assert resp.status_code == 403, (path, content_type, resp.text)
+            assert "Cross-site" in resp.json()["detail"]
+    async with tenant_session(r.tenant_id) as s:
+        assert set(await s.scalars(select(ApiToken.name))) == {"agent-track"}
+        assert (await s.scalar(select(User.sessions_valid_after))) is None
+    # The app's own origin passes.
+    same = {"Origin": "http://localhost:3000"}
+    ok = await client.post(
+        "/v1/me/tokens", content=token, headers={**same, "Content-Type": "application/json"}
+    )
+    assert ok.status_code == 201, ok.text
+
+
+async def test_concurrent_wrong_passwords_never_pass_the_limit(client):
+    """The failure count is read and the failure recorded under a per-member lock:
+    attempts racing each other cannot all see an empty window."""
+    import asyncio
+
+    r = await seed(password=PASSWORD)
+    await _login(client)
+    body = {"current_password": _phrase("guess"), "new_password": _phrase("longer")}
+    results = await asyncio.gather(*(client.post("/v1/me/password", json=body) for _ in range(8)))
+    codes = sorted(resp.status_code for resp in results)
+    assert codes == [400] * 5 + [429] * 3, codes
+    assert len(await _failed(r.tenant_id)) == 5
+
+
+async def _failed(tenant_id: uuid.UUID) -> list[str]:
+    async with tenant_session(tenant_id) as s:
+        return list(
+            await s.scalars(
+                select(AuditEvent.action).where(AuditEvent.action == "password.change_failed")
+            )
+        )
+
+
+async def test_password_hashing_runs_off_the_event_loop(client, monkeypatch):
+    """argon2 is slow and CPU-bound: the check and the new hash run in a worker thread,
+    on the password change and on sign-in."""
+    import threading
+
+    from argon2 import PasswordHasher
+
+    await seed(password=PASSWORD)
+    loop_thread = threading.get_ident()
+    seen: list[tuple[str, bool]] = []
+    verify, hash_ = PasswordHasher.verify, PasswordHasher.hash
+
+    def spy_verify(*a, **k):
+        seen.append(("verify", threading.get_ident() != loop_thread))
+        return verify(*a, **k)
+
+    def spy_hash(*a, **k):
+        seen.append(("hash", threading.get_ident() != loop_thread))
+        return hash_(*a, **k)
+
+    monkeypatch.setattr(PasswordHasher, "verify", spy_verify)
+    monkeypatch.setattr(PasswordHasher, "hash", spy_hash)
+    await _login(client)
+    body = {"current_password": PASSWORD, "new_password": _phrase("fresh")}
+    assert (await client.post("/v1/me/password", json=body)).status_code == 204
+    assert {kind for kind, _ in seen} == {"verify", "hash"}
+    assert all(off for _, off in seen), seen
+
+
+@pytest.mark.parametrize("how", ["sign_out", "password"])
+async def test_authorization_codes_issued_before_a_sign_out_are_void(client, how):
+    from oracle.mcp.oauth.models import OAuthCode
+    from tests.test_oauth import REDIRECT, approve, authorize_params, pkce, register, token
+
+    await seed(password=PASSWORD)
+    await _login(client)
+    reg = await register(client)
+    verifier, challenge = pkce()
+    code = await approve(client, authorize_params(reg["client_id"], challenge))
+    if how == "sign_out":
+        assert (await client.post("/v1/me/sign-out-everywhere")).status_code == 200
+    else:
+        body = {"current_password": PASSWORD, "new_password": _phrase("fresh")}
+        assert (await client.post("/v1/me/password", json=body)).status_code == 204
+    tenant_id = uuid.UUID(await _tenant_of_admin())
+    async with tenant_session(tenant_id) as s:
+        row = await s.scalar(select(OAuthCode))
+        assert row.expires_at <= datetime.now(UTC), "the unused code is voided"
+    resp = await token(
+        client,
+        grant_type="authorization_code",
+        client_id=reg["client_id"],
+        code=code,
+        redirect_uri=REDIRECT,
+        code_verifier=verifier,
+    )
+    assert resp.status_code == 400 and resp.json()["error"] == "invalid_grant", resp.text
+
+
+async def test_one_company_cannot_list_or_revoke_anothers_tokens(client):
+    a = await seed(password=PASSWORD)
+    from tests.conftest import make_tenant
+
+    b_tenant = await make_tenant("Other Co")
+    b_owner = await _add_user(b_tenant, "owner@other.io", "owner", PASSWORD)
+    b_raw = await _personal(b_tenant, b_owner.id, "oracle:read oracle:write")
+    a_admin = await _admin_id(a.tenant_id)
+    a_raw = await _personal(a.tenant_id, a_admin, "oracle:read oracle:write")
+    async with tenant_session(a.tenant_id) as s:
+        a_ids = {str(t.id) for t in await s.scalars(select(ApiToken))}
+    await _login(client, email="owner@other.io")
+    listed = {t["id"] for t in (await client.get("/v1/api-tokens")).json()}
+    assert len(listed) == 1  # B's own token
+    mine = {t["id"] for t in (await client.get("/v1/me/tokens")).json()}
+    assert listed and listed.isdisjoint(a_ids) and mine.isdisjoint(a_ids)
+    by_user = await client.get("/v1/api-tokens", params={"user_id": str(a_admin)})
+    assert by_user.status_code == 200 and by_user.json() == []
+    for token_id in a_ids:
+        assert (await client.delete(f"/v1/api-tokens/{token_id}")).status_code == 404
+        assert (await client.delete(f"/v1/me/tokens/{token_id}")).status_code == 404
+    # B's own bearer token cannot reach them either.
+    b_headers = {"Authorization": f"Bearer {b_raw}"}
+    client.cookies.clear()
+    for token_id in a_ids:
+        resp = await client.delete(f"/v1/me/tokens/{token_id}", headers=b_headers)
+        assert resp.status_code == 404
+    async with tenant_session(a.tenant_id) as s:
+        assert all(t.revoked_at is None for t in await s.scalars(select(ApiToken)))
+    a_me = await client.get("/v1/me", headers={"Authorization": f"Bearer {a_raw}"})
+    assert a_me.status_code == 200
