@@ -3203,11 +3203,11 @@ async def _resume_failed(
     attempt = _current_attempt(art, segment)
     count = int((attempt.get("resume_failures") or {}).get("count") or 0) + 1
     now = _now().isoformat()
-    attempt["resume_failures"] = {"count": count, "error": error, "at": now}
-    stats.errors.append(
-        f"run {run_id}: importing {segment.name}'s output failed ({error}), "
-        f"try {count} of {RESUME_TRIES}"
-    )
+    # ``pass``: this tick's pass over the run, so that the pass run again after a runtime
+    # call (_replay) neither tries the advance again nor counts it twice (_tick_run).
+    failed = {"count": count, "error": error, "at": now, "pass": stats.pass_id}
+    attempt["resume_failures"] = failed
+    stats.errors.append(_resume_error(run_id, segment, failed))
     if count >= RESUME_TRIES:
         segment.status = "failed"
         segment.error = (
@@ -3228,6 +3228,13 @@ async def _resume_failed(
     # The commit released the run's row lock: taken again, read as they are now.
     run = await _get_run(db, run_id, lock=True)
     return run, await _segments(db, run_id, fresh=True)
+
+
+def _resume_error(run_id: uuid.UUID, segment: RunSegment, failed: dict[str, Any]) -> str:
+    return (
+        f"run {run_id}: importing {segment.name}'s output failed ({failed.get('error')}), "
+        f"try {failed.get('count')} of {RESUME_TRIES}"
+    )
 
 
 async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str, Any]:
@@ -3268,6 +3275,9 @@ class _TickStats:
     paused: int = 0
     # Kept, not raised: what a raise would roll back (a count of 404s) is written.
     errors: list[str] = field(default_factory=list)
+    # This tick's pass over one run (set per run): what the pass committed and must not
+    # redo when it runs again after a runtime call (_replay) is marked with it.
+    pass_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 
 async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: float) -> None:
@@ -3303,11 +3313,17 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
             status = None  # read again where it is needed, and failing there as before
     resuming = _resuming(run, segments)
     if resuming is not None:
-        try:
-            await _resume_advance(db, run, resuming, segments, stats)
-            return
-        except Exception as exc:  # counted; the workflow is still read below
-            run, segments = await _resume_failed(db, run.id, resuming.seq, exc, stats)
+        failed = _current_attempt(_art(resuming), resuming).get("resume_failures") or {}
+        if failed.get("pass") == stats.pass_id:
+            # Tried and counted by this tick's pass already, which runs again after a
+            # runtime call: not tried again; its error, which ``reset`` dropped, reported.
+            stats.errors.append(_resume_error(run.id, resuming, failed))
+        else:
+            try:
+                await _resume_advance(db, run, resuming, segments, stats)
+                return
+            except Exception as exc:  # counted; the workflow is still read below
+                run, segments = await _resume_failed(db, run.id, resuming.seq, exc, stats)
         wf = _live(run)
         if wf is not None and not wf.get("cancel_pending") and run.status not in FINAL:
             # Its status, cost and the ceiling, a wait's expiry and the workflow's end:
@@ -4870,6 +4886,7 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
     for run_id in ids:
         # One cap on the runtime calls of this run's whole pass, its submission included.
         deadline = loop.time() + TICK_RUN_SECONDS
+        stats.pass_id = uuid.uuid4().hex
         saved = replace(stats, errors=list(stats.errors))
 
         def reset(saved: _TickStats = saved) -> None:
