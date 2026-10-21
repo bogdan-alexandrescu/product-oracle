@@ -142,14 +142,22 @@ async def test_a_queue_wait_does_not_count_against_the_parse_cap():
 async def test_slow_posts_do_not_make_a_small_honest_import_fail(client, monkeypatch):
     monkeypatch.setattr(safe_yaml, "PARSE_SECONDS", 0.3)
     owner = (await make_ctx()).as_("owner")
-    # Nested brackets (depth 10, closed): slow for markdown-it, under every linear cap.
-    slow = FRONT + "\n".join(["[[[[[[[[[[a]]]]]]]]]] " * 800] * 6) + "\n"
+    # Nested brackets (depth 10, closed): slow for markdown-it (seconds each), under every
+    # linear cap.
+    slow = FRONT + "\n".join(["[[[[[[[[[[a]]]]]]]]]] " * 800] * 10) + "\n"
     posts = [asyncio.create_task(import_md(client, owner, slow, doc=f"slow-{i}")) for i in range(8)]
-    await asyncio.sleep(0.05)  # the slow posts hold the parse pool first
+    # The slow posts hold every worker of the parse pool and more wait for one.
+    pool = safe_yaml._EXECUTOR
+    for _ in range(500):
+        if len(pool._threads) == pool._max_workers and pool._work_queue.qsize():
+            break
+        await asyncio.sleep(0.01)
+    else:
+        pytest.fail("the slow posts never filled the parse pool")
     resp = await import_md(client, owner, SMALL, doc="small")
     assert resp.status_code == 201, resp.text[:300]
     for done in await asyncio.gather(*posts):
-        assert done.status_code in (201, 422), done.text[:300]
+        assert done.status_code == 422 and "too_slow" in done.text, done.text[:300]
 
 
 # --------------------------------------------------------------------------- script URLs
