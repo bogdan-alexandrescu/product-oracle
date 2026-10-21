@@ -145,7 +145,7 @@ from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import schedule
-from oracle.runs import flows, rejection, roadmap, workflow
+from oracle.runs import flows, reasons, rejection, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -3195,19 +3195,25 @@ async def _advance(
             # reads only, and the tick's transaction (the segment, the run's row lock)
             # stays usable.
             async with db.begin_nested():
-                items_check = await _check_items(db, run, art["files"].get(ITEMS_FILE))
+                items_check = await _check_items(
+                    db, run, art["files"].get(ITEMS_FILE), art.get("previous")
+                )
         except Exception as exc:  # noqa: BLE001 - a bad file fails the check, never the tick
             log.exception("checking %s of run %s failed", ITEMS_FILE, run.id)
-            items_check = {
-                "items": 0,
-                "by_horizon": {},
-                "problems": [
-                    {
-                        "code": "unreadable_yaml",
-                        "message": f"{ITEMS_FILE} could not be checked ({type(exc).__name__})",
-                    }
-                ],
-            }
+            items_check = reasons.summarize(
+                {
+                    "items": 0,
+                    "by_horizon": {},
+                    "problems": [
+                        {
+                            "code": "unreadable_yaml",
+                            "message": f"{ITEMS_FILE} could not be checked ({type(exc).__name__})",
+                        }
+                    ],
+                },
+                [],
+                None,
+            )
         art["items_check"] = items_check
     if sdef.imports_draft:
         kind = await _target_kind(db, run)
@@ -3534,14 +3540,19 @@ def _resume_error(run_id: uuid.UUID, segment: RunSegment, failed: dict[str, Any]
     )
 
 
-async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str, Any]:
-    """roadmap_items.yaml checked against the run's PRD version (oracle.runs.roadmap)."""
+async def _check_items(
+    db: AsyncSession, run: Run, text: str | None, previous: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """roadmap_items.yaml checked against the run's PRD version (oracle.runs.roadmap),
+    with every item's reasons (oracle.runs.reasons). ``previous``: the segment's previous
+    attempt, the comparison base when it kept its file."""
     if text is None:
-        return {
+        missing = {
             "items": 0,
             "by_horizon": {},
             "problems": [{"code": "missing_file", "message": f"the segment left no {ITEMS_FILE}"}],
         }
+        return reasons.summarize(missing, [], None)
     slug = version = prd_id = None
     keys: set[str] | None = None
     source_id = _source_id(run)
@@ -3558,7 +3569,20 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
     check = await roadmap.check_items_async(
         text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
     )
-    return check.as_json()
+    if not check.items:
+        return reasons.summarize(check.as_json(), [], None)
+    try:
+        # In a savepoint: a database or trace error loses the advisory reasons only; the
+        # blocking ones (the check's) are still stored, flagged partial.
+        async with db.begin_nested():
+            context = await reasons.reason_context(db, run, check.items, previous)
+        partial = False
+    except Exception:  # noqa: BLE001 - advisory reasons never fail the check or the tick
+        log.exception("the reasons of %s of run %s could not be loaded", ITEMS_FILE, run.id)
+        context = reasons.ReasonContext(prd_title=slug, prd_version=version, advisory=False)
+        partial = True
+    found = reasons.reasons_for(check.items, check.problems, context)
+    return reasons.summarize(check.as_json(), found, context.base, partial)
 
 
 # --------------------------------------------------------------------------- tick

@@ -42,6 +42,7 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
     tick,
 )
 
+SHIPPING_V1 = "Show the shipping cost on the cart page, before the shopper enters an address."
 ROADMAP_V1 = {"kind": "roadmap_version", "label": "roadmap v1", "version": 1, "attempt": None}
 
 
@@ -410,7 +411,9 @@ async def test_advance_stores_reasons_on_the_segment_and_the_checkpoint(client, 
     await seed_trace(tenant_id)  # an open critical blocker affects the payment step
     await built_roadmap(client, auth, runtime)  # roadmap v1: payment-step now, shipping-step next
     # A newer PRD version changes the shipping section (5.2), not the payment one (5.1).
-    assert (await import_draft(client, auth, draft("prd_v2.md"))).status_code == 201
+    v2 = draft("prd_v1.md").replace(SHIPPING_V1, "Show an estimated shipping cost, by postcode.")
+    resp = await import_draft(client, auth, v2)
+    assert resp.status_code == 201, resp.text
 
     run, check = await roadmap_items_check(client, auth, runtime, SECOND)
     assert pending(run)["payload"]["items_check"] == check
