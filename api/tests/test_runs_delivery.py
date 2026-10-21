@@ -3,6 +3,8 @@
 decision through Oracle gets 409 "already decided"), and a decision not delivered yet is
 shown on the run page and in the Inbox. Synthetic placeholders only."""
 
+import json
+import uuid
 from types import SimpleNamespace
 
 import httpx
@@ -10,11 +12,14 @@ import pytest
 from sqlalchemy import select
 
 from oracle.models import AuditEvent
+from oracle.runs import service
+from oracle.runs.models import Checkpoint
 from oracle.tenancy import tenant_session
 from tests.fixtures import seed_auth
 from tests.review_v2_helpers import person
-from tests.test_adapter_v2 import _decide_raw, _waiting, on
+from tests.test_adapter_v2 import _ceiling, _decide_raw, _knobs_of, _waiting, on
 from tests.test_adapter_v2 import settings as _v2_settings
+from tests.test_adapter_v2_round7 import _wf_cost
 from tests.test_review_v2_security_3 import member_token
 from tests.test_runs import get, pending, started, tick
 from tests.test_runs import runtime as runtime  # the FakeRuntime fixture
@@ -164,3 +169,109 @@ async def test_a_voided_decision_whose_post_landed_waits_for_an_approver(client,
     cp = pending(run)
     assert cp["console"]["needs"] == "confirm", cp
     assert len(swarm.answers) == 1 and len(swarm.submissions()) == 1
+
+
+# --- C. an owed decision does not starve the tick ---------------------------------------
+
+
+async def _tick_raw(client, auth) -> dict:
+    """A tick whose errors the test reads (a post SwarmCloud refuses is one)."""
+    resp = await client.post("/v1/internal/tick", headers=auth)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def _owed(tenant_id, run_id: str) -> dict | None:
+    async with tenant_session(tenant_id) as s:
+        cps = await s.scalars(select(Checkpoint).where(Checkpoint.run_id == uuid.UUID(run_id)))
+        return next(
+            (c.payload["wait"]["posting"] for c in cps if "posting" in c.payload.get("wait", {})),
+            None,
+        )
+
+
+async def _refused_decision(client, auth, tenant_id, swarm) -> tuple[dict, dict]:
+    """A run whose changes request is recorded and SwarmCloud did not take its post."""
+    run = await _waiting(client, auth, tenant_id, swarm)
+    cp = pending(run)
+    swarm.fail_next_answer = httpx.Response(503, json=_UNAVAILABLE)
+    resp = await _decide_raw(client, auth, run, "changes_requested", "Cover returns")
+    assert resp.status_code == 503 and "recorded" in resp.text, resp.text
+    return run, cp
+
+
+async def test_the_tick_still_reads_the_run_while_its_decision_post_keeps_failing(client, owner):
+    """The tick tries the owed post, then still runs the run's normal pass: the workflow's
+    cost is read while SwarmCloud keeps refusing the post. The run is counted once."""
+    tenant_id, auth = owner
+    swarm = on()
+    run, _ = await _refused_decision(client, auth, tenant_id, swarm)
+    for _ in range(2):
+        swarm.workflows["wf_1"].steps[0].cost += 2.0  # spends while the decision is owed
+        swarm.fail_next_answer = httpx.Response(503, json=_UNAVAILABLE)
+        out = await _tick_raw(client, auth)
+        assert out["runs_checked"] == 1, out
+        assert any("recorded" in e for e in out["errors"]), out
+        got = await get(client, auth, run["id"])
+        assert got["spent_usd"] == pytest.approx(_wf_cost(swarm, "wf_1"))
+    assert swarm.answers == [] and (await _owed(tenant_id, run["id"]))["tries"] == 3
+    await tick(client, auth)
+    assert len(swarm.answers) == 1
+    assert (await get(client, auth, run["id"]))["status"] == "running"
+
+
+async def test_an_owed_decision_survives_a_pause_on_overrun_and_resume(client, owner):
+    """Owed, the run goes over its ceiling and pauses (its workflow cancelled): the
+    decision stays owed; resumed, the run waits on its delivery again, and the tick
+    delivers it as a new workflow."""
+    tenant_id, auth = owner
+    swarm = on()
+    run, cp = await _refused_decision(client, auth, tenant_id, swarm)
+    await _ceiling(tenant_id, run["id"], "0.01")
+    swarm.workflows["wf_1"].steps[0].cost += 1.0
+    swarm.fail_next_answer = httpx.Response(503, json=_UNAVAILABLE)
+    await _tick_raw(client, auth)
+    got = await get(client, auth, run["id"])
+    assert got["status"] == "paused_overrun", got["status"]
+    assert swarm.workflows["wf_1"].state == "CANCELLED"
+    await _tick_raw(client, auth)
+    assert await _owed(tenant_id, run["id"]) is not None
+    after = next(c for c in got["checkpoints"] if c["id"] == cp["id"])
+    assert after["status"] == "changes_requested"
+    resp = await client.post(f"/v1/runs/{run['id']}/resume", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "awaiting_checkpoint"
+    await tick(client, auth)
+    got = await get(client, auth, run["id"])
+    assert got["status"] == "running" and await _owed(tenant_id, run["id"]) is None
+    assert len(swarm.submissions()) == 2 and swarm.answers == []
+    assert "Cover returns" in json.dumps(swarm.submissions()[1])
+
+
+async def test_a_redo_whose_cancel_is_not_confirmed_keeps_its_cancel_marker(client, owner):
+    """Redo cancels the workflow; SwarmCloud does not confirm the cancel: the decision is
+    recorded and the cancel's marker is kept, counted on every try, so a cancel answered
+    with 404s that prove nothing reaches the Inbox's Cancel / Stop cancelling."""
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _waiting(client, auth, tenant_id, swarm)
+    swarm.console_answer("wf_1", "next_draft-review1", "NOT_YET", ["x"], by="lead@example.com")
+    step = swarm.workflows["wf_1"].step("next_draft-review1")
+    step.files["review1.json"] = json.dumps({"verdict": "NOT_YET", "findings": ["y" * 300_000]})
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert pending(run)["console"]["needs"] == "unreadable"
+    swarm.fail_cancels = 1
+    resp = await _decide_raw(client, auth, run, "redo", "Cover refunds")
+    assert resp.status_code == 503 and "recorded" in resp.text, resp.text
+    wf = (await _knobs_of(tenant_id, run["id"]))["workflow"]
+    assert wf["state"] == "live" and wf["cancel_pending"]["tries"] == 1, wf
+    assert await _owed(tenant_id, run["id"]) is not None
+    swarm.html_404_cancel = True
+    for _ in range(service.NOT_FOUND_TRIES):
+        await _tick_raw(client, auth)
+    wf = (await _knobs_of(tenant_id, run["id"]))["workflow"]
+    assert wf["cancel_pending"].get("stuck") is True, wf
+    [item] = (await client.get("/v1/inbox", headers=auth)).json()["lookups"]
+    assert item["id"] == run["id"] and item["can_stop_cancelling"] is True
+    assert len(swarm.submissions()) == 1
