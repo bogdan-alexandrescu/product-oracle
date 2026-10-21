@@ -317,14 +317,19 @@ async def import_yaml(
     *,
     origin: str = "import",
     reason: str = "YAML import",
+    proposals_only: bool = False,
 ) -> YamlImportResult:
     """Merge ``text`` in. ``origin`` is ``import`` (a person's file) or ``agent`` (a run's
-    baseline.yaml); either way locked items get proposals instead of changes."""
+    baseline.yaml); either way locked items get proposals instead of changes.
+    ``proposals_only``: every write becomes a proposal, as if every item were locked
+    (H11: the baseline below Act); an edge to an entity that is only proposed waits."""
     # Off the event loop: the file is untrusted text (oracle.safe_yaml bounds its cost).
     data, problems = await safe_yaml.run_parse(_parse_and_validate, text)
     if problems:
         raise YamlInvalid(problems)
-    writer = service.Writer(principal, origin, run_id=run_id, reason=reason)
+    writer = service.Writer(
+        principal, origin, run_id=run_id, reason=reason, proposals_only=proposals_only
+    )
     # One change event per subject kind for the whole file, not one per item.
     async with service.batched_changes(db):
         return await _merge(db, data, writer, principal)
@@ -336,6 +341,8 @@ async def _merge(
     own = await _own_item_ids(db, principal)
     result = YamlImportResult()
     by_ref: dict[str, Entity] = {_ref(e): e for e in (await db.scalars(select(Entity))).all()}
+    # Entities the file adds that became proposals (proposals_only): not there yet.
+    proposed: set[str] = set()
 
     for i, doc in enumerate(data.get("entities") or []):
         ref = f"{doc['type']}:{doc['key']}"
@@ -366,6 +373,11 @@ async def _merge(
                     attrs=doc.get("attrs") or {},
                     status=status,
                 )
+                if write.proposal is not None:
+                    # Proposed, not created: its evidence and edges wait for it.
+                    result.proposals += 1
+                    proposed.add(ref)
+                    continue
                 entity = by_ref[ref] = write.entity
                 result.created += 1
             else:
@@ -394,6 +406,16 @@ async def _merge(
         src, dst = by_ref.get(doc["src"]), by_ref.get(doc["dst"])
         if src is None or dst is None:
             missing = doc["src"] if src is None else doc["dst"]
+            if missing in proposed:
+                result.notes.append(
+                    ImportIssue(
+                        code="waits_for_proposal",
+                        message=f"{missing} is proposed, not created; propose this edge again "
+                        "once it is accepted",
+                        where=where,
+                    )
+                )
+                continue
             raise YamlInvalid([ImportIssue(code="unknown_ref", message=missing, where=where)])
         attrs = doc.get("attrs") or {}
         try:

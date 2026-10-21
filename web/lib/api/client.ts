@@ -33,6 +33,11 @@ export type FeedbackStatus = FeedbackItem["status"];
 export type DiffOut = Schemas["DiffOut"];
 export type SectionDiff = Schemas["SectionDiff"];
 export type Member = Schemas["MemberOut"];
+// Account management: every credential by kind (Settings > API tokens) and My account.
+export type ApiToken = Schemas["ApiTokenOut"];
+export type TokenKind = NonNullable<ApiToken["kind"]>;
+export type MyAccount = Schemas["MyAccountOut"];
+export type McpClient = Schemas["McpClientOut"];
 
 // Brief, full and present (O1f).
 export type DeckOut = Schemas["DeckOut"];

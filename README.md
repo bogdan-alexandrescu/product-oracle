@@ -28,8 +28,10 @@ also mints a new API token for the agent track (send it as `Authorization: Beare
 <token>`; the `oracle` CLI reads `ORACLE_API_TOKEN`). The token acts as the admin (their
 role, connections and sources), so per-user commands such as `oracle sync` work with it;
 tokens created without a user act with their own role. Both secrets are shown once: only
-hashes are stored. To choose the email and password, pass them through `ARGS`
-(see `python -m oracle.seed --help`).
+hashes are stored. The admin's email is required, through `ARGS`
+(`make seed ARGS="--email you@yourcompany.com"`, optionally `--password ...`; see
+`python -m oracle.seed --help`): there is no default admin, and reserved example domains
+(example.com, *.test, ...) are refused outside the test build.
 
 The browser only talks to the web app: Next.js proxies `/v1/*` and `/healthz` to the
 API (`next.config.ts`), so the session cookie is same-origin and needs no CORS.
@@ -79,7 +81,7 @@ Other targets:
 Without Docker for the apps: start only Postgres (`docker compose up -d postgres`), then
 
 ```sh
-cd api && uv sync && uv run alembic upgrade head && uv run python -m oracle.seed
+cd api && uv sync && uv run alembic upgrade head && uv run python -m oracle.seed --email you@yourcompany.com
 uv run uvicorn oracle.main:app --reload          # :8000
 cd web && npm ci && npm run dev                  # :3000, proxies /v1/* to :8000
 ```

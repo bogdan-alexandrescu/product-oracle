@@ -11,7 +11,7 @@ const PAGES = [
   "/documents/new",
   "/documents/new?kind=roadmap",
   "/priorities",
-  "/roadmap",
+  "/plan/documents",
   "/runs",
   "/settings/members",
   "/settings/sources",

@@ -31,6 +31,7 @@ from tests.baseline_helpers import NOW, confirm, entity, make_item
 from tests.claude_account_helpers import add_account, window
 from tests.intake_helpers import (
     answer,
+    ask_of,
     batch,
     company,
     create_intake,
@@ -349,6 +350,7 @@ async def test_a_rejected_critical_answer_is_not_closed_by_the_baseline(client):
     gap = gaps_by_category(out)["blockers"]
     assert gap["importance"] == "critical"
     q = question_for(await batch(client, ctx, intake_id), "blockers")
+    await ask_of(client, ctx, q["id"], "commenter")
     done = await answer(client, ctx, q["id"], body="The partner limit is fine.")
     assert done["gap"]["status"] == "answered_pending_review"
     resp = await client.post(

@@ -387,7 +387,8 @@ async def exchange_code(
         if user is None or user.disabled_at is not None:
             raise OAuthError("invalid_grant", "The user no longer exists or is disabled")
         if user.sessions_valid_after is not None and row.created_at < user.sessions_valid_after:
-            # Issued before a disable: a restored member authorizes again (C2).
+            # Issued before a disable (a restored member authorizes again, C2), a sign-out
+            # everywhere or a password change (which also void unused codes, AC1).
             raise OAuthError("invalid_grant", "Authorization code issued before a sign-out")
         row.used_at = _now()
         token, issued = _new_token_row(

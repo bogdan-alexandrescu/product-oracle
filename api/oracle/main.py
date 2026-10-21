@@ -9,7 +9,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from oracle.account.router import router as account_router
 from oracle.auth.router import router as auth_router
+from oracle.autonomy_router import router as autonomy_router
 from oracle.baseline.router import router as baseline_router
 from oracle.blockers.router import router as blockers_router
 from oracle.claude_accounts.router import router as claude_accounts_router
@@ -24,6 +26,7 @@ from oracle.db import dispose_engine, get_engine
 from oracle.docs.parser import DraftError
 from oracle.docs.router import router as docs_router
 from oracle.docs.schemas import ImportErrorResponse
+from oracle.engineering.router import router as engineering_router
 from oracle.export.router import router as export_router
 from oracle.intake.router import router as intake_router
 from oracle.integrations.router import router as company_integrations_router
@@ -34,11 +37,14 @@ from oracle.jobs.worker import (
     job_seconds,
     run_worker,
 )
+from oracle.launches.router import router as launches_router
 from oracle.mcp.oauth.routes import router as oauth_router
 from oracle.mcp.server import mount_mcp
+from oracle.members.router import people_router
 from oracle.members.router import router as members_router
 from oracle.modules.router import router as modules_router
 from oracle.modules.service import seed_all_companies
+from oracle.plan.router import router as plan_router
 from oracle.preferences.router import router as preferences_router
 from oracle.priorities.router import router as priorities_router
 from oracle.quality.router import router as quality_router
@@ -54,6 +60,7 @@ from oracle.sources.fireflies_browse import router as fireflies_browse_router
 from oracle.sources.repair import run_at_startup as repair_version_urls_at_startup
 from oracle.sources.router import router as sources_router
 from oracle.specs.router import router as specs_router
+from oracle.strategy.router import router as strategy_router
 from oracle.swarm import close_runtime
 from oracle.templates.router import router as templates_router
 from oracle.tenant_settings_api import router as settings_router
@@ -173,6 +180,8 @@ def create_app() -> FastAPI:
     app.include_router(llm_jobs_router)
     # v1 lanes add their routes to these (empty until then).
     app.include_router(members_router)
+    app.include_router(people_router)
+    app.include_router(account_router)
     app.include_router(connections_router)
     app.include_router(slack_browse_router)
     app.include_router(github_browse_router)
@@ -181,6 +190,8 @@ def create_app() -> FastAPI:
     app.include_router(settings_router)
     # A1: Home's Set up checklist.
     app.include_router(setup_router)
+    # H11: how far Oracle goes on its own, per responsibility, and its "Oracle did" rows.
+    app.include_router(autonomy_router)
     app.include_router(claude_accounts_router)
     app.include_router(sources_router)
     app.include_router(fireflies_browse_router)
@@ -197,6 +208,7 @@ def create_app() -> FastAPI:
     # Modules and compositions (CR-01/02): catalogue, packs, manifests, revisions.
     app.include_router(modules_router)
     app.include_router(trace_router)
+    app.include_router(engineering_router)
     app.include_router(blockers_router)
     # CR-09: engineering specs, user flows and wireframes from an approved PRD.
     app.include_router(specs_router)
@@ -205,6 +217,10 @@ def create_app() -> FastAPI:
     app.include_router(reports_router)
     app.include_router(company_integrations_router)
     app.include_router(requests_router)
+    # F1 Plan screen: one read of the PRDs in play and the roadmap rows.
+    app.include_router(plan_router)
+    app.include_router(strategy_router)
+    app.include_router(launches_router)
     # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
     app.include_router(oauth_router)
     # Cloud Scheduler's run ticker (Google ID token only; not in OpenAPI, so no MCP tool).

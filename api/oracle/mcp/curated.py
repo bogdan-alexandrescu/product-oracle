@@ -301,6 +301,47 @@ async def _run_output(app, caller, ops, args) -> types.CallToolResult:
     return to_result(await call_operation(app, caller, ops["op"], call, check_scopes=False))
 
 
+_CHECKPOINT_REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kind": {
+            "type": "string",
+            "description": "Optional: one checkpoint kind only, e.g. feature_set or prd_review",
+        },
+        "seq": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optional: one segment's checkpoints only (1 is the first)",
+        },
+    },
+}
+
+
+async def _checkpoint_review(app, caller, ops, args) -> types.CallToolResult:
+    """The decisions people made at the caller's run's checkpoints: the run is the
+    token's own; the filters apply to what the route returns."""
+    if caller.kind != "run" or caller.run_id is None:
+        raise ToolError("get_checkpoint_review is for a run's own agents (a run token).")
+    kind, seq = args.get("kind"), args.get("seq")
+    if kind is not None and (not isinstance(kind, str) or not kind):
+        raise ToolError("kind must be a checkpoint kind such as feature_set.")
+    if isinstance(seq, str) and seq.isascii() and seq.isdigit():
+        seq = int(seq)
+    if seq is not None and (isinstance(seq, bool) or not isinstance(seq, int) or seq < 1):
+        raise ToolError("seq must be a whole number from 1 (the segment's number in this run).")
+    resp = await call_operation(
+        app, caller, ops["op"], {"run_id": str(caller.run_id)}, check_scopes=False
+    )
+    if not resp.ok or not resp.is_json:
+        return to_result(resp)
+    listed = [
+        d
+        for d in resp.json()
+        if (kind is None or d.get("kind") == kind) and (seq is None or d.get("segment_seq") == seq)
+    ]
+    return to_result(resp, listed)
+
+
 def _plain_file_name(name: object) -> bool:
     """A file name, not a path: no separators, no '..', no control characters, and not
     blank, '.' or '..' (however padded)."""
@@ -451,6 +492,18 @@ CURATED: tuple[Curated, ...] = (
         needs={"op": _by("GET", ("get_run_artifact",))},
         schema=lambda ops: copy.deepcopy(_RUN_OUTPUT_SCHEMA),
         run=_run_output,
+        own_run=True,
+    ),
+    Curated(
+        name="get_checkpoint_review",
+        description=(
+            "Read what people decided at this run's checkpoints: approvals with their notes, "
+            "edits Oracle applied to earlier files, and structured reviews sent back. Read it "
+            "before you start: decisions made after your prompt was written are only here."
+        ),
+        needs={"op": _by("GET", ("list_run_decisions",))},
+        schema=lambda ops: copy.deepcopy(_CHECKPOINT_REVIEW_SCHEMA),
+        run=_checkpoint_review,
         own_run=True,
     ),
 )

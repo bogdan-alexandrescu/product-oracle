@@ -370,6 +370,8 @@ SwarmCloud (`POST /v1/tracks/{id}/roadmap-run` drafts it; cost gates apply).
 | `push_track_to_tracker` | POST `/v1/tracks/{id}/tracker-push` | approver (always refused) |
 | `list_track_milestones`, `create_track_milestone` | GET, POST `/v1/tracks/{id}/milestones` | viewer, approver |
 | `update_milestone` | PATCH `/v1/milestones/{id}` | approver |
+| `get_plan` | GET `/v1/plan` | viewer (F1 Plan screen; run tokens refused) |
+| `get_plan_item_history` | GET `/v1/plan/items/history` | viewer (run tokens refused) |
 
 Every route is company-scoped (another company's id is 404, tested for each); writes are
 audited (`roadmap.items_imported`, `roadmap.items.<action>`, `schedule_basis.verified`,

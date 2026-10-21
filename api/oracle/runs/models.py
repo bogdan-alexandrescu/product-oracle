@@ -22,7 +22,15 @@ from oracle.docs.models import _in
 
 # request_triage (C1 Requests, migration 0020_requests): its flow definition comes with
 # the triage lane; the database already allows it.
-FLOWS = ("baseline_to_prd", "feedback_loop", "prd_to_roadmap", "prd_to_spec", "request_triage")
+FLOWS = (
+    "baseline_to_prd",
+    "feedback_loop",
+    "prd_to_roadmap",
+    "prd_to_spec",
+    "request_triage",
+    "strategy_draft",
+    "launch_kit",
+)
 RUN_STATUSES = (
     "draft",
     "awaiting_approval",
@@ -43,6 +51,8 @@ CHECKPOINT_KINDS = (
     "roadmap_items",
     "roadmap_review",
     "request_triage",
+    "strategy_review",
+    "launch_review",
 )
 CHECKPOINT_STATUSES = ("pending", "approved", "changes_requested", "skipped")
 
@@ -76,6 +86,12 @@ class Run(TenantScoped, Base):
     # Who approved the cost estimate (runs over the approval threshold).
     approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The last overrun Resume (a spend approval, C2): who gave it, when, and the ceiling
+    # it replaced (restored if a demotion or disable voids it before its next segment
+    # was submitted: oracle.members.service._void_spend_approvals).
+    resumed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    resumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resumed_from_ceiling_usd: Mapped[Decimal | None] = mapped_column(Usd)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error: Mapped[str | None] = mapped_column(Text)

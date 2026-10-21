@@ -36,6 +36,7 @@ class AuditEvent(TenantScoped, Base):
 
 
 from oracle.auth.models import ApiToken, User  # noqa: E402
+from oracle.autonomy_models import OracleAction  # noqa: E402
 from oracle.baseline.models import (  # noqa: E402
     Conflict,
     Edge,
@@ -57,6 +58,12 @@ from oracle.docs.models import Citation, Document, DocumentVersion, Section  # n
 from oracle.intake.models import IntakeProposal, IntakeWithheldItem  # noqa: E402
 from oracle.integrations.models import CompanyIntegration  # noqa: E402
 from oracle.jobs.models import LlmJob, LlmSuggestion  # noqa: E402
+from oracle.launches.models import (  # noqa: E402
+    ChangelogEntry,
+    Launch,
+    LaunchTask,
+    RequesterNote,
+)
 from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken  # noqa: E402
 from oracle.members.models import Invite, MemberFollowUp  # noqa: E402
 from oracle.preferences.models import UserPreference  # noqa: E402
@@ -94,6 +101,7 @@ from oracle.sources.models import (  # noqa: E402
     SourceItem,
     SourceItemVersion,
 )
+from oracle.strategy.models import StrategyCheck, StrategyFinding  # noqa: E402
 from oracle.swarm.learned import LearnedFeature  # noqa: E402
 from oracle.templates.models import Template, TemplateVersion, Theme  # noqa: E402
 from oracle.tenant_settings import TenantSetting  # noqa: E402
@@ -130,6 +138,7 @@ __all__ = [
     "ArtifactOutput",
     "ArtifactRequest",
     "ArtifactReviewEvent",
+    "ChangelogEntry",
     "ArtifactVersion",
     "AssumptionDecision",
     "AuditEvent",
@@ -166,11 +175,11 @@ __all__ = [
     "IntakeProposal",
     "IntakeWithheldItem",
     "Invite",
-    "MemberFollowUp",
     "KnowledgeGap",
     "LearnedFeature",
     "LlmJob",
     "LlmSuggestion",
+    "MemberFollowUp",
     "ModuleDefinition",
     "ModuleVersion",
     "Notification",
@@ -181,12 +190,15 @@ __all__ = [
     "PrioritySnapshot",
     "ProductRequest",
     "ProductIntake",
+    "Launch",
+    "LaunchTask",
     "ProductTrack",
     "Proposal",
-    "ReviewCampaign",
     "QualityLearning",
     "RequestCandidate",
     "RequestTheme",
+    "ReviewCampaign",
+    "RequesterNote",
     "RoadmapItem",
     "Run",
     "RunSegment",
@@ -202,10 +214,13 @@ __all__ = [
     "SourceItemVersion",
     "StakeholderAnswer",
     "StakeholderQuestion",
+    "StrategyCheck",
+    "StrategyFinding",
     "Template",
     "TemplateModuleAssignment",
     "TemplateVersion",
     "Tenant",
+    "OracleAction",
     "TenantSetting",
     "Theme",
     "TrackMilestone",

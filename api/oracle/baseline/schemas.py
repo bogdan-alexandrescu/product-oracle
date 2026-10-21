@@ -16,6 +16,7 @@ EntityType = Literal[
     "acceptance_criterion",
     "assumption",
     "risk",
+    "strategy_choice",
 ]
 EdgeType = Literal[
     "supports",

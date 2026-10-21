@@ -8,14 +8,14 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import or_, select, true, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes
 from oracle.auth.models import ROLES, ApiToken, Role, User
 from oracle.members.models import Invite, MemberFollowUp
-from oracle.members.schemas import InviteOut, InviteStatus
+from oracle.members.schemas import InviteOut, InviteStatus, MemberOut
 from oracle.tenant_settings import TenantSetting
 
 if TYPE_CHECKING:
@@ -33,7 +33,7 @@ class MemberError(Exception):
     """A request the members service refuses; the router maps ``kind`` to an HTTP status."""
 
     def __init__(self, kind: str, message: str):
-        self.kind = kind  # "not_found" | "conflict" | "forbidden"
+        self.kind = kind  # "not_found" | "conflict" | "forbidden" | "invalid"
         self.message = message
         super().__init__(message)
 
@@ -71,6 +71,17 @@ async def list_members(session: AsyncSession) -> list[User]:
     return list((await session.scalars(select(User).order_by(User.created_at, User.email))).all())
 
 
+async def members_out(session: AsyncSession, users: list[User]) -> list[MemberOut]:
+    """Members as the API shows them: with their open tokens counted."""
+    from oracle.members.tokens import open_token_counts
+
+    counts = await open_token_counts(session)
+    return [
+        MemberOut.model_validate(u).model_copy(update={"open_tokens": counts.get(u.id, 0)})
+        for u in users
+    ]
+
+
 async def _other_active_owner(session: AsyncSession, user_id: uuid.UUID) -> bool:
     """Whether an active owner other than ``user_id`` exists. Locks every owner row so
     two concurrent demotions or disables cannot both see "another owner"."""
@@ -82,7 +93,9 @@ async def _other_active_owner(session: AsyncSession, user_id: uuid.UUID) -> bool
     return any(i != user_id and disabled is None for i, disabled in owners)
 
 
-async def _gate(session: AsyncSession, principal: "Principal", *, shared: bool = False) -> None:
+async def _gate(
+    session: AsyncSession, principal: "Principal", *, shared: bool = False, role: Role = "owner"
+) -> None:
     """Take the review gate, then re-read the caller under it.
 
     The gate reads approvers' roles and standing: a change to them never lands while
@@ -90,12 +103,13 @@ async def _gate(session: AsyncSession, principal: "Principal", *, shared: bool =
     exclusively, invites shared. The caller authenticated before waiting on it, and a
     disable, a demotion or a revocation may have committed meanwhile (an owner being
     disabled must not act with a request already in flight): they must still be an
-    active owner, through an active token or grant, now."""
+    active owner, through an active token or grant, now. A member acting on their own
+    account (My account) passes with any ``role``."""
     from oracle.auth.service import caller_refusal
     from oracle.review import publish
 
     await publish.gate_lock(session, shared=shared)
-    refusal = await caller_refusal(session, principal, "owner")
+    refusal = await caller_refusal(session, principal, role)
     if refusal is not None:
         raise MemberError("forbidden", refusal)
 
@@ -129,18 +143,21 @@ async def set_role(
         await lapse_approvals(
             session, principal, reviewer_id=user.id, reason=f"approver demoted to {role}"
         )
+    # C2: a demotion, like a disable, voids the spend approvals and checkpoint decisions
+    # they gave that the new role could not give (pending ones only: they return to the
+    # Inbox). Their own runs go on (a disable cancels those). Theirs in person and through
+    # their API tokens (which act with the person's role).
     if not has_role(role, before):
-        # A checkpoint decision they recorded that is not delivered to its run yet, on a
-        # checkpoint the new role may not decide: never delivered now. Theirs in person
-        # and through their API tokens (which act with the person's role).
+        via = {"via": "member.role", "member_id": str(user.id)}
         tokens = set(await session.scalars(select(ApiToken.id).where(ApiToken.user_id == user.id)))
+        acted_as = {user.id, *tokens}
+        if has_role(before, "owner"):
+            await _void_spend_approvals(session, principal, acted_as, None, via)
+        await _void_checkpoint_decisions(session, principal, acted_as, via, keep_role=role)
+        # A decision they recorded that is not delivered to its run yet, on a checkpoint
+        # the new role may not decide: never delivered now.
         await void_owed_decisions(
-            session,
-            principal,
-            {user.id, *tokens},
-            f"its decider was demoted to {role}",
-            {"via": "member.role", "member_id": str(user.id)},
-            role=role,
+            session, principal, acted_as, f"its decider was demoted to {role}", via, role=role
         )
     # Review gates read approvers' current roles; the change event tells every lane.
     await changes.record_change(
@@ -191,6 +208,8 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
         raise MemberError("not_found", f"Member {user_id} not found")
     if user.disabled_at is not None:
         return user
+    if principal.user_id == user.id:
+        raise MemberError("conflict", "You cannot remove yourself; another owner can remove you")
     if user.role == "owner" and not await _other_active_owner(session, user.id):
         raise MemberError("conflict", "Cannot remove the last owner; make someone else owner")
     at = datetime.now(UTC)
@@ -329,12 +348,14 @@ async def _void_spend_approvals(
     session: AsyncSession,
     principal: "Principal",
     approvers: set[uuid.UUID],
-    member_id: uuid.UUID,
+    member_id: uuid.UUID | None,
     via: dict[str, str],
 ) -> list[uuid.UUID]:
     """A spend approval the removed member gave on someone else's run that has not
     started (no segment ever ran) is void: the run waits for an approval again. A run
-    that started keeps its approval and its ceiling. Their own runs are cancelled."""
+    that started keeps its approval and its ceiling. With ``member_id`` (a disable),
+    their own runs are left out: the disable cancels them; without (a demotion), an
+    approval they gave their own run is void too."""
     from oracle.runs.models import Run, RunSegment
     from oracle.runs.service import FINAL, unqueue
     from oracle.runtokens import revoke_run_tokens
@@ -349,7 +370,7 @@ async def _void_spend_approvals(
             .where(
                 Run.approved_by.in_(approvers),
                 Run.status.not_in(FINAL),
-                Run.created_by.is_distinct_from(member_id),
+                Run.created_by.is_distinct_from(member_id) if member_id else true(),
                 ~started.exists(),
             )
             .with_for_update()
@@ -371,6 +392,67 @@ async def _void_spend_approvals(
             session, principal, "run.approval_voided", "run", run.id,
             {"approved_by": str(approved_by), **via},
         )  # fmt: skip
+    return [r.id for r in runs] + await _void_resumes(session, principal, approvers, member_id, via)
+
+
+async def _void_resumes(
+    session: AsyncSession,
+    principal: "Principal",
+    approvers: set[uuid.UUID],
+    member_id: uuid.UUID | None,
+    via: dict[str, str],
+) -> list[uuid.UUID]:
+    """An overrun Resume is a spend approval (C2, owner decision): one the removed or
+    demoted owner gave whose next segment has not been submitted (nothing started since
+    the Resume) is void. The run is paused on overrun again with the ceiling the Resume
+    replaced; the segment it queued is taken off the queue (marked, so the next Resume
+    queues it again; a submission under way cancels what it started) and the run's
+    tokens are revoked. A segment still running from before the pause goes on, as the
+    pause lets it, with its token. A run the Resume took to a checkpoint keeps waiting
+    for it, under the old ceiling. ``member_id``: as for :func:`_void_spend_approvals`."""
+    from oracle.runs.models import Run, RunSegment
+    from oracle.runs.service import RESUME_VOIDED, _art, _set_art, _set_knob, unqueue
+    from oracle.runtokens import revoke_run_tokens
+
+    since = select(RunSegment.id).where(
+        RunSegment.run_id == Run.id, RunSegment.started_at >= Run.resumed_at
+    )
+    runs = list(
+        await session.scalars(
+            select(Run)
+            .where(
+                Run.resumed_by.in_(approvers),
+                Run.status.in_(("running", "awaiting_checkpoint")),
+                Run.created_by.is_distinct_from(member_id) if member_id else true(),
+                ~since.exists(),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for run in runs:
+        resumed_by, ceiling = run.resumed_by, run.resumed_from_ceiling_usd
+        _set_knob(run, "spend_ceiling_usd", str(ceiling) if ceiling is not None else None)
+        run.resumed_by = run.resumed_at = run.resumed_from_ceiling_usd = None
+        segments = list(
+            await session.scalars(select(RunSegment).where(RunSegment.run_id == run.id))
+        )
+        if run.status == "running":
+            run.status = "paused_overrun"
+            for segment in segments:
+                if segment.status == "pending" and (
+                    segment.error is not None or "claim" in (segment.artifacts or {})
+                ):
+                    unqueue(segment)
+                    art = _art(segment)
+                    art[RESUME_VOIDED] = True
+                    _set_art(segment, art)
+            if not any(s.status == "running" for s in segments):
+                await revoke_run_tokens(session, run.id)
+        await audit.record(
+            session, principal, "run.resume_voided", "run", run.id,
+            {"resumed_by": str(resumed_by), "ceiling_usd": str(ceiling), **via},
+        )  # fmt: skip
     return [r.id for r in runs]
 
 
@@ -379,11 +461,16 @@ async def _void_checkpoint_decisions(
     principal: "Principal",
     deciders: set[uuid.UUID],
     via: dict[str, str],
+    *,
+    keep_role: Role | None = None,
 ) -> list[uuid.UUID]:
     """A checkpoint decision the removed member gave whose segment has not been
     submitted yet (the submission is under way, or waits for the tick's retry) is void,
     as a spend approval is: the checkpoint waits for a decision again, nothing runs for
-    it. A decision whose workflow was submitted stands (it is running)."""
+    it. A decision whose workflow was submitted stands (it is running). With
+    ``keep_role`` (a demotion), a decision on a checkpoint that role may still decide
+    stands."""
+    from oracle.authz import has_role
     from oracle.runs.models import Checkpoint, Run, RunSegment
     from oracle.runs.service import void_decision
 
@@ -415,6 +502,8 @@ async def _void_checkpoint_decisions(
             continue
         cp = await session.get(Checkpoint, uuid.UUID(decision["checkpoint_id"]))
         if cp is None or cp.run_id != run.id:
+            continue
+        if keep_role is not None and has_role(keep_role, cp.approver_role):  # type: ignore[arg-type]
             continue
         await void_decision(session, principal, run, segment, cp, via)
         voided.append(cp.id)
@@ -942,15 +1031,23 @@ async def list_api_tokens(session: AsyncSession) -> list[ApiToken]:
 
 
 async def revoke_api_token(
-    session: AsyncSession, principal: "Principal", token_id: uuid.UUID
+    session: AsyncSession,
+    principal: "Principal",
+    token_id: uuid.UUID,
+    *,
+    own: bool = False,
+    gated: bool = False,
 ) -> ApiToken:
     """Revoke an API token; the approvals given through it lapse for good (C2), the
-    approvals its user gave in person stand. Revoking twice is a no-op."""
+    approvals its user gave in person stand. Revoking twice is a no-op. With ``own``,
+    a member revokes one of their personal tokens (My account): any role, and another
+    member's token is not found. ``gated``: the caller already took the gate."""
     from oracle.review.state import lapse_approvals
 
-    await _gate(session, principal)
+    if not gated:
+        await _gate(session, principal, role="viewer" if own else "owner")
     token = await session.get(ApiToken, token_id, with_for_update=True)
-    if token is None:
+    if token is None or (own and (token.user_id is None or token.user_id != principal.user_id)):
         raise MemberError("not_found", f"API token {token_id} not found")
     if token.revoked_at is not None:
         return token
@@ -968,6 +1065,25 @@ async def revoke_api_token(
         {"name": token.name, "user_id": str(token.user_id) if token.user_id else None, **lapsed},
     )
     return token
+
+
+async def revoke_any_token(
+    session: AsyncSession, principal: "Principal", token_id: uuid.UUID
+) -> None:
+    """Revoke a credential of any kind by its id (Settings > API tokens): an API token, a
+    run token or an MCP client's grant. Owners only; twice is a no-op."""
+    from oracle.members import tokens
+
+    await _gate(session, principal)
+    if await session.get(ApiToken, token_id) is not None:
+        await revoke_api_token(session, principal, token_id, gated=True)
+        return
+    if await tokens.revoke_run_token(session, principal, token_id):
+        return
+    found = await tokens.grants(session, grant_id=token_id)
+    if not found:
+        raise MemberError("not_found", f"Token {token_id} not found")
+    await tokens.revoke_grant(session, principal, found[0], "revoked by an owner")
 
 
 async def token_approvals(
@@ -1093,6 +1209,12 @@ async def list_invites(session: AsyncSession, status: str) -> list[Invite]:
 async def create_invite(
     session: AsyncSession, principal: "Principal", email: str, role: Role
 ) -> Invite:
+    from oracle.auth.service import ReservedEmailError, check_email_allowed
+
+    try:
+        check_email_allowed(email)
+    except ReservedEmailError as e:
+        raise MemberError("invalid", str(e)) from None
     await _gate(session, principal, shared=True)
     member = await session.scalar(select(User).where(User.email == email))
     if member is not None and member.disabled_at is not None:

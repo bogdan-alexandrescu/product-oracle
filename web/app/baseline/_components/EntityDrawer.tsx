@@ -35,6 +35,7 @@ const TYPE_LABEL: Record<EntityOut["type"], string> = {
   acceptance_criterion: "Acceptance criterion",
   assumption: "Assumption",
   risk: "Risk",
+  strategy_choice: "Strategy choice",
 };
 
 /** Attribute fields offered in the edit form, per entity type. */

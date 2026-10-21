@@ -1,13 +1,14 @@
 """Requests and responses of the intake routes, shaped for the screens that follow:
-"New product idea" (IntakeCreate), "Opportunity and Gaps" (IntakeSummary) and the
-question batch view (QuestionBatch).
+"New product idea" (IntakeCreate), "Opportunity and Gaps" (IntakeSummary), the
+question batch view (QuestionBatch) and the Inbox's questions (C2: QuestionCreate,
+QuestionPatch, InboxQuestion).
 """
 
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from oracle.runs.schemas import KnobsIn
 from oracle.v2.schemas import (
@@ -450,3 +451,121 @@ class EvidenceSearch(BaseModel):
     pinned_version: int
     as_of: datetime | None
     hits: list[EvidenceHit]
+
+
+# --- questions to people (C2) ------------------------------------------------------------
+
+SubjectKind = Literal["intake", "document_section", "checkpoint_item", "entity"]
+
+
+class IntakeSubject(BaseModel):
+    kind: Literal["intake"]
+    intake_id: uuid.UUID
+
+
+class DocumentSectionSubject(BaseModel):
+    kind: Literal["document_section"]
+    document_id: uuid.UUID
+    section_key: str = Field(min_length=1, max_length=200)
+
+
+class CheckpointItemSubject(BaseModel):
+    kind: Literal["checkpoint_item"]
+    checkpoint_id: uuid.UUID
+    # The item's ref in the checkpoint's payload.
+    item_ref: str = Field(min_length=1, max_length=200)
+
+
+class EntitySubject(BaseModel):
+    kind: Literal["entity"]
+    entity_id: uuid.UUID
+
+
+QuestionSubject = Annotated[
+    IntakeSubject | DocumentSectionSubject | CheckpointItemSubject | EntitySubject,
+    Field(discriminator="kind"),
+]
+
+
+class QuestionCreate(BaseModel):
+    """Ask a named teammate (commenter or above) a question about a subject."""
+
+    prompt: str = Field(min_length=1, max_length=1000)
+    asked_to: uuid.UUID
+    # Why you ask: shown with the question.
+    rationale: str | None = Field(default=None, max_length=500)
+    subject: QuestionSubject
+
+    @field_validator("prompt")
+    @classmethod
+    def _prompt(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("A question needs some words")
+        return v.strip()
+
+    @field_validator("rationale")
+    @classmethod
+    def _rationale(cls, v: str | None) -> str | None:
+        return (v or "").strip() or None
+
+
+class QuestionPatch(BaseModel):
+    """Reassign (``asked_to``) or withdraw (``status``), one at a time."""
+
+    asked_to: uuid.UUID | None = None
+    status: Literal["withdrawn"] | None = None
+
+    @model_validator(mode="after")
+    def _one(self) -> "QuestionPatch":
+        if (self.asked_to is None) == (self.status is None):
+            raise ValueError("Give either asked_to (reassign) or status: withdrawn")
+        return self
+
+
+class QuestionBatchAsk(BaseModel):
+    """Ask the next batch; ``assign``: question id -> the person to ask instead of the
+    default (the gap's owner, else the intake's author)."""
+
+    size: int = Field(default=5, ge=1, le=10)
+    assign: dict[uuid.UUID, uuid.UUID] = Field(default={}, max_length=50)
+
+
+class OracleAsker(BaseModel):
+    """The intake engine's question: "Oracle asks"."""
+
+    kind: Literal["oracle"] = "oracle"
+
+
+class PersonAsker(BaseModel):
+    """A person's question to a teammate: "<name> asks"."""
+
+    kind: Literal["person"] = "person"
+    id: uuid.UUID
+    name: str
+
+
+class TokenAsker(BaseModel):
+    """A company API token's question: "<token name> asks" (no person asked it)."""
+
+    kind: Literal["api_client"] = "api_client"
+    # The token's name, or "An API token" once the token is gone.
+    name: str
+
+
+class InboxSubject(BaseModel):
+    kind: SubjectKind
+    # "Before drafting · <intake>", "<PRD> · <section heading>", "Roadmap items · <item>",
+    # "Baseline · <entity>".
+    title: str
+    # Where Open goes; None while the subject has no page to open.
+    href: str | None
+
+
+class InboxQuestion(BaseModel):
+    question: StakeholderQuestionOut
+    asked_by: Annotated[OracleAsker | PersonAsker | TokenAsker, Field(discriminator="kind")]
+    subject: InboxSubject
+    # The gap as the reader may see it (S6); None for a question with no gap.
+    gap: KnowledgeGapOut | None
+    # "research" only on intake questions with a gap (it proposes a research run).
+    answer_paths: list[AnswerPath]

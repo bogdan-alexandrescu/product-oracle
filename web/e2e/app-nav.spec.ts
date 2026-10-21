@@ -8,7 +8,7 @@ const DESTINATIONS = [
   ["nav-baseline", "Baseline", "/baseline"],
   ["nav-prds", "PRDs", "/documents"],
   ["nav-priorities", "Priorities", "/priorities"],
-  ["nav-roadmap", "Roadmap", "/roadmap"],
+  ["nav-plan", "Plan", "/plan"],
   ["nav-runs", "Runs", "/runs"],
   ["nav-inbox", "Inbox", "/inbox"],
   ["nav-settings", "Settings", "/settings/members"],
@@ -31,8 +31,8 @@ test("app shell: hidden when signed out, the rail lists the nine destinations on
   await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
   // Inbox carries its count as a badge.
   await expect(nav.getByTestId("nav-inbox-badge")).toHaveText(/^\d+$/);
-  // Roadmap (O4b) is a link to its own screen.
-  await expect(nav.getByRole("link", { name: "Roadmap" })).toHaveAttribute("href", "/roadmap");
+  // Plan (c7: the Roadmap renamed) is a link to its own screen.
+  await expect(nav.getByRole("link", { name: "Plan" })).toHaveAttribute("href", "/plan");
 });
 
 test("Requests: a placeholder with a one-line empty state", async ({ page }) => {
@@ -52,7 +52,7 @@ test("app shell: each destination routes to its page", async ({ page }) => {
     ["nav-baseline", "Baseline", "/baseline"],
     ["nav-runs", "Runs", "/runs"],
     ["nav-priorities", "Priorities", "/priorities"],
-    ["nav-roadmap", "Roadmap", "/roadmap"],
+    ["nav-plan", "Plan", "/plan"],
     ["nav-inbox", "Inbox", "/inbox"],
     ["nav-settings", "Members", "/settings/members"],
     ["nav-prds", "PRDs", "/documents"],
@@ -75,6 +75,7 @@ test("settings: its own strip routes to each section, Settings stays active", as
   const strip = page.getByRole("navigation", { name: "Settings" });
   for (const [id, path, heading] of [
     ["nav-members", "/settings/members", "Members"],
+    ["nav-api-tokens", "/settings/api-tokens", "API tokens"],
     ["nav-connections", "/settings/connections", "Connections"],
     ["nav-claude-accounts", "/settings/claude-accounts", "Claude accounts"],
     ["nav-sources", "/settings/sources", "Sources"],
@@ -150,12 +151,12 @@ test("user menu: the theme switch overrides the system setting and is remembered
   expect(await bg()).toBe("rgb(6, 16, 30)");
 });
 
-test("phone: a tab bar with Home, PRDs, Roadmap, Inbox and More, no sideways scroll", async ({ page }) => {
+test("phone: a tab bar with Home, PRDs, Plan, Inbox and More, no sideways scroll", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   const tabs = page.getByRole("navigation", { name: "Oracle" });
   await expect(tabs).toHaveAttribute("data-testid", "tab-bar");
-  for (const label of ["Home", "PRDs", "Roadmap", "Inbox", "More"]) {
+  for (const label of ["Home", "PRDs", "Plan", "Inbox", "More"]) {
     await expect(tabs.getByText(label, { exact: true })).toBeVisible();
   }
   await tabs.getByTestId("tab-more").click();
@@ -249,21 +250,22 @@ test("the bare site URL lands on Home, the rail's first destination", async ({ p
   await expect(nav.getByTestId("nav-prds")).not.toHaveAttribute("aria-current", "page");
 });
 
-test("a roadmap document's pages highlight Roadmap; a PRD's highlight PRDs", async ({ page }) => {
+test("a roadmap document's pages highlight Plan; a PRD's highlight PRDs", async ({ page }) => {
   await login(page);
   const nav = page.getByRole("navigation", { name: "Oracle" });
-  const roadmap = nav.getByTestId("nav-roadmap");
+  const roadmap = nav.getByTestId("nav-plan");
   const prds = nav.getByTestId("nav-prds");
 
-  // Opened from the Roadmap screen, and loaded directly: the overview and a version.
+  // Opened from Plan's Roadmap documents tab, and loaded directly: the overview and a version.
   await roadmap.click();
+  await page.getByTestId("plan-tabs").filter({ visible: true }).getByRole("link", { name: "Roadmap documents" }).click();
   await page.getByTestId("roadmap-row").getByRole("link", { name: "Usage alerts roadmap" }).click();
   await expect(page).toHaveURL(/\/documents\/usage-alerts-roadmap$/);
   await expect(roadmap).toHaveAttribute("aria-current", "page");
   await expect(prds).not.toHaveAttribute("aria-current", "page");
   for (const path of ["/documents/usage-alerts-roadmap", "/documents/usage-alerts-roadmap/v/1"]) {
     await page.goto(path);
-    await expect(page.getByRole("navigation", { name: "Breadcrumb" }).filter({ visible: true }).first()).toContainText("Roadmap");
+    await expect(page.getByRole("navigation", { name: "Breadcrumb" }).filter({ visible: true }).first()).toContainText("Plan");
     await expect(roadmap).toHaveAttribute("aria-current", "page");
     await expect(prds).not.toHaveAttribute("aria-current", "page");
   }
@@ -280,7 +282,7 @@ test("a roadmap document's pages highlight Roadmap; a PRD's highlight PRDs", asy
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/documents/usage-alerts-roadmap/v/1");
   const tabs = page.getByTestId("tab-bar");
-  await expect(tabs.getByTestId("tab-roadmap")).toHaveAttribute("aria-current", "page");
+  await expect(tabs.getByTestId("tab-plan")).toHaveAttribute("aria-current", "page");
   await expect(tabs.getByTestId("tab-prds")).not.toHaveAttribute("aria-current", "page");
 });
 

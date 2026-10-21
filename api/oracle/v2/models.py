@@ -81,6 +81,9 @@ GAP_CATEGORIES = (
     "third_party_policy",
     "configurability_scaling",
 )
+# A question's category: a gap's, or "general" for one a person asks a teammate (C2;
+# questions only, gaps keep the 17).
+QUESTION_CATEGORIES = (*GAP_CATEGORIES, "general")
 # §5 step 5: what a missing answer affects.
 IMPACT_AREAS = ("goals", "feasibility", "scope", "economics", "risks", "module_selection")
 IMPORTANCE = ("critical", "high", "medium", "low")
@@ -421,17 +424,31 @@ class KnowledgeGap(TenantScoped, Base):
 
 
 class StakeholderQuestion(TenantScoped, Base):
-    """A question in the ledger, asked in short prioritized batches."""
+    """A question in the ledger: the intake engine's, asked in short prioritized
+    batches ("Oracle asks"), or one a person asks a named teammate about an intake, a
+    document section, a run checkpoint item or a baseline entity (C2, "<name> asks")."""
 
     __tablename__ = "stakeholder_questions"
     __table_args__ = (
         CheckConstraint(_in("status", QUESTION_STATUSES), name="status"),
-        CheckConstraint(_in("category", GAP_CATEGORIES), name="category"),
+        CheckConstraint(_in("category", QUESTION_CATEGORIES), name="category"),
+        # Every question is about something.
+        CheckConstraint(
+            "intake_id IS NOT NULL OR document_id IS NOT NULL "
+            "OR checkpoint_id IS NOT NULL OR entity_id IS NOT NULL",
+            name="subject",
+        ),
+        # The Inbox read: what is asked of me (C2).
+        Index("ix_stakeholder_questions_asked_to", "asked_to", "status"),
     )
 
     gap_id: Mapped[uuid.UUID | None] = _fk("knowledge_gaps")
     intake_id: Mapped[uuid.UUID | None] = _fk("product_intakes")
     document_id: Mapped[uuid.UUID | None] = _fk("documents")
+    # A run checkpoint's item (its ref in the checkpoint's payload), or a baseline entity.
+    checkpoint_id: Mapped[uuid.UUID | None] = _fk("checkpoints")
+    item_ref: Mapped[str | None] = mapped_column(Text)
+    entity_id: Mapped[uuid.UUID | None] = _fk("entities")
     category: Mapped[str] = mapped_column(Text, nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     # Why it is asked (expected effect on goals, scope, ... ); shown with the question.
