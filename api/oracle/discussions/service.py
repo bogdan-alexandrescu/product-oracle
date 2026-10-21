@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import func, or_, select
+from sqlalchemy import update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 
 from oracle import audit
 from oracle.auth.models import User
@@ -902,7 +904,7 @@ async def _post(
     )
     db.add(message)
     await db.flush()
-    d.last_message_at = message.created_at
+    await _touch_thread(db, d, message.created_at)
     await _record(
         db, principal, "message_post", d,
         message_id=str(message.id), length=len(text), mentions=len(mentions),
@@ -1012,6 +1014,19 @@ async def delete_message(
     message.deleted_at = datetime.now(UTC)
     await _record(db, principal, "message_delete", d, message_id=str(message.id))
     await db.flush()
+
+
+async def _touch_thread(db: AsyncSession, d: Discussion, at: datetime) -> None:
+    """Record the last activity without a new ``lock_version``: a message is not an edit
+    of the discussion, so a rename or a Make open loaded before it still applies (Make
+    open then answers with the new counts, not a stale version)."""
+    await db.execute(
+        sql_update(Discussion)
+        .where(Discussion.id == d.id)
+        .values(last_message_at=at)
+        .execution_options(synchronize_session=False)
+    )
+    set_committed_value(d, "last_message_at", at)
 
 
 async def _system_line(db: AsyncSession, d: Discussion, body: str) -> None:

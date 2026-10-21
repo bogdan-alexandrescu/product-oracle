@@ -274,6 +274,14 @@ async def test_make_open_3_without_current_counts_nothing_changes(client):
     after = await get(client, ctx, d["id"], "commenter")
     assert after["visibility"] == "private" and after["lock_version"] == starter["lock_version"]
     assert len(await messages(client, ctx, d["id"])) == 3
+    # Someone writes while the warning is open: the same PATCH gets the new counts, not a
+    # stale version (a message is not an edit of the discussion).
+    await post(client, ctx, d["id"], "approver", "One more thing")
+    body = await patch(
+        client, ctx, d["id"], "commenter", expect=409, visibility="open",
+        exposes={"messages": 3, "people": 2}, lock_version=starter["lock_version"],
+    )  # fmt: skip
+    assert body == {"detail": "Confirm what this exposes", "messages": 4, "people": 2}
     assert await events(ctx, "discussion.visibility") == []
 
 
