@@ -64,7 +64,10 @@ CITATION_SOURCES = {
     "web": "web",
 }
 
-_ANCHOR = re.compile(r"\{#[^}]*\}")
+# A Pandoc anchor "{#id ...}", or the "{#" of one left open. The body stops at a brace, so
+# a flood of "{#" is scanned once (linear); an anchor nested in another ("{#{#x}id}")
+# loses both openers, so stripping never assembles a new one.
+_ANCHOR = re.compile(r"\{#[^{}]*+\}|\{#")
 
 
 def section_id_for(key: str) -> str:

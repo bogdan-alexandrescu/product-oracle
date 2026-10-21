@@ -30,6 +30,16 @@ async def test_defaults_and_unknown_keys(client, owner):
     assert {s["key"]: s["value"] for s in listed} == {
         "iap_default_role": "commenter",
         "confidence_weights": {},
+        # v2-review: the company's default review policy (oracle.review.state).
+        "review_policy": {
+            "decider_id": None,
+            "mandatory_reviewer_ids": [],
+            "required_section_keys": [],
+            "section_approval": "required_sections",
+            "rereview_on_change": True,
+        },
+        # v2-review: only the latest version of a document is published.
+        "publish_latest_only": True,
         "blocker_risk_acceptance_role": "owner",
         "blocker_risk_review_max_days": 90,
         "company_email_domains": [],

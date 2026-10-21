@@ -1,6 +1,6 @@
 """``oracle``: the agent track's bridge to the API.
 
-    oracle push <draft.md> [--doc slug]
+    oracle push <draft.md> [--doc slug] [--base N]   (base: the pulled version by default)
     oracle pull <doc> --version N [--out dir]
     oracle sync [--source ID]
     oracle baseline push <graph.yaml>
@@ -97,6 +97,21 @@ def _front_matter(text: str) -> dict[str, Any]:
 # --- commands ---------------------------------------------------------------------
 
 
+def _pulled_base(draft: Path, slug: str) -> int | None:
+    """The version ``oracle pull`` wrote ``draft`` from: its feedback package beside it
+    (``<slug>-v<N>.feedback-package.json`` for ``<slug>-v<N>.md``), for the same
+    document."""
+    package = draft.with_name(f"{draft.stem}.feedback-package.json")
+    try:
+        data = json.loads(package.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or str(data.get("slug")) != slug:
+        return None
+    version = data.get("version")
+    return version if isinstance(version, int) and not isinstance(version, bool) else None
+
+
 def push(args: argparse.Namespace, transport: httpx.BaseTransport | None, out: TextIO) -> int:
     path = Path(args.draft)
     try:
@@ -106,12 +121,18 @@ def push(args: argparse.Namespace, transport: httpx.BaseTransport | None, out: T
     slug = args.doc or _front_matter(markdown).get("document")
     if not slug:
         raise CliError("no document slug: pass --doc or set `document:` in the front matter", 2)
+    base = getattr(args, "base", None)
+    if base is None:
+        base = _pulled_base(path, str(slug))
+        if base is not None:
+            print(f"Base: version {base} (pulled)", file=out)
 
     with _client(args, transport) as client:
         resp = _send(
             client,
             "POST",
             f"/v1/documents/{quote(str(slug), safe='')}/versions",
+            params={"base_version": base} if base is not None else None,
             content=markdown.encode("utf-8"),
             headers={"Content-Type": "text/markdown; charset=utf-8"},
         )
@@ -541,6 +562,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("push", parents=[common], help="import a draft as the next version")
     p.add_argument("draft", help="draft markdown file with YAML front matter")
     p.add_argument("--doc", help="document slug (default: `document` from the front matter)")
+    p.add_argument(
+        "--base",
+        type=int,
+        metavar="N",
+        help="the version the draft was written on (default: the version `oracle pull` "
+        "wrote the file from); a newer version that changed the same sections refuses the "
+        "push instead of overwriting them",
+    )
     p.set_defaults(func=push)
 
     p = sub.add_parser("pull", parents=[common], help="write a version's feedback package")

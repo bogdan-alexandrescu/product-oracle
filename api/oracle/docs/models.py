@@ -87,11 +87,30 @@ class DocumentVersion(TenantScoped, Base):
     warnings: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, server_default="[]"
     )
+    # Notes on how the version came in that are not about its content, e.g.
+    # {"code": "base_version_missing", ...}: imported without a base version, so nothing
+    # checked it keeps the changes made since the version it was written on.
+    notes: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, server_default="[]")
     # User id or API token id; no FK because it can be either.
     imported_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Who approved it (user or API token id); null on approvals before 0013.
     approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # The API token the approval was given through, when a token acted (C2).
+    approved_token_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
+    # The MCP OAuth grant (oauth_tokens.family_id) the approval was given through (C2).
+    approved_grant_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
+    # A lapsed approval (approver demoted or disabled, token revoked) moves here and
+    # approved_at / approved_by are cleared: it never counts again (C2).
+    approval_lapsed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approval_lapsed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    approval_lapse_reason: Mapped[str | None] = mapped_column(Text)
+    # Every approval of this version that lapsed, oldest first (approved_at, approved_by,
+    # approved_token_id, approved_grant_id, lapsed_at, reason): a new approval clears
+    # approval_lapsed_* but never this, so the history is not only in the audit log.
+    approval_lapses: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]", default=list
+    )
     # Optimistic concurrency: the version number an edit started from. An import whose
     # base is older than the latest version, and that changes a section changed since,
     # is a conflict (no silent last-write-wins). Null: not given (legacy imports).
@@ -109,6 +128,10 @@ class DocumentVersion(TenantScoped, Base):
         order_by="Section.ordinal", passive_deletes=True
     )
     citations: Mapped[list["Citation"]] = relationship(passive_deletes=True)
+
+
+def _content_hash(context: Any) -> str:
+    return context.get_current_parameters()["content_hash"]
 
 
 class Section(TenantScoped, Base):
@@ -132,6 +155,11 @@ class Section(TenantScoped, Base):
         ARRAY(Text), nullable=False, server_default="{}"
     )
     layer: Mapped[str] = mapped_column(Text, nullable=False, server_default="detail")
+    # The review revision (CR-06): the text plus the citation entries it cites and its
+    # brief-layer membership (oracle.docs.parser.section_revision). Approvals, section
+    # edits and patches bind to it. Defaults to the content hash (a detail section that
+    # cites nothing).
+    revision: Mapped[str] = mapped_column(Text, nullable=False, default=_content_hash)
 
 
 class Citation(TenantScoped, Base):

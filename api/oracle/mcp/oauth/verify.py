@@ -31,13 +31,14 @@ async def verify_access_token(raw: str) -> Principal | None:
         if token.expires_at <= datetime.now(UTC):
             return None
         user = await s.get(User, token.user_id)
-        if user is None or user.tenant_id != token.tenant_id:
+        if user is None or user.tenant_id != token.tenant_id or user.disabled_at is not None:
             return None
         return Principal(
             tenant_id=token.tenant_id,
             kind="user",
             role=effective_role(user.role, token.scope),
             user_id=user.id,
+            grant_id=token.family_id,
             read_only="oracle:write" not in token.scope.split(),
         )
 

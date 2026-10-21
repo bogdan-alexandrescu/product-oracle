@@ -90,7 +90,7 @@ export const SectionView = memo(function SectionView({
     }
     return m;
   }, [blocks, states]);
-  const locked = section.verdict?.verdict === "approved";
+  const locked = section.verdict?.verdict === "approved" && !section.verdict.lapsed_at;
   // The tool picked from the ⋯ menu, shown under the review bar; a new pick remounts it.
   const [tool, setTool] = useState<{ kind: Tool; n: number } | null>(null);
   // Preselect the baseline item the section names (heading first, then its text).

@@ -235,7 +235,8 @@ What Oracle does with an answer (adapter v2 review fixes, 2026-10-19):
 | 409 `not_open`, `expired`, `cancelled` | the wait is closed: cancel, continue as a new workflow with the decision |
 | 403 `person_required` | service answers recorded as off until SwarmCloud reports them on (or Oracle's API restarts); cancel, continue as a new workflow (today's flow); later runs keep checkpoints in the Inbox |
 | other refusals (403, 404 `not_found` in SwarmCloud's envelope, 422) | not posted: cancel, continue as a new workflow, with a note |
-| 503, 429, timeout, a bare (non-envelope) 404 or a 404 with another reason | nothing recorded: "decide again" (the same answer replays); after 5 such 404s for the checkpoint, the run also shows in the Inbox with Cancel |
+| 503, 429, timeout (or any other failure after Oracle recorded the decision) | recorded; Oracle keeps delivering it: the decide call answers 503 "the decision is recorded", the tick posts it again (the same answer replays) until SwarmCloud takes it, and a second decision gets 409 "already decided" (owner, 2026-10-20). Until then the run page says "Approved by <name>, delivering to the run… (N tries, last: <error>)" and the Inbox lists it under "Decision not delivered yet" (`CheckpointOut.delivery`, `InboxOut.deliveries`; not counted) |
+| a bare (non-envelope) 404 or a 404 with another reason | nothing recorded: "decide again" (the same answer replays); after 5 such 404s for the checkpoint, the run also shows in the Inbox with Cancel |
 
 **A refused draft goes back to the writer first (owner, 2026-10-20).** When the import at
 segment end refuses the draft and the wait is review1 of the workflow's last segment (a

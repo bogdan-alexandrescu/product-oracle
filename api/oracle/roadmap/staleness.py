@@ -194,7 +194,13 @@ async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> Non
 
 
 async def mark_items(db: AsyncSession, event: ChangeEvent) -> None:
-    """The ``roadmap.items`` change handler."""
+    """The ``roadmap.items`` change handler.
+
+    A section change that is part of a version's change (``part_of_change_id``: the
+    version import recorded both) is that change's: marked once, from the version, as
+    ``trace.mark_stale`` does."""
+    if event.subject_kind == "document_section" and (event.data or {}).get("part_of_change_id"):
+        return
     found: dict[uuid.UUID, tuple[RoadmapItem, str]] = {}
     if event.subject_kind == "document_version" and event.subject_id is not None:
         document = await db.get(Document, event.document_id) if event.document_id else None

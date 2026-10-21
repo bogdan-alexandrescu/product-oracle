@@ -18,7 +18,7 @@ from markdown_it import MarkdownIt
 from markupsafe import escape
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import require_role
+from oracle.authz import require_role, require_role_now
 from oracle.docs.schemas import VersionOut
 from oracle.intake import sharing
 from oracle.jobs import next_draft, service
@@ -46,6 +46,8 @@ router = APIRouter(prefix="/v1", tags=["llm-jobs"], dependencies=[Depends(requir
 Approver = Annotated[Principal, Depends(require_role("approver"))]
 Viewer = Annotated[Principal, Depends(require_role("viewer"))]
 Owner = Annotated[Principal, Depends(require_role("owner"))]
+ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
+OwnerNow = Annotated[Principal, Depends(require_role_now("owner"))]
 DOC = "/documents/{doc}"
 VERSION = DOC + "/versions/{n}"
 
@@ -80,7 +82,9 @@ async def list_llm_jobs(doc: str, db: TenantDB) -> list[LlmJobOut]:
 
 
 @router.post(DOC + "/llm-jobs", response_model=LlmJobOut, status_code=201)
-async def create_llm_job(doc: str, body: JobCreate, principal: Approver, db: TenantDB) -> LlmJobOut:
+async def create_llm_job(
+    doc: str, body: JobCreate, principal: ApproverNow, db: TenantDB
+) -> LlmJobOut:
     """Queue review comments or reporting by hand (they also queue themselves)."""
     job = await _call(service.create_job(db, principal, doc, body.kind, body.version, body.since))
     await db.commit()
@@ -94,7 +98,7 @@ async def get_llm_job_settings(doc: str, db: TenantDB) -> JobSettings:
 
 @router.put(DOC + "/llm-jobs/settings", response_model=JobSettings)
 async def put_llm_job_settings(
-    doc: str, body: JobSettings, principal: Owner, db: TenantDB
+    doc: str, body: JobSettings, principal: OwnerNow, db: TenantDB
 ) -> JobSettings:
     """Turn each built-in job kind on or off for this document."""
     out = await _call(service.update_settings(db, principal, doc, body))
@@ -108,14 +112,14 @@ async def get_llm_job(job_id: uuid.UUID, principal: Viewer, db: TenantDB) -> Llm
 
 
 @router.post("/llm-jobs/{job_id}/cancel", response_model=LlmJobOut)
-async def cancel_llm_job(job_id: uuid.UUID, principal: Approver, db: TenantDB) -> LlmJobOut:
+async def cancel_llm_job(job_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> LlmJobOut:
     job = await _call(service.cancel(db, principal, job_id))
     await db.commit()
     return await _shown(db, principal, job)
 
 
 @router.post("/llm-jobs/{job_id}/retry", response_model=LlmJobOut)
-async def retry_llm_job(job_id: uuid.UUID, principal: Approver, db: TenantDB) -> LlmJobOut:
+async def retry_llm_job(job_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> LlmJobOut:
     job = await _call(service.retry(db, principal, job_id))
     await db.commit()
     return await _shown(db, principal, job)
@@ -126,7 +130,7 @@ async def retry_llm_job(job_id: uuid.UUID, principal: Approver, db: TenantDB) ->
 
 @router.post(VERSION + "/sections/{key}/refine", response_model=LlmJobOut, status_code=201)
 async def refine_section(
-    doc: str, n: int, key: str, body: RefineIn, principal: Approver, db: TenantDB
+    doc: str, n: int, key: str, body: RefineIn, principal: ApproverNow, db: TenantDB
 ) -> LlmJobOut:
     """Queue a refinement of one section from accepted suggestions and/or an instruction.
 
@@ -151,7 +155,7 @@ async def preview_refinement(job_id: uuid.UUID, db: TenantDB) -> RefinementPrevi
 
 @router.post("/llm-jobs/{job_id}/apply", response_model=VersionOut, status_code=201)
 async def apply_refinement(
-    job_id: uuid.UUID, body: RefinementApply, principal: Approver, db: TenantDB
+    job_id: uuid.UUID, body: RefinementApply, principal: ApproverNow, db: TenantDB
 ) -> VersionOut:
     """Accept a refinement: import it as the next version, with its resolutions."""
     return await _call(service.apply_refinement(db, principal, job_id, body.heading, body.body_md))
@@ -226,7 +230,7 @@ async def list_suggestions(
 
 @router.patch("/suggestions/{suggestion_id}", response_model=SuggestionOut)
 async def edit_suggestion(
-    suggestion_id: uuid.UUID, body: SuggestionPatch, principal: Approver, db: TenantDB
+    suggestion_id: uuid.UUID, body: SuggestionPatch, principal: ApproverNow, db: TenantDB
 ) -> SuggestionOut:
     row = await _call(service.edit_suggestion(db, principal, suggestion_id, body.text))
     await db.commit()
@@ -236,7 +240,7 @@ async def edit_suggestion(
 
 @router.post("/suggestions/{suggestion_id}/accept", response_model=SuggestionOut)
 async def accept_suggestion(
-    suggestion_id: uuid.UUID, body: SuggestionAccept, principal: Approver, db: TenantDB
+    suggestion_id: uuid.UUID, body: SuggestionAccept, principal: ApproverNow, db: TenantDB
 ) -> SuggestionOut:
     """Accept (optionally with an edit). Nothing changes the document until a refinement
     built from it is accepted."""
@@ -250,7 +254,7 @@ async def accept_suggestion(
 
 @router.post("/suggestions/{suggestion_id}/dismiss", response_model=SuggestionOut)
 async def dismiss_suggestion(
-    suggestion_id: uuid.UUID, body: SuggestionDismiss, principal: Approver, db: TenantDB
+    suggestion_id: uuid.UUID, body: SuggestionDismiss, principal: ApproverNow, db: TenantDB
 ) -> SuggestionOut:
     row = await _call(
         service.dismiss_suggestion(db, principal, suggestion_id, body.reason, body.decline)

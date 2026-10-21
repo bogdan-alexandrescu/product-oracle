@@ -42,10 +42,17 @@ class Principal:
     role: Role
     user_id: uuid.UUID | None = None
     token_id: uuid.UUID | None = None
+    # The MCP OAuth grant (its refresh-token family) the call came through: approvals
+    # record it, and revoking the grant voids them, as for API tokens (C2).
+    grant_id: uuid.UUID | None = None
     # An MCP client approved with oracle:read only: it reads as the user and changes
     # nothing of theirs, including what the role check would allow (their own sources).
     read_only: bool = False
-    # The run whose token made this call (through MCP), else None.
+    # The run token of a call made for a run (below): re-read under the review gate.
+    run_token_id: uuid.UUID | None = None
+    # The run whose token made this call (through MCP), else None. What it writes is an
+    # agent's work (oracle.docs.service.import_draft holds approved text), and it reads
+    # as a run (S6).
     run_id: uuid.UUID | None = None
 
     @property
@@ -97,7 +104,7 @@ async def _iap_user(request: Request) -> User | None:
             status.HTTP_503_SERVICE_UNAVAILABLE, "Cannot verify the sign-in right now"
         ) from None
     user = await iap.user_for_claims(claims)
-    if user is None:
+    if not service.may_sign_in(user):
         raise _unauthorized()
     return user
 
@@ -120,7 +127,7 @@ async def _bearer_principal(raw: str) -> Principal:
         # A token for a user acts as that user: the user's role and own data.
         async with tenant_session(token.tenant_id) as s:
             user = await s.get(User, token.user_id)
-        if user is None:
+        if not service.may_sign_in(user):
             raise _unauthorized()
         return Principal(
             tenant_id=token.tenant_id,
@@ -130,6 +137,29 @@ async def _bearer_principal(raw: str) -> Principal:
             token_id=token.id,
         )
     return Principal(tenant_id=token.tenant_id, kind="token", role=token.role, token_id=token.id)
+
+
+# The MCP server's in-process REST call for a run token carries the run creator's session
+# and this header with the run token, so the REST layer knows the call is the run's.
+RUN_TOKEN_HEADER = "x-oracle-run-token"
+
+
+async def _for_run(principal: Principal, raw: str) -> Principal:
+    """``principal`` acting for the run of the token ``raw``: the token must be active,
+    of the principal's company, and of a run the principal's user started."""
+    from oracle.runs.models import Run
+    from oracle.runtokens import verify_run_token
+
+    claims = await verify_run_token(raw)
+    if claims is None or claims.tenant_id != principal.tenant_id or principal.user_id is None:
+        raise _unauthorized()
+    async with tenant_session(claims.tenant_id) as s:
+        run = await s.get(Run, claims.run_id)
+        creator = await s.get(User, run.created_by) if run and run.created_by else None
+    # A disabled creator's runs act for no one.
+    if run is None or run.created_by != principal.user_id or not service.may_sign_in(creator):
+        raise _unauthorized()
+    return replace(principal, run_id=run.id, run_token_id=claims.token_id)
 
 
 def _run_of(request: Request, principal: Principal) -> uuid.UUID | None:
@@ -153,12 +183,25 @@ async def get_principal(
     cookie: Annotated[str | None, Depends(_cookie)],
 ) -> Principal:
     principal = await _authenticate(request, bearer, cookie)
+    # Oracle's MCP server marks a run token's in-process REST call twice: with the run
+    # token (re-read under the review gate) and with a server-signed run binding. Either
+    # one alone marks the call as the run's; both must name the same run.
+    run_token = request.headers.get(RUN_TOKEN_HEADER)
+    if run_token is not None:
+        principal = await _for_run(principal, run_token)
     run_id = _run_of(request, principal)
+    if run_id is not None and principal.run_id is not None and principal.run_id != run_id:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"{RUN_HEADER} and {RUN_TOKEN_HEADER} name different runs",
+        )
+    if run_id is not None:
+        principal = replace(principal, run_id=run_id)
     # Parses of this request count against one person: the user, else the token; a run
     # token's, the run (oracle.safe_yaml.MAX_PER_OWNER).
-    owner = run_id or principal.user_id or principal.token_id
+    owner = principal.run_id or principal.user_id or principal.token_id
     safe_yaml.PARSE_OWNER.set(str(owner) if owner is not None else None)
-    return replace(principal, run_id=run_id) if run_id is not None else principal
+    return principal
 
 
 async def _authenticate(
@@ -179,14 +222,18 @@ async def _authenticate(
             tenant_id=iap_user.tenant_id, kind="user", role=iap_user.role, user_id=iap_user.id
         )
     if cookie:
-        ids = service.read_session_cookie(cookie)
-        if ids is not None:
-            user_id, tenant_id = ids
-            async with tenant_session(tenant_id) as s:
-                user = await s.get(User, user_id)
-                if user is not None:
+        session = service.read_session_cookie(cookie)
+        if session is not None:
+            async with tenant_session(session.tenant_id) as s:
+                user = await s.get(User, session.user_id)
+                # A disabled member's sessions, and every session signed before their
+                # last disable or restore, no longer sign in (C2).
+                if service.session_is_current(user, session.signed_at):
                     return Principal(
-                        tenant_id=tenant_id, kind="user", role=user.role, user_id=user_id
+                        tenant_id=session.tenant_id,
+                        kind="user",
+                        role=user.role,
+                        user_id=session.user_id,
                     )
     raise _unauthorized()
 

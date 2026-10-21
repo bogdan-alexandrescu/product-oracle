@@ -615,10 +615,12 @@ class RenderedFootnote:
 def build_context(ev: ExportVersion) -> dict:
     md = _markdown()
     notes = _Footnotes(by_key={c.cite_key: c for c in ev.citations})
-    env = {"footnotes": notes}
     sections = []
     present = {s.section_key for s in ev.sections}
     for s in ev.sections:
+        # One env per section: markdown-it keeps link reference definitions in it, and a
+        # definition in one section must not turn text in another into a link.
+        env = {"footnotes": notes}
         heading = _HEADING_ID.sub("", s.heading)
         sections.append(
             RenderedSection(
@@ -633,7 +635,7 @@ def build_context(ev: ExportVersion) -> dict:
                                 ev,
                                 s.section_key,
                                 layers.slide_body(s.body_md),
-                                lambda text: md.render(text, env),
+                                lambda text, env=env: md.render(text, env),
                             ),
                             present,
                         )
@@ -841,10 +843,11 @@ def build_themed_context(ev: ExportVersion) -> dict:
         numbers.setdefault(c.cite_key, len(numbers) + 1)
 
     plain, linked = _themed_markdown(False), _themed_markdown(True)
-    env = {"numbers": numbers}
     present = {s.section_key for s in ev.sections} | {"sources"}
 
     def render(s: Section, md: MarkdownIt) -> ThemedSection:
+        # One env per section, so a link reference definition stays in its section.
+        env = {"numbers": numbers}
         heading = _HEADING_ID.sub("", s.heading)
         return ThemedSection(
             key=s.section_key,

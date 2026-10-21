@@ -51,7 +51,7 @@ def scratch_db():
 
 def test_0015_specs_chains_after_main_head():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_revision("0015_specs").down_revision == "0018_source_unavailable_items"
+    assert script.get_revision("0015_specs").down_revision == "0014_member_follow_up_retry"
     assert script.get_heads() == ["0015_specs"]
 
 

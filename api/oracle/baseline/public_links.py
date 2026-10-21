@@ -64,6 +64,9 @@ _SIGN_IN_PATH = re.compile(
     re.IGNORECASE,
 )
 _SIGN_IN_HOSTS = ("accounts.google.com",)
+# " | Notion" ending a page title. Starts only where a whitespace run starts, so a long run
+# is scanned once (linear).
+_NOTION_SUFFIX = re.compile(r"(?<!\s)\s*+[|–-]\s*+Notion$")
 # Titles Notion gives a page it does not show to anonymous readers.
 _NOTION_SHELL_TITLES = {
     "",
@@ -493,7 +496,7 @@ def _ld_modified(blobs: list[str]) -> str | None:
 
 def _strip_title(title: str | None, kind: str) -> str | None:
     if title and kind == "notion":
-        title = re.sub(r"\s*[|–-]\s*Notion$", "", title).strip()
+        title = _NOTION_SUFFIX.sub("", title).strip()
     return title or None
 
 

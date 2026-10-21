@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
-import { Button, Chip, confirmInPage, CostFigure, DataTable, Icon, LinkButton, type Column, type IconName } from "@/components/ds";
+import { Button, Chip, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { BUILD_PARAM } from "@/components/NextDraft";
@@ -17,6 +17,7 @@ import {
   SENT_BACK_STATE,
   STOP_CANCELLING_CONFIRM,
   age,
+  deliveryText,
   shortId,
   usd,
   type InboxOut,
@@ -96,15 +97,28 @@ export function NeedTable({
   testId,
   rows,
   compact = false,
+  heading,
 }: {
   title: string;
   testId: string;
   rows: Need[];
   compact?: boolean;
+  /** Shown above the rows: a group that is not something to act on says what it is. */
+  heading?: ReactNode;
 }) {
+  const headingId = useId();
   if (rows.length === 0) return null;
   return (
-    <section aria-label={title} data-testid={testId}>
+    <section aria-label={heading ? undefined : title} aria-labelledby={heading ? headingId : undefined} data-testid={testId}>
+      {heading && (
+        <h3
+          id={headingId}
+          data-testid={`${testId}-heading`}
+          className="flex flex-wrap items-center gap-x-1.5 border-t border-line px-4 pt-3 pb-1 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2 max-[600px]:px-3"
+        >
+          {heading}
+        </h3>
+      )}
       <DataTable
         label={title}
         columns={compact ? NEED_COLUMNS_COMPACT : NEED_COLUMNS}
@@ -153,7 +167,18 @@ export const STATE_TABS: { id: InboxState; label: string }[] = [
  * new or open, by the rail badge); a document's 'N changes staged' row and 'Looking' rows
  * are not items.
  */
-export type NeedGroup = "checkpoints" | "approvals" | "overruns" | "lookups" | "imports" | "feedback" | "questions" | "searches" | "revising";
+export type NeedGroup =
+  | "checkpoints"
+  | "deliveries"
+  | "approvals"
+  | "overruns"
+  | "lookups"
+  | "imports"
+  | "revoke-failures"
+  | "feedback"
+  | "questions"
+  | "searches"
+  | "revising";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
 
 type FeedbackRow = InboxOut["items"][number];
@@ -298,6 +323,74 @@ function consoleNeeds(c: NonNullable<InboxOut["checkpoints"][number]["console"]>
   if (c.needs === "redo_or_continue") return `changes requested; choose Redo from ${c.redo_segment} or Continue`;
   if (c.needs === "unread") return "waiting to read the answer";
   return "the verdict could not be read";
+}
+
+type RevokeFailure = NonNullable<InboxOut["revoke_failures"]>[number];
+
+/** Why the last attempt did not revoke, in the owner's words. */
+function revokeOutcome(outcome: string | null | undefined, provider: string): string {
+  if (outcome === "not_configured") return `Oracle's ${provider} sign-in app is not configured`;
+  if (outcome === "unreadable") return "Oracle could not read its copy of the credential";
+  return `${provider} refused or did not answer`;
+}
+
+/** Owners only: a provider revoke a removed member's disable could not make, with Retry and
+ * Dismiss. Inbox and Home draw the same rows (the badge counts them). */
+export function revokeNeeds(failures: RevokeFailure[], busy: string | null, act: Act): Need[] {
+  return failures.map((f) => {
+    const provider = f.provider_name ?? f.provider ?? "the provider";
+    const why = [
+      `${revokeOutcome(f.outcome, provider)}${f.last_error ? ` (${f.last_error})` : ""}`,
+      `tried ${f.attempts} time${f.attempts === 1 ? "" : "s"}`,
+      f.status === "pending"
+        ? `retrying until ${formatDateTime(f.retry_until)}`
+        : `stopped retrying ${formatDateTime(f.retry_until)}`,
+    ].join(" · ");
+    const path = { params: { path: { follow_up_id: f.id } } };
+    return {
+      key: f.id,
+      icon: "lock",
+      kind: "Couldn't revoke",
+      item: (
+        <>
+          <span className="truncate" title={f.title}>
+            {f.title}
+          </span>
+          <InfoTip label="this revoke" align="start">
+            Oracle keeps a copy of the credential until the revoke succeeds or you dismiss this. Dismiss if you revoked
+            the access at {provider} yourself.
+          </InfoTip>
+        </>
+      ),
+      context: (
+        <span className="block truncate text-text2" title={why}>
+          {why}
+        </span>
+      ),
+      at: f.created_at,
+      action: (
+        <>
+          <Button
+            disabled={busy !== null}
+            onClick={() =>
+              act(`retry-${f.id}`, () => unwrap(api.POST("/v1/member-follow-ups/{follow_up_id}/retry", path)))
+            }
+          >
+            Retry
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={busy !== null}
+            onClick={() =>
+              act(`dismiss-${f.id}`, () => unwrap(api.POST("/v1/member-follow-ups/{follow_up_id}/dismiss", path)))
+            }
+          >
+            Dismiss
+          </Button>
+        </>
+      ),
+    };
+  });
 }
 
 /**
@@ -523,6 +616,40 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
         ),
   }));
 
+  // Decided, not delivered to the run yet (owner, 2026-10-20): shown only, nothing to decide
+  // (Oracle sends it again on every tick), not counted. The run, the review and SwarmCloud's
+  // last answer; Open goes to the run.
+  // Revising wins: Oracle's send-back means no human decision is owed, so a run in both
+  // shows once, as Revising.
+  const revisingRuns = new Set((inbox.revising ?? []).map((r) => r.id));
+  const deliveries: Need[] = (inbox.deliveries ?? []).filter((c) => !revisingRuns.has(c.run_id)).map((c) => ({
+    key: c.id,
+    icon: "clock",
+    kind: "Decision",
+    item: (
+      // Two lines, wrapped rather than cut: the review and its decision, then SwarmCloud's last answer.
+      <span className="flex min-w-0 flex-col py-1" title={deliveryText(c)}>
+        <span className="break-words">
+          {CHECKPOINT_LABEL[c.kind]}: {c.status === "approved" ? "approved" : "changes requested"}
+          {c.delivery?.decided_by_name && ` by ${c.delivery.decided_by_name}`}
+        </span>
+        {c.delivery?.last_error && (
+          <span className="text-sm break-words text-text2" data-testid="delivery-error">
+            Last: {c.delivery.last_error}
+          </span>
+        )}
+      </span>
+    ),
+    context: (
+      <Link href={`/runs/${c.run_id}`} className="block truncate hover:underline" title={[c.flow_title, c.segment_title, c.document_slug].filter(Boolean).join(" · ")}>
+        <RunName run={c} />
+      </Link>
+    ),
+    run: shortId(c.run_id),
+    at: c.decided_at ?? c.created_at,
+    action: <LinkButton href={`/runs/${c.run_id}`}>Open</LinkButton>,
+  }));
+
   // Shown only: nothing to decide, and not counted in the total (nor on Home or the badge).
   const searches: Need[] = (inbox.searches ?? []).map((r) => ({
     key: r.id,
@@ -557,7 +684,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     action: openRun(r),
   }));
 
-  return { checkpoints, approvals, overruns, lookups, imports, searches, revising };
+  return { checkpoints, deliveries, approvals, overruns, lookups, imports, searches, revising };
 }
 
 /**
@@ -616,7 +743,7 @@ export function sourceNeeds(sources: Schemas["SourceOut"][]): Need[] {
 
 /**
  * Every row of the one Inbox, each in its state (owner, 2026-10-20): checkpoints, cost
- * approvals, overruns, stuck runs, couldn't-import, feedback items and the questions asked
+ * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke (owners), feedback items and the questions asked
  * of me are New or Open; feedback items also Staged, Declined or Done. Home's Needs you is
  * the New and Open rows, so the badge, Home and /inbox count the same items.
  */
@@ -637,9 +764,11 @@ export function allNeeds(
     ...stated(n.overruns, "overruns"),
     ...stated(n.lookups, "lookups"),
     ...stated(n.imports, "imports"),
+    ...stated(revokeNeeds(inbox.revoke_failures ?? [], busy, act), "revoke-failures"),
     ...feedbackNeeds(inbox, seenBefore),
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.
+    ...stated(n.deliveries, "deliveries", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.searches, "searches", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.revising, "revising", false).map((r) => ({ ...r, state: "open" as const })),
   ];

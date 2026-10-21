@@ -28,8 +28,9 @@ ROLES: dict[str, re.Pattern[str]] = {
 # A "non-goals" or "out of scope" heading is not scope; a "success metrics" one is not goals.
 EXCLUDES: dict[str, set[str]] = {"scope": {"non_goals"}, "goals": {"metrics", "non_goals"}}
 
-# Possessive and within one line: linear on blank lines and space runs.
-_BULLET = re.compile(r"^[ \t]*+(?:[-*+]|\d+[.)])[ \t]++(.*\S)", re.M)
+# Leading space stays on its line and the marker's space is possessive, so blank lines and
+# space runs are scanned once (linear); the bullets found are the same.
+_BULLET = re.compile(r"^[^\S\n]*+(?:[-*+]|\d++[.)])\s++(.*\S)", re.M)
 _NUMBER = re.compile(r"\d")
 _WORD = re.compile(r"[A-Za-z0-9][A-Za-z0-9'%$.-]*")
 
@@ -46,9 +47,12 @@ OBSERVABLE = re.compile(
     r"displays?|rejects?|refuses?|removes?|logs?|sends?|blocks?|fails?|equals?|matches)\b",
     re.I,
 )
+# "if ... then" on one line. The gap stops at the next "if", so each "if" scans only up to
+# the next one (linear); a line matches exactly when it did with ``if\b.+\bthen``, though
+# with several ifs the match starts at the last "if" before the "then".
 THRESHOLD = re.compile(
     r"\b(threshold|at least|at most|below|above|under|over|target|go/no-go|kill|stop|"
-    r"revisit|roll ?back|if\b.+\bthen|decision)\b",
+    r"revisit|roll ?back|if\b(?:(?!\bif\b).)+\bthen|decision)\b",
     re.I,
 )
 USERS_IN_TEXT = re.compile(

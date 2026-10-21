@@ -21,15 +21,28 @@ export const SELECT =
 
 export const VERDICT_KIND: Record<Verdict, ChipKind> = { approved: "pass", changes_requested: "warn", rejected: "crit" };
 
-/** The mark a section's row shows: its verdict, or a lock once the version's review is closed. */
-export function sectionMark(verdict: Verdict | null | undefined, closed = false): MarkState {
+/** The mark a section's row shows: its verdict, or a lock once the version's review is
+ * closed. An approval that lapsed (approver demoted or removed, token or grant revoked)
+ * never counts: it shows as lapsed, as the section view's review bar says. */
+export function sectionMark(verdict: Verdict | null | undefined, closed = false, lapsed = false): MarkState {
   if (closed) return "locked";
+  if (verdict === "approved" && lapsed) return "lapsed";
   return verdict ?? "none";
 }
 
 /** A section's review state as a mark (shape and colour); never a ✓ unless approved. */
-export function SectionMark({ verdict, closed = false, size = 16 }: { verdict: Verdict | null | undefined; closed?: boolean; size?: 16 | 20 }) {
-  return <StatusMark state={sectionMark(verdict, closed)} size={size} />;
+export function SectionMark({
+  verdict,
+  closed = false,
+  lapsed = false,
+  size = 16,
+}: {
+  verdict: Verdict | null | undefined;
+  closed?: boolean;
+  lapsed?: boolean;
+  size?: 16 | 20;
+}) {
+  return <StatusMark state={sectionMark(verdict, closed, lapsed)} size={size} />;
 }
 
 export function VerdictChip({ verdict }: { verdict: Verdict }) {
