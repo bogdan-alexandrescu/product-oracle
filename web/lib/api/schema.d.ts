@@ -1746,6 +1746,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/autonomy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Autonomy
+         * @description How far Oracle may go on its own, per responsibility: the level, what it means,
+         *     the ceiling and the limits.
+         */
+        get: operations["get_autonomy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/autonomy/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Autonomy
+         * @description Set how far Oracle may go for one responsibility (owner), with a reason.
+         */
+        put: operations["set_autonomy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/oracle-actions/{action_id}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Oracle Action
+         * @description Mark an "Oracle did" row opened, for me only: it stops counting in my Inbox.
+         */
+        post: operations["open_oracle_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/oracle-actions/{action_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Oracle Action
+         * @description Undo what Oracle did: call the route the behaviour stored, as me (my role and
+         *     checks apply), and record that I undid it. A refusal of that route is returned as is
+         *     and records nothing.
+         */
+        post: operations["undo_oracle_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/claude-accounts": {
         parameters: {
             query?: never;
@@ -2642,7 +2725,8 @@ export interface paths {
         put?: never;
         /**
          * Create Proposal
-         * @description Suggest a change; an approver accepts or rejects it.
+         * @description Suggest a change; an approver accepts or rejects it. A run's proposal is refused
+         *     while Oracle is set to observe the baseline (H11); a person's never is.
          */
         post: operations["create_proposal"];
         delete?: never;
@@ -6930,6 +7014,86 @@ export interface components {
         AuthorizeIn: {
             /** Label */
             label: string;
+        };
+        /** AutonomyIn */
+        AutonomyIn: {
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "observe" | "draft" | "recommend" | "act";
+            /** Limits */
+            limits?: {
+                [key: string]: unknown;
+            } | null;
+            /** Reason */
+            reason: string;
+        };
+        /** AutonomyItem */
+        AutonomyItem: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Group */
+            group: string;
+            /** Group Title */
+            group_title: string;
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "observe" | "draft" | "recommend" | "act";
+            /**
+             * Default
+             * @enum {string}
+             */
+            default: "observe" | "draft" | "recommend" | "act";
+            /**
+             * Ceiling
+             * @enum {string}
+             */
+            ceiling: "observe" | "draft" | "recommend" | "act";
+            /** Allowed */
+            allowed: ("observe" | "draft" | "recommend" | "act")[];
+            /** Levels */
+            levels: {
+                [key: string]: string;
+            };
+            /** Ceiling Reason */
+            ceiling_reason?: string | null;
+            /** Limits */
+            limits?: {
+                [key: string]: unknown;
+            } | null;
+            /** Limits Schema */
+            limits_schema?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Fixed Limits
+             * @default []
+             */
+            fixed_limits: string[];
+            /** Limits Summary */
+            limits_summary?: string | null;
+            /** Wired */
+            wired: boolean;
+            /** Wired By */
+            wired_by: string;
+            /** Wired By Name */
+            wired_by_name: string;
+        };
+        /** AutonomyOut */
+        AutonomyOut: {
+            /** Items */
+            items: components["schemas"]["AutonomyItem"][];
+            /** Stays With People */
+            stays_with_people: string[];
+            /** Updated By */
+            updated_by?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /**
          * Basis
@@ -11285,6 +11449,49 @@ export interface components {
             /** Suggestion Kind */
             suggestion_kind?: string | null;
         };
+        /**
+         * InboxOracleAction
+         * @description "Oracle did": what Oracle did on its own account (H11, ``oracle.autonomy.acted``),
+         *     for one of the people it notified. Counted until that person opens it.
+         */
+        InboxOracleAction: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Responsibility */
+            responsibility: string;
+            /** Responsibility Title */
+            responsibility_title: string;
+            /** Summary */
+            summary: string;
+            /**
+             * Subject
+             * @default {}
+             */
+            subject: {
+                [key: string]: unknown;
+            };
+            /** Undo */
+            undo?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "open" | "done";
+            /** Counts */
+            counts: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Undone At */
+            undone_at?: string | null;
+        };
         /** InboxOut */
         InboxOut: {
             /** Checkpoints */
@@ -11325,6 +11532,11 @@ export interface components {
              * @default []
              */
             revoke_failures: components["schemas"]["InboxRevokeFailure"][];
+            /**
+             * Oracle Actions
+             * @default []
+             */
+            oracle_actions: components["schemas"]["InboxOracleAction"][];
             /** Total */
             total: number;
             /**
@@ -16277,6 +16489,8 @@ export interface components {
              */
             can_retry_draft_import: boolean;
             items_check?: components["schemas"]["ItemsCheck"] | null;
+            /** Autonomy Note */
+            autonomy_note?: string | null;
             /** Started At */
             started_at?: string | null;
             /** Finished At */
@@ -22129,6 +22343,135 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_autonomy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutonomyOut"];
+                };
+            };
+        };
+    };
+    set_autonomy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutonomyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutonomyItem"];
+                };
+            };
+            /** @description Unknown responsibility */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Above the ceiling, a bad or fixed limit, or no reason */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    open_oracle_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxOracleAction"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_oracle_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxOracleAction"];
+                };
+            };
+            /** @description Nothing to undo, or already undone */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
