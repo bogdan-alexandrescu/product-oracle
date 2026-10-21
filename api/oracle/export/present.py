@@ -5,7 +5,9 @@ Owner decision 2026-10-20 (review of 7ab8fcf): a deck build takes a place
 from the person's exports, and one of the company's two places for exports and decks
 together). Versions are immutable, so a built deck is kept in this process (an LRU, not the
 database) and a repeat request is served from it: no place, no render. Requests for a deck
-that is being built wait for that build instead of starting their own.
+that is being built wait for that build instead of starting their own, and answer as it
+ended (review of PR #134, 2026-10-21: a failed build is not built again by each of them in
+turn).
 
 The key is what the deck shows: the company and the version, the theme as it is now (its
 id and when it last changed), :data:`RENDERER`, the dates marked now (a roadmap's
@@ -20,6 +22,8 @@ import sys
 from collections import OrderedDict
 from collections.abc import Callable, Hashable
 from typing import TYPE_CHECKING
+
+from fastapi import HTTPException, status
 
 from oracle.export import offload
 from oracle.export.deck import Deck
@@ -80,8 +84,9 @@ class Decks:
 
 
 _KEPT = Decks()
-# Builds running now, one per key: their requests' waiters are told when each ends.
-_building: dict[Hashable, asyncio.Future[None]] = {}
+# Builds running now, one per key: whose request builds it, and how it ended (its deck,
+# what it raised, None when its request was cancelled), for the requests waiting for it.
+_building: dict[Hashable, tuple[Hashable, asyncio.Future[Deck | Exception | None]]] = {}
 
 
 def key(principal: "Principal", ev: ExportVersion) -> Hashable:
@@ -105,31 +110,65 @@ def key(principal: "Principal", ev: ExportVersion) -> Hashable:
     )
 
 
+def _again(ended: Exception) -> Exception:
+    """The refusal or error a waiter answers when the build it waited for ended in
+    ``ended`` (a copy: one exception is not raised in several requests at once)."""
+    if isinstance(ended, offload.Refused):
+        return offload.Refused(ended.status_code, ended.code, ended.message)
+    if isinstance(ended, HTTPException):
+        return HTTPException(ended.status_code, ended.detail, ended.headers)
+    return HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal Server Error")
+
+
 async def deck_for(
     principal: "Principal", ev: ExportVersion, build: Callable[[ExportVersion], Deck]
 ) -> Deck:
     """The deck of ``ev``: kept, else ``build(ev)`` on the export pool in a Present place
     of ``principal`` (:class:`offload.Refused` when there is none or no worker is free in
     time), kept for the next request. ``ev`` holds no session's rows
-    (:func:`oracle.export.render.detached`)."""
+    (:func:`oracle.export.render.detached`).
+
+    A request for a deck that is being built waits for that build and answers as it ended:
+    its deck, or the same refusal or error (it never builds a deck that just failed again).
+    Two endings let a waiter build it in a place of its own: the builder's person had no
+    Present place left (``present_busy_you``, when the waiter is another person), or the
+    builder's request was cancelled (the first waiter to wake builds it, the others wait
+    for that build)."""
     k = key(principal, ev)
+    person = offload.person_of(principal)
     while (deck := _KEPT.get(k)) is None:
         pending = _building.get(k)
         if pending is None:
             break
-        # Another request builds it: wait for its end, then read it (or build it, when that
-        # build was refused or failed).
-        await asyncio.wait({pending})
+        builder, built = pending
+        await asyncio.wait({built})
+        outcome = built.result()
+        if isinstance(outcome, Deck):
+            return outcome  # built, even when too large to keep
+        if outcome is None:
+            continue  # its request went away before it ended
+        if (
+            isinstance(outcome, offload.Refused)
+            and outcome.code == "present_busy_you"
+            and builder != person
+        ):
+            continue  # the builder's person's share, not this one's
+        raise _again(outcome) from None
     if deck is not None:
         return deck
-    done = asyncio.get_running_loop().create_future()
-    _building[k] = done
+    done: asyncio.Future[Deck | Exception | None] = asyncio.get_running_loop().create_future()
+    entry = _building[k] = (person, done)
+    ended: Deck | Exception | None = None  # None: cancelled
     try:
         with offload.place(principal, present=True) as held:
             deck = await offload.run(held, build, ev)
         _KEPT.put(k, deck)
+        ended = deck
         return deck
+    except Exception as exc:
+        ended = exc
+        raise
     finally:
-        if _building.get(k) is done:
+        if _building.get(k) is entry:
             del _building[k]
-        done.set_result(None)
+        done.set_result(ended)

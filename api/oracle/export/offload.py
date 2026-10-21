@@ -113,8 +113,13 @@ class Place:
                     del counts[key]
 
 
+def person_of(principal: "Principal") -> Hashable:
+    """Whose share ``principal``'s exports and deck builds count in."""
+    return (principal.tenant_id, principal.actor)
+
+
 def _admit(principal: "Principal", present: bool) -> Place:
-    person = (principal.tenant_id, principal.actor)
+    person = person_of(principal)
     company = principal.tenant_id
     if present:
         people, cap, code, message = (
