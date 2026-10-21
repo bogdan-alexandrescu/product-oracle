@@ -61,6 +61,11 @@ from oracle.members.models import Invite, MemberFollowUp  # noqa: E402
 from oracle.preferences.models import UserPreference  # noqa: E402
 from oracle.priorities.models import PrioritySnapshot  # noqa: E402
 from oracle.quality.models import OutcomeRecord, QualityLearning  # noqa: E402
+from oracle.requests.models import (  # noqa: E402
+    ProductRequest,
+    RequestCandidate,
+    RequestTheme,
+)
 from oracle.review.models import (  # noqa: E402
     Comment,
     DocumentPublication,
@@ -169,11 +174,14 @@ __all__ = [
     "OAuthToken",
     "OutcomeRecord",
     "PrioritySnapshot",
+    "ProductRequest",
     "ProductIntake",
     "ProductTrack",
     "Proposal",
     "ReviewCampaign",
     "QualityLearning",
+    "RequestCandidate",
+    "RequestTheme",
     "RoadmapItem",
     "Run",
     "RunSegment",

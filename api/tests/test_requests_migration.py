@@ -180,7 +180,8 @@ def test_widened_checks_keep_other_lanes_values(scratch_db):
                                 ("checkpoints", "ck_checkpoints_kind", "kind")):  # fmt: skip
         values = _check(name)
         _run(f"ALTER TABLE {table} DROP CONSTRAINT {name}")
-        widened = values.replace(f"({column} = ANY (ARRAY[", f"({column} = ANY (ARRAY['x_lane'::text, ")
+        head = f"({column} = ANY (ARRAY["
+        widened = values.replace(head, f"{head}'x_lane'::text, ")
         _run(f"ALTER TABLE {table} ADD CONSTRAINT {name} {widened}")
     command.upgrade(cfg, REVISION)
     assert "'x_lane'" in _check("ck_runs_flow") and "'request_triage'" in _check("ck_runs_flow")

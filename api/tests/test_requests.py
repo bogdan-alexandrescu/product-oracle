@@ -25,7 +25,7 @@ from tests.test_mcp import mcp_client, text_of
 async def goal(client, ctx: Ctx, key: str = "activation", *, confirmed: bool = True) -> dict:
     ent = await entity(client, ctx, type="goal", key=key)
     if confirmed and ent["status"] != "confirmed":
-        ent = (await confirm(client, ctx, ent))["entity"]
+        ent = await confirm(client, ctx, ent)
     return ent
 
 
@@ -80,8 +80,9 @@ async def ctx() -> Ctx:
 async def test_commenter_adds_a_new_request_and_viewer_cannot(client, ctx):
     """protects=rule 1 (commenter+ adds, viewers read); fails_when=a viewer adds one or a
     commenter's request is not New with its filer; no_claim=the Add request dialog."""
-    out = await add(client, ctx, requester_name="A buyer at a retail customer",
-                    requester_kind="customer")
+    out = await add(
+        client, ctx, requester_name="A buyer at a retail customer", requester_kind="customer"
+    )
     assert out["state"] == "new"
     assert out["origin"] == "person"
     assert out["verified"] is True
@@ -110,13 +111,13 @@ async def test_add_refuses_interview_channel_and_bad_links(client, ctx):
     assert resp.json()["detail"] == "Interview requests come from interviews"
 
     proposed = await goal(client, ctx, "retention", confirmed=False)
-    if proposed["status"] != "confirmed":
-        resp = await client.post(
-            "/v1/requests",
-            json={"title": "x", "channel": "support", "goal_ids": [proposed["id"]]},
-            headers=ctx.as_("commenter"),
-        )
-        assert resp.status_code == 422
+    assert proposed["status"] == "proposed"
+    resp = await client.post(
+        "/v1/requests",
+        json={"title": "x", "channel": "support", "goal_ids": [proposed["id"]]},
+        headers=ctx.as_("commenter"),
+    )
+    assert resp.status_code == 422
     for field in ("goal_ids", "theme_id"):
         value = [str(uuid.uuid4())] if field == "goal_ids" else str(uuid.uuid4())
         resp = await client.post(
@@ -126,7 +127,8 @@ async def test_add_refuses_interview_channel_and_bad_links(client, ctx):
         )
         assert resp.status_code == 422, field
     resp = await client.post(
-        "/v1/requests", json={"title": "x" * 201, "channel": "support"},
+        "/v1/requests",
+        json={"title": "x" * 201, "channel": "support"},
         headers=ctx.as_("commenter"),
     )
     assert resp.status_code == 422
@@ -159,13 +161,14 @@ async def test_list_counts_match_rows_for_a_seeded_company(client, ctx):
     assert new["counts"]["all"] == 12
     sales = (await client.get("/v1/requests?channel=sales", headers=ctx.as_("viewer"))).json()
     assert sales["total"] == 4 and sales["counts"]["all"] == 4
-    by_goal = (await client.get(f"/v1/requests?goal_id={g['id']}", headers=ctx.as_("viewer")))
+    by_goal = await client.get(f"/v1/requests?goal_id={g['id']}", headers=ctx.as_("viewer"))
     assert by_goal.json()["total"] == 4
     found = (await client.get("/v1/requests?q=request%2011", headers=ctx.as_("viewer"))).json()
     assert [i["title"] for i in found["items"]] == ["Request 11"]
     page = (await client.get("/v1/requests?limit=5&offset=10", headers=ctx.as_("viewer"))).json()
     assert len(page["items"]) == 2 and page["total"] == 12
-    assert (await client.get("/v1/requests?limit=201", headers=ctx.as_("viewer"))).status_code == 422
+    too_many = await client.get("/v1/requests?limit=201", headers=ctx.as_("viewer"))
+    assert too_many.status_code == 422
 
 
 # --- qualify ------------------------------------------------------------------------
@@ -319,7 +322,8 @@ async def test_stale_lock_version_changes_nothing(client, ctx):
         resp = await act(client, ctx, r["id"], verb, lock_version=stale, **body)
         assert resp.status_code == 409, verb
     resp = await client.patch(
-        f"/v1/requests/{r['id']}", json={"lock_version": stale, "title": "New title"},
+        f"/v1/requests/{r['id']}",
+        json={"lock_version": stale, "title": "New title"},
         headers=ctx.as_("commenter"),
     )
     assert resp.status_code == 409
@@ -368,7 +372,8 @@ async def test_patch_filer_edits_text_while_new_and_approver_sets_links(client, 
     )
     assert resp.status_code == 403
     resp = await client.patch(
-        url, json={"lock_version": 1, "title": "Saved addresses", "body": "Two calls"},
+        url,
+        json={"lock_version": 1, "title": "Saved addresses", "body": "Two calls"},
         headers=ctx.as_("commenter"),
     )
     assert resp.status_code == 200, resp.text
@@ -383,7 +388,8 @@ async def test_patch_filer_edits_text_while_new_and_approver_sets_links(client, 
     assert resp.json()["goal_ids"] == [g["id"]]
     assert resp.json()["feature_id"] == feature["id"]
     resp = await client.patch(
-        url, json={"lock_version": 3, "feature_id": str(uuid.uuid4())},
+        url,
+        json={"lock_version": 3, "feature_id": str(uuid.uuid4())},
         headers=ctx.as_("approver"),
     )
     assert resp.status_code == 422
@@ -408,7 +414,8 @@ async def test_interview_requests_keep_their_words(client, ctx):
         )
         await s.commit()
     resp = await client.patch(
-        f"/v1/requests/{r['id']}", json={"lock_version": 1, "title": "Edited"},
+        f"/v1/requests/{r['id']}",
+        json={"lock_version": 1, "title": "Edited"},
         headers=ctx.as_("commenter"),
     )
     assert resp.status_code == 403
@@ -454,8 +461,14 @@ async def test_accept_suggestion_parts(client, ctx):
     g = await goal(client, ctx)
     target = await add(client, ctx, title="Saved addresses")
     r = await add(client, ctx, title="Keep my address")
-    await suggest(ctx, r["id"], theme_title="Faster check-out", goal_ids=[g["id"]],
-                  duplicate_of=target["id"], feature_id=None)
+    await suggest(
+        ctx,
+        r["id"],
+        theme_title="Faster check-out",
+        goal_ids=[g["id"]],
+        duplicate_of=target["id"],
+        feature_id=None,
+    )
     out = await get(client, ctx, r["id"])
     assert out["suggestion"]["theme_title"] == "Faster check-out"
     assert out["goal_ids"] == [] and out["theme"] is None
@@ -514,15 +527,17 @@ async def test_themes_roles_titles_and_archive(client, ctx):
     resp = await client.post("/v1/request-themes", json=dup, headers=ctx.as_("approver"))
     assert resp.status_code == 409
     resp = await client.post(
-        "/v1/request-themes", json={"title": "Bad", "goal_ids": [str(uuid.uuid4())]},
+        "/v1/request-themes",
+        json={"title": "Bad", "goal_ids": [str(uuid.uuid4())]},
         headers=ctx.as_("approver"),
     )
     assert resp.status_code == 422
 
     r = await add(client, ctx, theme_id=theme["id"])
     assert r["theme"] == {"id": theme["id"], "title": "Faster check-out"}
-    themed = (await client.get(f"/v1/requests?theme_id={theme['id']}",
-                               headers=ctx.as_("viewer"))).json()
+    themed = (
+        await client.get(f"/v1/requests?theme_id={theme['id']}", headers=ctx.as_("viewer"))
+    ).json()
     assert themed["total"] == 1
     await add(client, ctx, title="Unthemed")
     none = (await client.get("/v1/requests?theme_id=none", headers=ctx.as_("viewer"))).json()
@@ -531,11 +546,13 @@ async def test_themes_roles_titles_and_archive(client, ctx):
     assert listed[0]["request_count"] == 1
 
     url = f"/v1/request-themes/{theme['id']}"
-    resp = await client.patch(url, json={"lock_version": 1, "archived": True},
-                              headers=ctx.as_("commenter"))
+    resp = await client.patch(
+        url, json={"lock_version": 1, "archived": True}, headers=ctx.as_("commenter")
+    )
     assert resp.status_code == 403
-    resp = await client.patch(url, json={"lock_version": 1, "archived": True},
-                              headers=ctx.as_("approver"))
+    resp = await client.patch(
+        url, json={"lock_version": 1, "archived": True}, headers=ctx.as_("approver")
+    )
     assert resp.status_code == 200 and resp.json()["archived"] is True
     assert (await client.get("/v1/request-themes", headers=ctx.as_("viewer"))).json() == []
     every = await client.get("/v1/request-themes?include_archived=true", headers=ctx.as_("viewer"))
@@ -544,11 +561,13 @@ async def test_themes_roles_titles_and_archive(client, ctx):
     await add(client, ctx, theme_id=theme["id"], expect=422)
     resp = await client.post("/v1/request-themes", json=dup, headers=ctx.as_("approver"))
     assert resp.status_code == 201
-    resp = await client.patch(url, json={"lock_version": 1, "archived": False},
-                              headers=ctx.as_("approver"))
+    resp = await client.patch(
+        url, json={"lock_version": 1, "archived": False}, headers=ctx.as_("approver")
+    )
     assert resp.status_code == 409  # stale
-    resp = await client.patch(url, json={"lock_version": 2, "archived": False},
-                              headers=ctx.as_("approver"))
+    resp = await client.patch(
+        url, json={"lock_version": 2, "archived": False}, headers=ctx.as_("approver")
+    )
     assert resp.status_code == 409  # its title is taken by a live theme now
     assert {e.action for e in await audits(ctx, "request_theme.created")} == {
         "request_theme.created"
