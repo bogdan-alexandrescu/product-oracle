@@ -156,6 +156,50 @@ def _state_kind(state) -> str:
     return "added" if state.added else ("decided" if state.decided else "proposed")
 
 
+def slide_groups(front_matter: dict | None, template: str | None) -> list[list[str]]:
+    """Brief sections that share one slide (H8: a board update's two slides): the
+    version's front matter ``slides``, else its built-in template's."""
+    groups = (front_matter or {}).get("slides")
+    if groups is None and template:
+        from oracle.docs.parser import split_front_matter
+        from oracle.templates.builtins import BUILTIN_TEMPLATES_BY_KEY, builtin_body
+        from oracle.templates.service import slide_groups_of
+
+        builtin = BUILTIN_TEMPLATES_BY_KEY.get(template)
+        if builtin is not None:
+            groups = slide_groups_of(split_front_matter(builtin_body(builtin))[0])
+    if not isinstance(groups, list):
+        return []
+    return [
+        [k for k in g if isinstance(k, str)] for g in groups if isinstance(g, list) and g
+    ]
+
+
+def _grouped(ev: ExportVersion, brief: list[Section]) -> list[tuple[Section, str]]:
+    """Each slide's lead section and the body it shows: a section's own body, or for a
+    group (:func:`slide_groups`) the lead's body then each further section under its own
+    heading."""
+    groups = slide_groups(ev.version.front_matter, ev.document.template)
+    by_key = {s.section_key: s for s in brief}
+    lead_of: dict[str, list[Section]] = {}
+    taken: set[str] = set()
+    for g in groups:
+        members = [by_key[k] for k in g if k in by_key and k not in taken]
+        if members:
+            lead_of[members[0].section_key] = members
+            taken.update(m.section_key for m in members)
+    out: list[tuple[Section, str]] = []
+    for s in brief:
+        if s.section_key in lead_of:
+            members = lead_of[s.section_key]
+            parts = [s.body_md or ""]
+            parts += [f"### {_plain_heading(m)}\n\n{m.body_md or ''}" for m in members[1:]]
+            out.append((s, "\n\n".join(parts)))
+        elif s.section_key not in taken:
+            out.append((s, s.body_md or ""))
+    return out
+
+
 def build_deck(ev: ExportVersion) -> Deck:
     """Slides for ``ev`` (already restricted to the brief layer by ``apply_layer``)."""
     appendix = sources_keys(ev.all_sections)
@@ -167,10 +211,10 @@ def build_deck(ev: ExportVersion) -> Deck:
     detail_keys = {s.section_key for s in ev.all_sections if s.layer != layers.BRIEF} - appendix
 
     slides: list[Slide] = [Slide(index=1, kind="title", heading=ev.title)]
-    for s in brief:
-        body = layers.slide_body(s.body_md or "")
+    for s, raw in _grouped(ev, brief):
+        body = layers.slide_body(raw)
         expand = []
-        for key in layers.linked_sections(s.body_md or ""):
+        for key in layers.linked_sections(raw):
             if key not in detail_keys:
                 continue
             parts = []
@@ -198,7 +242,7 @@ def build_deck(ev: ExportVersion) -> Deck:
                 heading=_plain_heading(s),
                 body_md=body,
                 section_key=s.section_key,
-                notes=layers.presenter_notes(s.body_md or ""),
+                notes=layers.presenter_notes(raw),
                 body_html=Markup(
                     section_body_html(
                         ev, s.section_key, body, lambda text: str(_render_md(text, on_slides))

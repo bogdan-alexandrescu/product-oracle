@@ -459,7 +459,7 @@ async def read_version(
             .where(Document.id == version.document_id)
         )
     ).one()
-    if kind == "roadmap":
+    if kind in ("roadmap", "update"):
         from oracle.roadmap import doc_dates
 
         try:
@@ -496,7 +496,7 @@ async def version_markdown(db: AsyncSession, version: DocumentVersion) -> tuple[
     (``<!-- oracle: date unverified -->``, ``<!-- oracle: date withdrawn -->``; the import
     drops them), and the list names them (O4 'document dates')."""
     kind = await db.scalar(select(Document.kind).where(Document.id == version.document_id))
-    if kind != "roadmap":
+    if kind not in ("roadmap", "update"):
         return version.markdown, []
     from oracle.roadmap import doc_dates
 
@@ -581,8 +581,14 @@ async def _check_document_dates(
                 section_key=doc_dates.SOURCES_KEY,
             )
         )
-    prd_id = await doc_dates.prd_of(db, document.id, source_version_id, draft.front_matter)
-    marks = await doc_dates.check(db, found, prd_id, exempt=exempt)
+    if document.kind == "update":
+        # H8: every PRD with an active product track, not one roadmap's PRD.
+        prds = await doc_dates.prds_with_active_track(db)
+        prd_id = None
+    else:
+        prd_id = await doc_dates.prd_of(db, document.id, source_version_id, draft.front_matter)
+        prds = [prd_id] if prd_id is not None else []
+    marks = await doc_dates.check(db, found, prds, exempt=exempt)
     bad = [
         m
         for m in doc_dates.flagged(marks)
@@ -596,7 +602,7 @@ async def _check_document_dates(
     problems += [
         ImportProblem(
             code="unverified_date",
-            message=doc_dates.problem_message(m, prd_slug),
+            message=doc_dates.problem_message(m, prd_slug, update=document.kind == "update"),
             section_key=m.section_key or None,
         )
         for m in bad
@@ -912,7 +918,7 @@ async def import_draft(
                 "keeps the changes made since the version it was written on",
             )
         )
-    if document.kind == "roadmap":
+    if document.kind in ("roadmap", "update"):
         date_warnings, dates = await _check_document_dates(
             db,
             document,

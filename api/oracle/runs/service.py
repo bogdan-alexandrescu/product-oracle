@@ -1569,12 +1569,24 @@ async def create_run(
             "the Launch kit flow starts from a launch: Draft on the launch "
             "(POST /v1/launches/{id}/draft)"
         )
+    if flow.key == "update_draft" and not has_role(principal.role, "owner"):
+        # H8: the CEO decides what is said to the board and investors.
+        raise Forbidden("Only an owner can draft an update")
     knobs = _resolve_knobs(flow, body.knobs)
     document_id, oracle = await _resolve_inputs(
         db,
         flow,
         _Inputs(body.document, body.source, body.source_version, body.template, body.theme),
     )
+    if flow.key == "update_draft" and "depth" not in body.knobs.model_fields_set:
+        # H8: an investor update is quick by default ($4.50); a board update standard.
+        template = (
+            await db.scalar(select(Document.template).where(Document.id == document_id))
+            if document_id is not None
+            else None
+        )
+        depth = "standard" if template == "board-product" else "quick"
+        knobs = _resolve_knobs(flow, body.knobs.model_copy(update={"depth": depth}))
     extra = {k: v for k, v in (oracle_knobs or {}).items() if k in ORACLE_KNOBS}
     run = Run(
         flow=flow.key,

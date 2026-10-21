@@ -176,6 +176,25 @@ KIND_TEMPLATES: tuple[BuiltinTemplate, ...] = (
         "strategy's yearly review has come",
         "editorial-memo",
     ),
+    # H8 Board and investor drafts: started on Company › Updates, never in the seed.
+    BuiltinTemplate(
+        "board-product",
+        "update",
+        "Board product section",
+        "The product section of a board update: goals against target, a timeline with "
+        "verified dates only, what shipped and what slipped, in two slides",
+        "A board meeting is coming (every 6 to 8 weeks)",
+        "roadmap-board",
+    ),
+    BuiltinTemplate(
+        "investor-update",
+        "update",
+        "Investor update",
+        "The monthly investor update's product part: metrics first, asks near the top, "
+        "then highlights, lowlights and a short product recap",
+        "The monthly investor update is due",
+        "one-page-brief",
+    ),
 )
 BUILTIN_TEMPLATES_BY_KEY = {t.key: t for t in (*BUILTIN_TEMPLATES, *KIND_TEMPLATES)}
 DEFAULT_TEMPLATE_FOR_KIND = {
@@ -183,6 +202,7 @@ DEFAULT_TEMPLATE_FOR_KIND = {
     "roadmap": "now-next-later",
     "vision": "vision-narrative",
     "strategy": "product-strategy",
+    "update": "investor-update",
 }
 
 
@@ -346,6 +366,7 @@ DEFAULT_THEME_FOR_KIND = {
     "roadmap": "roadmap-board",
     "vision": "editorial-memo",
     "strategy": "editorial-memo",
+    "update": "one-page-brief",
 }
 
 
@@ -465,8 +486,8 @@ async def ensure_builtins(session: AsyncSession) -> bool:
 
 
 async def ensure_kind_templates(session: AsyncSession, kind: str) -> bool:
-    """Seed the built-ins (:func:`ensure_builtins`) and the built-in template of a vision
-    or strategy ``kind`` (no commit). A company that archived or edited it keeps its own.
+    """Seed the built-ins (:func:`ensure_builtins`) and the built-in templates of a
+    vision, strategy or update ``kind`` (no commit). A company that archived or edited it keeps its own.
     Returns True when something was added."""
     added = await ensure_builtins(session)
     missing = [

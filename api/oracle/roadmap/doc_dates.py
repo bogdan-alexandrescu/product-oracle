@@ -1412,6 +1412,46 @@ async def prd_of(
     return await db.scalar(select(Document.id).where(Document.slug == slug, Document.kind == "prd"))
 
 
+# H8: the document kinds whose dates rest on verified schedule bases.
+DATED_KINDS = ("roadmap", "update")
+
+
+async def prds_with_active_track(db: AsyncSession) -> list[uuid.UUID]:
+    """The PRDs an update's dates rest on (H8): every PRD with an active product track,
+    not the single PRD of a roadmap."""
+    from oracle.roadmap.models import ProductTrack
+
+    return list(
+        await db.scalars(
+            select(ProductTrack.prd_document_id)
+            .where(ProductTrack.status == "active")
+            .distinct()
+            .order_by(ProductTrack.prd_document_id)
+        )
+    )
+
+
+async def prds_for(
+    db: AsyncSession,
+    document_id: uuid.UUID | None,
+    source_version_id: uuid.UUID | None = None,
+    front_matter: dict[str, Any] | None = None,
+) -> list[uuid.UUID]:
+    """The PRDs a dated document's dates rest on: an update's every PRD with an active
+    track, a roadmap's one PRD (:func:`prd_of`)."""
+    from oracle.docs.models import Document
+
+    kind = (
+        await db.scalar(select(Document.kind).where(Document.id == document_id))
+        if document_id is not None
+        else None
+    )
+    if kind == "update":
+        return await prds_with_active_track(db)
+    prd = await prd_of(db, document_id, source_version_id, front_matter)
+    return [prd] if prd is not None else []
+
+
 def check_found(
     found: list[Found],
     verified: list[schedule.Basis],
@@ -1449,7 +1489,7 @@ def check_found(
 async def check(
     db: AsyncSession,
     found: Sequence[Found],
-    prd_document_id: uuid.UUID | None,
+    prd_document_id: uuid.UUID | Sequence[uuid.UUID] | None,
     *,
     exempt: Iterable[tuple[str, str]] | None = None,
 ) -> list[Mark]:
@@ -1462,8 +1502,20 @@ async def check(
     found = [f for f in found if (f.section_key, f.text) not in skip]
     if not found:
         return []
-    bases = await schedule.bases_by_status(db, prd_document_id, ("verified", "withdrawn"))
-    return check_found(found, bases["verified"], bases["withdrawn"])
+    prds = (
+        [prd_document_id]
+        if prd_document_id is None or isinstance(prd_document_id, uuid.UUID)
+        else list(prd_document_id)
+    )
+    verified: list[schedule.Basis] = []
+    withdrawn: list[schedule.Basis] = []
+    # An update's dates rest on any of several PRDs (H8): a date is verified when a basis
+    # of one of them supports it.
+    for prd in prds:
+        bases = await schedule.bases_by_status(db, prd, ("verified", "withdrawn"))
+        verified += bases["verified"]
+        withdrawn += bases["withdrawn"]
+    return check_found(found, verified, withdrawn)
 
 
 def _refs(bases: list[schedule.Basis]) -> list[str]:
@@ -1483,8 +1535,11 @@ def _reads_as(mark: Mark) -> str:
     return ""
 
 
-def problem_message(mark: Mark, prd_slug: str | None) -> str:
-    of = f"PRD {prd_slug}" if prd_slug else "the roadmap's PRD (none is known)"
+def problem_message(mark: Mark, prd_slug: str | None, *, update: bool = False) -> str:
+    if update:
+        of = "any PRD with an active product track"
+    else:
+        of = f"PRD {prd_slug}" if prd_slug else "the roadmap's PRD (none is known)"
     if mark.status == "withdrawn":
         return (
             f"the date {mark.text} ({_where(mark)}) rested on {', '.join(mark.bases)}, which "
@@ -1534,9 +1589,14 @@ async def occurrences_for_version(
     once per version, off the event loop (:func:`found_for_version`; raises
     :class:`DatesUnavailable` when that takes too long)."""
     found = await found_for_version(version, sections)
-    if prd is None:
-        prd = await prd_of(db, version.document_id, version.source_version_id, version.front_matter)
-    return await check(db, found, prd, exempt=await version_template_dates(db, version))
+    prds: list[uuid.UUID] = (
+        [prd]
+        if prd is not None
+        else await prds_for(
+            db, version.document_id, version.source_version_id, version.front_matter
+        )
+    )
+    return await check(db, found, prds, exempt=await version_template_dates(db, version))
 
 
 async def version_template_dates(db: AsyncSession, version: Any) -> frozenset[tuple[str, str]]:

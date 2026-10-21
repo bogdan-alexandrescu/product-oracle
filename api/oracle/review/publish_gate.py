@@ -69,7 +69,8 @@ async def check(
     """Raise :class:`PublishBlocked` when this PRD version may not be published, or this
     roadmap version writes a date no verified basis supports. A PRD's passing report is
     returned (the decision log records its summary, H1)."""
-    if document.kind == "roadmap":
+    if document.kind in ("roadmap", "update"):
+        # H8: an update's dates rest on verified bases as a roadmap's do.
         await check_roadmap_dates(db, version)
         return None
     if document.kind != "prd":
