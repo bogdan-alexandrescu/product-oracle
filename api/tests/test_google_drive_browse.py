@@ -231,7 +231,7 @@ async def _person(tenant_id, email):
 
 # --- the connection: its row lock, its status, and what Google's errors may say -------
 
-SECRET = ".".join(["ya" + "29", "browse-secret-token"])  # built at runtime
+SECRET = "ya29.browse-secret-token"
 
 
 async def _secret_pat(tenant_id):
