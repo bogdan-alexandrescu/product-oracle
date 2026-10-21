@@ -105,6 +105,8 @@ FLAG_ORDER = (
     "new_feature",
     "duplicate_of_existing",
 )
+# Problems of the file itself, not of its features: kept when the rows are re-checked.
+FILE_PROBLEMS = ("unreadable_yaml", "missing_file", "wrong_version", "wrong_document")
 # Features a scope leaves out (scope-only: the baseline keeps them).
 LEFT_OUT = ("exclude", "defer")
 
@@ -872,8 +874,15 @@ async def check_scope(db: AsyncSession, scope: PrdScope) -> FeatureSetCheck:
     """Re-check the scope as stored, with the same rules as the file (:func:`check_rows`)
     against the baseline now (a proposal rejected since, a goal unconfirmed): its stored
     check and each feature's flags follow. The caller commits."""
+    stored = scope.check_result or {}
+    # What the file said beyond its rows (its version, its document, whether it could be
+    # read at all) stays until the file is sent back: rows cannot fix it.
+    carried = [p for p in stored.get("problems") or [] if p.get("code") in FILE_PROBLEMS]
+    if any(p["code"] in ("unreadable_yaml", "missing_file") for p in carried):
+        return FeatureSetCheck(problems=carried)
     items = await scope_items(db, scope.id)
     check = check_rows(_rows(items), known=await known_for_run(db, scope.run_id))
+    check.problems = carried + check.problems
     scope.check_result = check.as_json()
     for item in items:
         if item.kind == "feature" and item.decision == "include":

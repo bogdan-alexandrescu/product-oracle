@@ -283,6 +283,22 @@ async def test_approve_refused_with_blocking(client, owner, runtime):  # noqa: F
     assert (first.status, second.status, second.attempt) == ("superseded", "proposed", 2)
 
 
+async def test_a_file_level_problem_stays_when_the_rows_are_rechecked(client, owner, runtime):  # noqa: F811
+    """The re-check at approval runs over the stored rows; what was wrong with the file
+    itself (here its version) is not in the rows and still blocks until it is sent back."""
+    _, auth = owner
+    run = await at_feature_set(client, owner, runtime, CLEAN.replace("version: 1", "version: 2"))
+    cp = pending(run)
+    assert [p["code"] for p in cp["payload"]["feature_set_check"]["problems"]] == ["wrong_version"]
+    resp = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
+        json={"decision": "approved"},
+        headers=auth,
+    )
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"].startswith("The feature set has 1 blocking problem")
+
+
 async def test_a_rerun_attempt_supersedes_the_proposed_scope(client, owner):  # noqa: F811
     """Rule 2 on its own: write_scope for a later attempt marks the earlier proposed one
     superseded (a request that did not go through decide, e.g. a console change)."""
