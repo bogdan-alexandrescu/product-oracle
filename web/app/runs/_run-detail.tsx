@@ -611,7 +611,7 @@ function SegmentItem({
               onSendBack={sendBack}
             />
           )}
-          {s.artifacts.length > 0 && <Artifacts runId={run.id} seq={s.seq} names={s.artifacts} />}
+          {(s.artifacts.length > 0 || s.previous_attempt) && <Artifacts runId={run.id} seq={s.seq} names={s.artifacts} previous={s.previous_attempt ?? null} />}
           {delivering.map((cp) => (
             <DeliveryLine key={cp.id} cp={cp} />
           ))}
@@ -805,37 +805,66 @@ function ItemsCheckLine({ check }: { check: NonNullable<SegmentOut["items_check"
   );
 }
 
-function Artifacts({ runId, seq, names }: { runId: string; seq: number; names: string[] }) {
-  const [open, setOpen] = useState<string | null>(null);
+function Artifacts({
+  runId,
+  seq,
+  names,
+  previous,
+}: {
+  runId: string;
+  seq: number;
+  names: string[];
+  previous: { attempt: number; artifacts: string[] } | null;
+}) {
+  // The open file: its name and, for the previous attempt's files, that attempt's number.
+  const [open, setOpen] = useState<{ name: string; attempt: number | null } | null>(null);
   const [content, setContent] = useState<string>("");
-  async function show(name: string) {
-    if (open === name) return setOpen(null);
-    setOpen(name);
+  async function show(name: string, attempt: number | null) {
+    if (open?.name === name && open.attempt === attempt) return setOpen(null);
+    setOpen({ name, attempt });
     setContent("Loading…");
     const { data, response } = await api.GET("/v1/runs/{run_id}/segments/{seq}/artifacts/{name}", {
-      params: { path: { run_id: runId, seq, name } },
+      params: { path: { run_id: runId, seq, name }, query: attempt == null ? {} : { attempt } },
       parseAs: "text",
     });
     setContent(response.ok ? (data as string) : `Could not load ${name} (${response.status}).`);
   }
+  const file = (name: string, attempt: number | null) => {
+    const on = open?.name === name && open.attempt === attempt;
+    return (
+      <button
+        key={name}
+        type="button"
+        onClick={() => void show(name, attempt)}
+        aria-expanded={on}
+        className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 font-mono text-[13px] ${
+          on ? "border-accent bg-accent-soft text-accent-ink" : "border-line-strong bg-surface text-text hover:bg-surface2"
+        }`}
+      >
+        <Icon name="doc" size={16} />
+        {name}
+      </button>
+    );
+  };
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5">
-        {names.map((n) => (
-          <button
-            key={n}
-            type="button"
-            onClick={() => void show(n)}
-            aria-expanded={open === n}
-            className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 font-mono text-[13px] ${
-              open === n ? "border-accent bg-accent-soft text-accent-ink" : "border-line-strong bg-surface text-text hover:bg-surface2"
-            }`}
-          >
-            <Icon name="doc" size={16} />
-            {n}
-          </button>
-        ))}
-      </div>
+      {names.length > 0 && (
+        <div className="flex flex-wrap gap-1.5" data-testid="artifacts-current">
+          {names.map((n) => file(n, null))}
+        </div>
+      )}
+      {previous && previous.artifacts.length > 0 && (
+        // A person sent the segment back: what the attempt before this one wrote, kept to compare.
+        <div
+          role="group"
+          aria-label={`Previous attempt (attempt ${previous.attempt})`}
+          className="mt-2 flex flex-wrap items-center gap-1.5"
+          data-testid="artifacts-previous"
+        >
+          <span className="text-[13px] text-text2">Previous attempt (attempt {previous.attempt}):</span>
+          {previous.artifacts.map((n) => file(n, previous.attempt))}
+        </div>
+      )}
       {open && (
         <pre
           className="mt-2 max-h-80 overflow-auto rounded-button border border-line bg-surface2 p-3 font-mono text-[13px] whitespace-pre-wrap text-text"

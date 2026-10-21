@@ -16,7 +16,7 @@ type Kind = DocumentRow["kind"];
 
 export interface RunsDb {
   runs: RunOut[];
-  /** `${runId}|${seq}|${name}` -> content */
+  /** `${runId}|${seq}|${name}` -> content; a send-back's previous attempt: `${runId}|${seq}|${name}|${attempt}` */
   artifacts: Record<string, string>;
 }
 
@@ -203,6 +203,7 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     sent_back: false,
     can_retry_draft_import: false,
     items_check: null,
+    previous_attempt: null,
     started_at: null,
     finished_at: null,
     error: null,
@@ -276,7 +277,17 @@ function refresh(r: RunOut) {
   }
 }
 
+/** As the API (D5): a person sent the segment back, so its files are kept as the previous attempt (one level). */
+function keepPrevious(ctx: RunsContext, r: RunOut, s: SegmentOut) {
+  const last = s.attempts[s.attempts.length - 1];
+  if (!last || s.artifacts.length === 0) return;
+  for (const name of s.previous_attempt?.artifacts ?? []) delete ctx.db.artifacts[`${r.id}|${s.seq}|${name}|${s.previous_attempt!.attempt}`];
+  for (const name of s.artifacts) ctx.db.artifacts[`${r.id}|${s.seq}|${name}|${last.attempt}`] = ctx.db.artifacts[`${r.id}|${s.seq}|${name}`];
+  s.previous_attempt = { attempt: last.attempt, artifacts: [...s.artifacts] };
+}
+
 function submit(ctx: RunsContext, r: RunOut, s: SegmentOut, note: string | null = null) {
+  if (note) keepPrevious(ctx, r, s);
   s.status = "running";
   s.workflow_id = `mock-wf-${ctx.uuid().slice(0, 8)}`;
   s.started_at ??= ctx.now();
@@ -784,7 +795,17 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     return done();
   }
   if (action === "segments" && p[5] === "artifacts" && m === "GET") {
-    const content = ctx.db.artifacts[`${r.id}|${p[4]}|${p[6]}`];
+    const s = r.segments.find((x) => x.seq === Number(p[4]));
+    const raw = new URL(req.url).searchParams.get("attempt");
+    const current = s?.attempts[s.attempts.length - 1]?.attempt;
+    let key = `${r.id}|${p[4]}|${p[6]}`;
+    if (raw != null && Number(raw) !== current) {
+      if (Number(raw) !== s?.previous_attempt?.attempt) {
+        return fail(404, `attempt ${raw} of segment ${p[4]} is not kept: only the current and the previous attempt are kept`);
+      }
+      key = `${key}|${raw}`;
+    }
+    const content = ctx.db.artifacts[key];
     if (content == null) return fail(404, `artifact '${p[6]}' not found`);
     return new Response(content, { headers: { "content-type": "text/plain" } });
   }
