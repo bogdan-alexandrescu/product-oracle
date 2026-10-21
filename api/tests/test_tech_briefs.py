@@ -690,3 +690,119 @@ async def test_non_text_decisions_are_dropped_at_registration(client, eng_flow, 
     assert b["verdict"]["value"] is None and b["answers"] == []
     resp = await client.get(f"/v1/tech-briefs/{a['id']}", headers=viewer)
     assert resp.status_code == 200, resp.text
+
+
+# The contract's sample written as ordinary YAML: an unquoted digits-only commit reads as
+# a number and an unquoted ISO timestamp as a date and time.
+UNQUOTED = SAMPLE.replace(
+    '{repo: "org/app", commit: "3f2c9a1", as_of: "2026-10-18T10:00:00Z"}',
+    "{repo: org/app, commit: 1234567, as_of: 2026-10-18T10:00:00Z}",
+)
+
+
+def test_a_commit_or_as_of_that_is_not_text_is_a_bad_entry():
+    # protects=check and parse refuse a code_map repo whose commit or as_of YAML read as
+    # a number or a date; fails_when=check returns [] and parse raises a pydantic
+    # ValidationError the callers do not catch.
+    assert UNQUOTED != SAMPLE
+    problems = briefs.check(UNQUOTED, FEATURES, CODE_MAP)
+    assert codes(problems) == {"bad_entry"}
+    assert any("commit" in p.message for p in problems)
+    assert any("as_of" in p.message for p in problems)
+    with pytest.raises(briefs.BriefsInvalid) as exc:
+        briefs.parse(UNQUOTED)
+    assert codes(exc.value.problems) == {"bad_entry"}
+    nulls = SAMPLE.replace('commit: "3f2c9a1", as_of: "2026-10-18T10:00:00Z"',
+                           "commit: null, as_of: null")  # fmt: skip
+    assert briefs.check(nulls, FEATURES, CODE_MAP) == []
+    assert briefs.parse(nulls).code_map.repos[0].commit is None
+
+
+@pytest.fixture
+def unquoted_runtime():
+    fake = FakeRuntime({"eng_check": [Outcome(artifacts={flows.BRIEFS_FILE: UNQUOTED})]})
+    set_runtime(fake)
+    yield fake
+    set_runtime(None)
+
+
+async def test_an_unquoted_commit_does_not_block_the_engineering_approval(
+    client, eng_flow, unquoted_runtime
+):
+    # protects=the lead approves an Engineering check whose tech_briefs.yaml has an
+    # unquoted commit and as_of, and nothing is registered; fails_when=the approval
+    # answers 500 on a pydantic ValidationError.
+    tenant_id, auth = await seed_auth()
+    await seed_features(tenant_id)
+    assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
+    _, lead = await member(tenant_id, "approver")
+    run = await start(client, auth, "checkout-redesign")
+    run = await advance_to(client, auth, run["id"], "eng_review")
+    await decide(client, lead, run)
+    assert await brief_rows(tenant_id) == []
+
+
+async def test_an_unquoted_commit_does_not_break_the_prd_draft_import(
+    client, eng_flow, unquoted_runtime
+):
+    # protects=a new PRD's prd_draft import goes through when the run's tech_briefs.yaml
+    # has an unquoted commit and as_of; fails_when=the import raises on every tick.
+    tenant_id, auth = await seed_auth()
+    await seed_features(tenant_id)
+    run = await start(client, auth, "new-prd")
+    run = await advance_to(client, auth, run["id"], "eng_review")
+    await decide(client, auth, run)
+    await advance_to(client, auth, run["id"], "prd_review")  # tick asserts no errors
+    async with tenant_session(tenant_id) as s:
+        assert await s.scalar(select(DocumentVersion)) is not None
+    assert await brief_rows(tenant_id) == []
+
+
+# One brief that checks clean, one citing a code map id no map of the run holds, one
+# for a feature the feature set does not have.
+UNCHECKED = """\
+version: 1
+code_map:
+  used: true
+  repos:
+    - {repo: "org/app", commit: "3f2c9a1", as_of: "2026-10-18T10:00:00Z"}
+features:
+  - feature: feature-a
+    title: "Feature A"
+    approach: "Add an invoice endpoint."
+    touches:
+      - {area: "POST /v1/invoices", kind: api, change: new, ref: null}
+    size: s
+  - feature: feature-b
+    title: "Feature B"
+    approach: "Extend the notifications module."
+    touches:
+      - {area: "api/notifications", kind: module, change: change, ref: "module:ghost"}
+    size: s
+  - feature: feature-z
+    title: "Feature Z"
+    approach: "Something the feature set does not have."
+    size: xs
+"""
+
+
+@pytest.fixture
+def unchecked_runtime():
+    fake = FakeRuntime({"eng_check": [Outcome(artifacts={flows.BRIEFS_FILE: UNCHECKED})]})
+    set_runtime(fake)
+    yield fake
+    set_runtime(None)
+
+
+async def test_with_the_check_off_a_brief_with_an_unknown_feature_or_ref_is_refused(
+    client, eng_flow, unchecked_runtime
+):
+    # protects=with the Engineering check turned off, registration runs the check against
+    # the feature set and the code map and refuses a brief with unknown_feature or
+    # unknown_ref; fails_when=such a brief is stored unchecked.
+    tenant_id, auth = await seed_auth()
+    await seed_features(tenant_id)
+    run = await start(client, auth, "unchecked-prd", checkpoints={"eng_review": False})
+    await advance_to(client, auth, run["id"], "prd_review")
+    rows = await brief_rows(tenant_id)
+    assert [req.params["feature_key"] for req, _ in rows] == ["feature-a"]
