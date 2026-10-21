@@ -438,7 +438,7 @@ async def test_cancel_a_draft(client, owner, runtime):
 
 
 async def test_runs_api_keeps_every_cost_field(client, owner, runtime):
-    """P3d Cost prominence hides cost in the web outside details and decisions; the API keeps it all."""
+    """P3d Cost prominence: the web shows cost only in details and decisions; the API keeps all."""
     _, auth = owner
     run = await started(client, auth)
     await tick(client, auth)
