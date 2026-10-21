@@ -1160,7 +1160,6 @@ function meOut(db: Db, m: MemberRow): Schemas["Me"] {
   return { kind: "user", tenant_id: db.tenant_id, user_id: m.id, email: m.email, role: m.role };
 }
 
-/** Members, invites: owners only, as in the API. */
 /**
  * GET /v1/setup (A1), as oracle.setup: the caller's steps from the mock's own stores. The
  * connections and sources stores are the company's in the mock, not each person's.
@@ -1193,6 +1192,7 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
   };
 }
 
+/** Members, invites: owners only, as in the API. */
 async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): Promise<Response> {
   if (!atLeast(me.role, "owner")) return forbidden("owner");
   const m = req.method;
