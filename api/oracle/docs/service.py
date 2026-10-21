@@ -7,7 +7,8 @@ apply resolutions -> audit -> commit.
 
 import uuid
 from dataclasses import dataclass
-from typing import Literal
+from datetime import date
+from typing import Any, Literal
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -96,6 +97,15 @@ IMPORT_CAUSES = ("draft_imported", "section_edited", "patch_accepted", "run_draf
 class ImportResult:
     version: VersionOut
     created: bool
+
+
+@dataclass(frozen=True)
+class DraftDates:
+    """The dates a roadmap draft's import found (``ref``: the day year-less dates were read
+    against), kept for the version it stores."""
+
+    ref: date
+    found: tuple[Any, ...]
 
 
 async def find_document(db: AsyncSession, doc: str, *, for_update: bool = False) -> Document | None:
@@ -349,7 +359,25 @@ async def _citations_out(
     return out
 
 
-async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut:
+async def _template_meta_async(db: AsyncSession, body: str):
+    """:func:`_template_meta` on the parse pool (a template body is markdown too), within
+    ``PARSE_SECONDS``: past it the import is refused (``too_slow``)."""
+    try:
+        return await safe_yaml.run_parse_within(_template_meta, body, name="the template")
+    except safe_yaml.ParseTimeout as exc:
+        await db.rollback()
+        raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from None
+
+
+async def read_version(
+    db: AsyncSession, version: DocumentVersion, *, require_dates: bool = True
+) -> VersionOut:
+    """The version with its sections, citations and, for a roadmap, its date markers.
+
+    A roadmap's dates are read off the event loop, once per version
+    (oracle.roadmap.doc_dates.found_for_version): while they are still being found the
+    read is refused (``DatesUnavailable``, 503), unless ``require_dates`` is False (an
+    import's result, whose dates the import itself checked), which then has no markers."""
     sections = list(
         await db.scalars(
             select(Section).where(Section.version_id == version.id).order_by(Section.ordinal)
@@ -378,12 +406,13 @@ async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut
     if kind == "roadmap":
         from oracle.roadmap import doc_dates
 
-        date_marks = [
-            m.as_json()
-            for m in doc_dates.per_section(
-                await doc_dates.occurrences_for_version(db, version, sections, prd=built_prd)
-            )
-        ]
+        try:
+            marks = await doc_dates.occurrences_for_version(db, version, sections, prd=built_prd)
+        except doc_dates.DatesUnavailable:
+            if require_dates:
+                raise
+            marks = []
+        date_marks = [m.as_json() for m in doc_dates.per_section(marks)]
     return VersionOut(
         **VersionSummary.model_validate(version).model_dump(exclude={"source"}),
         source=source,
@@ -436,16 +465,55 @@ async def _check_document_dates(
     refuse: bool,
     only_sections: set[str] | None = None,
     template_body: str | None = None,
-) -> list[VersionWarning]:
+) -> tuple[list[VersionWarning], DraftDates]:
     """Every date the roadmap's text writes against its PRD's verified bases: refused
-    (DraftError, nothing stored) or one ``unverified_date`` warning each.
+    (DraftError, nothing stored) or one ``unverified_date`` warning each. Also returns
+    the dates found, which the stored version keeps.
 
     ``only_sections``: Oracle's own revisions (refinement, start-draft) check only the
     sections they change (a date in an untouched section is the previous version's,
     marked there); the title only when ``""`` is in it. A date the company's template
     (``template_body``) writes literally in the same section is exempt: it is the
-    company's text, not a schedule claim."""
+    company's text, not a schedule claim.
+
+    The text is read off the event loop (oracle.roadmap.doc_dates.found_for_draft): a
+    draft whose dates take longer than ``doc_dates.WAIT_SECONDS`` to find is refused
+    (``too_slow``), and one that writes more than ``doc_dates.MAX_DATES`` dates
+    (``too_many_dates``), whatever kind of import."""
     from oracle.roadmap import doc_dates
+
+    title = draft.front_matter.get("title")
+    ref = doc_dates.import_day()
+    try:
+        found = await doc_dates.found_for_draft(
+            draft.sections, title=title if isinstance(title, str) else None, ref=ref
+        )
+        exempt = await doc_dates.template_dates_async(template_body) if template_body else None
+    except (safe_yaml.ParseTimeout, doc_dates.DatesUnavailable):
+        await db.rollback()
+        raise DraftError(
+            [
+                ImportProblem(
+                    code="too_slow",
+                    message=f"the roadmap's dates took more than {doc_dates.WAIT_SECONDS:g} s "
+                    "to check; keep it small and plain",
+                )
+            ]
+        ) from None
+    if len(found) > doc_dates.MAX_DATES:
+        # What a version keeps stays small (oracle.roadmap.doc_dates: a pathological date
+        # count is refused here, not kept and re-read).
+        await db.rollback()
+        raise DraftError(
+            [
+                ImportProblem(
+                    code="too_many_dates",
+                    message=f"the roadmap writes {len(found):,} dates; Oracle checks at most "
+                    f"{doc_dates.MAX_DATES:,} in one version. Split it or write fewer dates",
+                )
+            ]
+        )
+    dates = DraftDates(ref, found)
 
     problems: list[ImportProblem] = []
     sc = doc_dates.scope(draft.sections)
@@ -458,21 +526,14 @@ async def _check_document_dates(
             )
         )
     prd_id = await doc_dates.prd_of(db, document.id, source_version_id, draft.front_matter)
-    title = draft.front_matter.get("title")
-    marks = await doc_dates.check(
-        db,
-        draft.sections,
-        prd_id,
-        title=title if isinstance(title, str) else None,
-        exempt=doc_dates.template_dates(template_body) if template_body else None,
-    )
+    marks = await doc_dates.check(db, found, prd_id, exempt=exempt)
     bad = [
         m
         for m in doc_dates.flagged(marks)
         if only_sections is None or m.section_key in only_sections
     ]
     if not bad and not problems:
-        return []
+        return [], dates
     prd_slug = (
         await db.scalar(select(Document.slug).where(Document.id == prd_id)) if prd_id else None
     )
@@ -494,7 +555,7 @@ async def _check_document_dates(
             section_keys=[p.section_key] if p.section_key else [],
         )
         for p in problems
-    ]
+    ], dates
 
 
 async def _citation_items(
@@ -586,7 +647,7 @@ async def _layers(
             else (document.template, document.template_version)
         )
         body = await template_body(db, *named)
-        template_brief = _template_meta(body).marked_brief if body else None
+        template_brief = (await _template_meta_async(db, body)).marked_brief if body else None
     brief, brief_source = layers.resolve_brief(
         [layers.SectionRef(s.section_key, s.level) for s in draft.sections],
         draft_brief=draft.brief,
@@ -751,7 +812,9 @@ async def import_draft(
                     db, principal, document, previous, held, origin=origin, run_id=run_id
                 )
                 await db.commit()
-            return ImportResult(version=await read_version(db, existing), created=False)
+            return ImportResult(
+                version=await read_version(db, existing, require_dates=False), created=False
+            )
 
     brief, brief_source, layer_of = await _layers(db, document, draft)
     revisions = draft_revisions(draft, layer_of)
@@ -759,6 +822,7 @@ async def import_draft(
         await _check_base(db, document, previous, base_version, draft, revisions)
 
     warnings: list[VersionWarning] = []
+    dates: DraftDates | None = None
     if held:
         warnings.append(
             VersionWarning(
@@ -791,7 +855,7 @@ async def import_draft(
             )
         )
     if document.kind == "roadmap":
-        warnings += await _check_document_dates(
+        date_warnings, dates = await _check_document_dates(
             db,
             document,
             draft,
@@ -807,6 +871,7 @@ async def import_draft(
                 ),
             ),
         )
+        warnings += date_warnings
     if document.kind in ("strategy", "vision"):
         # H4: a strategy's choices each have their section; its goal and feature keys,
         # focus count and goalless focus are warnings. A vision's beliefs are well formed.
@@ -978,7 +1043,12 @@ async def import_draft(
         },
     )
     await db.commit()
-    return ImportResult(version=await read_version(db, version), created=True)
+    if dates is not None:
+        # The version's text is the draft's: reading it parses nothing again.
+        from oracle.roadmap import doc_dates
+
+        doc_dates.keep_for_version(version.id, dates.ref, dates.found)
+    return ImportResult(version=await read_version(db, version, require_dates=False), created=True)
 
 
 def _unknown_base(base: int, latest: int | None) -> DraftError:

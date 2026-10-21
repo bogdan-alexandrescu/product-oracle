@@ -938,6 +938,14 @@ async def approve_version(
     from oracle.review.state import effective_policy
 
     version = await get_version(session, doc, n)
+    kind = await session.scalar(select(Document.kind).where(Document.id == version.document_id))
+    if kind == "roadmap" and version.approved_at is None:
+        # A roadmap's dates are found before the gate and the lock, never waited for under
+        # them (up to WAIT_SECONDS, then 503): the publish gate under the lock reads them
+        # kept.
+        from oracle.roadmap import doc_dates
+
+        await doc_dates.prefetch(session, version)
     # The review gate, then the publish lock (publish's order): an approval never
     # commits while a publish renders, nor lands after a role change that ended it.
     await _still_an_approver(session, principal)

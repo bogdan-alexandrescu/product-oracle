@@ -34,7 +34,7 @@ import re
 import threading
 import time
 from collections.abc import Callable, Iterator
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Executor, ThreadPoolExecutor
 from typing import Any
 
 import yaml
@@ -335,14 +335,17 @@ def dump(data: Any, **kwargs: Any) -> str:
 _EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="safe-yaml")
 
 
-async def run_parse[T](fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
-    """``fn(*args, **kwargs)`` on the parse pool (4 threads), so a slow parse of untrusted
-    text never stalls other requests. Exceptions propagate unchanged. Under the queue policy
-    (:func:`_queued`): :class:`ParseBusy` when this person has :data:`MAX_PER_OWNER` parses
-    or no worker frees within :data:`QUEUE_SECONDS`. No CPU cap of its own (see
-    :func:`run_parse_within`)."""
+async def run_parse[T](
+    fn: Callable[..., T], /, *args: Any, pool: Executor | None = None, **kwargs: Any
+) -> T:
+    """``fn(*args, **kwargs)`` on the parse pool (4 threads), or on ``pool`` (the exports
+    have their own, so a slow export never holds up a draft's parse), so a slow parse of
+    untrusted text never stalls other requests. Exceptions propagate unchanged. Under the
+    queue policy (:func:`_queued`): :class:`ParseBusy` when this person has
+    :data:`MAX_PER_OWNER` parses or no worker frees within :data:`QUEUE_SECONDS`. No CPU cap
+    of its own (see :func:`run_parse_within`)."""
     ctx = contextvars.copy_context()
-    return await _queued(functools.partial(ctx.run, fn, *args, **kwargs), wall=None)
+    return await _queued(functools.partial(ctx.run, fn, *args, **kwargs), wall=None, pool=pool)
 
 
 # Who the parses of this request/tick count against (set by oracle.auth.deps.get_principal and
@@ -404,6 +407,7 @@ async def run_parse_within[T](
     *args: Any,
     name: str = "the text",
     seconds: float | None = None,
+    pool: Executor | None = None,
     **kwargs: Any,
 ) -> T:
     """:func:`run_parse`, capped at ``seconds`` (``PARSE_SECONDS``) from the moment the
@@ -435,17 +439,23 @@ async def run_parse_within[T](
             return fn(*args, **kwargs)
 
     try:
-        return await _queued(functools.partial(ctx.run, bounded), wall=limit * WALL_FACTOR)
+        return await _queued(
+            functools.partial(ctx.run, bounded), wall=limit * WALL_FACTOR, pool=pool
+        )
     except (TimeoutError, parse_budget.Exceeded):
         raise ParseTimeout(name, limit) from None
 
 
-async def _queued[T](call: Callable[[], T], *, wall: float | None) -> T:
+async def _queued[T](
+    call: Callable[[], T], *, wall: float | None, pool: Executor | None = None
+) -> T:
     """The queue policy (owner, 2026-10-20) around one pool call, for every parse of
     untrusted text: at most :data:`MAX_PER_OWNER` per person (:data:`PARSE_OWNER`) running or
     queued, else :class:`ParseBusy` 429; a wait of more than :data:`QUEUE_SECONDS` for a free
     worker is :class:`ParseBusy` 503, and the queued call is cancelled. ``wall``: the caller
-    stops waiting this long after the call started (the worker keeps running it).
+    stops waiting this long after the call started (the worker keeps running it). ``pool``:
+    the executor to run on (default: the parse pool); the per-person limit and the queue
+    wait apply on any pool.
 
     HOOK: a parse that does not go through :func:`run_parse` or :func:`run_parse_within`
     (roadmap ``_render_body`` and export rendering, moved into the pool by
@@ -484,7 +494,7 @@ async def _queued[T](call: Callable[[], T], *, wall: float | None) -> T:
                     _active.pop(owner, None)
 
     try:
-        job_future = _EXECUTOR.submit(job)
+        job_future = (pool or _EXECUTOR).submit(job)
     except BaseException:
         # Not submitted, or queued and then failed (e.g. no thread could start): either way
         # nothing will free the slot, and a job left in the queue must not run without it.

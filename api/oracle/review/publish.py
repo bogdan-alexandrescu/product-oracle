@@ -1,9 +1,10 @@
 """The publish check and the immutable publish transaction (CR-06, build prompt §9,
 §16.11 and §16.17).
 
-``publish_check`` lists everything that blocks publishing a version; ``publish`` runs
-the same check under the document's row lock and either refuses (nothing written) or
-writes one :class:`~oracle.review.models.DocumentPublication`.
+``publish_check`` lists everything that blocks publishing a version; ``publish`` renders
+the version on the export pool (never on the event loop, never under a lock), then runs the
+same check under the document's row lock and either refuses (nothing written) or writes one
+:class:`~oracle.review.models.DocumentPublication`.
 
 A publish is refused for:
 
@@ -47,6 +48,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from fastapi import HTTPException, status
 from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,6 +57,7 @@ from oracle import audit, changes, readiness
 from oracle.baseline.models import Evidence
 from oracle.connections.models import Connection
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
+from oracle.export import offload
 from oracle.jobs.models import LlmSuggestion
 from oracle.readiness import CheckOutcome, ReadinessContext
 from oracle.review.models import (
@@ -83,6 +86,9 @@ from oracle.v2.models import ChangeEvent, DocumentSectionLink
 
 if TYPE_CHECKING:
     from oracle.auth.deps import Principal
+    from oracle.export.render import ExportVersion
+
+    _Layers = tuple[ExportVersion, ExportVersion | None, ExportVersion | None]
 
 # The hard readiness check this lane registers (the review invariants, for the
 # readiness dashboard); the publish check computes them itself and skips it.
@@ -119,7 +125,8 @@ async def gate_lock(db: AsyncSession, *, shared: bool) -> None:
     """The company's review gate, a transaction-scoped advisory lock. A publish takes it
     shared (with the document's row lock), company-wide changes the gate reads take it
     exclusively: source revocations, the company review policy and publish settings. So
-    nothing those change commits while a publish renders."""
+    nothing those change commits between a publish's check and its store (it renders
+    before it takes the gate)."""
     from oracle.tenancy import current_tenant
 
     fn = "pg_advisory_xact_lock_shared" if shared else "pg_advisory_xact_lock"
@@ -131,7 +138,7 @@ async def gate_lock(db: AsyncSession, *, shared: bool) -> None:
 
 async def lock_document(db: AsyncSession, document_id: uuid.UUID) -> Document | None:
     """The document's row lock: the publish lock section verdicts, approvals and policy
-    changes take too, so none of them commits while a publish renders."""
+    changes take too, so none of them commits between a publish's check and its store."""
     return await db.scalar(
         select(Document)
         .where(Document.id == document_id)
@@ -1082,31 +1089,38 @@ async def _manifest(
     }
 
 
-async def _render(db: AsyncSession, document: Document, number: int) -> dict[str, str | None]:
-    from oracle.export.deck import build_deck, render_deck_html
-    from oracle.export.render import (
-        NoBrief,
-        apply_layer,
-        load_export_version,
-        render_html,
-        render_markdown,
-    )
+async def _layers(db: AsyncSession, document_id: uuid.UUID, number: int) -> "_Layers":
+    """The version's full, brief and deck layers (no brief: ``None`` for both), as copies
+    of the rows no session holds: what :func:`render_publication` reads on the pool."""
+    from oracle.export.render import NoBrief, apply_layer, detached, load_export_version
 
-    full = apply_layer(await load_export_version(db, str(document.id), number), "full")
-    out: dict[str, str | None] = {
-        "markdown": render_markdown(full),
-        "html_full": render_html(full),
-        "html_brief": None,
-        "html_deck": None,
-    }
+    ev = await load_export_version(db, str(document_id), number)
+    full = apply_layer(detached(ev), "full")
     try:
-        brief = apply_layer(await load_export_version(db, str(document.id), number), "brief")
-        out["html_brief"] = render_html(brief)
-        deck = apply_layer(await load_export_version(db, str(document.id), number), "deck")
-        out["html_deck"] = render_deck_html(build_deck(deck))
+        return full, apply_layer(detached(ev), "brief"), apply_layer(detached(ev), "deck")
     except NoBrief:
-        pass
-    return out
+        return full, None, None
+
+
+def render_publication(
+    full: "ExportVersion", brief: "ExportVersion | None", deck: "ExportVersion | None"
+) -> dict[str, str | None]:
+    """The publication's HTML: full, brief and deck. CPU-bound: on the export pool
+    (:func:`oracle.export.offload.run`), never on the event loop."""
+    from oracle.export import deck as decks
+    from oracle.export import render
+
+    return {
+        "html_full": render.render_html(full),
+        "html_brief": render.render_html(brief) if brief is not None else None,
+        "html_deck": decks.render_deck_html(decks.build_deck(deck)) if deck is not None else None,
+    }
+
+
+def _rendered_from(version: DocumentVersion) -> tuple:
+    """What a publication's render reads of its version: its content and its approval
+    (the banner). Unchanged under the lock, the render is the version's."""
+    return (version.content_hash, version.approved_at, version.approved_by)
 
 
 def published_markdown(row: DocumentPublication) -> str:
@@ -1132,6 +1146,24 @@ def manifest_hash(manifest: dict[str, Any], markdown: str) -> str:
     return hashlib.sha256(f"{canonical}\n{markdown}".encode()).hexdigest()
 
 
+# Owner decision 2026-10-21 (review of PR #134): a version that changed while it rendered
+# is rendered once more; changed again, the publish is refused (409) and can be retried.
+RENDERS = 2
+CHANGED = "the version changed while it was being published; publish it again"
+
+
+def _refusal(
+    check: PublishCheckOut, version: DocumentVersion, content_hash: str | None
+) -> PublishRefusedError | None:
+    if content_hash is not None and content_hash != version.content_hash:
+        return PublishRefusedError(
+            check, "the version's content is not the one you checked; check again"
+        )
+    if not check.can_publish:
+        return PublishRefusedError(check)
+    return None
+
+
 async def publish(
     db: AsyncSession,
     principal: "Principal",
@@ -1141,21 +1173,45 @@ async def publish(
     content_hash: str | None,
     note: str | None,
 ) -> DocumentPublication:
-    """Check and publish under the publish lock (the document's row lock and the
-    company's review gate, shared), so no verdict, approval, policy change or source
-    revocation commits mid-render. The caller commits."""
-    await gate_lock(db, shared=True)
-    locked = await lock_document(db, document.id)
-    await db.refresh(version)
-    check = await publish_check(db, locked, version)
-    if content_hash is not None and content_hash != version.content_hash:
-        raise PublishRefusedError(
-            check, "the version's content is not the one you checked; check again"
-        )
-    if not check.can_publish:
-        raise PublishRefusedError(check)
+    """Check, render, then check again and store under the publish lock (the document's
+    row lock and the company's review gate, shared), so no verdict, approval, policy
+    change or source revocation commits between the check and the store. The caller
+    commits.
+
+    The render (full, brief and deck HTML) runs on the export pool before the lock is
+    taken, never on the event loop or under the lock (owner decision 2026-10-21): in an
+    export place of the publishing person and their company (:func:`offload.place`;
+    refused: :class:`offload.Refused`, 429 or 503 like an export), with no database
+    connection held while it waits. Under the lock the version must be the one rendered
+    (:func:`_rendered_from`); else it renders once more, and a version changed again is
+    refused (:data:`CHANGED`)."""
+    from oracle.authz import recheck_caller
+
+    document_id, number = document.id, version.number
+    # Refused at once, before a render, when it would be refused under the lock now.
+    check = await publish_check(db, document, version)
+    if (refused := _refusal(check, version, content_hash)) is not None:
+        raise refused
+    with offload.place(principal) as held:
+        for _ in range(RENDERS):
+            full, brief, deck = await _layers(db, document_id, number)
+            await db.commit()  # no lock and no connection held while it renders
+            rendered = await offload.run(held, render_publication, full, brief, deck)
+            # The review gate (shared) with the caller re-read under it, then the row lock.
+            await recheck_caller(db, principal, "approver")
+            locked = await lock_document(db, document_id)
+            if locked is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+            await db.refresh(version)
+            check = await publish_check(db, locked, version)
+            if (refused := _refusal(check, version, content_hash)) is not None:
+                raise refused
+            if _rendered_from(version) == _rendered_from(full.version):
+                break
+            await db.rollback()  # frees the lock while it renders again
+        else:
+            raise PublishRefusedError(check, CHANGED)
     manifest = await _manifest(db, principal, locked, version, check, note)
-    rendered = await _render(db, locked, version.number)
     number = (
         await db.scalar(
             select(func.max(DocumentPublication.number)).where(

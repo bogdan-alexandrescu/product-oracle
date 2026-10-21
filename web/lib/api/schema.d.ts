@@ -738,7 +738,9 @@ export interface paths {
         /**
          * Publish Version
          * @description Publish an approved version, immutably. Refused (409, nothing written) while
-         *     the publish check lists a blocker.
+         *     the publish check lists a blocker, or when the version changed during two renders.
+         *     Rendered on the export pool in an export place, like an export: refused 429
+         *     ``export_busy_you`` or 503 ``export_busy``, with a Retry-After.
          */
         post: operations["publish_version"];
         delete?: never;
@@ -795,7 +797,8 @@ export interface paths {
          * Export Publication
          * @description The published HTML (full, brief or deck), its PDF, or the full markdown. Served
          *     from what was stored at publish time, so later edits, theme changes and source
-         *     updates never change it.
+         *     updates never change it. A PDF renders on the export pool in an export place, like an
+         *     export (refused: 429 ``export_busy_you`` or 503 ``export_busy``).
          */
         get: operations["export_publication"];
         put?: never;

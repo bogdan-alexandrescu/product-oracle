@@ -145,7 +145,7 @@ from oracle.priorities.models import PrioritySnapshot
 from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
-from oracle.roadmap import schedule
+from oracle.roadmap import doc_dates, schedule
 from oracle.runs import extensions, flows, reasons, rejection, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
@@ -3274,7 +3274,9 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
             if row is not None and row.source_version_id is None:
                 row.source_version_id = source_id
                 await s.commit()
-                result.version = await docs_service.read_version(s, row)
+                # Without its date markers (the import checked its dates; none of the
+                # markers is read here): never a wait for dates in the middle of a tick.
+                result.version = await docs_service.read_version(s, row, require_dates=False)
         document = await s.get(Document, result.version.document_id)
         out: dict[str, Any] = {
             "document_id": str(result.version.document_id),
@@ -3899,6 +3901,13 @@ class _TickStats:
     pass_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 
+def _dates_pending(exc: BaseException) -> bool:
+    """A roadmap's dates still being found, or its company's date jobs busy
+    (oracle.roadmap.doc_dates: 503, try again): a tick retries, never a failed try or run.
+    Dates given up on (422) are a failure like any other."""
+    return isinstance(exc, doc_dates.DatesUnavailable) and exc.pending
+
+
 def _resetter(stats: _TickStats) -> Callable[[], None]:
     """``reset`` for one :func:`_replay`: puts ``stats`` back as they are now, before it."""
     saved = replace(stats, errors=list(stats.errors))
@@ -3958,6 +3967,10 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
                 # records parse_busy and the next tick resumes the advance again.
                 raise
             except Exception as exc:  # counted; the workflow is still read below
+                if _dates_pending(exc):
+                    # Not a failed try (RESUME_TRIES): the tick gives up on this run and
+                    # the next tick resumes the advance again.
+                    raise
                 run, segments = await _resume_failed(db, run.id, resuming.seq, exc, stats)
         wf = _live(run)
         if wf is not None and not wf.get("cancel_pending") and run.status not in FINAL:
@@ -5567,6 +5580,12 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
             await db.rollback()
             errors.append(f"run {run_id}: {exc}")
         except Exception as exc:  # one broken run must not stop the others
+            if _dates_pending(exc):
+                # The run stays as it was and the next tick tries again: never a failed
+                # run. Its row lock and transaction end here.
+                await db.rollback()
+                errors.append(f"run {run_id}: dates_pending")
+                continue
             log.exception("tick failed for run %s", run_id)
             await db.rollback()
             errors.append(f"run {run_id}: {type(exc).__name__}")

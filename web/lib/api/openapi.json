@@ -2564,7 +2564,7 @@
           "review"
         ],
         "summary": "Publish Version",
-        "description": "Publish an approved version, immutably. Refused (409, nothing written) while\nthe publish check lists a blocker.",
+        "description": "Publish an approved version, immutably. Refused (409, nothing written) while\nthe publish check lists a blocker, or when the version changed during two renders.\nRendered on the export pool in an export place, like an export: refused 429\n``export_busy_you`` or 503 ``export_busy``, with a Retry-After.",
         "operationId": "publish_version",
         "security": [
           {
@@ -2758,7 +2758,7 @@
           "review"
         ],
         "summary": "Export Publication",
-        "description": "The published HTML (full, brief or deck), its PDF, or the full markdown. Served\nfrom what was stored at publish time, so later edits, theme changes and source\nupdates never change it.",
+        "description": "The published HTML (full, brief or deck), its PDF, or the full markdown. Served\nfrom what was stored at publish time, so later edits, theme changes and source\nupdates never change it. A PDF renders on the export pool in an export place, like an\nexport (refused: 429 ``export_busy_you`` or 503 ``export_busy``).",
         "operationId": "export_publication",
         "security": [
           {
