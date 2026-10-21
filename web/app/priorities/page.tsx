@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { Suspense, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 
 import {
   Button,
@@ -584,6 +584,15 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
 }
 
 export default function PrioritiesPage() {
+  // The query string is read on the client: the page streams in under Suspense.
+  return (
+    <Suspense fallback={null}>
+      <Priorities />
+    </Suspense>
+  );
+}
+
+function Priorities() {
   // Run mode (C8): /priorities?snapshot=<id> shows a run's order next to the live ranking.
   const snapshotId = useSearchParams().get("snapshot");
   const [compareKey, setCompareKey] = useState(0);
