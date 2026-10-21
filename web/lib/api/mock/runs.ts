@@ -29,6 +29,15 @@ export interface RunsDb {
   artifacts: Record<string, string>;
   /** C6: run id -> its PRD scopes, oldest first (a mock db saved before C6 has none). */
   scopes?: Record<string, PrdScopeOut[]>;
+  /** B1: when a Build the baseline run older than the seeded runs finished (the default company built one). */
+  baseline_built_at?: string | null;
+}
+
+/** B1's Set up step: when the last Build the baseline run finished, or null when none succeeded. */
+export function lastBaselineBuild(db: RunsDb | undefined): string | null {
+  if (!db) return null;
+  const done = db.runs.filter((r) => r.flow === "baseline" && r.status === "succeeded").map((r) => r.finished_at ?? r.created_at);
+  return done.sort().pop() ?? db.baseline_built_at ?? null;
 }
 
 export interface RunsContext {
@@ -76,6 +85,17 @@ const ROLES: Schemas["AgentRoleOut"][] = [
 ];
 const READ = ["read:sources", "read:baseline"];
 
+// The baseline segment: Baseline to PRD's first and the whole of Build the baseline (B1).
+const BASELINE_SEGMENT: Schemas["FlowSegmentOut"] = {
+  name: "baseline",
+  title: "Baseline proposal",
+  roles: ["researcher", "analyst"],
+  scopes: [...READ, "write:proposals"],
+  outputs: ["baseline.yaml", "summary.md"],
+  checkpoint: "baseline_confirm",
+  approver_role: "approver",
+};
+
 export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
   flows: [
     {
@@ -87,8 +107,9 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       source_kind: null,
       in_new_run_dialog: true,
       starts_from: null,
+      writes_document: true,
       segments: [
-        { name: "baseline", title: "Baseline proposal", roles: ["researcher", "analyst"], scopes: [...READ, "write:proposals"], outputs: ["baseline.yaml", "summary.md"], checkpoint: "baseline_confirm", approver_role: "approver" },
+        BASELINE_SEGMENT,
         { name: "feature_set", title: "Feature set, dependencies and design", roles: ["analyst", "architect"], scopes: [...READ, "write:proposals"], outputs: ["feature_set.yaml", "design.md"], checkpoint: "feature_set", approver_role: "approver" },
         { name: "priority", title: "Priority order", roles: ["prioritizer"], scopes: ["read:baseline", "write:proposals"], outputs: ["priority.yaml"], checkpoint: "priority_order", approver_role: "approver" },
         { name: "prd_draft", title: "PRD draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver" },
@@ -104,6 +125,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       // D12: started from Build next draft on a document, never from the New run dialog.
       in_new_run_dialog: false,
       starts_from: { label: "Build next draft · open a PRD or roadmap and use Build next draft", href: null },
+      writes_document: true,
       segments: [
         { name: "next_draft", title: "Next draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver" },
       ],
@@ -117,10 +139,24 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       source_kind: "prd",
       in_new_run_dialog: false,
       starts_from: { label: "PRD to roadmap · Plan › Roadmap documents", href: "/plan/documents" },
+      writes_document: true,
       segments: [
         { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver" },
         { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver" },
       ],
+    },
+    {
+      key: "baseline",
+      title: "Build the baseline",
+      description: "Read the sources and propose goals, products, features, constraints and evidence for you to review.",
+      requires_document: false,
+      writes_document: false,
+      target_kind: null,
+      source_kind: null,
+      // D12: started from the Baseline page, never from the New run dialog.
+      in_new_run_dialog: false,
+      starts_from: { label: "Build the baseline · Baseline", href: "/baseline?build=1" },
+      segments: [BASELINE_SEGMENT],
     },
   ],
   roles: ROLES,
@@ -143,6 +179,17 @@ const KIND_NAME: Record<Kind, string> = {
 const ROADMAP_DEFAULTS = { template: "now-next-later", theme: "roadmap-board" };
 const FACTOR = 1.5;
 const FINAL = ["succeeded", "failed", "cancelled"];
+// B1: a Build the baseline run in these states is under way; another is refused.
+const BUILD_UNDER_WAY: RunOut["status"][] = ["awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"];
+
+/** As the API: one baseline build at a time (409 naming the one under way). */
+function buildUnderWay(ctx: RunsContext, flowKey: string): Response | null {
+  if (flowKey !== "baseline") return null;
+  const first = ctx.db.runs
+    .filter((r) => r.flow === "baseline" && BUILD_UNDER_WAY.includes(r.status))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
+  return first ? fail(409, `A baseline build is already under way (run ${first.id})`) : null;
+}
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 function flowOf(key: string) {
@@ -764,6 +811,13 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const flow = flowOf(input.flow);
     const knobs = resolveKnobs(input.flow, input.knobs);
     if (typeof knobs === "string") return fail(422, knobs);
+    const refused = buildUnderWay(ctx, input.flow);
+    if (refused) return refused;
+    // A flow that writes no document names none, reads none and takes no template.
+    const noDocument = !flow.writes_document;
+    if (noDocument && [input.document, input.source, input.source_version, input.template, input.theme].some((v) => v != null)) {
+      return fail(422, `the ${flow.title} flow writes no document`);
+    }
     const find = (ref: string) => ctx.documents.find((d) => d.slug === ref || d.id === ref);
     if (flow.target_kind !== "roadmap" && (input.template || input.theme)) return fail(422, `the ${flow.title} flow takes no template or theme`);
     // prd_to_roadmap reads an approved PRD version (422 when there is none).
@@ -787,8 +841,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       ref = base;
       for (let n = 2; find(ref) && find(ref)!.kind !== flow.target_kind; n++) ref = `${base}-${n}`;
     }
-    if (!ref) return fail(422, "name the PRD: an existing document, or a new slug to create");
-    const doc = find(ref);
+    if (!ref && !noDocument) return fail(422, "name the PRD: an existing document, or a new slug to create");
+    const doc = ref ? find(ref) : undefined;
     if (flow.requires_document && !doc) return fail(422, `document '${ref}' not found`);
     if (doc && flow.target_kind && doc.kind !== flow.target_kind) {
       return fail(422, `document '${ref}' is a ${KIND_NAME[doc.kind]}, not a ${KIND_NAME[flow.target_kind]}`);
@@ -800,7 +854,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       flow_title: flow.title,
       status: "draft",
       document_id: doc?.id ?? null,
-      document_slug: doc?.slug ?? ref,
+      document_slug: doc?.slug ?? ref ?? null,
       document_kind: doc?.kind ?? flow.target_kind ?? null,
       source,
       template: roadmap ? (input.template ?? doc?.template ?? ROADMAP_DEFAULTS.template) : null,
@@ -895,6 +949,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (action === "start" && m === "POST") {
     if (r.status !== "draft") return fail(409, `run is ${r.status}, not a draft`);
     if (r.estimate_usd == null) return fail(409, "estimate the run first");
+    const refused = buildUnderWay(ctx, r.flow);
+    if (refused) return refused;
     if (r.knobs.budget_usd != null && r.estimate_usd > r.knobs.budget_usd) return fail(422, "the estimate is over the budget");
     r.snapshot_id = ctx.uuid();
     r.snapshot_as_of = ctx.now();
@@ -1156,7 +1212,7 @@ function decisionsOf(r: RunOut): RunDecision[] {
 
 /** Seeded runs: one waiting at a checkpoint, one over the approval threshold, one paused on overrun, one done. */
 export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
-  const db: RunsDb = { runs: [], artifacts: {}, scopes: {} };
+  const db: RunsDb = { runs: [], artifacts: {}, scopes: {}, baseline_built_at: "2026-10-20T16:00:00Z" };
   const { from, now } = seedClock();
   const full = { ...ctx, db, now };
   const make = (flow: RunOut["flow"], document: string, knobs: KnobsIn, created_at: string) => seedRun(ctx, db, flow, document, knobs, created_at);

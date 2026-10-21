@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 
 /**
  * B1 Build the baseline: a person builds or refreshes the baseline from the Baseline page,
@@ -91,7 +91,7 @@ test("commenters and viewers see no Build baseline button", async ({ page }) => 
     await expect(page.getByTestId("kpi-goals")).toBeVisible();
     await expect(page.getByRole("button", { name: "Build baseline" })).toHaveCount(0);
     await expect(sheet(page)).toHaveCount(0);
-    await page.context().clearCookies();
+    await signOut(page);
   }
 });
 
