@@ -145,7 +145,7 @@ from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import schedule
-from oracle.runs import flows, rejection, roadmap, workflow
+from oracle.runs import feature_set, flows, rejection, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -168,6 +168,7 @@ from oracle.runs.schemas import (
     ItemsCheck,
     KnobsIn,
     KnobsOut,
+    PrdScopeOut,
     RunCreate,
     RunOut,
     RunPatch,
@@ -1137,6 +1138,15 @@ async def list_runs(db: AsyncSession, status: str | None = None) -> list[RunSumm
         for seg in rows:
             segments[seg.run_id].append(seg)
     return [_summary(r, refs, pending.get(r.id), segments[r.id], owed.get(r.id)) for r in runs]
+
+
+async def read_scope(db: AsyncSession, run_id: uuid.UUID) -> PrdScopeOut:
+    """The run's latest PRD scope, any status (C6)."""
+    run = await _get_run(db, run_id)
+    scope = await feature_set.latest_scope(db, run.id)
+    if scope is None:
+        raise NotFound(f"run {run_id} has no PRD scope yet")
+    return feature_set.scope_out(scope, await feature_set.scope_items(db, scope.id))
 
 
 async def read_artifact(db: AsyncSession, run_id: uuid.UUID, seq: int, name: str) -> str:
