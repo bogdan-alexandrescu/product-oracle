@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
@@ -696,7 +697,14 @@ async def _store(
         created_by=principal.id,
     )
     db.add(o)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Another change to this feature was stored at the same moment (one active each).
+        await db.rollback()
+        raise ConflictError(
+            "Someone else changed this feature's place at the same moment; reload and try again"
+        ) from None
     if old is not None:
         old.replaced_by = o.id
         await audit.record(
