@@ -15,7 +15,8 @@ from sqlalchemy import select
 from oracle import audit
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import has_role, recheck_caller, require_role, require_role_now
-from oracle.strategy import drift
+from oracle.runs import extensions
+from oracle.strategy import brief, drift
 from oracle.strategy.models import StrategyFinding
 from oracle.strategy.schemas import (
     CheckOut,
@@ -28,6 +29,9 @@ from oracle.strategy.schemas import (
 )
 
 router = APIRouter(prefix="/v1/strategy", tags=["strategy"])
+
+# The owner's brief from Company › Strategy, in every step of a strategy_draft run.
+extensions.register_prompt_lines("strategy_draft", brief.prompt_lines)
 
 Approver = Annotated[Principal, Depends(require_role("approver"))]
 OwnerNow = Annotated[Principal, Depends(require_role_now("owner"))]

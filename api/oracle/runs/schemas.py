@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from oracle.docs.schemas import DocumentKind, ImportProblem, VersionSource
 from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
@@ -60,6 +60,26 @@ class KnobsOut(BaseModel):
     budget_usd: float | None = None
 
 
+class StrategyBriefIn(BaseModel):
+    """strategy_draft: what the owner tells Oracle in Company › Strategy's sheet. A vision's
+    horizon is in years; a product strategy's is the dates it covers."""
+
+    changed: str | None = Field(default=None, max_length=4000)
+    horizon_years: int | None = Field(default=None, ge=1, le=10)
+    horizon_from: date | None = None
+    horizon_to: date | None = None
+    # Start from the last approved version instead of the latest one.
+    from_approved: bool = False
+
+    @model_validator(mode="after")
+    def _horizon(self) -> "StrategyBriefIn":
+        if self.horizon_from and self.horizon_to and self.horizon_to <= self.horizon_from:
+            raise ValueError("the horizon ends before it starts")
+        if self.changed is not None:
+            self.changed = self.changed.strip() or None
+        return self
+
+
 class RunCreate(BaseModel):
     flow: Flow
     # The document the run writes: an existing document's slug or id, or a new slug
@@ -76,6 +96,8 @@ class RunCreate(BaseModel):
     template: str | None = Field(default=None, min_length=1, max_length=100)
     theme: str | None = Field(default=None, min_length=1, max_length=100)
     knobs: KnobsIn = KnobsIn()
+    # strategy_draft only: the brief from Company › Strategy (422 on any other flow).
+    strategy_brief: StrategyBriefIn | None = None
 
 
 class RunPatch(BaseModel):

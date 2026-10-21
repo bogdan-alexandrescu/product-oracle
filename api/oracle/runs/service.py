@@ -245,6 +245,8 @@ ORACLE_KNOBS = (
     "suggestion_ids",
     # A launch_kit run (oracle.launches): the launch it drafts for.
     "launch_id",
+    # strategy_draft (oracle.strategy.brief): the owner's brief from Company › Strategy.
+    "strategy_brief",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -1576,6 +1578,17 @@ async def create_run(
         _Inputs(body.document, body.source, body.source_version, body.template, body.theme),
     )
     extra = {k: v for k, v in (oracle_knobs or {}).items() if k in ORACLE_KNOBS}
+    if body.strategy_brief is not None:
+        if flow.key != "strategy_draft":
+            raise Invalid("only a Vision or strategy draft run takes a brief")
+        from oracle.strategy import brief as strategy_brief
+
+        try:
+            extra["strategy_brief"] = await strategy_brief.resolve(
+                db, document_id, body.strategy_brief
+            )
+        except ValueError as exc:
+            raise Invalid(str(exc)) from exc
     run = Run(
         flow=flow.key,
         status="draft",
