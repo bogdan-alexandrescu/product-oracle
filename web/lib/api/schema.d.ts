@@ -5645,6 +5645,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tech-briefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tech Briefs
+         * @description Tech briefs (one per feature, from the Engineering check), the latest version of
+         *     each, optionally of one PRD and one feature: approach, what it touches with code map
+         *     refs, risks, questions and answers, size, the lead's verdict and freshness.
+         */
+        get: operations["list_tech_briefs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tech-briefs/{artifact_version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tech Brief
+         * @description One tech brief by its artifact version id.
+         */
+        get: operations["get_tech_brief"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/blockers": {
         parameters: {
             query?: never;
@@ -9006,6 +9048,16 @@ export interface components {
             token_endpoint_auth_method: "none";
             /** Scope */
             scope: string;
+        };
+        /** CodeMapUse */
+        CodeMapUse: {
+            /** Used */
+            used: boolean;
+            /**
+             * Repos
+             * @default []
+             */
+            repos: components["schemas"]["RepoRef"][];
         };
         /** CommentCreate */
         CommentCreate: {
@@ -15380,6 +15432,20 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /** Question */
+        Question: {
+            /** Id */
+            id: string;
+            /** Question */
+            question: string;
+            /** Why */
+            why?: string | null;
+            /**
+             * Blocking
+             * @default false
+             */
+            blocking: boolean;
+        };
         /** QuestionBatch */
         QuestionBatch: {
             /**
@@ -15939,6 +16005,15 @@ export interface components {
         ReplyCreate: {
             /** Body */
             body: string;
+        };
+        /** RepoRef */
+        RepoRef: {
+            /** Repo */
+            repo: string;
+            /** Commit */
+            commit?: string | null;
+            /** As Of */
+            as_of?: string | null;
         };
         /** ReportAlignmentCounts */
         ReportAlignmentCounts: {
@@ -16845,6 +16920,15 @@ export interface components {
             /** Document Version Id */
             document_version_id?: string | null;
             diff: components["schemas"]["RevisionDiff"];
+        };
+        /** Risk */
+        Risk: {
+            /** Risk */
+            risk: string;
+            /** Level */
+            level: string;
+            /** Mitigation */
+            mitigation?: string | null;
         };
         /**
          * RoadmapAnswers
@@ -19235,6 +19319,122 @@ export interface components {
             unavailable?: components["schemas"]["UnavailableItem"][];
             source: components["schemas"]["SourceOut"];
         };
+        /** TechBriefAnswer */
+        TechBriefAnswer: {
+            /** Question Id */
+            question_id?: string | null;
+            /** Answer */
+            answer?: string | null;
+            /** By */
+            by?: string | null;
+        };
+        /** TechBriefFeature */
+        TechBriefFeature: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Entity Id */
+            entity_id?: string | null;
+        };
+        /**
+         * TechBriefOut
+         * @description A feature's tech brief (an artifact version of kind ``tech_brief``).
+         */
+        TechBriefOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            feature: components["schemas"]["TechBriefFeature"];
+            prd: components["schemas"]["TechBriefPrd"];
+            /** Run Id */
+            run_id?: string | null;
+            /** Status */
+            status: string;
+            code_map: components["schemas"]["CodeMapUse"];
+            /** Approach */
+            approach: string;
+            /**
+             * Touches
+             * @default []
+             */
+            touches: components["schemas"]["Touch"][];
+            /**
+             * Reuse
+             * @default []
+             */
+            reuse: string[];
+            /**
+             * Risks
+             * @default []
+             */
+            risks: components["schemas"]["Risk"][];
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["Question"][];
+            /**
+             * Answers
+             * @default []
+             */
+            answers: components["schemas"]["TechBriefAnswer"][];
+            /** Size */
+            size: string;
+            /** Size Why */
+            size_why?: string | null;
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Assumptions
+             * @default []
+             */
+            assumptions: string[];
+            verdict?: components["schemas"]["TechBriefVerdict"] | null;
+            /**
+             * Freshness
+             * @enum {string}
+             */
+            freshness: "fresh" | "potentially_stale" | "under_review" | "reconciled";
+            /**
+             * Stale Reasons
+             * @default []
+             */
+            stale_reasons: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** TechBriefPrd */
+        TechBriefPrd: {
+            /** Slug */
+            slug: string;
+            /** Version */
+            version?: number | null;
+        };
+        /** TechBriefVerdict */
+        TechBriefVerdict: {
+            /** Value */
+            value?: string | null;
+            /** Note */
+            note?: string | null;
+            /** By */
+            by?: string | null;
+            /** At */
+            at?: string | null;
+        };
         /** TemplateCreate */
         TemplateCreate: {
             /** Key */
@@ -19763,6 +19963,17 @@ export interface components {
             refresh_token: string;
             /** Scope */
             scope: string;
+        };
+        /** Touch */
+        Touch: {
+            /** Area */
+            area: string;
+            /** Kind */
+            kind: string;
+            /** Change */
+            change: string;
+            /** Ref */
+            ref?: string | null;
         };
         /** TraceAlternativeRef */
         TraceAlternativeRef: {
@@ -31790,6 +32001,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ArtifactDependencyOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tech_briefs: {
+        parameters: {
+            query?: {
+                /** @description A PRD's slug or id */
+                prd?: string | null;
+                /** @description A feature key */
+                feature?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TechBriefOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tech_brief: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artifact_version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TechBriefOut"];
                 };
             };
             /** @description Validation Error */

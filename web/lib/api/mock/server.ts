@@ -14,6 +14,7 @@ import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from 
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
+import { routeEngineering } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
@@ -1559,6 +1560,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "setup" && !p[2] && m === "GET") return json(200, setupOut(db, me));
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
+  // Tech briefs (./engineering.ts): every member reads.
+  const briefs = routeEngineering(req, p, q, db.documents);
+  if (briefs) return briefs;
   // Trace, impact, staleness and evidence-inspector routes (./trace.ts), on the v2 rows.
   if (["documents", "section-links", "baseline", "trace"].includes(p[1])) {
     const traced = await routeTrace(

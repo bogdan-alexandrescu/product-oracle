@@ -934,6 +934,13 @@ async def import_draft(
             db, principal, document, version, held, origin=origin, run_id=run_id
         )
 
+    if run_id is not None and document.kind == "prd":
+        # F5-1: the run's approved tech briefs are registered with its PRD draft, in
+        # this transaction (oracle.engineering.store).
+        from oracle.engineering import store as brief_store
+
+        await brief_store.on_draft_imported(db, principal, run_id, document, version)
+
     document.title = draft.title
     document.template = draft.template
     document.template_version = draft.template_version

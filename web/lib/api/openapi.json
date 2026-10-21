@@ -20028,6 +20028,140 @@
         ]
       }
     },
+    "/v1/tech-briefs": {
+      "get": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "List Tech Briefs",
+        "description": "Tech briefs (one per feature, from the Engineering check), the latest version of\neach, optionally of one PRD and one feature: approach, what it touches with code map\nrefs, risks, questions and answers, size, the lead's verdict and freshness.",
+        "operationId": "list_tech_briefs",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A PRD's slug or id",
+              "title": "Prd"
+            },
+            "description": "A PRD's slug or id"
+          },
+          {
+            "name": "feature",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A feature key",
+              "title": "Feature"
+            },
+            "description": "A feature key"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TechBriefOut"
+                  },
+                  "title": "Response List Tech Briefs"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tech-briefs/{artifact_version_id}": {
+      "get": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "Get Tech Brief",
+        "description": "One tech brief by its artifact version id.",
+        "operationId": "get_tech_brief",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "artifact_version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Artifact Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TechBriefOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/blockers": {
       "get": {
         "tags": [
@@ -30494,6 +30628,27 @@
           "scope"
         ],
         "title": "ClientRegistrationOut"
+      },
+      "CodeMapUse": {
+        "properties": {
+          "used": {
+            "type": "boolean",
+            "title": "Used"
+          },
+          "repos": {
+            "items": {
+              "$ref": "#/components/schemas/RepoRef"
+            },
+            "type": "array",
+            "title": "Repos",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "used"
+        ],
+        "title": "CodeMapUse"
       },
       "CommentCreate": {
         "properties": {
@@ -47498,6 +47653,40 @@
         ],
         "title": "QualifyIn"
       },
+      "Question": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why"
+          },
+          "blocking": {
+            "type": "boolean",
+            "title": "Blocking",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "question"
+        ],
+        "title": "Question"
+      },
       "QuestionBatch": {
         "properties": {
           "intake_id": {
@@ -49136,6 +49325,41 @@
           "body"
         ],
         "title": "ReplyCreate"
+      },
+      "RepoRef": {
+        "properties": {
+          "repo": {
+            "type": "string",
+            "title": "Repo"
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repo"
+        ],
+        "title": "RepoRef"
       },
       "ReportAlignmentCounts": {
         "properties": {
@@ -51757,6 +51981,35 @@
           "diff"
         ],
         "title": "RevisionSummary"
+      },
+      "Risk": {
+        "properties": {
+          "risk": {
+            "type": "string",
+            "title": "Risk"
+          },
+          "level": {
+            "type": "string",
+            "title": "Level"
+          },
+          "mitigation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mitigation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "risk",
+          "level"
+        ],
+        "title": "Risk"
       },
       "RoadmapAnswers": {
         "properties": {
@@ -58925,6 +59178,312 @@
         ],
         "title": "SyncResult"
       },
+      "TechBriefAnswer": {
+        "properties": {
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          }
+        },
+        "type": "object",
+        "title": "TechBriefAnswer"
+      },
+      "TechBriefFeature": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title"
+        ],
+        "title": "TechBriefFeature"
+      },
+      "TechBriefOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "feature": {
+            "$ref": "#/components/schemas/TechBriefFeature"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/TechBriefPrd"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "code_map": {
+            "$ref": "#/components/schemas/CodeMapUse"
+          },
+          "approach": {
+            "type": "string",
+            "title": "Approach"
+          },
+          "touches": {
+            "items": {
+              "$ref": "#/components/schemas/Touch"
+            },
+            "type": "array",
+            "title": "Touches",
+            "default": []
+          },
+          "reuse": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reuse",
+            "default": []
+          },
+          "risks": {
+            "items": {
+              "$ref": "#/components/schemas/Risk"
+            },
+            "type": "array",
+            "title": "Risks",
+            "default": []
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/Question"
+            },
+            "type": "array",
+            "title": "Questions",
+            "default": []
+          },
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/TechBriefAnswer"
+            },
+            "type": "array",
+            "title": "Answers",
+            "default": []
+          },
+          "size": {
+            "type": "string",
+            "title": "Size"
+          },
+          "size_why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Why"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On",
+            "default": []
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assumptions",
+            "default": []
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TechBriefVerdict"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "potentially_stale",
+              "under_review",
+              "reconciled"
+            ],
+            "title": "Freshness"
+          },
+          "stale_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Stale Reasons",
+            "default": []
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "request_id",
+          "feature",
+          "prd",
+          "status",
+          "code_map",
+          "approach",
+          "size",
+          "freshness",
+          "created_at"
+        ],
+        "title": "TechBriefOut",
+        "description": "A feature's tech brief (an artifact version of kind ``tech_brief``)."
+      },
+      "TechBriefPrd": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug"
+        ],
+        "title": "TechBriefPrd"
+      },
+      "TechBriefVerdict": {
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "title": "TechBriefVerdict"
+      },
       "TemplateCreate": {
         "properties": {
           "key": {
@@ -60448,6 +61007,40 @@
           "scope"
         ],
         "title": "TokenOut"
+      },
+      "Touch": {
+        "properties": {
+          "area": {
+            "type": "string",
+            "title": "Area"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "change": {
+            "type": "string",
+            "title": "Change"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "area",
+          "kind",
+          "change"
+        ],
+        "title": "Touch"
       },
       "TraceAlternativeRef": {
         "properties": {

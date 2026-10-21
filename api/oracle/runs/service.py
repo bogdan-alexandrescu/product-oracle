@@ -5498,6 +5498,12 @@ async def decide_checkpoint(
         cp.id,
         {"run_id": str(run.id), "kind": cp.kind},
     )
+    if decision == "approved":
+        # F5-1: an approved Engineering check registers its tech briefs when the run's
+        # PRD exists (else the prd_draft import does), in this transaction.
+        from oracle.engineering import store as brief_store
+
+        await brief_store.on_checkpoint_approved(db, principal, run, cp, segment)
     wf = _drivable(run)
     live = (
         (redo and wf is not None)

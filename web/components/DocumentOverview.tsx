@@ -21,6 +21,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { ORACLE_WORK } from "@/components/JobsPanel";
+import { FRESHNESS, sizeText } from "@/components/tech-brief";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type VersionSummary } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -156,6 +157,38 @@ function VersionInspector({
   );
 }
 
+/** The PRD's tech briefs, one per feature (F5-1), each opening its brief page. Hidden until there is one; a failed load shows its error. */
+function TechBriefs({ doc }: { doc: string }) {
+  const q = useQuery(`tech-briefs|${doc}`, () => unwrap(api.GET("/v1/tech-briefs", { params: { query: { prd: doc } } })));
+  const briefs = q.data ?? [];
+  if (q.error) {
+    return (
+      <Panel title="Tech briefs" testId="tech-briefs" bodyClassName="p-4">
+        <ErrorNote>{q.error}</ErrorNote>
+      </Panel>
+    );
+  }
+  if (briefs.length === 0) return null;
+  return (
+    <Panel title="Tech briefs" count={briefs.length} testId="tech-briefs">
+      <ul className="divide-y divide-line">
+        {briefs.map((b) => (
+          <li key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+            <Link href={`/briefs/${b.id}`} className="min-w-0 font-semibold break-words text-accent-ink hover:underline">
+              {b.feature.title}
+            </Link>
+            <span className="text-sm text-text2">{sizeText(b.size)}</span>
+            <span className="flex-1" />
+            <Chip kind={FRESHNESS[b.freshness].kind} dot>
+              {FRESHNESS[b.freshness].label}
+            </Chip>
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
 export function DocumentOverview({ doc }: { doc: string }) {
   const router = useRouter();
   const q = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
@@ -218,6 +251,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
                   empty="No versions yet"
                 />
               </Panel>
+              {d.kind === "prd" && <TechBriefs doc={doc} />}
             </Split>
           </>
         )}

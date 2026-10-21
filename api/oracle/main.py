@@ -24,6 +24,7 @@ from oracle.db import dispose_engine, get_engine
 from oracle.docs.parser import DraftError
 from oracle.docs.router import router as docs_router
 from oracle.docs.schemas import ImportErrorResponse
+from oracle.engineering.router import router as engineering_router
 from oracle.export.router import router as export_router
 from oracle.intake.router import router as intake_router
 from oracle.integrations.router import router as company_integrations_router
@@ -197,6 +198,7 @@ def create_app() -> FastAPI:
     # Modules and compositions (CR-01/02): catalogue, packs, manifests, revisions.
     app.include_router(modules_router)
     app.include_router(trace_router)
+    app.include_router(engineering_router)
     app.include_router(blockers_router)
     # CR-09: engineering specs, user flows and wireframes from an approved PRD.
     app.include_router(specs_router)
