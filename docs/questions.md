@@ -145,3 +145,20 @@ Facts checked against SwarmCloud's live catalogue on 2026-10-16 (`swarm_profiles
 | R2 | Who builds it: you + agent lanes on SwarmCloud? Budget for build and run? | answered | Builds run as SwarmCloud lanes (claude-code tasks) from the public repo. |
 | R3 | Pricing (if sold) | open | |
 | R4 | Product name | answered | **Product Oracle** (working name) |
+
+## Round 8 — Product shape (owner review, 2026-10-20)
+
+From the product-shape review (end-to-end journey, head-of-product research, 64 candidate items). Each pick gets its own spec.
+
+| ID | Question | Status | Answer |
+|---|----------|--------|--------|
+| PS1 | A roadmap draft for every PRD draft? | answered | Owner, 2026-10-20: **yes, items only**: each PRD draft gets its own roadmap draft of items (no separate roadmap prose). |
+| PS2 | "Approve with edits" without an agent round? | answered | Owner, 2026-10-20: **yes, Oracle applies the edits** itself when the approver approves with edits; no new agent round. |
+| PS3 | Blocking problems and Approve | answered | Owner, 2026-10-20: **blocking problems disable Approve** until each is fixed or explicitly waived. |
+| PS4 | Separate PRD and roadmap reviews? | answered | Owner, 2026-10-20: **fold them into one document review place.** |
+| PS5 | What agents get from a discussion | answered | Owner, 2026-10-20: **a summary plus the typed changes** (not the raw transcript). |
+| PS6 | Who may stage changes from a discussion; access | answered | Owner, 2026-10-20: **commenters suggest, approvers stage.** Discussions are **open by default** to everyone who can see the document; an **@mention** adds someone and puts it in their Inbox; the starter can mark a discussion **private** and choose who is in, and others see only that a private discussion exists; roles still apply (viewers read, commenters write and suggest, approvers stage). |
+| PS7 | Rename Roadmap and make it the integrated view? | answered | Owner, 2026-10-20: **yes, rename Roadmap to "Plan"**, the integrated planning, progress and engineering view. |
+| PS8 | One way to start a PRD? | answered | Owner, 2026-10-20: **one "New PRD" door** that always drafts with Oracle. |
+| PS9 | Engineering review stop | answered | Owner, 2026-10-20: **add it now, on by default.** |
+| PS10 | Which items to build | answered | Owner, 2026-10-20: **60 of 64 picked**; deferred: metrics review, competitive digest, pricing input, reasoned "no" to requesters. **One spec per pick.** |
