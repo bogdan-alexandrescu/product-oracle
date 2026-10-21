@@ -7,10 +7,10 @@ import { login } from "./helpers";
  * Each test states its card: protects / fails_when / no_claim.
  */
 
-test("the rail places Company after Inbox, just above Settings; it lands on Decisions with both highlighted", async ({ page }) => {
+test("the rail places Company after Inbox, just above Settings; it lands on Strategy with both highlighted", async ({ page }) => {
   // protects=the rail order Home, Requests, Baseline, PRDs, Priorities, Plan, Runs, Inbox,
-  // Company, then Settings (owner, 2026-10-21, "Rail order"); clicking Company lands on /company/decisions (its only tab before H4) with
-  // Company current and the Decisions tab selected; fails_when=Company is missing, out of
+  // Company, then Settings (owner, 2026-10-21, "Rail order"); clicking Company lands on /company/strategy (its first tab, H4) with
+  // Company current and the Strategy tab selected; fails_when=Company is missing, out of
   // order, or not highlighted on its pages; no_claim=none beyond protects (F1 renamed Roadmap to Plan).
   await login(page);
   const nav = page.getByTestId("app-nav");
@@ -29,12 +29,12 @@ test("the rail places Company after Inbox, just above Settings; it lands on Deci
   ]);
   await expect(nav.getByTestId("nav-company")).toHaveText("Company");
   await nav.getByTestId("nav-company").click();
-  await expect(page).toHaveURL(/\/company\/decisions$/);
+  await expect(page).toHaveURL(/\/company\/strategy$/);
   await expect(page.getByRole("heading", { level: 1, name: "Company" })).toBeVisible();
   await expect(nav.getByTestId("nav-company")).toHaveAttribute("aria-current", "page");
   const tabs = page.getByRole("navigation", { name: "Company" });
-  await expect(tabs.getByTestId("company-tab-decisions")).toHaveAttribute("aria-current", "page");
-  await expect(tabs.getByRole("link")).toHaveText(["Decisions"]);
+  await expect(tabs.getByTestId("company-tab-strategy")).toHaveAttribute("aria-current", "page");
+  await expect(tabs.getByRole("link")).toHaveText(["Strategy", "Decisions"]);
 });
 
 test("phone: Company is in the More sheet and the page never scrolls sideways", async ({ page }) => {
@@ -48,8 +48,8 @@ test("phone: Company is in the More sheet and the page never scrolls sideways", 
   await bar.getByTestId("tab-more").click();
   const more = page.getByRole("dialog", { name: "More" });
   await more.getByRole("link", { name: "Company" }).click();
-  await expect(page).toHaveURL(/\/company\/decisions$/);
-  await expect(page.getByRole("navigation", { name: "Company" }).getByTestId("company-tab-decisions")).toBeVisible();
+  await expect(page).toHaveURL(/\/company\/strategy$/);
+  await expect(page.getByRole("navigation", { name: "Company" }).getByTestId("company-tab-strategy")).toBeVisible();
   const [sw, cw] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
   expect(sw).toBeLessThanOrEqual(cw);
 });
