@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { SectionLink, TriageActions, type GoTo } from "@/components/FeedbackPanel";
+import { AgentStagedNote, SectionLink, StageForAgents, TriageActions, type GoTo } from "@/components/FeedbackPanel";
 import {
   SuggestionActions,
   SuggestionCard,
@@ -211,7 +211,14 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
           Reply
         </Button>
       ) : null;
-    const actions = deciding && openSuggestion ? <SuggestionActions d={d!} /> : null;
+    // D12: an open answer (no section text to accept) can go to the agents instead.
+    const actions =
+      deciding && openSuggestion ? (
+        <>
+          <SuggestionActions d={d!} />
+          <StageForAgents item={item} onChanged={onChanged} />
+        </>
+      ) : null;
     const hasActions = !!(actions || triage || reply);
     return (
       <li
@@ -308,6 +315,7 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
             {item.anchor && <Quote>{item.anchor.exact}</Quote>}
           </>
         )}
+        <AgentStagedNote item={item} />
         {item.resolution_note && (
           <p className="mt-1 text-sm leading-5 break-words text-text2">
             <span className="font-semibold text-text">Resolution:</span> {item.resolution_note}

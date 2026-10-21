@@ -1,15 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { usePolling } from "@/components/JobsPanel";
-import { Button, Chip, CostFigure, Icon, InfoTip, Notice } from "@/components/ds";
+import { Button, Chip, Icon, InfoTip, Notice } from "@/components/ds";
 import { JobStatusChip } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime, NO_ACCOUNT_REASON } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
+import { useLive } from "@/lib/use-live";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, onWaitingChanged, waitingChanged } from "@/lib/waiting";
 
@@ -17,6 +19,10 @@ type Staged = Schemas["StagedChanges"];
 type StagedItem = Schemas["StagedChange"];
 type Preview = Schemas["NextDraftPreview"];
 type PreviewSection = Schemas["NextDraftSection"];
+type AgentItem = Schemas["AgentItem"];
+type Plan = Schemas["NextDraftPlan"];
+/** What Build sends: the ticked text changes and items for the agents, and the engine the plan chose. */
+type Choice = { engine: Plan["engine"]; suggestion_ids: string[]; feedback_ids: string[] };
 
 /** `?build=1` on a document page (the Inbox's "Build draft" action) opens the sheet. */
 export const BUILD_PARAM = "build";
@@ -24,9 +30,11 @@ export const BUILD_PARAM = "build";
 const building = (status?: string | null) => status === "queued" || status === "running";
 
 /**
- * C1e: "Build draft N+1 · K staged" next to Publish when accepted changes wait for the
- * next draft (or a build is in progress). Opens the build sheet: pick the staged items,
- * build them in one job, review one combined preview, apply it as exactly one version.
+ * C1e: "Build draft N+1 · K staged" next to Publish when accepted changes or items staged
+ * for the agents wait for the next draft (or a build is in progress). Opens the build
+ * sheet: pick the staged items; D12: the sheet says which engine builds them and why.
+ * Oracle builds text changes in one job, with one combined preview applied as exactly one
+ * version; the agents write the draft in a feedback-loop run.
  */
 export function BuildDraftButton({ doc }: { doc: string }) {
   const { role } = useMe();
@@ -55,14 +63,15 @@ export function BuildDraftButton({ doc }: { doc: string }) {
   const data = q.data;
   if (!canBuild || !data) return null;
   const job = data.draft_job;
-  const count = data.items.length;
+  const count = data.items.length + data.agent_items.length;
   if (!count && !job) return null;
   const label = building(job?.status)
     ? `Building draft ${data.next_version}`
     : job?.status === "succeeded"
       ? `Draft ${data.next_version} ready`
       : `Build draft ${data.next_version}`;
-  if (refinementOff && !job) {
+  // The agents need no Refinement job: only a text-only build is switched off.
+  if (refinementOff && !job && !data.agent_items.length) {
     return (
       <Button
         variant="secondary"
@@ -187,6 +196,7 @@ function HeroChip({ children, tone = "plain" }: { children: ReactNode; tone?: "p
 export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: Staged; onClose: () => void }) {
   const router = useRouter();
   const [jobId, setJobId] = useState<string | null>(staged.draft_job?.id ?? null);
+  const [runId, setRunId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const next = staged.next_version;
@@ -217,14 +227,19 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
     }
   }
 
-  const build = (ids: string[]) =>
+  const build = ({ engine, suggestion_ids, feedback_ids }: Choice) =>
     act(async () => {
-      const job = await unwrap(
-        api.POST("/v1/documents/{doc}/next-draft", {
-          params: { path: { doc } },
-          body: { suggestion_ids: ids },
-        }),
-      );
+      const body = { suggestion_ids, feedback_ids, depth: "standard" as const };
+      if (engine === "agents") {
+        // D12: the agents write the draft in a feedback-loop run; its page follows it.
+        const run = await unwrap(api.POST("/v1/documents/{doc}/next-draft/run", { params: { path: { doc } }, body }));
+        setRunId(run.id);
+        invalidateWaiting();
+        waitingChanged();
+        router.push(`/runs/${run.id}`);
+        return;
+      }
+      const job = await unwrap(api.POST("/v1/documents/{doc}/next-draft", { params: { path: { doc } }, body }));
       setJobId(job.id);
     });
 
@@ -267,6 +282,17 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
       router.push(`/documents/${doc}/v/${v.number}?tab=reports`);
     });
 
+  if (runId)
+    return (
+      <Sheet eyebrow="Next draft" title={`Agents are writing draft ${next}`} onClose={onClose}>
+        <p className="text-text2" data-testid="agents-writing">
+          The draft comes back as version {next} with its run review.{" "}
+          <Link href={`/runs/${runId}`} className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+            Open the run
+          </Link>
+        </p>
+      </Sheet>
+    );
   if (!jobId) return <PickStep staged={staged} busy={busy} error={error} onBuild={build} onClose={onClose} />;
 
   const job = preview?.job;
@@ -276,11 +302,6 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
         <VersionStep from={preview?.base_version ?? staged.latest_version} to={preview?.next_version ?? next} />
       </HeroChip>
       {job && <JobStatusChip status={job.status} />}
-      {job?.cost_usd != null && (
-        <HeroChip>
-          <span className="font-mono">${job.cost_usd.toFixed(2)}</span>
-        </HeroChip>
-      )}
     </>
   );
 
@@ -347,6 +368,44 @@ function why(item: StagedItem, latest: number | null | undefined): string | null
   return null;
 }
 
+const EXCERPT = 140;
+const excerpt = (text: string) => (text.length <= EXCERPT ? text : `${text.slice(0, EXCERPT)}…`);
+const money = (usd: number) => `$${usd.toFixed(2)}`;
+
+/** "a, b and c" */
+function joined(parts: string[]): string {
+  return parts.length < 2 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
+}
+
+/** D12: which engine builds the ticked items, and why, in one line. */
+function engineLine(plan: Plan, next: number): string {
+  if (plan.engine === "oracle")
+    return `Oracle rewrites ${plan.sections} section${plan.sections === 1 ? "" : "s"} itself and shows you a preview.`;
+  return `Agents write draft ${next} because ${joined(plan.why.map((w) => w.text))}.`;
+}
+
+function Group({ label, testId, children }: { label: string; testId: string; children: ReactNode }) {
+  return (
+    <section aria-label={label} data-testid={testId}>
+      <h3 className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">{label}</h3>
+      <ul className="flex flex-col">{children}</ul>
+    </section>
+  );
+}
+
+function Tick({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <input
+      type="checkbox"
+      className="mt-1 size-4 flex-none accent-[var(--accent)]"
+      checked={checked}
+      disabled={disabled}
+      aria-label={label}
+      onChange={(e) => onChange(e.target.checked)}
+    />
+  );
+}
+
 function PickStep({
   staged,
   busy,
@@ -357,10 +416,11 @@ function PickStep({
   staged: Staged;
   busy: boolean;
   error: string | null;
-  onBuild: (ids: string[]) => void;
+  onBuild: (choice: Choice) => void;
   onClose: () => void;
 }) {
-  // Every staged item is in, unless its section is gone or locked; "section gone" ones are listed too.
+  // Every staged item is in (C1e: ticked by default), unless its section is locked; a change
+  // whose section is gone is listed unticked (ticked, it goes to the agents).
   const all = useQuery(`staged-all|${staged.slug}`, () =>
     unwrap(
       api.GET("/v1/documents/{doc}/staged-changes", {
@@ -369,97 +429,142 @@ function PickStep({
     ),
   );
   const items = all.data?.items ?? staged.items;
-  const [off, setOff] = useState<Set<string>>(new Set());
-  const blocked = (i: StagedItem) => !!why(i, staged.latest_version);
-  const chosen = items.filter((i) => !blocked(i) && !off.has(i.suggestion_id));
-  const sections = new Set(chosen.map((i) => i.section_key));
-  // The estimate covers every buildable section; scale it to the sections still chosen.
-  const allSections = new Set(staged.items.filter((i) => !i.section_gone).map((i) => i.section_key)).size;
-  const perSection = staged.estimate_usd != null && allSections ? staged.estimate_usd / allSections : null;
+  const agents: AgentItem[] = all.data?.agent_items ?? staged.agent_items;
+  // Ids the approver changed from their default (ticked, or unticked for a gone section).
+  const [flipped, setFlipped] = useState<Set<string>>(new Set());
+  const flip = (id: string) => {
+    const nextSet = new Set(flipped);
+    if (nextSet.has(id)) nextSet.delete(id);
+    else nextSet.add(id);
+    setFlipped(nextSet);
+  };
+  const ticked = (i: StagedItem) => !i.section_locked && i.section_gone === flipped.has(i.suggestion_id);
+  const texts = items.filter(ticked);
+  const agentsOn = agents.filter((a) => !flipped.has(a.feedback_id));
+  const chosen = texts.length + agentsOn.length;
+  const body = {
+    suggestion_ids: texts.map((i) => i.suggestion_id),
+    feedback_ids: agentsOn.map((a) => a.feedback_id),
+    depth: "standard" as const,
+  };
+  const live = useLive(
+    body,
+    (b) => unwrap(api.POST("/v1/documents/{doc}/next-draft/plan", { params: { path: { doc: staged.slug } }, body: b })),
+    250,
+    chosen > 0,
+  );
+  const plan = chosen > 0 && !live.pending ? live.data : undefined;
+  const next = staged.next_version;
 
   return (
     <Sheet
       eyebrow="Next draft"
-      title={`Build draft ${staged.next_version}`}
+      title={`Build draft ${next}`}
       chips={
         <>
           <HeroChip>
-            <VersionStep from={staged.latest_version} to={staged.next_version} />
+            <VersionStep from={staged.latest_version} to={next} />
           </HeroChip>
           <HeroChip tone="accent">
-            <span data-testid="pick-count">{chosen.length}</span> of {items.length} staged
+            <span data-testid="pick-count">{chosen}</span> of {items.length + agents.length} staged
           </HeroChip>
           <InfoTip label="Build draft" align="start" side="bottom" hero>
-            One Oracle job rewrites every section these changes touch, together; you review one preview and apply it as one draft.
+            Oracle rewrites the sections text changes touch, together, and you review one preview; anything that needs more than a
+            section&apos;s text goes to the agents, who write the whole draft.
           </InfoTip>
         </>
       }
       onClose={onClose}
       footer={
         <>
-          <span className="mr-auto flex items-center gap-2 text-sm text-text2" data-testid="build-estimate">
-            Est.{" "}
-            {perSection != null ? (
-              <CostFigure usd={Math.round(perSection * sections.size * 10000) / 10000} est />
-            ) : (
-              <span>–</span>
+          <span className="mr-auto flex min-w-0 flex-col gap-0.5 text-sm" aria-live="polite">
+            <span className="font-semibold text-text" data-testid="engine-line">
+              {plan ? engineLine(plan, next) : chosen ? "…" : "Tick at least one item."}
+            </span>
+            {plan?.engine === "agents" && plan.estimate_usd != null && (
+              <span className="tnum text-text2" data-testid="run-estimate">
+                {plan.needs_owner_approval ? `Ask an owner to approve (${money(plan.estimate_usd)})` : `Estimate ${money(plan.estimate_usd)}`}
+              </span>
             )}
           </span>
           <Button onClick={onClose}>Cancel</Button>
           <Button
             variant="primary"
-            disabled={busy || chosen.length === 0}
-            onClick={() => onBuild(chosen.map((i) => i.suggestion_id))}
+            disabled={busy || !plan || !!plan.refused}
+            onClick={() => plan && onBuild({ engine: plan.engine, suggestion_ids: body.suggestion_ids, feedback_ids: body.feedback_ids })}
           >
-            Build draft {staged.next_version}
+            Build draft {next}
           </Button>
         </>
       }
     >
-      <ul className="flex flex-col" aria-label="Staged changes" data-testid="staged-list">
-        {items.map((i) => {
-          const reason = why(i, staged.latest_version);
-          const checked = !reason && !off.has(i.suggestion_id);
-          return (
-            <li key={i.suggestion_id} className="border-b border-line py-2.5 last:border-b-0" data-testid="staged-item">
-              <label className={`flex items-start gap-3 ${reason ? "cursor-not-allowed" : "cursor-pointer"}`}>
-                <input
-                  type="checkbox"
-                  className="mt-1 size-4 flex-none accent-[var(--accent)]"
-                  checked={checked}
-                  disabled={!!reason}
-                  aria-label={`Include ${i.section_heading}: ${i.feedback_summary}`}
-                  onChange={(e) => {
-                    const nextOff = new Set(off);
-                    if (e.target.checked) nextOff.delete(i.suggestion_id);
-                    else nextOff.add(i.suggestion_id);
-                    setOff(nextOff);
-                  }}
-                />
-                <span className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className={`font-semibold ${reason ? "text-text2" : "text-text"}`}>{i.section_heading}</span>
-                    <Chip kind="line">v{i.raised_on_version}</Chip>
-                    {reason && (
-                      <Chip kind={i.section_locked ? "warn" : "na"}>
-                        {i.section_locked && <Icon name="lock" size={16} />}
-                        {reason}
-                      </Chip>
+      {items.length > 0 && (
+        <Group label="Text changes" testId="staged-list">
+          {items.map((i) => {
+            const reason = why(i, staged.latest_version);
+            return (
+              <li key={i.suggestion_id} className="border-b border-line py-2.5 last:border-b-0" data-testid="staged-item">
+                <label className={`flex items-start gap-3 ${i.section_locked ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                  <Tick
+                    label={`Include ${i.section_heading}: ${i.feedback_summary}`}
+                    checked={ticked(i)}
+                    disabled={i.section_locked}
+                    onChange={() => flip(i.suggestion_id)}
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className={`font-semibold ${reason ? "text-text2" : "text-text"}`}>Section {i.section_heading}</span>
+                      <Chip kind="line">v{i.raised_on_version}</Chip>
+                      {reason && (
+                        <Chip kind={i.section_locked ? "warn" : "na"}>
+                          {i.section_locked && <Icon name="lock" size={16} />}
+                          {reason}
+                        </Chip>
+                      )}
+                    </span>
+                    <span className={`text-[15px] leading-[22px] ${reason ? "text-text2" : "text-text"}`}>{i.feedback_summary}</span>
+                    {i.text && (
+                      <span className="text-sm leading-5 text-text2" data-testid="staged-text">
+                        {excerpt(i.text)}
+                      </span>
                     )}
+                    <span className="tnum text-[13px] text-text2">
+                      {i.accepted_by_name ?? "Accepted"}
+                      {i.accepted_at && ` · ${formatDateTime(i.accepted_at)}`}
+                    </span>
                   </span>
-                  <span className={`text-[15px] leading-[22px] ${reason ? "text-text2" : "text-text"}`}>
-                    {i.feedback_summary}
+                </label>
+              </li>
+            );
+          })}
+        </Group>
+      )}
+      {agents.length > 0 && (
+        <Group label="Needs the agents" testId="agent-list">
+          {agents.map((a) => {
+            const where = a.section_key ? `Section ${a.section_key}` : "General";
+            return (
+              <li key={a.feedback_id} className="border-b border-line py-2.5 last:border-b-0" data-testid="agent-item">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <Tick label={`Include ${where}: ${a.summary}`} checked={!flipped.has(a.feedback_id)} onChange={() => flip(a.feedback_id)} />
+                  <span className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <Chip kind="line">{where}</Chip>
+                    </span>
+                    <span className="text-[15px] leading-[22px] text-text">{a.summary}</span>
+                    <span className="tnum text-[13px] text-text2">
+                      {a.staged_by_name ?? "Staged"}
+                      {a.staged_at && ` · ${formatDateTime(a.staged_at)}`}
+                    </span>
                   </span>
-                  <span className="tnum text-[13px] text-text2">
-                    {i.accepted_by_name ?? "Accepted"}
-                    {i.accepted_at && ` · ${formatDateTime(i.accepted_at)}`}
-                  </span>
-                </span>
-              </label>
-            </li>
-          );
-        })}
-      </ul>
+                </label>
+              </li>
+            );
+          })}
+        </Group>
+      )}
+      {plan?.refused && <Notice tone="error">{plan.refused}</Notice>}
+      {live.error && <Notice tone="error">{live.error}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
     </Sheet>
   );
