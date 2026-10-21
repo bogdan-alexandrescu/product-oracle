@@ -559,3 +559,134 @@ def test_the_routes_are_mcp_tools():
 
     names = {op.tool_name for op in app_operations(app)}
     assert {"list_tech_briefs", "get_tech_brief"} <= names
+
+
+# --------------------------------------------------------------------------- review fixes
+
+
+def test_parse_reads_the_file_once(monkeypatch):
+    # protects=one YAML load per parse (check reuses parse's data); fails_when=parse
+    # loads the untrusted file again to check it.
+    from oracle import safe_yaml
+
+    loads = []
+    real = safe_yaml.load
+
+    def counting(text, **kw):
+        loads.append(text)
+        return real(text, **kw)
+
+    monkeypatch.setattr(safe_yaml, "load", counting)
+    parsed = briefs.parse(SAMPLE)
+    assert [f.feature for f in parsed.features] == list(FEATURES)
+    assert len(loads) == 1
+
+
+async def test_a_slow_brief_parse_is_refused_off_the_event_loop(monkeypatch):
+    # protects=the briefs' parse and rendering run on the parse pool with a time cap
+    # (oracle.safe_yaml.run_parse_within); fails_when=they run on the event loop or wait
+    # without a cap.
+    import asyncio
+    import time
+
+    from oracle import safe_yaml
+    from oracle.engineering import store
+
+    def slow(*args, **kwargs):
+        time.sleep(0.5)
+        raise AssertionError("not reached")
+
+    monkeypatch.setattr(store, "_prepare", slow)
+    monkeypatch.setattr(safe_yaml, "PARSE_SECONDS", 0.05)
+    beats = 0
+
+    async def beat():
+        nonlocal beats
+        while True:
+            await asyncio.sleep(0.01)
+            beats += 1
+
+    task = asyncio.create_task(beat())
+    with pytest.raises(safe_yaml.ParseTimeout):
+        await store.prepare(SAMPLE, None)
+    task.cancel()
+    assert beats >= 2
+
+
+async def test_registration_parses_and_renders_on_the_parse_pool(
+    client, eng_flow, runtime, monkeypatch
+):
+    # protects=at the approval and at the draft import, tech_briefs.yaml is loaded and
+    # brief.md rendered on the parse pool, never on the event loop; fails_when=a request
+    # handler parses or renders the untrusted file itself.
+    import threading
+
+    from oracle import safe_yaml
+
+    threads: dict[str, list[str]] = {"load": [], "render": []}
+    real_load, real_render = safe_yaml.load, briefs.render_markdown
+
+    def load(text, **kw):
+        if text == SAMPLE:
+            threads["load"].append(threading.current_thread().name)
+        return real_load(text, **kw)
+
+    def render(*args, **kw):
+        threads["render"].append(threading.current_thread().name)
+        return real_render(*args, **kw)
+
+    monkeypatch.setattr(safe_yaml, "load", load)
+    monkeypatch.setattr(briefs, "render_markdown", render)
+    tenant_id, auth = await seed_auth()
+    await seed_features(tenant_id)
+    assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
+    run = await start(client, auth, "checkout-redesign")
+    run = await advance_to(client, auth, run["id"], "eng_review")
+    threads["load"].clear()
+    await decide(client, auth, run)
+    assert len(await brief_rows(tenant_id)) == 2
+    assert len(threads["load"]) == 1 and len(threads["render"]) == 2, threads
+    threads["load"].clear()
+    await advance_to(client, auth, run["id"], "prd_review")  # the draft import
+    assert threads["load"], "the draft import did not read the briefs"
+    for name in threads["load"] + threads["render"]:
+        assert name.startswith("safe-yaml"), threads
+
+
+async def test_non_text_decisions_are_dropped_at_registration(client, eng_flow, runtime):
+    # protects=the GET routes read a brief whose checkpoint recorded non-text verdicts or
+    # answers; fails_when=such a value is stored and the routes answer 500.
+    tenant_id, auth = await seed_auth()
+    await seed_features(tenant_id)
+    assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
+    lead_id, lead = await member(tenant_id, "approver")
+    run = await start(client, auth, "checkout-redesign")
+    run = await advance_to(client, auth, run["id"], "eng_review")
+    recorded = {
+        "verdicts": {"feature-a": {"value": 3, "note": ["x"]}, "feature-b": "feasible"},
+        "answers": {
+            "feature-a": [
+                {"question_id": "q1", "answer": {"text": "Hourly"}},
+                {"question_id": 7, "answer": "Seven"},
+                {"question_id": "q1", "answer": 42},
+                {"question_id": "q1", "answer": "Hourly is fine", "by": 5},
+                "junk",
+            ],
+            "feature-b": "none",
+        },
+    }
+    async with tenant_session(tenant_id) as s:
+        cp = await s.get(Checkpoint, uuid.UUID(pending(run)["id"]))
+        cp.payload = {**cp.payload, "briefs": recorded}
+        await s.commit()
+    await decide(client, lead, run)
+
+    _, viewer = await member(tenant_id, "viewer")
+    resp = await client.get("/v1/tech-briefs", headers=viewer)
+    assert resp.status_code == 200, resp.text
+    a, b = resp.json()
+    assert a["verdict"]["value"] is None and a["verdict"]["note"] == "Looks buildable"
+    assert a["answers"] == [{"question_id": "q1", "answer": "Hourly is fine", "by": str(lead_id)}]
+    assert b["verdict"]["value"] is None and b["answers"] == []
+    resp = await client.get(f"/v1/tech-briefs/{a['id']}", headers=viewer)
+    assert resp.status_code == 200, resp.text
