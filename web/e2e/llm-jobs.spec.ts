@@ -12,23 +12,27 @@ function feedbackItem(page: Page, text: string) {
   return page.getByTestId("feedback-item").filter({ visible: true, hasText: text });
 }
 
-test("jobs panel: status, account, cost, and a clear no-account failure that can be retried", async ({ page }) => {
+test("Oracle's work: status, account and cost behind Details, and a clear no-account failure that can be retried", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/team-workspaces");
-  const panel = page.getByTestId("jobs-panel");
-  const review = panel.getByTestId("llm-job").filter({ hasText: "Review comments" });
+  await page.goto("/documents/team-workspaces/v/2");
+  await openTab(page, "History");
+  const panel = page.getByTestId("jobs-panel").filter({ visible: true });
+  const kind = (name: string) => panel.getByTestId("llm-job").filter({ has: page.getByTestId("job-kind").getByText(name, { exact: true }) });
+  const review = kind("Suggestions");
   await expect(review).toHaveAttribute("data-status", "succeeded");
+  await review.getByText("Details", { exact: true }).click();
   await expect(review.getByTestId("job-account")).toHaveText("personal");
   await expect(review.getByTestId("job-cost")).toHaveText("$0.03");
   await expect(review).toContainText("3 feedback items handled · 1 pushback");
 
-  const reports = panel.getByTestId("llm-job").filter({ hasText: "Reporting" });
+  const reports = kind("Reports");
   await expect(reports).toHaveAttribute("data-status", "failed");
   await expect(reports.getByTestId("job-error")).toContainText("No Claude account can take this call");
   await expect(reports.getByTestId("job-error")).toContainText("Every Claude account is paused");
 
   await reports.getByRole("button", { name: "Retry" }).click();
   await expect(reports).toHaveAttribute("data-status", "succeeded");
+  await reports.getByText("Details", { exact: true }).click();
   await expect(reports.getByTestId("job-account")).toHaveText("personal");
 });
 
@@ -208,18 +212,20 @@ for (const email of ["viewer@example.com", "commenter@example.com"]) {
 
 test("an owner turns a job kind off for a document", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign");
-  const settings = page.getByTestId("llm-job-settings");
-  const review = settings.getByLabel("Review comments");
+  await page.goto("/documents/checkout-redesign/v/2");
+  await openTab(page, "History");
+  const settings = page.getByTestId("llm-job-settings").filter({ visible: true });
+  const review = settings.getByLabel("Suggest changes from feedback");
   await expect(review).toBeChecked();
   await review.uncheck();
   await expect(review).not.toBeChecked();
-  await page.getByTestId("jobs-panel").getByRole("button", { name: "Handle new feedback" }).click();
+  await page.getByTestId("jobs-panel").filter({ visible: true }).getByRole("button", { name: "Suggest changes now" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "turned off" })).toHaveText(
-    "Review comments is turned off for this document (409)",
+    '"Suggest changes from feedback" is turned off for this document (409)',
   );
   await page.reload();
-  await expect(page.getByTestId("llm-job-settings").getByLabel("Review comments")).not.toBeChecked();
+  await openTab(page, "History");
+  await expect(page.getByTestId("llm-job-settings").filter({ visible: true }).getByLabel("Suggest changes from feedback")).not.toBeChecked();
 });
 
 test("a new comment queues review comments, and Oracle's suggestion appears on it", async ({ page }) => {

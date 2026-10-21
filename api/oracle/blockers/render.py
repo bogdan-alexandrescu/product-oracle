@@ -21,7 +21,7 @@ from datetime import datetime
 
 from oracle.blockers.policy import LIMIT_KIND_LABELS
 from oracle.blockers.schemas import BlockerCitation, BlockerGate, BlockerModuleRender, BlockerSpec
-from oracle.docs.parser import strip_citations
+from oracle.docs.parser import CITATION_STRIP_RE
 
 MODULE_KEY = "constraints.solutions"
 BRIEF_SECTION_ID = "constraints-solutions"
@@ -65,9 +65,15 @@ CITATION_SOURCES = {
 }
 
 # A Pandoc anchor "{#id ...}", or the "{#" of one left open. The body stops at a brace, so
-# a flood of "{#" is scanned once (linear); an anchor nested in another ("{#{#x}id}")
-# loses both openers, so stripping never assembles a new one.
+# a flood of "{#" is scanned once (linear). Stripping one can still join its neighbours
+# into a new token ("{{#}#id}" -> "{#id}", "[{#}c:x]" -> "[c:x]"): see _inline.
 _ANCHOR = re.compile(r"\{#[^{}]*+\}|\{#")
+# A "[c:" with another before the run ends: CITATION_STRIP_RE ends a citation id at the
+# second (so a flood of them is linear), and leaves a marker CITATION_RE still reads
+# ("[c:[c:]"). Each scan stops at the next "[c:", so the search is linear too.
+_NESTED_CITATION = re.compile(r"\[c:(?:[^\]\s\[]|\[(?!c:))*+\[c:")
+# Rounds of stripping before _inline falls back to dropping every opener left.
+_STRIP_ROUNDS = 3
 
 
 def section_id_for(key: str) -> str:
@@ -136,9 +142,32 @@ def _inline(text: str | None) -> str:
     """User text safe for one line of a section body: no citations, anchors or breaks."""
     if not text:
         return ""
-    text = strip_citations(text)
-    text = _ANCHOR.sub("", text)
+    # Strip until nothing changes. Real text settles in one round; text nested so each
+    # round uncovers another token would take a round per level (quadratic), so past a
+    # few rounds, or on a nested citation, every "{#" and "[c:" left is dropped in one
+    # scan, which leaves none.
+    for _ in range(_STRIP_ROUNDS):
+        stripped = _ANCHOR.sub("", CITATION_STRIP_RE.sub("", text))
+        if stripped == text:
+            break
+        text = stripped
+    else:
+        text = _drop_openers(text)
+    if _NESTED_CITATION.search(text):
+        text = _drop_openers(text)
     return " ".join(text.split())
+
+
+def _drop_openers(text: str) -> str:
+    """``text`` without "{#" or "[c:", including ones that dropping another assembles."""
+    out: list[str] = []
+    for ch in text:
+        out.append(ch)
+        if ch == "#" and out[-2:] == ["{", "#"]:
+            del out[-2:]
+        elif ch == ":" and out[-3:] == ["[", "c", ":"]:
+            del out[-3:]
+    return "".join(out)
 
 
 def _cell(text: str | None) -> str:

@@ -807,6 +807,11 @@ def _retitle(text: str, title: str) -> str:
     return text
 
 
+# Linear: the marker's whitespace is taken once (possessive), and the title ends on a
+# non-space, so the anchor's leading whitespace is scanned from one place, not every one.
+_TITLE_LINE = re.compile(r"^(#\s++)((?:.*?\S)??)(\s*\{#[A-Za-z0-9][A-Za-z0-9_.:-]*\}\s*)$", re.M)
+
+
 def _yaml_scalar(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
