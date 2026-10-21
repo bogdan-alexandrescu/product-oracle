@@ -162,6 +162,7 @@ export function canStageForAgents(item: FeedbackItem): boolean {
   if (item.staged_for_agents) return true;
   if (item.state === "staged") return false;
   const s = item.suggestion;
+  if (s?.kind === "duplicate" && s.status === "open") return false;
   return !(s && s.kind === "section_text" && (s.status === "open" || s.status === "accepted"));
 }
 

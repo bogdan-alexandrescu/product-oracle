@@ -190,6 +190,7 @@ export function InboxActions({
   const stage =
     !compact &&
     primary !== "Accept" &&
+    primary !== "Merge" &&
     (f.suggestion_kind !== "section_text" || f.suggestion_status === "dismissed") && (
     <Button
       variant="ghost"

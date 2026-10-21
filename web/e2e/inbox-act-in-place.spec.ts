@@ -132,7 +132,7 @@ for (const [width, height] of [
     await expect(badge(page)).toHaveText(String(before));
     await tab(page, "New").click();
     await expect(row(page, FAILED)).toHaveCount(1);
-    expect(await buttons(row(page, FAILED))).toEqual(["Decline", "Open"]);
+    expect(await buttons(row(page, FAILED))).toEqual(["Decline", "Stage for agents", "Open"]);
 
     // Undo shows for 10 s only.
     const depot = row(page, DEPOT);
@@ -146,9 +146,9 @@ for (const [width, height] of [
     await suggestions(page);
     await inbox(page);
     const question = row(page, QUESTION);
-    expect(await buttons(question)).toEqual(["Send answer", "Decline", "Open"]);
+    expect(await buttons(question)).toEqual(["Send answer", "Decline", "Stage for agents", "Open"]);
     const remark = row(page, REMARK);
-    expect(await buttons(remark)).toEqual(["Close", "Decline", "Open"]);
+    expect(await buttons(remark)).toEqual(["Close", "Decline", "Stage for agents", "Open"]);
     const duplicate = row(page, QUANTIFY);
     expect(await buttons(duplicate)).toEqual(["Merge", "Open"]);
 
@@ -176,11 +176,11 @@ for (const [width, height] of [
     await expect(answered.getByTestId("comment")).toContainText("Workspace owners and billing admins see it; members do not.");
   });
 
-  test("a row without a suggestion offers Decline and Open only; Decline declines the item", async ({ page }) => {
+  test("a row without a suggestion offers Decline, Stage for agents and Open; Decline declines the item", async ({ page }) => {
     await suggestions(page);
     await inbox(page);
     const address = row(page, ADDRESS);
-    expect(await buttons(address)).toEqual(["Decline", "Open"]);
+    expect(await buttons(address)).toEqual(["Decline", "Stage for agents", "Open"]);
     await address.getByRole("button", { name: "Decline", exact: true }).click();
     await address.getByLabel("Why? (optional)").fill("The last address is often a gift address.");
     await address.getByRole("button", { name: "Decline", exact: true }).click();
