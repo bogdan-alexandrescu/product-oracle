@@ -574,6 +574,60 @@ async def test_options_job_fills_options_with_evidence_and_a_recommendation(clie
         assert row.status == "succeeded"
 
 
+async def test_options_job_does_not_hold_the_decision_while_the_model_thinks(client, ctx):
+    """protects=while decision_options waits on the model, the approver decides the same
+    decision at once, and the job then leaves the decided record's options alone;
+    fails_when=Decide waits for the model call (the job holds the row lock) or the job
+    writes its options over a decision that changed meanwhile; no_claim=a scripted fake
+    stands in for the model and a 5 second bound stands in for "at once"."""
+    d = await propose(client, ctx)
+    resp = await client.post(
+        f"/v1/decisions/{d['number']}/options-job", headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 201, resp.text
+    job = resp.json()
+
+    fake = FakeClaude()
+    decided: list[int] = []
+
+    async def decide_meanwhile(kind, payload):
+        r = await asyncio.wait_for(
+            client.post(
+                f"/v1/decisions/{d['number']}/decide",
+                json=decide_body(),
+                headers=ctx.as_("approver"),
+            ),
+            timeout=5,
+        )
+        decided.append(r.status_code)
+
+    fake.on_call = decide_meanwhile
+    from oracle.llm import gateway
+
+    previous = gateway.set_transports(gateway.Transports(plan=fake, api_key=fake))
+    try:
+        await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
+        fake.script["decision_options"].append(
+            {
+                "options": [
+                    {"key": "late-a", "label": "Late A", "recommended": True},
+                    {"key": "late-b", "label": "Late B"},
+                ]
+            }
+        )
+        await worker.run_pending(ctx.tenant_id)
+    finally:
+        gateway.set_transports(previous)
+    assert decided == [200]
+    got = (await client.get(f"/v1/decisions/{d['number']}", headers=ctx.as_("viewer"))).json()
+    assert got["status"] == "decided" and got["chosen_option"] == "caps-first"
+    assert [o["key"] for o in got["options"]] == ["caps-first", "together"]
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(LlmJob, uuid.UUID(job["id"]))
+        assert row.status == "failed"
+        assert "changed" in (row.error or "")
+
+
 async def test_list_filters(client, ctx):
     """protects=status, approver=me, origin, subject and q filter the list, newest number
     first; fails_when=a filter is ignored; no_claim=none beyond protects."""
@@ -636,3 +690,69 @@ async def test_people_lists_active_members_for_the_pickers(client, ctx):
         "owner@example.com": "owner",
         "viewer@example.com": "viewer",
     }
+
+
+async def test_list_filters_reach_decisions_older_than_the_newest_200(client, ctx):
+    """protects=the Decisions page's state and From filters run in the API, company-scoped,
+    so an old decision whose review is due, an old proposal waiting on me (status=open with
+    approver=me) and an old checkpoint approval (chosen=approve) are found among 260
+    decisions, and offset pages through the rest; fails_when=a filter only sees the newest
+    200 or another company's decision is listed; no_claim=rows are inserted directly."""
+    from datetime import UTC, datetime
+
+    approver, owner = ctx.users["approver"].id, ctx.users["owner"].id
+    now = datetime.now(UTC)
+    done = {"chosen_option": "caps-first", "rationale": "Because", "decided_at": now}
+
+    def row(number: int, **fields) -> Decision:
+        return Decision(
+            number=number,
+            title=f"Decision {number}",
+            approver_id=fields.pop("approver_id", owner),
+            driver="oracle",
+            origin=fields.pop("origin", "manual"),
+            **fields,
+        )
+
+    async with tenant_session(ctx.tenant_id) as s:
+        due = TODAY - timedelta(days=3)
+        s.add(row(1, status="decided", approver_id=approver, review_at=due, **done))
+        s.add(row(2, status="proposed", approver_id=approver))
+        for number, chosen in ((3, "approve"), (4, "request_changes")):
+            stop = {**done, "chosen_option": chosen}
+            s.add(row(number, status="decided", origin="checkpoint", **stop))
+        s.add(row(5, status="decided", review_at=TODAY + timedelta(days=30), **done))
+        for n in range(6, 261):
+            s.add(row(n))
+        await s.commit()
+    other = await make_ctx("Other Co")
+    async with tenant_session(other.tenant_id) as s:
+        s.add(
+            Decision(
+                number=1,
+                title="Elsewhere",
+                approver_id=other.users["approver"].id,
+                driver="oracle",
+                origin="manual",
+                status="decided",
+                review_at=TODAY - timedelta(days=1),
+                **done,
+            )
+        )
+        await s.commit()
+    h = ctx.as_("approver")
+
+    async def numbers(query: str) -> list[int]:
+        resp = await client.get(f"/v1/decisions?limit=200&{query}", headers=h)
+        assert resp.status_code == 200, resp.text
+        return [x["number"] for x in resp.json()]
+
+    assert await numbers("class=judgement&status=open&approver=me") == [2, 1]
+    assert await numbers("class=judgement&status=review_due") == [1]
+    assert await numbers("class=judgement&status=proposed&approver=me") == [2]
+    assert await numbers("class=judgement&status=decided") == [5, 1]
+    assert await numbers("class=all&origin=checkpoint&chosen=approve") == [3]
+    assert await numbers("class=all&origin=checkpoint&chosen=request_changes") == [4]
+    first = await numbers("class=all")
+    rest = await numbers("class=all&offset=200")
+    assert first == list(range(260, 60, -1)) and rest == list(range(60, 0, -1))

@@ -4,9 +4,9 @@ import uuid
 from datetime import date, timedelta
 from typing import Any
 
-from oracle.decisions.models import Decision
 from sqlalchemy import select
 
+from oracle.decisions.models import Decision
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx
 

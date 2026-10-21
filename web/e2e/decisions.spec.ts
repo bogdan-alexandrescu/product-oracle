@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, openSection, sectionAction, seedDecidedRun } from "./helpers";
 
 /*
@@ -201,4 +202,25 @@ test("a section's Record a decision opens Propose decision about that section", 
   await expect(row(page, "Trace the retention goal to repeat orders")).toContainText("Proposed");
   const inspector = page.getByTestId("decision-inspector").filter({ visible: true });
   await expect(inspector).toContainText("Section 1. Goal trace");
+});
+
+test("with 250 newer decisions, Needs me and Review due still find an old one; Show more pages through the rest", async ({ page }) => {
+  // protects=the state filters run in the API, so D-4 (decided 92 days ago, review due) is
+  // found under Needs me and Review due behind 250 newer decisions, and All pages 200 at a
+  // time; fails_when=a filter only looks at the newest 200 rows or the rest cannot be reached;
+  // no_claim=the "large" mock scenario stands in for a company with a long log.
+  await page.addInitScript((key) => localStorage.setItem(key, "large"), MOCK_SCENARIO_KEY);
+  await login(page, APPROVER);
+  await page.goto("/company/decisions");
+  await expect(chip(page, "State", "Needs me")).toHaveAttribute("aria-pressed", "true");
+  await expect(row(page, "Price the team plan per seat")).toContainText("Review due");
+  await chip(page, "State", "Review due").click();
+  await expect(row(page, "Price the team plan per seat")).toBeVisible();
+  await expect(rows(page)).toHaveCount(1);
+  await chip(page, "State", "All").click();
+  await expect(rows(page)).toHaveCount(200);
+  await page.getByRole("button", { name: "Show more" }).click();
+  await expect(rows(page)).toHaveCount(255);
+  await expect(row(page, "Price the team plan per seat")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show more" })).toHaveCount(0);
 });

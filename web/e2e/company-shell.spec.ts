@@ -7,24 +7,25 @@ import { login } from "./helpers";
  * Each test states its card: protects / fails_when / no_claim.
  */
 
-test("the rail places Company after Roadmap; it lands on Decisions with both highlighted", async ({ page }) => {
-  // protects=the rail order Home, Requests, Baseline, PRDs, Priorities, Roadmap, Company,
-  // Runs, Inbox; clicking Company lands on /company/decisions (its only tab before H4) with
+test("the rail places Company after Inbox, just above Settings; it lands on Decisions with both highlighted", async ({ page }) => {
+  // protects=the rail order Home, Requests, Baseline, PRDs, Priorities, Roadmap, Runs, Inbox,
+  // Company, then Settings (owner, 2026-10-21, "Rail order"); clicking Company lands on /company/decisions (its only tab before H4) with
   // Company current and the Decisions tab selected; fails_when=Company is missing, out of
   // order, or not highlighted on its pages; no_claim=Roadmap stands for Plan until F1 renames it.
   await login(page);
   const nav = page.getByTestId("app-nav");
   const ids = await nav.locator("a[data-testid^='nav-']").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
-  expect(ids.filter((id) => id !== "nav-brand" && id !== "nav-settings")).toEqual([
+  expect(ids.filter((id) => id !== "nav-brand")).toEqual([
     "nav-home",
     "nav-requests",
     "nav-baseline",
     "nav-prds",
     "nav-priorities",
     "nav-roadmap",
-    "nav-company",
     "nav-runs",
     "nav-inbox",
+    "nav-company",
+    "nav-settings",
   ]);
   await expect(nav.getByTestId("nav-company")).toHaveText("Company");
   await nav.getByTestId("nav-company").click();
