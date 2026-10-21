@@ -66,14 +66,14 @@ def test_the_migration_follows_0015_and_precedes_0014_intake():
     # v2-roadmap (wave 2) chains 0016_roadmap on it; 0016_refinement_batch (C1e) chains on
     # that, 0017_citation_source_oracle on that, then 0018_runtime_features,
     # 0019_citation_confidence and the intake lane's 0014_intake.
-    assert script.get_heads() == ["0017_item_provenance"]
+    assert script.get_heads() == ["0017_source_config_version"]
     assert script.get_revision("0016_roadmap").down_revision == REVISION
     assert script.get_revision("0016_refinement_batch").down_revision == "0016_roadmap"
     assert (
         script.get_revision("0017_citation_source_oracle").down_revision == "0016_refinement_batch"
     )
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
-    assert script.get_heads() == ["0017_item_provenance"]
+    assert script.get_heads() == ["0017_source_config_version"]
 
 
 def _constraint(t, key: str, attrs: dict) -> uuid.UUID:

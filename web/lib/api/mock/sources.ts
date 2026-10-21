@@ -81,6 +81,7 @@ function seed(): SourcesDb {
     updated_at: "2026-10-17T08:00:00Z",
     item_count: 2,
     connector_available: true,
+    config_version: 1,
   };
   const repo: Source = {
     id: "50000000-0000-4000-8000-000000000002",
@@ -95,6 +96,7 @@ function seed(): SourcesDb {
     updated_at: "2026-10-16T08:00:00Z",
     item_count: 1,
     connector_available: true,
+    config_version: 1,
   };
   // Saved before the 100-channel rule (as the API's 0016 migration leaves such a source):
   // syncs answer needs_attention until it is edited back within the rules.
@@ -111,6 +113,7 @@ function seed(): SourcesDb {
     updated_at: "2026-10-18T08:00:00Z",
     item_count: 0,
     connector_available: true,
+    config_version: 1,
   };
   // Saved before the meeting picker: a title rule.
   const calls: Source = {
@@ -126,6 +129,7 @@ function seed(): SourcesDb {
     updated_at: "2026-10-17T08:00:00Z",
     item_count: 0,
     connector_available: true,
+    config_version: 1,
   };
   const item = (source: Source, external_id: string, kind: string, title: string, content: string, freshness: number): Item => ({
     id: uuid(),
@@ -298,6 +302,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       updated_at: now(),
       item_count: 0,
       connector_available: true,
+      config_version: 1,
     };
     db.sources.push(s);
     return json(201, s);
@@ -325,8 +330,16 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     }
     if (m === "PATCH") {
       const patch = (await req.json()) as Schemas["SourcePatch"];
+      // A form that loaded an older version is refused, nothing changed (as the API does).
+      if (patch.base_version != null && patch.base_version !== s.config_version) {
+        return json(409, {
+          code: "source_changed",
+          message: "This source changed since you opened it. Reload to see the current picks.",
+        });
+      }
       const invalid = patch.config ? badConfig(s.kind, patch.config) : null;
       if (invalid) return json(422, { detail: invalid });
+      s.config_version += 1;
       if (patch.name) s.name = patch.name;
       if (patch.config) {
         s.config = patch.config;

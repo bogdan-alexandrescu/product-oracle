@@ -52,7 +52,7 @@ def scratch_db():
 def test_0014_intake_chains_after_mains_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
-    assert script.get_heads() == ["0017_item_provenance"]
+    assert script.get_heads() == ["0017_source_config_version"]
 
 
 def test_widened_checks_keep_other_lanes_values(scratch_db):

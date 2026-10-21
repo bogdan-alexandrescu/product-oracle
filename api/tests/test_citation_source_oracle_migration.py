@@ -94,7 +94,7 @@ def test_chains_on_the_refinement_batch_head():
     assert script.get_revision(REVISION).down_revision == "0016_refinement_batch"
     # 0018_runtime_features chains on it, 0019_citation_confidence on that and the intake
     # lane's 0014_intake on that; one head.
-    assert script.get_heads() == ["0017_item_provenance"]
+    assert script.get_heads() == ["0017_source_config_version"]
     assert script.get_revision("0018_runtime_features").down_revision == REVISION
     assert script.get_revision("0019_citation_confidence").down_revision == "0018_runtime_features"
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"

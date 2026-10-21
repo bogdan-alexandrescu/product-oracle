@@ -313,3 +313,92 @@ async def test_a_save_that_loaded_the_row_before_a_reconnect_is_validated_as_a_r
     async with tenant_session(tenant_id) as check:
         row = await service.get_source(check, alice.id, created.id)
         assert row.connection_id == other.id
+
+
+# --- A stale save is refused (config_version, owner 2026-10-20) -----------------------
+
+STALE = {
+    "code": "source_changed",
+    "message": "This source changed since you opened it. Reload to see the current picks.",
+}
+
+
+async def _get(client, alice, sid) -> dict:
+    return (await client.get(f"/v1/sources/{sid}", headers=alice.headers)).json()
+
+
+async def test_a_stale_save_with_an_old_base_version_is_refused_and_changes_nothing(
+    client, tenant_id, alice, fake, ff_connector, ff_conn
+):
+    sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
+    opened = (await _get(client, alice, sid))["config_version"]
+    assert opened == 1
+    narrowed = await client.patch(
+        f"/v1/sources/{sid}",
+        headers=alice.headers,
+        json={"config": NARROW_FF, "base_version": opened},
+    )
+    assert narrowed.status_code == 200, narrowed.text
+    assert narrowed.json()["config_version"] == opened + 1
+
+    stale = await client.patch(
+        f"/v1/sources/{sid}",
+        headers=alice.headers,
+        json={"name": "Renamed", "config": WIDE_FF, "base_version": opened},
+    )
+    assert stale.status_code == 409, stale.text
+    assert stale.json() == STALE
+    after = await _get(client, alice, sid)
+    assert after["config"] == NARROW_FF
+    assert after["name"] == "My fireflies"
+    assert after["config_version"] == opened + 1
+    live = await _live(tenant_id, sid)
+    assert live["P1"] is False and live["P2"] is False
+
+
+async def test_a_save_with_the_matching_base_version_is_applied(
+    client, tenant_id, alice, fake, ff_connector, ff_conn
+):
+    sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
+    version = (await _get(client, alice, sid))["config_version"]
+    renamed = await client.patch(
+        f"/v1/sources/{sid}",
+        headers=alice.headers,
+        json={"name": "Renamed", "base_version": version},
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["name"] == "Renamed"
+    assert renamed.json()["config_version"] == version + 1
+
+
+async def test_a_save_without_a_base_version_is_last_write_wins(
+    client, tenant_id, alice, fake, ff_connector, ff_conn
+):
+    sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
+    for config in (NARROW_FF, WIDE_FF):
+        saved = await client.patch(
+            f"/v1/sources/{sid}", headers=alice.headers, json={"config": config}
+        )
+        assert saved.status_code == 200, saved.text
+    after = await _get(client, alice, sid)
+    assert after["config"] == WIDE_FF
+    assert after["config_version"] == 3
+
+
+async def test_a_sync_and_a_pause_do_not_bump_the_config_version(
+    client, tenant_id, alice, fake, ff_connector, ff_conn
+):
+    sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)  # creates and syncs
+    version = (await _get(client, alice, sid))["config_version"]
+    again = await client.post(f"/v1/sources/{sid}/sync", headers=alice.headers)
+    assert again.status_code == 200, again.text
+    await client.post(f"/v1/sources/{sid}/pause", headers=alice.headers)
+    await client.post(f"/v1/sources/{sid}/resume", headers=alice.headers)
+    assert (await _get(client, alice, sid))["config_version"] == version
+    # A form opened before the sync still saves.
+    saved = await client.patch(
+        f"/v1/sources/{sid}",
+        headers=alice.headers,
+        json={"config": NARROW_FF, "base_version": version},
+    )
+    assert saved.status_code == 200, saved.text
