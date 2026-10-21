@@ -45,13 +45,27 @@ CITATION_STRIP_RE = re.compile(r"(?<![ \t])[ \t]*\[c:(?:[^\]\s\[]|\[(?!c:))++\]"
 
 def strip_citations(text: str) -> str:
     """``text`` without its ``[c:id]`` markers. A nested ``[c:[c:x]a]`` leaves ``[c:a]``
-    after one pass, so strip until the text stops changing (at most 3 passes)."""
+    after one pass, so strip until the text stops changing (at most 3 passes). Nesting
+    deeper than that is not real text: every "[c:" left is then dropped in one scan, so
+    nothing CITATION_RE reads survives."""
     for _ in range(3):
         stripped = CITATION_STRIP_RE.sub("", text)
         if stripped == text:
             break
         text = stripped
+    if CITATION_RE.search(text):
+        text = _drop_citation_openers(text)
     return text
+
+
+def _drop_citation_openers(text: str) -> str:
+    """``text`` without "[c:", including ones that dropping another assembles."""
+    out: list[str] = []
+    for ch in text:
+        out.append(ch)
+        if ch == ":" and out[-3:] == ["[", "c", ":"]:
+            del out[-3:]
+    return "".join(out)
 
 
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
