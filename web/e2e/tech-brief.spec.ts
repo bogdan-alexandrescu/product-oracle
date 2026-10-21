@@ -81,3 +81,14 @@ test.describe("on a phone", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 });
+
+test("the PRD's Tech briefs panel shows a load error instead of hiding", async ({ page }) => {
+  // protects=the panel's error path; fails_when=a failed load reads as a PRD without
+  // briefs (the panel disappears).
+  await page.addInitScript(() => localStorage.setItem("po-mock-fail", "/v1/tech-briefs"));
+  await login(page);
+  await page.goto("/documents/checkout-redesign");
+  const panel = page.getByTestId("tech-briefs");
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("alert")).toContainText("Mock failure");
+});
