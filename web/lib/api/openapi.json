@@ -781,6 +781,76 @@
         }
       }
     },
+    "/v1/documents/{doc}/versions/{n}/feedback": {
+      "post": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Create General Feedback",
+        "description": "Feedback on the whole draft, not one section: a ``general`` item (no section).",
+        "operationId": "create_general_feedback",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneralFeedbackCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/comments/{comment_id}/replies": {
       "post": {
         "tags": [
@@ -34195,6 +34265,18 @@
             "type": "string",
             "title": "Summary"
           },
+          "author_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Id"
+          },
           "anchor": {
             "anyOf": [
               {
@@ -35347,6 +35429,38 @@
         ],
         "title": "GateView",
         "description": "The review gate as everyone sees it. ``private_blocking_gap_ids``: for the author\nonly, their private critical blockers, which gate nothing until shared at counts or\nabove (S6)."
+      },
+      "GeneralFeedbackCreate": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "major",
+                  "minor"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "GeneralFeedbackCreate",
+        "description": "Feedback on the whole draft rather than one section: a ``general`` item."
       },
       "GithubRepoOut": {
         "properties": {

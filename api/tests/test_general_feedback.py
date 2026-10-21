@@ -16,6 +16,7 @@ from oracle.models import AuditEvent
 from oracle.review.models import FeedbackItem
 from oracle.tenancy import tenant_session
 from tests.fixtures import draft, import_draft, seed_auth
+from tests.test_mcp import api_token, mcp_client
 from tests.test_runs import as_user, runtime, started  # noqa: F401
 
 SLUG = "checkout-redesign"
@@ -60,7 +61,7 @@ async def test_a_commenter_leaves_a_general_item_on_the_draft(client):
         [event] = (
             await s.scalars(select(AuditEvent).where(AuditEvent.action == "feedback.create"))
         ).all()
-        assert event.target_id == uuid.UUID(item["id"])
+        assert event.entity == "feedback_item" and event.entity_id == uuid.UUID(item["id"])
         assert event.data["kind"] == "general"
         assert event.data["raised_on_version"] == 2
 
@@ -103,8 +104,9 @@ async def test_the_review_comments_job_is_queued_for_it(client):
     assert (await client.post(url(2), json={"body": REMARK}, headers=auth)).status_code == 201
 
     jobs = (await client.get(f"/v1/documents/{SLUG}/llm-jobs", headers=auth)).json()
-    assert [(j["kind"], j["status"], j["version_number"]) for j in jobs] == [
-        ("review_comments", "queued", 2)
+    # (Importing v2 also queued its report.)
+    assert [(j["status"], j["version_number"]) for j in jobs if j["kind"] == "review_comments"] == [
+        ("queued", 2)
     ]
 
 
@@ -118,9 +120,7 @@ async def test_the_feedback_list_and_the_inbox_show_it(client):
     assert [(f["id"], f["kind"], f["section_key"]) for f in listed] == [
         (created["id"], "general", None)
     ]
-    on_v2 = (
-        await client.get(f"/v1/documents/{SLUG}/feedback?version=2", headers=commenter)
-    ).json()
+    on_v2 = (await client.get(f"/v1/documents/{SLUG}/feedback?version=2", headers=commenter)).json()
     assert [f["id"] for f in on_v2] == [created["id"]]
 
     inbox = (await client.get("/v1/inbox", headers=approver)).json()
@@ -164,3 +164,22 @@ async def test_comment_and_verdict_items_carry_their_author_too(client):
         ("comment", lead),
         ("section_review", lead),
     ]
+
+
+async def test_mcp_clients_leave_whole_draft_remarks_with_a_persons_token(client):
+    tenant_id, auth = await two_versions(client)
+    async with mcp_client(await api_token(tenant_id, "commenter")) as c:
+        tools = {t.name: t for t in (await c.list_tools()).tools}
+        assert "create_general_feedback" in tools
+        assert tools["create_general_feedback"].input_schema["required"] == ["doc", "n", "body"]
+        r = await c.call_tool(
+            "create_general_feedback", {"doc": SLUG, "n": 2, "body": {"body": REMARK}}
+        )
+        assert not r.is_error, r.content
+    async with mcp_client(await api_token(tenant_id, "viewer")) as c:
+        r = await c.call_tool(
+            "create_general_feedback", {"doc": SLUG, "n": 2, "body": {"body": REMARK}}
+        )
+        assert r.is_error
+    listed = (await client.get(f"/v1/documents/{SLUG}/feedback", headers=auth)).json()
+    assert [(f["kind"], f["summary"]) for f in listed] == [("general", REMARK)]

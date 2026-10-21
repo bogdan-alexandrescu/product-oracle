@@ -192,6 +192,7 @@ async def feedback_out(
                 section_review_id=item.section_review_id,
                 section_key=item.section_key,
                 summary=item.summary,
+                author_id=item.author_id,
                 anchor=TextQuoteSelector(**anchor) if anchor else None,
                 verdict=verdicts.get(item.section_review_id) if item.section_review_id else None,
                 status=item.status,
@@ -291,6 +292,7 @@ async def create_comment(
         comment_id=comment.id,
         section_key=section_key,
         summary=body,
+        author_id=principal.id,
         status="open",
         severity=severity,
         created_at=comment.created_at,
@@ -324,6 +326,48 @@ async def create_comment(
         },
     )
     return _comment_out(comment, feedback_item_id=item.id, layer=section.layer)
+
+
+async def create_general_feedback(
+    session: AsyncSession,
+    principal: "Principal",
+    doc: str,
+    n: int,
+    body: str,
+    severity: str | None = None,
+) -> FeedbackItemOut:
+    """Feedback on the whole draft (D13): a ``general`` item with no section, raised on
+    version ``n`` by ``principal``."""
+    version = await get_version(session, doc, n)
+    item = FeedbackItem(
+        document_id=version.document_id,
+        raised_on_version=version.number,
+        kind="general",
+        section_key=None,
+        summary=body,
+        author_id=principal.id,
+        status="open",
+        severity=severity,
+        created_at=_now(),
+    )
+    session.add(item)
+    await session.flush()
+    await _mark_in_review(session, await session.get(Document, version.document_id))
+    await audit.record(
+        session,
+        principal,
+        "feedback.create",
+        "feedback_item",
+        item.id,
+        {
+            "kind": "general",
+            "raised_on_version": version.number,
+            **({"severity": severity} if severity else {}),
+        },
+    )
+    await session.refresh(item)
+    [out] = await feedback_out(session, [item])
+    return out
 
 
 async def list_comments(session: AsyncSession, doc: str, n: int) -> list[CommentOut]:
@@ -606,6 +650,7 @@ async def review_section(
             section_review_id=review.id,
             section_key=section_key,
             summary=f"{label}: {note}" if note else f"{label} (section {section_key})",
+            author_id=review.reviewer_id,
             status="open",
             severity=severity,
             created_at=review.created_at,

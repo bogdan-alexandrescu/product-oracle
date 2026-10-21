@@ -43,6 +43,17 @@ class CommentCreate(BaseModel):
     severity: Severity | None = None
 
 
+# A whole-draft remark's longest body (D13 General feedback).
+GENERAL_FEEDBACK_MAX = 4000
+
+
+class GeneralFeedbackCreate(BaseModel):
+    """Feedback on the whole draft rather than one section: a ``general`` item."""
+
+    body: str = Field(min_length=1, max_length=GENERAL_FEEDBACK_MAX)
+    severity: Severity | None = None
+
+
 class ReplyCreate(BaseModel):
     body: str = Field(min_length=1)
 
@@ -103,6 +114,8 @@ class FeedbackItemOut(ORM):
     section_review_id: uuid.UUID | None = None
     section_key: str | None = None
     summary: str
+    # Who raised it (a user id or an API token id); null on older items without one.
+    author_id: uuid.UUID | None = None
     # Copied from the comment / verdict so the agent track needs no extra calls.
     anchor: TextQuoteSelector | None = None
     verdict: Verdict | None = None

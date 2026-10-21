@@ -110,7 +110,11 @@ def test_upgrade_fills_the_author_and_downgrade_drops_it(scratch_db):
     command.upgrade(cfg, REVISION)
 
     rows = dict(_run("SELECT id, author_id FROM feedback_items"))
-    assert rows == {items["comment"]: author, items["section_review"]: reviewer, items["general"]: None}
+    assert rows == {
+        items["comment"]: author,
+        items["section_review"]: reviewer,
+        items["general"]: None,
+    }
 
     command.downgrade(cfg, "0014_member_follow_up_retry")
     cols = _run(
