@@ -170,6 +170,7 @@ from oracle.runs.schemas import (
     KnobsOut,
     PreviousAttempt,
     RunCreate,
+    RunDecision,
     RunOut,
     RunPatch,
     RunProgress,
@@ -785,6 +786,110 @@ def _segment_out(
         finished_at=segment.finished_at,
         error=segment.error,
     )
+
+
+# D11: how a decision reads for the run's agents and on the run page.
+CHECKPOINT_TITLES = {
+    "baseline_confirm": "Baseline",
+    "feature_set": "Feature set",
+    "priority_order": "Priority order",
+    "prd_review": "PRD review",
+    "eng_review": "Engineering review",
+    "roadmap_items": "Roadmap items",
+    "roadmap_review": "Roadmap review",
+}
+_LISTED = ("approved", "changes_requested", "skipped")
+
+
+def _record_decider(cp: Checkpoint, role: str | None, via: str) -> None:
+    """Who decided ``cp``, by role, and where (:func:`list_decisions`); kept on the
+    checkpoint as it is decided, so a later change of the member's role does not alter
+    what the run's agents read."""
+    cp.payload = {**copy.deepcopy(cp.payload or {}), "decided": {"role": role, "via": via}}
+
+
+def decision_summary(
+    kind: str, status: str, role: str | None, via: str, note: str | None, delivered: bool
+) -> str:
+    """One line: "Feature set · approved by an approver · note: Keep bulk import out"."""
+    what = status.replace("_", " ")
+    if role:
+        what += f" by {'an' if role[0] in 'aeiou' else 'a'} {role}"
+    if via == "swarmcloud_console":
+        what += " in SwarmCloud's console"
+    parts = [CHECKPOINT_TITLES.get(kind, kind), what]
+    if note:
+        parts.append(f"note: {note}")
+    if not delivered:
+        parts.append("not delivered to the run yet")
+    return " · ".join(parts)
+
+
+async def list_decisions(
+    db: AsyncSession, run_id: uuid.UUID, principal: Principal
+) -> list[RunDecision]:
+    """Every decided checkpoint of the run, by segment then decided time (pending ones,
+    a console answer held for an approver included, are not decisions yet). A run's own
+    call reads its own run only."""
+    if principal.run_id is not None and principal.run_id != run_id:
+        raise NotFound(f"run {run_id} not found")
+    run = await _get_run(db, run_id)
+    flow = _flow(run)
+    decided = [c for c in await _checkpoints(db, [run.id]) if c.status in _LISTED]
+    # Decisions recorded before the decider was kept on the checkpoint: their role now.
+    ids = {
+        c.decided_by
+        for c in decided
+        if c.decided_by is not None and "decided" not in (c.payload or {})
+    }
+    roles: dict[uuid.UUID, str] = {}
+    if ids:
+        roles = dict((await db.execute(select(User.id, User.role).where(User.id.in_(ids)))).all())
+        if rest := ids - set(roles):
+            roles.update(
+                (
+                    await db.execute(
+                        select(ApiToken.id, ApiToken.role).where(ApiToken.id.in_(rest))
+                    )
+                ).all()
+            )
+    out: list[RunDecision] = []
+    for cp in decided:
+        payload = cp.payload or {}
+        mark = payload.get("decided")
+        if isinstance(mark, dict):
+            role, via = mark.get("role"), mark.get("via") or "oracle"
+        else:
+            role = roles.get(cp.decided_by) if cp.decided_by else None
+            via = "oracle"
+        seq = payload.get("segment_seq")
+        name = payload.get("segment")
+        title = None
+        if name and any(s.name == name for s in flow.segments):
+            title = flow.segment(name).title
+        extra = payload.get("review") if isinstance(payload.get("review"), dict) else {}
+        delivered = not _owes(cp)
+        out.append(
+            RunDecision(
+                checkpoint_id=cp.id,
+                kind=cp.kind,  # type: ignore[arg-type]
+                segment_seq=seq,
+                segment_title=title,
+                attempt=payload.get("attempt"),
+                status=cp.status,  # type: ignore[arg-type]
+                decided_at=cp.decided_at,
+                decided_by_role=role,
+                via=via,
+                note=cp.note,
+                edits=extra.get("edits"),
+                review=extra.get("review"),
+                delivered=delivered,
+                summary=decision_summary(cp.kind, cp.status, role, via, cp.note, delivered),
+            )
+        )
+    far = datetime.max.replace(tzinfo=UTC)
+    out.sort(key=lambda d: (d.segment_seq or 0, d.decided_at or far))
+    return out
 
 
 async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | None) -> RunOut:
@@ -4920,6 +5025,8 @@ async def _take_answer(
     cp.status = "approved" if approved else "changes_requested"
     cp.decided_at = record.answered_at or _now()
     cp.note = applied
+    if not ours:
+        _record_decider(cp, member.role if member is not None else None, "swarmcloud_console")
     if member is not None:
         cp.decided_by = member.id
     elif ours and record.on_behalf_of:
@@ -5346,7 +5453,12 @@ async def decide_checkpoint(
     note = (note or "").strip() or None
     wait = (cp.payload or {}).get("wait") or {}
     redo = False
+    # Who decided, as the run's agents read it (list_decisions): the Inbox's decider, or
+    # for a confirmed console answer its author, by role.
+    decider: tuple[str | None, str] = (principal.role, "oracle")
     if decision in ("confirm", "redo", "continue"):
+        if decision == "confirm":
+            decider = ((wait.get("console") or {}).get("role"), "swarmcloud_console")
         decision, note, redo = _console_choice(cp, wait, decision, note)
         if decision == "confirm":
             # A console change request where the workflow has no revision step: now
@@ -5388,6 +5500,7 @@ async def decide_checkpoint(
     cp.decided_by = principal.id
     cp.decided_at = _now()
     cp.note = note
+    _record_decider(cp, *decider)
     await audit.record(
         db,
         principal,

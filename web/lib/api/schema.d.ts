@@ -3206,6 +3206,29 @@ export interface paths {
         patch: operations["update_run"];
         trace?: never;
     };
+    "/v1/runs/{run_id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Run Decisions
+         * @description What people decided at the run's checkpoints, by segment then decided time: role
+         *     (never a name), when, the decision, the note, the edits applied and the review sent
+         *     back. Pending checkpoints are not listed. A run's agents read their own run's with
+         *     the get_checkpoint_review tool.
+         */
+        get: operations["list_run_decisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/estimate": {
         parameters: {
             query?: never;
@@ -15136,6 +15159,63 @@ export interface components {
              */
             knobs: components["schemas"]["KnobsIn"];
         };
+        /**
+         * RunDecision
+         * @description A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):
+         *     who decided by role only (no names reach the agents), when, and what. A console
+         *     answer is a decision once it is followed: one held for an approver is still pending
+         *     and not listed.
+         */
+        RunDecision: {
+            /**
+             * Checkpoint Id
+             * Format: uuid
+             */
+            checkpoint_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review";
+            /** Segment Seq */
+            segment_seq?: number | null;
+            /** Segment Title */
+            segment_title?: string | null;
+            /** Attempt */
+            attempt?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "approved" | "changes_requested" | "skipped";
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decided By Role */
+            decided_by_role?: ("viewer" | "commenter" | "approver" | "owner") | null;
+            /**
+             * Via
+             * @default oracle
+             * @enum {string}
+             */
+            via: "oracle" | "swarmcloud_console";
+            /** Note */
+            note?: string | null;
+            /** Edits */
+            edits?: {
+                [key: string]: unknown;
+            } | null;
+            /** Review */
+            review?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Delivered
+             * @default true
+             */
+            delivered: boolean;
+            /** Summary */
+            summary: string;
+        };
         /** RunOut */
         RunOut: {
             /**
@@ -25348,6 +25428,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_run_decisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunDecision"][];
                 };
             };
             /** @description Validation Error */

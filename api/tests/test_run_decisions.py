@@ -176,6 +176,7 @@ async def test_skipped_checkpoints_are_listed_and_a_run_without_decisions_is_emp
     _, auth = owner
     run = await started(client, auth, checkpoints={"baseline_confirm": False})
     assert await decisions(client, auth, run["id"]) == []
+    await tick(client, auth)  # the baseline, with no stop after it
     run = await at(client, auth, run["id"], "feature_set")
     [skipped] = await decisions(client, auth, run["id"])
     assert skipped["kind"] == "baseline_confirm" and skipped["status"] == "skipped"
@@ -293,8 +294,9 @@ async def test_an_approval_after_the_workflow_was_planned_reaches_its_agents(
     run = await decide(client, auth, run, note=NOTE)
     # One workflow, planned before either approval: no prompt carries the note.
     assert len(swarm.submissions()) == 1
+    # The agents' steps (the waits are a person's).
     prompts = [
-        s["input"]["prompt"] for s in swarm.submissions()[0]["steps"] if "prompt" in s["input"]
+        s["input"]["prompt"] for s in swarm.submissions()[0]["steps"] if "await_input" not in s
     ]
     assert prompts and all(NOTE not in p for p in prompts)
     assert all(READ_FIRST in p and "get_checkpoint_review" in p for p in prompts)

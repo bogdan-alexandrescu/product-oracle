@@ -717,10 +717,12 @@ function importSections(
 }
 
 function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
+  const member = db.members.find((m) => m.email === db.session) ?? db.members.find((m) => m.id === db.user_id);
   return {
     db: db.runs,
     userId: db.user_id,
     userName: db.session ?? db.members.find((m) => m.id === db.user_id)?.email ?? null,
+    userRole: member ? withMockRole(member).role : null,
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     feedback: db.feedback,
     documents: db.documents,

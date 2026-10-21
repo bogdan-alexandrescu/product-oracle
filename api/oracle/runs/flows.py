@@ -50,7 +50,17 @@ MCP_TOOLS = {
     "push_draft": "hand back a draft for import as the document's next version",
     "get_run_output": "a file an earlier segment of this run wrote (seq and name), or with "
     "attempt a segment's previous attempt",
+    "get_checkpoint_review": "decisions people made at this run's checkpoints (notes, applied "
+    "edits, reviews)",
 }
+
+# D11: a workflow's prompts are written when it is submitted; decisions made later are
+# read at run time.
+READ_DECISIONS_FIRST = (
+    "Before you start, read the run's checkpoint decisions with get_checkpoint_review: "
+    "approvals made after this workflow was planned are only there. Follow them; if one "
+    "conflicts with your task, say so in your output."
+)
 
 
 @dataclass(frozen=True)
@@ -170,7 +180,13 @@ FLOWS: dict[str, FlowDef] = {
                     "entities and edges, as get_baseline and `oracle baseline pull` give it) "
                     "and a one-page summary to summary.md. Oracle merges baseline.yaml into "
                     "the baseline when the segment ends: locked items become proposals.",
-                    tools=("search", "get_source_item", "get_baseline", "propose_change"),
+                    tools=(
+                        "search",
+                        "get_source_item",
+                        "get_baseline",
+                        "propose_change",
+                        "get_checkpoint_review",
+                    ),
                 ),
                 SegmentDef(
                     name="feature_set",
@@ -189,6 +205,7 @@ FLOWS: dict[str, FlowDef] = {
                         "search",
                         "get_source_item",
                         "propose_change",
+                        "get_checkpoint_review",
                     ),
                 ),
                 SegmentDef(
@@ -200,7 +217,12 @@ FLOWS: dict[str, FlowDef] = {
                     checkpoint="priority_order",
                     task="Order the approved feature set by goal-weighted priority, respecting "
                     "dependencies. Explain every number. Write the order to priority.yaml.",
-                    tools=("get_baseline", "trace_feature", "propose_change"),
+                    tools=(
+                        "get_baseline",
+                        "trace_feature",
+                        "propose_change",
+                        "get_checkpoint_review",
+                    ),
                 ),
                 SegmentDef(
                     name="prd_draft",
@@ -220,6 +242,7 @@ FLOWS: dict[str, FlowDef] = {
                         "search",
                         "get_source_item",
                         "push_draft",
+                        "get_checkpoint_review",
                     ),
                 ),
             ),
@@ -254,6 +277,7 @@ FLOWS: dict[str, FlowDef] = {
                         "search",
                         "get_source_item",
                         "push_draft",
+                        "get_checkpoint_review",
                     ),
                 ),
             ),
@@ -297,6 +321,7 @@ FLOWS: dict[str, FlowDef] = {
                         "get_priorities",
                         "search",
                         "get_source_item",
+                        "get_checkpoint_review",
                     ),
                 ),
                 SegmentDef(
@@ -324,6 +349,7 @@ FLOWS: dict[str, FlowDef] = {
                         "get_baseline",
                         "search",
                         "get_source_item",
+                        "get_checkpoint_review",
                     ),
                 ),
             ),
@@ -536,6 +562,8 @@ def step_prompt(
             "prompt and say which claims you could not check. Tools it will offer:"
         )
     lines += [f"- {t}: {MCP_TOOLS[t]}" for t in segment.tools]
+    if ctx.mcp_reachable and len(flow.segments) > 1:
+        lines += ["", READ_DECISIONS_FIRST]
     lines += [
         "",
         "Evidence: every source item and piece of evidence carries a confidence score "

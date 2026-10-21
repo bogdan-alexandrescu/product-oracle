@@ -11483,6 +11483,62 @@
         }
       }
     },
+    "/v1/runs/{run_id}/decisions": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Run Decisions",
+        "description": "What people decided at the run's checkpoints, by segment then decided time: role\n(never a name), when, the decision, the note, the edits applied and the review sent\nback. Pending checkpoints are not listed. A run's agents read their own run's with\nthe get_checkpoint_review tool.",
+        "operationId": "list_run_decisions",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunDecision"
+                  },
+                  "title": "Response List Run Decisions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/runs/{run_id}/estimate": {
       "post": {
         "tags": [
@@ -46908,6 +46964,161 @@
           "flow"
         ],
         "title": "RunCreate"
+      },
+      "RunDecision": {
+        "properties": {
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checkpoint Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "baseline_confirm",
+              "feature_set",
+              "priority_order",
+              "prd_review",
+              "eng_review",
+              "roadmap_items",
+              "roadmap_review"
+            ],
+            "title": "Kind"
+          },
+          "segment_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segment Seq"
+          },
+          "segment_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segment Title"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "changes_requested",
+              "skipped"
+            ],
+            "title": "Status"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by_role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "viewer",
+                  "commenter",
+                  "approver",
+                  "owner"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Role"
+          },
+          "via": {
+            "type": "string",
+            "enum": [
+              "oracle",
+              "swarmcloud_console"
+            ],
+            "title": "Via",
+            "default": "oracle"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "edits": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edits"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review"
+          },
+          "delivered": {
+            "type": "boolean",
+            "title": "Delivered",
+            "default": true
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkpoint_id",
+          "kind",
+          "status",
+          "summary"
+        ],
+        "title": "RunDecision",
+        "description": "A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):\nwho decided by role only (no names reach the agents), when, and what. A console\nanswer is a decision once it is followed: one held for an approver is still pending\nand not listed."
       },
       "RunOut": {
         "properties": {

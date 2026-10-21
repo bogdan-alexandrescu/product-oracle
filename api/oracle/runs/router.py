@@ -31,6 +31,7 @@ from oracle.runs.schemas import (
     InboxOut,
     McpServerRegistration,
     RunCreate,
+    RunDecision,
     RunOut,
     RunPatch,
     RunStatus,
@@ -131,6 +132,17 @@ async def create_run(body: RunCreate, principal: ApproverNow, db: TenantDB) -> R
 @router.get("/runs/{run_id}", response_model=RunOut)
 async def get_run(run_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB) -> RunOut:
     return await _call(service.read_run(db, run_id, principal))
+
+
+@router.get("/runs/{run_id}/decisions", response_model=list[RunDecision])
+async def list_run_decisions(
+    run_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
+) -> list[RunDecision]:
+    """What people decided at the run's checkpoints, by segment then decided time: role
+    (never a name), when, the decision, the note, the edits applied and the review sent
+    back. Pending checkpoints are not listed. A run's agents read their own run's with
+    the get_checkpoint_review tool."""
+    return await _call(service.list_decisions(db, run_id, principal))
 
 
 @router.patch("/runs/{run_id}", response_model=RunOut)
