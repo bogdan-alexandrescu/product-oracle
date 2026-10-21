@@ -461,6 +461,28 @@ async def test_a_section_missing_from_the_answer_stays_staged(client, ctx, pool,
     assert fb[ids["sol"]]["state"] == "staged"
 
 
+async def test_a_section_past_the_200k_cap_is_skipped_with_its_reason(client, ctx, pool, fake):
+    # Model output is capped like an approver's edit: the house rules never read more.
+    await staged_setup(client, ctx, fake)
+    resp = await client.post(f"{DOC}/next-draft", json={}, headers=ctx["headers"])
+    job = resp.json()
+
+    def long_solution(payload):
+        out = batch_answer(payload)
+        for s in out["sections"]:
+            if s["section_key"] == "solution":
+                s["body_md"] = "a" * 200_001
+        return out
+
+    fake.script["refinement_batch"].append(long_solution)
+    await tick(client, ctx)
+    preview = (await client.get(f"{DOC}/next-draft/{job['id']}", headers=ctx["headers"])).json()
+    assert [s["section_key"] for s in preview["sections"]] == ["goal-trace"]
+    [skipped] = preview["skipped"]
+    assert skipped["section_key"] == "solution", skipped
+    assert "200,000 characters" in skipped["reason"], skipped
+
+
 async def test_single_section_refine_and_apply_still_work(client, ctx, pool, fake):
     ids = await staged_setup(client, ctx, fake)
     resp = await client.post(V(1, "/sections/solution/refine"), json={}, headers=ctx["headers"])

@@ -38430,7 +38430,8 @@
           },
           "edits": {
             "additionalProperties": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 200000
             },
             "type": "object",
             "title": "Edits",
@@ -41713,7 +41714,8 @@
           "body_md": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 200000
               },
               {
                 "type": "null"
@@ -47222,6 +47224,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 200000,
                 "minLength": 1
               },
               {
@@ -47484,6 +47487,7 @@
         "properties": {
           "text": {
             "type": "string",
+            "maxLength": 200000,
             "minLength": 1,
             "title": "Text"
           }
