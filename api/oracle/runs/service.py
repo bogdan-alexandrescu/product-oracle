@@ -4907,7 +4907,7 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
                 # (its cost, the ceiling, its workflow's end): a post that keeps failing
                 # must not stop Oracle from watching the run.
                 try:
-                    await _complete_decision(db, run_id, owed, deadline)
+                    await _complete_decision(db, run_id, owed, deadline, stats)
                 except Unavailable as exc:
                     errors.append(f"run {run_id}: {exc}")
             # Each replay puts back only what its own unfinished passes counted: what an
@@ -5143,24 +5143,42 @@ async def _owed_decision(db: AsyncSession, run_id: uuid.UUID) -> uuid.UUID | Non
 
 
 async def _complete_decision(
-    db: AsyncSession, run_id: uuid.UUID, checkpoint_id: uuid.UUID, deadline: float | None
+    db: AsyncSession,
+    run_id: uuid.UUID,
+    checkpoint_id: uuid.UUID,
+    deadline: float | None,
+    stats: _TickStats | None = None,
 ) -> None:
     """Finish a recorded decision: the request that recorded it does so right after its
     commit; the tick does for one that never finished (a crash, a failed post). The calls
     to SwarmCloud are made outside the review gate and the run's row lock
     (:func:`_replay`). Commits; raises Unavailable when it did not finish (the marker
-    stays, the tick tries again)."""
-    await _replay(db, deadline, lambda: _finish_decision(db, run_id, checkpoint_id))
+    stays, the tick tries again). ``stats``: the tick's, for what the cancel it may need
+    counts (its errors, a pause on the ceiling); a request logs those."""
+    mine = stats or _TickStats()
+    try:
+        await _replay(
+            db,
+            deadline,
+            lambda: _finish_decision(db, run_id, checkpoint_id, mine),
+            reset=_resetter(mine),
+        )
+    finally:
+        if stats is None:
+            for error in mine.errors:
+                log.warning("decision on run %s: %s", run_id, error)
 
 
-async def _finish_decision(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: uuid.UUID) -> None:
+async def _finish_decision(
+    db: AsyncSession, run_id: uuid.UUID, checkpoint_id: uuid.UUID, stats: _TickStats
+) -> None:
     """The follow-through of a decision recorded by :func:`decide_checkpoint`, on the run
     as it is now (locked, read afresh): post it to the wait in the live workflow (the same
     answer id and body every time, so a post made twice is one answer), or cancel the
     workflow and go on as a new one. Done, the marker is dropped, in the same commit as
     its effect."""
     try:
-        await _finish_decision_now(db, run_id, checkpoint_id)
+        await _finish_decision_now(db, run_id, checkpoint_id, stats)
     except _PostNotFound as exc:
         await _count_post_404(db, run_id, checkpoint_id, exc.cause)  # decided again by a person
         raise
@@ -5204,7 +5222,7 @@ async def _finish_decision(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: u
 
 
 async def _finish_decision_now(
-    db: AsyncSession, run_id: uuid.UUID, checkpoint_id: uuid.UUID
+    db: AsyncSession, run_id: uuid.UUID, checkpoint_id: uuid.UUID, stats: _TickStats
 ) -> None:
     from oracle.review import publish
 
@@ -5239,7 +5257,7 @@ async def _finish_decision_now(
         await db.commit()
         return
     try:
-        await _deliver_decision(db, run, cp, wait, posting)
+        await _deliver_decision(db, run, cp, wait, posting, stats)
     except Unavailable as exc:
         held = _live(run)
         if held is not None and held.get("cancel_pending"):
@@ -5250,7 +5268,12 @@ async def _finish_decision_now(
 
 
 async def _deliver_decision(
-    db: AsyncSession, run: Run, cp: Checkpoint, wait: dict[str, Any], posting: dict[str, Any]
+    db: AsyncSession,
+    run: Run,
+    cp: Checkpoint,
+    wait: dict[str, Any],
+    posting: dict[str, Any],
+    stats: _TickStats,
 ) -> None:
     segments = await _segments(db, run.id)
     seq = (cp.payload or {}).get("segment_seq")
@@ -5265,7 +5288,7 @@ async def _deliver_decision(
     if held is not None and held.get("cancel_pending"):
         # A cancel not confirmed yet (an earlier try, or the one the run was cancelled
         # with): made again; nothing is submitted after a workflow that may still run.
-        if not await _retry_pending_cancel(db, run, held, segments, _TickStats()):
+        if not await _retry_pending_cancel(db, run, held, segments, stats):
             await db.commit()  # the cancel's tries and cost, counted
             raise _unconfirmed("go on with the decision")
     wf = _drivable(run)
