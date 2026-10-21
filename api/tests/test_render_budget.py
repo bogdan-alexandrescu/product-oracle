@@ -1103,6 +1103,192 @@ async def test_parallel_requests_for_one_deck_build_it_once(
     assert bodies[0]["slides"] and all(b == bodies[0] for b in bodies)
 
 
+# Review of PR #134 (2026-10-21): the requests waiting for a deck's build share how it ended.
+# A failed build is not built again by each of them in turn (five viewers of a deck whose
+# build times out would wait up to five times the queue); a refusal that is its builder's
+# person's own (``present_busy_you``) lets another person's waiter build it in its own place.
+
+
+def count_present_places(monkeypatch) -> list[int]:
+    """How many Present places were asked for (taken or refused)."""
+    calls = [0]
+    real = offload._admit
+
+    def counted(principal, present):
+        calls[0] += present
+        return real(principal, present)
+
+    monkeypatch.setattr(offload, "_admit", counted)
+    return calls
+
+
+def count_requests(monkeypatch) -> list[int]:
+    """How many requests reached the deck (each then reads it, waits for it or builds it,
+    with nothing awaited in between)."""
+    from oracle.export import present
+
+    return count_calls(monkeypatch, present, "key")
+
+
+async def no_place_held() -> None:
+    """Every place is free again (abandoned renders finish on the pool first)."""
+    await until(lambda: not (offload._presenters or offload._people or offload._companies))
+
+
+async def test_one_deck_refused_busy_is_one_build_attempt_for_all_its_waiters(client, monkeypatch):
+    held = Held(monkeypatch)
+    decks = HeldDecks(monkeypatch, held=False)
+    monkeypatch.setattr(offload, "QUEUE_SECONDS", 1.0)
+    a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
+    viewers = [await _token(c, "viewer") for _ in range(5)]
+    blockers = []
+    try:
+        blockers += await _fill(client, a, b)
+        await until(lambda: held.started == 4)  # no worker free
+        places = count_present_places(monkeypatch)
+        arrived = count_requests(monkeypatch)
+        began = time.monotonic()
+        tasks = [asyncio.create_task(client.get(deck_url(), headers=h)) for h in viewers]
+        await until(lambda: arrived[0] == 5)
+        responses = await asyncio.wait_for(asyncio.gather(*tasks), 15)
+        took = time.monotonic() - began
+        for resp in responses:
+            assert resp.status_code == 503, resp.text
+            _busy(resp, "export_busy")
+            _retry(resp)
+        assert places[0] == 1  # one build attempt, shared
+        assert took < 2.5, f"the waiters took {took:.1f} s (about one queue wait expected)"
+    finally:
+        held.release()
+    for t in blockers:
+        assert (await t).status_code == 200
+    assert decks.started == 0
+    await no_place_held()
+
+
+@pytest.mark.parametrize("failure", ["too_large", "error"])
+async def test_a_failed_deck_build_fails_its_waiters_alike_and_is_not_built_again(
+    tenant_id,
+    doc,  # noqa: F811
+    monkeypatch,
+    failure,
+):
+    import httpx
+
+    from oracle.main import app
+
+    decks = HeldDecks(monkeypatch)
+    if failure == "too_large":
+        monkeypatch.setattr(offload, "SECONDS", 1.0)
+        expected = 422
+    else:
+
+        def broken(ev):
+            raise RuntimeError("the deck could not be built")
+
+        decks.real = broken
+        expected = 500
+    places = count_present_places(monkeypatch)
+    arrived = count_requests(monkeypatch)
+    viewers = [await _token(tenant_id, "viewer") for _ in range(3)]
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        tasks = [asyncio.create_task(client.get(deck_url(), headers=h)) for h in viewers]
+        try:
+            await until(lambda: arrived[0] == 3 and decks.started == 1)
+            if failure == "error":
+                decks.release()
+            responses = await asyncio.wait_for(asyncio.gather(*tasks), 15)
+        finally:
+            decks.release()
+    for resp in responses:
+        assert resp.status_code == expected, resp.text
+    if failure == "too_large":
+        assert {r.json()["detail"] for r in responses} == {offload.TOO_LARGE}
+    assert decks.started == 1  # build_deck called once
+    assert places[0] == 1
+    await no_place_held()
+
+
+async def test_a_builder_refused_its_own_person_s_share_leaves_others_their_own_build(
+    client,
+    tenant_id,
+    doc,  # noqa: F811
+    monkeypatch,
+):
+    """A refusal that belongs to the builder's person (``present_busy_you``: their Present
+    places are taken) is not another person's: that one builds the deck in a place of its
+    own, once. The same person's other request is refused alike. (``offload.place`` refuses
+    before any request can wait for the build; here the refusal comes after they do.)"""
+    decks = HeldDecks(monkeypatch, held=False)
+    places = count_present_places(monkeypatch)
+    arrived = count_requests(monkeypatch)
+    refuse = asyncio.Event()
+    real_run = offload.run
+    runs = [0]
+
+    async def run(held, fn, *args):
+        runs[0] += 1
+        if runs[0] == 1:
+            await refuse.wait()
+            raise offload.Refused(429, "present_busy_you", offload.PRESENT_BUSY_YOU)
+        return await real_run(held, fn, *args)
+
+    monkeypatch.setattr(offload, "run", run)
+    person, other = await _token(tenant_id, "viewer"), await _token(tenant_id, "viewer")
+    builder = asyncio.create_task(client.get(deck_url(), headers=person))
+    try:
+        await until(lambda: runs[0] == 1)
+        same = asyncio.create_task(client.get(deck_url(), headers=person))
+        another = asyncio.create_task(client.get(deck_url(), headers=other))
+        await until(lambda: arrived[0] == 3)
+    finally:
+        refuse.set()
+    first, again, theirs = await asyncio.wait_for(asyncio.gather(builder, same, another), 15)
+    for resp in (first, again):
+        assert resp.status_code == 429, resp.text[:300]
+        assert _busy(resp, "present_busy_you")["message"] == offload.PRESENT_BUSY_YOU
+    assert theirs.status_code == 200, theirs.text
+    assert theirs.json()["slides"]
+    assert decks.started == 1
+    assert places[0] == 2  # the builder's, then the other person's own
+    await no_place_held()
+
+
+async def test_a_cancelled_deck_build_never_leaves_its_waiters_hanging(
+    client,
+    tenant_id,
+    doc,  # noqa: F811
+    monkeypatch,
+):
+    """The builder's request goes away (its client disconnected): one waiter builds the deck
+    instead, once, and every waiter is answered."""
+    decks = HeldDecks(monkeypatch)
+    places = count_present_places(monkeypatch)
+    arrived = count_requests(monkeypatch)
+    viewers = [await _token(tenant_id, "viewer") for _ in range(4)]
+    builder = asyncio.create_task(client.get(deck_url(), headers=viewers[0]))
+    waiters = []
+    try:
+        await until(lambda: decks.started == 1)
+        waiters = [asyncio.create_task(client.get(deck_url(), headers=h)) for h in viewers[1:]]
+        await until(lambda: arrived[0] == 4)
+        builder.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await builder
+        await until(lambda: decks.started == 2)  # one waiter took the build over
+        decks.release()
+        responses = await asyncio.wait_for(asyncio.gather(*waiters), 15)
+    finally:
+        decks.release()
+    for resp in responses:
+        assert resp.status_code == 200, resp.text
+    assert all(r.json() == responses[0].json() for r in responses)
+    assert places[0] == 2  # the cancelled build's and the one that took over
+    assert decks.started == 2
+    await no_place_held()
+
+
 async def test_a_kept_deck_is_never_served_to_another_company(client, monkeypatch):
     decks = HeldDecks(monkeypatch, held=False)
     a, b = await _company(client, "A Co"), await _company(client, "B Co")
