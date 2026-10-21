@@ -274,7 +274,7 @@ export function feedbackNeeds(inbox: InboxOut, seenBefore: string | null | undef
           <Link href={href} className="min-w-0 truncate hover:underline" title={f.summary}>
             {f.summary}
           </Link>
-          {f.section_key && f.kind !== "general" ? (
+          {f.section_key ? (
             <span className="flex-none font-mono text-[13px] text-text2">#{f.section_key}</span>
           ) : (
             // D13: feedback on the whole draft names no section.

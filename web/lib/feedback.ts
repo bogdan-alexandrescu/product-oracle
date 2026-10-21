@@ -94,9 +94,9 @@ export function openBySection(entries: FeedbackEntry[]): Map<string, number> {
   return m;
 }
 
-/** Feedback on the whole draft (D13): a "general" item, or any item without a section. */
-export function isGeneralFeedback(f: Pick<FeedbackItem, "kind" | "section_key">): boolean {
-  return f.kind === "general" || !f.section_key;
+/** Feedback on the whole draft (D13): an item about no one section. */
+export function isGeneralFeedback(f: Pick<FeedbackItem, "section_key">): boolean {
+  return !f.section_key;
 }
 
 /** A whole-draft remark's longest body (the API's limit). */
