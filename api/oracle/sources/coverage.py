@@ -133,7 +133,11 @@ def _item_stats(group: list, where, settings: dict[str, Any] | None, now: dateti
 
 
 def _uses():
-    """Every use of a source item, one row each: (kind, item_id, document_id)."""
+    """Every use of a source item, one row each: (kind, item_id, document_id). Uses are
+    baseline evidence (``evidence.source_item_id``), citations (``citations.item_id``) and
+    section links (``document_section_links.source_item_id``); ``used.documents`` counts the
+    distinct ``document_id`` across the citations (through ``document_versions``) and the
+    section links."""
     return union_all(
         select(
             literal("evidence").label("kind"),

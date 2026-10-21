@@ -71,7 +71,7 @@ export function CompanyTable({
       width: "84px",
       align: "right",
       phone: "meta",
-      phoneLabel: "Sources ",
+      phoneLabel: "Sources",
       cell: (r) => (
         <span className="tnum" data-testid="company-sources">
           {r.kind?.sources ?? 0}

@@ -340,6 +340,26 @@ async def test_the_list_runs_four_statements_whatever_the_number_of_sources(ctx,
     assert len(seen) == 4, seen
 
 
+# --- MCP surface ----------------------------------------------------------------------
+
+
+def test_the_three_routes_are_mcp_read_tools():
+    """protects=coverage reaches people's MCP clients as three read tools (3.3);
+    fails_when=a route is renamed, excluded, or not a GET;
+    no_claim=who may call them (the role and run tests above)."""
+    from oracle.main import app
+    from oracle.mcp.tools import app_operations
+
+    ops = {o.tool_name: o for o in app_operations(app)}
+    for name, path in (
+        ("list_source_coverage", "/v1/sources/coverage"),
+        ("get_source_coverage", "/v1/sources/{source_id}/coverage"),
+        ("get_company_source_coverage", "/v1/sources/coverage/company"),
+    ):
+        op = ops[name]
+        assert (op.method, op.path, op.excluded) == ("GET", path, None)
+
+
 # --- AC 9: route order ------------------------------------------------------------------
 
 

@@ -134,6 +134,7 @@ export function CoverageTable({
       header: "Items",
       width: "80px",
       align: "right",
+      phoneLabel: "Items",
       cell: (c) => (
         <span className="tnum" data-testid="coverage-items">
           {n(c.items)}
