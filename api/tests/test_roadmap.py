@@ -372,6 +372,35 @@ def test_segment_prompts_carry_the_prd_version_priorities_and_edges():
     assert "Sources and data points" in prompt
 
 
+@pytest.mark.parametrize(
+    "h, lines",
+    [
+        ((1, 2, 12, 24), flows.HORIZONS),
+        (
+            (2, 1, 9, 12),
+            (
+                ("now", "short", "the current and next quarter"),
+                ("next", "medium", "the next quarter"),
+                ("later", "long", "9 to 12 months"),
+            ),
+        ),
+        (
+            (2, 4, 18, 60),
+            (
+                ("now", "short", "the current and next quarter"),
+                ("next", "medium", "the next 4 quarters"),
+                ("later", "long", "18 to 60 months"),
+            ),
+        ),
+    ],
+)
+def test_horizon_lines(h, lines):
+    # protects=the prompt's wording per horizon value; fails_when=a span reads wrong or the
+    # defaults' text drifts from HORIZONS; no_claim=agents use it.
+    keys = ("short_quarters", "medium_quarters", "long_from_months", "long_to_months")
+    assert flows.horizon_lines(dict(zip(keys, h, strict=True))) == lines
+
+
 def test_feedback_loop_prompt_names_the_roadmap():
     flow = flows.FLOWS["feedback_loop"]
     segment = flow.segment("next_draft")
@@ -638,6 +667,43 @@ async def test_end_to_end(client, owner, runtime):
     # Runs list the source too.
     runs = (await client.get("/v1/runs", headers=auth)).json()
     assert runs[0]["source"]["slug"] == PRD and runs[0]["document_kind"] == "roadmap"
+
+
+async def test_the_prompt_reads_the_companys_horizons(client, owner, runtime):
+    # protects=runs honour the owner's horizons; fails_when=the constant is still used;
+    # no_claim=agent behaviour.
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await seed_baseline(tenant_id)
+    value = {
+        "short_quarters": 2,
+        "medium_quarters": 2,
+        "long_from_months": 18,
+        "long_to_months": 30,
+    }
+    put = await client.put("/v1/settings/planning_horizons", json={"value": value}, headers=auth)
+    assert put.status_code == 200, put.text
+    await start(client, auth, await create(client, auth, source=PRD))
+    prompt = runtime.submitted[0].steps[-1].prompt
+    assert (
+        "now = short term, the current and next quarter; next = medium term, the next 2 "
+        "quarters; later = long term, 18 to 30 months"
+    ) in prompt
+    assert "the current quarter;" not in prompt
+
+
+async def test_without_a_setting_the_prompt_keeps_the_default_horizons(client, owner, runtime):
+    # protects=no stored row means today's text, byte for byte; fails_when=the default
+    # wording drifts; no_claim=agent behaviour.
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await seed_baseline(tenant_id)
+    await start(client, auth, await create(client, auth, source=PRD))
+    prompt = runtime.submitted[0].steps[-1].prompt
+    assert (
+        "Horizons (B2): now = short term, the current quarter; next = medium term, the next "
+        "two quarters; later = long term, 12 to 24 months."
+    ) in prompt
 
 
 async def test_exports_resolve_prd_links_and_carry_provenance(client, owner, runtime):
