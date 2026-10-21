@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { FRESHNESS, sizeText } from "@/app/briefs/_brief-detail";
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { DocToolbar } from "@/components/DocToolbar";
@@ -136,6 +137,31 @@ function VersionInspector({ doc, v, latest }: { doc: string; v: VersionSummary; 
   );
 }
 
+/** The PRD's tech briefs, one per feature (F5-1), each opening its brief page. Hidden until there is one. */
+function TechBriefs({ doc }: { doc: string }) {
+  const q = useQuery(`tech-briefs|${doc}`, () => unwrap(api.GET("/v1/tech-briefs", { params: { query: { prd: doc } } })));
+  const briefs = q.data ?? [];
+  if (briefs.length === 0) return null;
+  return (
+    <Panel title="Tech briefs" count={briefs.length} testId="tech-briefs">
+      <ul className="divide-y divide-line">
+        {briefs.map((b) => (
+          <li key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+            <Link href={`/briefs/${b.id}`} className="min-w-0 font-semibold break-words text-accent-ink hover:underline">
+              {b.feature.title}
+            </Link>
+            <span className="text-sm text-text2">{sizeText(b.size)}</span>
+            <span className="flex-1" />
+            <Chip kind={FRESHNESS[b.freshness].kind} dot>
+              {FRESHNESS[b.freshness].label}
+            </Chip>
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
 export function DocumentOverview({ doc }: { doc: string }) {
   const router = useRouter();
   const q = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
@@ -198,6 +224,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
                   empty="No versions yet"
                 />
               </Panel>
+              {d.kind === "prd" && <TechBriefs doc={doc} />}
               <Panel title="Jobs" bodyClassName="p-4">
                 <JobsPanel doc={doc} />
               </Panel>
