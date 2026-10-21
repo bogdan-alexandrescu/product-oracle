@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { type ComponentType, type FormEvent, type ReactNode, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 
 import { KIND_LABEL } from "@/app/sources/_components/confidence";
@@ -421,6 +422,7 @@ function SourceRow({
   /** The page's #source-<id> (the Inbox's Edit): scrolled to, its editor open if it needs attention. */
   targeted?: boolean;
 }) {
+  const router = useRouter();
   // Rows mount once the list has loaded, after the hash is read: open from the start.
   const [editing, setEditing] = useState(targeted && source.status === "needs_attention");
   const rowRef = useRef<HTMLLIElement>(null);
@@ -575,6 +577,8 @@ function SourceRow({
               ...(fireflies
                 ? [{ label: editing ? "Close meetings" : "Edit meetings", onSelect: () => setEditing((v) => !v) }]
                 : []),
+              // What Oracle read from it, left out and uses (A2).
+              { label: "Coverage", onSelect: () => router.push(`/sources?source=${source.id}`) },
               { label: "Delete", onSelect: () => void remove(), danger: true },
             ]}
           />

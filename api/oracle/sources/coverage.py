@@ -64,6 +64,7 @@ from oracle.v2.models import DocumentSectionLink
 
 NOT_READ_STATUSES = ("skipped", "unavailable", "flagged", "limited")
 DEFAULT_HALF_LIFE = 90
+NOT_USED = UsedCounts(evidence=0, citations=0, section_links=0, documents=0)
 
 
 def half_life_days(settings: dict[str, Any] | None, source_kind: str, item_kind: str) -> float:
@@ -273,7 +274,7 @@ async def _coverage(
                 newest_at=t.newest_at,
                 oldest_at=t.oldest_at,
                 freshness=t.freshness,
-                used=used.get(s.id, UsedCounts()),
+                used=used.get(s.id) or NOT_USED,
             )
         )
     return out, tallies

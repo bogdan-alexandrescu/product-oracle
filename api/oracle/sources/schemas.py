@@ -193,26 +193,26 @@ class SearchResults(BaseModel):
 class NotReadCounts(BaseModel):
     """Entries of ``unavailable_items`` by status (a missing status is unavailable)."""
 
-    skipped: int = 0
-    unavailable: int = 0
-    flagged: int = 0
-    limited: int = 0
+    skipped: int
+    unavailable: int
+    flagged: int
+    limited: int
 
 
 class FreshnessCounts(BaseModel):
     """Live items by age: fresh up to one half-life, aging up to two, stale older."""
 
-    fresh: int = 0
-    aging: int = 0
-    stale: int = 0
+    fresh: int
+    aging: int
+    stale: int
 
 
 class UsedCounts(BaseModel):
-    evidence: int = 0
-    citations: int = 0
-    section_links: int = 0
+    evidence: int
+    citations: int
+    section_links: int
     # Distinct documents across the citations and the section links.
-    documents: int = 0
+    documents: int
 
 
 class SourceCoverage(BaseModel):
@@ -222,13 +222,13 @@ class SourceCoverage(BaseModel):
     status: SourceStatus
     last_synced_at: datetime | None
     # Live items; removed: soft-deleted (narrowed out, or deleted where they live).
-    items: int = 0
-    removed: int = 0
-    not_read: NotReadCounts = Field(default_factory=NotReadCounts)
-    newest_at: datetime | None = None
-    oldest_at: datetime | None = None
-    freshness: FreshnessCounts = Field(default_factory=FreshnessCounts)
-    used: UsedCounts = Field(default_factory=UsedCounts)
+    items: int
+    removed: int
+    not_read: NotReadCounts
+    newest_at: datetime | None
+    oldest_at: datetime | None
+    freshness: FreshnessCounts
+    used: UsedCounts
 
 
 class CoverageList(BaseModel):
@@ -279,18 +279,18 @@ class UsedIn(BaseModel):
 
 
 class SourceCoverageDetail(SourceCoverage):
-    by_kind: list[KindCoverage] = Field(default_factory=list)
-    not_read_items: list[UnavailableItem] = Field(default_factory=list)
+    by_kind: list[KindCoverage]
+    not_read_items: list[UnavailableItem]
     # Newest first, one page (limit, offset); used_in_total counts them all.
-    used_in: list[UsedIn] = Field(default_factory=list)
-    used_in_total: int = 0
+    used_in: list[UsedIn]
+    used_in_total: int
 
 
 class CompanyMember(BaseModel):
     id: uuid.UUID
     email: str
     # The member's display name once people have one; null until then.
-    name: str | None = None
+    name: str | None
     role: str
 
 

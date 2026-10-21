@@ -8,6 +8,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { DEPOSITS_IDS } from "./blockers";
+import { PRODUCT_CHAT_ID, seededItemId } from "./ids";
 import { routeEvidenceLinks } from "./public-links";
 
 type Role = Schemas["Me"]["role"];
@@ -130,7 +131,17 @@ export function seedBaseline(uuid: () => string): BaselineState {
     target: EntityRow,
     source_kind: string,
     f: Factors,
-    e: { url: string; ref: string; excerpt: string; retrieved_at: string; private?: boolean; itemTitle?: string; removed?: boolean },
+    e: {
+      url: string;
+      ref: string;
+      excerpt: string;
+      retrieved_at: string;
+      private?: boolean;
+      itemTitle?: string;
+      removed?: boolean;
+      /** An item of the mock's own sources (./sources.ts), so its coverage counts this use. */
+      item?: { id: string; source_id: string };
+    },
   ) => {
     const row: EvidenceRow = {
       id: uuid(),
@@ -144,8 +155,8 @@ export function seedBaseline(uuid: () => string): BaselineState {
       source_item: e.private
         ? null
         : {
-            id: uuid(),
-            source_id: uuid(),
+            id: e.item?.id ?? uuid(),
+            source_id: e.item?.source_id ?? uuid(),
             source_kind: source_kind.split(":")[0],
             kind: source_kind.split(":")[1] ?? "message",
             title: e.itemTitle ?? e.ref,
@@ -289,6 +300,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
     excerpt: "One prospect asked whether carts can be saved across devices.",
     retrieved_at: "2026-08-02T15:00:00Z",
     itemTitle: "#sales thread",
+    item: { id: seededItemId(PRODUCT_CHAT_ID, "m1"), source_id: PRODUCT_CHAT_ID },
   });
   cite(carts, "upload", { source: 0.4, freshness: 0.25, mentions: 0.2, goal_impact: 0.3 }, {
     url: "https://files.example.com/wishlist-2026.pdf",
@@ -310,6 +322,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
     excerpt: "A few admins asked for a dark theme for late shifts.",
     retrieved_at: "2026-10-09T19:10:00Z",
     itemTitle: "#design thread",
+    item: { id: seededItemId(PRODUCT_CHAT_ID, "m2"), source_id: PRODUCT_CHAT_ID },
   });
 
   // Conflicts: one material and open, one logged.

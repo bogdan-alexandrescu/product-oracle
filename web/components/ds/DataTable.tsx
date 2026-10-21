@@ -62,6 +62,8 @@ export function DataTable<T>({
   loading = false,
   empty = "Nothing yet",
   group,
+  groupHeader,
+  groupOnly,
   rowProps,
   testId,
   hideHeader = false,
@@ -79,6 +81,10 @@ export function DataTable<T>({
   empty?: ReactNode;
   /** Group header rows: a header is drawn whenever this value changes. */
   group?: (row: T) => string;
+  /** What a group header shows (default: the group's value). */
+  groupHeader?: (row: T) => ReactNode;
+  /** A row that only stands for its group (a group with nothing in it): its header is drawn, the row is not. */
+  groupOnly?: (row: T) => boolean;
   rowProps?: (row: T) => Record<string, string | undefined>;
   testId?: string;
   hideHeader?: boolean;
@@ -88,17 +94,21 @@ export function DataTable<T>({
   const list = rows ?? [];
   const selIndex = list.findIndex((r) => rowKey(r) === selected);
 
+  // Rows drawn as rows (not group-only), by index in `list`.
+  const drawn = list.map((_, i) => i).filter((i) => !groupOnly?.(list[i]!));
+
   const focusRow = (i: number) => {
-    const el = body.current?.querySelectorAll<HTMLTableRowElement>("tr[data-row]")[i];
+    const el = body.current?.querySelectorAll<HTMLTableRowElement>("tr[data-row]")[drawn.indexOf(i)];
     el?.focus();
   };
 
   const onKey = (e: KeyboardEvent<HTMLTableRowElement>, i: number) => {
+    const at = drawn.indexOf(i);
     let next = -1;
-    if (e.key === "ArrowDown") next = Math.min(list.length - 1, i + 1);
-    else if (e.key === "ArrowUp") next = Math.max(0, i - 1);
-    else if (e.key === "Home") next = 0;
-    else if (e.key === "End") next = list.length - 1;
+    if (e.key === "ArrowDown") next = drawn[Math.min(drawn.length - 1, at + 1)] ?? -1;
+    else if (e.key === "ArrowUp") next = drawn[Math.max(0, at - 1)] ?? -1;
+    else if (e.key === "Home") next = drawn[0] ?? -1;
+    else if (e.key === "End") next = drawn[drawn.length - 1] ?? -1;
     else if (e.key === "Enter" || e.key === " ") {
       if (e.target !== e.currentTarget) return;
       e.preventDefault();
@@ -169,7 +179,8 @@ export function DataTable<T>({
             const g = groups[i];
             const header = !!group && (i === 0 || g !== groups[i - 1]);
             // Roving tabindex: the selected row (or the first) is the table's one tab stop.
-            const tabbable = selectable && (selIndex >= 0 ? i === selIndex : i === 0);
+            const tabbable = selectable && (selIndex >= 0 ? i === selIndex : i === drawn[0]);
+            const only = !!groupOnly?.(row);
             return (
               <Fragment key={k}>
                 {header && (
@@ -180,40 +191,42 @@ export function DataTable<T>({
                       scope="colgroup"
                       className="h-9 px-4 max-[600px]:flex max-[600px]:items-center max-[600px]:px-3 text-left font-display tracking-heading text-[15px] font-bold"
                     >
-                      {g}
+                      {groupHeader ? groupHeader(row) : g}
                     </th>
                   </tr>
                 )}
-                <tr
-                  data-row
-                  data-key={k}
-                  role="row"
-                  {...rowProps?.(row)}
-                  aria-selected={selectable ? on : undefined}
-                  tabIndex={selectable ? (tabbable ? 0 : -1) : undefined}
-                  onClick={selectable ? () => onSelect?.(k, row) : undefined}
-                  onKeyDown={selectable ? (e) => onKey(e, i) : undefined}
-                  className={`h-11 border-t border-line max-[600px]:flex max-[600px]:h-auto max-[600px]:min-h-12 max-[600px]:flex-wrap max-[600px]:items-center max-[600px]:gap-x-3 max-[600px]:gap-y-1 max-[600px]:px-3 max-[600px]:py-2.5 max-[600px]:after:order-3 max-[600px]:after:h-0 max-[600px]:after:basis-full max-[600px]:after:content-[''] ${selectable ? "cursor-pointer outline-offset-[-2px] hover:bg-surface2" : ""} ${
-                    on ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)] hover:bg-accent-soft" : ""
-                  }`}
-                >
-                  {columns.map((c, ci) => {
-                    const r = role(c, ci);
-                    return (
-                      <td
-                        key={c.key}
-                        role={selectable ? "gridcell" : "cell"}
-                        data-phone={r}
-                        className={`${c.wrap ? "break-words whitespace-normal" : "truncate"} px-2 py-1.5 first:pl-4 last:pr-4 max-[600px]:first:pl-0 max-[600px]:last:pr-0 ${align(c)} ${PHONE_CELL[r]} ${PHONE_WRAP} ${r === "meta" || r === "title" ? "max-[600px]:text-left" : ""} ${c.className ?? ""}`}
-                      >
-                        {c.phoneLabel && r === "meta" && (
-                          <span className="hidden font-semibold max-[600px]:inline">{c.phoneLabel}</span>
-                        )}
-                        {c.cell(row)}
-                      </td>
-                    );
-                  })}
-                </tr>
+                {!only && (
+                  <tr
+                    data-row
+                    data-key={k}
+                    role="row"
+                    {...rowProps?.(row)}
+                    aria-selected={selectable ? on : undefined}
+                    tabIndex={selectable ? (tabbable ? 0 : -1) : undefined}
+                    onClick={selectable ? () => onSelect?.(k, row) : undefined}
+                    onKeyDown={selectable ? (e) => onKey(e, i) : undefined}
+                    className={`h-11 border-t border-line max-[600px]:flex max-[600px]:h-auto max-[600px]:min-h-12 max-[600px]:flex-wrap max-[600px]:items-center max-[600px]:gap-x-3 max-[600px]:gap-y-1 max-[600px]:px-3 max-[600px]:py-2.5 max-[600px]:after:order-3 max-[600px]:after:h-0 max-[600px]:after:basis-full max-[600px]:after:content-[''] ${selectable ? "cursor-pointer outline-offset-[-2px] hover:bg-surface2" : ""} ${
+                      on ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)] hover:bg-accent-soft" : ""
+                    }`}
+                  >
+                    {columns.map((c, ci) => {
+                      const r = role(c, ci);
+                      return (
+                        <td
+                          key={c.key}
+                          role={selectable ? "gridcell" : "cell"}
+                          data-phone={r}
+                          className={`${c.wrap ? "break-words whitespace-normal" : "truncate"} px-2 py-1.5 first:pl-4 last:pr-4 max-[600px]:first:pl-0 max-[600px]:last:pr-0 ${align(c)} ${PHONE_CELL[r]} ${PHONE_WRAP} ${r === "meta" || r === "title" ? "max-[600px]:text-left" : ""} ${c.className ?? ""}`}
+                        >
+                          {c.phoneLabel && r === "meta" && (
+                            <span className="hidden font-semibold max-[600px]:inline">{c.phoneLabel}</span>
+                          )}
+                          {c.cell(row)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                )}
               </Fragment>
             );
           })}

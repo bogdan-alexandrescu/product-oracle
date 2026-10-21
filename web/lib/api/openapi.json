@@ -28578,6 +28578,7 @@
         "required": [
           "id",
           "email",
+          "name",
           "role"
         ],
         "title": "CompanyMember"
@@ -35459,21 +35460,23 @@
         "properties": {
           "fresh": {
             "type": "integer",
-            "title": "Fresh",
-            "default": 0
+            "title": "Fresh"
           },
           "aging": {
             "type": "integer",
-            "title": "Aging",
-            "default": 0
+            "title": "Aging"
           },
           "stale": {
             "type": "integer",
-            "title": "Stale",
-            "default": 0
+            "title": "Stale"
           }
         },
         "type": "object",
+        "required": [
+          "fresh",
+          "aging",
+          "stale"
+        ],
         "title": "FreshnessCounts",
         "description": "Live items by age: fresh up to one half-life, aging up to two, stale older."
       },
@@ -42016,26 +42019,28 @@
         "properties": {
           "skipped": {
             "type": "integer",
-            "title": "Skipped",
-            "default": 0
+            "title": "Skipped"
           },
           "unavailable": {
             "type": "integer",
-            "title": "Unavailable",
-            "default": 0
+            "title": "Unavailable"
           },
           "flagged": {
             "type": "integer",
-            "title": "Flagged",
-            "default": 0
+            "title": "Flagged"
           },
           "limited": {
             "type": "integer",
-            "title": "Limited",
-            "default": 0
+            "title": "Limited"
           }
         },
         "type": "object",
+        "required": [
+          "skipped",
+          "unavailable",
+          "flagged",
+          "limited"
+        ],
         "title": "NotReadCounts",
         "description": "Entries of ``unavailable_items`` by status (a missing status is unavailable)."
       },
@@ -51169,13 +51174,11 @@
           },
           "items": {
             "type": "integer",
-            "title": "Items",
-            "default": 0
+            "title": "Items"
           },
           "removed": {
             "type": "integer",
-            "title": "Removed",
-            "default": 0
+            "title": "Removed"
           },
           "not_read": {
             "$ref": "#/components/schemas/NotReadCounts"
@@ -51217,7 +51220,14 @@
           "name",
           "kind",
           "status",
-          "last_synced_at"
+          "last_synced_at",
+          "items",
+          "removed",
+          "not_read",
+          "newest_at",
+          "oldest_at",
+          "freshness",
+          "used"
         ],
         "title": "SourceCoverage"
       },
@@ -51268,13 +51278,11 @@
           },
           "items": {
             "type": "integer",
-            "title": "Items",
-            "default": 0
+            "title": "Items"
           },
           "removed": {
             "type": "integer",
-            "title": "Removed",
-            "default": 0
+            "title": "Removed"
           },
           "not_read": {
             "$ref": "#/components/schemas/NotReadCounts"
@@ -51332,8 +51340,7 @@
           },
           "used_in_total": {
             "type": "integer",
-            "title": "Used In Total",
-            "default": 0
+            "title": "Used In Total"
           }
         },
         "type": "object",
@@ -51342,7 +51349,18 @@
           "name",
           "kind",
           "status",
-          "last_synced_at"
+          "last_synced_at",
+          "items",
+          "removed",
+          "not_read",
+          "newest_at",
+          "oldest_at",
+          "freshness",
+          "used",
+          "by_kind",
+          "not_read_items",
+          "used_in",
+          "used_in_total"
         ],
         "title": "SourceCoverageDetail"
       },
@@ -56779,26 +56797,28 @@
         "properties": {
           "evidence": {
             "type": "integer",
-            "title": "Evidence",
-            "default": 0
+            "title": "Evidence"
           },
           "citations": {
             "type": "integer",
-            "title": "Citations",
-            "default": 0
+            "title": "Citations"
           },
           "section_links": {
             "type": "integer",
-            "title": "Section Links",
-            "default": 0
+            "title": "Section Links"
           },
           "documents": {
             "type": "integer",
-            "title": "Documents",
-            "default": 0
+            "title": "Documents"
           }
         },
         "type": "object",
+        "required": [
+          "evidence",
+          "citations",
+          "section_links",
+          "documents"
+        ],
         "title": "UsedCounts"
       },
       "UsedDocument": {

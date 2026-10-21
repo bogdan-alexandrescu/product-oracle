@@ -8391,7 +8391,7 @@ export interface components {
             /** Email */
             email: string;
             /** Name */
-            name?: string | null;
+            name: string | null;
             /** Role */
             role: string;
         };
@@ -10905,20 +10905,11 @@ export interface components {
          * @description Live items by age: fresh up to one half-life, aging up to two, stale older.
          */
         FreshnessCounts: {
-            /**
-             * Fresh
-             * @default 0
-             */
+            /** Fresh */
             fresh: number;
-            /**
-             * Aging
-             * @default 0
-             */
+            /** Aging */
             aging: number;
-            /**
-             * Stale
-             * @default 0
-             */
+            /** Stale */
             stale: number;
         };
         /** GapCreate */
@@ -13438,25 +13429,13 @@ export interface components {
          * @description Entries of ``unavailable_items`` by status (a missing status is unavailable).
          */
         NotReadCounts: {
-            /**
-             * Skipped
-             * @default 0
-             */
+            /** Skipped */
             skipped: number;
-            /**
-             * Unavailable
-             * @default 0
-             */
+            /** Unavailable */
             unavailable: number;
-            /**
-             * Flagged
-             * @default 0
-             */
+            /** Flagged */
             flagged: number;
-            /**
-             * Limited
-             * @default 0
-             */
+            /** Limited */
             limited: number;
         };
         /** NotificationOut */
@@ -16639,23 +16618,17 @@ export interface components {
             status: "active" | "paused" | "error" | "needs_attention";
             /** Last Synced At */
             last_synced_at: string | null;
-            /**
-             * Items
-             * @default 0
-             */
+            /** Items */
             items: number;
-            /**
-             * Removed
-             * @default 0
-             */
+            /** Removed */
             removed: number;
-            not_read?: components["schemas"]["NotReadCounts"];
+            not_read: components["schemas"]["NotReadCounts"];
             /** Newest At */
-            newest_at?: string | null;
+            newest_at: string | null;
             /** Oldest At */
-            oldest_at?: string | null;
-            freshness?: components["schemas"]["FreshnessCounts"];
-            used?: components["schemas"]["UsedCounts"];
+            oldest_at: string | null;
+            freshness: components["schemas"]["FreshnessCounts"];
+            used: components["schemas"]["UsedCounts"];
         };
         /** SourceCoverageDetail */
         SourceCoverageDetail: {
@@ -16678,33 +16651,24 @@ export interface components {
             status: "active" | "paused" | "error" | "needs_attention";
             /** Last Synced At */
             last_synced_at: string | null;
-            /**
-             * Items
-             * @default 0
-             */
+            /** Items */
             items: number;
-            /**
-             * Removed
-             * @default 0
-             */
+            /** Removed */
             removed: number;
-            not_read?: components["schemas"]["NotReadCounts"];
+            not_read: components["schemas"]["NotReadCounts"];
             /** Newest At */
-            newest_at?: string | null;
+            newest_at: string | null;
             /** Oldest At */
-            oldest_at?: string | null;
-            freshness?: components["schemas"]["FreshnessCounts"];
-            used?: components["schemas"]["UsedCounts"];
+            oldest_at: string | null;
+            freshness: components["schemas"]["FreshnessCounts"];
+            used: components["schemas"]["UsedCounts"];
             /** By Kind */
-            by_kind?: components["schemas"]["KindCoverage"][];
+            by_kind: components["schemas"]["KindCoverage"][];
             /** Not Read Items */
-            not_read_items?: components["schemas"]["UnavailableItem"][];
+            not_read_items: components["schemas"]["UnavailableItem"][];
             /** Used In */
-            used_in?: components["schemas"]["UsedIn"][];
-            /**
-             * Used In Total
-             * @default 0
-             */
+            used_in: components["schemas"]["UsedIn"][];
+            /** Used In Total */
             used_in_total: number;
         };
         /** SourceCreate */
@@ -18593,25 +18557,13 @@ export interface components {
         };
         /** UsedCounts */
         UsedCounts: {
-            /**
-             * Evidence
-             * @default 0
-             */
+            /** Evidence */
             evidence: number;
-            /**
-             * Citations
-             * @default 0
-             */
+            /** Citations */
             citations: number;
-            /**
-             * Section Links
-             * @default 0
-             */
+            /** Section Links */
             section_links: number;
-            /**
-             * Documents
-             * @default 0
-             */
+            /** Documents */
             documents: number;
         };
         /** UsedDocument */
