@@ -8,7 +8,11 @@ const dateTimeFmt = new Intl.DateTimeFormat("en", {
   minute: "2-digit",
 });
 
+const dayFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" });
+
 export const formatDate = (iso: string) => dateFmt.format(new Date(iso));
+/** "Oct 16". */
+export const formatDay = (iso: string) => dayFmt.format(new Date(iso));
 export const formatDateTime = (iso: string) => dateTimeFmt.format(new Date(iso));
 
 export const SOURCE_LABEL: Record<CitationOut["source"], string> = {

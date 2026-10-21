@@ -134,7 +134,7 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.baseline import yaml_io
-from oracle.baseline.models import Edge, Entity
+from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
@@ -823,6 +823,12 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
         checkpoints=[_checkpoint_out(c, principal, names) for c in checkpoints],
         token_read_only=await token_hold(db, run.id, live=False) is not None,
+        open_proposals=await db.scalar(
+            select(func.count())
+            .select_from(Proposal)
+            .where(Proposal.run_id == run.id, Proposal.status == "open")
+        )
+        or 0,
     )
 
 

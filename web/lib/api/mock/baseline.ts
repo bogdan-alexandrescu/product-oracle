@@ -28,7 +28,12 @@ export interface BaselineState {
   revisions?: Schemas["RevisionOut"][];
 }
 
-export type BaselineCaller = { userId: string; role: Role };
+export type BaselineCaller = {
+  userId: string;
+  role: Role;
+  /** The run that made a proposal, as ProposalOut.run names it; null when it is gone. */
+  runOf?: (runId: string) => Schemas["ProposalRun"] | null;
+};
 
 /** The accepted intake constraint the seed keeps as a suggested blocker (B4). */
 export const SUGGESTED_BLOCKER = {
@@ -43,7 +48,9 @@ const WEIGHTS = { source: 0.35, freshness: 0.25, mentions: 0.2, goal_impact: 0.2
 const ROLE_ORDER: readonly Role[] = ["viewer", "commenter", "approver", "owner"];
 // A colleague who locked an item before you signed in.
 const OTHER_MEMBER = "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e6f7";
-const AGENT_RUN = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a291";
+/** The Baseline to PRD run (./runs.ts) whose agents made the seeded proposals. */
+export const AGENT_RUN = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a291";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const now = () => new Date().toISOString();
 
@@ -400,6 +407,19 @@ export function seedBaseline(uuid: () => string): BaselineState {
     });
   proposal(guided, { attrs: { effort: "L" } }, "The setup review estimated more work than planned.", "2026-10-16T08:10:00Z");
   proposal(dark, { attrs: { status: "planned" } }, "Mentioned as next up in the planning call.", "2026-10-16T08:12:00Z");
+  // And one from a commenter: no run. A fixed id, so the ids seeded after it stay put.
+  s.proposals.push({
+    id: "b3000000-0000-4000-8000-000000000001",
+    entity_id: invites.id,
+    edge_id: null,
+    payload: { op: "update", kind: "entity", fields: { attrs: { effort: "S" } }, reason: "Most of the invite flow already exists.", origin: "agent" },
+    run_id: null,
+    actor: `user:${OTHER_MEMBER}`,
+    status: "open",
+    decided_by: null,
+    decided_at: null,
+    created_at: "2026-10-15T15:00:00Z",
+  });
 
   // The Quillfield deposits blocker (./blockers.ts) is a baseline constraint, opened from Publish.
   entity("constraint", "c.same-day-refund", "Same-day refund rule unanswered", {
@@ -625,6 +645,7 @@ export async function routeBaseline(
   const entityOut = (e: EntityRow) => withCount(s, e, "entity_id") as Schemas["EntityOut"];
   const edgeOut = (e: EdgeRow) => withCount(s, e, "edge_id") as Schemas["EdgeOut"];
   const findEntity = (id: string) => s.entities.find((e) => e.id === id);
+  const withRun = (p: ProposalRow): ProposalRow => ({ ...p, run: p.run_id ? (caller.runOf?.(p.run_id) ?? null) : null });
 
   // Public-link evidence is open to commenters, so it is routed before the approver check.
   const link = await routeEvidenceLinks(s, caller, req, rest);
@@ -700,11 +721,15 @@ export async function routeBaseline(
 
     if (head === "proposals" && !id && m === "GET") {
       const status = q.get("status");
+      const run = q.get("run_id");
+      if (run != null && run !== "none" && !UUID_RE.test(run)) return fail(422, "run_id must be a run's id or none");
       return json(
         200,
         s.proposals
           .filter((p) => !status || p.status === status)
-          .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+          .filter((p) => run == null || (run === "none" ? p.run_id == null : p.run_id === run))
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))
+          .map(withRun),
       );
     }
     if (head === "proposals" && id && (action === "accept" || action === "reject") && m === "POST") {
@@ -725,7 +750,7 @@ export async function routeBaseline(
         decided_by: caller.userId,
         decided_at: now(),
       });
-      return json(200, p);
+      return json(200, withRun(p));
     }
 
     if (head === "conflicts" && !id && m === "GET") {

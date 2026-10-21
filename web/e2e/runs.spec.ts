@@ -17,7 +17,7 @@ async function openRuns(page: Page) {
 test("runs list shows each run with its status, and cost only on the approval and the overrun", async ({ page }) => {
   await openRuns(page);
   const rows = page.getByTestId("run-row");
-  await expect(rows).toHaveCount(4);
+  await expect(rows).toHaveCount(5);
   const waiting = rows.filter({ hasText: "team-onboarding" });
   await expect(waiting).toContainText("Waiting for review");
   await expect(waiting).toContainText("Confirm the baseline");
@@ -359,7 +359,7 @@ test("mock run ids and times are stable: every page load, the runs list, the inb
     const page = await context.newPage();
     await openRuns(page);
     const rows = page.getByTestId("run-row");
-    await expect(rows).toHaveCount(4);
+    await expect(rows).toHaveCount(5);
     const byRun: Record<string, string> = {};
     for (const row of await rows.all()) {
       const slug = (await row.getByRole("link").first().innerText()).trim();
@@ -383,7 +383,7 @@ test("mock run ids and times are stable: every page load, the runs list, the inb
     await expect(page.getByText(`Run ${short("team-onboarding")}`)).toBeVisible();
     await context.close();
   }
-  expect(Object.keys(ids[0]!).sort()).toEqual(["checkout-redesign", "team-onboarding", "team-workspaces", "usage-alerts-v2"]);
+  expect(Object.keys(ids[0]!).sort()).toEqual(["checkout-redesign", "saved-carts", "team-onboarding", "team-workspaces", "usage-alerts-v2"]);
   expect(ids[1]).toEqual(ids[0]);
   expect(dates[1]).toEqual(dates[0]);
 });

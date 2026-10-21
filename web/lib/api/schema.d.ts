@@ -2642,7 +2642,8 @@ export interface paths {
         put?: never;
         /**
          * Create Proposal
-         * @description Suggest a change; an approver accepts or rejects it.
+         * @description Suggest a change; an approver accepts or rejects it. A run's proposal records
+         *     the run.
          */
         post: operations["create_proposal"];
         delete?: never;
@@ -13820,6 +13821,7 @@ export interface components {
             };
             /** Run Id */
             run_id?: string | null;
+            run?: components["schemas"]["ProposalRun"] | null;
             /** Actor */
             actor?: string | null;
             /**
@@ -13831,6 +13833,28 @@ export interface components {
             decided_by?: string | null;
             /** Decided At */
             decided_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * ProposalRun
+         * @description The run that made a proposal, enough to name it and link to it.
+         */
+        ProposalRun: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Flow */
+            flow: string;
+            /** Flow Title */
+            flow_title: string;
+            /** Status */
+            status: string;
             /**
              * Created At
              * Format: date-time
@@ -15243,6 +15267,11 @@ export interface components {
              * @default false
              */
             token_read_only: boolean;
+            /**
+             * Open Proposals
+             * @default 0
+             */
+            open_proposals: number;
         };
         /** RunPatch */
         RunPatch: {
@@ -24054,6 +24083,8 @@ export interface operations {
         parameters: {
             query?: {
                 status?: ("open" | "accepted" | "rejected") | null;
+                /** @description A run's id for that run's proposals, or `none` for those of no run */
+                run_id?: string | null;
             };
             header?: never;
             path?: never;

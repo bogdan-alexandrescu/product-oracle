@@ -396,7 +396,8 @@ CURATED: tuple[Curated, ...] = (
         name="propose_change",
         description=(
             "Propose a change to the baseline. Proposals wait for a person to accept or "
-            "reject them; locked items only change this way. Cite evidence for the change, "
+            "reject them; locked items only change this way. The run is recorded for you: "
+            "leave run_id out. Cite evidence for the change, "
             "and say when that evidence is low confidence. " + CONFIDENCE_GUIDANCE
         ),
         needs={

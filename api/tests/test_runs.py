@@ -1035,3 +1035,29 @@ async def test_the_runs_list_carries_progress_with_what_the_inbox_says_of_a_stuc
     assert inbox["total"] == len(inbox["checkpoints"]) + len(inbox["approvals"]) + len(
         inbox["overruns"]
     ) + 2 + len(inbox["feedback"])
+
+
+async def test_run_counts_its_open_proposals(client, owner, runtime):
+    """protects: the run page's "Baseline proposals: N open" line (B3).
+    fails_when: open_proposals counts decided proposals, another run's or a person's, or
+    does not drop when one is accepted.
+    no_claim: proposals made through the REST route, not by a run's merge."""
+    tenant_id, auth = owner
+    run = await create(client, auth)
+    other = await create(client, auth, document="other-prd")
+    assert (await get(client, auth, run["id"]))["open_proposals"] == 0
+    commenter = await as_user(tenant_id, "commenter")
+    made = []
+    for key, run_id in (("a", run["id"]), ("b", run["id"]), ("c", other["id"]), ("d", None)):
+        body = {"op": "create", "kind": "entity", "fields": {"type": "goal", "key": key}}
+        body["fields"]["title"] = key.upper()
+        if run_id:
+            body["run_id"] = run_id
+        resp = await client.post("/v1/baseline/proposals", json=body, headers=commenter)
+        assert resp.status_code == 201, resp.text
+        made.append(resp.json())
+    assert (await get(client, auth, run["id"]))["open_proposals"] == 2
+    resp = await client.post(f"/v1/baseline/proposals/{made[0]['id']}/accept", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert (await get(client, auth, run["id"]))["open_proposals"] == 1
+    assert (await get(client, auth, other["id"]))["open_proposals"] == 1
