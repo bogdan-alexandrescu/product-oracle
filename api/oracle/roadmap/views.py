@@ -152,7 +152,7 @@ def blocker_dependency(e: Entity) -> BlockerDependency:
     )
 
 
-class _Context:
+class ItemContext:
     """Entities, live blockers, PRD documents and tracker records for a set of items."""
 
     def __init__(self) -> None:
@@ -165,7 +165,7 @@ class _Context:
         self.milestones: dict[uuid.UUID, Any] = {}
 
     @classmethod
-    async def load(cls, db: AsyncSession, rows: list[RoadmapItem]) -> "_Context":
+    async def load(cls, db: AsyncSession, rows: list[RoadmapItem]) -> "ItemContext":
         ctx = cls()
         ids: set[uuid.UUID] = set()
         for i in rows:
@@ -217,7 +217,7 @@ class _Context:
         return self.milestones.get(item.id, item.milestone)
 
 
-def item_out(item: RoadmapItem, ctx: _Context, view: str = "full") -> RoadmapItemOut:
+def item_out(item: RoadmapItem, ctx: ItemContext, view: str = "full") -> RoadmapItemOut:
     doc = ctx.docs.get(item.prd_document_id) if item.prd_document_id else None
     version = ctx.versions.get(item.prd_version_id) if item.prd_version_id else None
     link = None
@@ -283,7 +283,7 @@ async def items_view(
     db: AsyncSession, document: Document, version: DocumentVersion | None, view: str
 ) -> RoadmapItemsOut:
     rows = await version_items(db, version)
-    ctx = await _Context.load(db, rows)
+    ctx = await ItemContext.load(db, rows)
     source = None
     if version is not None and version.source_version_id:
         sv = await db.get(DocumentVersion, version.source_version_id)
@@ -457,7 +457,7 @@ async def milestones_of(db: AsyncSession, track_id: uuid.UUID) -> list[TrackMile
     return list(rows)
 
 
-def _chosen_milestone(milestones: list[TrackMilestone], now: date) -> TrackMilestone | None:
+def chosen_milestone(milestones: list[TrackMilestone], now: date) -> TrackMilestone | None:
     """The next planned track milestone: the earliest dated one still ahead, else the
     undated one of the earliest horizon."""
     planned = [m for m in milestones if m.status == "planned"]
@@ -473,13 +473,13 @@ def _chosen_milestone(milestones: list[TrackMilestone], now: date) -> TrackMiles
 def next_milestone(
     milestones: list[TrackMilestone],
     rows: list[RoadmapItem],
-    ctx: _Context,
+    ctx: ItemContext,
     bases: list[ScheduleBasis],
     now: date,
 ) -> NextMilestone | None:
     """The track's next milestone. ``bases``: the schedule bases read for the chosen
     milestone's ``basis_ids`` (any others are ignored)."""
-    chosen = _chosen_milestone(milestones, now)
+    chosen = chosen_milestone(milestones, now)
     if chosen is not None:
         named = set(chosen.basis_ids or [])
         return NextMilestone(
@@ -527,7 +527,7 @@ async def milestone_bases(
     db: AsyncSession, milestones: list[TrackMilestone]
 ) -> list[ScheduleBasis]:
     """The schedule bases :func:`next_milestone` may name: those of the chosen milestone."""
-    chosen = _chosen_milestone(milestones, today())
+    chosen = chosen_milestone(milestones, today())
     if chosen is None or not chosen.basis_ids:
         return []
     return list(
@@ -584,7 +584,7 @@ class ItemRisk:
 
 def item_risk(
     item: RoadmapItem,
-    ctx: _Context,
+    ctx: ItemContext,
     milestones: list[TrackMilestone],
     dated: dict[str, date],
     now: date,
@@ -628,7 +628,7 @@ def assess(
     track: ProductTrack,
     base: TrackOut,
     rows: list[RoadmapItem],
-    ctx: _Context,
+    ctx: ItemContext,
     milestones: list[TrackMilestone],
     records: list[TrackerRecord],
     bases: list[ScheduleBasis],
@@ -716,7 +716,7 @@ async def overview(db: AsyncSession, track: ProductTrack) -> TrackOverview:
     )
     version = await items_version(db, roadmap, approved_first=True) if roadmap else None
     rows = await version_items(db, version)
-    ctx = await _Context.load(db, rows)
+    ctx = await ItemContext.load(db, rows)
     milestones = await milestones_of(db, track.id)
     records = await tracker.records_for_track(db, track.id)
     source_number = None
