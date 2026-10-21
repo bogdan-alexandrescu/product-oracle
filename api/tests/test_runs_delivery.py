@@ -303,3 +303,22 @@ async def test_what_an_owed_decisions_cancel_counts_is_the_ticks(client, owner):
     out = await _tick_raw(client, auth)
     assert (await get(client, auth, run["id"]))["status"] == "paused_overrun"
     assert out["runs_paused"] == 1, out
+
+
+async def test_a_runtime_failure_after_the_decision_is_recorded_is_a_503(
+    client, owner, monkeypatch
+):
+    """The decision is committed before SwarmCloud is called: a runtime failure after that
+    (here the replay limit) reaches the client as 503 "recorded", never a 500, and the
+    failed try is recorded for the tick (PR #128 minor)."""
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _waiting(client, auth, tenant_id, swarm)
+    monkeypatch.setattr(service, "REPLAY_LIMIT", 1)
+    resp = await _decide_raw(client, auth, run, "changes_requested", "Cover returns")
+    assert resp.status_code == 503 and "recorded" in resp.text, resp.text
+    posting = await _owed(tenant_id, run["id"])
+    assert posting["tries"] == 1 and posting["error"], posting
+    monkeypatch.setattr(service, "REPLAY_LIMIT", 64)
+    await tick(client, auth)
+    assert len(swarm.answers) == 1 and await _owed(tenant_id, run["id"]) is None
