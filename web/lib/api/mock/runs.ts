@@ -314,13 +314,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   // The local runtime's one item cites PRD section "features", as the API's FakeRuntime does.
   if (def.outputs.includes("roadmap_items.yaml")) {
     const known = r.source ? ctx.sectionKeys(r.source.version_id) : [];
-    s.items_check = {
-      items: 1,
-      by_horizon: { now: 1, next: 0, later: 0 },
-      problems: known.includes("features")
-        ? []
-        : [{ code: "unknown_prd_section", message: "item price-early: PRD section 'features' is not in the PRD version", item: "price-early" }],
-    };
+    s.items_check = localItemsCheck(known.includes("features"), r.source ?? null);
   }
   if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md")) && r.document_slug) {
     const imp = ctx.importDraft(r.document_slug, r);
@@ -912,3 +906,213 @@ export function enlargeRuns(db: RunsDb, uuid: () => string, count: number) {
     db.runs.push(r);
   }
 }
+
+// --------------------------------------------------------------------------- roadmap review
+
+type ItemsCheck = NonNullable<SegmentOut["items_check"]>;
+type ItemReason = ItemsCheck["reasons"][number];
+type ReasonFix = ItemReason["fixes"][number];
+
+const fix = (label: string, kind: ReasonFix["action"]["kind"], item: string, field: string | null = null, value: unknown = null): ReasonFix => ({
+  label,
+  action: { kind, item, field, value },
+});
+const accept = (item: string, label = "Accept") => fix(label, "accept", item);
+const drop = (item: string) => fix("Drop", "drop", item);
+const moveTo = (item: string, horizon: string, label = `Move to ${horizon[0].toUpperCase()}${horizon.slice(1)}`) => fix(label, "edit", item, "horizon", horizon);
+
+/** As oracle.runs.reasons.summarize: the check with its reasons and their counts. */
+function withReasons(check: Pick<ItemsCheck, "items" | "by_horizon" | "problems">, reasons: ItemReason[], base: ItemsCheck["base"] = null): ItemsCheck {
+  return {
+    ...check,
+    reasons,
+    blocking: reasons.filter((r) => r.severity === "blocking").length,
+    to_confirm: reasons.filter((r) => r.severity === "confirm").length,
+    file_problems: check.problems.filter((p) => !p.item).length,
+    base,
+    reasons_partial: false,
+  };
+}
+
+/** The local runtime's one item, as the API checks it: its unknown PRD section is its one blocking reason. */
+function localItemsCheck(known: boolean, source: VersionSource | null): ItemsCheck {
+  if (known) return withReasons({ items: 1, by_horizon: { now: 1, next: 0, later: 0 }, problems: [] }, []);
+  const item = "price-early";
+  return withReasons(
+    {
+      items: 1,
+      by_horizon: { now: 1, next: 0, later: 0 },
+      problems: [{ code: "unknown_prd_section", message: `item ${item}: PRD section 'features' is not in the PRD version`, item }],
+    },
+    [
+      {
+        item,
+        item_title: "Show the price early",
+        code: "unknown_prd_section",
+        severity: "blocking",
+        label: "No PRD section",
+        text: `Section features is not in ${source ? `${source.title} v${source.version}` : "the PRD version"}.`,
+        data: { section: "features" },
+        fixes: [fix("Link section", "edit", item, "prd_section")],
+      },
+    ],
+  );
+}
+
+/** The seeded roadmap review run (seedRoadmapReview in e2e/helpers.ts). */
+export const ROADMAP_REVIEW_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d2";
+
+const REVIEW_ITEMS = `version: 1
+prd: {document: usage-alerts, version: 1}
+items:
+  - {id: slack-alerts, title: Slack alerts, outcome: Teams hear about spend spikes where they work, horizon: now, prd_section: alerts-slack, confidence: high, milestone: {name: Beta, date: 2026-11-30, date_source: a guess}}
+  - {id: anomaly-detection, title: Anomaly detection, outcome: Unusual spend is caught the same day, horizon: later, prd_section: alerts-anomaly, confidence: low}
+  - {id: budget-caps, title: Budget caps, outcome: No team overspends its budget, horizon: now, prd_section: alerts-caps, depends_on: [anomaly-detection], confidence: high}
+  - {id: usage-export, title: Usage export, outcome: Finance gets usage as a file, horizon: now, prd_section: export, confidence: medium}
+  - {id: cost-forecast, title: Cost forecast, outcome: Owners see next month's spend, horizon: next, prd_section: alerts-forecast, confidence: medium}
+  - {id: mobile-push, title: Mobile push, outcome: Owners hear about spikes on their phone, horizon: later, prd_section: alerts-mobile, confidence: medium}
+  - {id: sso-login, title: Single sign-on, outcome: Members sign in with the company account, horizon: next, prd_section: sso, confidence: high}
+  - {id: invoice-pdf, title: Invoice PDF, outcome: Finance downloads each invoice, horizon: later, prd_section: billing-invoices, priority: {rank: 2, score: 4.1, explanation: "revenue weight 3 x contribution 1.4"}, confidence: high}
+  - {id: webhooks, title: Webhooks, outcome: Teams wire alerts into their own tools, horizon: now, prd_section: alerts-webhooks, confidence: high}
+`;
+
+function reviewReasons(): ItemReason[] {
+  const r = (item: string, item_title: string, code: string, severity: ItemReason["severity"], label: string, text: string, fixes: ReasonFix[], data: Record<string, unknown> = {}): ItemReason => ({
+    item,
+    item_title,
+    code,
+    severity,
+    label,
+    text,
+    data,
+    fixes,
+  });
+  const base = "roadmap v1";
+  return [
+    r("slack-alerts", "Slack alerts", "unverified_date", "blocking", "Date unverified", "No verified estimate, capacity or commitment supports 2026-11-30.", [fix("Remove date", "edit", "slack-alerts", "milestone_date")], { date: "2026-11-30" }),
+    r("anomaly-detection", "Anomaly detection", "low_confidence", "confirm", "Low confidence", "Confidence low, under the company's low threshold (0.4).", [accept("anomaly-detection"), drop("anomaly-detection")], { confidence: "low", low: 0.4 }),
+    r(
+      "budget-caps",
+      "Budget caps",
+      "horizon_breaks_dependency",
+      "blocking",
+      "Depends on a later item",
+      "Needs Anomaly detection, which is in Later. An item cannot ship before what it depends on.",
+      [moveTo("budget-caps", "later"), moveTo("anomaly-detection", "now", "Pull dependency to Now"), fix("Remove dependency", "edit", "budget-caps", "depends_on", { remove: ["anomaly-detection"] })],
+      { dependency: "anomaly-detection", dependency_horizon: "later" },
+    ),
+    r("usage-export", "Usage export", "unknown_prd_section", "blocking", "No PRD section", "Section export is not in Usage alerts PRD v1.", [fix("Link section", "edit", "usage-export", "prd_section")], { section: "export" }),
+    r("cost-forecast", "Cost forecast", "horizon_changed", "confirm", `Moved from Now (${base})`, `It was in Now in ${base}.`, [accept("cost-forecast"), moveTo("cost-forecast", "now", "Keep in Now")], { from: "now", to: "next" }),
+    r("weekly-digest", "Weekly digest", "dropped_item", "confirm", `Dropped since ${base}`, `It was in ${base} and is not in this file.`, [accept("weekly-digest", "Accept drop"), fix("Keep", "restore", "weekly-digest")]),
+    r("mobile-push", "Mobile push", "serves_no_goal", "confirm", "Serves no goal", "Mobile push supports no confirmed goal.", [accept("mobile-push"), drop("mobile-push")], { feature: "mobile-push" }),
+    r("sso-login", "Single sign-on", "new_item", "confirm", `New since ${base}`, `Not in ${base}.`, [accept("sso-login"), drop("sso-login")]),
+    r("invoice-pdf", "Invoice PDF", "rank_vs_horizon", "confirm", "Top priority in Later", "Ranked 2 but placed in Later.", [accept("invoice-pdf"), moveTo("invoice-pdf", "next")], { rank: 2 }),
+    r("webhooks", "Webhooks", "linked_blocker", "confirm", "Open blocker", "Vendor rate limit is open.", [accept("webhooks"), moveTo("webhooks", "later")], { blocker: "vendor-rate-limit", status: "open" }),
+    r(
+      "webhooks",
+      "Webhooks",
+      "stale_section",
+      "confirm",
+      "PRD section changed",
+      "4.6 Webhooks changed in Usage alerts PRD v2 after this item was derived from v1.",
+      [accept("webhooks")],
+      { section: "alerts-webhooks", version: 2, gone: false, send_back: true },
+    ),
+  ];
+}
+
+/** A prd_to_roadmap run waiting at its Roadmap items checkpoint, with a reason of every code on its nine items. */
+function roadmapReviewRun(): RunOut {
+  const id = ROADMAP_REVIEW_RUN_ID;
+  const at = "2026-10-20T09:00:00Z";
+  const flow = flowOf("prd_to_roadmap");
+  const knobs = resolveKnobs("prd_to_roadmap", {}) as RunOut["knobs"];
+  let n = 0;
+  const ids = () => `7a11c0de-0000-4000-8000-0000000d2${String(++n).padStart(3, "0")}`;
+  const segments = segmentsFor("prd_to_roadmap", knobs, ids);
+  for (const s of segments) s.estimate_usd = segEstimate(s.roles, knobs.depth);
+  const [items] = segments;
+  const problems: ItemsCheck["problems"] = [
+    { code: "unverified_date", message: "item slack-alerts: no verified estimate, capacity or commitment of this PRD (for this item) named in date_source ('a guess') supports 2026-11-30; drop the date or record the basis", item: "slack-alerts" },
+    { code: "unknown_prd_section", message: "item usage-export: PRD section 'export' is not in the PRD version", item: "usage-export" },
+    { code: "horizon_breaks_dependency", message: "item budget-caps is in now but depends on anomaly-detection in later", item: "budget-caps" },
+  ];
+  Object.assign(items, {
+    status: "succeeded",
+    cost_usd: 4.9,
+    workflow_id: "mock-wf-roadmap-items",
+    artifacts: ["roadmap_items.yaml"],
+    started_at: at,
+    finished_at: "2026-10-20T09:04:00Z",
+    attempts: [{ attempt: 1, workflow_id: "mock-wf-roadmap-items", submitted_at: at, cost_usd: 4.9, note: null, note_by: null, state: "succeeded" }],
+    items_check: withReasons({ items: 9, by_horizon: { now: 4, next: 2, later: 3 }, problems }, reviewReasons(), {
+      kind: "roadmap_version",
+      label: "roadmap v1",
+      version: 1,
+      attempt: null,
+    }),
+  });
+  const estimate = round2(segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
+  const run: RunOut = {
+    id,
+    flow: "prd_to_roadmap",
+    flow_title: flow.title,
+    status: "awaiting_checkpoint",
+    document_id: null,
+    document_slug: "usage-alerts-roadmap",
+    document_kind: "roadmap",
+    source: { document_id: "7a11c0de-0000-4000-8000-0000000d2a01", slug: "usage-alerts", title: "Usage alerts PRD", kind: "prd", version: 1, version_id: "7a11c0de-0000-4000-8000-0000000d2a02", approved_at: "2026-10-19T12:00:00Z" },
+    template: ROADMAP_DEFAULTS.template,
+    theme: ROADMAP_DEFAULTS.theme,
+    estimate_usd: estimate,
+    spent_usd: 4.9,
+    created_by: "mock-user",
+    created_at: at,
+    started_at: at,
+    finished_at: null,
+    waiting_on: "roadmap_items",
+    error: null,
+    can_retry: false,
+    can_stop_cancelling: false,
+    can_retry_lookup: false,
+    cancel_again: [],
+    can_dismiss_overrun: false,
+    can_retry_import: false,
+    knobs,
+    snapshot_id: ids(),
+    snapshot_as_of: at,
+    approved_by: null,
+    approved_at: null,
+    needs_approval: false,
+    overrun_ceiling_usd: round2(estimate * FACTOR),
+    runtime: "fake",
+    notes: FLOW_CATALOG.runtime_notes,
+    segments,
+    checkpoints: [
+      {
+        id: ids(),
+        run_id: id,
+        kind: "roadmap_items",
+        status: "pending",
+        approver_role: "approver",
+        segment_seq: 1,
+        decided_by: null,
+        decided_at: null,
+        note: null,
+        payload: { segment_seq: 1, segment: "roadmap_items", attempt: 1, artifacts: ["roadmap_items.yaml"], items_check: items.items_check },
+        created_at: "2026-10-20T09:04:00Z",
+        can_decide: true,
+        cannot_approve: null,
+      },
+    ],
+    token_read_only: false,
+  };
+  refresh(run);
+  return run;
+}
+
+/** The roadmap review run and its file, as e2e/helpers.ts seedRoadmapReview adds them to the mock's data. */
+export const ROADMAP_REVIEW_RUN: { run: RunOut; artifacts: Record<string, string> } = {
+  run: roadmapReviewRun(),
+  artifacts: { [`${ROADMAP_REVIEW_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS },
+};

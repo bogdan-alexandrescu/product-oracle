@@ -775,27 +775,95 @@ function DraftRejected({
 }
 
 /** O4b: the check of roadmap_items.yaml, counts by horizon and every problem found. */
-function ItemsCheckLine({ check }: { check: NonNullable<SegmentOut["items_check"]> }) {
+type ItemsCheck = NonNullable<SegmentOut["items_check"]>;
+type ItemReason = ItemsCheck["reasons"][number];
+
+/** A reason's fixes as plain words, until the items review makes them buttons: "Fix: Remove date or Record basis". */
+function fixText(reason: ItemReason): string | null {
+  const labels = reason.fixes.map((f) => f.label);
+  if (labels.length === 0) return null;
+  const last = labels.pop()!;
+  return `Fix: ${labels.length ? `${labels.join(", ")} or ${last}` : last}`;
+}
+
+/** Reasons per item, in the order given (item position, blocking first). */
+function byItem(reasons: ItemReason[]): { item: string; title: string; reasons: ItemReason[] }[] {
+  const out: { item: string; title: string; reasons: ItemReason[] }[] = [];
+  for (const r of reasons) {
+    let group = out.find((g) => g.item === r.item);
+    if (!group) {
+      group = { item: r.item, title: r.item_title || r.item, reasons: [] };
+      out.push(group);
+    }
+    group.reasons.push(r);
+  }
+  return out;
+}
+
+// Reason chips wrap instead of cutting their label short (a phone is 390 px wide).
+const REASON_CHIP = "h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left";
+
+function ItemsCheckLine({ check }: { check: ItemsCheck }) {
   const horizons = Object.entries(check.by_horizon).map(([h, n]) => `${n} ${h}`);
+  const reasons = check.reasons ?? [];
+  // An item's problems read as its blocking reasons; the box keeps the file's own problems
+  // (or every problem, for a check stored before reasons).
+  const boxed = reasons.length > 0 ? check.problems.filter((p) => !p.item) : check.problems;
+  const counts = [
+    check.blocking > 0 && `${check.blocking} blocking`,
+    check.to_confirm > 0 && `${check.to_confirm} to confirm`,
+  ].filter(Boolean);
   return (
     <div data-testid="items-check">
       <p className="flex flex-wrap items-center gap-2">
-        <span className="tnum">
+        <span className="tnum" data-testid="items-check-summary">
           {check.items} roadmap item{check.items === 1 ? "" : "s"}
           {horizons.length > 0 && `: ${horizons.join(", ")}`}
+          {counts.map((c) => ` · ${c}`).join("")}
         </span>
-        {check.problems.length === 0 ? (
+        {check.problems.length === 0 && reasons.length === 0 ? (
           <Chip kind="pass">no problems</Chip>
         ) : (
-          <Chip kind="warn">
-            {check.problems.length} problem{check.problems.length === 1 ? "" : "s"}
-          </Chip>
+          boxed.length > 0 && (
+            <Chip kind="warn">
+              {boxed.length} problem{boxed.length === 1 ? "" : "s"}
+            </Chip>
+          )
         )}
       </p>
-      {check.problems.length > 0 && (
-        <ul className="mt-1.5 space-y-0.5 rounded-button bg-warn-bg px-3 py-1.5 text-sm text-warn">
-          {check.problems.map((p, i) => (
-            <li key={i} className="truncate" title={p.message}>
+      {check.reasons_partial && (
+        <p className="mt-1 text-sm text-text2">Only the rule problems are listed: Oracle could not load what the other reasons read.</p>
+      )}
+      {reasons.length > 0 && (
+        <ul className="mt-1.5 space-y-2" data-testid="items-reasons">
+          {byItem(reasons).map((g) => (
+            <li key={g.item} data-testid="item-reasons" data-item={g.item} className="min-w-0">
+              <p className="font-medium break-words">{g.title}</p>
+              <ul className="mt-1 space-y-1.5">
+                {g.reasons.map((r, i) => (
+                  <li key={`${r.code}-${i}`} className="flex min-w-0 flex-col items-start gap-0.5 text-sm" data-testid="item-reason" data-code={r.code}>
+                    <Chip kind={r.severity === "blocking" ? "crit" : "warn"} className={REASON_CHIP} data-testid="reason-chip">
+                      {r.label}
+                    </Chip>
+                    <span className="break-words" data-testid="reason-text">
+                      {r.text}
+                    </span>
+                    {fixText(r) && (
+                      <span className="break-words text-text2" data-testid="reason-fixes">
+                        {fixText(r)}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+      {boxed.length > 0 && (
+        <ul className="mt-1.5 space-y-0.5 rounded-button bg-warn-bg px-3 py-1.5 text-sm text-warn" data-testid="items-check-problems">
+          {boxed.map((p, i) => (
+            <li key={i} className="break-words">
               {p.message}
             </li>
           ))}

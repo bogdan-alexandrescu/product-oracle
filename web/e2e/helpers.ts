@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 import { MOCK_LOGIN } from "../lib/api/mock/fixtures";
+import { ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
 
 export const ADMIN = MOCK_LOGIN;
 
@@ -211,4 +212,22 @@ export async function seedSentBack(page: Page): Promise<string> {
     },
     { id: SENT_BACK_RUN, summary: SENT_BACK_SUMMARY },
   );
+}
+
+/**
+ * Seeds the mock with the roadmap-items-waiting run (ROADMAP_REVIEW_RUN): a "Roadmap from an
+ * approved PRD" run on usage-alerts-roadmap waiting at its Roadmap items checkpoint, its
+ * nine-item file checked with 3 blocking reasons and a reason of every to-confirm code (one
+ * of them a dropped item). Returns the run's id.
+ */
+export async function seedRoadmapReview(page: Page): Promise<string> {
+  return page.evaluate((seed) => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    db.runs.runs = db.runs.runs.filter((r: { id: string }) => r.id !== seed.run.id);
+    db.runs.runs.push(seed.run);
+    Object.assign(db.runs.artifacts, seed.artifacts);
+    localStorage.setItem(key, JSON.stringify(db));
+    return seed.run.id;
+  }, ROADMAP_REVIEW_RUN);
 }
