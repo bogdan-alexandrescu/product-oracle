@@ -913,10 +913,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           }
           action={
             <>
-              {/* G1: a discussion of the whole document. */}
+              {/* G1: a discussion of the whole document. On a phone the header has no room;
+                  each section's ⋯ menu still has Discuss this section. */}
               {document_ && canComment && !readOnly && (
                 <Button
                   icon="comment"
+                  className="max-[639px]:hidden"
                   data-testid="doc-discuss"
                   onClick={() => discuss({ kind: "document", subject: { document_id: document_.id, version: n }, label: document_.title })}
                 >

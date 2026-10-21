@@ -76,6 +76,8 @@ test("discuss a section: the mention shows as a chip, the Discussion chip counts
   const before = await openFeedback.textContent();
   await openTab(page, "Feedback");
   await expect(discussionChip(page)).toHaveText(/^Discussion\s*0$/);
+  // The whole document has its own Discuss in the header.
+  await expect(page.getByTestId("doc-discuss")).toHaveText("Discuss");
 
   await discussProblem(page);
   await expect(thread(page).getByTestId("discussion-visibility")).toHaveText("Open");

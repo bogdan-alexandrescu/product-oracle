@@ -228,7 +228,10 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
- * problem (C6, saved-addresses).
+ * problem (C6, saved-addresses);
+ * "discussions" as the default company plus one private discussion the commenter started
+ * with the approver on team-workspaces v2's Problem, 3 messages from the 2 of them (G1,
+ * ./discussions.ts).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
