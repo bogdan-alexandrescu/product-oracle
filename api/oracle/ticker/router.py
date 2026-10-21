@@ -52,6 +52,7 @@ from oracle.connections import service as connections_service
 from oracle.db import get_engine
 from oracle.jobs import worker as llm_jobs
 from oracle.models import Tenant
+from oracle.reports import alignment as alignment_reports
 from oracle.roadmap import views as track_views
 from oracle.tenancy import tenant_session, unscoped_session
 from oracle.ticker import body, idtoken
@@ -168,8 +169,9 @@ def _count_sweep(result: dict[str, Any] | None, out: TickerOut) -> None:
 
 
 async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failures) -> None:
-    """One company's runs and account sweep (``oracle.ticker.body``) and its product
-    tracks' monitoring, each on its own."""
+    """One company's runs and account sweep (``oracle.ticker.body``), its product
+    tracks' monitoring and then its weekly alignment report (oracle.reports), each on
+    its own."""
     async with tenant_session(tenant_id) as db:
         company = await body.tick_company(db, tenant_id)
     if company.runs is not None:
@@ -193,6 +195,15 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
             failures.add(tenant_id)
     except Exception:
         log.exception("run ticker: track monitoring failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
+        # F6: the weekly alignment report once its moment has passed, and the Slack posts
+        # that are due; deterministic, no model call.
+        async with tenant_session(tenant_id) as db:
+            await alignment_reports.due(db)
+            await db.commit()
+    except Exception:
+        log.exception("run ticker: the alignment report failed for company %s", tenant_id)
         failures.add(tenant_id)
 
 

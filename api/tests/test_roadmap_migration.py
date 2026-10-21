@@ -70,7 +70,7 @@ def test_0016_roadmap_follows_the_wave_1_head():
     # 0016_refinement_batch (C1e) chains on it, 0017_citation_source_oracle on that, then
     # 0018_runtime_features, 0019_citation_confidence, 0014_intake and the PRD review chain
     # (0014_review ... 0014_member_follow_up_retry); still a single head.
-    assert script.get_heads() == ["0015_specs"]
+    assert script.get_heads() == ["0020_alignment_reports"]
     assert script.get_revision("0016_refinement_batch").down_revision == REVISION
     assert script.get_revision("0017_citation_source_oracle").down_revision == (
         "0016_refinement_batch"

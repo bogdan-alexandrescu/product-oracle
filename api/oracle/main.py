@@ -26,6 +26,7 @@ from oracle.docs.router import router as docs_router
 from oracle.docs.schemas import ImportErrorResponse
 from oracle.export.router import router as export_router
 from oracle.intake.router import router as intake_router
+from oracle.integrations.router import router as company_integrations_router
 from oracle.jobs.router import router as llm_jobs_router
 from oracle.jobs.worker import (
     JOB_OVERHEAD_SECONDS,
@@ -41,6 +42,7 @@ from oracle.modules.service import seed_all_companies
 from oracle.preferences.router import router as preferences_router
 from oracle.priorities.router import router as priorities_router
 from oracle.quality.router import router as quality_router
+from oracle.reports.router import router as reports_router
 from oracle.review.router import router as review_router
 from oracle.review.v2_router import router as review_v2_router
 from oracle.roadmap.router import router as roadmap_router
@@ -198,6 +200,9 @@ def create_app() -> FastAPI:
     # CR-09: engineering specs, user flows and wireframes from an approved PRD.
     app.include_router(specs_router)
     app.include_router(roadmap_router)
+    # F6: the weekly alignment report and the company's Slack install it posts through.
+    app.include_router(reports_router)
+    app.include_router(company_integrations_router)
     # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
     app.include_router(oauth_router)
     # Cloud Scheduler's run ticker (Google ID token only; not in OpenAPI, so no MCP tool).

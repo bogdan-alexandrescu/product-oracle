@@ -183,6 +183,8 @@ export type NeedGroup =
   | "lookups"
   | "imports"
   | "revoke-failures"
+  | "report-failures"
+  | "reports"
   | "feedback"
   | "questions"
   | "searches"
@@ -393,6 +395,85 @@ export function revokeNeeds(failures: RevokeFailure[], busy: string | null, act:
             onClick={() =>
               act(`dismiss-${f.id}`, () => unwrap(api.POST("/v1/member-follow-ups/{follow_up_id}/dismiss", path)))
             }
+          >
+            Dismiss
+          </Button>
+        </>
+      ),
+    };
+  });
+}
+
+type InboxReport = NonNullable<InboxOut["reports"]>[number];
+type ReportFailure = NonNullable<InboxOut["report_failures"]>[number];
+
+/**
+ * Owners only (F6): the weekly alignment reports, New while unread and made after my last
+ * visit, Open while unread, Done once opened (C1e). Open shows the report, which marks it read.
+ */
+export function reportNeeds(reports: InboxReport[], seenBefore: string | null | undefined): StatedNeed[] {
+  return reports.map((r) => {
+    const risky = r.summary.at_risk + r.summary.off_track;
+    const label = `${r.title} · ${risky} at risk · ${r.summary.slips} ${r.summary.slips === 1 ? "slip" : "slips"}`;
+    return {
+      key: `report-${r.id}`,
+      icon: "roadmap",
+      kind: "Report",
+      state: r.read ? "done" : isNew(r.created_at, seenBefore) ? "new" : "open",
+      counted: true,
+      group: "reports",
+      item: (
+        <Link href={`/plan/reports/${r.id}`} className="min-w-0 truncate hover:underline" title={r.headline}>
+          {label}
+        </Link>
+      ),
+      context: (
+        <span className="block truncate text-text2" title={r.headline}>
+          {r.headline}
+        </span>
+      ),
+      at: r.created_at,
+      action: (
+        <LinkButton variant={r.read ? "ghost" : undefined} href={`/plan/reports/${r.id}`} aria-label="Open">
+          Open
+        </LinkButton>
+      ),
+    };
+  });
+}
+
+/** Owners only (F6): a report Slack refused for 24 hours, with Retry and Dismiss. */
+export function reportFailureNeeds(failures: ReportFailure[], busy: string | null, act: Act): Need[] {
+  return failures.map((f) => {
+    const path = { params: { path: { report_id: f.id } } };
+    const why = `${f.channel ? `#${f.channel.name} · ` : ""}tried ${f.attempts} time${f.attempts === 1 ? "" : "s"}`;
+    return {
+      key: `report-failure-${f.id}`,
+      icon: "alert",
+      kind: "Couldn't post",
+      item: (
+        <Link href={`/plan/reports/${f.id}`} className="min-w-0 truncate hover:underline" title={f.title}>
+          Report not posted to Slack · {f.error ?? "Slack refused it"}
+        </Link>
+      ),
+      context: (
+        <span className="block truncate text-text2" title={`${f.title} · ${why}`}>
+          {f.title.replace("Report not posted to Slack · ", "")} · {why}
+        </span>
+      ),
+      at: f.created_at,
+      action: (
+        <>
+          <Button
+            disabled={busy !== null}
+            onClick={() => act(`report-retry-${f.id}`, () => unwrap(api.POST("/v1/alignment-reports/{report_id}/slack/retry", path)))}
+          >
+            Retry
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={busy !== null}
+            onClick={() => act(`report-dismiss-${f.id}`, () => unwrap(api.POST("/v1/alignment-reports/{report_id}/slack/dismiss", path)))}
           >
             Dismiss
           </Button>
@@ -775,6 +856,8 @@ export function allNeeds(
     ...stated(n.lookups, "lookups"),
     ...stated(n.imports, "imports"),
     ...stated(revokeNeeds(inbox.revoke_failures ?? [], busy, act), "revoke-failures"),
+    ...stated(reportFailureNeeds(inbox.report_failures ?? [], busy, act), "report-failures"),
+    ...reportNeeds(inbox.reports ?? [], seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.
