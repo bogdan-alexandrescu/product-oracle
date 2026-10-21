@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /** The run's status badge (Next keeps the list page mounted but hidden). */
@@ -379,4 +380,46 @@ test("mock run ids and times are stable: every page load, the runs list, the inb
   expect(Object.keys(ids[0]!).sort()).toEqual(["checkout-redesign", "team-onboarding", "team-workspaces", "usage-alerts-v2"]);
   expect(ids[1]).toEqual(ids[0]);
   expect(dates[1]).toEqual(dates[0]);
+});
+
+test("a decision SwarmCloud has not taken yet: recorded, shown as delivering, final, then delivered", async ({ page }) => {
+  // Owner decision 2026-10-20: the decision is recorded before SwarmCloud is told. Here
+  // SwarmCloud takes nothing until the next tick, so the decide call answers 503.
+  await page.addInitScript((key) => localStorage.setItem(key, "undelivered"), MOCK_SCENARIO_KEY);
+  await openRuns(page);
+  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Waiting");
+  // A second tab on the same run, still showing the open review (another approver, say).
+  const other = await page.context().newPage();
+  await other.goto(page.url());
+  await expect(other.getByTestId("checkpoint-baseline_confirm")).toContainText("Waiting");
+
+  await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
+  // The page re-reads the run: the review is approved, delivering, with why it waits. That
+  // says what the 503 said, so no error is drawn as well.
+  const segment = page.getByTestId("segment-baseline");
+  const delivering = segment.getByTestId("checkpoint-delivering");
+  await expect(delivering).toHaveCount(1);
+  await expect(delivering).toContainText(
+    "Approved by admin@example.com, delivering to the run… (1 try, last: SwarmCloud HTTP 503 unavailable)",
+  );
+  await expect(page.getByRole("alert").filter({ hasText: "did not confirm" })).toHaveCount(0);
+  // Decided: one fewer waiting on me (10 in the seeded company); the delivery is not counted.
+  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("9");
+  await expect(segment.getByTestId("checkpoint-baseline_confirm")).toContainText("Approved");
+  await expect(segment.getByRole("button", { name: "Approve and continue" })).toHaveCount(0);
+
+  // The other tab decides too: a recorded decision is final (409), and it re-reads the run.
+  const stale = other.getByTestId("checkpoint-baseline_confirm");
+  await stale.getByLabel("Note for the agents").fill("Add a target for G2");
+  await stale.getByRole("button", { name: "Request changes" }).click();
+  await expect(other.getByRole("alert").filter({ hasText: "already decided" })).toBeVisible();
+  await expect(other.getByTestId("segment-baseline").getByTestId("checkpoint-delivering")).toContainText("Approved by admin@example.com");
+  await other.close();
+
+  // The tick delivers it: the line goes, the review reads approved, the run goes on.
+  await page.getByRole("button", { name: "Check agents now" }).click();
+  await expect(delivering).toHaveCount(0);
+  await expect(segment.getByTestId("checkpoint-baseline_confirm")).toContainText("Approved");
+  await expect(status(page)).toHaveText("Running");
 });

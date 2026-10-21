@@ -106,6 +106,49 @@ test("inbox: owners retry or dismiss a provider revoke a removed member's disabl
   await expect(failures).toHaveCount(0);
 });
 
+test("inbox: a decision not delivered yet shows under its own heading, uncounted, until the tick delivers it", async ({
+  page,
+}) => {
+  // SwarmCloud takes no decision until the next tick: the decide call answers 503, recorded.
+  await page.addInitScript((key) => localStorage.setItem(key, "undelivered"), MOCK_SCENARIO_KEY);
+  await login(page);
+  const badge = page.getByTestId("nav-inbox-badge");
+  await expect(badge).toHaveText("10");
+  await page.goto("/runs");
+  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
+  await expect(page.getByTestId("segment-baseline").getByTestId("checkpoint-delivering")).toBeVisible();
+  const run = page.url();
+
+  await page.goto("/inbox");
+  // The checkpoint is decided (one fewer to do); the delivery is not counted.
+  await expect(badge).toHaveText("9");
+  await expect(page.getByText("9 waiting").filter({ visible: true })).toBeVisible();
+  await expect(page.getByTestId("inbox-checkpoints")).toHaveCount(0);
+  // Shown only, under Open, with a heading saying what it is.
+  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Open/ }).click();
+  const group = page.getByTestId("inbox-tab-open").getByTestId("inbox-deliveries");
+  await expect(group.getByRole("heading", { name: "Decision not delivered yet" })).toBeVisible();
+  const row = group.locator("tr[data-row]");
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("Confirm the baseline: approved by admin@example.com");
+  await expect(row).toContainText("Last: SwarmCloud HTTP 503 unavailable");
+  await expect(row).toContainText("team-onboarding");
+  // Nothing to decide here: only Open, to the run.
+  await expect(row.getByRole("button")).toHaveCount(0);
+  await expect(row.getByRole("link", { name: "Open" })).toHaveAttribute("href", new URL(run).pathname);
+
+  // The tick delivers it; the row and its heading go.
+  await page.goto(run);
+  await page.getByRole("button", { name: "Check agents now" }).click();
+  await expect(page.getByTestId("segment-baseline").getByTestId("checkpoint-delivering")).toHaveCount(0);
+  await page.goto("/inbox");
+  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Open/ }).click();
+  await expect(page.getByTestId("inbox-tab-open")).toBeVisible();
+  await expect(page.getByTestId("inbox-deliveries")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Decision not delivered yet" })).toHaveCount(0);
+});
+
 test("inbox: only owners see revokes a disable could not make", async ({ page }) => {
   await withRevokeFailures(page);
   await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [MOCK_ROLE_KEY, "approver"] as const);
