@@ -77,6 +77,8 @@ function isActive(pathname: string, d: Dest, home?: string): boolean {
   const base = d.match ?? d.href;
   // /sources (evidence search) lives under Settings › Sources.
   if (d === SETTINGS && pathname.startsWith("/sources")) return true;
+  // The Plan's alignment reports (F6) belong with the Roadmap.
+  if (d.href === "/roadmap" && (pathname === "/plan" || pathname.startsWith("/plan/"))) return true;
   return pathname === base || pathname.startsWith(`${base}/`);
 }
 

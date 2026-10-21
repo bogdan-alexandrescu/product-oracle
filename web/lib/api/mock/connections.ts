@@ -85,7 +85,22 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
   // mock company's members are all @example.com.
   company_email_domains: ["example.com"],
   company_shared_drives: [],
+  // F6: the weekly alignment report, Monday 08:00 Pacific; the channel once Slack is connected.
+  alignment_report: { enabled: true, weekday: "mon", time: "08:00", timezone: "America/Los_Angeles", slack_channel: null },
 };
+
+/** A company setting's value as stored, else its default (./reports.ts reads the report's channel). */
+export function mockSettingValue(key: string): unknown {
+  const db = load();
+  return key in db.settings ? db.settings[key] : SETTING_DEFAULTS[key];
+}
+
+/** Stores a company setting's value, as PUT /v1/settings/{key} would. */
+export function setMockSetting(key: string, value: unknown) {
+  const db = load();
+  db.settings[key] = value;
+  save(db);
+}
 
 /** A mail provider anyone can sign up with, which the API refuses as a company domain. */
 function publicMailDomain(domain: string): boolean {
@@ -210,7 +225,15 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
     if (!(key in SETTING_DEFAULTS)) return json(404, { detail: `Unknown setting '${key}'` });
     if (m === "GET") return json(200, settingOut(db, key));
     if (m === "PUT") {
-      const { value } = await body<Schemas["SettingIn"]>();
+      const { value: given } = await body<Schemas["SettingIn"]>();
+      let value = given;
+      if (key === "alignment_report" && value && typeof value === "object") {
+        // As the API: a partial value takes the defaults for the rest.
+        value = { ...(SETTING_DEFAULTS.alignment_report as object), ...(value as object) };
+        const v = value as { weekday: string; time: string };
+        if (!["mon", "tue", "wed", "thu", "fri", "sat", "sun"].includes(v.weekday)) return json(422, { detail: "alignment_report.weekday must be one of mon, tue, wed, thu, fri, sat, sun" });
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v.time)) return json(422, { detail: "alignment_report.time must be HH:MM, 00:00 to 23:59" });
+      }
       if (key === "company_email_domains" && Array.isArray(value)) {
         const domain = value.map((d) => String(d).trim().toLowerCase().replace(/^@/, "")).find(publicMailDomain);
         if (domain) {

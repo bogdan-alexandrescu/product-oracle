@@ -7,8 +7,8 @@ import { login } from "./helpers";
 /*
  * F6 Weekly alignment report, driven through the UI as an owner would, on the mock layer.
  * A mock transport stands in for Slack (lib/api/mock/reports.ts); the real Slack API is
- * never called. The "alignment-report" scenario seeds two weekly reports (week of Oct 12,
- * read, whose Slack post failed; week of Oct 19, unread, posted to #plan) and Oracle's Slack
+ * never called. The "alignment-report" scenario seeds two weekly reports (week of Oct 5,
+ * read, whose Slack post failed; week of Oct 12, unread, posted to #plan) and Oracle's Slack
  * install; the default scenario has neither.
  */
 
@@ -27,20 +27,20 @@ test("Inbox: the weekly report row opens the report, and moves to Done", async (
   await page.goto("/inbox");
   const row = page.getByTestId("inbox-tab-new").getByTestId("inbox-reports").locator("tr[data-row]");
   await expect(row).toHaveCount(1);
-  await expect(row).toContainText("Weekly alignment · week of Oct 19");
+  await expect(row).toContainText("Weekly alignment · week of Oct 12");
   await expect(row).toContainText("1 at risk · 2 slips");
   const badge = page.getByTestId("nav-inbox-badge");
   const before = Number(await badge.innerText());
   await row.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/plan\/reports\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 19");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 12");
   await expect(badge).toHaveText(String(before - 1));
 
   await page.goto("/inbox");
   await expect(page.getByTestId("inbox-tab-new").getByTestId("inbox-reports")).toHaveCount(0);
   await tab(page, "Done").click();
   await expect(page.getByTestId("inbox-tab-done").getByTestId("inbox-reports").locator("tr[data-row]").first()).toContainText(
-    "Weekly alignment · week of Oct 19",
+    "Weekly alignment · week of Oct 12",
   );
 });
 
@@ -63,11 +63,11 @@ test("report page: the headline, a panel per track, needs attention linking to t
   await withReports(page);
   await login(page);
   await page.goto("/plan/reports");
-  await page.getByRole("link", { name: /week of Oct 19/ }).first().click();
-  await expect(page.getByTestId("report-headline")).toHaveText(
+  await page.getByRole("link", { name: /week of Oct 12/ }).first().click();
+  await expect(page.getByTestId("report-headline").filter({ visible: true })).toHaveText(
     "1 of 2 tracks at risk; 2 dates slipping as of now; 4 Now items have no issue.",
   );
-  const tracks = page.getByTestId("report-track");
+  const tracks = page.getByTestId("report-track").filter({ visible: true });
   await expect(tracks).toHaveCount(2);
   const first = tracks.first();
   await expect(first.getByRole("heading", { name: "Usage alerts PRD" })).toBeVisible();
@@ -79,20 +79,20 @@ test("report page: the headline, a panel per track, needs attention linking to t
   await expect(first).toContainText("ENG-413");
   await expect(first).toContainText("Estimate replaced");
   await expect(tracks.nth(1).getByTestId("track-health")).toHaveText("On track");
-  await expect(page.getByTestId("report-slack")).toContainText("Posted to #plan on Oct 26");
+  await expect(page.getByTestId("report-slack").filter({ visible: true })).toContainText("Posted to #plan on Oct 19");
 
   // Previous and Next report.
   await page.getByRole("link", { name: "Previous report" }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 12");
-  await expect(page.getByTestId("report-slack")).toContainText("channel_not_found");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 5");
+  await expect(page.getByTestId("report-slack").filter({ visible: true })).toContainText("channel_not_found");
   await expect(page.getByRole("link", { name: "Previous report" })).toHaveCount(0);
   await page.getByRole("link", { name: "Next report" }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 19");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 12");
 
   // Printable: the print stylesheet drops the rail.
-  await expect(page.getByTestId("report-rail")).toBeVisible();
+  await expect(page.getByTestId("report-rail").filter({ visible: true })).toBeVisible();
   await page.emulateMedia({ media: "print" });
-  await expect(page.getByTestId("report-rail")).toBeHidden();
+  await expect(page.getByTestId("report-rail").filter({ visible: true })).toBeHidden();
   await expect(tracks.first()).toBeVisible();
 });
 
@@ -104,7 +104,7 @@ test("the Plan header's Alignment report opens the latest report", async ({ page
   await page.goto("/roadmap");
   await page.getByRole("link", { name: "Alignment report" }).click();
   await expect(page).toHaveURL(/\/plan\/reports\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 19");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 12");
 });
 
 test("Settings › Notifications: connect Slack, pick a channel, send a test message, disconnect", async ({ page }) => {
@@ -130,7 +130,7 @@ test("Settings › Notifications: connect Slack, pick a channel, send a test mes
   // The schedule: Monday 08:00 Pacific by default; owners change it.
   const schedule = page.getByTestId("report-schedule");
   await expect(schedule.getByLabel("Day")).toHaveValue("mon");
-  await expect(schedule.getByLabel("Time")).toHaveValue("08:00");
+  await expect(schedule.getByLabel("Time", { exact: true })).toHaveValue("08:00");
   await schedule.getByLabel("Day").selectOption("tue");
   await schedule.getByRole("button", { name: "Save schedule" }).click();
   await expect(schedule.getByText("Saved")).toBeVisible();
@@ -158,14 +158,14 @@ test("Generate now makes an on-demand report, posted only with Post to Slack tic
   await expect(dialog.getByLabel("Post to Slack")).not.toBeChecked();
   await dialog.getByRole("button", { name: "Generate" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^Alignment so far · week of /);
-  await expect(page.getByTestId("report-slack")).toHaveText("Not posted to Slack.");
+  await expect(page.getByTestId("report-slack").filter({ visible: true })).toHaveText("Not posted to Slack.");
 
   await page.goto("/plan/reports");
   await expect(rows).toHaveCount(3);
   await page.getByRole("button", { name: "Generate now" }).click();
   await page.getByRole("dialog", { name: "Generate a report now" }).getByLabel("Post to Slack").check();
   await page.getByRole("dialog", { name: "Generate a report now" }).getByRole("button", { name: "Generate" }).click();
-  await expect(page.getByTestId("report-slack")).toContainText("Posted to #plan");
+  await expect(page.getByTestId("report-slack").filter({ visible: true })).toContainText("Posted to #plan");
 });
 
 test("phone and themes: the report page and settings fit 390 px, light and dark without console errors", async ({ page }) => {
@@ -182,8 +182,8 @@ test("phone and themes: the report page and settings fit 390 px, light and dark 
     await page.goto("/plan/reports");
     await expect(page.getByTestId("reports-table")).toBeVisible();
     await expectNoSideScroll(page);
-    await page.getByTestId("reports-table").getByRole("link", { name: /week of Oct 19/ }).first().click();
-    const tracks = page.getByTestId("report-track");
+    await page.getByTestId("reports-table").getByRole("link", { name: /week of Oct 12/ }).first().click();
+    const tracks = page.getByTestId("report-track").filter({ visible: true });
     await expect(tracks).toHaveCount(2);
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     const [a, b] = [await tracks.nth(0).boundingBox(), await tracks.nth(1).boundingBox()];

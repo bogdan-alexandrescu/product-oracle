@@ -10,6 +10,7 @@ const ITEMS = [
   { label: "Connections", href: "/settings/connections", testId: "nav-connections" },
   { label: "Claude accounts", href: "/settings/claude-accounts", testId: "nav-claude-accounts" },
   { label: "Sources", href: "/settings/sources", testId: "nav-sources" },
+  { label: "Notifications", href: "/settings/notifications", testId: "nav-notifications" },
   { label: "Templates", href: "/settings/templates", testId: "nav-templates" },
   { label: "Themes", href: "/settings/themes", testId: "nav-themes" },
 ];

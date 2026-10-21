@@ -123,6 +123,7 @@ function PrdInspector({ d, built }: { d: Doc; built: Doc[] }) {
 export default function RoadmapPage() {
   const q = useQuery("documents|roadmap", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "roadmap" } } })));
   const prds = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
+  const latestReport = useQuery("alignment-reports|latest", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 1 } } })));
   const { role } = useMe();
   const canBuild = hasRole(role, "approver");
   const [selected, setSelected] = useState<string | null>(null);
@@ -244,9 +245,15 @@ export default function RoadmapPage() {
           )
         }
         action={
-          <LinkButton variant="primary" icon="plus" href="/documents/new?kind=roadmap">
-            New roadmap
-          </LinkButton>
+          <>
+            {/* F6: the latest weekly alignment report (the Plan's header button until F1). */}
+            <LinkButton href={latestReport.data?.[0] ? `/plan/reports/${latestReport.data[0].id}` : "/plan/reports"}>
+              Alignment report
+            </LinkButton>
+            <LinkButton variant="primary" icon="plus" href="/documents/new?kind=roadmap">
+              New roadmap
+            </LinkButton>
+          </>
         }
       />
       <div className="flex flex-col gap-3">

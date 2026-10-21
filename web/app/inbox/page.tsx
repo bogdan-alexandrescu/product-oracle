@@ -108,6 +108,8 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "lookups", title: "Stuck runs" },
   { id: "imports", title: "Couldn't import" },
   { id: "revoke-failures", title: "Couldn't revoke access" },
+  { id: "report-failures", title: "Report not posted to Slack" },
+  { id: "reports", title: "Reports" },
   { id: "feedback", title: "Feedback" },
   { id: "questions", title: "Questions" },
   { id: "revising", title: "Sent back by Oracle" },
@@ -153,7 +155,8 @@ function InboxTabs({
             Nothing {label.toLowerCase()}{" "}
             {tab === "new" && (
               <InfoTip label="the inbox" align="start">
-                Checkpoints that need a decision, cost approvals, feedback to review and the questions asked of you land here.
+                Checkpoints that need a decision, cost approvals, feedback to review, the questions asked of you and, for owners,
+                the weekly alignment report land here.
               </InfoTip>
             )}
           </Empty>

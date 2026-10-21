@@ -24,6 +24,7 @@ import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake } from "./intake";
+import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { dateMarks, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
@@ -83,6 +84,9 @@ export interface Db {
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
    * "revoke-failures" scenario only. */
   revoke_failures?: RevokeFailureRow[];
+  /** Alignment reports, their reads and Oracle's Slack install (./reports.ts, F6); seeded in
+   * the "alignment-report" scenario only. */
+  reports?: ReportsDb;
 }
 
 type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
@@ -161,6 +165,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * default company plus a PRD with three open Oracle suggestions (fleet-next); "big-prd" adds a PRD
  * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts); "revoke-failures" as the
  * default company plus two provider revokes a removed member's disable could not make (C2);
+ * "alignment-report" as the default company plus two weekly alignment reports and Oracle's
+ * Slack install (./reports.ts, F6);
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
  * next tick (recorded, the decide call answers 503; ./runs.ts).
  */
@@ -1407,6 +1413,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The Claude account pool checks roles itself: every member reads, owners change.
   const pool = await claudeAccountsRoute(req, p, q, me.role);
   if (pool) return pool;
+  // Alignment reports and the company Slack install check roles themselves (./reports.ts).
+  const reports = await reportsRoute(db, db.user_id, me, req, p, q);
+  if (reports) return reports;
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
   db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   const llm = llmContext(db, me.id, me.role);
@@ -1551,7 +1560,15 @@ async function route(db: Db, req: Request): Promise<Response> {
     const failures = atLeast(me.role, "owner")
       ? db.revoke_failures.filter((r) => !r.dismissed).map((r) => ({ ...r, dismissed: undefined }))
       : [];
-    return json(200, { ...inbox, revoke_failures: failures, total: inbox.total + failures.length });
+    // Owners also get the weekly alignment reports and the posts Slack refused (F6).
+    const reported = inboxReports(ensureReports(db, db.user_id), me);
+    return json(200, {
+      ...inbox,
+      revoke_failures: failures,
+      reports: reported.reports,
+      report_failures: reported.report_failures,
+      total: inbox.total + failures.length + reported.unread,
+    });
   }
   if (runs) return runs;
 
