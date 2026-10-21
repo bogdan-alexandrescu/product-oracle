@@ -4,7 +4,8 @@ credential: the Google connection's OAuth bundle ``{"access_token", ...}`` (the 
 lane refreshes it; a rejected token raises :class:`ConnectorAuthError`).
 config ``{"docs": [file ids], "folders": [folder ids], "names": {id: name}}``: the files
 and folders the person picked (S5, 'Drive folders', owner 2026-10-19). ``names`` is only
-what the Sources page shows before the first sync. A picked folder syncs every Google
+what the Sources page shows before the first sync: it names picked ids only, at most
+:data:`MAX_NAME` characters each. A picked folder syncs every Google
 Doc in it and its sub-folders, including docs added later, so the connection holds
 ``drive.readonly`` (read access to the person's Drive), not ``drive.file``. Every id must
 look like a Drive id (:data:`DRIVE_ID`); 'root' (the whole My Drive) is refused.
@@ -17,13 +18,23 @@ that drive is not one of the company's; elsewhere, when its owner is outside the
 or when no domain is set (fails closed). Docs picked one by one are always pulled in.
 
 A picked doc Oracle cannot read any more (unshared, access removed, trashed, not a Google
-Doc) is reported with :class:`ItemUnavailable`, one per doc, and deleted; a picked folder
-it cannot read is reported the same way and what came from it is kept until it can be
-read again or is removed from the source. The rest still syncs.
+Doc) is reported with :class:`ItemUnavailable`, one per doc, and deleted. A picked folder
+Drive refuses (403 for that file, or 404: a confirmed loss, owner 2026-10-20) or that is
+in the trash is reported the same way ("Lost access to <folder>") and what came from it
+is hidden (deleted) at once; while it is reported, every sync checks it again, and once
+it can be read its docs are read again and come back. A timeout, a 5xx or a rate limit
+fails or stops the sync instead, hiding nothing. The rest still syncs.
 
 Each Google Doc becomes one ``doc`` item exported as Markdown, or as plain text when
 Drive cannot export it as Markdown. ``acl`` is the file's sharing summary (owners,
-whether it is shared, and the permissions when the user may read them).
+whether it is shared, the shared drive it is in, and the permissions when the user may
+read them).
+
+Narrowing without Drive (S5, owner 2026-10-20): :func:`outside_picks` and
+:func:`outside_company` say, from the cursor's ``tree`` and the items' stored ``acl``,
+which live items a narrower allowlist or narrower company settings leave out, so they
+are deleted when the edit is saved (:mod:`oracle.sources.service`); :func:`forget` drops
+them from the cursor, so a later sync that finds them again reads them again.
 
 Cursor::
 
@@ -31,25 +42,27 @@ Cursor::
      "files": {"<file id>": "2026-10-01T09:00:00.000Z"},
      "listing": {"for": "<allowlist hash>", "changes": "<Drive changes token>",
                  "at": "<when the folders were last listed>"},
-     "tree": {"<picked folder id>": ["<doc id>", ...]},
+     "tree": {"<picked folder id>": ["<doc id pulled in from it>", ...]},
      "folders": ["<every folder id under the picked ones>"],
      "notes": [{"external_id", "reason", "name", "status"}]}
 
-A sync lists the picked folders (recursively, at most :data:`MAX_FOLDER_DOCS` docs per
-source) and reads the picked docs' metadata, then exports a doc only when its
-``modifiedTime`` moved past the one in ``files``. Every doc in ``files`` no longer found
-under the allowlist yields :class:`ItemDelete`. The sync engine adds every live item of
-the source to ``files`` first, so what an edit removed is deleted even when the cursor
-was reset (:mod:`oracle.sources.sync`). The folders are not listed again while Drive's
-change log shows nothing under them, the allowlist is the same and the last listing is
-younger than :data:`RELIST_SECONDS`.
+``tree`` records, for every picked folder, each doc pulled in from it (a doc under two
+picked folders is under both): which pick each item came from. A sync lists the picked
+folders (recursively, at most :data:`MAX_FOLDER_DOCS` docs per source) and reads the
+picked docs' metadata, then exports a doc only when its ``modifiedTime`` moved past the
+one in ``files``. Every doc in ``files`` no longer found under the allowlist yields
+:class:`ItemDelete`. The sync engine adds every live item of the source to ``files``
+first, so what an edit removed is deleted even when the cursor was reset
+(:mod:`oracle.sources.sync`). The folders are not listed again while Drive's change log
+shows nothing under them, no picked folder is reported lost, the allowlist is the same
+and the last listing is younger than :data:`RELIST_SECONDS`.
 """
 
 import asyncio
 import hashlib
 import json
 import re
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Collection, Iterable, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
@@ -92,6 +105,8 @@ NOT_A_DRIVE_ID = "is not a Drive file or folder id: choose it from Drive"
 # Picked files and folders per source, and how many of them validate checks at once.
 MAX_PICKED = 500
 VALIDATE_BATCH = 8
+# Characters in one picked item's display name (config "names").
+MAX_NAME = 500
 # Docs a source pulls in from its folders; past it the listing stops and says so.
 MAX_FOLDER_DOCS = 2000
 # Folders (picked ones and every sub-folder) one sync lists, each at least one Drive call;
@@ -116,9 +131,10 @@ NOT_PICKED = "Not picked: choose it again from Drive"
 TRASHED = "In the trash"
 NOT_A_DOC = "Not a Google Doc"
 NOT_A_FOLDER = "Not a folder"
-FOLDER_NO_ACCESS = (
-    "No access to this folder: removed, or no longer shared with you. "
-    "What came from it is kept until you remove it here"
+# A picked folder Drive refuses (403 for that file, or 404): a confirmed loss.
+FOLDER_LOST = (
+    "Lost access to {name}: removed, or no longer shared with you. "
+    "Its docs are hidden until Oracle can read it again"
 )
 FOLDER_LIMIT = (
     "Only the first {limit:,} docs in this source's folders are synced: pick smaller folders"
@@ -156,6 +172,10 @@ def _options(config: dict[str, Any]) -> tuple[list[str], list[str]]:
         raise ConnectorConfigError("allowlist at least one folder or doc")
     if len(folders) + len(docs) > MAX_PICKED:
         raise ConnectorConfigError(f"choose at most {MAX_PICKED} files and folders per source")
+    if not set(names) <= set(folders) | set(docs):
+        raise ConnectorConfigError("names may only name the picked files and folders")
+    if any(len(name) > MAX_NAME for name in names.values()):
+        raise ConnectorConfigError(f"names: at most {MAX_NAME} characters each")
     return folders, docs
 
 
@@ -194,6 +214,9 @@ def _acl(file: dict[str, Any]) -> dict[str, Any]:
         "shared": bool(file.get("shared")),
         "owners": [o.get("emailAddress") or o.get("displayName") for o in file.get("owners") or []],
     }
+    if file.get("driveId"):
+        # Whose the doc is when its shared drive leaves the company's list (S5).
+        acl["shared_drive"] = file["driveId"]
     if "permissions" in file:
         acl["permissions"] = [
             {
@@ -249,6 +272,102 @@ def _outside_reason(why: str, domains: list[str], skipped: bool) -> str:
     else:
         text = f"owned outside {_outside_label(domains)}"
     return f"Skipped: {text}" if skipped else text[0].upper() + text[1:]
+
+
+def picked_ids(config: dict[str, Any]) -> tuple[set[str], set[str]]:
+    """The picked folders and docs of a stored config (already checked when saved)."""
+    return set(config.get("folders") or []), set(config.get("docs") or [])
+
+
+def outside_picks(
+    config: dict[str, Any],
+    cursor: dict[str, Any] | None,
+    live: Iterable[str],
+    removed: Collection[str] = (),
+) -> set[str]:
+    """The ``live`` items ``config``'s picks no longer cover, judged without Drive from the
+    cursor's ``tree`` (S5, narrowing takes effect on save; owner 2026-10-20).
+
+    An item stays when it is picked on its own or listed under a picked folder. When a
+    picked folder's docs were never listed (its tree is unknown), an item it may hold
+    stays, unless it came from a pick that is gone: one of ``removed`` (a doc, or a doc
+    listed under a folder), or a doc listed under a folder the config no longer picks. The
+    next sync settles the rest."""
+    folders, docs = picked_ids(config)
+    tree: dict[str, list[str]] = (cursor or {}).get("tree") or {}
+    keep, unknown = set(docs), False
+    for folder in folders:
+        if folder in tree:
+            keep.update(tree[folder])
+        else:
+            unknown = True
+    gone_from = set(removed) - docs
+    for folder, ids in tree.items():
+        if folder not in folders:
+            gone_from.update(ids)
+    return {i for i in live if i not in keep and (not unknown or i in gone_from)}
+
+
+def _stored_file(acl: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The shared drive and owners an item's ``acl`` recorded, as :func:`owned_outside`
+    reads a Drive file; ``None`` when neither is known (stored before Oracle kept them)."""
+    acl = acl or {}
+    if acl.get("shared_drive"):
+        return {"driveId": acl["shared_drive"]}
+    emails = [o for o in acl.get("owners") or [] if isinstance(o, str) and "@" in o]
+    if emails:
+        return {"owners": [{"emailAddress": e} for e in emails]}
+    return None
+
+
+def outside_company(
+    config: dict[str, Any],
+    items: Iterable[tuple[str, dict[str, Any] | None]],
+    domains: list[str],
+    shared_drives: Sequence[str],
+    *,
+    unknown_outside: bool,
+) -> set[str]:
+    """The ids of ``items`` (``(external_id, acl)``) the company's ``domains`` and
+    ``shared_drives`` leave out, judged without Drive from what each item stored, as a
+    sync judges a doc found in a picked folder (:func:`owned_outside`). A doc picked on
+    its own always stays. An item whose drive and owner are not known is left out when
+    ``unknown_outside`` (a later sync reads it again if it is the company's)."""
+    _, docs = picked_ids(config)
+    out: set[str] = set()
+    for external_id, acl in items:
+        if external_id in docs:
+            continue
+        file = _stored_file(acl)
+        if file is None:
+            if unknown_outside:
+                out.add(external_id)
+        elif owned_outside(file, domains, shared_drives):
+            out.add(external_id)
+    return out
+
+
+def forget(cursor: dict[str, Any] | None, ids: Collection[str]) -> dict[str, Any] | None:
+    """``cursor`` without ``ids`` (items just deleted without Drive): the next sync lists
+    the folders again, and one that finds them under the allowlist again (the setting or
+    pick put back) exports them again, which brings them back."""
+    if not cursor or not ids:
+        return cursor
+    cursor = {k: v for k, v in cursor.items() if k != "listing"}
+    if isinstance(cursor.get("files"), dict):
+        cursor["files"] = {k: v for k, v in cursor["files"].items() if k not in ids}
+    if isinstance(cursor.get("tree"), dict):
+        cursor["tree"] = {f: [i for i in v if i not in ids] for f, v in cursor["tree"].items()}
+    return cursor
+
+
+def lost_folders(cursor: dict[str, Any] | None, folders: Collection[str]) -> list[str]:
+    """The picked folders the last sync reported it could not read."""
+    return [
+        n["external_id"]
+        for n in (cursor or {}).get("notes") or []
+        if n.get("external_id") in folders and n.get("status", "unavailable") == "unavailable"
+    ]
 
 
 def _listing_key(
@@ -488,6 +607,13 @@ class GoogleDocsConnector:
                 )
                 relist = touched
             if not relist:
+                # A folder Oracle lost access to: Drive's change log need not say it is
+                # back, so ask Drive about it; once it can be read, list again.
+                for root in lost_folders(cursor, folders):
+                    if await self._folder_problem(drive, root, names) is None:
+                        relist = True
+                        break
+            if not relist:
                 # Nothing under the picked folders or docs changed: report what the last
                 # listing found, read the picked docs not pulled in yet, keep the rest.
                 listing["changes"] = next_token
@@ -509,21 +635,22 @@ class GoogleDocsConnector:
                 listing["for"], listing["at"] = key, _now()
                 notes: list[dict[str, Any]] = []
                 current, protected = {}, set()
-                protect_all = False
                 all_folders = set(folders)
                 outside: dict[str, tuple[dict[str, Any], str]] = {}
                 budget, folders_left = MAX_FOLDER_DOCS, MAX_FOLDERS_WALKED
                 for root in folders:
-                    reason = await self._folder_problem(drive, root)
+                    reason = await self._folder_problem(drive, root, names)
                     if reason:
+                        # Drive refused it (403 for the file, or 404) or it is in the
+                        # trash: a confirmed loss (owner 2026-10-20). What came from it is
+                        # not found here, so it is deleted (hidden) below, unless picked on
+                        # its own or found under another folder; it comes back once a sync
+                        # can read the folder. A timeout or 5xx raised instead.
                         notes.append(
                             {"external_id": root, "reason": reason, "name": names.get(root)}
                         )
-                        if root in tree:
-                            protected.update(tree[root])
-                        else:
-                            # Which docs came from it is not known: delete nothing now.
-                            protect_all = True
+                        # Nothing is pulled in from it now; listed again once readable.
+                        tree[root] = []
                         continue
                     if folders_left <= 0:
                         found, limit = [], FOLDERS_WALKED_LIMIT
@@ -552,7 +679,12 @@ class GoogleDocsConnector:
                         kept = []
                     tree[root] = kept
                     for file in found:
-                        if file["id"] in current or file["id"] in outside:
+                        if file["id"] in current:
+                            # Pulled in from an earlier root too: it came from both.
+                            if file["id"] not in tree[root]:
+                                tree[root].append(file["id"])
+                            continue
+                        if file["id"] in outside:
                             continue
                         budget -= 1
                         why = owned_outside(file, domains, shared_drives)
@@ -586,10 +718,9 @@ class GoogleDocsConnector:
                         }
                     )
                 notes = [{k: v for k, v in n.items() if v is not None} for n in notes]
-                if not protect_all:
-                    for file_id in sorted(set(known) - set(current) - protected):
-                        yield ItemDelete(external_id=file_id)
-                        del known[file_id]
+                for file_id in sorted(set(known) - set(current) - protected):
+                    yield ItemDelete(external_id=file_id)
+                    del known[file_id]
                 for note in notes:
                     yield ItemUnavailable(**note)
 
@@ -632,17 +763,21 @@ class GoogleDocsConnector:
             return None, NOT_A_DOC
         return file, None
 
-    async def _folder_problem(self, drive: _Drive, folder: str) -> str | None:
+    async def _folder_problem(
+        self, drive: _Drive, folder: str, names: dict[str, str]
+    ) -> str | None:
         """Why a picked folder cannot be listed now (Drive lists an unreadable folder as
-        empty, so it is read first); ``None`` when it can."""
+        empty, so it is read first); ``None`` when it can. Only Drive's answer about this
+        folder counts (404, or a 403 refusing this file); any other failure raises."""
+        lost = FOLDER_LOST.format(name=names.get(folder) or "this folder")
         try:
             file = await drive.file(folder)
         except _Error as e:
             if _unreadable(e) is None:
                 raise
-            return FOLDER_NO_ACCESS
+            return lost
         if file is None:
-            return FOLDER_NO_ACCESS
+            return lost
         if file.get("trashed"):
             return TRASHED
         if file.get("mimeType") != FOLDER_MIME:

@@ -111,7 +111,9 @@ function CompanyDomains() {
   async function remove(domain: string) {
     if (
       list.length === 1 &&
-      !window.confirm(`Remove ${domain}? With no company domain, every doc in a picked folder is skipped.`)
+      !window.confirm(
+        `Remove ${domain}? With no company domain, every doc in a picked folder is skipped, and the ones already pulled in are hidden now.`,
+      )
     ) {
       return;
     }
@@ -126,7 +128,8 @@ function CompanyDomains() {
         tip="Set here by an owner. Oracle never guesses them from members' email addresses."
       >
         Docs in a picked folder owned outside these domains are skipped. With none set, every doc in a picked folder is
-        skipped (&ldquo;company domain not set&rdquo;).
+        skipped (&ldquo;company domain not set&rdquo;). Removing a domain hides the docs it let in from every
+        member&rsquo;s sources at once.
       </Heading>
       {q.error && <Notice tone="error">{q.error}</Notice>}
       {!q.data && !q.error && <span aria-busy className="block h-3 w-1/2 animate-pulse rounded bg-surface2" />}
@@ -281,7 +284,7 @@ function CompanySharedDrives() {
         tip="Add the shared drives that belong to the company. Docs in My Drive folders are judged by their owner's domain instead."
       >
         A doc in a shared drive counts as the company&rsquo;s only when its drive is on this list. Docs in picked folders
-        in other shared drives are skipped.
+        in other shared drives are skipped. Removing a drive hides its docs from every member&rsquo;s sources at once.
       </Heading>
       {q.error && <Notice tone="error">{q.error}</Notice>}
       {!q.data && !q.error && <span aria-busy className="block h-3 w-1/2 animate-pulse rounded bg-surface2" />}

@@ -6,10 +6,11 @@ sources they own (S3 revised). Another user's source reads as "not found".
 
 import importlib
 import pkgutil
+import re
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +26,7 @@ from oracle.connections.providers import (
     reconnect_reason,
 )
 from oracle.sources import base
+from oracle.sources.connectors import google_docs
 from oracle.sources.models import SOURCE_KINDS, Source, SourceItem
 from oracle.v2 import links
 
@@ -374,8 +376,42 @@ PUBLIC_MAIL_DOMAINS = frozenset(
         "zoho.com",
         "fastmail.com",
         "hey.com",
+        "mail.com",
+        "ymail.com",
+        "web.de",
+        "tutanota.com",
+        "tuta.io",
     }
 )
+# Providers with an address under many country domains (gmx.de, yahoo.co.uk): the name,
+# then one or two short labels.
+PUBLIC_MAIL_NAMES = frozenset(
+    {
+        "gmail",
+        "googlemail",
+        "outlook",
+        "hotmail",
+        "live",
+        "msn",
+        "yahoo",
+        "aol",
+        "icloud",
+        "protonmail",
+        "gmx",
+        "yandex",
+    }
+)
+_COUNTRY_SUFFIX = re.compile(r"[a-z]{2,3}(?:\.[a-z]{2,3})?")
+
+
+def is_public_mail_domain(domain: str) -> bool:
+    """Whether ``domain`` is a mail provider anyone can sign up with (gmail.com, gmx.de,
+    yahoo.co.uk, ...): an address there says nothing about whose a document is."""
+    domain = domain.strip().lower().lstrip("@")
+    if domain in PUBLIC_MAIL_DOMAINS:
+        return True
+    name, _, suffix = domain.partition(".")
+    return name in PUBLIC_MAIL_NAMES and bool(_COUNTRY_SUFFIX.fullmatch(suffix))
 
 
 async def company_domains(db: AsyncSession, tenant_id: uuid.UUID) -> list[str]:
@@ -393,7 +429,7 @@ async def company_domains(db: AsyncSession, tenant_id: uuid.UUID) -> list[str]:
         return sorted(configured)
     emails = await db.scalars(select(User.email).where(User.tenant_id == tenant_id))
     found = {e.rpartition("@")[2].strip().lower() for e in emails if "@" in e}
-    return sorted(found - PUBLIC_MAIL_DOMAINS - {""})
+    return sorted(d for d in found if d and not is_public_mail_domain(d))
 
 
 async def company_shared_drives(db: AsyncSession) -> list[str]:
@@ -401,6 +437,172 @@ async def company_shared_drives(db: AsyncSession) -> list[str]:
     from oracle.tenant_settings_api import get_setting
 
     return sorted({d["id"] for d in await get_setting(db, "company_shared_drives")})
+
+
+async def company_scope(db: AsyncSession, tenant_id: uuid.UUID) -> tuple[list[str], list[str]]:
+    """The company's email domains and shared drives, as a Google Docs sync reads them."""
+    return await company_domains(db, tenant_id), await company_shared_drives(db)
+
+
+# --- Narrowing without the provider (S5, owner 2026-10-20) ---------------------------
+#
+# Saving a narrower Google Docs allowlist, or narrower company Drive settings, deletes
+# (soft delete) what falls outside in the same request, judged from what Oracle stored:
+# no provider call, so it works with an expired connection or a paused source.
+#
+# Locks: the source row first (FOR NO KEY UPDATE, as a sync's checkpoint takes it), then
+# the items with SKIP LOCKED, so a save never waits on a running sync's item rows (a sync
+# takes item rows, then the source row: waiting here could deadlock). A row skipped that
+# way was written by a sync that has not committed; that sync then finds the source
+# changed at its next checkpoint, rolls back and runs tidy_drive_source
+# (oracle.sources.sync), which deletes it.
+
+
+async def _lock_source(db: AsyncSession, source_id: uuid.UUID) -> Source | None:
+    """The source row, locked until the commit and loaded afresh (a sync may have saved
+    a checkpoint since it was read)."""
+    return await db.scalar(
+        select(Source)
+        .where(Source.id == source_id)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
+    )
+
+
+async def _live_items(db: AsyncSession, source_id: uuid.UUID) -> list[tuple[str, dict[str, Any]]]:
+    rows = await db.execute(
+        select(SourceItem.external_id, SourceItem.acl).where(
+            SourceItem.source_id == source_id, SourceItem.deleted_at.is_(None)
+        )
+    )
+    return [(r.external_id, r.acl) for r in rows]
+
+
+async def _hide_items(db: AsyncSession, source: Source, external_ids: set[str]) -> set[str]:
+    """Soft-delete these live items of ``source`` (versions kept; citations show 'source
+    removed') and drop them from its cursor, so a sync that finds them under the
+    allowlist again reads them again. Rows a running sync holds are skipped (see above).
+    Returns the ids deleted."""
+    if not external_ids:
+        return set()
+    rows = (
+        await db.execute(
+            select(SourceItem.id, SourceItem.external_id)
+            .where(
+                SourceItem.source_id == source.id,
+                SourceItem.external_id.in_(sorted(external_ids)),
+                SourceItem.deleted_at.is_(None),
+            )
+            .order_by(SourceItem.external_id)
+            .with_for_update(key_share=True, skip_locked=True)
+        )
+    ).all()
+    if not rows:
+        return set()
+    await db.execute(
+        update(SourceItem)
+        .where(SourceItem.id.in_([r.id for r in rows]))
+        .values(deleted_at=func.clock_timestamp())
+        .execution_options(synchronize_session=False)
+    )
+    hidden = {r.external_id for r in rows}
+    source.cursor = google_docs.forget(source.cursor, hidden)
+    return hidden
+
+
+def _only_removes_picks(old: dict[str, Any], new: dict[str, Any]) -> bool:
+    """Whether a Google Docs config edit only removes picked docs or folders (and maybe
+    renames what stays): nothing to ask the provider about."""
+
+    def picked(config: dict[str, Any], key: str) -> set[str] | None:
+        value = config.get(key) or []
+        if not isinstance(value, list) or not all(isinstance(i, str) for i in value):
+            return None
+        return set(value)
+
+    rest = ("docs", "folders", "names")
+    before = {k: v for k, v in old.items() if k not in rest}
+    after = {k: v for k, v in new.items() if k not in rest}
+    pairs = [(picked(new, k), picked(old, k)) for k in ("docs", "folders")]
+    return before == after and all(n is not None and o is not None and n <= o for n, o in pairs)
+
+
+async def _apply_drive_edit(
+    db: AsyncSession, source: Source, config: dict[str, Any], *, reconnect: bool
+) -> None:
+    """Lock the Google Docs source and delete, now, its items ``config`` no longer picks
+    (google_docs.outside_picks). On a new connection the next sync reads everything
+    again, keeping which folder each doc came from; otherwise the cursor stays (the
+    folders are listed again since the allowlist changed) and so does what the last sync
+    said about what is still picked."""
+    old = dict((await _lock_source(db, source.id) or source).config or {})
+    old_folders, old_docs = google_docs.picked_ids(old)
+    new_folders, new_docs = google_docs.picked_ids(config)
+    removed = (old_folders | old_docs) - (new_folders | new_docs)
+    live = [external_id for external_id, _ in await _live_items(db, source.id)]
+    await _hide_items(db, source, google_docs.outside_picks(config, source.cursor, live, removed))
+    if reconnect:
+        tree = (source.cursor or {}).get("tree")
+        source.cursor = {"tree": tree} if tree else None
+        source.unavailable_items = []
+    else:
+        picked = new_folders | new_docs
+        keep = [n for n in source.unavailable_items or [] if n.get("external_id") in picked]
+        source.unavailable_items = keep
+        if source.cursor and source.cursor.get("notes"):
+            notes = [n for n in source.cursor["notes"] if n.get("external_id") in picked]
+            source.cursor = {**source.cursor, "notes": notes}
+
+
+async def tidy_drive_source(db: AsyncSession, source_id: uuid.UUID) -> int:
+    """After a Google Docs sync stopped because its source or the company's Drive
+    settings changed: delete the live items that now fall outside (what the edit's save
+    could not, because the sync held their rows). Commits; returns how many."""
+    source = await _lock_source(db, source_id)
+    if source is None or source.kind != "google_docs":
+        await db.rollback()
+        return 0
+    items = await _live_items(db, source.id)
+    gone = google_docs.outside_picks(source.config or {}, source.cursor, [i for i, _ in items])
+    if get_settings().drive_docs_owned_outside == "skip":
+        domains, drives = await company_scope(db, source.tenant_id)
+        gone |= google_docs.outside_company(
+            source.config or {}, items, domains, drives, unknown_outside=False
+        )
+    hidden = await _hide_items(db, source, gone)
+    await db.commit()
+    return len(hidden)
+
+
+async def hide_outside_company(
+    db: AsyncSession, tenant_id: uuid.UUID, before: tuple[list[str], list[str]]
+) -> int:
+    """After an owner changed the company's email domains or shared drives (``before``:
+    what they were): when that narrowed them, delete now, across every member's Google
+    Docs sources, the docs in picked folders that fall outside, judged from what each
+    item stored (google_docs.outside_company). One whose drive and owner are not known is
+    deleted too; the next sync reads it again if it is the company's. Nothing is deleted
+    when docs owned outside are pulled in and flagged (ORACLE_DRIVE_DOCS_OWNED_OUTSIDE).
+    Does not commit; returns how many were deleted."""
+    domains, drives = await company_scope(db, tenant_id)
+    narrowed = not set(before[0]) <= set(domains) or not set(before[1]) <= set(drives)
+    if not narrowed or get_settings().drive_docs_owned_outside != "skip":
+        return 0
+    sources = await db.scalars(
+        select(Source)
+        .where(Source.kind == "google_docs")
+        .order_by(Source.id)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
+    )
+    hidden = 0
+    for source in list(sources):
+        items = await _live_items(db, source.id)
+        gone = google_docs.outside_company(
+            source.config or {}, items, domains, drives, unknown_outside=True
+        )
+        hidden += len(await _hide_items(db, source, gone))
+    return hidden
 
 
 def _check_config(config: dict[str, Any]) -> None:
@@ -420,33 +622,49 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         _check_shape(source.kind, changes["config"])
         source.config = changes["config"]
         reconfigure = False
+    # Removing Google Docs picks asks the provider nothing (S5, narrowing takes effect on
+    # save; owner 2026-10-20): no connection check and no validation, so it works with an
+    # expired connection or a paused source.
+    narrowing = (
+        reconfigure
+        and not reconnect
+        and source.kind == "google_docs"
+        and _only_removes_picks(dict(source.config or {}), changes["config"])
+    )
     if reconnect or reconfigure:
         connection_id = changes["connection_id"] if reconnect else source.connection_id
         config = changes["config"] if reconfigure else source.config
         _check_config(config)
-        conn = await _check_connection(db, source.owner_user_id, source.kind, connection_id)
-        # Validating reads the credential, which commits: change nothing before it.
-        await _validate(db, source.kind, config, conn)
-        # A new account: sync from the start. A new allowlist: what left it is deleted
-        # on the next sync. Unchanged content writes no new versions, so a full pass is
-        # cheap in storage. A connector that deletes by its cursor (items it knew minus
-        # items still live) must keep its known ids across a config change, or narrowing
-        # the source could never delete anything (S5).
-        if source.kind == "notion":
+        if narrowing:
+            _check_shape(source.kind, config)
+        else:
+            conn = await _check_connection(db, source.owner_user_id, source.kind, connection_id)
+            # Validating reads the credential, which commits: change nothing before it.
+            await _validate(db, source.kind, config, conn)
+        # A new account: sync from the start. A new allowlist: Google Docs deletes what
+        # left it now, other kinds on the next sync. Unchanged content writes no new
+        # versions, so a full pass is cheap in storage. A connector that deletes by its
+        # cursor (items it knew minus items still live) must keep its known ids across a
+        # config change, or narrowing the source could never delete anything (S5).
+        if source.kind == "google_docs":
+            # Keeps its cursor for a new allowlist (it lists the folders again when the
+            # allowlist changes); the sync engine adds every live item to what it knows
+            # (oracle.sources.sync), and a sync still running saves nothing more.
+            await _apply_drive_edit(db, source, config, reconnect=reconnect)
+        elif source.kind == "notion":
             # Keep the page ids, drop the render cache: every live page is re-rendered
             # and pages now outside the roots are deleted.
             pages = (source.cursor or {}).get("pages") or {}
             source.cursor = {"pages": {page_id: {} for page_id in pages}}
-        elif reconnect or source.kind != "google_docs":
-            # Google Docs keeps its cursor for a new allowlist (it lists the folders again
-            # when the allowlist changes); either way the sync engine adds every live item
-            # to what it knows (oracle.sources.sync), and a sync still running saves
-            # nothing more.
+            source.unavailable_items = []
+        else:
             source.cursor = None
+            source.unavailable_items = []
         source.connection_id = connection_id
         source.config = config
-        source.unavailable_items = []
-        if source.status == "error":
+        if source.status == "error" and not narrowing:
+            # Checked with the provider just now. A narrowing asked it nothing, so an
+            # error (a rejected connection) still stands.
             source.status = "active"
             source.last_error = None
     if "name" in changes and changes["name"] is not None:

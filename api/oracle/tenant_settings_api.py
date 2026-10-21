@@ -10,9 +10,15 @@ The known keys and how each value is checked:
   accepted risk, in days from its acceptance.
 - ``company_email_domains`` (S5): the company's email domains, e.g. ``["example.com"]``.
   A doc in a picked Drive folder whose owner is outside them is skipped; with none set
-  (here or in ORACLE_IAP_ALLOWED_DOMAINS) every doc in a picked folder is.
+  (here or in ORACLE_IAP_ALLOWED_DOMAINS) every doc in a picked folder is. Public mail
+  providers (gmail.com, outlook.com, gmx.de, ...) are refused: anyone has an address there.
 - ``company_shared_drives`` (S5): ``[{"id", "name"}]``, the Google shared drives that are
   the company's. A doc in a picked folder in any other shared drive is skipped.
+
+Removing a domain or a shared drive (or resetting either) takes effect on save (S5, owner
+2026-10-20): the docs in picked folders that now fall outside are deleted (soft delete)
+from every member's Google Docs sources in the same request, with no Drive call
+(:func:`oracle.sources.service.hide_outside_company`).
 
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
@@ -46,6 +52,8 @@ DEFAULTS: dict[str, Any] = {
     "company_shared_drives": [],
 }
 RISK_ACCEPTANCE_ROLES = ("approver", "owner")
+# Changing these narrows every member's Google Docs sources at once (S5).
+COMPANY_KEYS = ("company_email_domains", "company_shared_drives")
 DOMAIN = re.compile(
     r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})"
 )
@@ -158,6 +166,8 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
 
 
 def validate_company_domains(value: Any) -> list[str]:
+    from oracle.sources.service import is_public_mail_domain
+
     if not isinstance(value, list) or not all(isinstance(d, str) for d in value):
         raise InvalidSetting("company_email_domains must be a list of domains")
     if len(value) > MAX_COMPANY_LIST:
@@ -167,6 +177,11 @@ def validate_company_domains(value: Any) -> list[str]:
         domain = raw.strip().lower().rpartition("@")[2]
         if not DOMAIN.fullmatch(domain):
             raise InvalidSetting(f"company_email_domains: {raw[:80]!r} is not a domain")
+        if is_public_mail_domain(domain):
+            raise InvalidSetting(
+                f"company_email_domains: {domain} is a public mail provider, where anyone "
+                "can have an address; enter the company's own domain"
+            )
         if domain not in out:
             out.append(domain)
     return out
@@ -238,17 +253,37 @@ async def get_setting_endpoint(key: str, principal: Owner, db: TenantDB) -> Sett
     return await _out(db, key)
 
 
+async def _company_narrowing(
+    db: AsyncSession, principal: Principal, before: tuple[list[str], list[str]] | None
+) -> dict[str, int]:
+    """Delete, now, the Drive docs a narrower company setting leaves out (S5, owner
+    2026-10-20); what the audit event records of it."""
+    from oracle.sources.service import hide_outside_company
+
+    if before is None:
+        return {}
+    await db.flush()
+    hidden = await hide_outside_company(db, principal.tenant_id, before)
+    return {"hidden_items": hidden} if hidden else {}
+
+
 @router.put(
     "/settings/{key}",
     response_model=SettingOut,
     responses={404: {"description": "Unknown key"}, 422: {"description": "Invalid value"}},
 )
 async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB) -> SettingOut:
+    from oracle.sources.service import company_scope
+
     if key not in DEFAULTS:
         raise _unknown(key)
+    before = await company_scope(db, principal.tenant_id) if key in COMPANY_KEYS else None
     if body.value is None:
         await clear_setting(db, key)
-        await audit.record(db, principal, "setting.reset", "tenant_setting", data={"key": key})
+        extra = await _company_narrowing(db, principal, before)
+        await audit.record(
+            db, principal, "setting.reset", "tenant_setting", data={"key": key, **extra}
+        )
         await db.commit()
         return await _out(db, key)
     try:
@@ -262,8 +297,13 @@ async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB)
     else:
         row.value = value
         row.updated_by = principal.id
+    extra = await _company_narrowing(db, principal, before)
     await audit.record(
-        db, principal, "setting.update", "tenant_setting", data={"key": key, "value": value}
+        db,
+        principal,
+        "setting.update",
+        "tenant_setting",
+        data={"key": key, "value": value, **extra},
     )
     await db.commit()
     await db.refresh(row)

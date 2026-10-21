@@ -40,6 +40,7 @@ from oracle.sources.connectors.google_docs import (
     query_string,
     valid_id,
 )
+from oracle.sources.service import redact
 
 router = APIRouter(prefix="/v1", tags=["connections"])
 
@@ -224,15 +225,25 @@ async def _read(
     read: Callable[[_Drive], Awaitable[Any]],
 ) -> Any:
     """``read`` through the connection: cached per connection and question, throttled per
-    person, Drive's errors as HTTP errors."""
+    person, Drive's errors as HTTP errors. A connection that is not active is refused
+    before the cache answers. The credential is read as every reader reads it
+    (:func:`oracle.connections.service.get_credential`: the connection's row is locked
+    while a refresh spends its refresh token), and Google's error text is redacted of it
+    before it reaches the answer or the connection's ``last_error``, as a sync does."""
+    if conn.status != "active":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"The {conn.provider} connection is {conn.status}; reconnect it",
+        )
     hit = _cached(conn.id, key)
     if hit is not None:
         return hit
     _admit(user_id)
     try:
-        credential = await service.credential_for(db, conn, http)
+        credential = await service.get_credential(db, conn.id, user_id, http=http)
     except service.ConnectionUnavailable as e:
         raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from None
+    secrets = {**credential.extra, "access_token": credential.access_token}
     try:
         answer = await read(_Drive(http, credential.access_token))
     except ConnectorRateLimited as e:
@@ -243,13 +254,15 @@ async def _read(
             headers={"Retry-After": str(wait)},
         ) from None
     except ConnectorAuthError as e:
-        await service.mark_failure(db, conn, "expired", f"Rejected while browsing: {e}")
+        detail = redact(str(e), secrets)
+        await service.mark_failure(db, conn, "expired", f"Rejected while browsing: {detail}")
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Google rejected the connection: reconnect it"
         ) from None
     except ConnectorError as e:
         raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY, f"Google Drive could not be read: {e}"
+            status.HTTP_502_BAD_GATEWAY,
+            f"Google Drive could not be read: {redact(str(e), secrets)}",
         ) from None
     except (httpx.HTTPError, ValueError):
         raise HTTPException(

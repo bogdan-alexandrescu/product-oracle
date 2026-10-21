@@ -8,16 +8,22 @@ connector finishes; on any failure they are rolled back and re-read next time.
 Credentials are passed to the connector and nowhere else: never stored on the
 source, logged, or echoed in ``last_error`` (connector messages are redacted).
 
-A sync works for the source's config and connection as they were when it started. Every
-save (a checkpoint's cursor, the final status and unavailable items) first locks the
-source's row and checks both are unchanged; when an edit changed them meanwhile, the
-sync rolls back what it has not saved and stops (outcome ``superseded``), so it never
-writes a cursor or report made for the old settings over the edit.
+A sync works for the source's config and connection as they were when it started (for
+Google Docs, also the company's email domains and shared drives). Every save (a
+checkpoint's cursor, the final status and unavailable items) first locks the source's
+row and checks they are unchanged; when an edit changed them meanwhile, the sync rolls
+back what it has not saved and stops (outcome ``superseded``), so it never writes a
+cursor, report or docs made for the old settings over the edit.
 
-Google Docs: before the connector runs, every live item of the source is added to the
-cursor's ``files`` (with no time, so it is read again) when missing. The connector deletes
-what it knows and no longer finds under the allowlist, so what an edit removed is deleted
-on the next sync however the cursor was reset (S5, narrowing; owner 2026-10-20).
+Google Docs: saving a narrower allowlist, or narrower company Drive settings, deletes
+what falls outside in that request, with no provider call (S5, narrowing takes effect on
+save; owner 2026-10-20; :func:`oracle.sources.service.update_source`). That save skips
+item rows a running sync has written and not committed, so a superseded Google Docs sync
+deletes, once rolled back, whatever now falls outside
+(:func:`oracle.sources.service.tidy_drive_source`). Before the connector runs, every live
+item of the source is added to the cursor's ``files`` (with no time, so it is read again)
+when missing; the connector deletes what it knows and no longer finds under the
+allowlist, which also cleans sources narrowed before narrowing took effect on save.
 """
 
 import logging
@@ -56,16 +62,27 @@ class _Superseded(Exception):
 
 @dataclass(frozen=True)
 class _Started:
-    """What a sync works for: the source's config and connection when it started."""
+    """What a sync works for: the source's config and connection when it started, and
+    for Google Docs the company's email domains and shared drives it judged docs by."""
 
     source_id: Any
     config: dict[str, Any]
     connection_id: Any
+    kind: str = ""
+    tenant_id: Any = None
+    company: tuple[tuple[str, ...], tuple[str, ...]] | None = None
+
+
+async def _company(db: AsyncSession, tenant_id: Any) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    domains, drives = await service.company_scope(db, tenant_id)
+    return tuple(domains), tuple(drives)
 
 
 async def _hold(db: AsyncSession, started: _Started) -> None:
     """Lock the source's row until the next commit; raise :class:`_Superseded` when its
-    config or connection is no longer the one the sync started with.
+    config or connection, or the company's Drive settings, are no longer the ones the
+    sync started with. An owner's change of those settings locks every Google Docs
+    source row before it commits, so this sees it.
 
     FOR NO KEY UPDATE, not FOR UPDATE: writing a source's items takes KEY SHARE on the
     source row (their foreign key), which FOR UPDATE waits on, so two syncs of one
@@ -79,12 +96,17 @@ async def _hold(db: AsyncSession, started: _Started) -> None:
     ).one_or_none()
     if row is None or row.config != started.config or row.connection_id != started.connection_id:
         raise _Superseded
+    if started.company is not None and await _company(db, started.tenant_id) != started.company:
+        raise _Superseded
 
 
-async def _superseded(db: AsyncSession, stats: SyncStats) -> SyncStats:
+async def _superseded(db: AsyncSession, stats: SyncStats, started: _Started) -> SyncStats:
     await db.rollback()
     stats.outcome = "superseded"
     stats.unavailable = []
+    if started.kind == "google_docs":
+        # What the edit's save skipped because this sync held the rows (now rolled back).
+        await service.tidy_drive_source(db, started.source_id)
     return stats
 
 
@@ -120,7 +142,7 @@ async def _fail(
         try:
             await _hold(db, started)
         except _Superseded:
-            return await _superseded(db, stats)
+            return await _superseded(db, stats, started)
     source.status = "error"
     source.last_error = message
     await db.commit()
@@ -158,15 +180,22 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
     if problem:
         return await _fail(db, source, stats, problem)
 
-    started = _Started(
-        source_id=source.id, config=dict(source.config), connection_id=source.connection_id
-    )
     config = dict(source.config)
     cursor = dict(source.cursor) if source.cursor else None
+    company = None
     if source.kind == "google_docs":
         cursor = await _drive_cursor(db, source, cursor)
-        config[base.COMPANY_DOMAINS] = await service.company_domains(db, source.tenant_id)
-        config[base.COMPANY_SHARED_DRIVES] = await service.company_shared_drives(db)
+        company = await _company(db, source.tenant_id)
+        config[base.COMPANY_DOMAINS] = list(company[0])
+        config[base.COMPANY_SHARED_DRIVES] = list(company[1])
+    started = _Started(
+        source_id=source.id,
+        config=dict(source.config),
+        connection_id=source.connection_id,
+        kind=source.kind,
+        tenant_id=source.tenant_id,
+        company=company,
+    )
     try:
         async for event in connector.sync(config, credential, cursor):
             if isinstance(event, base.ItemUpsert):
@@ -192,14 +221,14 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
             else:
                 raise TypeError(f"unexpected sync event {type(event).__name__}")
     except _Superseded:
-        return await _superseded(db, stats)
+        return await _superseded(db, stats, started)
     except base.ConnectorRateLimited as e:
         # Stop cleanly: keep everything up to the last checkpoint and its cursor.
         await db.rollback()
         try:
             await _hold(db, started)
         except _Superseded:
-            return await _superseded(db, stats)
+            return await _superseded(db, stats, started)
         stats.outcome = "rate_limited"
         stats.retry_after = e.retry_after
         wait = f" (retry after {e.retry_after:g}s)" if e.retry_after is not None else ""
@@ -223,7 +252,7 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
     try:
         await _hold(db, started)
     except _Superseded:
-        return await _superseded(db, stats)
+        return await _superseded(db, stats, started)
     source.status = "active"
     source.last_error = None
     source.unavailable_items = list(stats.unavailable)

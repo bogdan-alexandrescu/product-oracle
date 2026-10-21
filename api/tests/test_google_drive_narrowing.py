@@ -631,7 +631,7 @@ async def test_a_doc_picked_on_its_own_in_a_lost_folder_stays(tenant_id, drive):
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     drive.doc(IN_SUB, "Shared with me directly", folder=FOLDER)
     pat, source = await _setup(tenant_id, drive, {"docs": [IN_SUB], "folders": [FOLDER]})
-    drive.refuse[FOLDER] = (404, "notFound")
+    _refused(404, "notFound")(drive)
     await _sync(pat, source)
     assert await _live(tenant_id, source["id"]) == {IN_SUB}
 

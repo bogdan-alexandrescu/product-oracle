@@ -96,9 +96,10 @@ function seed(): SourcesDb {
     item_count: 1,
     connector_available: true,
   };
-  // Google Docs and folders picked in the Drive picker. Since: one doc was unshared, one
-  // folder can no longer be read (its docs are kept), three docs in a picked folder are
-  // owned outside the company and one is in a shared drive outside it, so they were skipped.
+  // Google Docs and folders picked in the Drive picker. Since: one doc was unshared, Oracle
+  // lost access to one folder (its docs are hidden until it can be read again), three docs
+  // in a picked folder are owned outside the company and one is in a shared drive outside
+  // it, so they were skipped.
   const docs: Source = {
     id: "50000000-0000-4000-8000-000000000003",
     kind: "google_docs",
@@ -125,7 +126,8 @@ function seed(): SourcesDb {
     unavailable_items: [
       {
         external_id: "1FolderVendorExample",
-        reason: "No access to this folder: removed, or no longer shared with you. What came from it is kept until you remove it here",
+        reason:
+          "Lost access to Vendor research: removed, or no longer shared with you. Its docs are hidden until Oracle can read it again",
         name: null,
         status: "unavailable",
       },
@@ -230,6 +232,25 @@ function itemOut(i: Item): Schemas["ItemOut"] {
   void _content;
   void _name;
   return out;
+}
+
+function pickedDrive(s: Source, key: "docs" | "folders"): string[] {
+  const value = s.config[key];
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
+/** Deletes a Google Docs source's items no longer picked (on their own, or by their folder). */
+function hideOutsidePicks(db: SourcesDb, s: Source): number {
+  const docs = new Set(pickedDrive(s, "docs"));
+  const folders = new Set(pickedDrive(s, "folders"));
+  let deleted = 0;
+  for (const i of db.items) {
+    if (i.source_id !== s.id || i.deleted_at) continue;
+    if (docs.has(i.external_id) || (i.folder && folders.has(i.folder))) continue;
+    i.deleted_at = now();
+    deleted += 1;
+  }
+  return deleted;
 }
 
 function counted(db: SourcesDb, s: Source): Source {
@@ -345,10 +366,16 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       if (patch.name) s.name = patch.name;
       if (patch.config) {
         s.config = patch.config;
-        s.unavailable_items = [];
         if (s.kind === "google_docs") {
           const choice = Object.values(CONNECTIONS).flat().find((c) => c.id === s.connection_id);
           s.reconnect_reason = choice?.reconnect_reason ?? null;
+          // Narrowing takes effect on save (S5, owner 2026-10-20): what left the picks is
+          // deleted now, and what the last sync said about what is still picked stays.
+          const picked = new Set([...pickedDrive(s, "docs"), ...pickedDrive(s, "folders")]);
+          hideOutsidePicks(db, s);
+          s.unavailable_items = (s.unavailable_items ?? []).filter((u) => picked.has(u.external_id));
+        } else {
+          s.unavailable_items = [];
         }
       }
       s.updated_at = now();
@@ -367,19 +394,9 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       return json(200, { source_id: s.id, outcome: "error", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
     }
     s.last_synced_at = now();
-    // Narrowing: a Google Doc no longer picked, or from a folder no longer picked, is deleted.
-    let deleted = 0;
-    if (s.kind === "google_docs") {
-      const docs = new Set((s.config.docs as string[] | undefined) ?? []);
-      const folders = new Set((s.config.folders as string[] | undefined) ?? []);
-      for (const i of db.items) {
-        if (i.source_id !== s.id || i.deleted_at) continue;
-        if (i.folder ? !folders.has(i.folder) : !docs.has(i.external_id)) {
-          i.deleted_at = now();
-          deleted += 1;
-        }
-      }
-    }
+    // A sync also deletes what left the picks (sources narrowed before narrowing took
+    // effect on save).
+    const deleted = s.kind === "google_docs" ? hideOutsidePicks(db, s) : 0;
     return json(200, { source_id: s.id, outcome: "completed", upserted: 2, versions_written: 1, deleted, checkpoints: 1, retry_after: null, error: null, source: counted(db, s) });
   }
   if (sub === "items") return json(200, db.items.filter((i) => i.source_id === s.id && !i.deleted_at).map(itemOut));

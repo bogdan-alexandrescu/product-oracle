@@ -34,6 +34,9 @@ export function driveFiles(config: Record<string, unknown>): DriveFile[] {
   ];
 }
 
+/** The longest display name the API keeps for a picked item (config `names`). */
+export const MAX_NAME = 500;
+
 /** The config to save for `files`: `docs`, `folders` (when any) and their `names`. */
 export function driveConfig(config: Record<string, unknown>, files: DriveFile[]) {
   const folders = files.filter((f) => f.kind === "folder").map((f) => f.id);
@@ -41,7 +44,7 @@ export function driveConfig(config: Record<string, unknown>, files: DriveFile[])
     ...config,
     docs: files.filter((f) => f.kind === "doc").map((f) => f.id),
     folders,
-    names: Object.fromEntries(files.filter((f) => f.name !== f.id).map((f) => [f.id, f.name])),
+    names: Object.fromEntries(files.filter((f) => f.name !== f.id).map((f) => [f.id, f.name.slice(0, MAX_NAME)])),
   };
   if (folders.length === 0) delete next.folders;
   return next;
@@ -179,7 +182,7 @@ export function DriveFiles({
           </Button>
           <InfoTip label="choosing from Drive" align="start">
             {DRIVE_ACCESS} Choose Google Docs, or a folder to bring in every doc in it, including docs added to it later.
-            Removing one deletes what came from it on the next sync.
+            Removing one hides what came from it when you save.
           </InfoTip>
         </div>
       )}
@@ -208,7 +211,7 @@ export function DriveFiles({
               </span>
               {unavailable[f.id] && (
                 <Chip kind="warn" title={unavailable[f.id]}>
-                  No access
+                  {noAccessLabel(unavailable[f.id])}
                 </Chip>
               )}
               <button
@@ -262,6 +265,7 @@ type SourceNote = Schemas["UnavailableItem"];
 
 /** The chip for an item the last sync could not read. */
 function noAccessLabel(reason: string): string {
+  if (reason.startsWith("Lost access")) return "Lost access";
   if (reason.startsWith("In the trash")) return "In the trash";
   if (reason.startsWith("Not a")) return reason;
   if (reason.startsWith("Not picked")) return "Not picked";
@@ -292,7 +296,8 @@ function NameList({ names, shown = 4 }: { names: string[]; shown?: number }) {
 
 /**
  * What the last sync of a Google Docs source reported, on its card: picked docs and folders
- * it cannot read (a folder's docs are kept until it is removed), docs in a picked folder it
+ * it cannot read ("Lost access to <folder>": a folder's docs are hidden until Oracle can
+ * read it again, owner 2026-10-20), docs in a picked folder it
  * left out (owned outside the company, in a shared drive outside the company, or no company
  * domain set; count and names per reason), docs it pulled in
  * with that warning, and a folder listing that stopped at the source's cap.
@@ -322,18 +327,25 @@ export function DriveNotes({
     <ul aria-label={`Sync notes for ${sourceName}`} className="mt-2 flex flex-col gap-1.5" data-testid="drive-notes">
       {unreadable.map((n) => {
         const folder = byId.get(n.external_id)?.kind === "folder";
+        const label = noAccessLabel(n.reason);
+        const lost = label === "Lost access";
         return (
-          <li key={n.external_id} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+          <li
+            key={n.external_id}
+            aria-label={lost ? `Lost access to ${nameOf(n)}` : `${label}: ${nameOf(n)}`}
+            className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm"
+          >
             <Chip kind="warn" title={n.reason}>
-              {noAccessLabel(n.reason)}
+              {label}
             </Chip>
+            {lost && <span className="text-text2">to</span>}
             <span className="flex min-w-0 items-center gap-1.5">
               <Icon name={folder ? "folder" : "doc"} size={16} className="flex-none text-text2" />
               <span className="min-w-0 truncate font-medium" title={`${nameOf(n)}: ${n.reason}`}>
                 {nameOf(n)}
               </span>
             </span>
-            {folder && <span className="text-text2">its docs are kept until you remove it</span>}
+            {folder && <span className="text-text2">its docs are hidden until Oracle can read it again</span>}
           </li>
         );
       })}

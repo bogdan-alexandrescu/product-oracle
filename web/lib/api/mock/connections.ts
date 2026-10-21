@@ -87,6 +87,14 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
   company_shared_drives: [],
 };
 
+/** A mail provider anyone can sign up with, which the API refuses as a company domain. */
+function publicMailDomain(domain: string): boolean {
+  if (["gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "yahoo.com", "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com"].includes(domain)) {
+    return true;
+  }
+  return /^(gmail|googlemail|outlook|hotmail|live|msn|yahoo|aol|icloud|protonmail|gmx|yandex)\.[a-z]{2,3}(\.[a-z]{2,3})?$/.test(domain);
+}
+
 /** The shared drives a mock Google connection can see. */
 export const MOCK_SHARED_DRIVES = [
   { id: "0ADriveProductExample", name: "Product" },
@@ -203,6 +211,14 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
     if (m === "GET") return json(200, settingOut(db, key));
     if (m === "PUT") {
       const { value } = await body<Schemas["SettingIn"]>();
+      if (key === "company_email_domains" && Array.isArray(value)) {
+        const domain = value.map((d) => String(d).trim().toLowerCase().replace(/^@/, "")).find(publicMailDomain);
+        if (domain) {
+          return json(422, {
+            detail: `company_email_domains: ${domain} is a public mail provider, where anyone can have an address; enter the company's own domain`,
+          });
+        }
+      }
       if (value === null || value === undefined) delete db.settings[key];
       else db.settings[key] = value;
       return json(200, settingOut(db, key));

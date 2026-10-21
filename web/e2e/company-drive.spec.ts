@@ -62,7 +62,7 @@ test("settings › sources › Google Drive: a public mail provider is not a com
   await page.goto("/settings/sources");
   const domains = page.getByTestId("company-drive").getByTestId("company-domains");
   // Removing a domain hides, from every member's sources, the docs it let in.
-  await expect(domains).toContainText("Removing a domain hides the docs it let in from every member's sources at once.");
+  await expect(domains).toContainText("Removing a domain hides the docs it let in from every member’s sources at once.");
   const add = domains.getByRole("form", { name: "Add a company domain" });
   await add.getByLabel("Add a domain").fill("gmail.com");
   await add.getByRole("button", { name: "Add" }).click();
