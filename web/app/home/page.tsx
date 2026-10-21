@@ -10,16 +10,14 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
 
 import { allNeeds, CountChip, NeedTable, questionNeeds, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
-import { goalViews, historyOf, shownGoals, type Point } from "./_goals";
 import { GoalsPanel } from "./_goals-panel";
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
+import { useGoals } from "./_use-goals";
 
 /** Runs that are still going: under way, or waiting on a person. */
 const IN_FLIGHT = new Set(["running", "awaiting_checkpoint", "awaiting_approval", "paused_overrun"]);
 /** Needs you shows this many lines; the rest are one click away in the Inbox. */
 const MAX_NEEDS = 7;
-/** A goal's trend reads at most this many of its newest revisions (six monthly readings and change). */
-const TREND_REVISIONS = 24;
 
 /**
  * At most `max` lines, in the Inbox's order, never without a question when there is one
@@ -63,36 +61,16 @@ export default function HomePage() {
   const { role } = useMe();
   const canWrite = hasRole(role, "approver");
 
-  const goalsQ = useQuery("home|goals", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
   const inboxQ = useQuery("home|inbox", loadInbox);
   // Asked of me, filtered by the API so none is cut off; a failure shows in Needs you.
   const questionsQ = useQuery("home|questions", loadMyQuestions);
   const docsQ = useQuery("home|documents", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const runsQ = useQuery("home|runs", () => unwrap(api.GET("/v1/runs")));
 
-  const goals = useMemo(() => (goalsQ.data ? goalViews(goalsQ.data) : undefined), [goalsQ.data]);
+  const { goals, history, error: goalsError, loading: goalsLoading } = useGoals("home");
   const goalIndex: GoalIndex = useMemo(
     () => new Map((goals ?? []).map((g) => [g.id, { tag: g.tag, title: g.title, proposed: g.proposed }])),
     [goals],
-  );
-
-  // A trend for each goal shown that has a current value, from its newest revisions only.
-  const tracked = (goals ? shownGoals(goals) : []).filter((g) => g.currentText).map((g) => g.id);
-  const historyQ = useQuery(
-    `home|history|${tracked.join(",")}`,
-    async () => {
-      const lists = await Promise.all(
-        tracked.map((id) =>
-          unwrap(
-            api.GET("/v1/baseline/entities/{entity_id}/revisions", {
-              params: { path: { entity_id: id }, query: { limit: TREND_REVISIONS } },
-            }),
-          ).catch(() => []),
-        ),
-      );
-      return new Map<string, Point[]>(tracked.map((id, i) => [id, historyOf(lists[i])]));
-    },
-    { keepPrevious: true },
   );
 
   const docs = useMemo(() => docsQ.data ?? [], [docsQ.data]);
@@ -170,13 +148,7 @@ export default function HomePage() {
       <Split
         inspector={selected ? <FlightInspector f={selected} openItems={openItems} docs={docs} goalIndex={goalIndex} /> : undefined}
       >
-        <GoalsPanel
-          goals={goals}
-          history={historyQ.data ?? new Map()}
-          error={goalsQ.error}
-          loading={goalsQ.loading}
-          canImport={canWrite}
-        />
+        <GoalsPanel goals={goals} history={history} error={goalsError} loading={goalsLoading} canImport={canWrite} />
 
         <Panel
           title="Needs you"

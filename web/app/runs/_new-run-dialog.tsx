@@ -31,7 +31,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // A flow that reads an approved document (prd_to_roadmap) starts from the Roadmap screen,
+  // A flow that reads an approved document (prd_to_roadmap) starts from Plan › Roadmap documents,
   // where the PRD is picked; this dialog offers the others.
   const flows = useMemo(() => catalog.data?.flows.filter((f) => !f.source_kind) ?? [], [catalog.data]);
   const flow = flows.find((f) => f.key === flowKey);
@@ -168,11 +168,11 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                 {catalog.data.flows.some((f) => f.source_kind) && (
                   <p className="mt-2 flex items-center gap-1.5 text-sm text-text2" data-testid="roadmap-flow-note">
                     PRD to roadmap:{" "}
-                    <Link href="/roadmap" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
-                      Roadmap
+                    <Link href="/plan/documents" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+                      Roadmap documents
                     </Link>
                     <InfoTip label="roadmap runs" align="start">
-                      A roadmap from an approved PRD starts from the Roadmap screen.
+                      A roadmap from an approved PRD starts from Plan › Roadmap documents.
                     </InfoTip>
                   </p>
                 )}

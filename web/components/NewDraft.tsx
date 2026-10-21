@@ -530,11 +530,11 @@ export function NewDraft({ kind }: { kind: Kind }) {
       <PageHeader
         back={
           <Link
-            href={kind === "roadmap" ? "/roadmap" : "/documents"}
+            href={kind === "roadmap" ? "/plan/documents" : "/documents"}
             className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text"
           >
             <Icon name="back" size={16} />
-            {kind === "roadmap" ? "Roadmap" : "PRDs"}
+            {kind === "roadmap" ? "Plan" : "PRDs"}
           </Link>
         }
         title={`New ${label}`}

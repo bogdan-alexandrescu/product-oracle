@@ -24,19 +24,19 @@ export const DESTINATIONS: Dest[] = [
   { label: "Baseline", href: "/baseline", icon: "baseline", testId: "nav-baseline" },
   { label: "PRDs", href: "/documents", icon: "prds", testId: "nav-prds" },
   { label: "Priorities", href: "/priorities", icon: "priorities", testId: "nav-priorities" },
-  { label: "Roadmap", href: "/roadmap", icon: "roadmap", testId: "nav-roadmap" },
+  { label: "Plan", href: "/plan", icon: "roadmap", testId: "nav-plan" },
   { label: "Runs", href: "/runs", icon: "runs", testId: "nav-runs" },
   { label: "Inbox", href: "/inbox", icon: "inbox", testId: "nav-inbox" },
 ];
 const SETTINGS: Dest = { label: "Settings", href: "/settings/members", icon: "settings", testId: "nav-settings", match: "/settings" };
 
-/** Phone tab bar: Home, PRDs, Roadmap, Inbox, More. */
-const TABS = ["Home", "PRDs", "Roadmap", "Inbox"];
+/** Phone tab bar: Home, PRDs, Plan, Inbox, More. */
+const TABS = ["Home", "PRDs", "Plan", "Inbox"];
 
 /*
  * The destination a document belongs to (UI test finding E2): every kind's pages are
  * /documents/<slug>/…, so the URL alone says PRDs. A document page names its list once it
- * knows the document's kind (Roadmap for a roadmap), per slug; a slug's kind never changes,
+ * knows the document's kind (Plan for a roadmap), per slug; a slug's kind never changes,
  * so later pages of the same document highlight the right item from their first paint.
  */
 const documentHomes = new Map<string, string>();
@@ -50,7 +50,7 @@ function subscribeDocumentHomes(listener: () => void) {
   };
 }
 
-/** A document page says which destination it belongs to (`href`, e.g. "/roadmap"). */
+/** A document page says which destination it belongs to (`href`, e.g. "/plan"). */
 export function useDocumentDestination(slug: string | undefined, href: string | undefined) {
   useLayoutEffect(() => {
     if (!slug || !href || documentHomes.get(slug) === href) return;

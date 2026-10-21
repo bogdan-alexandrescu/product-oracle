@@ -27,6 +27,8 @@ interface Doc {
   slug: string;
   title: string;
   kind?: string | null;
+  status?: string;
+  updated_at?: string;
 }
 interface Version {
   id: string;
@@ -637,4 +639,226 @@ export function dateMarks(
     }
   }
   return [...out.values()];
+}
+
+// --- F1 Plan screen: GET /v1/plan, GET /v1/plan/items/history -----------------------------
+
+type PlanItem = Schemas["PlanItem"];
+type PlanPrd = Schemas["PlanPrd"];
+type Who = Schemas["PlanWho"];
+type Horizon = PlanItem["horizon"];
+
+export interface PlanContext extends RoadmapContext {
+  /** The baseline's goals (id and key), for the items' goal ids. */
+  goals: { id: string; key: string }[];
+}
+
+/** One item of the mock plan: an approved row, its draft twin (when the roadmap draft changes it), or a new draft row. */
+type PlanSeedItem = {
+  key: string;
+  title: string;
+  horizon: Horizon;
+  goals?: string[];
+  state?: PlanItem["state"];
+  records?: { ref: string; state: "todo" | "in_progress" | "done"; target?: string }[];
+  date?: string;
+  dateStatus?: "verified" | "unverified" | "withdrawn";
+  slipDays?: number;
+  reasons?: { kind: string; detail: string }[];
+  next?: { action: NonNullable<Schemas["PlanNext"]["action"]>; who: Who["role"] };
+  section: string;
+};
+
+const ALERTS_ROADMAP_SLUG = "usage-alerts-roadmap";
+const CHECKOUT_ROADMAP_SLUG = "checkout-redesign-roadmap";
+const NEXT_LABEL: Record<NonNullable<Schemas["PlanNext"]["action"]>, string> = {
+  review_prd: "PRD review",
+  verify_date: "Verify date",
+  reverify_date: "Re-verify date",
+  decide_slip: "Decide on slip",
+  resolve_blocker: "Resolve blocker",
+  reconcile: "Reconcile",
+  link_issue: "Link issue",
+};
+
+/** The tracked PRD's approved roadmap (usage-alerts-roadmap v1, from Usage alerts PRD v1). */
+const ALERTS_APPROVED: PlanSeedItem[] = [
+  { key: "threshold-alerts", title: "Threshold alerts on spend", horizon: "now", goals: ["g.activation"], state: "on_track", section: "behaviour",
+    records: [{ ref: "ENG-402", state: "in_progress" }], date: "2026-11-20", dateStatus: "verified" },
+  { key: "alert-digest", title: "Daily alert digest email", horizon: "now", goals: ["g.paid-conversion"], state: "at_risk", section: "behaviour",
+    records: [{ ref: "ENG-405", state: "in_progress", target: "2026-12-09" }], date: "2026-11-30", dateStatus: "verified", slipDays: 9,
+    reasons: [{ kind: "slipping", detail: "ENG-405 targets 2026-12-09, after the milestone date 2026-11-30." }], next: { action: "decide_slip", who: "owner" } },
+  { key: "alert-rules-api", title: "Alert rules API", horizon: "now", goals: ["g.activation"], state: "done", section: "behaviour",
+    records: [{ ref: "ENG-398", state: "done" }] },
+  { key: "slack-alerts", title: "Alerts in the team chat", horizon: "now", goals: ["g.activation"], state: "on_track", section: "behaviour",
+    records: [{ ref: "ENG-431", state: "todo" }], date: "2026-12-15", dateStatus: "unverified", next: { action: "verify_date", who: "approver" } },
+  { key: "usage-dashboard", title: "Usage dashboard", horizon: "now", goals: ["g.activation"], state: "planned", section: "behaviour",
+    next: { action: "link_issue", who: "approver" } },
+  { key: "spend-forecast", title: "Spend forecast for the month", horizon: "next", state: "planned", section: "behaviour",
+    next: { action: "link_issue", who: "approver" } },
+  { key: "team-budgets", title: "Budgets per team", horizon: "later", goals: ["g.early-churn"], state: "planned", section: "behaviour" },
+];
+/** usage-alerts-roadmap draft 2: twins of approved items (E3: only plan changes count). */
+const ALERTS_DRAFT: Record<string, { horizon?: Horizon; change: Schemas["ItemChange"] }> = {
+  "alert-rules-api": { change: { kind: "unchanged", fields: [], notes: ["confidence"] } },
+  "usage-dashboard": { change: { kind: "changed", fields: ["outcome"], notes: [] } },
+  "spend-forecast": { horizon: "now", change: { kind: "moved", from_horizon: "next", to_horizon: "now", fields: ["horizon"], notes: [] } },
+  "team-budgets": { change: { kind: "dropped", draft_version: 2, fields: [], notes: [] } },
+};
+/** checkout-redesign-roadmap draft 2, from Checkout redesign PRD v2 (never approved): every item new. */
+const CHECKOUT_DRAFT: PlanSeedItem[] = [
+  { key: "one-page-checkout", title: "One-page checkout", horizon: "now", goals: ["g.paid-conversion"], section: "problem" },
+  { key: "saved-addresses", title: "Saved addresses as cards", horizon: "next", goals: ["g.paid-conversion"], section: "s-5-3" },
+  { key: "shipping-choices", title: "Three clear shipping choices", horizon: "later", section: "s-5-2" },
+];
+
+/**
+ * The Plan's mock (api/oracle/plan): a tracked PRD (Usage alerts, with a roadmap draft 2 that
+ * moves, changes and drops items), a PRD waiting at the feature set checkpoint (Saved carts),
+ * a PRD at the engineering check with a lead named (Clinic outreach), and a never-approved PRD
+ * with a roadmap draft (Checkout redesign); the other PRDs by their versions. Simplified on
+ * purpose: the rows are seeded with the state, engineering and next decision the API's rules
+ * give them, not computed from the other mocks.
+ */
+export function routePlan(ctx: PlanContext, db: RoadmapDb, req: Request, p: string[], q: URLSearchParams): Response | null {
+  if (p[1] !== "plan" || req.method !== "GET") return null;
+  if (p[2] === "items" && p[3] === "history") return planHistory(q);
+  if (p[2]) return null;
+  const scope = q.get("scope") ?? "all";
+  if (scope !== "all" && scope !== "approved") return json(422, { detail: "scope: all or approved" });
+  return json(200, planOut(ctx, db, scope));
+}
+
+function planHistory(q: URLSearchParams): Response {
+  const roadmap = q.get("roadmap");
+  const key = q.get("item") ?? "";
+  const out = (versions: Schemas["ItemVersion"][]): Response => json(200, { roadmap, item: key, versions, tracker_events: [] });
+  if (roadmap === ALERTS_ROADMAP_SLUG) {
+    const a = ALERTS_APPROVED.find((i) => i.key === key);
+    if (!a) return out([]);
+    const versions: Schemas["ItemVersion"][] = [{ version: 1, prd_version: 1, horizon: a.horizon, approved_at: "2026-10-18T10:00:00Z" }];
+    const d = ALERTS_DRAFT[key];
+    if (!d || d.change.kind !== "dropped") versions.push({ version: 2, prd_version: 1, horizon: d?.horizon ?? a.horizon, approved_at: null });
+    return out(versions);
+  }
+  if (roadmap === CHECKOUT_ROADMAP_SLUG) {
+    const d = CHECKOUT_DRAFT.find((i) => i.key === key);
+    return out(d ? [{ version: 2, prd_version: 2, horizon: d.horizon, approved_at: null }] : []);
+  }
+  return notFound(`document '${roadmap}'`);
+}
+
+function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanOut"] {
+  const may = (role: Who["role"]) => RANK[ctx.role] >= RANK[(role === "engineering_lead" || role === "track_owner" ? "approver" : role) as Role];
+  const doc = (slug: string) => ctx.documents.find((d) => d.slug === slug);
+  const goalIds = (keys: string[] = []) => keys.map((k) => ctx.goals.find((g) => g.key === k)?.id).filter((id): id is string => !!id);
+  const alerts = doc("usage-alerts");
+  const checkout = doc("checkout-redesign");
+  const track = alerts ? db.tracks.find((t) => t.prd_id === alerts.id) : undefined;
+
+  const row = (
+    s: PlanSeedItem,
+    prd: Doc,
+    prdVersion: number,
+    roadmap: { slug: string; version: number },
+    origin: PlanItem["origin"],
+    change: Schemas["ItemChange"] | null,
+    horizon: Horizon = s.horizon,
+  ): PlanItem => {
+    const records = (s.records ?? []).map((r) => ({
+      tracker: "linear" as const, external_ref: r.ref, state: r.state, raw_status: null, target_date: r.target ?? null,
+      estimate: null, url: `https://tracker.example.com/${r.ref}`,
+    }));
+    const href = `/documents/${prd.slug}/v/${prdVersion}`;
+    const next: Schemas["PlanNext"] =
+      origin === "draft"
+        ? { action: "review_prd", label: "PRD review", who: { role: "approver", user_id: null }, href, viewer_may: may("approver") }
+        : s.next
+          ? { action: s.next.action, label: NEXT_LABEL[s.next.action], who: { role: s.next.who, user_id: null }, href: null, viewer_may: may(s.next.who) }
+          : { action: null, label: "—", who: null, href: null, viewer_may: false };
+    return {
+      id: seeded(`plan:${roadmap.slug}:${roadmap.version}:${s.key}`, mockUuid),
+      key: s.key,
+      title: s.title,
+      outcome: null,
+      horizon,
+      position: 0,
+      origin,
+      change,
+      prd: { id: prd.id, slug: prd.slug, title: prd.title, version: prdVersion, approved: origin === "approved" || prd.slug === "usage-alerts", link: `${href}#${s.section}` },
+      roadmap: { slug: roadmap.slug, version: roadmap.version, anchor: `${horizon}-${s.key}` },
+      track_id: prd.slug === "usage-alerts" ? (track?.id ?? null) : null,
+      goal_ids: goalIds(s.goals),
+      state: origin === "draft" ? "proposed" : (s.state ?? "planned"),
+      reasons: origin === "draft" ? [] : (s.reasons ?? []),
+      engineering: { records, date: s.date ?? null, date_status: s.dateStatus ?? null, slip_days: s.slipDays ?? null, tracked: records.length > 0 },
+      next,
+    };
+  };
+
+  const items: PlanItem[] = [];
+  if (alerts) {
+    for (const s of ALERTS_APPROVED) {
+      const d = scope === "all" ? ALERTS_DRAFT[s.key] : undefined;
+      if (d && d.change.kind !== "dropped") items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: 2 }, "draft", d.change, d.horizon));
+      else items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: 1 }, "approved", d?.change ?? null));
+    }
+  }
+  if (checkout && scope === "all") {
+    for (const s of CHECKOUT_DRAFT) items.push(row(s, checkout, 2, { slug: CHECKOUT_ROADMAP_SLUG, version: 2 }, "draft", { kind: "new", fields: [], notes: [] }));
+  }
+
+  const risky = items.some((i) => i.state === "at_risk" || i.state === "slipped");
+  const prds: PlanPrd[] = [];
+  const order = new Map<string, number>();
+  for (const d of ctx.documents) {
+    if ((d.kind ?? "prd") !== "prd") continue;
+    const versions = ctx.versions.filter((v) => v.document_id === d.id).sort((a, b) => a.number - b.number);
+    const latest = versions.at(-1)?.number ?? null;
+    const approved = versions.filter((v) => v.approved_at).at(-1)?.number ?? null;
+    const base = {
+      document: { id: d.id, slug: d.slug, title: d.title }, latest_version: latest, approved_version: approved,
+      run: null, track: null, figure: null, waiting_for_viewer: false, updated_at: d.updated_at ?? AT,
+    } satisfies Partial<PlanPrd>;
+    let card: PlanPrd;
+    if (d.slug === "usage-alerts" && track) {
+      card = { ...base, stage: "approved", stage_label: `Approved v${approved}`, journey_step: 9, figure: risky ? "At risk" : "On track",
+        track: { id: track.id, status: track.status, health: risky ? "at_risk" : "on_track", owner_id: track.owner_id } };
+    } else if (d.slug === "saved-carts") {
+      const mine = may("approver");
+      card = { ...base, stage: "waiting", stage_label: `Feature set · waiting for ${mine ? "you" : "approver"}`, journey_step: 7, figure: "9 features",
+        waiting_for_viewer: mine, run: { id: seeded("plan:run:saved-carts", mockUuid), status: "awaiting_checkpoint", checkpoint: "feature_set", checkpoint_role: "approver", segment: null } };
+    } else if (d.slug === "clinic-outreach") {
+      // A lead is named (A3): the engineering check waits for them, whoever looks. The run
+      // imported the PRD's draft on Oct 20, which updated the document.
+      card = { ...base, updated_at: "2026-10-20T08:00:00Z", stage: "waiting", stage_label: "Engineering check · waiting for the engineering lead", journey_step: 7,
+        run: { id: seeded("plan:run:clinic-outreach", mockUuid), status: "awaiting_checkpoint", checkpoint: "eng_review", checkpoint_role: "approver", segment: null } };
+    } else if (approved != null && latest === approved) {
+      continue;
+    } else if (latest == null) {
+      card = { ...base, stage: "idea", stage_label: "Brief", journey_step: 1 };
+    } else {
+      const review = d.status === "in_review";
+      const draft = d.slug === "checkout-redesign" ? " · roadmap draft 2" : "";
+      const label = approved != null ? `Approved v${approved} · draft ${latest}` : `Draft ${latest}`;
+      card = { ...base, stage: review ? "in_review" : "draft", stage_label: review ? `${label} in review${draft}` : label, journey_step: 8 };
+      if (d.slug === "checkout-redesign" && scope === "all") card.figure = `${CHECKOUT_DRAFT.length} items`;
+    }
+    order.set(d.id, (card.waiting_for_viewer ? 0 : 2) + (card.track?.health === "at_risk" ? 0 : 1));
+    prds.push(card);
+  }
+  const rank = (c: PlanPrd) => order.get(c.document.id) ?? 3;
+  prds.sort((a, b) => rank(a) - rank(b) || b.updated_at.localeCompare(a.updated_at));
+  return {
+    scope: scope as Schemas["PlanOut"]["scope"],
+    generated_at: now(),
+    counts: {
+      prds: prds.length,
+      at_risk: items.filter((i) => i.state === "at_risk" || i.state === "slipped").length,
+      proposed: items.filter((i) => i.origin === "draft").length,
+      items: items.length,
+    },
+    prds,
+    items,
+  };
 }
