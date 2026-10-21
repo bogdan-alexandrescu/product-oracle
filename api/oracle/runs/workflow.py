@@ -243,7 +243,7 @@ def check_problems(
                 continue
             label = str(r.get("label") or r.get("code") or "Problem")
             item = f" ({r['item']})" if r.get("item") else ""
-            sentence = str(r.get("sentence") or r.get("message") or "")
+            sentence = str(r.get("text") or "")
             out.append(f"{label}{item}: {sentence}" if sentence else f"{label}{item}")
     else:
         for p in check.get("problems") or []:
