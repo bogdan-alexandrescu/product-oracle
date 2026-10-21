@@ -139,7 +139,9 @@ async def test_an_already_answered_post_oracle_cannot_read_holds_the_token(
     assert _console(run, cp["id"])["needs"] in ("unread", "unreadable")
     assert run["token_read_only"] is True
     async with mcp_session(token, f"{EGRESS[0]}, {LB}") as c:
-        res = await c.call_tool("push_draft", {"doc": "w5", "markdown": _draft_markdown()})
+        res = await c.call_tool(
+            "push_draft", {"doc": "w5", "markdown": _draft_markdown(), "base_version": 0}
+        )
         assert res.is_error and "waiting for approval" in res.content[0].text
     assert any(c["id"] == cp["id"] for c in (await _inbox(client, auth))["checkpoints"])
     # Readable again: the approver rule applies (an approver decides: followed).

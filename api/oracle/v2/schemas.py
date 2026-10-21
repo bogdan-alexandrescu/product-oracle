@@ -88,6 +88,7 @@ ChangeSubject = Literal[
     "document_version",
     "entity",
     "artifact_version",
+    "member",
     "product_track",
 ]
 FindingStatus = Literal["pass", "warning", "critical", "not_applicable"]

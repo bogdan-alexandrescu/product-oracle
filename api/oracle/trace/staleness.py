@@ -722,7 +722,12 @@ async def mark_stale(db: AsyncSession, event: ChangeEvent) -> None:
     """The ``trace.mark_stale`` handler: mark what the change reaches potentially_stale,
     with the change as its cause, and record exactly what was marked and why in
     ``event.data["trace"]``. On a version import it also carries unchanged sections'
-    links forward and derives a roadmap version's dependencies on its PRD."""
+    links forward and derives a roadmap version's dependencies on its PRD.
+
+    A section change that is part of a version's change (``part_of_change_id``: the
+    version import recorded both) is that change's: marked once, from the version."""
+    if event.subject_kind == "document_section" and (event.data or {}).get("part_of_change_id"):
+        return
     await _derive_for(db, event)
     subject = Subject.of(event)
     found = await affected(db, subject)

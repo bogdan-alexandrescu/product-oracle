@@ -309,7 +309,7 @@
           "documents"
         ],
         "summary": "Import Version",
-        "description": "Import a draft (markdown + YAML front matter). Creates the document on first import.",
+        "description": "Import a draft (markdown + YAML front matter). Creates the document on first import.\n\n``base_version``: the version the draft was written on (0: the draft creates the\ndocument). When a newer version changed sections (or the front matter) the draft\ndoes not have as the latest has them, the import is a 409 naming both versions and\nthose sections (never a silent overwrite). Without it the import works as before,\nand the version carries a ``base_version_missing`` note.",
         "operationId": "import_version",
         "security": [
           {
@@ -327,6 +327,23 @@
             "schema": {
               "type": "string",
               "title": "Doc"
+            }
+          },
+          {
+            "name": "base_version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Base Version"
             }
           }
         ],
@@ -347,6 +364,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VersionOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The draft's base version is older than the latest, and the draft would overwrite sections changed since",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictResponse"
                 }
               }
             }
@@ -882,6 +909,7 @@
           "review"
         ],
         "summary": "Review Section",
+        "description": "A verdict on a section, bound to its revision. Send ``revision`` (the section's\ncontent hash you read) and a verdict on text that changed since is a 409.",
         "operationId": "review_section",
         "security": [
           {
@@ -937,6 +965,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SectionReviewOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The section changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictResponse"
                 }
               }
             }
@@ -1291,6 +1329,1446 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/versions/{n}/section-states": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Get Section States",
+        "description": "Review status of every section of a version: its revision, status (approved on\nthis revision, stale, changes requested...), the approval it holds, owner,\nreviewers, due date, open feedback by severity, and whether a publish needs it.",
+        "operationId": "get_section_states",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectionStatesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/section-assignments": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "List Section Assignments",
+        "operationId": "list_section_assignments",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SectionAssignmentOut"
+                  },
+                  "title": "Response List Section Assignments"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/sections/{key}/assignment": {
+      "put": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Put Section Assignment",
+        "description": "Set a section's owner, reviewer assignees and due date. Send the ``lock_version``\nfrom the section states (null for a section with none); a stale one is a 409.",
+        "operationId": "put_section_assignment",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SectionAssignmentIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectionAssignmentOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Changed since you loaded it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/review-queue": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Get My Review Queue",
+        "description": "Sections the caller owns or was asked to review, soonest due first.",
+        "operationId": "get_my_review_queue",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReviewQueueItem"
+                  },
+                  "type": "array",
+                  "title": "Response Get My Review Queue"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/documents/{doc}/review-policy": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Get Review Policy",
+        "description": "The document's review policy, else the company's ``review_policy`` setting.",
+        "operationId": "get_review_policy",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPolicyOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Put Review Policy",
+        "description": "Designated decider, mandatory reviewers, extra required sections, which sections\nneed approval before a publish, and whether a change requests re-review.",
+        "operationId": "put_review_policy",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewPolicyIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPolicyOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Changed since you loaded it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/sections/{key}": {
+      "put": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Edit Document Section",
+        "description": "Save one section as the next version. Send the version and section revision you\nloaded: another section changed since is fine (the edit applies on the latest\nversion); the same section changed since is a 409 with its current text. Approvers\nedit any section; a section's owner edits their own, and their ``resolutions`` close\nonly that section's feedback (403 otherwise). An edit that reaches outside its\nsection (adds, rewrites or swallows another section) is a 422.",
+        "operationId": "edit_document_section",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SectionEditIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionOut"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The edited draft is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Changed since you loaded it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/section-patches": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "List Section Patches",
+        "description": "Proposed replacements of section text (an agent rewrite of an approved\nsection), newest first.",
+        "operationId": "list_section_patches",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "accepted",
+                    "rejected",
+                    "superseded"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SectionPatchOut"
+                  },
+                  "title": "Response List Section Patches"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/section-patches/{patch_id}": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Get Section Patch",
+        "description": "A patch with its word diff against the section's current text.",
+        "operationId": "get_section_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "patch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Patch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectionPatchDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/section-patches/{patch_id}/accept": {
+      "post": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Accept Section Patch",
+        "description": "Accept a patch (optionally edited): the section's next revision, as a new\nversion. ``base_revision`` is the current revision you compared against.",
+        "operationId": "accept_section_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "patch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Patch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SectionPatchAccept"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Changed since you loaded it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/section-patches/{patch_id}/reject": {
+      "post": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Reject Section Patch",
+        "operationId": "reject_section_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "patch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Patch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SectionPatchReject"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectionPatchOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Changed since you loaded it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/campaigns": {
+      "post": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Create Review Campaign",
+        "description": "Ask the organization for feedback on a version: everyone with an audience role\nis notified. Comments are gathered; approval stays with the decider.",
+        "operationId": "create_review_campaign",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "List Review Campaigns",
+        "operationId": "list_review_campaigns",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CampaignOut"
+                  },
+                  "title": "Response List Review Campaigns"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/campaigns/{campaign_id}": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Get Review Campaign",
+        "operationId": "get_review_campaign",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Campaign Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Update Review Campaign",
+        "description": "Close (or reopen) a campaign.",
+        "operationId": "update_review_campaign",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Campaign Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Changed since you loaded it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/notifications": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "List My Notifications",
+        "description": "The caller's in-app notifications, newest first (empty for API tokens).",
+        "operationId": "list_my_notifications",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "unread",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Unread"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationOut"
+                  },
+                  "title": "Response List My Notifications"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/notifications/{notification_id}/read": {
+      "post": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Read Notification",
+        "operationId": "read_notification",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "notification_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Notification Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/notifications/read-all": {
+      "post": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Read All Notifications",
+        "operationId": "read_all_notifications",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationsRead"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/documents/{doc}/versions/{n}/publish-check": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Get Publish Check",
+        "description": "Everything that blocks publishing this version, and the advisory warnings.",
+        "operationId": "get_publish_check",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishCheckOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/versions/{n}/publish": {
+      "post": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Publish Version",
+        "description": "Publish an approved version, immutably. Refused (409, nothing written) while\nthe publish check lists a blocker.",
+        "operationId": "publish_version",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionPublishIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The publish was refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishRefused"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/publications": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "List Publications",
+        "operationId": "list_publications",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PublicationSummary"
+                  },
+                  "title": "Response List Publications"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/publications/{p}": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Get Publication",
+        "description": "A publication with everything it pinned.",
+        "operationId": "get_publication",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "P"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/publications/{p}/export": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Export Publication",
+        "description": "The published HTML (full, brief or deck), its PDF, or the full markdown. Served\nfrom what was stored at publish time, so later edits, theme changes and source\nupdates never change it.",
+        "operationId": "export_publication",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "P"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "html",
+                "pdf",
+                "md"
+              ],
+              "type": "string",
+              "default": "html",
+              "title": "Format"
+            }
+          },
+          {
+            "name": "layer",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "full",
+                "brief",
+                "deck"
+              ],
+              "type": "string",
+              "default": "full",
+              "title": "Layer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The published file, exactly as published",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/markdown": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Format not offered for the layer, or no brief"
           }
         }
       }
@@ -2763,7 +4241,7 @@
           "members"
         ],
         "summary": "List Members",
-        "description": "The users of this company's Oracle and their roles.",
+        "description": "The users of this company's Oracle, their roles, and whether each is active or\ndisabled (a removed member: kept so history keeps their name).",
         "operationId": "list_members",
         "responses": {
           "200": {
@@ -2841,6 +4319,310 @@
           },
           "409": {
             "description": "Would demote the last owner"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Remove Member",
+        "description": "Remove a member: the same as ``POST /v1/members/{user_id}/disable`` (a member is\nnever deleted; their row keeps the history's names).",
+        "operationId": "remove_member",
+        "deprecated": true,
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "409": {
+            "description": "The last owner"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/members/{user_id}/disable": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Disable Member",
+        "description": "Remove a member by disabling them: sign-in is refused on every path; their\nconnections are disconnected (revoked at the provider) and their sources recorded\nas revoked, so documents citing them cannot publish; their API tokens and OAuth\ngrants are revoked, their runs cancelled, the open invite for their email revoked;\ntheir approvals lapse for good; every session they signed is ended. The calls at\nthe providers and the runtime are made after the disable commits, outside the\nreview gate, and retried by the tick when they fail. The member stays in the list\n(history keeps the name); an owner can restore them, and they sign in fresh. A\nno-op for a disabled member.",
+        "operationId": "disable_member",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "409": {
+            "description": "The last owner"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/members/{user_id}/restore": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Restore Member",
+        "description": "Let a disabled member sign in again, with their role. Their approvals stay\nlapsed, their tokens revoked and their connections gone: nothing else comes back.",
+        "operationId": "restore_member",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/api-tokens": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "List Api Tokens",
+        "description": "Every API token of this company (never the secret), revoked ones included.",
+        "operationId": "list_api_tokens",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApiTokenOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Api Tokens"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/api-tokens/{token_id}": {
+      "delete": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Revoke Api Token",
+        "description": "Revoke an API token. The approvals given through it lapse for good (section\nverdicts and version approvals); its user's own approvals stand. Revoking twice is\na no-op.",
+        "operationId": "revoke_api_token",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Token Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such token"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/api-tokens/{token_id}/approvals": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Token Approvals",
+        "description": "The approvals given through an API token, oldest first, lapsed ones included\n(``lapsed_at``): what revoking it voids, or voided.",
+        "operationId": "token_approvals",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Token Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TokenApprovalOut"
+                  },
+                  "title": "Response Token Approvals"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such token"
           },
           "422": {
             "description": "Validation Error",
@@ -3006,6 +4788,122 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/member-follow-ups/{follow_up_id}/retry": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Retry Member Follow Up",
+        "description": "Make a provider revoke (or runtime cancel) a disable still owes now, whatever its\nbackoff or its 24 hours of retries. A success drops Oracle's copy of the credential.",
+        "operationId": "retry_member_follow_up",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "follow_up_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Follow Up Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowUpOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such follow-up"
+          },
+          "409": {
+            "description": "Not open"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/member-follow-ups/{follow_up_id}/dismiss": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Dismiss Member Follow Up",
+        "description": "Stop trying a provider revoke (or runtime cancel) a disable owes: Oracle's copy of\nthe credential is dropped, and the dismissal audited.",
+        "operationId": "dismiss_member_follow_up",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "follow_up_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Follow Up Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowUpOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such follow-up"
+          },
+          "409": {
+            "description": "Not open"
           },
           "422": {
             "description": "Validation Error",
@@ -3336,7 +5234,7 @@
           "connections"
         ],
         "summary": "Delete Connection",
-        "description": "Disconnect: revoke the grant at the provider where it has an endpoint (GitHub,\nSlack, Google; best effort), then delete Oracle's copy of the credential.",
+        "description": "Disconnect: revoke the grant at the provider where it has an endpoint (GitHub,\nSlack, Google; best effort), record a ``source_permission`` revocation for each\nsource it synced, then delete Oracle's copy of the credential.",
         "operationId": "delete_connection",
         "security": [
           {
@@ -10428,7 +12326,7 @@
           "runs"
         ],
         "summary": "Tick",
-        "description": "Advance this company's active runs, sweep its Claude account pool and run its\nqueued built-in model jobs (``oracle tick`` calls it on a schedule).",
+        "description": "Advance this company's active runs, sweep its Claude account pool, run its\nqueued built-in model jobs and retry the provider and runtime calls a member's\ndisable still owes (``oracle tick`` calls it on a schedule).",
         "operationId": "tick",
         "responses": {
           "200": {
@@ -12967,6 +14865,7 @@
                     "document_version",
                     "entity",
                     "artifact_version",
+                    "member",
                     "product_track"
                   ],
                   "type": "string"
@@ -21156,6 +23055,152 @@
         ],
         "title": "AnswerResult"
       },
+      "ApiTokenOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "role",
+          "created_at"
+        ],
+        "title": "ApiTokenOut"
+      },
+      "ApprovalLapse": {
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "approved_token_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Token Id"
+          },
+          "approved_grant_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Grant Id"
+          },
+          "lapsed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Lapsed At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lapsed_at"
+        ],
+        "title": "ApprovalLapse",
+        "description": "A version approval that lapsed for good (C2), kept after a new approval."
+      },
       "ApproveOut": {
         "properties": {
           "document_id": {
@@ -24658,6 +26703,240 @@
         ],
         "title": "Body_upload_files"
       },
+      "CampaignCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "audience_roles": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "viewer",
+                "commenter",
+                "approver",
+                "owner"
+              ]
+            },
+            "type": "array",
+            "title": "Audience Roles",
+            "default": [
+              "commenter",
+              "approver",
+              "owner"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "CampaignCreate"
+      },
+      "CampaignOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "version_number": {
+            "type": "integer",
+            "title": "Version Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "audience_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Audience Roles",
+            "default": []
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "closed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "invited": {
+            "type": "integer",
+            "title": "Invited",
+            "default": 0
+          },
+          "comments": {
+            "type": "integer",
+            "title": "Comments",
+            "default": 0
+          },
+          "participants": {
+            "type": "integer",
+            "title": "Participants",
+            "default": 0
+          },
+          "open_change_requests": {
+            "type": "integer",
+            "title": "Open Change Requests",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document_id",
+          "version_number",
+          "title",
+          "status",
+          "lock_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CampaignOut"
+      },
+      "CampaignPatch": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "lock_version"
+        ],
+        "title": "CampaignPatch"
+      },
       "CancelAgain": {
         "properties": {
           "workflow_id": {
@@ -24988,6 +27267,7 @@
               "document_version",
               "entity",
               "artifact_version",
+              "member",
               "product_track"
             ],
             "title": "Subject Kind"
@@ -25209,6 +27489,64 @@
         ],
         "title": "CheckpointDecision"
       },
+      "CheckpointDelivery": {
+        "properties": {
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "tries": {
+            "type": "integer",
+            "title": "Tries",
+            "default": 0
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_tried_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Tried At"
+          }
+        },
+        "type": "object",
+        "title": "CheckpointDelivery",
+        "description": "A decision recorded in Oracle that has not reached the run's workflow yet (owner,\n2026-10-20: a recorded decision is final; Oracle sends it again on every tick until\nSwarmCloud takes it). The decision is the checkpoint's ``status``, ``decided_by`` and\n``decided_at``. None once delivered: the checkpoint then shows its decided state."
+      },
       "CheckpointOut": {
         "properties": {
           "id": {
@@ -25330,6 +27668,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ConsoleAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckpointDelivery"
               },
               {
                 "type": "null"
@@ -25795,6 +28143,22 @@
             "type": "string",
             "minLength": 1,
             "title": "Body"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "major",
+                  "minor"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity"
           }
         },
         "type": "object",
@@ -26952,6 +29316,144 @@
         },
         "type": "object",
         "title": "ConflictResolve"
+      },
+      "ConflictResponse": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "version_conflict",
+              "section_conflict",
+              "stale_lock_version"
+            ],
+            "title": "Code"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/ConflictSection"
+            },
+            "type": "array",
+            "title": "Sections",
+            "default": []
+          },
+          "front_matter_changed": {
+            "type": "boolean",
+            "title": "Front Matter Changed",
+            "default": false
+          },
+          "current_lock_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "code"
+        ],
+        "title": "ConflictResponse",
+        "description": "409: the save started from an older state. Reload ``latest_version``, merge the\nlisted sections and save again with the new base."
+      },
+      "ConflictSection": {
+        "properties": {
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "base_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision"
+          },
+          "current_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Revision"
+          },
+          "your_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Your Revision"
+          },
+          "current_heading": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Heading"
+          },
+          "current_body_md": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Body Md"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_key"
+        ],
+        "title": "ConflictSection"
       },
       "ConflictView": {
         "properties": {
@@ -31751,6 +34253,22 @@
             ],
             "title": "Resolution Note"
           },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "major",
+                  "minor"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -31904,6 +34422,22 @@
               }
             ],
             "title": "Addressed In Version"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "major",
+                  "minor"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity"
           }
         },
         "type": "object",
@@ -32478,6 +35012,139 @@
           "approver_role"
         ],
         "title": "FlowSegmentOut"
+      },
+      "FollowUpOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "member_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Member Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "provider_revoke",
+              "run_cancel"
+            ],
+            "title": "Kind"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "done",
+              "failed",
+              "dismissed"
+            ],
+            "title": "Status"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          },
+          "done_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
+          "dismissed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dismissed At"
+          },
+          "dismissed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dismissed By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "member_id",
+          "kind",
+          "status",
+          "attempts",
+          "created_at"
+        ],
+        "title": "FollowUpOut",
+        "description": "A call a member's disable owes (a provider revoke, a runtime cancel) and how it\nstands: pending (retried by the tick), failed (no more automatic retries; Retry or\nDismiss), done, or dismissed by an owner."
       },
       "GapCreate": {
         "properties": {
@@ -33589,6 +36256,16 @@
               }
             ]
           },
+          "delivery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckpointDelivery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "flow": {
             "type": "string",
             "enum": [
@@ -33955,6 +36632,14 @@
             "type": "array",
             "title": "Checkpoints"
           },
+          "deliveries": {
+            "items": {
+              "$ref": "#/components/schemas/InboxCheckpoint"
+            },
+            "type": "array",
+            "title": "Deliveries",
+            "default": []
+          },
           "approvals": {
             "items": {
               "$ref": "#/components/schemas/RunSummary"
@@ -34007,6 +36692,14 @@
             },
             "type": "array",
             "title": "Feedback"
+          },
+          "revoke_failures": {
+            "items": {
+              "$ref": "#/components/schemas/InboxRevokeFailure"
+            },
+            "type": "array",
+            "title": "Revoke Failures",
+            "default": []
           },
           "total": {
             "type": "integer",
@@ -34065,6 +36758,125 @@
           "total"
         ],
         "title": "InboxOut"
+      },
+      "InboxRevokeFailure": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "member_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Member Id"
+          },
+          "member_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Email"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "provider_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          },
+          "retry_until": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Retry Until"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "member_id",
+          "title",
+          "status",
+          "attempts",
+          "created_at",
+          "retry_until"
+        ],
+        "title": "InboxRevokeFailure",
+        "description": "A provider revoke a member's disable still owes, whose last attempt did not\nrevoke (C2): retried by the tick for 24 hours, then waiting for an owner."
       },
       "InboxStaged": {
         "properties": {
@@ -37099,6 +39911,25 @@
         ],
         "title": "LoginRequest"
       },
+      "MandatoryApproval": {
+        "properties": {
+          "reviewer_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Reviewer Id"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reviewer_id",
+          "approved"
+        ],
+        "title": "MandatoryApproval"
+      },
       "ManifestIn": {
         "properties": {
           "modules": {
@@ -37434,6 +40265,39 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "disabled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled At"
+          },
+          "disabled_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled By"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "title": "Status",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -37441,7 +40305,8 @@
           "id",
           "email",
           "role",
-          "created_at"
+          "created_at",
+          "status"
         ],
         "title": "MemberOut"
       },
@@ -38779,6 +41644,139 @@
           "items"
         ],
         "title": "NextMilestone"
+      },
+      "NotificationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "comment",
+              "reply",
+              "assignment",
+              "rereview_requested",
+              "campaign",
+              "patch_proposed",
+              "published"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "version_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Number"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "comment_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment Id"
+          },
+          "campaign_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Campaign Id"
+          },
+          "actor": {
+            "type": "string",
+            "title": "Actor"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "default": {}
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "actor",
+          "created_at"
+        ],
+        "title": "NotificationOut"
+      },
+      "NotificationsRead": {
+        "properties": {
+          "marked": {
+            "type": "integer",
+            "title": "Marked"
+          }
+        },
+        "type": "object",
+        "required": [
+          "marked"
+        ],
+        "title": "NotificationsRead"
       },
       "NotionPageOut": {
         "properties": {
@@ -40474,6 +43472,156 @@
         ],
         "title": "ProviderOut"
       },
+      "PublicationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          },
+          "version_number": {
+            "type": "integer",
+            "title": "Version Number"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash"
+          },
+          "manifest_hash": {
+            "type": "string",
+            "title": "Manifest Hash"
+          },
+          "published_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "has_brief": {
+            "type": "boolean",
+            "title": "Has Brief",
+            "default": false
+          },
+          "manifest": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Manifest"
+          },
+          "markdown": {
+            "type": "string",
+            "title": "Markdown"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document_id",
+          "number",
+          "version_id",
+          "version_number",
+          "content_hash",
+          "manifest_hash",
+          "created_at",
+          "manifest",
+          "markdown"
+        ],
+        "title": "PublicationOut",
+        "description": "A publication with everything it pinned (immutable)."
+      },
+      "PublicationSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          },
+          "version_number": {
+            "type": "integer",
+            "title": "Version Number"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash"
+          },
+          "manifest_hash": {
+            "type": "string",
+            "title": "Manifest Hash"
+          },
+          "published_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "has_brief": {
+            "type": "boolean",
+            "title": "Has Brief",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document_id",
+          "number",
+          "version_id",
+          "version_number",
+          "content_hash",
+          "manifest_hash",
+          "created_at"
+        ],
+        "title": "PublicationSummary"
+      },
       "PublishBlock": {
         "properties": {
           "key": {
@@ -40533,6 +43681,112 @@
         "title": "PublishBlockedOut",
         "description": "409 from approve: the PRD version may not be published (T2 publish gate, C5), or\nthe roadmap version writes dates that rest on no verified basis (O4 'document dates',\nowner 2026-10-20: ``dates`` lists them)."
       },
+      "PublishCheckOut": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash"
+          },
+          "can_publish": {
+            "type": "boolean",
+            "title": "Can Publish"
+          },
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/PublishProblem"
+            },
+            "type": "array",
+            "title": "Blockers",
+            "default": []
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/PublishProblem"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "default": []
+          },
+          "required_sections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Sections",
+            "default": []
+          },
+          "approval_required_sections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Approval Required Sections",
+            "default": []
+          },
+          "decider_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decider Id"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "readiness": {
+            "items": {
+              "$ref": "#/components/schemas/ReadinessResultOut"
+            },
+            "type": "array",
+            "title": "Readiness",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "version",
+          "content_hash",
+          "can_publish"
+        ],
+        "title": "PublishCheckOut",
+        "description": "Whether a version can be published, and everything that blocks it."
+      },
       "PublishIn": {
         "properties": {
           "version": {
@@ -40546,6 +43800,90 @@
           "version"
         ],
         "title": "PublishIn"
+      },
+      "PublishProblem": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "version_not_approved",
+              "version_approval_lapsed",
+              "decider_not_current",
+              "approval_not_by_decider",
+              "missing_required_section",
+              "stale_approval",
+              "missing_approval",
+              "mandatory_reviewer_pending",
+              "readiness_critical",
+              "source_permission_revoked",
+              "already_published",
+              "superseded_version",
+              "template_unresolved",
+              "open_critical_change_request",
+              "open_change_request",
+              "readiness_warning",
+              "approval_stale_optional",
+              "review_overdue"
+            ],
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section Keys",
+            "default": []
+          },
+          "check_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Key"
+          },
+          "ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "PublishProblem"
+      },
+      "PublishRefused": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "check": {
+            "$ref": "#/components/schemas/PublishCheckOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "check"
+        ],
+        "title": "PublishRefused",
+        "description": "409: the publish transaction refused; nothing was published."
       },
       "Pushback": {
         "properties": {
@@ -41361,6 +44699,80 @@
         ],
         "title": "ReadinessItem"
       },
+      "ReadinessResultOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "hard": {
+            "type": "boolean",
+            "title": "Hard"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warning",
+              "critical",
+              "not_applicable"
+            ],
+            "title": "Status"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Evidence Ids",
+            "default": []
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section Keys",
+            "default": []
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "hard",
+          "status",
+          "rationale"
+        ],
+        "title": "ReadinessResultOut"
+      },
       "RecommendIn": {
         "properties": {
           "kind": {
@@ -42134,6 +45546,41 @@
         ],
         "title": "RescoreResult"
       },
+      "Resolution": {
+        "properties": {
+          "feedback_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feedback Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "addressed",
+              "declined"
+            ],
+            "title": "Status"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feedback_id",
+          "status"
+        ],
+        "title": "Resolution",
+        "description": "One entry of a draft's front-matter ``resolutions`` list."
+      },
       "ResolutionNarrative": {
         "properties": {
           "summary": {
@@ -42206,6 +45653,232 @@
         ],
         "title": "ResolutionReport",
         "description": "How each feedback item raised on earlier versions was handled, as of ``version``."
+      },
+      "ReviewPolicyIn": {
+        "properties": {
+          "decider_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decider Id"
+          },
+          "mandatory_reviewer_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Mandatory Reviewer Ids",
+            "default": []
+          },
+          "required_section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Required Section Keys",
+            "default": []
+          },
+          "section_approval": {
+            "type": "string",
+            "enum": [
+              "required_sections",
+              "all_sections",
+              "none"
+            ],
+            "title": "Section Approval",
+            "default": "required_sections"
+          },
+          "rereview_on_change": {
+            "type": "boolean",
+            "title": "Rereview On Change",
+            "default": true
+          },
+          "lock_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "title": "ReviewPolicyIn"
+      },
+      "ReviewPolicyOut": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "decider_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decider Id"
+          },
+          "mandatory_reviewer_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Mandatory Reviewer Ids",
+            "default": []
+          },
+          "required_section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Section Keys",
+            "default": []
+          },
+          "section_approval": {
+            "type": "string",
+            "enum": [
+              "required_sections",
+              "all_sections",
+              "none"
+            ],
+            "title": "Section Approval",
+            "default": "required_sections"
+          },
+          "rereview_on_change": {
+            "type": "boolean",
+            "title": "Rereview On Change",
+            "default": true
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "document",
+              "company",
+              "default"
+            ],
+            "title": "Source",
+            "default": "default"
+          },
+          "lock_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id"
+        ],
+        "title": "ReviewPolicyOut"
+      },
+      "ReviewQueueItem": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "reviewer"
+            ],
+            "title": "Role"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unreviewed",
+              "approved",
+              "approval_stale",
+              "changes_requested",
+              "rejected",
+              "revised"
+            ],
+            "title": "Status"
+          },
+          "rereview_requested": {
+            "type": "boolean",
+            "title": "Rereview Requested",
+            "default": false
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "overdue": {
+            "type": "boolean",
+            "title": "Overdue",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "slug",
+          "title",
+          "version",
+          "section_key",
+          "heading",
+          "role",
+          "status"
+        ],
+        "title": "ReviewQueueItem",
+        "description": "A section the caller owns or reviews, in the latest version of its document."
       },
       "RevisionDetail": {
         "properties": {
@@ -43464,6 +47137,26 @@
             ],
             "title": "Draft Rejected"
           },
+          "delivering": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "baseline_confirm",
+                  "feature_set",
+                  "priority_order",
+                  "prd_review",
+                  "eng_review",
+                  "roadmap_items",
+                  "roadmap_review"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivering"
+          },
           "sent_back": {
             "anyOf": [
               {
@@ -43977,6 +47670,26 @@
             ],
             "title": "Draft Rejected"
           },
+          "delivering": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "baseline_confirm",
+                  "feature_set",
+                  "priority_order",
+                  "prd_review",
+                  "eng_review",
+                  "roadmap_items",
+                  "roadmap_review"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivering"
+          },
           "sent_back": {
             "anyOf": [
               {
@@ -44466,6 +48179,174 @@
         ],
         "title": "SearchResults"
       },
+      "SectionApproval": {
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Review Id"
+          },
+          "reviewer_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Approved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "review_id",
+          "version",
+          "approved_at"
+        ],
+        "title": "SectionApproval",
+        "description": "The approval a section's current revision holds (or held, when stale)."
+      },
+      "SectionAssignmentIn": {
+        "properties": {
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "reviewer_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Reviewer Ids",
+            "default": []
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "lock_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "title": "SectionAssignmentIn"
+      },
+      "SectionAssignmentOut": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "reviewer_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Reviewer Ids",
+            "default": []
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "overdue": {
+            "type": "boolean",
+            "title": "Overdue",
+            "default": false
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "section_key",
+          "lock_version",
+          "updated_at"
+        ],
+        "title": "SectionAssignmentOut"
+      },
       "SectionDiff": {
         "properties": {
           "section_key": {
@@ -44583,6 +48464,53 @@
         ],
         "title": "SectionDiff"
       },
+      "SectionEditIn": {
+        "properties": {
+          "base_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Base Version"
+          },
+          "base_revision": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Base Revision"
+          },
+          "heading": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heading"
+          },
+          "body_md": {
+            "type": "string",
+            "title": "Body Md"
+          },
+          "resolutions": {
+            "items": {
+              "$ref": "#/components/schemas/Resolution"
+            },
+            "type": "array",
+            "title": "Resolutions",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "base_version",
+          "base_revision",
+          "body_md"
+        ],
+        "title": "SectionEditIn",
+        "description": "Save one section: the next version is the latest with this section replaced."
+      },
       "SectionEvidence": {
         "properties": {
           "section_key": {
@@ -44631,6 +48559,43 @@
           "citations"
         ],
         "title": "SectionEvidence"
+      },
+      "SectionInvalidation": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "change_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Id"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "at"
+        ],
+        "title": "SectionInvalidation"
       },
       "SectionLinkCreate": {
         "properties": {
@@ -45012,6 +48977,17 @@
             "type": "string",
             "title": "Content Hash"
           },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
           "citation_keys": {
             "items": {
               "type": "string"
@@ -45064,6 +49040,484 @@
         ],
         "title": "SectionOut"
       },
+      "SectionPatchAccept": {
+        "properties": {
+          "base_revision": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Base Revision"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "heading": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heading"
+          },
+          "body_md": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Md"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "base_revision",
+          "lock_version"
+        ],
+        "title": "SectionPatchAccept"
+      },
+      "SectionPatchDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "base_version": {
+            "type": "integer",
+            "title": "Base Version"
+          },
+          "base_hash": {
+            "type": "string",
+            "title": "Base Hash"
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "body_md": {
+            "type": "string",
+            "title": "Body Md"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "run",
+              "llm_job",
+              "agent",
+              "person"
+            ],
+            "title": "Origin"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "replace",
+              "remove"
+            ],
+            "title": "Action",
+            "default": "replace"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "accepted",
+              "rejected",
+              "superseded"
+            ],
+            "title": "Status"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "applied_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Version"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "latest_version": {
+            "type": "integer",
+            "title": "Latest Version"
+          },
+          "current_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Revision"
+          },
+          "current_heading": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Heading"
+          },
+          "current_body_md": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Body Md"
+          },
+          "rebase_needed": {
+            "type": "boolean",
+            "title": "Rebase Needed",
+            "default": false
+          },
+          "words": {
+            "items": {
+              "$ref": "#/components/schemas/WordOp"
+            },
+            "type": "array",
+            "title": "Words",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document_id",
+          "section_key",
+          "base_version",
+          "base_hash",
+          "heading",
+          "body_md",
+          "origin",
+          "status",
+          "lock_version",
+          "created_at",
+          "updated_at",
+          "latest_version"
+        ],
+        "title": "SectionPatchDetail",
+        "description": "A patch with its word diff against the section's text in the latest version."
+      },
+      "SectionPatchOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "base_version": {
+            "type": "integer",
+            "title": "Base Version"
+          },
+          "base_hash": {
+            "type": "string",
+            "title": "Base Hash"
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "body_md": {
+            "type": "string",
+            "title": "Body Md"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "run",
+              "llm_job",
+              "agent",
+              "person"
+            ],
+            "title": "Origin"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "replace",
+              "remove"
+            ],
+            "title": "Action",
+            "default": "replace"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "accepted",
+              "rejected",
+              "superseded"
+            ],
+            "title": "Status"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "applied_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Version"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document_id",
+          "section_key",
+          "base_version",
+          "base_hash",
+          "heading",
+          "body_md",
+          "origin",
+          "status",
+          "lock_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SectionPatchOut"
+      },
+      "SectionPatchReject": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "SectionPatchReject"
+      },
       "SectionReviewIn": {
         "properties": {
           "verdict": {
@@ -45085,6 +49539,33 @@
               }
             ],
             "title": "Note"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "major",
+                  "minor"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity"
           }
         },
         "type": "object",
@@ -45146,6 +49627,17 @@
             "format": "date-time",
             "title": "Created At"
           },
+          "section_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Hash"
+          },
           "feedback_item_id": {
             "anyOf": [
               {
@@ -45183,6 +49675,217 @@
           "created_at"
         ],
         "title": "SectionReviewOut"
+      },
+      "SectionStateOut": {
+        "properties": {
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "ordinal": {
+            "type": "integer",
+            "title": "Ordinal"
+          },
+          "layer": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "detail"
+            ],
+            "title": "Layer"
+          },
+          "revision": {
+            "type": "string",
+            "title": "Revision"
+          },
+          "revision_since_version": {
+            "type": "integer",
+            "title": "Revision Since Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unreviewed",
+              "approved",
+              "approval_stale",
+              "changes_requested",
+              "rejected",
+              "revised"
+            ],
+            "title": "Status"
+          },
+          "approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SectionApproval"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "invalidated": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SectionInvalidation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rereview_requested": {
+            "type": "boolean",
+            "title": "Rereview Requested",
+            "default": false
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "default": false
+          },
+          "approval_required": {
+            "type": "boolean",
+            "title": "Approval Required",
+            "default": false
+          },
+          "mandatory_approvals": {
+            "items": {
+              "$ref": "#/components/schemas/MandatoryApproval"
+            },
+            "type": "array",
+            "title": "Mandatory Approvals",
+            "default": []
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "reviewer_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Reviewer Ids",
+            "default": []
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "overdue": {
+            "type": "boolean",
+            "title": "Overdue",
+            "default": false
+          },
+          "open_feedback": {
+            "type": "integer",
+            "title": "Open Feedback",
+            "default": 0
+          },
+          "open_by_severity": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Open By Severity",
+            "default": {}
+          },
+          "lock_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_key",
+          "heading",
+          "ordinal",
+          "layer",
+          "revision",
+          "revision_since_version",
+          "status"
+        ],
+        "title": "SectionStateOut",
+        "description": "Review status of one section of a version, for the document views."
+      },
+      "SectionStatesOut": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "latest_version": {
+            "type": "integer",
+            "title": "Latest Version"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/SectionStateOut"
+            },
+            "type": "array",
+            "title": "Sections"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "enum": [
+                "unreviewed",
+                "approved",
+                "approval_stale",
+                "changes_requested",
+                "rejected",
+                "revised"
+              ]
+            },
+            "type": "object",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "version",
+          "latest_version",
+          "sections",
+          "counts"
+        ],
+        "title": "SectionStatesOut"
       },
       "SectionTrace": {
         "properties": {
@@ -45287,6 +49990,29 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "lapsed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lapsed At"
+          },
+          "lapse_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lapse Reason"
           }
         },
         "type": "object",
@@ -48939,6 +53665,11 @@
                 "type": "null"
               }
             ]
+          },
+          "member_follow_ups": {
+            "type": "integer",
+            "title": "Member Follow Ups",
+            "default": 0
           }
         },
         "type": "object",
@@ -48950,6 +53681,104 @@
           "errors"
         ],
         "title": "TickOut"
+      },
+      "TokenApprovalOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "section",
+              "version"
+            ],
+            "title": "Kind"
+          },
+          "document": {
+            "type": "string",
+            "title": "Document"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "review_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Id"
+          },
+          "approver_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approver Id"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "lapsed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lapsed At"
+          },
+          "lapse_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lapse Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "document",
+          "version"
+        ],
+        "title": "TokenApprovalOut",
+        "description": "An approval given through an API token: a section verdict or a version approval."
       },
       "TokenIn": {
         "properties": {
@@ -51569,6 +56398,14 @@
             "title": "Warnings",
             "default": []
           },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/VersionWarning"
+            },
+            "type": "array",
+            "title": "Notes",
+            "default": []
+          },
           "imported_by": {
             "anyOf": [
               {
@@ -51619,6 +56456,14 @@
             "format": "date-time",
             "title": "Created At"
           },
+          "approval_lapses": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalLapse"
+            },
+            "type": "array",
+            "title": "Approval Lapses",
+            "default": []
+          },
           "front_matter": {
             "additionalProperties": true,
             "type": "object",
@@ -51659,6 +56504,35 @@
           "created_at"
         ],
         "title": "VersionOut"
+      },
+      "VersionPublishIn": {
+        "properties": {
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "VersionPublishIn"
       },
       "VersionReports": {
         "properties": {
@@ -51827,6 +56701,14 @@
             },
             "type": "array",
             "title": "Warnings",
+            "default": []
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/VersionWarning"
+            },
+            "type": "array",
+            "title": "Notes",
             "default": []
           },
           "imported_by": {

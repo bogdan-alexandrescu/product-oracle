@@ -109,6 +109,9 @@ class VersionSummary(ORM):
     content_hash: str
     snapshot: str | None = None
     warnings: list[VersionWarning] = []
+    # How the version came in, e.g. base_version_missing: imported without a base
+    # version, so nothing checked that it keeps the changes made since.
+    notes: list[VersionWarning] = []
     imported_by: uuid.UUID | None = None
     approved_at: datetime | None = None
     # Where the brief layer came from; "none": no brief, the version opens on the full
@@ -147,6 +150,10 @@ class SectionVerdict(ORM):
     note: str | None = None
     reviewer_id: uuid.UUID | None = None
     created_at: datetime
+    # Set when an approval lapsed for good (C2: its approver was demoted or removed, its
+    # API token or OAuth grant revoked): it no longer counts, and never will again.
+    lapsed_at: datetime | None = None
+    lapse_reason: str | None = None
 
 
 class SectionOut(ORM):
@@ -162,12 +169,26 @@ class SectionOut(ORM):
         "a cell is '\\|'."
     )
     content_hash: str
+    # The review revision: the text, the citation entries it cites and its layer. Send
+    # it as ``base_revision`` when saving the section.
+    revision: str | None = None
     citation_keys: list[str] = []
     verdict: SectionVerdict | None = None
     layer: Layer = "detail"
     # Presenter notes: the section's fenced ``notes`` block only; guidance is never used
     # (O1g).
     notes: str | None = None
+
+
+class ApprovalLapse(BaseModel):
+    """A version approval that lapsed for good (C2), kept after a new approval."""
+
+    approved_at: datetime | None = None
+    approved_by: uuid.UUID | None = None
+    approved_token_id: uuid.UUID | None = None
+    approved_grant_id: uuid.UUID | None = None
+    lapsed_at: datetime
+    reason: str | None = None
 
 
 class DateMarkOut(BaseModel):
@@ -189,6 +210,8 @@ class DateMarkOut(BaseModel):
 
 
 class VersionOut(VersionSummary):
+    # Every approval of this version that lapsed, oldest first.
+    approval_lapses: list[ApprovalLapse] = []
     front_matter: dict[str, Any] = {}
     sections: list[SectionOut] = []
     citations: list[CitationOut] = []

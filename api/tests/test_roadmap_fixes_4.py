@@ -696,19 +696,14 @@ async def test_a_disabled_owner_is_refused_once_the_column_exists(client, owner)
         member = await create_user(s, "gone@example.com", "pw")
         await s.commit()
         member_id = member.id
+    # The column exists since the member disable (migration 0014_member_disable).
     async with engine().begin() as conn:
-        await conn.execute(text("ALTER TABLE users ADD COLUMN disabled_at timestamptz"))
-    try:
-        async with engine().begin() as conn:
-            await conn.execute(
-                text("UPDATE users SET disabled_at = now() WHERE id = :id"), {"id": member_id}
-            )
-        resp = await client.patch(
-            f"/v1/tracks/{track['id']}",
-            json={"owner_id": str(member_id), "lock_version": track["lock_version"]},
-            headers=auth,
+        await conn.execute(
+            text("UPDATE users SET disabled_at = now() WHERE id = :id"), {"id": member_id}
         )
-        assert resp.status_code == 422 and "disabled" in resp.text, resp.text
-    finally:
-        async with engine().begin() as conn:
-            await conn.execute(text("ALTER TABLE users DROP COLUMN disabled_at"))
+    resp = await client.patch(
+        f"/v1/tracks/{track['id']}",
+        json={"owner_id": str(member_id), "lock_version": track["lock_version"]},
+        headers=auth,
+    )
+    assert resp.status_code == 422 and "disabled" in resp.text, resp.text

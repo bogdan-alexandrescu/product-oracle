@@ -52,7 +52,9 @@ def scratch_db():
 def test_0014_intake_chains_after_mains_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
-    assert script.get_heads() == ["0018_source_unavailable_items"]
+    # The PRD review chain (0014_review ... 0014_member_follow_up_retry) chains on it.
+    assert script.get_revision("0014_review").down_revision == "0018_source_unavailable_items"
+    assert script.get_heads() == ["0014_member_follow_up_retry"]
 
 
 def test_widened_checks_keep_other_lanes_values(scratch_db):

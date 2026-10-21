@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import require_role
+from oracle.authz import recheck_caller, require_role
 from oracle.docs import service
 from oracle.docs.parser import DraftError
 from oracle.docs.schemas import (
@@ -24,6 +24,7 @@ from oracle.docs.schemas import (
 )
 from oracle.http import read_capped_body
 from oracle.jobs import service as jobs_service
+from oracle.review.schemas import ConflictResponse
 
 # Every route needs at least a viewer; importing a version needs an approver.
 router = APIRouter(
@@ -64,6 +65,11 @@ async def get_document(doc: str, db: TenantDB) -> DocumentOut:
     status_code=status.HTTP_201_CREATED,
     responses={
         200: {"model": VersionOut, "description": "Same content as an existing version"},
+        409: {
+            "model": ConflictResponse,
+            "description": "The draft's base version is older than the latest, and the "
+            "draft would overwrite sections changed since",
+        },
         413: {"description": "Draft larger than 1 MiB (ORACLE_MAX_BODY_BYTES)"},
         422: {"model": ImportErrorResponse, "description": "Draft rejected"},
     },
@@ -75,10 +81,22 @@ async def get_document(doc: str, db: TenantDB) -> DocumentOut:
     },
 )
 async def import_version(
-    doc: str, request: Request, principal: Approver, db: TenantDB
+    doc: str,
+    request: Request,
+    principal: Approver,
+    db: TenantDB,
+    base_version: Annotated[int | None, Query(ge=0)] = None,
 ) -> VersionOut | JSONResponse:
-    """Import a draft (markdown + YAML front matter). Creates the document on first import."""
+    """Import a draft (markdown + YAML front matter). Creates the document on first import.
+
+    ``base_version``: the version the draft was written on (0: the draft creates the
+    document). When a newer version changed sections (or the front matter) the draft
+    does not have as the latest has them, the import is a 409 naming both versions and
+    those sections (never a silent overwrite). Without it the import works as before,
+    and the version carries a ``base_version_missing`` note."""
     raw = await read_capped_body(request)
+    # The body is in before the gate is taken (and the caller re-read under it).
+    await recheck_caller(db, principal, "approver")
     try:
         markdown = raw.decode("utf-8")
     except UnicodeDecodeError:
@@ -86,11 +104,21 @@ async def import_version(
             DraftError([ImportProblem(code="invalid_encoding", message="body must be UTF-8")])
         )
     try:
-        result = await service.import_draft(db, doc, markdown, principal)
+        result = await service.import_draft(db, doc, markdown, principal, base_version=base_version)
     except DraftError as exc:
         return _draft_rejected(exc)
     except service.NotFoundError as exc:
         raise _not_found(exc) from exc
+    except service.BaseVersionConflictError as exc:
+        body = ConflictResponse(
+            detail=str(exc),
+            code=exc.code,  # type: ignore[arg-type]
+            base_version=exc.base,
+            latest_version=exc.latest,
+            sections=exc.sections,  # type: ignore[arg-type]
+            front_matter_changed=exc.front_matter_changed,
+        )
+        return JSONResponse(body.model_dump(mode="json"), status.HTTP_409_CONFLICT)
     except service.ImportConflictError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     if result.created:

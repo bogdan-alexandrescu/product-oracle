@@ -4,6 +4,12 @@ The known keys and how each value is checked:
 
 - ``iap_default_role``: one of the roles; the role of a Google sign-in without an invite.
 - ``confidence_weights``: overrides of ``oracle.confidence.DEFAULTS``, same shape.
+- ``review_policy``: the company's default review policy (``oracle.review.state``):
+  designated decider, mandatory reviewers, required sections, which sections need an
+  approval before a publish, re-review on change. A document's own policy replaces it.
+
+- ``publish_latest_only``: true (default) refuses publishing a version a newer one
+  superseded; false lets an approved older version be published.
 - ``blocker_risk_acceptance_role`` (B4): ``approver`` or ``owner``, the lowest role that
   may accept a critical hard blocker's risk or approve its feasibility scope.
 - ``blocker_risk_review_max_days`` (B4): an integer, 1-365, the latest review date of an
@@ -35,7 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.auth.models import ROLES
-from oracle.authz import require_role
+from oracle.authz import recheck_caller, require_role
 from oracle.baseline.models import LINK_KINDS
 from oracle.confidence import DEFAULTS as CONFIDENCE_DEFAULTS
 from oracle.sources.models import ITEM_KINDS, SOURCE_KINDS
@@ -44,6 +50,14 @@ from oracle.tenant_settings import TenantSetting
 DEFAULTS: dict[str, Any] = {
     "iap_default_role": "commenter",
     "confidence_weights": {},
+    "review_policy": {
+        "decider_id": None,
+        "mandatory_reviewer_ids": [],
+        "required_section_keys": [],
+        "section_approval": "required_sections",
+        "rereview_on_change": True,
+    },
+    "publish_latest_only": True,
     # B4 (owner, 2026-10-19): owners only, reviewed within at most 90 days.
     "blocker_risk_acceptance_role": "owner",
     "blocker_risk_review_max_days": 90,
@@ -51,6 +65,10 @@ DEFAULTS: dict[str, Any] = {
     "company_email_domains": [],
     "company_shared_drives": [],
 }
+# Settings the publish gate reads: a change takes the review gate exclusively, so it
+# never lands while a publish renders (oracle.review.publish.gate_lock). Every other
+# key takes it shared; either way the caller is re-read under it.
+GATE_KEYS = ("review_policy", "publish_latest_only")
 RISK_ACCEPTANCE_ROLES = ("approver", "owner")
 # Changing these narrows every member's Google Docs sources at once (S5).
 COMPANY_KEYS = ("company_email_domains", "company_shared_drives")
@@ -144,6 +162,17 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         return value
     if key == "confidence_weights":
         return validate_confidence_weights(value)
+    if key == "review_policy":
+        from oracle.review.state import PolicyError, validate_policy
+
+        try:
+            return await validate_policy(session, value)
+        except PolicyError as e:
+            raise InvalidSetting(str(e)) from None
+    if key == "publish_latest_only":
+        if not isinstance(value, bool):
+            raise InvalidSetting("publish_latest_only must be true or false")
+        return value
     if key == "blocker_risk_acceptance_role":
         if value not in RISK_ACCEPTANCE_ROLES:
             raise InvalidSetting(
@@ -277,6 +306,9 @@ async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB)
 
     if key not in DEFAULTS:
         raise _unknown(key)
+    # Every key: the caller must still be an owner when the change lands (a rogue owner
+    # being disabled must not raise iap_default_role with a request in flight).
+    await recheck_caller(db, principal, "owner", shared=key not in GATE_KEYS)
     before = await company_scope(db, principal.tenant_id) if key in COMPANY_KEYS else None
     if body.value is None:
         await clear_setting(db, key)

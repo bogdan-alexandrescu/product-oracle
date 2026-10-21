@@ -18,9 +18,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
-from oracle.authz import require_role
+from oracle.authz import require_role, require_role_now
 from oracle.claude_accounts.sweep import summarise_sweep
-from oracle.claude_accounts.sweep import sweep_if_due as sweep_claude_accounts_if_due
+from oracle.connections.router import ProviderHttp
 from oracle.jobs.worker import run_pending as run_llm_jobs
 from oracle.runs import service
 from oracle.runs.schemas import (
@@ -42,12 +42,14 @@ from oracle.runs.schemas import (
 from oracle.swarm import Features, RuntimeUnavailable, get_runtime, load_learned
 from oracle.swarm.runtime import MCP_SERVER
 from oracle.swarm.settings import get_runtime_settings
+from oracle.ticker import body as tick_body
 from oracle.ticker import router as scheduler_tick
 
 router = APIRouter(prefix="/v1", tags=["runs"])
 
-Approver = Annotated[Principal, Depends(require_role("approver"))]
 Owner = Annotated[Principal, Depends(require_role("owner"))]
+ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
+OwnerNow = Annotated[Principal, Depends(require_role_now("owner"))]
 
 
 async def _call[T](op: Awaitable[T]) -> T:
@@ -120,7 +122,7 @@ async def list_runs(
 
 
 @router.post("/runs", response_model=RunOut, status_code=status.HTTP_201_CREATED)
-async def create_run(body: RunCreate, principal: Approver, db: TenantDB) -> RunOut:
+async def create_run(body: RunCreate, principal: ApproverNow, db: TenantDB) -> RunOut:
     """Create a draft run. Nothing runs and nothing is spent until it is started."""
     run_id = await _call(service.create_run(db, principal, body))
     return await service.read_run(db, run_id, principal)
@@ -133,7 +135,7 @@ async def get_run(run_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB) 
 
 @router.patch("/runs/{run_id}", response_model=RunOut)
 async def update_run(
-    run_id: uuid.UUID, body: RunPatch, principal: Approver, db: TenantDB
+    run_id: uuid.UUID, body: RunPatch, principal: ApproverNow, db: TenantDB
 ) -> RunOut:
     """Change a draft's document or knobs; its estimate is cleared."""
     await _call(service.update_run(db, principal, run_id, body))
@@ -141,49 +143,54 @@ async def update_run(
 
 
 @router.post("/runs/{run_id}/estimate", response_model=EstimateOut)
-async def estimate_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> EstimateOut:
+async def estimate_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> EstimateOut:
     """Per-segment cost estimate from the cost table; stored on the run."""
     return await _call(service.estimate(db, principal, run_id))
 
 
 @router.post("/runs/{run_id}/start", response_model=RunOut)
-async def start_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+async def start_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> RunOut:
     """Pin a snapshot and submit the first segment, or wait for an owner when the
     estimate is over the approval threshold ($50)."""
     await _call(service.start(db, principal, run_id))
+    await service.submit_queued(db, run_id)
     return await service.read_run(db, run_id, principal)
 
 
 @router.post("/runs/{run_id}/approve", response_model=RunOut)
-async def approve_run(run_id: uuid.UUID, principal: Owner, db: TenantDB) -> RunOut:
+async def approve_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> RunOut:
     """Approve the cost of a run awaiting approval and start it."""
     await _call(service.approve(db, principal, run_id))
+    await service.submit_queued(db, run_id)
     return await service.read_run(db, run_id, principal)
 
 
 @router.post("/runs/{run_id}/resume", response_model=RunOut)
-async def resume_run(run_id: uuid.UUID, principal: Owner, db: TenantDB) -> RunOut:
+async def resume_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> RunOut:
     """Resume a run paused on overrun; it may spend another half of its estimate."""
     await _call(service.resume(db, principal, run_id))
+    await service.submit_queued(db, run_id)
     return await service.read_run(db, run_id, principal)
 
 
 @router.post("/runs/{run_id}/retry", response_model=RunOut)
-async def retry_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+async def retry_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> RunOut:
     """Retry a run whose lost submission Oracle could neither find nor rule out (Inbox:
     lookups): looked up once more, else the segment is submitted again."""
     await _call(service.retry(db, principal, run_id))
+    # The segment is queued under the gate; submitted here, with nothing held.
+    await service.submit_queued(db, run_id)
     return await service.read_run(db, run_id, principal)
 
 
 @router.post("/runs/{run_id}/cancel", response_model=RunOut)
-async def cancel_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+async def cancel_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> RunOut:
     await _call(service.cancel(db, principal, run_id))
     return await service.read_run(db, run_id, principal)
 
 
 @router.post("/runs/{run_id}/stop-cancelling", response_model=RunOut)
-async def stop_cancelling_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+async def stop_cancelling_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> RunOut:
     """Stop cancelling a workflow whose cancel SwarmCloud keeps answering with a 404 that
     proves nothing (Inbox: ``can_stop_cancelling``): the cancel calls stop and the Inbox
     item clears. A run that has not ended ends (cancelled, the reason recorded) and no
@@ -194,7 +201,7 @@ async def stop_cancelling_run(run_id: uuid.UUID, principal: Approver, db: Tenant
 
 
 @router.post("/runs/{run_id}/retry-lookup", response_model=RunOut)
-async def retry_lookup_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+async def retry_lookup_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> RunOut:
     """Read a workflow whose cost is unknown now (Inbox: ``can_retry_lookup``): its status
     did not read past its search's end, or SwarmCloud answered it with 404s that prove
     nothing, or its confirmed cancel still reads CANCELLING. Read, its cost is counted
@@ -205,7 +212,7 @@ async def retry_lookup_run(run_id: uuid.UUID, principal: Approver, db: TenantDB)
 
 
 @router.post("/runs/{run_id}/retry-import", response_model=RunOut)
-async def retry_import_run(run_id: uuid.UUID, principal: Owner, db: TenantDB) -> RunOut:
+async def retry_import_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> RunOut:
     """Retry importing a step's output (Inbox: ``imports``, ``can_retry_import``): Oracle
     stopped after its resumed advance failed 5 times in a row; the next tick tries again,
     the count reset. Owners only; audited."""
@@ -234,7 +241,7 @@ async def retry_draft_import(
 
 @router.post("/runs/{run_id}/cancel-again", response_model=RunOut)
 async def cancel_again_run(
-    run_id: uuid.UUID, body: CancelAgain, principal: Approver, db: TenantDB
+    run_id: uuid.UUID, body: CancelAgain, principal: ApproverNow, db: TenantDB
 ) -> RunOut:
     """Cancel again (Inbox: ``cancel_again``): a workflow an approver stopped cancelling,
     whose spend took the ended run over its ceiling, has Oracle's cancel calls turned
@@ -245,7 +252,7 @@ async def cancel_again_run(
 
 
 @router.post("/runs/{run_id}/dismiss-overrun", response_model=RunOut)
-async def dismiss_overrun_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+async def dismiss_overrun_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> RunOut:
     """Clear an ended run's overrun from the Inbox (``can_dismiss_overrun``: nothing of
     the run is left to read). The overrun stays recorded on the run; audited."""
     await _call(service.dismiss_overrun(db, principal, run_id))
@@ -266,6 +273,7 @@ async def decide_checkpoint(
     await _call(
         service.decide_checkpoint(db, principal, run_id, checkpoint_id, body.decision, body.note)
     )
+    await service.submit_queued(db, run_id)
     return await service.read_run(db, run_id, principal)
 
 
@@ -296,17 +304,33 @@ async def get_inbox(
 
 
 @router.post("/internal/tick", response_model=TickOut)
-async def tick(principal: CurrentPrincipal, db: TenantDB) -> TickOut:
-    """Advance this company's active runs, sweep its Claude account pool and run its
-    queued built-in model jobs (``oracle tick`` calls it on a schedule)."""
+async def tick(principal: CurrentPrincipal, db: TenantDB, http: ProviderHttp) -> TickOut:
+    """Advance this company's active runs, sweep its Claude account pool, run its
+    queued built-in model jobs and retry the provider and runtime calls a member's
+    disable still owes (``oracle tick`` calls it on a schedule)."""
     if principal.kind != "token" and principal.role != "owner":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Requires the owner role or an API token")
+    if principal.kind == "token" and principal.role == "viewer":
+        # The tick submits workflows and spends: a read-only token does not run it.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "A viewer API token cannot run the tick")
     started = time.monotonic()
-    out = await service.tick(db, principal)
+    # The scheduled ticker's body, for this company (oracle.ticker.body).
+    company = await tick_body.tick_company(db, principal.tenant_id, principal)
+    try:
+        # The scheduled tick's time limit, from the start of this request: no job is
+        # claimed, and no call started, that could not finish inside it.
+        budget = scheduler_tick.HARD_LIMIT_SECONDS - (time.monotonic() - started)
+        llm_jobs = await run_llm_jobs(principal.tenant_id, budget_seconds=budget)
+    finally:
+        # Last, within their own time budget: they never hold up runs and jobs, and a
+        # failure of those never skips them.
+        await tick_body.settle_company(db, principal.tenant_id, http, company, principal)
+    if company.errors:
+        raise company.errors[0]
+    out = company.runs
+    assert out is not None
     # Only when due, at most every five minutes however often this is called.
-    out.claude_accounts = summarise_sweep(await sweep_claude_accounts_if_due(principal.tenant_id))
-    # The scheduled tick's time limit, from the start of this request: no job is claimed,
-    # and no call started, that could not finish inside it.
-    budget = scheduler_tick.HARD_LIMIT_SECONDS - (time.monotonic() - started)
-    out.llm_jobs = await run_llm_jobs(principal.tenant_id, budget_seconds=budget)
+    out.claude_accounts = summarise_sweep(company.sweep)
+    out.llm_jobs = llm_jobs
+    out.member_follow_ups = company.follow_ups
     return out

@@ -858,3 +858,8 @@ def register() -> None:
     """Register the ten criteria (advisory, T2) and the two hard checks. Idempotent."""
     for criterion in (*CRITERIA, *HARD):
         readiness.register_check(criterion.key, _check(criterion), hard=criterion.hard)
+
+
+# Registered once, at import (as the other lanes' checks are): a test's isolated registry
+# (readiness.isolated_checks) stays as the test left it.
+register()

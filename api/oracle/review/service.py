@@ -56,9 +56,11 @@ class UnknownFeedbackItemsError(ValueError):
 class ReviewError(Exception):
     """A request the review service refuses; the router maps ``kind`` to an HTTP status."""
 
-    def __init__(self, kind: str, message: str):
-        self.kind = kind  # "not_found" | "invalid" | "forbidden"
+    def __init__(self, kind: str, message: str, conflict: dict | None = None):
+        self.kind = kind  # "not_found" | "invalid" | "forbidden" | "conflict"
         self.message = message
+        # For "conflict": a ConflictResponse body (oracle.review.schemas).
+        self.conflict = conflict
         super().__init__(message)
 
 
@@ -195,6 +197,7 @@ async def feedback_out(
                 status=item.status,
                 addressed_in_version=item.addressed_in_version,
                 resolution_note=item.resolution_note,
+                severity=item.severity,
                 created_at=item.created_at,
                 updated_at=item.updated_at,
                 suggestion=SuggestionOut.model_validate(suggestion) if suggestion else None,
@@ -264,8 +267,11 @@ async def create_comment(
     section_key: str,
     anchor: TextQuoteSelector,
     body: str,
+    severity: str | None = None,
 ) -> CommentOut:
-    """Top-level inline comment; also opens a ``comment`` feedback item."""
+    """Top-level inline comment; also opens a ``comment`` feedback item (a change
+    request of ``severity`` when given). The section's owner and reviewers are
+    notified."""
     version = await get_version(session, doc, n)
     section = await _get_section(session, version, section_key)
     comment = Comment(
@@ -286,11 +292,16 @@ async def create_comment(
         section_key=section_key,
         summary=body,
         status="open",
+        severity=severity,
         created_at=comment.created_at,
     )
     session.add(item)
     await session.flush()
-    await _mark_in_review(session, await session.get(Document, version.document_id))
+    document = await session.get(Document, version.document_id)
+    await _mark_in_review(session, document)
+    from oracle.review import collab
+
+    await collab.on_comment(session, principal, document, version.number, comment)
     await audit.record(
         session,
         principal,
@@ -305,7 +316,12 @@ async def create_comment(
         "feedback.create",
         "feedback_item",
         item.id,
-        {"kind": "comment", "comment_id": str(comment.id), "raised_on_version": version.number},
+        {
+            "kind": "comment",
+            "comment_id": str(comment.id),
+            "raised_on_version": version.number,
+            **({"severity": severity} if severity else {}),
+        },
     )
     return _comment_out(comment, feedback_item_id=item.id, layer=section.layer)
 
@@ -371,6 +387,11 @@ async def reply_to_comment(
     await audit.record(
         session, principal, "comment.reply", "comment", reply.id, {"parent_id": str(parent.id)}
     )
+    from oracle.review import collab
+
+    version = await session.get(DocumentVersion, reply.version_id)
+    document = await session.get(Document, version.document_id)
+    await collab.on_comment(session, principal, document, version.number, reply, parent)
     return _comment_out(
         reply, layer=await section_layer(session, reply.version_id, reply.section_key)
     )
@@ -392,8 +413,17 @@ async def update_comment(
     Below the approver role a principal may only change its own comments.
     """
     comment = await _get_comment(session, comment_id)
-    if comment.author_id != principal.id and not has_role(principal.role, "approver"):
-        raise ReviewError("forbidden", "Only the author or an approver can change this comment")
+    if comment.author_id != principal.id:
+        refusal = None if has_role(principal.role, "approver") else "not an approver"
+        if refusal is None:
+            # Moderation: the role is read now, under the review gate (C2).
+            from oracle.auth.service import caller_refusal
+            from oracle.review import publish
+
+            await publish.gate_lock(session, shared=True)
+            refusal = await caller_refusal(session, principal, "approver")
+        if refusal is not None:
+            raise ReviewError("forbidden", "Only the author or an approver can change this comment")
     changes: dict[str, object] = {}
     if resolved is not None:
         if comment.parent_id is not None:
@@ -452,6 +482,22 @@ async def update_comment(
 # --- Section verdicts --------------------------------------------------------------------
 
 
+async def _still_an_approver(session: AsyncSession, principal: "Principal") -> None:
+    """Under the review gate (shared): the caller still is an approver now. A role
+    change, a disable or a token or grant revocation takes the gate exclusively and
+    lapses the approvals it ends; this re-read keeps one that raced with it from
+    landing after."""
+    from oracle.auth.service import caller_refusal
+    from oracle.review.publish import gate_lock
+
+    await gate_lock(session, shared=True)
+    refusal = await caller_refusal(session, principal, "approver")
+    if refusal is not None:
+        if refusal.startswith("Your access"):
+            refusal = "Requires the approver role"
+        raise ReviewError("forbidden", refusal)
+
+
 async def latest_verdicts(session: AsyncSession, version_id: uuid.UUID) -> dict[str, SectionReview]:
     """Latest verdict per section key in a version (Lane 1 can use it for VersionOut)."""
     reviews = (
@@ -472,21 +518,46 @@ async def review_section(
     section_key: str,
     verdict: str,
     note: str | None,
+    revision: str | None = None,
+    severity: str | None = None,
 ) -> tuple[SectionReview, FeedbackItem | None]:
     """Record a verdict (history is kept; the latest wins).
 
     Any still-open ``section_review`` item for the same section, raised on this or an
     earlier version, becomes ``superseded``. A non-approved verdict opens a new item.
+
+    The verdict binds to the section's revision (its content hash). With ``revision``
+    (what the reviewer read), a verdict whose revision is no longer the latest
+    version's is a ``conflict``: an approval is never given on stale text. A verdict
+    clears a pending re-review request on the section.
     """
+    from oracle.review.publish import lock_document
+
     version = await get_version(session, doc, n)
+    # The review gate, then the publish lock (publish's order): a verdict never commits
+    # while a publish renders, nor lands after a role change that ended it.
+    await _still_an_approver(session, principal)
+    await lock_document(session, version.document_id)
     section = await _get_section(session, version, section_key)
+    if revision is not None:
+        await _check_revision(session, version, section, revision)
+    from oracle.review.state import review_revisions
+
+    bound = await review_revisions(
+        session, version.document_id, version.id, {section_key: section.revision}
+    )
     review = SectionReview(
         version_id=version.id,
         section_key=section_key,
         verdict=verdict,
         note=note,
-        reviewer_id=principal.id,
-        section_hash=section.content_hash,
+        reviewer_id=principal.user_id or principal.id,
+        # The token the verdict came through (C2: revoking it voids its approvals).
+        token_id=principal.token_id,
+        # And the MCP OAuth grant (revoking the grant voids them too).
+        grant_id=principal.grant_id,
+        # The review revision: the section's revision and its section links.
+        section_hash=bound[section_key],
         created_at=_now(),
     )
     session.add(review)
@@ -536,6 +607,7 @@ async def review_section(
             section_key=section_key,
             summary=f"{label}: {note}" if note else f"{label} (section {section_key})",
             status="open",
+            severity=severity,
             created_at=review.created_at,
         )
         session.add(item)
@@ -552,9 +624,60 @@ async def review_section(
                 "raised_on_version": version.number,
             },
         )
+    from oracle.review.models import SectionReviewState
+
+    state = await session.scalar(
+        select(SectionReviewState).where(
+            SectionReviewState.document_id == version.document_id,
+            SectionReviewState.section_key == section_key,
+        )
+    )
+    if state is not None and state.rereview_requested_at is not None:
+        state.rereview_requested_at = None
     await _mark_in_review(session, await session.get(Document, version.document_id))
     await session.flush()
     return review, item
+
+
+async def _check_revision(
+    session: AsyncSession, version: DocumentVersion, section: Section, revision: str
+) -> None:
+    latest = await session.scalar(
+        select(DocumentVersion)
+        .where(DocumentVersion.document_id == version.document_id)
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
+    current = await session.scalar(
+        select(Section).where(
+            Section.version_id == latest.id, Section.section_key == section.section_key
+        )
+    )
+    if revision == section.revision and current is not None and (current.revision == revision):
+        return
+    message = (
+        f"section {section.section_key!r} changed: version {latest.number} has another "
+        "revision; review the current text"
+    )
+    raise ReviewError(
+        "conflict",
+        message,
+        {
+            "detail": message,
+            "code": "section_conflict",
+            "base_version": version.number,
+            "latest_version": latest.number,
+            "sections": [
+                {
+                    "section_key": section.section_key,
+                    "base_revision": revision,
+                    "current_revision": current.revision if current else None,
+                    "current_heading": current.heading if current else None,
+                    "current_body_md": current.body_md if current else None,
+                }
+            ],
+        },
+    )
 
 
 # --- Feedback ----------------------------------------------------------------------------
@@ -622,6 +745,8 @@ async def apply_resolutions(
     document_id: uuid.UUID,
     version_id: uuid.UUID,
     resolutions: Sequence[Resolution],
+    *,
+    principal: "Principal | None" = None,
 ) -> list[FeedbackItem]:
     """Apply a draft's front-matter ``resolutions`` to the document's feedback items.
 
@@ -629,6 +754,7 @@ async def apply_resolutions(
     ``resolution_note`` and ``addressed_in_version`` (the NUMBER of ``version_id``).
     Validates all ids first and raises :class:`UnknownFeedbackItemsError` without
     changing anything if any is unknown for ``document_id``. Returns the updated items.
+    The audit events name ``principal`` (whoever imported or saved the version).
     """
     if not resolutions:
         return []
@@ -657,7 +783,7 @@ async def apply_resolutions(
         item.addressed_in_version = version.number
         await audit.record(
             session,
-            None,
+            principal,
             "feedback.resolve",
             "feedback_item",
             item.id,
@@ -676,7 +802,7 @@ async def locked_section_keys(session: AsyncSession, version_id: uuid.UUID) -> s
     return {
         k
         for k, r in (await latest_verdicts(session, version_id)).items()
-        if r.verdict == "approved"
+        if r.verdict == "approved" and r.lapsed_at is None
     }
 
 
@@ -746,18 +872,57 @@ async def resolution_report(session: AsyncSession, doc: str, n: int) -> Resoluti
 async def approve_version(
     session: AsyncSession, principal: "Principal", doc: str, n: int
 ) -> tuple[Document, DocumentVersion]:
-    """Stamp the version's ``approved_at`` (kept if already set); document -> approved.
+    """Stamp the version's ``approved_at`` and ``approved_by`` (a re-approval by someone
+    else updates both; the same approver's keeps them); document -> approved.
 
-    A PRD passes the publish gate first (raises ``publish_gate.PublishBlocked``).
+    The final approval is the designated decider's when the review policy names one
+    (others review and give section verdicts), and it is of the current version only:
+    approving a version a newer one replaced is a ``conflict``. A PRD passes the publish
+    gate first (raises ``publish_gate.PublishBlocked``).
     """
+    from oracle.review.publish import lock_document
+    from oracle.review.state import effective_policy
+
     version = await get_version(session, doc, n)
-    # The lock an import takes: no new version lands while the gate decides.
-    document = await session.get(Document, version.document_id, with_for_update=True)
+    # The review gate, then the publish lock (publish's order): an approval never
+    # commits while a publish renders, nor lands after a role change that ended it.
+    await _still_an_approver(session, principal)
+    document = await lock_document(session, version.document_id)
+    await session.refresh(version)
+    policy = await effective_policy(session, document)
+    # The person behind the call: an API token acting for a user is that user.
+    who = principal.user_id or principal.id
+    if policy.decider_id is not None and who != policy.decider_id:
+        raise ReviewError(
+            "forbidden", "Only the designated decider approves this document's versions"
+        )
+    # A PRD: the publish gate (only the latest version, then readiness), in its words.
     await publish_gate.check(session, document, version)
+    latest = await session.scalar(
+        select(DocumentVersion.number)
+        .where(DocumentVersion.document_id == document.id)
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
+    if version.approved_at is None and latest != version.number:
+        raise ReviewError(
+            "conflict",
+            f"version {version.number} is not the current version (version {latest} is); "
+            "approve the current version",
+        )
     already = version.approved_at is not None
-    if not already:
+    previous_approver = version.approved_by
+    # A re-approval by someone else (the decider set after an earlier approval) is the
+    # approval that counts: it records them and when; the same approver's is a no-op.
+    if not already or previous_approver != who:
         version.approved_at = _now()
-        version.approved_by = principal.id
+        version.approved_by = who
+        version.approved_token_id = principal.token_id
+        version.approved_grant_id = principal.grant_id
+        # A new approval; a lapsed one stays in the audit log, never counts again.
+        version.approval_lapsed_at = None
+        version.approval_lapsed_by = None
+        version.approval_lapse_reason = None
     previous_status = document.status
     document.status = "approved"
     await session.flush()
@@ -772,6 +937,11 @@ async def approve_version(
             "version": version.number,
             "previous_status": previous_status,
             "already_approved": already,
+            **(
+                {"previous_approved_by": str(previous_approver)}
+                if already and previous_approver
+                else {}
+            ),
         },
     )
     if document.kind == "prd":

@@ -46,7 +46,9 @@ export function SectionReviewBar({
     }
   }
 
-  const locked = verdict?.verdict === "approved";
+  // A lapsed approval (approver demoted or removed, token or grant revoked) never counts.
+  const lapsed = verdict?.verdict === "approved" && Boolean(verdict.lapsed_at);
+  const locked = verdict?.verdict === "approved" && !lapsed;
 
   return (
     <div className="mt-4 rounded-button border border-line bg-surface2" data-testid="review-bar">
@@ -54,7 +56,13 @@ export function SectionReviewBar({
         <div className="flex min-w-0 flex-1 items-center gap-2" data-testid="verdict-state">
           {verdict ? (
             <>
-              <VerdictChip verdict={verdict.verdict} />
+              {lapsed ? (
+                <Chip kind="warn" data-testid="verdict-lapsed" title={verdict.lapse_reason ?? "This approval no longer counts"}>
+                  Lapsed
+                </Chip>
+              ) : (
+                <VerdictChip verdict={verdict.verdict} />
+              )}
               {locked && <LockedChip />}
               {verdict.note && (
                 <span className="min-w-0 truncate text-sm text-text" title={verdict.note}>

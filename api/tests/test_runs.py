@@ -833,6 +833,7 @@ async def test_inbox_for_a_viewer_is_empty(client, owner, runtime):
             "searches",
             "imports",
             "feedback",
+            "revoke_failures",
             "total",
         )
     } == {
@@ -843,6 +844,7 @@ async def test_inbox_for_a_viewer_is_empty(client, owner, runtime):
         "searches": [],
         "imports": [],
         "feedback": [],
+        "revoke_failures": [],
         "total": 0,
     }
     # No feedback states for a viewer either (C1e).

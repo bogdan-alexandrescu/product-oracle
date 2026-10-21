@@ -656,6 +656,101 @@ async def test_refine_needs_an_accepted_suggestion_or_an_instruction(client, ctx
     assert resp.status_code == 404
 
 
+async def _refined_problem_job(client, ctx, fake, body_md: str) -> str:
+    await import_draft(client, ctx)
+    resp = await client.post(
+        V(1, "/sections/problem/refine"), json={"instruction": "Show it."}, headers=ctx["headers"]
+    )
+    assert resp.status_code == 201, resp.text
+    fake.script["refinement"].append({"heading": "Problem", "body_md": body_md})
+    await tick(client, ctx)
+    return resp.json()["id"]
+
+
+@pytest.mark.parametrize(
+    "body_md",
+    ["Teams stall.\n\n```text\nstalled\n   ", "Teams stall.\n\n```text\nstalled\n\n\n"],
+)
+async def test_a_refinement_with_an_open_fence_keeps_every_section(
+    client, ctx, pool, fake, body_md
+):
+    """An open fence whose body ends in whitespace-only or blank lines is closed before
+    the next section, so the refinement cannot swallow it (round 3, MAJOR 2)."""
+    job_id = await _refined_problem_job(client, ctx, fake, body_md)
+    resp = await client.post(f"/v1/llm-jobs/{job_id}/apply", json={}, headers=ctx["headers"])
+    assert resp.status_code == 201, resp.text
+    keys = [s["section_key"] for s in resp.json()["sections"]]
+    assert keys == ["title", "goal-trace", "problem", "solution", "sources"]
+
+
+async def test_a_refinement_that_would_lose_a_section_is_refused(
+    client, ctx, pool, fake, monkeypatch
+):
+    from oracle.jobs import service as jobs_service
+
+    job_id = await _refined_problem_job(client, ctx, fake, "Teams stall.")
+    real = jobs_service.compose_markdown
+
+    def leaky(front_matter, sections, replace, resolutions):
+        out = real(front_matter, sections, replace, resolutions)
+        return out.replace("## Proposed solution {#solution}\n", "")
+
+    monkeypatch.setattr(jobs_service, "compose_markdown", leaky)
+    resp = await client.post(f"/v1/llm-jobs/{job_id}/apply", json={}, headers=ctx["headers"])
+    assert resp.status_code == 422, resp.text
+    assert "solution" in resp.json()["detail"]
+    async with tenant_session(ctx["tenant_id"]) as s:
+        assert len((await s.scalars(select(DocumentVersion))).all()) == 1
+
+
+async def test_a_refinement_that_would_add_a_section_is_refused(
+    client, ctx, pool, fake, monkeypatch
+):
+    """The last check before import compared only the expected keys, so a draft with an
+    extra section after the last one passed (round 4). A heading in a refined body is
+    already demoted; this is the check behind it. Refused, nothing imported."""
+    from oracle.jobs import service as jobs_service
+
+    job_id = await _refined_problem_job(client, ctx, fake, "Teams stall.")
+    real = jobs_service.compose_markdown
+
+    def extra(front_matter, sections, replace, resolutions):
+        out = real(front_matter, sections, replace, resolutions)
+        return out + "\n## Appendix {#appendix}\n\nAdded.\n"
+
+    monkeypatch.setattr(jobs_service, "compose_markdown", extra)
+    resp = await client.post(f"/v1/llm-jobs/{job_id}/apply", json={}, headers=ctx["headers"])
+    assert resp.status_code == 422, resp.text
+    assert "appendix" in resp.json()["detail"]
+    async with tenant_session(ctx["tenant_id"]) as s:
+        assert len((await s.scalars(select(DocumentVersion))).all()) == 1
+
+
+async def test_a_heading_in_a_refined_last_section_stays_in_it(client, ctx, pool, fake):
+    await import_draft(client, ctx)
+    resp = await client.post(
+        V(1, "/sections/sources/refine"), json={"instruction": "More."}, headers=ctx["headers"]
+    )
+    assert resp.status_code == 201, resp.text
+    body = "Notes.\n\n## Appendix {#appendix}\n\nExtra."
+    fake.script["refinement"].append({"heading": "Sources", "body_md": body})
+    await tick(client, ctx)
+    resp = await client.post(
+        f"/v1/llm-jobs/{resp.json()['id']}/apply", json={}, headers=ctx["headers"]
+    )
+    assert resp.status_code == 201, resp.text
+    keys = [s["section_key"] for s in resp.json()["sections"]]
+    assert keys == ["title", "goal-trace", "problem", "solution", "sources"]
+
+
+def test_lost_sections_reports_an_added_section():
+    from oracle.jobs.service import lost_sections
+
+    md = "# T {#title}\n\n## A {#a}\n\nx\n\n## B {#b}\n\ny\n"
+    assert lost_sections(["title", "a", "b"], md) == []
+    assert lost_sections(["title", "a"], md) == ["b"]
+
+
 # --- reporting ---------------------------------------------------------------------------
 
 

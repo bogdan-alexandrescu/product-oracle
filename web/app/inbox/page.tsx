@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from "@/components/ds";
 import { TabBar } from "@/components/review/parts";
@@ -84,13 +84,30 @@ function SourcesNeedingAttention({ sources }: { sources: Source[] }) {
   );
 }
 
-/** The groups a tab draws, in order; each is one table under its own label. */
-const GROUPS: { id: NeedGroup; title: string }[] = [
+/**
+ * The groups a tab draws, in order; each is one table under its own label. `heading`: shown
+ * above the group, for one that is not something to act on.
+ */
+const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "checkpoints", title: "Checkpoints" },
+  {
+    id: "deliveries",
+    title: "Decision not delivered yet",
+    heading: (
+      <>
+        Decision not delivered yet
+        <InfoTip label="decisions not delivered yet" align="start">
+          These decisions are recorded and final: nobody needs to decide again. SwarmCloud has not taken them yet, so Oracle sends
+          each again on every tick until it does.
+        </InfoTip>
+      </>
+    ),
+  },
   { id: "approvals", title: "Cost approvals" },
   { id: "overruns", title: "Paused on overrun" },
   { id: "lookups", title: "Stuck runs" },
   { id: "imports", title: "Couldn't import" },
+  { id: "revoke-failures", title: "Couldn't revoke access" },
   { id: "feedback", title: "Feedback" },
   { id: "questions", title: "Questions" },
   { id: "revising", title: "Sent back by Oracle" },
@@ -142,7 +159,7 @@ function InboxTabs({
           </Empty>
         ) : (
           GROUPS.map((g) => (
-            <NeedTable key={g.id} title={g.title} testId={`inbox-${g.id}`} rows={shown.filter((r) => r.group === g.id)} />
+            <NeedTable key={g.id} title={g.title} heading={g.heading} testId={`inbox-${g.id}`} rows={shown.filter((r) => r.group === g.id)} />
           ))
         )}
       </div>
