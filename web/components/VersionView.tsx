@@ -9,6 +9,8 @@ import { CommentPopover, SelectionButton, type PageRect } from "@/components/Com
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { DocCrumb } from "@/components/DocToolbar";
 import { Button, Chip, Empty, Icon, InfoTip, LinkButton, Page, PageHeader, SegmentedControl, Sheet } from "@/components/ds";
+import { DiscussionThread } from "@/components/discuss/DiscussionThread";
+import { StartDiscussion, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
 import { SectionQuestions, type GoTo } from "@/components/FeedbackPanel";
 import { DEFAULT_FILTERS, type FeedbackFilters, type PlacedComment } from "@/components/review/FeedbackList";
 import {
@@ -132,6 +134,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const [filters, setFilters] = useState<FeedbackFilters>(DEFAULT_FILTERS);
   // D13: "Comment on the whole draft" is open in the Feedback tab.
   const [generalOpen, setGeneralOpen] = useState(false);
+  // G1: a discussion open in the Feedback tab (its thread), or one being started.
+  const [discussion, setDiscussion] = useState<{ id: string } | { start: DiscussionSubject } | null>(null);
+  const [discussionsKey, setDiscussionsKey] = useState(0);
   // A link with ?feedback=open (the Inbox's): the Feedback tab on every section's open items,
   // the first one brought into view, once (ffb19 lane).
   const [feedbackFocus, setFeedbackFocus] = useState(false);
@@ -212,6 +217,16 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
 
   const version = verQ.data;
   const document_ = docQ.data;
+  // The document's discussions (G1): the Feedback tab's fourth kind, never open feedback.
+  const documentId = document_?.id;
+  const discussionsQ = useQuery(
+    `discussions|${documentId}|${discussionsKey}`,
+    () =>
+      documentId
+        ? unwrap(api.GET("/v1/discussions", { params: { query: { document_id: documentId, limit: 100 } } })).then((r) => r.items)
+        : Promise.resolve(null),
+    { keepPrevious: true },
+  );
   const isRoadmap = document_?.kind === "roadmap";
   // The Items tab's count (E2): the version's items, brief view.
   const itemCountQ = useQuery(`roadmap-item-count|${doc}|${n}|${isRoadmap}`, () =>
@@ -609,6 +624,53 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   // section verdicts and comment.
   const ownerApproves = document_ ? OWNER_APPROVES[document_.kind] : undefined;
   const canApprove = canDecide && (!ownerApproves || hasRole(role, "owner"));
+  /** Opens the Feedback tab on a new discussion of `subject` (on a phone, in the Review sheet). */
+  const discuss = useCallback((subject: DiscussionSubject) => {
+    setTab("feedback");
+    setDiscussion({ start: subject });
+    if (window.matchMedia("(max-width: 639px)").matches) setSheet("review");
+    else inspectorRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, []);
+  const discussSection = useMemo(
+    () =>
+      canComment && document_
+        ? (s: SectionOut) =>
+            discuss({
+              kind: "section",
+              subject: { document_id: document_.id, version: n, section_key: s.section_key },
+              label: `${document_.title} · ${s.heading}`,
+            })
+        : undefined,
+    [canComment, document_, n, discuss],
+  );
+  const closeDiscussion = () => {
+    setDiscussion(null);
+    setFilters((f) => ({ ...f, kind: "discussion" }));
+    setDiscussionsKey((k) => k + 1);
+  };
+  const discussionPane =
+    discussion &&
+    ("start" in discussion ? (
+      <div className="flex flex-col gap-3">
+        <div>
+          <Button variant="ghost" icon="chevron-left" onClick={closeDiscussion}>
+            All feedback
+          </Button>
+        </div>
+        <StartDiscussion
+          key={JSON.stringify(discussion.start.subject)}
+          subject={discussion.start}
+          onStarted={(id) => {
+            setDiscussion({ id });
+            setDiscussionsKey((k) => k + 1);
+          }}
+          onCancel={closeDiscussion}
+        />
+      </div>
+    ) : (
+      <DiscussionThread key={discussion.id} id={discussion.id} onBack={closeDiscussion} onChanged={() => setDiscussionsKey((k) => k + 1)} />
+    ));
+
   const sectionProps = (s: SectionOut) => ({
     section: s,
     blocks: parsed.get(s.section_key)!.blocks,
@@ -624,6 +686,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     onVerdict,
     showLayer: hasBrief,
     dateMarks: dateMarks.get(s.section_key),
+    onDiscuss: !readOnly ? discussSection : undefined,
   });
   const expandFor = (origin: string): ExpandCtx => ({
     keys: expandable,
@@ -774,6 +837,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       refreshKey={refreshKey}
       shortcuts={variant === "side" ? shortcuts : undefined}
       questions={document_ && scopeKeys ? <SectionQuestions documentId={document_.id} sectionKeys={scopeKeys} /> : undefined}
+      discussion={discussionPane}
       feedback={{
         entries,
         error: feedbackQ.error || commentsQ.error,
@@ -802,6 +866,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         generalOpen,
         setGeneralOpen,
         onGeneral: canComment && !readOnly ? submitGeneral : undefined,
+        discussions: { rows: discussionsQ.data ?? null, onOpen: (id) => setDiscussion({ id }) },
         // A decision on an item: its counts, and the comment it may have resolved.
         onChanged: () => {
           void feedbackQ.reload();
@@ -848,6 +913,16 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           }
           action={
             <>
+              {/* G1: a discussion of the whole document. */}
+              {document_ && canComment && !readOnly && (
+                <Button
+                  icon="comment"
+                  data-testid="doc-discuss"
+                  onClick={() => discuss({ kind: "document", subject: { document_id: document_.id, version: n }, label: document_.title })}
+                >
+                  Discuss
+                </Button>
+              )}
               {/* C1e: accepted changes staged for the next draft, built in one job. */}
               {document_?.kind === "prd" && <BuildDraftButton doc={doc} />}
               {version && canDecide && !canApprove && !version.approved_at && (

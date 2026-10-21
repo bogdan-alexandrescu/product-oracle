@@ -16,6 +16,7 @@ import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from 
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { emptyDiscussions, routeDiscussions, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
 import { routeEngineering } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
@@ -115,6 +116,8 @@ export interface Db {
   autonomy?: AutonomyDb;
   /** Every credential by kind, changed passwords (./account.ts); seeded on first use. */
   account?: AccountDb;
+  /** Discussions (./discussions.ts, G1); seeded in the "discussions" scenario only. */
+  discussions?: DiscussionsDb;
 }
 
 type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
@@ -1211,9 +1214,60 @@ function load(): Db {
   // other specs' Inbox counts stay as they were.
   if (scenario === "launches") db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
   db.autonomy = emptyAutonomy();
+  // Discussions (G1): one private discussion in the "discussions" scenario; none otherwise,
+  // so other specs' counts stay as they were.
+  db.discussions = scenario === "discussions" ? seedDiscussionsScenario(db) : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   save(db);
   return db;
+}
+
+/** "discussions": the commenter's private discussion with the approver on team-workspaces v2's Problem. */
+function seedDiscussionsScenario(db: Db): DiscussionsDb {
+  const doc = findDocument(db, "team-workspaces")!;
+  const heading = findVersion(db, doc, 2)!.sections.find((s) => s.section_key === "problem")!.heading;
+  return seedDiscussions({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, doc.id, `${doc.title} · ${heading}`, `/documents/${doc.slug}/v/2#problem`);
+}
+
+const CHECKPOINT_NAMES: Record<string, string> = {
+  baseline_confirm: "Confirm the baseline",
+  feature_set: "Feature set",
+  priority_order: "Priority order",
+  prd_review: "PRD review",
+  eng_review: "Engineering review",
+  roadmap_items: "Roadmap items",
+  roadmap_review: "Roadmap review",
+  request_triage: "Request triage",
+};
+
+/** A discussion's subject as the API resolves it (oracle.discussions.service): documents, sections and run checkpoints are checked; other kinds are taken as given. */
+function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): SubjectInfo | { status: number; detail: string } {
+  if (kind === "document" || kind === "section" || kind === "roadmap_item") {
+    const doc = findDocument(db, String(s.document_id));
+    if (!doc) return { status: 404, detail: "Document not found" };
+    const v = findVersion(db, doc, Number(s.version));
+    if (!v) return { status: 404, detail: `Version ${s.version} not found` };
+    const url = `/documents/${doc.slug}/v/${v.number}`;
+    if (kind === "document") return { key: `document:${doc.id}`, label: doc.title, url, document_id: doc.id };
+    if (kind === "roadmap_item")
+      return { key: `roadmap_item:${doc.id}:${s.item_key}`, label: `${doc.title} · ${s.item_key}`, url: `${url}/items`, document_id: doc.id };
+    const section = v.sections.find((x) => x.section_key === s.section_key);
+    if (!section) return { status: 422, detail: `Section ${s.section_key} is not in version ${v.number}` };
+    return { key: `section:${doc.id}:${section.section_key}`, label: `${doc.title} · ${section.heading}`, url: `${url}#${section.section_key}`, document_id: doc.id };
+  }
+  if (kind === "checkpoint" || kind === "checkpoint_item") {
+    const run = db.runs?.runs.find((r) => r.id === s.run_id);
+    if (!run) return { status: 404, detail: "Run not found" };
+    const cp = run.checkpoints.find((c) => c.id === s.checkpoint_id);
+    if (!cp) return { status: 404, detail: "Checkpoint not found" };
+    const label = `${run.flow_title} · ${CHECKPOINT_NAMES[cp.kind] ?? cp.kind}`;
+    if (kind === "checkpoint") return { key: `checkpoint:${run.id}:${cp.kind}`, label, url: `/runs/${run.id}`, run_id: run.id };
+    return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${s.item_key}`, url: `/runs/${run.id}`, run_id: run.id };
+  }
+  if (kind === "priorities") return { key: "priorities", label: "Priority order", url: "/priorities" };
+  if (kind === "screen") return { key: `screen:${s.path}`, label: String(s.path), url: String(s.path) };
+  const id = Object.values(s)[0];
+  return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
 }
 
 function save(db: Db) {
@@ -1906,6 +1960,19 @@ async function route(db: Db, req: Request): Promise<Response> {
   );
   if (accountOut) return accountOut;
   if (p[1] === "me") return json(200, meOut(db, me));
+  if (p[1] === "discussions") {
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    const discussionsCtx: DiscussionsContext = {
+      db: (db.discussions ??= emptyDiscussions()),
+      members: db.members,
+      me: { id: me.id, role: me.role },
+      resolve: (kind, subject) => discussionSubject(db, kind, subject),
+      uuid,
+      now,
+    };
+    const res = await routeDiscussions(discussionsCtx, req, p, q);
+    if (res) return res;
+  }
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
   // Tech briefs (./engineering.ts): every member reads.
   const briefs = routeEngineering(req, p, q, db.documents);
