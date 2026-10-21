@@ -25,20 +25,24 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_, select
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
+from oracle.auth.models import User
 from oracle.authz import require_role
 from oracle.connections.models import Connection
 from oracle.connections.providers import reconnect_reason
-from oracle.sources import items, service, store, uploads
+from oracle.sources import coverage, items, service, store, uploads
 from oracle.sources import search as search_service
 from oracle.sources import sync as sync_engine
 from oracle.sources.models import ITEM_KINDS, SOURCE_KINDS, Snapshot, Source, SourceItemVersion
 from oracle.sources.schemas import (
+    CompanyCoverage,
     ConnectionChoice,
+    CoverageList,
     ItemDetail,
     ItemOut,
     SearchResults,
     SnapshotCreate,
     SnapshotOut,
+    SourceCoverageDetail,
     SourceCreate,
     SourceKindOut,
     SourceOut,
@@ -187,6 +191,64 @@ async def list_source_kinds(principal: CurrentPrincipal, db: TenantDB) -> list[S
             )
         )
     return out
+
+
+# --- coverage (A2) -----------------------------------------------------------------
+# Declared before /sources/{source_id}, which would otherwise take "coverage" for an id.
+
+FOR_PEOPLE = "Coverage is for people"
+FOR_OWNERS = "Company coverage is for owners"
+
+
+def _person(principal: Principal) -> uuid.UUID:
+    """The person reading coverage. A run never does (S6: it must not learn what its user
+    holds beyond what it may read), whoever it acts for."""
+    if principal.is_run:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, FOR_PEOPLE)
+    return _user(principal)
+
+
+@router.get("/sources/coverage", response_model=CoverageList)
+async def list_source_coverage(principal: CurrentPrincipal, db: TenantDB) -> CoverageList:
+    """What Oracle read from each of your sources: live and removed items, what it left
+    out (by status), how fresh the items are against each kind's half-life, and how often
+    they are used as baseline evidence, citations and section links."""
+    return await coverage.list_coverage(db, _person(principal))
+
+
+@router.get(
+    "/sources/coverage/company",
+    response_model=CompanyCoverage,
+    responses={403: {"description": "Not an owner, or a run"}},
+)
+async def get_company_source_coverage(principal: CurrentPrincipal, db: TenantDB) -> CompanyCoverage:
+    """Owners only: per active member and source kind, the number of sources, live
+    items, freshness and the newest sync. Counts only: never a source name, an item or
+    what was left out (owner 2026-10-21, A2 "Coverage")."""
+    user_id = _person(principal)
+    role = principal.role
+    if principal.read_only:
+        # An oracle:read client reads as its person: the owner's own role, not the viewer
+        # rights it changes things with.
+        role = await db.scalar(select(User.role).where(User.id == user_id)) or role
+    if role != "owner":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, FOR_OWNERS)
+    return await coverage.company_coverage(db)
+
+
+@router.get("/sources/{source_id}/coverage", response_model=SourceCoverageDetail)
+async def get_source_coverage(
+    source_id: uuid.UUID,
+    principal: CurrentPrincipal,
+    db: TenantDB,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> SourceCoverageDetail:
+    """One of your sources' coverage: its items by kind, every entry it did not read
+    with the reason, and its uses newest first (``limit`` at a time)."""
+    _person(principal)
+    source = await _owned(db, principal, source_id)
+    return await coverage.source_coverage(db, source, limit=limit, offset=offset)
 
 
 @router.post(

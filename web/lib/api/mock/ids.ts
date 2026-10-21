@@ -42,3 +42,9 @@ export function seeded<T>(label: string, seed: () => T): T {
     scope = outer;
   }
 }
+
+/** The id a seeded source item takes, so baseline and document fixtures can point at it. */
+export const seededItemId = (sourceId: string, externalId: string) => stableUuid(`source-item/${sourceId}/${externalId}`);
+
+/** The mock's "Product chat" source (./sources.ts), which baseline evidence and a citation use. */
+export const PRODUCT_CHAT_ID = "50000000-0000-4000-8000-000000000001";

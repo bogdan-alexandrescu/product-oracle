@@ -1393,6 +1393,53 @@ function goalLinks(db: Db): V2Db["section_links"] {
 }
 
 /** The v2 rows, seeded on first use against the first mock PRD. */
+/** Every use of a source item (A2 coverage): baseline evidence, citations and section links. */
+function itemUses(db: Db): Schemas["UsedIn"][] {
+  const uses: Schemas["UsedIn"][] = [];
+  const entity = (id: string | null | undefined) => db.baseline.entities.find((e) => e.id === id);
+  const docOut = (id: string) => {
+    const d = db.documents.find((x) => x.id === id);
+    return d ? { slug: d.slug, title: d.title, kind: d.kind } : null;
+  };
+  for (const ev of db.baseline.evidence) {
+    if (!ev.source_item) continue;
+    const e = entity(ev.entity_id) ?? entity(db.baseline.edges.find((x) => x.id === ev.edge_id)?.src_id);
+    uses.push({
+      kind: "evidence",
+      at: ev.created_at,
+      item: { id: ev.source_item.id, title: ev.source_item.title ?? null },
+      entity: e ? { id: e.id, type: e.type, key: e.key, title: e.title, status: e.status } : null,
+    });
+  }
+  for (const v of db.versions) {
+    for (const c of v.citations) {
+      if (!c.item_id) continue;
+      uses.push({
+        kind: "citation",
+        at: v.created_at,
+        item: { id: c.item_id, title: c.title ?? null },
+        document: docOut(v.document_id),
+        version: v.number,
+        cite_key: c.cite_key,
+      });
+    }
+  }
+  for (const l of db.v2?.section_links ?? []) {
+    if (!l.source_item_id) continue;
+    const v = db.versions.find((x) => x.id === l.version_id);
+    uses.push({
+      kind: "section_link",
+      at: l.created_at,
+      item: { id: l.source_item_id, title: null },
+      document: docOut(l.document_id),
+      version: v?.number ?? null,
+      section_key: l.section_key,
+      section_title: v?.sections.find((x) => x.section_key === l.section_key)?.heading ?? null,
+    });
+  }
+  return uses;
+}
+
 function ensureV2(db: Db): V2Db {
   if (!db.v2) {
     const prd = db.documents.find((d) => d.kind === "prd");
@@ -1497,7 +1544,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf }, req, p.slice(2), q);
   }
   // Sources and connections belong to each user: every role manages their own.
-  if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
+  if (["sources", "source-items", "snapshots", "search"].includes(p[1])) {
+    return routeSources(req, p, q, {
+      scenario: localStorage.getItem(MOCK_SCENARIO_KEY),
+      me: { email: me.email, role: me.role },
+      members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role, disabled: x.status === "disabled" })),
+      uses: () => itemUses(db),
+    });
+  }
   const fireflies = routeFirefliesBrowse(p, q);
   if (fireflies) return fireflies;
   // Company settings are the owner's, as in the API (tenant_settings_api.py).

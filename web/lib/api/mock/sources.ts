@@ -5,7 +5,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { FIREFLIES_CONNECTION_ID } from "./fireflies";
-import { mockUuid, seeded } from "./ids";
+import { mockUuid, PRODUCT_CHAT_ID, seeded, seededItemId } from "./ids";
 import { MOCK_NOTION_CONNECTION_ID } from "./notion";
 
 type Source = Schemas["SourceOut"];
@@ -17,7 +17,23 @@ interface SourcesDb {
   sources: Source[];
   items: Item[];
   snapshots: Schemas["SnapshotOut"][];
+  /** Other members' sources and items, by email: only the owners' Company coverage counts them. */
+  team?: Record<string, { sources: Source[]; items: Item[] }>;
 }
+
+type Role = Schemas["Me"]["role"];
+type UsedIn = Schemas["UsedIn"];
+
+/** What coverage needs from the rest of the mock: who asks, the members, and every use of an item. */
+export type SourcesContext = {
+  /** The mock scenario ("empty" starts with no sources). */
+  scenario: string | null;
+  me: { email: string; role: Role };
+  members: { id: string; email: string; role: Role; disabled: boolean }[];
+  /** Baseline evidence, citations and section links pointing at source items. */
+  uses: () => UsedIn[];
+};
+
 
 export const SOURCES_STORAGE_KEY = "po-mock-sources-v2";
 
@@ -109,9 +125,11 @@ function confidence(kind: string, freshness: number): Confidence {
   return { value: Math.round(value * 1000) / 1000, breakdown, low: value < 0.4 };
 }
 
+const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+
 function seed(): SourcesDb {
   const chat: Source = {
-    id: "50000000-0000-4000-8000-000000000001",
+    id: PRODUCT_CHAT_ID,
     kind: "slack",
     name: "Product chat",
     connection_id: CONNECTIONS.slack[0].id,
@@ -124,6 +142,10 @@ function seed(): SourcesDb {
     item_count: 2,
     connector_available: true,
     config_version: 1,
+    // A channel shared in from another company: left out on purpose.
+    unavailable_items: [
+      { external_id: "C0777PARTNER", reason: "Skipped: shared from outside the company", name: "#partner-launch", status: "skipped" },
+    ],
   };
   const repo: Source = {
     id: "50000000-0000-4000-8000-000000000002",
@@ -252,9 +274,10 @@ function seed(): SourcesDb {
     title: string,
     content: string,
     freshness: number,
+    age: number,
     folder?: string,
   ): Item => ({
-    id: uuid(),
+    id: seededItemId(source.id, external_id),
     source_id: source.id,
     source_kind: source.kind,
     source_name: source.name,
@@ -264,7 +287,8 @@ function seed(): SourcesDb {
     url: `https://example.com/${external_id}`,
     author: "someone",
     acl: {},
-    occurred_at: "2026-10-14T10:00:00Z",
+    // Days old when the mock is seeded: "Product chat" holds one fresh and one aging message.
+    occurred_at: daysAgo(age),
     source_updated_at: null,
     deleted_at: null,
     version_id: uuid(),
@@ -276,18 +300,63 @@ function seed(): SourcesDb {
   return {
     sources: [chat, repo, legacy, calls, docs, folders],
     items: [
-      item(repo, "readme", "readme", "README", "The onboarding checklist guides new accounts through setup in five steps.", 0.95),
-      item(chat, "m1", "message", "Customer question", "Customers keep asking whether the onboarding checklist can be skipped.", 0.4),
-      item(chat, "m2", "message", "Pricing thread", "Annual pricing gets a discount for teams above ten seats.", 0.9),
-      item(docs, "1DocPricingExample", "doc", "Pricing strategy", "Annual plans get two months free.", 0.9),
-      item(docs, "1DocActivationExample", "doc", "Activation v2 PRD", "New accounts finish setup in under 3 minutes.", 0.8),
-      item(docs, "1DocCheckoutSpecExample", "doc", "Checkout spec", "Guests can check out without an account.", 0.8, "1FolderSpecsExample"),
+      item(repo, "readme", "readme", "README", "The onboarding checklist guides new accounts through setup in five steps.", 0.95, 10),
+      item(chat, "m1", "message", "Customer question", "Customers keep asking whether the onboarding checklist can be skipped.", 0.4, 40),
+      item(chat, "m2", "message", "Pricing thread", "Annual pricing gets a discount for teams above ten seats.", 0.9, 10),
+      item(docs, "1DocPricingExample", "doc", "Pricing strategy", "Annual plans get two months free.", 0.9, 5),
+      item(docs, "1DocActivationExample", "doc", "Activation v2 PRD", "New accounts finish setup in under 3 minutes.", 0.8, 5),
+      item(docs, "1DocCheckoutSpecExample", "doc", "Checkout spec", "Guests can check out without an account.", 0.8, 5, "1FolderSpecsExample"),
     ],
     snapshots: [],
+    team: seedTeam(item),
   };
 }
 
-function load(): SourcesDb {
+/**
+ * Other members' sources, seen only as counts on the owners' Company tab: the approver has one
+ * Drive source holding only stale docs, the viewer one GitHub source never synced, the commenter
+ * none.
+ */
+function seedTeam(item: (source: Source, id: string, kind: string, title: string, content: string, f: number, age: number) => Item) {
+  const base = { connector_available: true, config_version: 1, last_error: null, status: "active" as const, unavailable_items: [] };
+  const drive: Source = {
+    ...base,
+    id: "50000000-0000-4000-8000-000000000101",
+    kind: "google_docs",
+    name: "Approver drive",
+    connection_id: null,
+    config: { docs: ["1DocOldPlanExample", "1DocOldNotesExample"] },
+    last_synced_at: "2026-09-01T08:00:00Z",
+    created_at: "2025-06-01T08:00:00Z",
+    updated_at: "2026-09-01T08:00:00Z",
+    item_count: 2,
+  };
+  const repo: Source = {
+    ...base,
+    id: "50000000-0000-4000-8000-000000000102",
+    kind: "github",
+    name: "Viewer repo",
+    connection_id: null,
+    config: { repos: ["example-org/viewer-tools"] },
+    last_synced_at: null,
+    created_at: "2026-10-18T08:00:00Z",
+    updated_at: "2026-10-18T08:00:00Z",
+    item_count: 0,
+  };
+  return {
+    "approver@example.com": {
+      sources: [drive],
+      items: [
+        item(drive, "1DocOldPlanExample", "doc", "Old plan", "Last year's plan.", 0.3, 400),
+        item(drive, "1DocOldNotesExample", "doc", "Old notes", "Notes from last year.", 0.3, 420),
+      ],
+    },
+    "viewer@example.com": { sources: [repo], items: [] },
+  };
+}
+
+/** The mock's sources; ``scenario`` defaults to the stored mock scenario. */
+function load(scenario: string | null = localStorage.getItem("po-mock-scenario")): SourcesDb {
   const raw = localStorage.getItem(SOURCES_STORAGE_KEY);
   if (raw) {
     try {
@@ -296,8 +365,8 @@ function load(): SourcesDb {
       // fall through to a fresh seed
     }
   }
-  // A new company (the "empty" scenario) has picked no sources yet.
-  if (localStorage.getItem("po-mock-scenario") === "empty") return { sources: [], items: [], snapshots: [] };
+  // A new company: nobody has connected anything yet.
+  if (scenario === "empty") return { sources: [], items: [], snapshots: [], team: {} };
   return seeded("sources", seed);
 }
 
@@ -411,14 +480,14 @@ function badConfig(kind: Source["kind"], config: Record<string, unknown>): strin
 
 /** Handles /v1/sources*, /v1/source-items*, /v1/snapshots* and /v1/search. */
 
-export async function routeSources(req: Request, p: string[], q: URLSearchParams): Promise<Response> {
-  const db = load();
-  const res = await route(db, req, p, q);
+export async function routeSources(req: Request, p: string[], q: URLSearchParams, ctx: SourcesContext): Promise<Response> {
+  const db = load(ctx.scenario);
+  const res = await route(db, req, p, q, ctx);
   localStorage.setItem(SOURCES_STORAGE_KEY, JSON.stringify(db));
   return res;
 }
 
-async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParams): Promise<Response> {
+async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParams, ctx: SourcesContext): Promise<Response> {
   const m = req.method;
   if (p[1] === "search") return json(200, search(db, q));
   if (p[1] === "snapshots") {
@@ -471,6 +540,15 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     };
     db.sources.push(s);
     return json(201, s);
+  }
+  if (p[2] === "coverage") {
+    if (m !== "GET") return json(405, { detail: "Method not allowed" });
+    if (p[3] === "company") {
+      if (ctx.me.role !== "owner") return json(403, { detail: "Company coverage is for owners" });
+      return json(200, companyCoverage(db, ctx));
+    }
+    const uses = ctx.uses();
+    return json(200, { as_of: now(), sources: db.sources.map((s) => coverageOf(s, db.items, uses)) });
   }
   if (p[2] === "kinds") {
     return json(
@@ -568,6 +646,12 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     const deleted = s.kind === "google_docs" ? hideOutsidePicks(db, s) : 0;
     return json(200, { source_id: s.id, outcome: "completed", upserted: 2, versions_written: 1, deleted, checkpoints: 1, retry_after: null, error: null, source: counted(db, s) });
   }
+  if (sub === "coverage" && m === "GET") {
+    const limit = Number(q.get("limit") ?? 50);
+    const offset = Number(q.get("offset") ?? 0);
+    if (!(limit >= 1 && limit <= 100) || !(offset >= 0)) return json(422, { detail: "limit runs from 1 to 100" });
+    return json(200, coverageDetail(s, db.items, ctx.uses(), limit, offset));
+  }
   if (sub === "items") return json(200, db.items.filter((i) => i.source_id === s.id && !i.deleted_at).map(itemOut));
   if (sub === "uploads" && m === "POST") {
     if (s.kind !== "upload") return json(409, { detail: "Only upload sources take files" });
@@ -606,4 +690,146 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     return json(201, { items: out.map(itemOut), unchanged: [] });
   }
   return json(404, { detail: "Route not found" });
+}
+
+// --- coverage (A2) -----------------------------------------------------------------
+
+// Freshness halves every N days per source kind or "kind:item kind" (oracle.confidence DEFAULTS).
+const HALF_LIFE: Record<string, number> = {
+  slack: 30,
+  fireflies: 45,
+  "github:issue": 60,
+  "github:pull_request": 60,
+  notion: 90,
+  google_docs: 90,
+  upload: 90,
+  github: 180,
+};
+const halfLife = (sourceKind: string, itemKind: string) => HALF_LIFE[`${sourceKind}:${itemKind}`] ?? HALF_LIFE[sourceKind] ?? 90;
+const DAY = 86_400_000;
+
+/** The item's latest own timestamp, else its fetch (as the API's coverage reads it). */
+function itemTime(i: Item): string | null {
+  const own = [i.source_updated_at, i.occurred_at].filter((t): t is string => !!t).sort();
+  return own.length ? own[own.length - 1] : (i.fetched_at ?? null);
+}
+
+type Tally = {
+  items: number;
+  removed: number;
+  fresh: number;
+  aging: number;
+  newest_at: string | null;
+  oldest_at: string | null;
+  by_kind: Schemas["KindCoverage"][];
+};
+
+/** Live and removed items, and fresh (up to one half-life) or aging (up to two) live items. */
+function tally(sourceKind: string, items: Item[]): Tally {
+  const t: Tally = { items: 0, removed: 0, fresh: 0, aging: 0, newest_at: null, oldest_at: null, by_kind: [] };
+  const kinds = new Map<string, Schemas["KindCoverage"]>();
+  const at = Date.now();
+  for (const i of items) {
+    if (i.deleted_at) {
+      t.removed += 1;
+      continue;
+    }
+    t.items += 1;
+    const hl = halfLife(sourceKind, i.kind);
+    const k = kinds.get(i.kind) ?? { kind: i.kind, items: 0, newest_at: null, half_life_days: hl };
+    k.items += 1;
+    kinds.set(i.kind, k);
+    const ts = itemTime(i);
+    if (!ts) continue;
+    if (!t.newest_at || ts > t.newest_at) t.newest_at = ts;
+    if (!t.oldest_at || ts < t.oldest_at) t.oldest_at = ts;
+    if (!k.newest_at || ts > k.newest_at) k.newest_at = ts;
+    const age = (at - new Date(ts).getTime()) / DAY;
+    if (age <= hl) t.fresh += 1;
+    else if (age <= 2 * hl) t.aging += 1;
+  }
+  t.by_kind = [...kinds.values()].sort((a, b) => b.items - a.items || a.kind.localeCompare(b.kind));
+  return t;
+}
+
+const freshness = (t: Tally) => ({ fresh: t.fresh, aging: t.aging, stale: t.items - t.fresh - t.aging });
+
+function notRead(s: Source): Schemas["NotReadCounts"] {
+  const counts = { skipped: 0, unavailable: 0, flagged: 0, limited: 0 };
+  for (const u of s.unavailable_items ?? []) counts[u.status && u.status in counts ? u.status : "unavailable"] += 1;
+  return counts;
+}
+
+function usesOf(s: Source, items: Item[], uses: UsedIn[]): UsedIn[] {
+  const mine = new Set(items.filter((i) => i.source_id === s.id).map((i) => i.id));
+  return uses.filter((u) => mine.has(u.item.id)).sort((a, b) => b.at.localeCompare(a.at));
+}
+
+function coverageOf(s: Source, items: Item[], uses: UsedIn[]): Schemas["SourceCoverage"] {
+  const t = tally(s.kind, items.filter((i) => i.source_id === s.id));
+  const used = usesOf(s, items, uses);
+  const count = (kind: UsedIn["kind"]) => used.filter((u) => u.kind === kind).length;
+  return {
+    source_id: s.id,
+    name: s.name,
+    kind: s.kind,
+    status: s.status,
+    last_synced_at: s.last_synced_at,
+    items: t.items,
+    removed: t.removed,
+    not_read: notRead(s),
+    newest_at: t.newest_at,
+    oldest_at: t.oldest_at,
+    freshness: freshness(t),
+    used: {
+      evidence: count("evidence"),
+      citations: count("citation"),
+      section_links: count("section_link"),
+      documents: new Set(used.filter((u) => u.document).map((u) => u.document!.slug)).size,
+    },
+  };
+}
+
+function coverageDetail(s: Source, items: Item[], uses: UsedIn[], limit: number, offset: number): Schemas["SourceCoverageDetail"] {
+  const used = usesOf(s, items, uses);
+  return {
+    ...coverageOf(s, items, uses),
+    by_kind: tally(s.kind, items.filter((i) => i.source_id === s.id)).by_kind,
+    not_read_items: (s.unavailable_items ?? []).map((u) => ({ ...u, name: u.name ?? null, status: u.status ?? "unavailable" })),
+    used_in: used.slice(offset, offset + limit),
+    used_in_total: used.length,
+  };
+}
+
+/** Owners only: counts per active member and source kind, never a name, id or item. */
+function companyCoverage(db: SourcesDb, ctx: SourcesContext): Schemas["CompanyCoverage"] {
+  const active = ctx.members.filter((m) => !m.disabled);
+  const rows = active.map((m) => {
+    const own = m.email === ctx.me.email ? { sources: db.sources, items: db.items } : (db.team?.[m.email] ?? { sources: [], items: [] });
+    const kinds = [...new Set(own.sources.map((s) => s.kind))].sort().map((kind) => {
+      const sources = own.sources.filter((s) => s.kind === kind);
+      const ids = new Set(sources.map((s) => s.id));
+      const t = tally(kind, own.items.filter((i) => ids.has(i.source_id)));
+      const synced = sources.map((s) => s.last_synced_at).filter((x): x is string => !!x).sort();
+      return {
+        kind,
+        sources: sources.length,
+        items: t.items,
+        fresh_share: t.items ? Math.round((t.fresh / t.items) * 1000) / 1000 : null,
+        freshness: freshness(t),
+        last_synced_at: synced.length ? synced[synced.length - 1] : null,
+      };
+    });
+    const items = kinds.reduce((n, k) => n + k.items, 0);
+    const share = items ? kinds.reduce((n, k) => n + k.freshness.fresh, 0) / items : -1;
+    return { member: { id: m.id, email: m.email, name: null, role: m.role }, kinds, order: [kinds.length ? 1 : 0, share] as const };
+  });
+  // Setup first (no source), then the lowest fresh share.
+  rows.sort((a, b) => a.order[0] - b.order[0] || a.order[1] - b.order[1] || a.member.email.localeCompare(b.member.email));
+  return {
+    as_of: now(),
+    members_total: active.length,
+    members_with_sources: rows.filter((r) => r.kinds.length).length,
+    members: rows.map(({ member, kinds }) => ({ member, kinds })),
+  };
 }

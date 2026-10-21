@@ -185,3 +185,138 @@ class SearchResults(BaseModel):
     query: str
     as_of: datetime | None
     hits: list[SearchHit]
+
+
+# --- coverage (A2) ------------------------------------------------------------------
+
+
+class NotReadCounts(BaseModel):
+    """Entries of ``unavailable_items`` by status (a missing status is unavailable)."""
+
+    skipped: int
+    unavailable: int
+    flagged: int
+    limited: int
+
+
+class FreshnessCounts(BaseModel):
+    """Live items by age: fresh up to one half-life, aging up to two, stale older."""
+
+    fresh: int
+    aging: int
+    stale: int
+
+
+class UsedCounts(BaseModel):
+    evidence: int
+    citations: int
+    section_links: int
+    # Distinct documents across the citations and the section links.
+    documents: int
+
+
+class SourceCoverage(BaseModel):
+    source_id: uuid.UUID
+    name: str
+    kind: SourceKind
+    status: SourceStatus
+    last_synced_at: datetime | None
+    # Live items; removed: soft-deleted (narrowed out, or deleted where they live).
+    items: int
+    removed: int
+    not_read: NotReadCounts
+    newest_at: datetime | None
+    oldest_at: datetime | None
+    freshness: FreshnessCounts
+    used: UsedCounts
+
+
+class CoverageList(BaseModel):
+    as_of: datetime
+    sources: list[SourceCoverage]
+
+
+class KindCoverage(BaseModel):
+    kind: str
+    items: int
+    newest_at: datetime | None
+    half_life_days: float
+
+
+class UsedItem(BaseModel):
+    id: uuid.UUID
+    title: str | None
+
+
+class UsedEntity(BaseModel):
+    id: uuid.UUID
+    type: str
+    key: str
+    title: str
+    status: str
+
+
+class UsedDocument(BaseModel):
+    slug: str
+    title: str
+    kind: str
+
+
+class UsedIn(BaseModel):
+    """One use of one of the source's items: baseline evidence (on an entity, or on an
+    edge, shown on its source entity), a citation in a document version, or a section's
+    evidence link."""
+
+    kind: Literal["evidence", "citation", "section_link"]
+    at: datetime
+    item: UsedItem
+    entity: UsedEntity | None = None
+    document: UsedDocument | None = None
+    version: int | None = None
+    cite_key: str | None = None
+    section_key: str | None = None
+    section_title: str | None = None
+
+
+class SourceCoverageDetail(SourceCoverage):
+    by_kind: list[KindCoverage]
+    not_read_items: list[UnavailableItem]
+    # Newest first, one page (limit, offset); used_in_total counts them all.
+    used_in: list[UsedIn]
+    used_in_total: int
+
+
+class CompanyMember(BaseModel):
+    id: uuid.UUID
+    email: str
+    # The member's display name once people have one; null until then.
+    name: str | None
+    role: str
+
+
+class CompanyKindCoverage(BaseModel):
+    """One member's sources of one kind, as counts: never a name, id or item."""
+
+    kind: SourceKind
+    sources: int
+    items: int
+    # fresh / items; null with no items.
+    fresh_share: float | None
+    freshness: FreshnessCounts
+    last_synced_at: datetime | None
+
+
+class CompanyMemberCoverage(BaseModel):
+    member: CompanyMember
+    kinds: list[CompanyKindCoverage]
+
+
+class CompanyCoverage(BaseModel):
+    """Owners only (A2, owner 2026-10-21 "Coverage"): counts per active member and source
+    kind. Nothing here can carry a source name, config, external id, item or not-read
+    entry."""
+
+    as_of: datetime
+    members_total: int
+    members_with_sources: int
+    members: list[CompanyMemberCoverage]

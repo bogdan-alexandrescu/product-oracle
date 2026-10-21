@@ -3,6 +3,8 @@
  * No real company, product or customer names: this repository is public.
  */
 
+import { PRODUCT_CHAT_ID, seededItemId } from "./ids";
+
 export type CitationSeed = {
   id: string;
   source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web" | "oracle";
@@ -674,7 +676,8 @@ export const DOCUMENTS: DocumentSeed[] = [
         created_at: "2026-10-17T09:20:00Z",
         snapshot: "2026-10-17T09:00Z",
         sections: CHECKOUT_V2,
-        citations: CHECKOUT_CITATIONS,
+        // v2's writer read c1 from the mock's Product chat (its "Customer question" item).
+        citations: CHECKOUT_CITATIONS.map((c) => (c.id === "c1" ? { ...c, item: seededItemId(PRODUCT_CHAT_ID, "m1") } : c)),
       },
     ],
   },

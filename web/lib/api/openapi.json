@@ -6769,6 +6769,144 @@
         ]
       }
     },
+    "/v1/sources/coverage": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "List Source Coverage",
+        "description": "What Oracle read from each of your sources: live and removed items, what it left\nout (by status), how fresh the items are against each kind's half-life, and how often\nthey are used as baseline evidence, citations and section links.",
+        "operationId": "list_source_coverage",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoverageList"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/sources/coverage/company": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Get Company Source Coverage",
+        "description": "Owners only: per active member and source kind, the number of sources, live\nitems, freshness and the newest sync. Counts only: never a source name, an item or\nwhat was left out (owner 2026-10-21, A2 \"Coverage\").",
+        "operationId": "get_company_source_coverage",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyCoverage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an owner, or a run"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/sources/{source_id}/coverage": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Get Source Coverage",
+        "description": "One of your sources' coverage: its items by kind, every entry it did not read\nwith the reason, and its uses newest first (``limit`` at a time).",
+        "operationId": "get_source_coverage",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceCoverageDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sources/{source_id}": {
       "get": {
         "tags": [
@@ -28918,6 +29056,156 @@
         "type": "object",
         "title": "CommentPatch"
       },
+      "CompanyCoverage": {
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "title": "As Of"
+          },
+          "members_total": {
+            "type": "integer",
+            "title": "Members Total"
+          },
+          "members_with_sources": {
+            "type": "integer",
+            "title": "Members With Sources"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyMemberCoverage"
+            },
+            "type": "array",
+            "title": "Members"
+          }
+        },
+        "type": "object",
+        "required": [
+          "as_of",
+          "members_total",
+          "members_with_sources",
+          "members"
+        ],
+        "title": "CompanyCoverage",
+        "description": "Owners only (A2, owner 2026-10-21 \"Coverage\"): counts per active member and source\nkind. Nothing here can carry a source name, config, external id, item or not-read\nentry."
+      },
+      "CompanyKindCoverage": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "upload",
+              "github",
+              "slack",
+              "notion",
+              "fireflies",
+              "google_docs"
+            ],
+            "title": "Kind"
+          },
+          "sources": {
+            "type": "integer",
+            "title": "Sources"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          },
+          "fresh_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fresh Share"
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/FreshnessCounts"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "sources",
+          "items",
+          "fresh_share",
+          "freshness",
+          "last_synced_at"
+        ],
+        "title": "CompanyKindCoverage",
+        "description": "One member's sources of one kind, as counts: never a name, id or item."
+      },
+      "CompanyMember": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role"
+        ],
+        "title": "CompanyMember"
+      },
+      "CompanyMemberCoverage": {
+        "properties": {
+          "member": {
+            "$ref": "#/components/schemas/CompanyMember"
+          },
+          "kinds": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyKindCoverage"
+            },
+            "type": "array",
+            "title": "Kinds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "member",
+          "kinds"
+        ],
+        "title": "CompanyMemberCoverage"
+      },
       "ComposedModule": {
         "properties": {
           "key": {
@@ -30627,6 +30915,28 @@
           "reason"
         ],
         "title": "Coverage"
+      },
+      "CoverageList": {
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "title": "As Of"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCoverage"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "as_of",
+          "sources"
+        ],
+        "title": "CoverageList"
       },
       "CriterionInfo": {
         "properties": {
@@ -36040,6 +36350,30 @@
         "title": "FollowUpOut",
         "description": "A call a member's disable owes (a provider revoke, a runtime cancel) and how it\nstands: pending (retried by the tick), failed (no more automatic retries; Retry or\nDismiss), done, or dismissed by an owner."
       },
+      "FreshnessCounts": {
+        "properties": {
+          "fresh": {
+            "type": "integer",
+            "title": "Fresh"
+          },
+          "aging": {
+            "type": "integer",
+            "title": "Aging"
+          },
+          "stale": {
+            "type": "integer",
+            "title": "Stale"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fresh",
+          "aging",
+          "stale"
+        ],
+        "title": "FreshnessCounts",
+        "description": "Live items by age: fresh up to one half-life, aging up to two, stale older."
+      },
       "GapCreate": {
         "properties": {
           "intake_id": {
@@ -39804,6 +40138,42 @@
         "title": "JobSettings",
         "description": "Which built-in jobs run on this document (all on by default)."
       },
+      "KindCoverage": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          },
+          "newest_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newest At"
+          },
+          "half_life_days": {
+            "type": "number",
+            "title": "Half Life Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "items",
+          "newest_at",
+          "half_life_days"
+        ],
+        "title": "KindCoverage"
+      },
       "KnobsIn": {
         "properties": {
           "depth": {
@@ -42717,6 +43087,35 @@
           "items"
         ],
         "title": "NextMilestone"
+      },
+      "NotReadCounts": {
+        "properties": {
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          },
+          "unavailable": {
+            "type": "integer",
+            "title": "Unavailable"
+          },
+          "flagged": {
+            "type": "integer",
+            "title": "Flagged"
+          },
+          "limited": {
+            "type": "integer",
+            "title": "Limited"
+          }
+        },
+        "type": "object",
+        "required": [
+          "skipped",
+          "unavailable",
+          "flagged",
+          "limited"
+        ],
+        "title": "NotReadCounts",
+        "description": "Entries of ``unavailable_items`` by status (a missing status is unavailable)."
       },
       "NotificationOut": {
         "properties": {
@@ -52213,6 +52612,243 @@
         ],
         "title": "SnapshotOut"
       },
+      "SourceCoverage": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "upload",
+              "github",
+              "slack",
+              "notion",
+              "fireflies",
+              "google_docs"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "error",
+              "needs_attention"
+            ],
+            "title": "Status"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          },
+          "removed": {
+            "type": "integer",
+            "title": "Removed"
+          },
+          "not_read": {
+            "$ref": "#/components/schemas/NotReadCounts"
+          },
+          "newest_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newest At"
+          },
+          "oldest_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest At"
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/FreshnessCounts"
+          },
+          "used": {
+            "$ref": "#/components/schemas/UsedCounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "name",
+          "kind",
+          "status",
+          "last_synced_at",
+          "items",
+          "removed",
+          "not_read",
+          "newest_at",
+          "oldest_at",
+          "freshness",
+          "used"
+        ],
+        "title": "SourceCoverage"
+      },
+      "SourceCoverageDetail": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "upload",
+              "github",
+              "slack",
+              "notion",
+              "fireflies",
+              "google_docs"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "error",
+              "needs_attention"
+            ],
+            "title": "Status"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          },
+          "removed": {
+            "type": "integer",
+            "title": "Removed"
+          },
+          "not_read": {
+            "$ref": "#/components/schemas/NotReadCounts"
+          },
+          "newest_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newest At"
+          },
+          "oldest_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest At"
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/FreshnessCounts"
+          },
+          "used": {
+            "$ref": "#/components/schemas/UsedCounts"
+          },
+          "by_kind": {
+            "items": {
+              "$ref": "#/components/schemas/KindCoverage"
+            },
+            "type": "array",
+            "title": "By Kind"
+          },
+          "not_read_items": {
+            "items": {
+              "$ref": "#/components/schemas/UnavailableItem"
+            },
+            "type": "array",
+            "title": "Not Read Items"
+          },
+          "used_in": {
+            "items": {
+              "$ref": "#/components/schemas/UsedIn"
+            },
+            "type": "array",
+            "title": "Used In"
+          },
+          "used_in_total": {
+            "type": "integer",
+            "title": "Used In Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "name",
+          "kind",
+          "status",
+          "last_synced_at",
+          "items",
+          "removed",
+          "not_read",
+          "newest_at",
+          "oldest_at",
+          "freshness",
+          "used",
+          "by_kind",
+          "not_read_items",
+          "used_in",
+          "used_in_total"
+        ],
+        "title": "SourceCoverageDetail"
+      },
       "SourceCreate": {
         "properties": {
           "kind": {
@@ -58247,6 +58883,210 @@
           "unchanged"
         ],
         "title": "UploadResult"
+      },
+      "UsedCounts": {
+        "properties": {
+          "evidence": {
+            "type": "integer",
+            "title": "Evidence"
+          },
+          "citations": {
+            "type": "integer",
+            "title": "Citations"
+          },
+          "section_links": {
+            "type": "integer",
+            "title": "Section Links"
+          },
+          "documents": {
+            "type": "integer",
+            "title": "Documents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "evidence",
+          "citations",
+          "section_links",
+          "documents"
+        ],
+        "title": "UsedCounts"
+      },
+      "UsedDocument": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "title",
+          "kind"
+        ],
+        "title": "UsedDocument"
+      },
+      "UsedEntity": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "key",
+          "title",
+          "status"
+        ],
+        "title": "UsedEntity"
+      },
+      "UsedIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "evidence",
+              "citation",
+              "section_link"
+            ],
+            "title": "Kind"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "item": {
+            "$ref": "#/components/schemas/UsedItem"
+          },
+          "entity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UsedEntity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "document": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UsedDocument"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "cite_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cite Key"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "section_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "at",
+          "item"
+        ],
+        "title": "UsedIn",
+        "description": "One use of one of the source's items: baseline evidence (on an entity, or on an\nedge, shown on its source entity), a citation in a document version, or a section's\nevidence link."
+      },
+      "UsedItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "UsedItem"
       },
       "ValidationError": {
         "properties": {
