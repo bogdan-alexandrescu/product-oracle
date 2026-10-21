@@ -121,20 +121,20 @@ def test_check_findings_lists_each_blocking_reason_and_never_a_to_confirm_one():
             {
                 "item": "shipping-step",
                 "label": "No PRD section",
-                "sentence": "Its PRD section is not in the PRD version.",
-                "blocking": True,
+                "text": "Section s-9 is not in the PRD version.",
+                "severity": "blocking",
             },
             {
                 "item": "payment-step",
                 "label": "Moved",
-                "sentence": "It moved from next to now.",
-                "blocking": False,
+                "text": "It moved from next to now.",
+                "severity": "confirm",
             },
         ],
     }
     assert workflow.check_findings(ITEMS_FILE, check, []) == [
         f"Oracle's check found these problems in {ITEMS_FILE}; fix each one:",
-        "No PRD section (shipping-step): Its PRD section is not in the PRD version.",
+        "No PRD section (shipping-step): Section s-9 is not in the PRD version.",
     ]
     # Without reasons: one line per problem of the check.
     del check["reasons"]
@@ -187,7 +187,9 @@ async def test_a_send_back_starts_from_the_previous_file_and_its_problems(client
     assert HEADER in first and HEADER in last
     assert f"--- {ITEMS_FILE} ---\n{NO_SECTION}" in first
     assert "Oracle's check found these problems in attempt 1; fix each one:" in first
-    assert f"- [unknown_prd_section] {NO_SECTION_MESSAGE}" in first
+    # With D2 Product reasons the check carries reasons: a blocking one reaches the agents
+    # as its label and sentence.
+    assert "- No PRD section (shipping-step): Section s-9 is not in " in first
 
 
 async def test_the_previous_attempt_survives_the_harvest_one_level_kept(client, owner, runtime):

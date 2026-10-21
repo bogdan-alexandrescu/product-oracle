@@ -1145,6 +1145,7 @@ function roadmapReviewRun(): RunOut {
       },
     ],
     token_read_only: false,
+    open_proposals: 0,
   };
   refresh(run);
   return run;
