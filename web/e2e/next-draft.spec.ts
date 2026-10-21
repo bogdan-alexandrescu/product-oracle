@@ -69,7 +69,8 @@ test("build draft 6: one job, one combined preview, apply makes exactly one vers
   await expect(items.filter({ hasText: "Goal trace" })).toContainText("v4");
   await expect(items.filter({ hasText: "F-38 Outbound check" })).toContainText("admin@example.com");
   for (const box of await s.getByRole("checkbox").all()) await expect(box).toBeChecked();
-  await expect(s.getByTestId("build-estimate")).toContainText("$");
+  // D12: the built-in build shows no cost (P3d); the cost figure left the sheet.
+  await expect(s.getByTestId("build-estimate")).toHaveCount(0);
 
   await s.getByRole("button", { name: "Build draft 6" }).click();
   const preview = s.getByTestId("next-draft-preview");
