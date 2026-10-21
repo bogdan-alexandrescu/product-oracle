@@ -122,7 +122,15 @@ function RolesSection({ members }: { members?: Member[] }) {
         </InspectorRow>
       ))}
       <div data-testid="roles-engineering-lead">
-        <InspectorRow value={leads != null ? <span className="tnum">{leads}</span> : undefined}>
+        <InspectorRow
+          value={
+            leads != null ? (
+              <span className="tnum" data-testid="engineering-lead-count">
+                {leads}
+              </span>
+            ) : undefined
+          }
+        >
           <span className="inline-flex items-center gap-1.5">
             Engineering lead
             <InfoTip label="the engineering lead" align="start">
@@ -202,9 +210,12 @@ function OwnerView({ selfId }: { selfId: string | null }) {
   async function setLead(m: Member, engineering_lead: boolean) {
     setSaving(m.id);
     setError(null);
+    // The box shows the tick at once; a refusal puts it back and says why.
+    replace({ ...m, engineering_lead });
     try {
       replace(await unwrap(api.PATCH("/v1/members/{user_id}", { params: { path: { user_id: m.id } }, body: { engineering_lead } })));
     } catch (e) {
+      replace(m);
       setError(errorMessage(e));
     } finally {
       setSaving(null);
