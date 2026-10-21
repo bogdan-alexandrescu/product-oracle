@@ -447,6 +447,7 @@ function RunInspector({ run }: { run: RunOut }) {
           Runtime
         </InspectorRow>
       </InspectorSection>
+      <RunDecisions run={run} />
     </Inspector>
   );
 }
@@ -477,6 +478,45 @@ function ProposalsRow({ run }: { run: RunOut }) {
         Baseline proposals
       </InspectorRow>
     </div>
+  );
+}
+
+/** D11: what people decided at the run's checkpoints, in the words its agents read. */
+function RunDecisions({ run }: { run: RunOut }) {
+  // Read again whenever a checkpoint of the run is decided or delivered.
+  const states = run.checkpoints.map((c) => `${c.id}:${c.status}:${c.delivery ? 1 : 0}`).join(",");
+  const q = useQuery(
+    `run-decisions|${run.id}|${states}`,
+    () => unwrap(api.GET("/v1/runs/{run_id}/decisions", { params: { path: { run_id: run.id } } })),
+    { keepPrevious: true },
+  );
+  return (
+    <InspectorSection
+      label="Decisions"
+      testId="run-decisions"
+      tools={
+        <InfoTip label="decisions" side="bottom">
+          What people decided at this run&apos;s checkpoints. The run&apos;s agents read the same list before they start, so an
+          approval note reaches the segments that follow it.
+        </InfoTip>
+      }
+    >
+      {q.error ? (
+        <ErrorNote>{q.error}</ErrorNote>
+      ) : !q.data ? (
+        <Loading />
+      ) : q.data.length === 0 ? (
+        <p className="text-sm text-text2">No decisions yet.</p>
+      ) : (
+        <ol className="space-y-1.5 text-[13px] leading-5 text-text">
+          {q.data.map((d) => (
+            <li key={d.checkpoint_id} data-testid="run-decision" className="break-words">
+              {d.summary}
+            </li>
+          ))}
+        </ol>
+      )}
+    </InspectorSection>
   );
 }
 

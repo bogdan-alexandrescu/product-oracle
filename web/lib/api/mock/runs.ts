@@ -11,6 +11,7 @@ import { AGENT_RUN } from "./baseline";
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
 type CheckpointOut = Schemas["CheckpointOut"];
+type RunDecision = Schemas["RunDecision"];
 type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version">;
 type DocumentRow = Pick<Schemas["DocumentSummary"], "id" | "slug" | "title" | "kind" | "template" | "theme">;
 type VersionSource = Schemas["VersionSource"];
@@ -27,6 +28,8 @@ export interface RunsContext {
   userId: string;
   /** The signed-in member's email: who decided, on a decision not delivered yet. */
   userName?: string | null;
+  /** The signed-in member's role: who decided, as the run's agents read it (D11). */
+  userRole?: Schemas["Me"]["role"] | null;
   /**
    * The "undelivered" scenario: SwarmCloud does not take a checkpoint decision until the
    * next tick. The decision is recorded (and final) but the decide call answers 503, as the
@@ -763,6 +766,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const text = note?.trim() || null;
     if (decision === "changes_requested" && !text) return fail(422, "say what to change: a note is required to request changes");
     Object.assign(cp, { status: decision, note: text, decided_by: ctx.userId, decided_at: ctx.now() });
+    cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: "oracle" } };
     if (ctx.undelivered) {
       // Recorded, and final; SwarmCloud did not take it: the tick delivers it.
       const at = ctx.now();
@@ -796,6 +800,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     review.payload = { ...review.payload, import: s.draft_import };
     return done();
   }
+  if (action === "decisions" && m === "GET") return json(200, decisionsOf(r));
   if (action === "segments" && p[5] === "artifacts" && m === "GET") {
     const s = r.segments.find((x) => x.seq === Number(p[4]));
     const raw = new URL(req.url).searchParams.get("attempt");
@@ -812,6 +817,55 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     return new Response(content, { headers: { "content-type": "text/plain" } });
   }
   return fail(404, "Route not found");
+}
+
+/** D11: how a decision reads for the run's agents (as api/oracle/runs/service.py). */
+const CHECKPOINT_TITLES: Record<CheckpointOut["kind"], string> = {
+  baseline_confirm: "Baseline",
+  feature_set: "Feature set",
+  priority_order: "Priority order",
+  prd_review: "PRD review",
+  eng_review: "Engineering review",
+  roadmap_items: "Roadmap items",
+  roadmap_review: "Roadmap review",
+};
+
+function decisionSummary(d: Omit<RunDecision, "summary">): string {
+  let what = d.status.replace("_", " ");
+  if (d.decided_by_role) what += ` by ${/^[aeiou]/.test(d.decided_by_role) ? "an" : "a"} ${d.decided_by_role}`;
+  if (d.via === "swarmcloud_console") what += " in SwarmCloud's console";
+  const parts = [CHECKPOINT_TITLES[d.kind] ?? d.kind, what];
+  if (d.note) parts.push(`note: ${d.note}`);
+  if (d.delivered === false) parts.push("not delivered to the run yet");
+  return parts.join(" · ");
+}
+
+/** The run's decided checkpoints, by segment then decided time; pending ones are not listed. */
+function decisionsOf(r: RunOut): RunDecision[] {
+  const flow = FLOW_CATALOG.flows.find((f) => f.key === r.flow);
+  const out = r.checkpoints
+    .filter((c) => c.status !== "pending")
+    .map((c) => {
+      const decided = c.payload.decided as { role?: RunDecision["decided_by_role"]; via?: RunDecision["via"] } | undefined;
+      const extra = (c.payload.review ?? {}) as { edits?: RunDecision["edits"]; review?: RunDecision["review"] };
+      const d: Omit<RunDecision, "summary"> = {
+        checkpoint_id: c.id,
+        kind: c.kind,
+        segment_seq: c.segment_seq ?? null,
+        segment_title: flow?.segments.find((s) => s.name === c.payload.segment)?.title ?? null,
+        attempt: (c.payload.attempt as number | undefined) ?? null,
+        status: c.status as RunDecision["status"],
+        decided_at: c.decided_at ?? null,
+        decided_by_role: decided?.role ?? null,
+        via: decided?.via ?? "oracle",
+        note: c.note ?? null,
+        edits: extra.edits ?? null,
+        review: extra.review ?? null,
+        delivered: !c.delivery,
+      };
+      return { ...d, summary: decisionSummary(d) };
+    });
+  return out.sort((a, b) => (a.segment_seq ?? 0) - (b.segment_seq ?? 0) || (a.decided_at ?? "~").localeCompare(b.decided_at ?? "~"));
 }
 
 /** Seeded runs: one waiting at a checkpoint, one over the approval threshold, one paused on overrun, one done. */
