@@ -30,8 +30,9 @@ test("the badge counts each new or open item and equals New + Open; no item is d
   const feedback = panel.getByTestId("inbox-feedback").locator("tr[data-row]");
   await expect(feedback).toHaveCount(5);
   await expect(panel).not.toContainText("to accept or dismiss");
-  await expect(feedback.filter({ hasText: "most recently used address" }).getByRole("link", { name: /^Review comments/ })).toBeVisible();
-  await expect(feedback.filter({ hasText: "custom roles" }).getByRole("link", { name: /^Review suggestions/ })).toBeVisible();
+  // D14: a comment without a suggestion is declined or opened; Oracle's suggestion is accepted here.
+  await expect(feedback.filter({ hasText: "most recently used address" }).getByRole("button", { name: "Decline", exact: true })).toBeVisible();
+  await expect(feedback.filter({ hasText: "custom roles" }).getByRole("button", { name: "Accept", exact: true })).toBeVisible();
 
   // Each row once across all five tabs.
   const seen = new Map<string, string>();

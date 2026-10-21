@@ -31,14 +31,17 @@ test("inbox: one feedback row per item, saying what waits and linking to its sec
   await expect(page.getByTestId("inbox-needs")).not.toContainText("to accept or dismiss");
   const row = fleet.filter({ hasText: "#f-33" });
   await expect(row).toContainText("Say what happens when the customer is not home");
-  const action = row.getByRole("link", { name: /^Review suggestions: Say what happens/ });
-  await expect(action).toHaveText("Review suggestions");
+  // D14: Oracle's suggestion is decided here (Accept, Decline); Open goes to the item.
+  await expect(row.getByRole("button", { name: "Accept", exact: true })).toBeVisible();
+  const action = row.getByRole("link", { name: /^Open Say what happens/ });
+  await expect(action).toHaveText("Open");
   await expect(action).toHaveAttribute("href", DEEP_LINK);
 
-  // A comment's row says so, and its button says what to do.
+  // A comment without a suggestion: Decline, and Open to its section.
   const checkout = page.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Checkout redesign PRD" });
   await expect(checkout).toContainText("most recently used address");
-  await expect(checkout.getByRole("link", { name: /^Review comments/ })).toHaveAttribute(
+  await expect(checkout.getByRole("button", { name: "Decline", exact: true })).toBeVisible();
+  await expect(checkout.getByRole("link", { name: /^Open Should the most recently used address/ })).toHaveAttribute(
     "href",
     "/documents/checkout-redesign/v/2?feedback=open#s-5-3",
   );
@@ -47,13 +50,14 @@ test("inbox: one feedback row per item, saying what waits and linking to its sec
   await page.goto("/home");
   const home = page.getByTestId("home-needs-table").locator("tr[data-row]").filter({ hasText: "Fleet next version" });
   await expect(home.first()).toContainText("#f-3");
-  await expect(home.first().getByRole("link", { name: /^Review suggestions/ })).toHaveAttribute("href", /^\/documents\/fleet-next\/v\/2\?feedback=open#f-3\d$/);
+  await expect(home.first().getByRole("button", { name: "Accept", exact: true })).toBeVisible();
+  await expect(home.first().getByRole("link", { name: /^Open / })).toHaveAttribute("href", /^\/documents\/fleet-next\/v\/2\?feedback=open#f-3\d$/);
 });
 
 test("arriving from the inbox: Feedback, All + Open, at the first open item with its actions in view", async ({ page }) => {
   await suggestions(page);
   await page.goto("/inbox");
-  await page.getByTestId("inbox-feedback").getByRole("link", { name: /^Review suggestions: Say what happens/ }).click();
+  await page.getByTestId("inbox-feedback").getByRole("link", { name: /^Open Say what happens/ }).click();
   await expect(page).toHaveURL(/\/documents\/fleet-next\/v\/2\?feedback=open#f-33$/);
 
   await expect(page.getByTestId("document-sections").filter({ visible: true })).toHaveAttribute("data-open", "f-33");
@@ -125,7 +129,10 @@ test("feedback items: long text collapsed, Accept, Edit and accept, Dismiss, and
   await expect(rows).toHaveCount(1);
   const left = rows.filter({ hasText: "#f-36" });
   await expect(left).toContainText("Depot handover needs a count check");
-  await expect(left.getByRole("link", { name: /^Review: Depot handover/ })).toHaveText("Review");
+  // Its suggestion dismissed, the item waits on a person: Decline or Open (D14).
+  await expect(left.getByRole("button", { name: "Decline", exact: true })).toBeVisible();
+  await expect(left.getByRole("button", { name: "Accept", exact: true })).toHaveCount(0);
+  await expect(left.getByRole("link", { name: /^Open Depot handover/ })).toHaveText("Open");
   await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Staged/ }).click();
   const staged = page.getByTestId("inbox-tab-staged").locator("tr[data-row]").filter({ hasText: "Fleet next version" });
   await expect(staged.getByTestId("staged-row-label")).toHaveText("2 changes staged for draft 3");

@@ -19,7 +19,8 @@ test("inbox lists checkpoints, cost approvals, overruns and feedback by state", 
   // Feedback is one row per item, with its document and what to do.
   const comment = feedback.locator("tr[data-row]").filter({ hasText: "Should the most recently used address be selected by default?" });
   await expect(comment).toContainText("Checkout redesign PRD");
-  await expect(comment.getByRole("link", { name: /^Review comments/ })).toBeVisible();
+  await expect(comment.getByRole("button", { name: "Decline", exact: true })).toBeVisible();
+  await expect(comment.getByRole("link", { name: /^Open Should the most recently used address/ })).toBeVisible();
 
   // Approve the cost from the inbox: the run starts and leaves the list.
   await page.getByTestId("inbox-approvals").getByRole("button", { name: "Approve $53.00" }).click();
@@ -31,7 +32,8 @@ test("inbox lists checkpoints, cost approvals, overruns and feedback by state", 
 
   // Row actions are outline, like every other row action; filled is for the page's primary.
   await expect(checkpoints.getByRole("link", { name: "Decide" }).first()).toHaveAttribute("data-variant", "secondary");
-  await expect(feedback.getByRole("link", { name: /^Review/ }).first()).toHaveAttribute("data-variant", "secondary");
+  // D14: a feedback row's primary action is outline too.
+  await expect(feedback.getByRole("button", { name: "Accept", exact: true }).first()).toHaveAttribute("data-variant", "secondary");
 
   // Decide goes to the run, at the decision.
   await checkpoints.getByRole("link", { name: "Decide" }).first().click();

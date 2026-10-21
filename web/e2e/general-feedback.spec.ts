@@ -90,8 +90,8 @@ test("a viewer has no whole-draft entry; the new item reaches the approver's Inb
   await expect(row.getByTestId("inbox-general")).toHaveText("General");
   await expect(row).not.toContainText("#");
 
-  // Oracle's review job answered it (an answer, not one section's new text).
-  await expect(row.getByRole("link", { name: `Review suggestions: ${REMARK}` })).toBeVisible();
+  // Oracle's review job answered it (an answer, not one section's new text): D14 sends it from the row.
+  await expect(row.getByRole("button", { name: "Send answer" })).toBeVisible();
 
   // Its link opens the version's Feedback, where the answer waits on the item.
   await row.getByRole("link", { name: REMARK, exact: true }).click();

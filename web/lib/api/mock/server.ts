@@ -370,6 +370,53 @@ function seedSuggestions(): Db {
       updated_at: created_at,
     });
   });
+  // D14: a question Oracle answered and a remark with nothing to change, on Team workspaces,
+  // so the Inbox has a row of every kind to act on (Send answer, Close).
+  const w2 = findVersion(db, findDocument(db, "team-workspaces")!, 2)!;
+  const replies: [string, Schemas["TextQuoteSelector"], "answer" | "none", string | null, string][] = [
+    [
+      "Who can see a workspace's billing page?",
+      { exact: "One invoice per workspace", prefix: "", suffix: ", with seats" },
+      "answer",
+      "Workspace owners and billing admins see it; members do not.",
+      "The roles section says who manages billing.",
+    ],
+    [
+      "The scope reads well as it is.",
+      { exact: "Move existing projects into a workspace", prefix: "", suffix: "." },
+      "none",
+      null,
+      "A remark that approves the section: nothing to change.",
+    ],
+  ];
+  replies.forEach(([body, anchor, kind, text, rationale], i) => {
+    const created_at = `2026-10-13T11:1${i}:00Z`;
+    addComment(db, w2, { section_key: "scope", anchor, body }, { created_at });
+    const f = db.feedback.at(-1)!;
+    llm.suggestions.push({
+      id: uuid(),
+      document_id: f.document_id,
+      feedback_item_id: f.id,
+      job_id: null,
+      version_number: w2.number,
+      classification: kind === "answer" ? "question" : "approval",
+      group_key: null,
+      duplicate_of: null,
+      kind,
+      section_key: "scope",
+      text,
+      edited_text: null,
+      rationale,
+      pushback: null,
+      status: "open",
+      override_reason: null,
+      decided_by: null,
+      decided_at: null,
+      applied_in_version: null,
+      created_at,
+      updated_at: created_at,
+    });
+  });
   return db;
 }
 

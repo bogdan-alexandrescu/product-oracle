@@ -623,6 +623,11 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
       const input = (await body<Schemas["SuggestionAccept"]>()) ?? {};
       const reason = input.reason?.trim();
       if (s.pushback && !reason) return fail(422, "Oracle pushed back on this feedback: say why you keep your call (reason)");
+      // As the API: section text for a section approved (locked) since is refused.
+      const last = doc ? versionsOf(ctx, doc).at(-1) : undefined;
+      if (s.kind === "section_text" && s.section_key && last && ctx.lockedKeys(last).includes(s.section_key)) {
+        return fail(409, `section '${s.section_key}' is approved and locked`);
+      }
       Object.assign(s, {
         status: "accepted",
         edited_text: input.text ?? s.edited_text,

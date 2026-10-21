@@ -332,7 +332,7 @@ function Navs() {
             >
               <Icon name={d.icon} stroke={1.7} />
               <span>{d.label}</span>
-              {d.label === "Inbox" && <Badge n={inbox} />}
+              {d.label === "Inbox" && <Badge n={inbox} testId="tab-inbox-badge" />}
             </Link>
           );
         })}
