@@ -22,12 +22,15 @@ import {
 } from "@/components/ds";
 import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
+import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD, TEXTAREA } from "../_components/fields";
 import type { PickerProps } from "./_browse-list";
 import { GithubPicker } from "./_github-picker";
 import { SlackPicker } from "./_slack-picker";
+import { CompanyDriveSettings } from "./CompanyDrive";
+import { driveConfig, driveFiles, DriveFiles, DriveNotes, ReconnectToChoose, type DriveFile } from "./DriveFiles";
 import {
   type FirefliesConfig,
   FirefliesPicker,
@@ -42,6 +45,7 @@ import { NotionPicker, notionRoots } from "./NotionPicker";
 type Source = Schemas["SourceOut"];
 type Kind = Source["kind"];
 type KindOption = Schemas["SourceKindOut"];
+type Choice = Schemas["ConnectionChoice"];
 
 // The config key holding each kind's allowlist (as its connector reads it), and what one
 // entry looks like. Notion's roots are ticked in the page picker, not typed; Fireflies
@@ -51,7 +55,8 @@ const ALLOWLIST: Record<ListKind, { key: string; label: string; example: string 
   github: { key: "repos", label: "Repositories", example: "example-org/example-app" },
   slack: { key: "channels", label: "Channel ids", example: "C0123PRODUCT" },
   notion: { key: "roots", label: "Pages", example: "" },
-  google_docs: { key: "folders", label: "Folder ids", example: "1AbC…" },
+  // Picked in Google's Drive picker (DriveFiles): "docs" and "folders".
+  google_docs: { key: "docs", label: "Files", example: "1AbC…" },
 };
 
 // Kinds chosen in a picker (browse, search, tick) rather than typed ids (S5).
@@ -348,6 +353,64 @@ function FirefliesEditor({
   );
 }
 
+/** Edit a Google Docs source's picked files and folders: the Drive picker adds to the list. */
+function DriveFilesEditor({
+  source,
+  connection,
+  onSaved,
+  onReload,
+}: {
+  source: Source;
+  connection: Choice | undefined;
+  onSaved: (s: Source) => void;
+  onReload: (s: Source) => void;
+}) {
+  const [files, setFiles] = useState<DriveFile[]>(driveFiles(source.config));
+  const { act, error, busy, stale } = useAction();
+  const reconnect = !!connection?.reconnect_reason;
+  const unavailable = Object.fromEntries(
+    (source.unavailable_items ?? []).filter((u) => (u.status ?? "unavailable") === "unavailable").map((u) => [u.external_id, u.reason]),
+  );
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const config = driveConfig(source.config, files);
+    const saved = await act(() =>
+      unwrap(api.PATCH("/v1/sources/{source_id}", { params: { path: { source_id: source.id } }, body: { config, base_version: source.config_version } })),
+    );
+    if (saved) onSaved(saved);
+  }
+  async function reload() {
+    const fresh = await act(() => fetchSource(source.id));
+    if (fresh) onReload(fresh);
+  }
+
+  return (
+    <form
+      onSubmit={save}
+      aria-label={`Files of ${source.name}`}
+      className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3"
+    >
+      <DriveFiles
+        files={files}
+        onChange={setFiles}
+        accountHint={connection?.account_label ?? ""}
+        reconnect={reconnect}
+        unavailable={unavailable}
+      />
+      {error && <SaveError error={error} stale={stale} busy={busy} onReload={reload} />}
+      <div className="flex items-center gap-1.5">
+        <Button type="submit" variant="solid" disabled={busy || files.length === 0}>
+          Save files
+        </Button>
+        <InfoTip label="saving the files" align="start">
+          Saving syncs this source again. Docs from a file or folder you removed are deleted on that sync.
+        </InfoTip>
+      </div>
+    </form>
+  );
+}
+
 /** A Notion source whose connection is gone: its pages can only be picked through a connection. */
 function ReconnectNotion({ picked }: { picked: number }) {
   return (
@@ -371,11 +434,13 @@ function ReconnectNotion({ picked }: { picked: number }) {
 
 function SourceRow({
   source,
+  connection,
   onChange,
   onDelete,
   targeted = false,
 }: {
   source: Source;
+  connection?: Choice;
   onChange: (s: Source) => void;
   onDelete: () => void;
   /** The page's #source-<id> (the Inbox's Edit): scrolled to, its editor open if it needs attention. */
@@ -393,6 +458,10 @@ function SourceRow({
   const path = { params: { path: { source_id: source.id } } };
   const fireflies = source.kind === "fireflies" ? readFirefliesConfig(source.config) : null;
   const allowlist = source.kind === "upload" || source.kind === "fireflies" ? null : ALLOWLIST[source.kind];
+  const drive = source.kind === "google_docs";
+  const picked = drive ? driveFiles(source.config) : [];
+  const folders = picked.filter((f) => f.kind === "folder").map((f) => f.name);
+  const unavailable = source.unavailable_items ?? [];
 
   async function syncNow() {
     setNotice(null);
@@ -447,7 +516,11 @@ function SourceRow({
     if (fresh) onChange(fresh);
   }
 
-  const items = allowlist ? entries(source.config, allowlist.key) : [];
+  const items = drive
+    ? picked.filter((f) => f.kind === "doc").map((f) => f.name)
+    : allowlist
+      ? entries(source.config, allowlist.key)
+      : [];
   const attention = source.status === "needs_attention";
   const synced = source.last_synced_at
     ? `last ${source.kind === "upload" ? "upload" : "sync"} ${formatDateTime(source.last_synced_at)}`
@@ -510,7 +583,12 @@ function SourceRow({
             label={`More actions for ${source.name}`}
             items={[
               ...(allowlist
-                ? [{ label: editing ? "Close allowlist" : "Edit allowlist", onSelect: () => setEditing((v) => !v) }]
+                ? [
+                    {
+                      label: drive ? (editing ? "Close files and folders" : "Edit files and folders") : editing ? "Close allowlist" : "Edit allowlist",
+                      onSelect: () => setEditing((v) => !v),
+                    },
+                  ]
                 : []),
               ...(fireflies
                 ? [{ label: editing ? "Close meetings" : "Edit meetings", onSelect: () => setEditing((v) => !v) }]
@@ -533,15 +611,42 @@ function SourceRow({
             </span>
           </span>
         )}
-        {allowlist && (
+        {allowlist && (items.length > 0 || folders.length === 0) && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">{allowlist.label}</Label>
-            <span className="min-w-0 truncate font-mono text-text" title={items.join(", ")}>
+            <span className={`min-w-0 truncate text-text ${drive || source.kind === "notion" ? "" : "font-mono"}`} title={items.join(", ")}>
               {source.kind === "notion" ? `${items.length} picked` : items.length ? items.join(", ") : "none yet"}
             </span>
           </span>
         )}
+        {folders.length > 0 && (
+          <span className="flex min-w-0 max-w-full items-center gap-1.5">
+            <Label className="flex-none">Folders</Label>
+            <span className="min-w-0 truncate text-text" title={folders.join(", ")}>
+              {folders.join(", ")}
+            </span>
+          </span>
+        )}
       </div>
+      {source.reconnect_reason && <ReconnectToChoose className="mt-2" />}
+      {drive && <DriveNotes notes={unavailable} picked={picked} sourceName={source.name} />}
+      {!drive && unavailable.length > 0 && (
+        <ul aria-label={`Unreadable files of ${source.name}`} className="mt-2 flex flex-col gap-1">
+          {unavailable.map((u) => {
+            const name = picked.find((f) => f.id === u.external_id)?.name ?? u.external_id;
+            return (
+              <li key={u.external_id} className="flex min-w-0 items-center gap-2 text-sm">
+                <Chip kind="warn" title={u.reason}>
+                  No access
+                </Chip>
+                <span className="min-w-0 truncate font-medium" title={`${name}: ${u.reason}`}>
+                  {name}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       {(source.last_error || notice || error) && (
         <div className="mt-2 flex flex-col gap-2">
           {source.last_error && attention && (
@@ -572,6 +677,19 @@ function SourceRow({
           {error && <Notice tone="error">{error}</Notice>}
         </div>
       )}
+      {editing && drive && (
+        <DriveFilesEditor
+          key={source.config_version}
+          source={source}
+          connection={connection}
+          onReload={onChange}
+          onSaved={(s) => {
+            onChange(s);
+            setEditing(false);
+            setNotice({ tone: "pass", text: "Files saved." });
+          }}
+        />
+      )}
       {editing && fireflies && (
         <FirefliesEditor
           key={source.config_version}
@@ -584,7 +702,7 @@ function SourceRow({
           }}
         />
       )}
-      {editing && allowlist && (
+      {editing && allowlist && !drive && (
         <AllowlistEditor
           key={source.config_version}
           source={source}
@@ -629,6 +747,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
   const [name, setName] = useState("");
   const [connection, setConnection] = useState("");
   const [allow, setAllow] = useState("");
+  const [files, setFiles] = useState<DriveFile[]>([]);
   const [picked, setPicked] = useState<Record<string, unknown>>({});
   const [meetings, setMeetings] = useState<FirefliesConfig>(NEW_FIREFLIES);
   const { act, error, busy } = useAction();
@@ -638,6 +757,9 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
   const needsConnection = kind !== "upload";
   const spec = kind === "upload" || kind === "fireflies" ? null : ALLOWLIST[kind];
   const connectionId = connection || usable[0]?.id || "";
+  const chosen = usable.find((c) => c.id === connectionId);
+  const drive = kind === "google_docs";
+  const reconnect = drive && !!chosen?.reconnect_reason;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -648,17 +770,20 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
       config:
         kind === "fireflies"
           ? firefliesConfigToSave(meetings)
-          : Picker
-            ? picked
-            : spec
-              ? { [spec.key]: parseLines(allow) }
-              : {},
+          : drive
+            ? driveConfig({}, files)
+            : Picker
+              ? picked
+              : spec
+                ? { [spec.key]: parseLines(allow) }
+                : {},
     };
     const s = await act(() => unwrap(api.POST("/v1/sources", { body })));
     if (s) {
       onAdded(s);
       setName("");
       setAllow("");
+      setFiles([]);
       setPicked({});
       setMeetings(NEW_FIREFLIES);
     }
@@ -667,6 +792,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
   const blocked =
     !option?.connector_available ||
     (needsConnection && usable.length === 0) ||
+    (drive && (reconnect || files.length === 0)) ||
     (kind === "fireflies" && !firefliesReady(meetings)) ||
     (kind === "notion" && notionRoots(picked).length === 0);
 
@@ -729,11 +855,20 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
           </LinkButton>
         </div>
       )}
+      {drive && usable.length > 0 && (
+        <DriveFiles
+          key={connectionId}
+          files={files}
+          onChange={setFiles}
+          accountHint={chosen?.account_label ?? ""}
+          reconnect={reconnect}
+        />
+      )}
       {kind === "fireflies" && option?.connector_available && usable.length > 0 && connectionId && (
         <FirefliesPicker key={connectionId} connectionId={connectionId} value={meetings} onChange={setMeetings} />
       )}
       {Picker && usable.length > 0 && <Picker key={`${kind}:${connectionId}`} connectionId={connectionId} config={picked} onChange={setPicked} />}
-      {!Picker && spec && usable.length > 0 && (
+      {!Picker && spec && !drive && usable.length > 0 && (
         <Field label={`${spec.label} to pull in (one per line)`}>
           <textarea
             value={allow}
@@ -769,6 +904,7 @@ function useTargetedSource(): string | null {
 export default function SourceSettingsPage() {
   const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
   const kinds = useQuery("source-kinds", () => unwrap(api.GET("/v1/sources/kinds")));
+  const { role } = useMe();
   const list = sources.data ?? [];
   const errors = list.filter((s) => s.status === "error").length;
   const attention = list.filter((s) => s.status === "needs_attention").length;
@@ -851,6 +987,7 @@ export default function SourceSettingsPage() {
                 <SourceRow
                   key={s.id}
                   source={s}
+                  connection={kinds.data?.flatMap((k) => k.connections).find((c) => c.id === s.connection_id)}
                   onChange={replace}
                   targeted={s.id === target}
                   onDelete={() => sources.setData((prev) => (prev ?? []).filter((x) => x.id !== s.id))}
@@ -859,6 +996,7 @@ export default function SourceSettingsPage() {
             </ul>
           )}
         </Panel>
+        {hasRole(role, "owner") && <CompanyDriveSettings />}
       </Split>
     </>
   );

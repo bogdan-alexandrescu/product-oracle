@@ -21,6 +21,8 @@ from oracle import audit
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.auth.models import User
 from oracle.auth.service import may_sign_in
+from oracle.authz import require_role
+from oracle.config import get_settings
 from oracle.connections import oauth, service
 from oracle.connections.models import Connection
 from oracle.connections.providers import (
@@ -30,6 +32,7 @@ from oracle.connections.providers import (
     Provider,
     ProviderUnavailable,
     get_provider,
+    reconnect_reason,
 )
 from oracle.tenancy import tenant_session
 
@@ -56,6 +59,7 @@ async def require_user(principal: CurrentPrincipal) -> Principal:
 
 
 UserPrincipal = Annotated[Principal, Depends(require_user)]
+Viewer = Annotated[Principal, Depends(require_role("viewer"))]
 
 
 # --- Schemas ------------------------------------------------------------------------
@@ -74,6 +78,9 @@ class ConnectionOut(BaseModel):
     last_used_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # Set when the connection works but should be signed in again: a Google grant
+    # without drive.readonly cannot read picked folders, "Reconnect to choose files".
+    reconnect_reason: str | None = None
 
 
 class ProviderOut(BaseModel):
@@ -105,6 +112,18 @@ class AuthorizeOut(BaseModel):
     url: str
 
 
+class PickerConfigOut(BaseModel):
+    """What the browser needs to open Google's Drive picker. All of it is public."""
+
+    # Oracle's Google OAuth client id (the browser asks Google for a drive.readonly
+    # token to browse Drive in the picker).
+    client_id: str
+    # The Cloud project number of that client (the picker's app id).
+    app_id: str
+    # A browser API key restricted to Oracle's origin and the Picker API.
+    developer_key: str
+
+
 def _out(conn: Connection) -> ConnectionOut:
     return ConnectionOut(
         id=conn.id,
@@ -119,6 +138,7 @@ def _out(conn: Connection) -> ConnectionOut:
         last_used_at=conn.last_used_at,
         created_at=conn.created_at,
         updated_at=conn.updated_at,
+        reconnect_reason=reconnect_reason(conn.provider, list(conn.scopes or [])),
     )
 
 
@@ -194,6 +214,29 @@ async def list_providers(principal: UserPrincipal) -> list[ProviderOut]:
         )
         for p in PROVIDERS.values()
     ]
+
+
+@router.get(
+    "/connections/google/picker-config",
+    response_model=PickerConfigOut,
+    responses={404: {"description": "The Drive picker is not configured"}},
+)
+async def google_picker_config(principal: UserPrincipal, _: Viewer) -> PickerConfigOut:
+    """Client id, Cloud project number and browser API key for Google's Drive picker.
+    Never the client secret or anyone's token."""
+    client = oauth.client_for(PROVIDERS["google"])
+    settings = get_settings()
+    key = settings.google_picker_api_key.get_secret_value()
+    if client is None or not settings.google_picker_app_id or not key:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Choosing files from Drive is not configured: it needs Google sign-in "
+            "(ORACLE_OAUTH_GOOGLE_CLIENT_ID and _SECRET), ORACLE_GOOGLE_PICKER_APP_ID "
+            "and ORACLE_GOOGLE_PICKER_API_KEY",
+        )
+    return PickerConfigOut(
+        client_id=client.client_id, app_id=settings.google_picker_app_id, developer_key=key
+    )
 
 
 @router.post(
@@ -369,6 +412,12 @@ async def reconnect_connection(
         except service.MemberDisabled as e:
             raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from None
     else:
+        if reconnect_reason(conn.provider, list(conn.scopes or [])):
+            # Only a Google grant without drive.readonly: a refresh keeps the old grant,
+            # so sign in again for the scopes Oracle needs. drive.readonly grants refresh.
+            url = _start_oauth(principal, p, conn.id)
+            if url:
+                return ReconnectOut(connection=_out(conn), authorize_url=url)
         try:
             conn = await service.recheck(db, http, conn)
         except service.ConnectionUnavailable as e:

@@ -32,6 +32,17 @@ class SourcePatch(BaseModel):
     base_version: int | None = Field(default=None, ge=1)
 
 
+class UnavailableItem(BaseModel):
+    external_id: str
+    reason: str
+    # The item's name when the source config does not name it (a doc found in a folder).
+    name: str | None = None
+    # unavailable: cannot be read; skipped: left out on purpose (e.g. a doc in a picked
+    # folder owned outside the company); flagged: pulled in with a warning; limited: a
+    # folder listing stopped at the source's cap.
+    status: Literal["unavailable", "skipped", "flagged", "limited"] = "unavailable"
+
+
 class SourceOut(ORM):
     id: uuid.UUID
     kind: SourceKind
@@ -49,12 +60,20 @@ class SourceOut(ORM):
     item_count: int = 0
     # False while no connector is registered for the kind (sync answers 422).
     connector_available: bool = True
+    # Allowlisted items the last completed sync could not read (unshared, removed), or
+    # left out or flagged on purpose (see UnavailableItem.status).
+    unavailable_items: list[UnavailableItem] = Field(default_factory=list)
+    # Set when the source's connection should be signed in again, e.g. a Google
+    # connection without drive.readonly: "Reconnect to choose files".
+    reconnect_reason: str | None = None
 
 
 class ConnectionChoice(BaseModel):
     id: uuid.UUID
     account_label: str | None
     status: str
+    # "Reconnect to choose files" for a Google connection without drive.readonly.
+    reconnect_reason: str | None = None
 
 
 class SourceKindOut(BaseModel):
@@ -70,8 +89,9 @@ class SyncResult(BaseModel):
     source_id: uuid.UUID
     # completed: ran to the end; rate_limited: stopped cleanly, resumes from the saved
     # cursor; error: the source is now in status error (see error); superseded: the
-    # source's config or connection changed while it ran, so nothing it read after its
-    # last checkpoint was kept (sync again);
+    # source's config or connection (for Google Docs, also the company's Drive settings)
+    # changed while it ran, so nothing it read after its last checkpoint was kept and the
+    # next sync uses the new ones;
     # needs_attention: the saved selection breaks a newer rule, edit the source (see error).
     outcome: Literal["completed", "rate_limited", "error", "superseded", "needs_attention"]
     upserted: int = 0
@@ -80,6 +100,8 @@ class SyncResult(BaseModel):
     checkpoints: int = 0
     retry_after: float | None = None
     error: str | None = None
+    # Items this sync could not read; the rest of the source synced.
+    unavailable: list[UnavailableItem] = Field(default_factory=list)
     source: SourceOut
 
 

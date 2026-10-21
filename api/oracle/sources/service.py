@@ -6,17 +6,28 @@ sources they own (S3 revised). Another user's source reads as "not found".
 
 import importlib
 import pkgutil
+import re
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle.auth.models import User
+from oracle.config import get_settings
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
-from oracle.connections.providers import get_provider
+from oracle.connections.providers import (
+    DRIVE_FILE,
+    DRIVE_READONLY,
+    RECONNECT_TO_CHOOSE_FILES,
+    get_provider,
+    reconnect_reason,
+)
 from oracle.sources import base, store
+from oracle.sources.connectors import google_docs
+from oracle.sources.items import current_xid
 from oracle.sources.models import SOURCE_KINDS, Source, SourceItem
 from oracle.v2 import links
 
@@ -61,6 +72,10 @@ class StaleError(Exception):
 
 class InvalidError(Exception):
     """The request cannot be carried out as asked (answered 422)."""
+
+
+class BadRequestError(InvalidError):
+    """The config is malformed, e.g. an id that is not one (answered 400)."""
 
 
 class RateLimitedError(Exception):
@@ -172,6 +187,48 @@ async def credential_for(
     return _connector_credential(credential), conn
 
 
+def scope_problem(kind: str, config: dict[str, Any], conn: Connection | None) -> str | None:
+    """Why the connection's grant cannot read this source's allowlist, before calling
+    the provider. Google: Oracle reads Drive through drive.readonly (S5, 'Drive folders');
+    a picked folder cannot be read without it, since the short-lived drive.file grant
+    does not open a folder's docs. Picked files also open under drive.file. Unknown
+    scopes (an older pasted token) are not judged."""
+    if kind != "google_docs" or conn is None or not conn.scopes:
+        return None
+    scopes = set(conn.scopes)
+    if config.get("folders") and DRIVE_READONLY not in scopes:
+        return (
+            f"{RECONNECT_TO_CHOOSE_FILES}: this Google connection cannot read folders; "
+            "reconnect Google to give Oracle read access to your Drive"
+        )
+    if config.get("docs") and not scopes & {DRIVE_FILE, DRIVE_READONLY}:
+        return f"{RECONNECT_TO_CHOOSE_FILES}: this Google connection cannot read Drive files"
+    return None
+
+
+def source_reconnect_reason(source: Source, conn: Connection | None) -> str | None:
+    """What the Sources page shows next to a source whose connection should be signed
+    in again (a Google grant without drive.readonly), or whose folders the connection
+    cannot read."""
+    if conn is None or KIND_PROVIDER.get(source.kind) != conn.provider:
+        return None
+    if scope_problem(source.kind, dict(source.config or {}), conn):
+        return RECONNECT_TO_CHOOSE_FILES
+    return reconnect_reason(conn.provider, list(conn.scopes or []))
+
+
+async def connections_by_id(
+    db: AsyncSession, user_id: uuid.UUID, ids: list[uuid.UUID | None]
+) -> dict[uuid.UUID, Connection]:
+    wanted = [i for i in ids if i is not None]
+    if not wanted:
+        return {}
+    rows = await db.scalars(
+        select(Connection).where(Connection.user_id == user_id, Connection.id.in_(wanted))
+    )
+    return {c.id: c for c in rows}
+
+
 async def _check_connection(
     db: AsyncSession, user_id: uuid.UUID, kind: str, connection_id: uuid.UUID | None
 ) -> Connection | None:
@@ -192,17 +249,46 @@ async def _check_connection(
     return conn
 
 
+def _picks(config: dict[str, Any]) -> dict[str, Any]:
+    """A source's config without the display names of what was picked."""
+    return {k: v for k, v in (config or {}).items() if k != "names"}
+
+
+def _check_shape(kind: str, config: dict[str, Any]) -> None:
+    """The connector's offline check of a config's shape and ids (no provider call)."""
+    if kind == "upload":
+        return
+    connector = connector_for(kind)
+    if connector is None:
+        raise InvalidError(CONNECTOR_UNAVAILABLE)
+    # A connector may be stricter with what is saved than with what it syncs (Google
+    # Docs: the display names a stored config carries are trimmed when it syncs).
+    check = getattr(connector, "check_new_config", None) or getattr(connector, "check_config", None)
+    if check is not None:
+        try:
+            check(config)
+        except base.ConnectorBadInput as e:
+            raise BadRequestError(str(e)) from None
+        except base.ConnectorError as e:
+            raise InvalidError(str(e)) from None
+
+
 async def _validate(
     db: AsyncSession, kind: str, config: dict[str, Any], conn: Connection | None
 ) -> None:
     if kind == "upload":
         return
     connector = connector_for(kind)
-    if connector is None:
-        raise InvalidError(CONNECTOR_UNAVAILABLE)
+    # The shape and ids first: nothing is sent to the provider for a bad id.
+    _check_shape(kind, config)
+    problem = scope_problem(kind, config, conn)
+    if problem:
+        raise InvalidError(problem)
     credential = await _read_credential(db, conn) if conn is not None else None
     try:
         await connector.validate(config, credential)
+    except base.ConnectorBadInput as e:
+        raise BadRequestError(redact(str(e), credential)) from None
     except base.ConnectorRateLimited as e:
         wait = max(1, round(e.retry_after)) if e.retry_after else 60
         provider = get_provider(KIND_PROVIDER[kind] or "")
@@ -284,6 +370,7 @@ async def create_source(
     connection_id: uuid.UUID | None,
     config: dict[str, Any],
 ) -> Source:
+    _check_config(config)
     conn = await _check_connection(db, user_id, kind, connection_id)
     await _validate(db, kind, config, conn)
     config = normalize_config(kind, config)
@@ -300,10 +387,270 @@ async def create_source(
     return source
 
 
+# Mail providers anyone can sign up with: a member's address there says nothing about
+# which documents are the company's.
+PUBLIC_MAIL_DOMAINS = frozenset(
+    {
+        "gmail.com",
+        "googlemail.com",
+        "outlook.com",
+        "hotmail.com",
+        "hotmail.co.uk",
+        "live.com",
+        "msn.com",
+        "yahoo.com",
+        "yahoo.co.uk",
+        "aol.com",
+        "icloud.com",
+        "me.com",
+        "proton.me",
+        "protonmail.com",
+        "pm.me",
+        "gmx.com",
+        "gmx.de",
+        "gmx.net",
+        "yandex.com",
+        "yandex.ru",
+        "mail.ru",
+        "qq.com",
+        "zoho.com",
+        "fastmail.com",
+        "hey.com",
+        "mail.com",
+        "ymail.com",
+        "web.de",
+        "tutanota.com",
+        "tuta.io",
+    }
+)
+# Providers with an address under many country domains (gmx.de, yahoo.co.uk): the name,
+# then one or two short labels.
+PUBLIC_MAIL_NAMES = frozenset(
+    {
+        "gmail",
+        "googlemail",
+        "outlook",
+        "hotmail",
+        "live",
+        "msn",
+        "yahoo",
+        "aol",
+        "icloud",
+        "protonmail",
+        "gmx",
+        "yandex",
+    }
+)
+_COUNTRY_SUFFIX = re.compile(r"[a-z]{2,3}(?:\.[a-z]{2,3})?")
+
+
+def is_public_mail_domain(domain: str) -> bool:
+    """Whether ``domain`` is a mail provider anyone can sign up with (gmail.com, gmx.de,
+    yahoo.co.uk, ...): an address there says nothing about whose a document is."""
+    domain = domain.strip().lower().lstrip("@")
+    if domain in PUBLIC_MAIL_DOMAINS:
+        return True
+    name, _, suffix = domain.partition(".")
+    return name in PUBLIC_MAIL_NAMES and bool(_COUNTRY_SUFFIX.fullmatch(suffix))
+
+
+async def company_domains(db: AsyncSession, tenant_id: uuid.UUID) -> list[str]:
+    """The company's email domains, set explicitly (S5, owner 2026-10-20):
+    ``ORACLE_IAP_ALLOWED_DOMAINS`` and the owner's ``company_email_domains`` setting.
+    Neither set: none (the outside-owner check fails closed), unless
+    ``ORACLE_INFER_COMPANY_DOMAINS`` (local development only) takes them from the members'
+    email addresses, public mail providers left out."""
+    from oracle.tenant_settings_api import get_setting
+
+    configured = {d.strip().lower().lstrip("@") for d in get_settings().iap_allowed_domains}
+    configured |= {str(d).strip().lower() for d in await get_setting(db, "company_email_domains")}
+    configured.discard("")
+    if configured or not get_settings().infer_company_domains:
+        return sorted(configured)
+    emails = await db.scalars(select(User.email).where(User.tenant_id == tenant_id))
+    found = {e.rpartition("@")[2].strip().lower() for e in emails if "@" in e}
+    return sorted(d for d in found if d and not is_public_mail_domain(d))
+
+
+async def company_shared_drives(db: AsyncSession) -> list[str]:
+    """The ids of the shared drives the owner listed as the company's (S5)."""
+    from oracle.tenant_settings_api import get_setting
+
+    return sorted({d["id"] for d in await get_setting(db, "company_shared_drives")})
+
+
+async def company_scope(db: AsyncSession, tenant_id: uuid.UUID) -> tuple[list[str], list[str]]:
+    """The company's email domains and shared drives, as a Google Docs sync reads them."""
+    return await company_domains(db, tenant_id), await company_shared_drives(db)
+
+
+# --- Narrowing without the provider (S5, owner 2026-10-20) ---------------------------
+#
+# Saving a narrower Google Docs allowlist, or narrower company Drive settings, deletes
+# (soft delete) what falls outside in the same request, judged from what Oracle stored:
+# no provider call, so it works with an expired connection or a paused source.
+#
+# Locks: the source row first (a save's FOR UPDATE, or FOR NO KEY UPDATE as a sync takes
+# it before its first item write and every checkpoint, oracle.sources.sync._hold), then
+# the items with SKIP LOCKED. A running sync holds the source row while it holds item
+# rows, so a save waits for its commit and then finds nothing locked; SKIP LOCKED keeps a
+# save from ever waiting on item rows all the same. A row skipped that way was written by
+# a sync that has not committed; that sync then finds the source changed at its next
+# hold, rolls back and runs tidy_drive_source, which deletes it.
+
+
+async def _lock_source(db: AsyncSession, source_id: uuid.UUID) -> Source | None:
+    """The source row, locked until the commit and loaded afresh (a sync may have saved
+    a checkpoint since it was read)."""
+    return await db.scalar(
+        select(Source)
+        .where(Source.id == source_id)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
+    )
+
+
+async def _live_items(db: AsyncSession, source_id: uuid.UUID) -> list[tuple[str, dict[str, Any]]]:
+    rows = await db.execute(
+        select(SourceItem.external_id, SourceItem.acl).where(
+            SourceItem.source_id == source_id, SourceItem.deleted_at.is_(None)
+        )
+    )
+    return [(r.external_id, r.acl) for r in rows]
+
+
+async def _hide_items(db: AsyncSession, source: Source, external_ids: set[str]) -> set[str]:
+    """Soft-delete these live items of ``source`` (versions kept; citations show 'source
+    removed') and drop them from its cursor, so a sync that finds them under the
+    allowlist again reads them again. Rows a running sync holds are skipped (see above).
+    Returns the ids deleted."""
+    if not external_ids:
+        return set()
+    rows = (
+        await db.execute(
+            select(SourceItem.id, SourceItem.external_id)
+            .where(
+                SourceItem.source_id == source.id,
+                SourceItem.external_id.in_(sorted(external_ids)),
+                SourceItem.deleted_at.is_(None),
+            )
+            .order_by(SourceItem.external_id)
+            .with_for_update(key_share=True, skip_locked=True)
+        )
+    ).all()
+    if not rows:
+        return set()
+    await db.execute(
+        update(SourceItem)
+        .where(SourceItem.id.in_([r.id for r in rows]))
+        .values(deleted_at=func.clock_timestamp(), deleted_xid=current_xid())
+        .execution_options(synchronize_session=False)
+    )
+    hidden = {r.external_id for r in rows}
+    source.cursor = google_docs.forget(source.cursor, hidden)
+    return hidden
+
+
+async def _apply_drive_edit(
+    db: AsyncSession,
+    source: Source,
+    old: dict[str, Any],
+    config: dict[str, Any],
+    *,
+    reconnect: bool,
+) -> None:
+    """Delete, now, the Google Docs source's items ``config`` no longer picks
+    (google_docs.outside_picks); the caller holds the source row (update_source). On a
+    new connection the next sync reads everything again, keeping which folder each doc
+    came from; otherwise the cursor stays (the folders are listed again since the
+    allowlist changed) and so does what the last sync said about what is still picked.
+    A change of display names alone changes nothing else."""
+    if not reconnect and _picks(old) == _picks(config):
+        return
+    old_folders, old_docs = google_docs.picked_ids(old)
+    new_folders, new_docs = google_docs.picked_ids(config)
+    removed = (old_folders | old_docs) - (new_folders | new_docs)
+    live = [external_id for external_id, _ in await _live_items(db, source.id)]
+    await _hide_items(db, source, google_docs.outside_picks(config, source.cursor, live, removed))
+    if reconnect:
+        tree = (source.cursor or {}).get("tree")
+        source.cursor = {"tree": tree} if tree else None
+        source.unavailable_items = []
+    else:
+        picked = new_folders | new_docs
+        keep = [n for n in source.unavailable_items or [] if n.get("external_id") in picked]
+        source.unavailable_items = keep
+        if source.cursor and source.cursor.get("notes"):
+            notes = [n for n in source.cursor["notes"] if n.get("external_id") in picked]
+            source.cursor = {**source.cursor, "notes": notes}
+
+
+async def tidy_drive_source(
+    db: AsyncSession, source_id: uuid.UUID, *, unknown_outside: bool = False
+) -> int:
+    """After a Google Docs sync stopped because its source or the company's Drive
+    settings changed: delete the live items that now fall outside (what the edit's save
+    could not, because the sync held their rows). Commits; returns how many.
+    ``unknown_outside``: also delete items whose drive and owner are not known; only after
+    a company narrowing (domains or shared drives), not a person's own edit."""
+    source = await _lock_source(db, source_id)
+    if source is None or source.kind != "google_docs":
+        await db.rollback()
+        return 0
+    items = await _live_items(db, source.id)
+    gone = google_docs.outside_picks(source.config or {}, source.cursor, [i for i, _ in items])
+    if get_settings().drive_docs_owned_outside == "skip":
+        domains, drives = await company_scope(db, source.tenant_id)
+        gone |= google_docs.outside_company(
+            source.config or {}, items, domains, drives, unknown_outside=unknown_outside
+        )
+    hidden = await _hide_items(db, source, gone)
+    await db.commit()
+    return len(hidden)
+
+
+async def hide_outside_company(
+    db: AsyncSession, tenant_id: uuid.UUID, before: tuple[list[str], list[str]]
+) -> int:
+    """After an owner changed the company's email domains or shared drives (``before``:
+    what they were): when that narrowed them, delete now, across every member's Google
+    Docs sources, the docs in picked folders that fall outside, judged from what each
+    item stored (google_docs.outside_company). One whose drive and owner are not known is
+    deleted too; the next sync reads it again if it is the company's. Nothing is deleted
+    when docs owned outside are pulled in and flagged (ORACLE_DRIVE_DOCS_OWNED_OUTSIDE).
+    Does not commit; returns how many were deleted."""
+    domains, drives = await company_scope(db, tenant_id)
+    narrowed = not set(before[0]) <= set(domains) or not set(before[1]) <= set(drives)
+    if not narrowed or get_settings().drive_docs_owned_outside != "skip":
+        return 0
+    sources = await db.scalars(
+        select(Source)
+        .where(Source.kind == "google_docs")
+        .order_by(Source.id)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
+    )
+    hidden = 0
+    for source in list(sources):
+        items = await _live_items(db, source.id)
+        gone = google_docs.outside_company(
+            source.config or {}, items, domains, drives, unknown_outside=True
+        )
+        hidden += len(await _hide_items(db, source, gone))
+    return hidden
+
+
+def _check_config(config: dict[str, Any]) -> None:
+    reserved = sorted(k for k in config if str(k).startswith("_"))
+    if reserved:
+        raise InvalidError(f"Unknown setting {reserved[0]!r}: names starting with _ are Oracle's")
+
+
 async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any]) -> Source:
     changes = dict(changes)
     base_version = changes.pop("base_version", None)
     if changes.get("config") is not None:
+        _check_config(changes["config"])
         changes = {**changes, "config": normalize_config(source.kind, changes["config"])}
     asks = "connection_id" in changes or changes.get("config") is not None
     if asks or base_version is not None:
@@ -330,16 +677,28 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
             await db.refresh(source, with_for_update=True)
             _check_base(source, base_version)  # another save may have landed meanwhile
             reconnect, reconfigure, narrowing = _what_changed(source, changes)
+        if narrowing:
+            # Nothing is asked of the provider (S5, owner 2026-10-20), so the connection
+            # may be expired; the shape and ids are still checked, offline.
+            _check_shape(source.kind, changes["config"])
         old_config = dict(source.config or {})
         connection_id = changes.get("connection_id", source.connection_id)
     else:
-        reconnect = reconfigure = False
+        reconnect = reconfigure = narrowing = False
     if reconnect or reconfigure:
         config = changes["config"] if reconfigure else source.config
-        if reconnect:
-            # Another connection may sign in to another account: its position in the
-            # old one means nothing. Start over (unchanged content writes no new version).
-            source.cursor = None
+        if source.kind == "google_docs":
+            # Google Docs narrows on save from its cursor's tree (which folder each doc
+            # came from), not from item provenance: it has no ``scope``, so _sweep below
+            # does nothing for it. Its cursor stays for a new allowlist (the folders are
+            # listed again when the allowlist changes); a new connection keeps the tree.
+            await _apply_drive_edit(db, source, old_config, config, reconnect=reconnect)
+        else:
+            if reconnect:
+                # Another connection may sign in to another account: its position in the
+                # old one means nothing. Start over (unchanged content writes no version).
+                source.cursor = None
+            source.unavailable_items = []
         source.connection_id = connection_id
         source.config = config
         if reconfigure:
@@ -352,8 +711,10 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         # fingerprint, oracle.sources.sync), sweeps again (nothing left by then) and asks
         # the connector how much of the cursor still holds (rescope_cursor), so it only
         # re-reads what remains. A sync running now keeps none of what it reads from here
-        # on (its writes are conditional).
-        if source.status in ("error", "needs_attention"):
+        # on (it holds the row before each write and finds the source changed).
+        if source.status == "needs_attention" or (source.status == "error" and not narrowing):
+            # An error was checked with the provider just now; a pure narrowing asked it
+            # nothing, so an error (a rejected connection) still stands.
             source.status = "active"
             source.last_error = None
     name = changes.get("name")
@@ -393,17 +754,20 @@ def _what_changed(source: Source, changes: dict[str, Any]) -> tuple[bool, bool, 
 
 
 def _only_narrows(kind: str, old: dict[str, Any] | None, new: dict[str, Any]) -> bool:
+    """The one rule for a pure narrowing, whatever the kind: the connector's ``narrows``
+    when it has one (Fireflies, Google Docs), else its ``scope`` of each config compared
+    by base.scope_narrows. A kind with neither never narrows without the provider."""
     connector = connector_for(kind)
+    narrows = getattr(connector, "narrows", None)
     scope = getattr(connector, "scope", None)
-    if scope is None:
-        return False
     try:
-        narrows = getattr(connector, "narrows", None)
         if narrows is not None:
             return bool(narrows(dict(old or {}), new))
-        return base.scope_narrows(scope(dict(old or {})), scope(new))
+        if scope is not None:
+            return base.scope_narrows(scope(dict(old or {})), scope(new))
     except base.ConnectorConfigError:
         return False  # saved before a rule it now breaks, or refused now: validate
+    return False
 
 
 async def _sweep(

@@ -99,7 +99,7 @@ def test_chains_on_the_refinement_batch_head():
     assert script.get_revision("0018_runtime_features").down_revision == REVISION
     assert script.get_revision("0019_citation_confidence").down_revision == "0018_runtime_features"
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
-    assert script.get_revision("0014_review").down_revision == "0017_source_config_version"
+    assert script.get_revision("0014_review").down_revision == "0018_source_unavailable_items"
 
 
 def test_an_oracle_citation_inserts_after_upgrade(scratch_db):

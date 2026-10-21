@@ -74,7 +74,7 @@ def test_the_migration_follows_0015_and_precedes_0014_intake():
         script.get_revision("0017_citation_source_oracle").down_revision == "0016_refinement_batch"
     )
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
-    assert script.get_revision("0014_review").down_revision == "0017_source_config_version"
+    assert script.get_revision("0014_review").down_revision == "0018_source_unavailable_items"
 
 
 def _constraint(t, key: str, attrs: dict) -> uuid.UUID:

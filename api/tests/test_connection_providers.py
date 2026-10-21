@@ -106,6 +106,8 @@ async def test_fireflies_graphql_user():
 
 async def test_google_userinfo():
     def handler(request):
+        if request.url.path == "/tokeninfo":
+            return httpx.Response(200, json={"scope": "openid email"})
         assert request.url.path == "/v1/userinfo"
         if bearer(request) != "Bearer good":
             return httpx.Response(401)

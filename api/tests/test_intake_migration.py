@@ -53,7 +53,7 @@ def test_0014_intake_chains_after_mains_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
     # The PRD review chain (0014_review ... 0014_member_follow_up_retry) chains on it.
-    assert script.get_revision("0014_review").down_revision == "0017_source_config_version"
+    assert script.get_revision("0014_review").down_revision == "0018_source_unavailable_items"
     assert script.get_heads() == ["0014_member_follow_up_retry"]
 
 

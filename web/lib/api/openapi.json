@@ -4984,6 +4984,39 @@
         ]
       }
     },
+    "/v1/connections/google/picker-config": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "Google Picker Config",
+        "description": "Client id, Cloud project number and browser API key for Google's Drive picker.\nNever the client secret or anyone's token.",
+        "operationId": "google_picker_config",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PickerConfigOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The Drive picker is not configured"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
     "/v1/connections/{provider}/token": {
       "post": {
         "tags": [
@@ -5485,6 +5518,186 @@
           },
           "429": {
             "description": "GitHub is rate limiting, or this connection searched too often; retry after Retry-After seconds"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/connections/{connection_id}/google/files": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "List Google Drive Files",
+        "description": "List the Google Docs and folders in your Google Drive (and shared drives) that a\nGoogle Docs source can pick: by name, or inside one folder, most recently modified\nfirst. Each has the id to put in a source's ``docs`` or ``folders``.\n\nRead through your own Google connection. Answers are cached for a minute, and you\nmay search Drive a limited number of times a minute.",
+        "operationId": "list_google_drive_files",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Text the name contains",
+              "default": "",
+              "title": "Q"
+            },
+            "description": "Text the name contains"
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A folder id: list what is in it",
+              "title": "Folder"
+            },
+            "description": "A folder id: list what is in it"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriveFilePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "folder is not a Drive folder id"
+          },
+          "403": {
+            "description": "Not a person (an API token without a user), or a read-only credential (oracle:read)"
+          },
+          "404": {
+            "description": "Not one of your Google connections"
+          },
+          "409": {
+            "description": "The connection needs reconnecting (or lacks Drive access)"
+          },
+          "429": {
+            "description": "Drive is rate limiting, or you searched too often; retry after Retry-After seconds"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/connections/{connection_id}/google/shared-drives": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "List Google Shared Drives",
+        "description": "The Google shared drives your Google connection can see, for an owner choosing the\ncompany's shared drives (the ``company_shared_drives`` setting, S5): docs in a picked\nfolder in any other shared drive are skipped. At most :data:`MAX_SHARED_DRIVES`.",
+        "operationId": "list_google_shared_drives",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedDriveList"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a person (an API token without a user), or a read-only credential (oracle:read)"
+          },
+          "404": {
+            "description": "Not one of your Google connections"
+          },
+          "409": {
+            "description": "The connection needs reconnecting (or lacks Drive access)"
+          },
+          "429": {
+            "description": "Drive is rate limiting, or you asked too often"
           },
           "422": {
             "description": "Validation Error",
@@ -29348,6 +29561,17 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "reconnect_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconnect Reason"
           }
         },
         "type": "object",
@@ -29453,6 +29677,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "reconnect_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconnect Reason"
           }
         },
         "type": "object",
@@ -30905,6 +31140,103 @@
           "detail"
         ],
         "title": "DriftEntry"
+      },
+      "DriveFileOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "doc",
+              "folder"
+            ],
+            "title": "Kind"
+          },
+          "modified_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modified Time"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "in_shared_drive": {
+            "type": "boolean",
+            "title": "In Shared Drive"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "modified_time",
+          "url",
+          "owner",
+          "in_shared_drive"
+        ],
+        "title": "DriveFileOut"
+      },
+      "DriveFilePage": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/DriveFileOut"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files",
+          "next_cursor"
+        ],
+        "title": "DriveFilePage"
       },
       "EdgeCreate": {
         "properties": {
@@ -42035,6 +42367,30 @@
         ],
         "title": "PackOut"
       },
+      "PickerConfigOut": {
+        "properties": {
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "app_id": {
+            "type": "string",
+            "title": "App Id"
+          },
+          "developer_key": {
+            "type": "string",
+            "title": "Developer Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_id",
+          "app_id",
+          "developer_key"
+        ],
+        "title": "PickerConfigOut",
+        "description": "What the browser needs to open Google's Drive picker. All of it is public."
+      },
       "Pinned": {
         "properties": {
           "version": {
@@ -50017,6 +50373,40 @@
         ],
         "title": "SettingOut"
       },
+      "SharedDriveList": {
+        "properties": {
+          "drives": {
+            "items": {
+              "$ref": "#/components/schemas/SharedDriveOut"
+            },
+            "type": "array",
+            "title": "Drives"
+          }
+        },
+        "type": "object",
+        "required": [
+          "drives"
+        ],
+        "title": "SharedDriveList"
+      },
+      "SharedDriveOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "SharedDriveOut"
+      },
       "SharingBulkIn": {
         "properties": {
           "changes": {
@@ -50577,6 +50967,24 @@
             "type": "boolean",
             "title": "Connector Available",
             "default": true
+          },
+          "unavailable_items": {
+            "items": {
+              "$ref": "#/components/schemas/UnavailableItem"
+            },
+            "type": "array",
+            "title": "Unavailable Items"
+          },
+          "reconnect_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconnect Reason"
           }
         },
         "type": "object",
@@ -51885,6 +52293,13 @@
               }
             ],
             "title": "Error"
+          },
+          "unavailable": {
+            "items": {
+              "$ref": "#/components/schemas/UnavailableItem"
+            },
+            "type": "array",
+            "title": "Unavailable"
           },
           "source": {
             "$ref": "#/components/schemas/SourceOut"
@@ -55671,6 +56086,46 @@
         ],
         "title": "TrackerRecordsImport",
         "description": "Engineering status as read from a tracker, posted by an approver (an export, the\nCLI, an MCP client acting for them; not a run's token). Oracle stores it; it never\nwrites back."
+      },
+      "UnavailableItem": {
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unavailable",
+              "skipped",
+              "flagged",
+              "limited"
+            ],
+            "title": "Status",
+            "default": "unavailable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "external_id",
+          "reason"
+        ],
+        "title": "UnavailableItem"
       },
       "UploadResult": {
         "properties": {

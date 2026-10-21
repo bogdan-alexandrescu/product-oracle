@@ -1,7 +1,9 @@
 """Settings, read from the environment (prefix ``ORACLE_``) or a ``.env`` file."""
 
 from functools import lru_cache
+from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,6 +37,24 @@ class Settings(BaseSettings):
     # (oracle-ticker@<project>.iam.gserviceaccount.com). Either empty = off (404).
     ticker_audience: str = ""
     ticker_service_account: str = ""
+    # Google's Drive picker (Settings > Sources, Google Docs): the Cloud project number
+    # of Oracle's Google OAuth client, and a browser API key restricted to Oracle's web
+    # origin and the Picker API. The key is public by design (the browser sends it to
+    # Google) but is never logged. Either empty: the picker is off (404).
+    google_picker_app_id: str = ""
+    google_picker_api_key: SecretStr = SecretStr("")
+    # Local development only: with no company email domains set (ORACLE_IAP_ALLOWED_DOMAINS
+    # or the owner's company_email_domains setting), take them from the members' email
+    # addresses. Off, the outside-owner check of Drive folders fails closed. S5 (owner,
+    # 2026-10-20): never inferred in production.
+    infer_company_domains: bool = False
+    # A Google Doc inside a picked Drive folder whose owner's email domain is not one of
+    # the company's (ORACLE_IAP_ALLOWED_DOMAINS and company_email_domains), or that is in
+    # a shared drive not on company_shared_drives:
+    # "skip" leaves it out and lists it on the source as 'Skipped: owned outside
+    # <domain>'; "include_and_flag" pulls it in and lists it as 'Owned outside <domain>'.
+    # Docs picked one by one are always pulled in. Owner, 2026-10-20 (S5): skip.
+    drive_docs_owned_outside: Literal["skip", "include_and_flag"] = "skip"
     # Two-way tracker sync (E1, CR-11): Oracle writing epics and issues to Linear or Jira.
     # Off, and stays off until a connector is verified end to end on an authorized
     # account; with it off Oracle makes no tracker writes and the read-only alignment

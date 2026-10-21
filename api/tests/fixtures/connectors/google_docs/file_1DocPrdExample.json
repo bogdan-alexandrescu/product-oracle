@@ -1,0 +1,34 @@
+{
+  "id": "1DocPrdExample",
+  "name": "Onboarding v2 PRD",
+  "mimeType": "application/vnd.google-apps.document",
+  "trashed": false,
+  "webViewLink": "https://docs.google.com/document/d/1DocPrdExample/edit",
+  "createdTime": "2026-09-01T09:00:00.000Z",
+  "modifiedTime": "2026-10-02T10:00:00.000Z",
+  "shared": true,
+  "owners": [
+    {
+      "displayName": "Ada Example",
+      "emailAddress": "ada@example.com"
+    }
+  ],
+  "lastModifyingUser": {
+    "displayName": "Lin Example",
+    "emailAddress": "lin@example.com"
+  },
+  "permissions": [
+    {
+      "type": "user",
+      "role": "owner",
+      "emailAddress": "ada@example.com",
+      "displayName": "Ada Example"
+    },
+    {
+      "type": "domain",
+      "role": "reader",
+      "domain": "example.com",
+      "displayName": "Example Co"
+    }
+  ]
+}
