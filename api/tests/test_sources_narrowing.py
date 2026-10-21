@@ -24,7 +24,7 @@ from oracle.sources.connectors.slack import SlackConnector
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
 from oracle.tenancy import tenant_session
 from tests.slack_world import SlackWorld, ts
-from tests.sources_helpers import client_for, make_connection, make_user
+from tests.sources_helpers import client_for, make_connection, make_user, patch_source
 
 
 class GithubWorld:
@@ -111,7 +111,7 @@ async def sync(a, source: dict) -> dict:
 async def narrow(a, source: dict, config: dict) -> list[str]:
     """Save a new config; what the save itself deleted."""
     before = set(await removed(a, source))
-    resp = await a.patch(f"/v1/sources/{source['id']}", json={"config": config})
+    resp = await patch_source(a, source["id"], {"config": config})
     assert resp.status_code == 200, resp.text
     return sorted(set(await removed(a, source)) - before)
 

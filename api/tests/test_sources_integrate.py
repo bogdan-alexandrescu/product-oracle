@@ -18,7 +18,7 @@ from oracle.sources.connectors.slack import SlackConnector
 from oracle.sources.models import Source, SourceItem
 from oracle.tenancy import tenant_session
 from tests.slack_world import SlackWorld, ts
-from tests.sources_helpers import client_for, make_connection, make_user
+from tests.sources_helpers import client_for, make_connection, make_user, patch_source
 
 BOTH = ["C0PRODUCT", "C0ROADMAP"]
 PRICING = f"C0PRODUCT:{ts('2025-10-05')}"
@@ -79,7 +79,7 @@ async def sync(a, source: dict, outcome: str = "completed") -> dict:
 
 
 async def patch(a, source: dict, body: dict) -> dict:
-    resp = await a.patch(f"/v1/sources/{source['id']}", json=body)
+    resp = await patch_source(a, source["id"], body)
     assert resp.status_code == 200, resp.text
     return resp.json()
 

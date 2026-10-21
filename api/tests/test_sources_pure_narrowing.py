@@ -27,6 +27,7 @@ from tests.connection_helpers import (
 )
 from tests.connectors.test_notion import CHILD, DB, GRAND, ROW1, ROW2, FakeNotion, full_routes
 from tests.fireflies_fake import API_KEY, PLANNING_CAL, SAMPLE, STANDUP_CAL, FakeFireflies
+from tests.sources_helpers import patch_source
 
 STANDUP = f"cal:{STANDUP_CAL}"
 PLANNING = f"cal:{PLANNING_CAL}"
@@ -104,9 +105,7 @@ async def test_fireflies_narrowing_with_an_expired_connection_saves_and_sweeps(
     await _break_connection(tenant_id, ff_conn.id)
     fake.requests.clear()
 
-    resp = await client.patch(
-        f"/v1/sources/{sid}", headers=alice.headers, json={"config": NARROW_FF}
-    )
+    resp = await patch_source(client, sid, {"config": NARROW_FF}, headers=alice.headers)
     assert resp.status_code == 200, resp.text
     assert fake.requests == []
     live = await _live(tenant_id, sid)
@@ -121,9 +120,7 @@ async def test_fireflies_narrowing_during_a_provider_outage_saves_and_sweeps(
     fake.error = httpx.Response(503, text="Service Unavailable")
     fake.requests.clear()
 
-    resp = await client.patch(
-        f"/v1/sources/{sid}", headers=alice.headers, json={"config": NARROW_FF}
-    )
+    resp = await patch_source(client, sid, {"config": NARROW_FF}, headers=alice.headers)
     assert resp.status_code == 200, resp.text
     assert fake.requests == []
     live = await _live(tenant_id, sid)
@@ -135,7 +132,7 @@ async def test_fireflies_widening_still_needs_a_working_connection(
 ):
     sid = await _create(client, alice, "fireflies", ff_conn, NARROW_FF)
     await _break_connection(tenant_id, ff_conn.id)
-    resp = await client.patch(f"/v1/sources/{sid}", headers=alice.headers, json={"config": WIDE_FF})
+    resp = await patch_source(client, sid, {"config": WIDE_FF}, headers=alice.headers)
     assert resp.status_code >= 400
     assert await _config(client, alice, sid) == NARROW_FF
 
@@ -147,14 +144,12 @@ async def test_fireflies_a_stale_rename_with_the_old_wide_config_is_validated(
     config) with a new name. It widens, so it is validated like any widening: with the
     connection gone it is refused and the narrowing stands."""
     sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
-    saved = await client.patch(
-        f"/v1/sources/{sid}", headers=alice.headers, json={"config": NARROW_FF}
-    )
+    saved = await patch_source(client, sid, {"config": NARROW_FF}, headers=alice.headers)
     assert saved.status_code == 200, saved.text
     await _break_connection(tenant_id, ff_conn.id)
 
-    stale = await client.patch(
-        f"/v1/sources/{sid}", headers=alice.headers, json={"name": "Renamed", "config": WIDE_FF}
+    stale = await patch_source(
+        client, sid, {"name": "Renamed", "config": WIDE_FF}, headers=alice.headers
     )
     assert stale.status_code >= 400, stale.text
     assert await _config(client, alice, sid) == NARROW_FF
@@ -187,9 +182,7 @@ async def test_notion_narrowing_with_an_expired_connection_saves_and_sweeps(
     await _break_connection(tenant_id, notion_conn.id)
     notion_fake.requests.clear()
 
-    resp = await client.patch(
-        f"/v1/sources/{sid}", headers=alice.headers, json={"config": {"roots": [CHILD]}}
-    )
+    resp = await patch_source(client, sid, {"config": {"roots": [CHILD]}}, headers=alice.headers)
     assert resp.status_code == 200, resp.text
     assert notion_fake.requests == []
     live = await _live(tenant_id, sid)
@@ -204,9 +197,7 @@ async def test_notion_narrowing_during_a_provider_outage_saves_and_sweeps(
     monkeypatch.setitem(base._registry, "notion", NotionConnector(client=down))
     notion_fake.requests.clear()
 
-    resp = await client.patch(
-        f"/v1/sources/{sid}", headers=alice.headers, json={"config": {"roots": [CHILD]}}
-    )
+    resp = await patch_source(client, sid, {"config": {"roots": [CHILD]}}, headers=alice.headers)
     assert resp.status_code == 200, resp.text
     assert await _live(tenant_id, sid) == {CHILD: True, GRAND: True, ROW1: False, ROW2: False}
 
@@ -216,8 +207,8 @@ async def test_notion_adding_a_root_still_needs_a_working_connection(
 ):
     sid = await _create(client, alice, "notion", notion_conn, {"roots": [CHILD]})
     await _break_connection(tenant_id, notion_conn.id)
-    resp = await client.patch(
-        f"/v1/sources/{sid}", headers=alice.headers, json={"config": {"roots": [CHILD, DB]}}
+    resp = await patch_source(
+        client, sid, {"config": {"roots": [CHILD, DB]}}, headers=alice.headers
     )
     assert resp.status_code >= 400
     assert await _config(client, alice, sid) == {"roots": [CHILD]}
@@ -227,25 +218,21 @@ async def test_notion_a_stale_rename_with_the_old_wide_config_is_validated(
     client, tenant_id, alice, notion_fake, notion_conn
 ):
     sid = await _create(client, alice, "notion", notion_conn, {"roots": [CHILD, DB]})
-    saved = await client.patch(
-        f"/v1/sources/{sid}", headers=alice.headers, json={"config": {"roots": [CHILD]}}
-    )
+    saved = await patch_source(client, sid, {"config": {"roots": [CHILD]}}, headers=alice.headers)
     assert saved.status_code == 200, saved.text
     wide = {"name": "Renamed", "config": {"roots": [CHILD, DB]}}
 
     # Healthy connection: the widening is validated against Notion (the user's call).
     notion_fake.requests.clear()
-    ok = await client.patch(f"/v1/sources/{sid}", headers=alice.headers, json=wide)
+    ok = await patch_source(client, sid, wide, headers=alice.headers)
     assert ok.status_code == 200, ok.text
     assert "GET /users/me" in notion_fake.requests
 
     # Narrow again, lose the connection, then the stale form arrives: refused.
-    again = await client.patch(
-        f"/v1/sources/{sid}", headers=alice.headers, json={"config": {"roots": [CHILD]}}
-    )
+    again = await patch_source(client, sid, {"config": {"roots": [CHILD]}}, headers=alice.headers)
     assert again.status_code == 200, again.text
     await _break_connection(tenant_id, notion_conn.id)
-    stale = await client.patch(f"/v1/sources/{sid}", headers=alice.headers, json=wide)
+    stale = await patch_source(client, sid, wide, headers=alice.headers)
     assert stale.status_code >= 400, stale.text
     assert await _config(client, alice, sid) == {"roots": [CHILD]}
     live = await _live(tenant_id, sid)
@@ -333,18 +320,17 @@ async def test_a_stale_save_with_an_old_base_version_is_refused_and_changes_noth
     sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
     opened = (await _get(client, alice, sid))["config_version"]
     assert opened == 1
-    narrowed = await client.patch(
-        f"/v1/sources/{sid}",
-        headers=alice.headers,
-        json={"config": NARROW_FF, "base_version": opened},
+    narrowed = await patch_source(
+        client, sid, {"config": NARROW_FF, "base_version": opened}, headers=alice.headers
     )
     assert narrowed.status_code == 200, narrowed.text
     assert narrowed.json()["config_version"] == opened + 1
 
-    stale = await client.patch(
-        f"/v1/sources/{sid}",
+    stale = await patch_source(
+        client,
+        sid,
+        {"name": "Renamed", "config": WIDE_FF, "base_version": opened},
         headers=alice.headers,
-        json={"name": "Renamed", "config": WIDE_FF, "base_version": opened},
     )
     assert stale.status_code == 409, stale.text
     assert stale.json() == STALE
@@ -361,28 +347,140 @@ async def test_a_save_with_the_matching_base_version_is_applied(
 ):
     sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
     version = (await _get(client, alice, sid))["config_version"]
-    renamed = await client.patch(
-        f"/v1/sources/{sid}",
-        headers=alice.headers,
-        json={"name": "Renamed", "base_version": version},
+    renamed = await patch_source(
+        client, sid, {"name": "Renamed", "base_version": version}, headers=alice.headers
     )
     assert renamed.status_code == 200, renamed.text
     assert renamed.json()["name"] == "Renamed"
     assert renamed.json()["config_version"] == version + 1
 
 
-async def test_a_save_without_a_base_version_is_last_write_wins(
+REQUIRED = {
+    "code": "base_version_required",
+    "message": "Say which version of the source you read (base_version); get it from the source.",
+}
+
+
+async def test_a_config_change_without_a_base_version_is_refused(
+    client, tenant_id, alice, fake, ff_connector, ff_conn
+):
+    """Owner 2026-10-20: base_version is required wherever config or connection change."""
+    sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
+    before = await _get(client, alice, sid)
+    for body in (
+        {"config": NARROW_FF},
+        {"name": "Renamed", "config": NARROW_FF},
+        {"connection_id": str(ff_conn.id)},
+    ):
+        resp = await client.patch(f"/v1/sources/{sid}", headers=alice.headers, json=body)
+        assert resp.status_code == 422, (body, resp.text)
+        assert resp.json() == REQUIRED
+    assert await _get(client, alice, sid) == before
+
+
+async def test_a_rename_and_a_pause_need_no_base_version(
     client, tenant_id, alice, fake, ff_connector, ff_conn
 ):
     sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
-    for config in (NARROW_FF, WIDE_FF):
-        saved = await client.patch(
-            f"/v1/sources/{sid}", headers=alice.headers, json={"config": config}
+    version = (await _get(client, alice, sid))["config_version"]
+    renamed = await client.patch(
+        f"/v1/sources/{sid}", headers=alice.headers, json={"name": "Renamed"}
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["config_version"] == version + 1
+    assert (await client.post(f"/v1/sources/{sid}/pause", headers=alice.headers)).status_code == 200
+    assert (
+        await client.post(f"/v1/sources/{sid}/resume", headers=alice.headers)
+    ).status_code == 200
+
+
+async def test_a_rename_with_a_stale_base_version_is_still_checked(
+    client, tenant_id, alice, fake, ff_connector, ff_conn
+):
+    sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
+    stale = await client.patch(
+        f"/v1/sources/{sid}", headers=alice.headers, json={"name": "Renamed", "base_version": 99}
+    )
+    assert stale.status_code == 409, stale.text
+    assert stale.json() == STALE
+    assert (await _get(client, alice, sid))["name"] == "My fireflies"
+
+
+async def test_a_rename_without_a_lock_adds_one_to_the_current_version(
+    tenant_id, alice, notion_conn
+):
+    """The rename-only path takes no lock: it must bump the version the row has now, not
+    the one read at request start (that would hand two versions the same number)."""
+    async with tenant_session(tenant_id) as first, tenant_session(tenant_id) as second:
+        created = await service.create_source(
+            first,
+            alice.id,
+            kind="notion",
+            name="Handbook",
+            connection_id=notion_conn.id,
+            config={"roots": [CHILD]},
         )
-        assert saved.status_code == 200, saved.text
-    after = await _get(client, alice, sid)
-    assert after["config"] == WIDE_FF
-    assert after["config_version"] == 3
+        stale = await service.get_source(second, alice.id, created.id)
+        await service.update_source(first, created, {"name": "One"})
+        await service.update_source(second, stale, {"name": "Two"})
+    async with tenant_session(tenant_id) as check:
+        row = await service.get_source(check, alice.id, created.id)
+        assert row.name == "Two"
+        assert row.config_version == 3
+
+
+async def test_a_save_that_lands_during_validation_is_refused(
+    tenant_id, alice, notion_fake, notion_conn, monkeypatch
+):
+    """The second base check: validating a widening reads the provider with the lock
+    released, so another save can land meanwhile. It is checked again afterwards."""
+    async with tenant_session(tenant_id) as first, tenant_session(tenant_id) as second:
+        created = await service.create_source(
+            first,
+            alice.id,
+            kind="notion",
+            name="Handbook",
+            connection_id=notion_conn.id,
+            config={"roots": [CHILD]},
+        )
+        mine = await service.get_source(second, alice.id, created.id)
+        real = service._validate
+
+        async def validate_then_a_rival_saves(db, kind, config, conn):
+            await real(db, kind, config, conn)
+            await service.update_source(first, created, {"name": "Rival"})
+
+        monkeypatch.setattr(service, "_validate", validate_then_a_rival_saves)
+        with pytest.raises(service.StaleError):
+            await service.update_source(
+                second, mine, {"config": {"roots": [CHILD, DB]}, "base_version": 1}
+            )
+        await second.rollback()
+    async with tenant_session(tenant_id) as check:
+        row = await service.get_source(check, alice.id, created.id)
+        assert row.config == {"roots": [CHILD]}
+        assert row.name == "Rival"
+        assert row.config_version == 2
+
+
+async def test_a_save_that_changes_nothing_does_not_bump_the_version(
+    client, tenant_id, alice, fake, ff_connector, ff_conn
+):
+    sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
+    before = await _get(client, alice, sid)
+    same = await client.patch(
+        f"/v1/sources/{sid}",
+        headers=alice.headers,
+        json={
+            "name": before["name"],
+            "config": WIDE_FF,
+            "connection_id": str(ff_conn.id),
+            "base_version": before["config_version"],
+        },
+    )
+    assert same.status_code == 200, same.text
+    assert same.json()["config_version"] == before["config_version"]
+    assert (await _get(client, alice, sid))["config_version"] == before["config_version"]
 
 
 async def test_a_sync_and_a_pause_do_not_bump_the_config_version(
@@ -396,9 +494,7 @@ async def test_a_sync_and_a_pause_do_not_bump_the_config_version(
     await client.post(f"/v1/sources/{sid}/resume", headers=alice.headers)
     assert (await _get(client, alice, sid))["config_version"] == version
     # A form opened before the sync still saves.
-    saved = await client.patch(
-        f"/v1/sources/{sid}",
-        headers=alice.headers,
-        json={"config": NARROW_FF, "base_version": version},
+    saved = await patch_source(
+        client, sid, {"config": NARROW_FF, "base_version": version}, headers=alice.headers
     )
     assert saved.status_code == 200, saved.text

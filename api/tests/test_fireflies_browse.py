@@ -33,7 +33,7 @@ from tests.fireflies_fake import (
     meeting,
     rate_limited,
 )
-from tests.sources_helpers import client_for, make_connection, make_user
+from tests.sources_helpers import client_for, make_connection, make_user, patch_source
 
 STANDUP = f"cal:{STANDUP_CAL}"
 PLANNING = f"cal:{PLANNING_CAL}"
@@ -204,9 +204,8 @@ async def test_picked_source_syncs_and_drops_what_is_unpicked(
         }
 
         # Unpick the interview, add the planning series.
-        resp = await a.patch(
-            f"/v1/sources/{source['id']}",
-            json={"config": {"mode": "selected", "series": [STANDUP, PLANNING]}},
+        resp = await patch_source(
+            a, source["id"], {"config": {"mode": "selected", "series": [STANDUP, PLANNING]}}
         )
         assert resp.status_code == 200, resp.text
         # The unpicked interview went on save (owner 2026-10-20), not on the next sync.
@@ -306,7 +305,7 @@ async def test_narrowing_deletes_what_falls_outside(
         stored = {i for i, live in (await _items(tenant_id, source_id)).items() if live}
         assert kept < stored
 
-        resp = await a.patch(f"/v1/sources/{source_id}", json={"config": after})
+        resp = await patch_source(a, source_id, {"config": after})
         assert resp.status_code == 200, resp.text
         # On save (owner 2026-10-20) what the date range leaves out; the picks, which only
         # Fireflies can tell, on the next sync's full pass.
@@ -503,8 +502,8 @@ async def test_a_full_pass_on_a_broken_answer_keeps_the_items(
         source_id = resp.json()["id"]
         assert (await a.post(f"/v1/sources/{source_id}/sync")).json()["outcome"] == "completed"
         # A config change makes the next sync a full pass, which prunes.
-        resp = await a.patch(
-            f"/v1/sources/{source_id}", json={"config": {"mode": "all", "date_from": "2026-01-01"}}
+        resp = await patch_source(
+            a, source_id, {"config": {"mode": "all", "date_from": "2026-01-01"}}
         )
         assert resp.status_code == 200, resp.text
         for broken in (
@@ -1028,7 +1027,7 @@ async def _picked(a, conn, config):
 async def _save(a, fake, source, config):
     """PATCH the config; what Fireflies was asked for meetings meanwhile."""
     fake.requests.clear()
-    resp = await a.patch(f"/v1/sources/{source['id']}", json={"config": config})
+    resp = await patch_source(a, source["id"], {"config": config})
     assert resp.status_code == 200, resp.text
     return fake.list_variables(), fake.detail_ids()
 

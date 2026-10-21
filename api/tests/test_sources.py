@@ -20,6 +20,7 @@ from tests.sources_helpers import (
     make_connection,
     make_user,
     message,
+    patch_source,
 )
 
 
@@ -162,14 +163,14 @@ async def test_patch_pause_resume_delete(a, tenant_id, alice, slack):
     slack.pages = [[message("m1", "hello")]]
     await _sync(a, src["id"])
 
-    resp = await a.patch(f"/v1/sources/{src['id']}", json={"name": "Renamed"})
+    resp = await patch_source(a, src["id"], {"name": "Renamed"})
     assert resp.status_code == 200 and resp.json()["name"] == "Renamed"
     async with tenant_session(tenant_id) as s:
         assert position((await s.get(Source, src["id"])).cursor) == {"page": 1}
 
     # A new allowlist starts the next sync from the beginning (a connector without
     # rescope_cursor gets no cursor).
-    resp = await a.patch(f"/v1/sources/{src['id']}", json={"config": {"channels": ["C2"]}})
+    resp = await patch_source(a, src["id"], {"config": {"channels": ["C2"]}})
     assert resp.status_code == 200 and resp.json()["config"] == {"channels": ["C2"]}
     await _sync(a, src["id"])
     assert slack.calls[-1]["cursor"] is None

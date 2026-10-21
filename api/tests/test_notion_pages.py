@@ -33,6 +33,7 @@ from tests.connectors.test_notion import (
     fixture,
     full_routes,
 )
+from tests.sources_helpers import patch_source
 
 TOKEN = "ntn_example"
 
@@ -233,9 +234,7 @@ async def test_narrowing_a_notion_source_deletes_pages_outside_it(
     first = await client.post(f"/v1/sources/{sid}/sync", headers=alice.headers)
     assert first.json()["upserted"] == len({CHILD, GRAND, ROW1, ROW2}), first.text
 
-    patched = await client.patch(
-        f"/v1/sources/{sid}", headers=alice.headers, json={"config": {"roots": [CHILD]}}
-    )
+    patched = await patch_source(client, sid, {"config": {"roots": [CHILD]}}, headers=alice.headers)
     assert patched.status_code == 200, patched.text
     second = await client.post(f"/v1/sources/{sid}/sync", headers=alice.headers)
     assert second.json()["outcome"] == "completed", second.text
@@ -269,9 +268,7 @@ async def test_unticking_a_root_deletes_its_pages_on_save_without_reading_notion
     assert first.json()["outcome"] == "completed", first.text
 
     seen = len(notion_connector.requests)
-    patched = await client.patch(
-        f"/v1/sources/{sid}", headers=alice.headers, json={"config": {"roots": [CHILD]}}
-    )
+    patched = await patch_source(client, sid, {"config": {"roots": [CHILD]}}, headers=alice.headers)
     assert patched.status_code == 200, patched.text
     # Only the root check of validating: no page, block or database content is read.
     assert not [r for r in notion_connector.requests[seen:] if "/children" in r or "query" in r]
