@@ -158,7 +158,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * (30 goals, 50 more active runs, questions asked of the signed-in member); "suggestions" as the
  * default company plus a PRD with three open Oracle suggestions (fleet-next); "big-prd" adds a PRD
  * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts); "revoke-failures" as the
- * default company plus two provider revokes a removed member's disable could not make (C2).
+ * default company plus two provider revokes a removed member's disable could not make (C2);
+ * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
+ * next tick (recorded, the decide call answers 503; ./runs.ts).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -647,7 +649,8 @@ function withInboxStates(
   db.inbox_seen ??= {};
   const seen = db.inbox_seen[me.id] ?? null;
   if (markSeen) db.inbox_seen[me.id] = now();
-  if (!atLeast(me.role, "approver")) return { ...base, last_seen_at: seen };
+  // Decisions not delivered yet show to the review's approver role and above, as the API.
+  if (!atLeast(me.role, "approver")) return { ...base, deliveries: [], last_seen_at: seen };
   const states = inboxStates(llm, seen);
   // Open feedback per document comes from ./runs.ts (staged items left out there); its
   // items carry their state here.
@@ -715,6 +718,8 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
   return {
     db: db.runs,
     userId: db.user_id,
+    userName: db.session ?? db.members.find((m) => m.id === db.user_id)?.email ?? null,
+    undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     feedback: db.feedback,
     documents: db.documents,
     suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,

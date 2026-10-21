@@ -102,6 +102,21 @@ export function usd(value: number | null | undefined): string {
 /** A run's short id, as B1 shows it ("0412"). */
 export const shortId = (id: string) => id.replace(/-/g, "").slice(0, 4);
 
+/**
+ * A decision recorded in Oracle that SwarmCloud has not taken yet (owner, 2026-10-20): final,
+ * and sent again on every tick until it is delivered. "Approved by <name>, delivering to the
+ * run… (N tries, last: <error>)".
+ */
+export function deliveryText(cp: Pick<CheckpointOut, "status" | "delivery">): string {
+  const d = cp.delivery;
+  if (!d) return "";
+  const verb = cp.status === "approved" ? "Approved" : "Changes requested";
+  const by = d.decided_by_name ? ` by ${d.decided_by_name}` : "";
+  const tries = d.tries ?? 0;
+  const tried = tries > 0 ? ` (${tries} ${tries === 1 ? "try" : "tries"}${d.last_error ? `, last: ${d.last_error}` : ""})` : "";
+  return `${verb}${by}, delivering to the run…${tried}`;
+}
+
 /** "12m", "3h", "2d": how long an item has waited. */
 export function age(iso: string | null | undefined, now = Date.now()): string {
   if (!iso) return "–";

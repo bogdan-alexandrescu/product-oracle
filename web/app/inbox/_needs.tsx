@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
 import { Button, Chip, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
@@ -16,6 +16,7 @@ import {
   RETRY_CONFIRM,
   STOP_CANCELLING_CONFIRM,
   age,
+  deliveryText,
   shortId,
   usd,
   type InboxOut,
@@ -95,15 +96,28 @@ export function NeedTable({
   testId,
   rows,
   compact = false,
+  heading,
 }: {
   title: string;
   testId: string;
   rows: Need[];
   compact?: boolean;
+  /** Shown above the rows: a group that is not something to act on says what it is. */
+  heading?: ReactNode;
 }) {
+  const headingId = useId();
   if (rows.length === 0) return null;
   return (
-    <section aria-label={title} data-testid={testId}>
+    <section aria-label={heading ? undefined : title} aria-labelledby={heading ? headingId : undefined} data-testid={testId}>
+      {heading && (
+        <h3
+          id={headingId}
+          data-testid={`${testId}-heading`}
+          className="flex flex-wrap items-center gap-x-1.5 border-t border-line px-4 pt-3 pb-1 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2 max-[600px]:px-3"
+        >
+          {heading}
+        </h3>
+      )}
       <DataTable
         label={title}
         columns={compact ? NEED_COLUMNS_COMPACT : NEED_COLUMNS}
@@ -154,6 +168,7 @@ export const STATE_TABS: { id: InboxState; label: string }[] = [
  */
 export type NeedGroup =
   | "checkpoints"
+  | "deliveries"
   | "approvals"
   | "overruns"
   | "lookups"
@@ -599,6 +614,37 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
         ),
   }));
 
+  // Decided, not delivered to the run yet (owner, 2026-10-20): shown only, nothing to decide
+  // (Oracle sends it again on every tick), not counted. The run, the review and SwarmCloud's
+  // last answer; Open goes to the run.
+  const deliveries: Need[] = (inbox.deliveries ?? []).map((c) => ({
+    key: c.id,
+    icon: "clock",
+    kind: "Decision",
+    item: (
+      // Two lines, wrapped rather than cut: the review and its decision, then SwarmCloud's last answer.
+      <span className="flex min-w-0 flex-col py-1" title={deliveryText(c)}>
+        <span className="break-words">
+          {CHECKPOINT_LABEL[c.kind]}: {c.status === "approved" ? "approved" : "changes requested"}
+          {c.delivery?.decided_by_name && ` by ${c.delivery.decided_by_name}`}
+        </span>
+        {c.delivery?.last_error && (
+          <span className="text-sm break-words text-text2" data-testid="delivery-error">
+            Last: {c.delivery.last_error}
+          </span>
+        )}
+      </span>
+    ),
+    context: (
+      <Link href={`/runs/${c.run_id}`} className="block truncate hover:underline" title={[c.flow_title, c.segment_title, c.document_slug].filter(Boolean).join(" · ")}>
+        <RunName run={c} />
+      </Link>
+    ),
+    run: shortId(c.run_id),
+    at: c.decided_at ?? c.created_at,
+    action: <LinkButton href={`/runs/${c.run_id}`}>Open</LinkButton>,
+  }));
+
   // Shown only: nothing to decide, and not counted in the total (nor on Home or the badge).
   const searches: Need[] = (inbox.searches ?? []).map((r) => ({
     key: r.id,
@@ -615,7 +661,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     action: null,
   }));
 
-  return { checkpoints, approvals, overruns, lookups, imports, searches };
+  return { checkpoints, deliveries, approvals, overruns, lookups, imports, searches };
 }
 
 /**
@@ -672,6 +718,7 @@ export function allNeeds(
     ...feedbackNeeds(inbox, seenBefore),
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.
+    ...stated(n.deliveries, "deliveries", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.searches, "searches", false).map((r) => ({ ...r, state: "open" as const })),
   ];
 }

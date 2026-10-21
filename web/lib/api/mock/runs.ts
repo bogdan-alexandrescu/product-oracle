@@ -23,6 +23,14 @@ export interface RunsDb {
 export interface RunsContext {
   db: RunsDb;
   userId: string;
+  /** The signed-in member's email: who decided, on a decision not delivered yet. */
+  userName?: string | null;
+  /**
+   * The "undelivered" scenario: SwarmCloud does not take a checkpoint decision until the
+   * next tick. The decision is recorded (and final) but the decide call answers 503, as the
+   * API does when SwarmCloud did not confirm it; the tick delivers it.
+   */
+  undelivered?: boolean;
   feedback: FeedbackRow[];
   documents: DocumentRow[];
   latestVersion: (documentId: string) => number | null;
@@ -328,8 +336,24 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
     errors: [] as string[],
     member_follow_ups: 0,
   };
+  // Decisions recorded and not delivered yet: SwarmCloud takes them now, and the run goes on
+  // (its next segment runs from the next tick).
+  const delivered = new Set<string>();
   for (const r of ctx.db.runs) {
-    if (r.status !== "running") continue;
+    const owed = r.checkpoints.find((c) => c.delivery);
+    if (!owed) continue;
+    const wait = { ...((owed.payload.wait as Record<string, unknown> | undefined) ?? {}) };
+    delete wait.posting;
+    Object.assign(owed, { delivery: null, payload: { ...owed.payload, wait } });
+    const s = r.segments.find((x) => x.seq === owed.segment_seq)!;
+    if (owed.status === "approved") next(ctx, r, s);
+    else submit(ctx, r, s, owed.note);
+    refresh(r);
+    delivered.add(r.id);
+    out.runs_checked += 1;
+  }
+  for (const r of ctx.db.runs) {
+    if (r.status !== "running" || delivered.has(r.id)) continue;
     out.runs_checked += 1;
     const s = r.segments.find((x) => x.status === "running");
     if (!s) continue;
@@ -366,6 +390,19 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
       .map((c) => ({
         ...c,
         can_decide: true,
+        flow: r.flow,
+        flow_title: r.flow_title,
+        document_slug: r.document_slug,
+        segment_title: r.segments.find((s) => s.seq === c.segment_seq)?.title ?? null,
+      })),
+  );
+  // Decided, not delivered to the run yet: shown, nothing to decide, not in the total.
+  const deliveries = ctx.db.runs.flatMap((r) =>
+    r.checkpoints
+      .filter((c) => c.delivery)
+      .map((c) => ({
+        ...c,
+        can_decide: false,
         flow: r.flow,
         flow_title: r.flow_title,
         document_slug: r.document_slug,
@@ -425,6 +462,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   const searches = ctx.db.runs.filter((r) => r.searching).map(summary);
   return {
     checkpoints,
+    deliveries,
     approvals,
     overruns,
     lookups,
@@ -685,6 +723,19 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const text = note?.trim() || null;
     if (decision === "changes_requested" && !text) return fail(422, "say what to change: a note is required to request changes");
     Object.assign(cp, { status: decision, note: text, decided_by: ctx.userId, decided_at: ctx.now() });
+    if (ctx.undelivered) {
+      // Recorded, and final; SwarmCloud did not take it: the tick delivers it.
+      const at = ctx.now();
+      const error = "SwarmCloud HTTP 503 unavailable";
+      cp.payload = { ...cp.payload, wait: { ...((cp.payload.wait as object | undefined) ?? {}), posting: { redo: false, at, tries: 1, error, tried_at: at } } };
+      cp.delivery = { decided_by_name: ctx.userName ?? null, since: at, tries: 1, last_error: error, last_tried_at: at };
+      refresh(r);
+      return fail(
+        503,
+        "SwarmCloud did not confirm the decision (SwarmCloud refused POST /v1/workflows/mock-wf/steps/review/answer: HTTP 503 unavailable); " +
+          "the decision is recorded and Oracle posts it again on its next tick, there is no need to decide again",
+      );
+    }
     const s = r.segments.find((x) => x.seq === cp.segment_seq)!;
     if (decision === "approved") next(ctx, r, s);
     else submit(ctx, r, s, text);
