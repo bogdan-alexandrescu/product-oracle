@@ -108,10 +108,12 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "lookups", title: "Stuck runs" },
   { id: "imports", title: "Couldn't import" },
   { id: "revoke-failures", title: "Couldn't revoke access" },
+  { id: "launches", title: "Launches" },
   { id: "feedback", title: "Feedback" },
   { id: "questions", title: "Questions" },
   { id: "revising", title: "Sent back by Oracle" },
   { id: "searches", title: "Looking for earlier submissions" },
+  { id: "shipped", title: "Shipped", heading: "Shipped: what you asked for" },
 ];
 
 /**

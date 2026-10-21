@@ -33,7 +33,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
 
   // A flow that reads an approved document (prd_to_roadmap) starts from the Roadmap screen,
   // where the PRD is picked; this dialog offers the others.
-  const flows = useMemo(() => catalog.data?.flows.filter((f) => !f.source_kind) ?? [], [catalog.data]);
+  const flows = useMemo(() => catalog.data?.flows.filter((f) => !f.source_kind && f.in_new_run_dialog !== false) ?? [], [catalog.data]);
   const flow = flows.find((f) => f.key === flowKey);
 
   // Choices on top of the flow's defaults; a new flow starts from its defaults again.

@@ -244,9 +244,17 @@ export default function RoadmapPage() {
           )
         }
         action={
-          <LinkButton variant="primary" icon="plus" href="/documents/new?kind=roadmap">
-            New roadmap
-          </LinkButton>
+          <span className="flex flex-wrap items-center gap-2">
+            <LinkButton href="/roadmap/launches" data-testid="roadmap-launches-link">
+              Launches
+            </LinkButton>
+            <LinkButton href="/roadmap/changelog" data-testid="roadmap-changelog-link">
+              Changelog
+            </LinkButton>
+            <LinkButton variant="primary" icon="plus" href="/documents/new?kind=roadmap">
+              New roadmap
+            </LinkButton>
+          </span>
         }
       />
       <div className="flex flex-col gap-3">

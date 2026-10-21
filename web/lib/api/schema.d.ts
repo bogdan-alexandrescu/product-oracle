@@ -6180,6 +6180,335 @@ export interface paths {
         patch: operations["update_milestone"];
         trace?: never;
     };
+    "/v1/launches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Launches
+         * @description Launches, newest first, each with its tier (or Oracle's suggestion), state, task
+         *     and note counts. ``tier`` filters on the tier a person set.
+         */
+        get: operations["list_launches"];
+        put?: never;
+        /**
+         * Create Launch
+         * @description Plan a launch by hand ("Plan a launch"): one or more items of the track's latest
+         *     approved roadmap. 422 for items not on it; 409 when they already have a launch.
+         */
+        post: operations["create_launch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/launches/{launch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Launch
+         * @description One launch: its tier with Oracle's reason, owner, items, checklist with the
+         *     drafted text, note counts and kit run.
+         */
+        get: operations["get_launch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Launch
+         * @description Set the tier (1 to 3; the checklist follows), the owner, the title or the items.
+         *     409 on a stale ``lock_version``.
+         */
+        patch: operations["update_launch"];
+        trace?: never;
+    };
+    "/v1/launches/{launch_id}/launched": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Launched
+         * @description Mark launched: always a person's go. Records when, sends the launch ship signal
+         *     per item, lists the people who asked, and starts the kit run unless it ran at Ready.
+         *     409 "Already launched" the second time.
+         */
+        post: operations["mark_launched"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/launches/{launch_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Launch
+         * @description Cancel a planned or ready launch, with a reason (409 once launched).
+         */
+        post: operations["cancel_launch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/launches/{launch_id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Launch Kit
+         * @description Start Oracle's launch kit run (one writer step, quick depth: $3.00): the
+         *     changelog entries, task drafts and personal notes. 409 while one is under way.
+         */
+        post: operations["draft_launch_kit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/launches/{launch_id}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Launch Task
+         * @description Add a task of the company's own to the launch's checklist.
+         */
+        post: operations["add_launch_task"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/launch-tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Launch Task
+         * @description Edit a task's text, owner or state (todo, drafted, done, skipped with a reason).
+         *     The task's owner or an approver.
+         */
+        patch: operations["update_launch_task"];
+        trace?: never;
+    };
+    "/v1/launches/{launch_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Requester Notes
+         * @description The people who asked for the launch's items, each with what they asked (their
+         *     words) and Oracle's draft of a personal note. External notes are sent by a person;
+         *     Oracle never sends them.
+         */
+        get: operations["list_requester_notes"];
+        put?: never;
+        /**
+         * Add Requester
+         * @description Add someone who asked by hand: a name and what they gave to reach them.
+         */
+        post: operations["add_requester"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requester-notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Requester Note
+         * @description Edit the draft, Mark sent (with the channel and date: the person sent it) or Skip
+         *     (with a reason). The launch's owner or an approver.
+         */
+        patch: operations["update_requester_note"];
+        trace?: never;
+    };
+    "/v1/launches/{launch_id}/notify-members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Notify Requesters
+         * @description Tell the members who asked, inside Oracle: each gets a "Shipped" row in their
+         *     Inbox carrying their note. Only once the launch is launched (409 before).
+         */
+        post: operations["notify_requesters"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/changelog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Changelog
+         * @description Changelog entries, newest first (by release date), internal and public.
+         */
+        get: operations["list_changelog"];
+        put?: never;
+        /**
+         * Create Changelog Entry
+         * @description Add an entry (draft). A public entry needs ``released_on``.
+         */
+        post: operations["create_changelog_entry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/changelog/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Changelog
+         * @description Published entries as Markdown or HTML (Keep a Changelog: newest first, dated
+         *     YYYY-MM-DD, grouped by category), for a person to post on the company's site or help
+         *     center. Drafts and withdrawn entries are never in it; Oracle posts nothing.
+         */
+        get: operations["export_changelog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/changelog/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Changelog Entry */
+        patch: operations["update_changelog_entry"];
+        trace?: never;
+    };
+    "/v1/changelog/{entry_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish Changelog Entry
+         * @description Publish an entry inside Oracle (an approver; a public entry is never published
+         *     by Oracle). Then Export it for a person to post. 409 for a withdrawn entry.
+         */
+        post: operations["publish_changelog_entry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/changelog/{entry_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Changelog Entry
+         * @description Withdraw an entry: it leaves the export (a copy a person already posted elsewhere
+         *     is theirs to take down).
+         */
+        post: operations["withdraw_changelog_entry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -7814,6 +8143,11 @@ export interface components {
             /** Workflow Id */
             workflow_id: string;
         };
+        /** CancelIn */
+        CancelIn: {
+            /** Reason */
+            reason: string;
+        };
         /** CatalogModuleDetail */
         CatalogModuleDetail: {
             /** Key */
@@ -7959,6 +8293,99 @@ export interface components {
              */
             summary: string;
         };
+        /** ChangelogCreate */
+        ChangelogCreate: {
+            /** Launch Id */
+            launch_id?: string | null;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "added" | "changed" | "deprecated" | "removed" | "fixed" | "security";
+            /**
+             * Audience
+             * @enum {string}
+             */
+            audience: "internal" | "public";
+            /** Title */
+            title: string;
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+            /** Released On */
+            released_on?: string | null;
+        };
+        /** ChangelogEntryOut */
+        ChangelogEntryOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Launch Id */
+            launch_id?: string | null;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "added" | "changed" | "deprecated" | "removed" | "fixed" | "security";
+            /**
+             * Audience
+             * @enum {string}
+             */
+            audience: "internal" | "public";
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /**
+             * Released On
+             * Format: date
+             */
+            released_on: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "published" | "withdrawn";
+            /** Published By */
+            published_by?: string | null;
+            /** Published Actor */
+            published_actor?: string | null;
+            /** Published At */
+            published_at?: string | null;
+            /** Created Actor */
+            created_actor: string;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ChangelogPatch */
+        ChangelogPatch: {
+            /** Category */
+            category?: ("added" | "changed" | "deprecated" | "removed" | "fixed" | "security") | null;
+            /** Audience */
+            audience?: ("internal" | "public") | null;
+            /** Title */
+            title?: string | null;
+            /** Body */
+            body?: string | null;
+            /** Released On */
+            released_on?: string | null;
+            /** Lock Version */
+            lock_version: number;
+        };
         /** ChangesIn */
         ChangesIn: {
             /**
@@ -8033,7 +8460,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "launch_review";
             /**
              * Status
              * @enum {string}
@@ -10680,13 +11107,18 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "launch_kit";
             /** Title */
             title: string;
             /** Description */
             description: string;
             /** Requires Document */
             requires_document: boolean;
+            /**
+             * In New Run Dialog
+             * @default true
+             */
+            in_new_run_dialog: boolean;
             /** Target Kind */
             target_kind?: ("prd" | "roadmap") | null;
             /** Source Kind */
@@ -10710,7 +11142,7 @@ export interface components {
              * Checkpoint
              * @enum {string}
              */
-            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review";
+            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "launch_review";
             /**
              * Approver Role
              * @enum {string}
@@ -11106,7 +11538,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "launch_review";
             /**
              * Status
              * @enum {string}
@@ -11147,7 +11579,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "launch_kit";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -11285,6 +11717,43 @@ export interface components {
             /** Suggestion Kind */
             suggestion_kind?: string | null;
         };
+        /**
+         * InboxLaunch
+         * @description A launch row of the Inbox: Ready to launch (owner), Set tier (approvers), Notes
+         *     to send (owner) are counted; Shipped (a member's personal note) is shown only.
+         */
+        InboxLaunch: {
+            /**
+             * Launch Id
+             * Format: uuid
+             */
+            launch_id: string;
+            /** Title */
+            title: string;
+            /** Item */
+            item: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "ready" | "set_tier" | "notes_to_send" | "shipped_note";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "planned" | "ready" | "launched" | "cancelled";
+            /** Counted */
+            counted: boolean;
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /** Note */
+            note?: string | null;
+            /** At */
+            at?: string | null;
+        };
         /** InboxOut */
         InboxOut: {
             /** Checkpoints */
@@ -11352,6 +11821,11 @@ export interface components {
              * @default 0
              */
             needs_me: number;
+            /**
+             * Launches
+             * @default []
+             */
+            launches: components["schemas"]["InboxLaunch"][];
             /** Last Seen At */
             last_seen_at?: string | null;
         };
@@ -12221,6 +12695,163 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** LaunchCreate */
+        LaunchCreate: {
+            /** Title */
+            title: string;
+            /**
+             * Track Id
+             * Format: uuid
+             */
+            track_id: string;
+            /** Item Keys */
+            item_keys: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+        };
+        /** LaunchItem */
+        LaunchItem: {
+            /** Item Key */
+            item_key: string;
+            /** Title */
+            title?: string | null;
+            /** Horizon */
+            horizon?: string | null;
+            /** Roadmap Slug */
+            roadmap_slug?: string | null;
+            /** Roadmap Version */
+            roadmap_version?: number | null;
+        };
+        /** LaunchOut */
+        LaunchOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Track Id */
+            track_id?: string | null;
+            /** Roadmap Version Id */
+            roadmap_version_id?: string | null;
+            /** Item Keys */
+            item_keys: string[];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "planned" | "ready" | "launched" | "cancelled";
+            /** Tier */
+            tier?: number | null;
+            tier_suggestion: components["schemas"]["TierSuggestion"];
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Ready At */
+            ready_at?: string | null;
+            /** Launched At */
+            launched_at?: string | null;
+            /** Cancel Reason */
+            cancel_reason?: string | null;
+            /** Kit Run Id */
+            kit_run_id?: string | null;
+            /** Kit Error */
+            kit_error?: string | null;
+            task_counts: components["schemas"]["TaskCounts"];
+            notes: components["schemas"]["NoteCounts"];
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["LaunchItem"][];
+            /**
+             * Tasks
+             * @default []
+             */
+            tasks: components["schemas"]["TaskOut"][];
+        };
+        /** LaunchPatch */
+        LaunchPatch: {
+            /** Title */
+            title?: string | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Tier */
+            tier?: number | null;
+            /** Tier Reason Override */
+            tier_reason_override?: string | null;
+            /** Item Keys */
+            item_keys?: string[] | null;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** LaunchSummary */
+        LaunchSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Track Id */
+            track_id?: string | null;
+            /** Roadmap Version Id */
+            roadmap_version_id?: string | null;
+            /** Item Keys */
+            item_keys: string[];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "planned" | "ready" | "launched" | "cancelled";
+            /** Tier */
+            tier?: number | null;
+            tier_suggestion: components["schemas"]["TierSuggestion"];
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Ready At */
+            ready_at?: string | null;
+            /** Launched At */
+            launched_at?: string | null;
+            /** Cancel Reason */
+            cancel_reason?: string | null;
+            /** Kit Run Id */
+            kit_run_id?: string | null;
+            /** Kit Error */
+            kit_error?: string | null;
+            task_counts: components["schemas"]["TaskCounts"];
+            notes: components["schemas"]["NoteCounts"];
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** LaunchedIn */
+        LaunchedIn: {
+            /** At */
+            at?: string | null;
         };
         /**
          * LayerImpact
@@ -13267,6 +13898,34 @@ export interface components {
             /** Milestone Id */
             milestone_id?: string | null;
         };
+        /** NoteCounts */
+        NoteCounts: {
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Sent
+             * @default 0
+             */
+            sent: number;
+            /**
+             * Skipped
+             * @default 0
+             */
+            skipped: number;
+            /**
+             * Notified
+             * @default 0
+             */
+            notified: number;
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+        };
         /** NotificationOut */
         NotificationOut: {
             /**
@@ -13312,6 +13971,11 @@ export interface components {
         NotificationsRead: {
             /** Marked */
             marked: number;
+        };
+        /** NotifiedOut */
+        NotifiedOut: {
+            /** Notified */
+            notified: number;
         };
         /** NotionPageOut */
         NotionPageOut: {
@@ -14626,6 +15290,93 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * RequesterCreate
+         * @description Someone who asked, added by hand: a name and what they gave to reach them.
+         */
+        RequesterCreate: {
+            /** Display Name */
+            display_name: string;
+            /** Contact Hint */
+            contact_hint?: string | null;
+            /** Asked */
+            asked?: string | null;
+        };
+        /** RequesterNoteOut */
+        RequesterNoteOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Launch Id
+             * Format: uuid
+             */
+            launch_id: string;
+            /**
+             * Requester Kind
+             * @enum {string}
+             */
+            requester_kind: "request" | "member" | "manual";
+            /** Request Id */
+            request_id?: string | null;
+            /** Member Id */
+            member_id?: string | null;
+            /** Display Name */
+            display_name: string;
+            /** Contact Hint */
+            contact_hint?: string | null;
+            /** Asked */
+            asked?: string | null;
+            /** Body */
+            body?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "drafted" | "sent" | "skipped" | "notified";
+            /** Channel */
+            channel?: ("email" | "slack" | "call" | "in_app" | "other") | null;
+            /** Sent On */
+            sent_on?: string | null;
+            /** Sent By */
+            sent_by?: string | null;
+            /** Skip Reason */
+            skip_reason?: string | null;
+            /** Notified At */
+            notified_at?: string | null;
+            /**
+             * Internal
+             * @default false
+             */
+            internal: boolean;
+            /** Notice */
+            notice?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** RequesterNotePatch */
+        RequesterNotePatch: {
+            /** Body */
+            body?: string | null;
+            /** Status */
+            status?: ("sent" | "skipped") | null;
+            /** Channel */
+            channel?: ("email" | "slack" | "call" | "in_app" | "other") | null;
+            /** Sent On */
+            sent_on?: string | null;
+            /** Skip Reason */
+            skip_reason?: string | null;
+        };
         /** RescoreResult */
         RescoreResult: {
             /** Evidence */
@@ -15105,7 +15856,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "launch_kit";
             /** Document */
             document?: string | null;
             /** Source */
@@ -15136,7 +15887,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "launch_kit";
             /** Flow Title */
             flow_title: string;
             /**
@@ -15171,7 +15922,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "launch_review") | null;
             /** Error */
             error?: string | null;
             /** Stuck */
@@ -15213,7 +15964,7 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "launch_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
@@ -15281,7 +16032,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "launch_kit";
             /** Flow Title */
             flow_title: string;
             /**
@@ -15316,7 +16067,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "launch_review") | null;
             /** Error */
             error?: string | null;
             /** Stuck */
@@ -15358,7 +16109,7 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "launch_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
@@ -16252,7 +17003,7 @@ export interface components {
              * Checkpoint
              * @enum {string}
              */
-            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review";
+            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "launch_review";
             /** Checkpoint On */
             checkpoint_on: boolean;
             /** Estimate Usd */
@@ -16977,6 +17728,110 @@ export interface components {
             unavailable?: components["schemas"]["UnavailableItem"][];
             source: components["schemas"]["SourceOut"];
         };
+        /** TaskCounts */
+        TaskCounts: {
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Closed
+             * @default 0
+             */
+            closed: number;
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+        };
+        /** TaskCreate */
+        TaskCreate: {
+            /** Key */
+            key?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Audience
+             * @enum {string}
+             */
+            audience: "internal" | "external";
+            /** Owner Id */
+            owner_id?: string | null;
+        };
+        /** TaskOut */
+        TaskOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Launch Id
+             * Format: uuid
+             */
+            launch_id: string;
+            /** Key */
+            key: string | null;
+            /** Title */
+            title: string;
+            /** Position */
+            position: number;
+            /**
+             * Audience
+             * @enum {string}
+             */
+            audience: "internal" | "external";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "todo" | "drafted" | "done" | "skipped";
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Body */
+            body?: string | null;
+            /** Skip Reason */
+            skip_reason?: string | null;
+            /** Done By */
+            done_by?: string | null;
+            /** Done At */
+            done_at?: string | null;
+            /**
+             * Drafts
+             * @default no
+             * @enum {string}
+             */
+            drafts: "yes" | "outline" | "no";
+            /**
+             * Optional
+             * @default false
+             */
+            optional: boolean;
+            /** Notice */
+            notice?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** TaskPatch */
+        TaskPatch: {
+            /** Body */
+            body?: string | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Status */
+            status?: ("todo" | "drafted" | "done" | "skipped") | null;
+            /** Skip Reason */
+            skip_reason?: string | null;
+            /** Lock Version */
+            lock_version: number;
+        };
         /** TemplateCreate */
         TemplateCreate: {
             /** Key */
@@ -17455,6 +18310,29 @@ export interface components {
              * @default 0
              */
             member_follow_ups: number;
+        };
+        /** TierSuggestion */
+        TierSuggestion: {
+            /** Tier */
+            tier: number;
+            /** Reason */
+            reason: string;
+            /**
+             * Innovation
+             * @enum {string}
+             */
+            innovation: "new" | "improvement" | "fix";
+            /**
+             * Goal
+             * @enum {string}
+             */
+            goal: "top" | "other" | "none";
+            /** Goal Title */
+            goal_title?: string | null;
+            /** Item Key */
+            item_key?: string | null;
+            /** Person Reason */
+            person_reason?: string | null;
         };
         /**
          * TokenApprovalOut
@@ -30525,6 +31403,639 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MilestoneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_launches: {
+        parameters: {
+            query?: {
+                state?: ("planned" | "ready" | "launched" | "cancelled") | null;
+                track_id?: string | null;
+                tier?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_launch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_launch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                launch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_launch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                launch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_launched: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                launch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LaunchedIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_launch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                launch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_launch_kit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                launch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_launch_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                launch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_launch_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_requester_notes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                launch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequesterNoteOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_requester: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                launch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequesterCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequesterNoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_requester_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequesterNotePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequesterNoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    notify_requesters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                launch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifiedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_changelog: {
+        parameters: {
+            query?: {
+                audience?: ("internal" | "public") | null;
+                status?: ("draft" | "published" | "withdrawn") | null;
+                since?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangelogEntryOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_changelog_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangelogCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangelogEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_changelog: {
+        parameters: {
+            query?: {
+                audience?: "internal" | "public";
+                format?: "md" | "html";
+                since?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/markdown": unknown;
+                    "text/html": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_changelog_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangelogPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangelogEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_changelog_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangelogEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_changelog_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangelogEntryOut"];
                 };
             };
             /** @description Validation Error */

@@ -68,6 +68,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       title: "Baseline to PRD",
       description: "Baseline proposal, feature set and design, priority order, PRD draft.",
       requires_document: false,
+      in_new_run_dialog: true,
       target_kind: "prd",
       source_kind: null,
       segments: [
@@ -82,6 +83,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       title: "Feedback loop",
       description: "Pull open feedback on a PRD or roadmap, write the next draft, review it.",
       requires_document: true,
+      in_new_run_dialog: true,
       target_kind: null,
       source_kind: null,
       segments: [
@@ -93,6 +95,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       title: "Roadmap from an approved PRD",
       description: "Roadmap items from an approved PRD version (horizon, milestone, dependencies, priority), then a roadmap draft in the chosen template.",
       requires_document: false,
+      in_new_run_dialog: true,
       target_kind: "roadmap",
       source_kind: "prd",
       segments: [
@@ -487,6 +490,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   // shown only (nothing to decide, not in the total).
   const revising = ctx.db.runs.filter((r) => r.segments.some((s) => sentBack(r, s))).map(bare);
   return {
+    // Launch rows (H6) are added by the server (./launches.ts).
+    launches: [],
     checkpoints,
     deliveries,
     approvals,
