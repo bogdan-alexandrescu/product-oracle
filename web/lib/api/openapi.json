@@ -43627,7 +43627,8 @@
               "prd_to_roadmap",
               "prd_to_spec",
               "strategy_draft",
-              "launch_kit"
+              "launch_kit",
+              "baseline"
             ],
             "title": "Key"
           },
@@ -43711,6 +43712,11 @@
                 "type": "null"
               }
             ]
+          },
+          "writes_document": {
+            "type": "boolean",
+            "title": "Writes Document",
+            "default": true
           }
         },
         "type": "object",
@@ -45135,7 +45141,8 @@
               "prd_to_roadmap",
               "prd_to_spec",
               "strategy_draft",
-              "launch_kit"
+              "launch_kit",
+              "baseline"
             ],
             "title": "Flow"
           },
@@ -61207,7 +61214,8 @@
               "prd_to_roadmap",
               "prd_to_spec",
               "strategy_draft",
-              "launch_kit"
+              "launch_kit",
+              "baseline"
             ],
             "title": "Flow"
           },
@@ -61462,7 +61470,8 @@
               "prd_to_roadmap",
               "prd_to_spec",
               "strategy_draft",
-              "launch_kit"
+              "launch_kit",
+              "baseline"
             ],
             "title": "Flow"
           },
@@ -62010,7 +62019,8 @@
               "prd_to_roadmap",
               "prd_to_spec",
               "strategy_draft",
-              "launch_kit"
+              "launch_kit",
+              "baseline"
             ],
             "title": "Flow"
           },

@@ -16,6 +16,7 @@ Flow = Literal[
     "prd_to_spec",
     "strategy_draft",
     "launch_kit",
+    "baseline",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -126,6 +127,8 @@ class FlowOut(BaseModel):
     in_new_run_dialog: bool = False
     # Where a flow with its own door starts: a pointer line under the dialog's list.
     starts_from: FlowStart | None = None
+    # False: the run writes no document (launch_kit, baseline).
+    writes_document: bool = True
 
 
 class FlowCatalog(BaseModel):

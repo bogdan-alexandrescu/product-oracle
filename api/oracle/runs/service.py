@@ -346,6 +346,7 @@ def flow_catalog() -> FlowCatalog:
                 source_kind=f.source_kind,  # type: ignore[arg-type]
                 entry=f.entry,
                 in_new_run_dialog=f.in_new_run_dialog,
+                writes_document=f.writes_document,
                 starts_from=FlowStart(label=f.starts_from[0], href=f.starts_from[1])
                 if f.starts_from
                 else None,
@@ -1502,12 +1503,19 @@ async def _resolve_inputs(
 ) -> tuple[uuid.UUID | None, dict[str, Any]]:
     """(target document id, the knobs Oracle sets) for a run's document, source and
     template choices."""
+    if not flow.writes_document:
+        named = (
+            inputs.document,
+            inputs.source,
+            inputs.source_version,
+            inputs.template,
+            inputs.theme,
+        )
+        if any(v is not None for v in named):
+            raise Invalid(f"the {flow.title} flow writes no document")
+        return None, {}
     if flow.target_kind != "roadmap" and (inputs.template or inputs.theme):
         raise Invalid(f"the {flow.title} flow takes no template or theme")
-    if not flow.writes_document:
-        if inputs.document or inputs.source:
-            raise Invalid(f"the {flow.title} flow writes no document and reads none")
-        return None, {}
     source = await _resolve_source(db, flow, inputs.source, inputs.source_version)
     default_slug = None
     if source is not None and inputs.document is None:
@@ -1548,6 +1556,25 @@ async def _reset_segments(db: AsyncSession, run: Run, flow: flows.FlowDef) -> No
     run.estimate_usd = None
 
 
+# A baseline build in these states is under way: another is refused (B1), as two would
+# race on the same (type, key) items and double the proposals.
+BUILD_UNDER_WAY = ("awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
+
+
+async def _one_build_at_a_time(db: AsyncSession, flow: flows.FlowDef) -> None:
+    """Refuse a second Build the baseline run while one is under way (409)."""
+    if flow.key != "baseline":
+        return
+    under_way = await db.scalar(
+        select(Run.id)
+        .where(Run.flow == flow.key, Run.status.in_(BUILD_UNDER_WAY))
+        .order_by(Run.created_at)
+        .limit(1)
+    )
+    if under_way is not None:
+        raise RunError(f"A baseline build is already under way (run {under_way})")
+
+
 async def create_run(
     db: AsyncSession,
     principal: Principal,
@@ -1570,6 +1597,7 @@ async def create_run(
             "(POST /v1/launches/{id}/draft)"
         )
     knobs = _resolve_knobs(flow, body.knobs)
+    await _one_build_at_a_time(db, flow)
     document_id, oracle = await _resolve_inputs(
         db,
         flow,
@@ -1689,6 +1717,7 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
         raise RunError(f"run is {run.status}, not a draft")
     if run.estimate_usd is None:
         raise RunError("estimate the run first: POST /v1/runs/{id}/estimate")
+    await _one_build_at_a_time(db, _flow(run))
     knobs = _knobs(run)
     source_id = _source_id(run)
     if source_id is not None and await db.get(DocumentVersion, source_id) is None:
