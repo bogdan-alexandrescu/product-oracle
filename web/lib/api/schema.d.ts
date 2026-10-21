@@ -6905,6 +6905,51 @@ export interface paths {
         patch: operations["update_request_theme"];
         trace?: never;
     };
+    "/v1/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Plan
+         * @description The Plan: the PRDs in play with their stage, and every roadmap item under Now,
+         *     Next and Later with its state, engineering status and next decision. ``scope=all``
+         *     adds the items of each roadmap's latest draft (``origin: draft``), each marked with
+         *     how it differs from its approved twin; ``scope=approved`` leaves them out.
+         */
+        get: operations["get_plan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plan/items/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Plan Item History
+         * @description A roadmap item across its roadmap's versions, in version order: its horizon in
+         *     each version that has it, the PRD version it came from, and when that roadmap
+         *     version was approved. ``tracker_events`` stays empty until F2 Track health.
+         */
+        get: operations["get_plan_item_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -13094,6 +13139,33 @@ export interface components {
             /** Revoked At */
             revoked_at?: string | null;
         };
+        /**
+         * ItemChange
+         * @description How a draft item differs from its approved twin (roadmap.diff.diff_items).
+         */
+        ItemChange: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "new" | "moved" | "changed" | "unchanged" | "dropped";
+            /** From Horizon */
+            from_horizon?: ("now" | "next" | "later") | null;
+            /** To Horizon */
+            to_horizon?: ("now" | "next" | "later") | null;
+            /**
+             * Fields
+             * @default []
+             */
+            fields: string[];
+            /**
+             * Notes
+             * @default []
+             */
+            notes: string[];
+            /** Draft Version */
+            draft_version?: number | null;
+        };
         /** ItemDetail */
         ItemDetail: {
             /**
@@ -13140,6 +13212,22 @@ export interface components {
             content: string | null;
             /** Version Count */
             version_count: number;
+        };
+        /** ItemHistoryOut */
+        ItemHistoryOut: {
+            /** Roadmap */
+            roadmap: string;
+            /** Item */
+            item: string;
+            /** Versions */
+            versions: components["schemas"]["ItemVersion"][];
+            /**
+             * Tracker Events
+             * @default []
+             */
+            tracker_events: {
+                [key: string]: unknown;
+            }[];
         };
         /** ItemOut */
         ItemOut: {
@@ -13249,6 +13337,20 @@ export interface components {
             }[];
             /** Items */
             items: components["schemas"]["RoadmapItemOut"][];
+        };
+        /** ItemVersion */
+        ItemVersion: {
+            /** Version */
+            version: number;
+            /** Prd Version */
+            prd_version: number | null;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Approved At */
+            approved_at: string | null;
         };
         /**
          * ItemsCheck
@@ -14831,6 +14933,228 @@ export interface components {
             snapshot_id: string;
             /** As Of */
             as_of?: string | null;
+        };
+        /** PlanCounts */
+        PlanCounts: {
+            /** Prds */
+            prds: number;
+            /** At Risk */
+            at_risk: number;
+            /** Proposed */
+            proposed: number;
+            /** Items */
+            items: number;
+        };
+        /** PlanDocument */
+        PlanDocument: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
+        /** PlanEngineering */
+        PlanEngineering: {
+            /** Records */
+            records: components["schemas"]["TrackerRecordRef"][];
+            /** Date */
+            date: string | null;
+            /** Date Status */
+            date_status: ("verified" | "unverified" | "withdrawn") | null;
+            /** Slip Days */
+            slip_days: number | null;
+            /** Tracked */
+            tracked: boolean;
+        };
+        /** PlanItem */
+        PlanItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Outcome */
+            outcome?: string | null;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Position */
+            position: number;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "approved" | "draft";
+            change: components["schemas"]["ItemChange"] | null;
+            prd: components["schemas"]["PlanItemPrd"] | null;
+            roadmap: components["schemas"]["PlanItemRoadmap"];
+            /** Track Id */
+            track_id: string | null;
+            /** Goal Ids */
+            goal_ids: string[];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "proposed" | "done" | "slipped" | "at_risk" | "on_track" | "planned";
+            /** Reasons */
+            reasons: components["schemas"]["PlanReason"][];
+            engineering: components["schemas"]["PlanEngineering"];
+            next: components["schemas"]["PlanNext"];
+        };
+        /** PlanItemPrd */
+        PlanItemPrd: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number | null;
+            /** Approved */
+            approved: boolean;
+            /** Link */
+            link: string | null;
+        };
+        /** PlanItemRoadmap */
+        PlanItemRoadmap: {
+            /** Slug */
+            slug: string;
+            /** Version */
+            version: number;
+            /** Anchor */
+            anchor: string;
+        };
+        /** PlanNext */
+        PlanNext: {
+            /** Action */
+            action: ("review_prd" | "verify_date" | "reverify_date" | "decide_slip" | "resolve_blocker" | "reconcile" | "link_issue") | null;
+            /** Label */
+            label: string;
+            who: components["schemas"]["PlanWho"] | null;
+            /** Href */
+            href?: string | null;
+            /**
+             * Viewer May
+             * @default false
+             */
+            viewer_may: boolean;
+        };
+        /** PlanOut */
+        PlanOut: {
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "all" | "approved";
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            counts: components["schemas"]["PlanCounts"];
+            /** Prds */
+            prds: components["schemas"]["PlanPrd"][];
+            /** Items */
+            items: components["schemas"]["PlanItem"][];
+        };
+        /** PlanPrd */
+        PlanPrd: {
+            document: components["schemas"]["PlanDocument"];
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "idea" | "drafting" | "waiting" | "draft" | "in_review" | "approved" | "in_build" | "paused" | "closed";
+            /** Stage Label */
+            stage_label: string;
+            /** Journey Step */
+            journey_step: number;
+            /** Latest Version */
+            latest_version: number | null;
+            /** Approved Version */
+            approved_version: number | null;
+            run: components["schemas"]["PlanRun"] | null;
+            track: components["schemas"]["PlanTrack"] | null;
+            /** Figure */
+            figure: string | null;
+            /**
+             * Waiting For Viewer
+             * @default false
+             */
+            waiting_for_viewer: boolean;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** PlanReason */
+        PlanReason: {
+            /** Kind */
+            kind: string;
+            /** Detail */
+            detail: string;
+        };
+        /** PlanRun */
+        PlanRun: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+            /** Checkpoint */
+            checkpoint?: string | null;
+            /** Checkpoint Role */
+            checkpoint_role?: string | null;
+            /** Segment */
+            segment?: string | null;
+        };
+        /** PlanTrack */
+        PlanTrack: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "closed";
+            /**
+             * Health
+             * @enum {string}
+             */
+            health: "on_track" | "at_risk" | "off_track" | "no_roadmap" | "paused" | "closed";
+            /** Owner Id */
+            owner_id?: string | null;
+        };
+        /** PlanWho */
+        PlanWho: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner" | "track_owner" | "engineering_lead";
+            /** User Id */
+            user_id?: string | null;
         };
         /** PrdAnchor */
         PrdAnchor: {
@@ -34440,6 +34764,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RequestThemeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_plan: {
+        parameters: {
+            query?: {
+                scope?: "all" | "approved";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_plan_item_history: {
+        parameters: {
+            query: {
+                roadmap: string;
+                item: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemHistoryOut"];
                 };
             };
             /** @description Validation Error */

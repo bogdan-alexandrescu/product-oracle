@@ -51,7 +51,8 @@ test("new PRD: answers give a recommendation; override template and theme; creat
 
 test("new roadmap: a board audience gets the outcome roadmap; company default", async ({ page }) => {
   await login(page);
-  await page.getByTestId("nav-roadmap").click();
+  await page.getByTestId("nav-plan").click();
+  await page.getByTestId("plan-tabs").filter({ visible: true }).getByRole("link", { name: "Roadmap documents" }).click();
   await page.getByRole("link", { name: "New roadmap" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "New roadmap" })).toBeVisible();
   await expect(page.getByTestId("recommended-template")).toHaveText("Now / Next / Later");

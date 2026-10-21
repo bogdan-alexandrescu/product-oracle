@@ -10,11 +10,14 @@ async function asRole(page: Page, role: "viewer" | "commenter" | "approver") {
   await page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, role] as const);
 }
 
+/** Plan's Roadmap documents tab (c7: roadmap documents live inside Plan). */
 async function openRoadmap(page: Page) {
   await login(page);
-  await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Roadmap" }).click();
-  await expect(page).toHaveURL(/\/roadmap$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Roadmap" })).toBeVisible();
+  await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Plan", exact: true }).click();
+  await expect(page).toHaveURL(/\/plan$/);
+  await page.getByTestId("plan-tabs").filter({ visible: true }).getByRole("link", { name: "Roadmap documents" }).click();
+  await expect(page).toHaveURL(/\/plan\/documents$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Plan" })).toBeVisible();
 }
 
 const approvedPrd = (page: Page) => page.getByTestId("approved-prd").filter({ hasText: "Usage alerts PRD" });
@@ -49,8 +52,8 @@ test("roadmap screen lists roadmaps with status, template and source PRD; PRDs l
   await row.getByRole("link", { name: "Usage alerts roadmap" }).click();
   await expect(page).toHaveURL(/\/documents\/usage-alerts-roadmap$/);
   await expect(source(page).first()).toHaveText("From Usage alerts PRD v1");
-  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Roadmap", exact: true }).click();
-  await expect(page).toHaveURL(/\/roadmap$/);
+  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Plan", exact: true }).click();
+  await expect(page).toHaveURL(/\/plan$/);
 
   // PRDs: no roadmaps in the list.
   await page.getByTestId("nav-prds").click();
@@ -72,7 +75,7 @@ for (const role of ["viewer", "commenter"] as const) {
   });
 }
 
-test("build roadmap: shown for an approver, on the Roadmap screen and the PRD view", async ({ page }) => {
+test("build roadmap: shown for an approver, on Plan's Roadmap documents and the PRD view", async ({ page }) => {
   await asRole(page, "approver");
   await openRoadmap(page);
   await expect(page.getByText("Approvers and owners start these runs.")).toHaveCount(0);

@@ -24332,6 +24332,126 @@
         }
       }
     },
+    "/v1/plan": {
+      "get": {
+        "tags": [
+          "plan"
+        ],
+        "summary": "Get Plan",
+        "description": "The Plan: the PRDs in play with their stage, and every roadmap item under Now,\nNext and Later with its state, engineering status and next decision. ``scope=all``\nadds the items of each roadmap's latest draft (``origin: draft``), each marked with\nhow it differs from its approved twin; ``scope=approved`` leaves them out.",
+        "operationId": "get_plan",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "all",
+                "approved"
+              ],
+              "type": "string",
+              "default": "all",
+              "title": "Scope"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/plan/items/history": {
+      "get": {
+        "tags": [
+          "plan"
+        ],
+        "summary": "Get Plan Item History",
+        "description": "A roadmap item across its roadmap's versions, in version order: its horizon in\neach version that has it, the PRD version it came from, and when that roadmap\nversion was approved. ``tracker_events`` stays empty until F2 Track health.",
+        "operationId": "get_plan_item_history",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roadmap",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "Roadmap"
+            }
+          },
+          {
+            "name": "item",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "Item"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemHistoryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/.well-known/oauth-protected-resource": {
       "get": {
         "tags": [
@@ -41496,6 +41616,86 @@
         ],
         "title": "InviteOut"
       },
+      "ItemChange": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "new",
+              "moved",
+              "changed",
+              "unchanged",
+              "dropped"
+            ],
+            "title": "Kind"
+          },
+          "from_horizon": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "now",
+                  "next",
+                  "later"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Horizon"
+          },
+          "to_horizon": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "now",
+                  "next",
+                  "later"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Horizon"
+          },
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fields",
+            "default": []
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes",
+            "default": []
+          },
+          "draft_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "ItemChange",
+        "description": "How a draft item differs from its approved twin (roadmap.diff.diff_items)."
+      },
       "ItemDetail": {
         "properties": {
           "id": {
@@ -41666,6 +41866,41 @@
           "version_count"
         ],
         "title": "ItemDetail"
+      },
+      "ItemHistoryOut": {
+        "properties": {
+          "roadmap": {
+            "type": "string",
+            "title": "Roadmap"
+          },
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/ItemVersion"
+            },
+            "type": "array",
+            "title": "Versions"
+          },
+          "tracker_events": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Tracker Events",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "roadmap",
+          "item",
+          "versions"
+        ],
+        "title": "ItemHistoryOut"
       },
       "ItemOut": {
         "properties": {
@@ -41987,6 +42222,54 @@
           "items"
         ],
         "title": "ItemStalenessOut"
+      },
+      "ItemVersion": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "prd_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Version"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "prd_version",
+          "horizon",
+          "approved_at"
+        ],
+        "title": "ItemVersion"
       },
       "ItemsCheck": {
         "properties": {
@@ -46085,6 +46368,696 @@
           "snapshot_id"
         ],
         "title": "PinnedVersion"
+      },
+      "PlanCounts": {
+        "properties": {
+          "prds": {
+            "type": "integer",
+            "title": "Prds"
+          },
+          "at_risk": {
+            "type": "integer",
+            "title": "At Risk"
+          },
+          "proposed": {
+            "type": "integer",
+            "title": "Proposed"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prds",
+          "at_risk",
+          "proposed",
+          "items"
+        ],
+        "title": "PlanCounts"
+      },
+      "PlanDocument": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title"
+        ],
+        "title": "PlanDocument"
+      },
+      "PlanEngineering": {
+        "properties": {
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/TrackerRecordRef"
+            },
+            "type": "array",
+            "title": "Records"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "date_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "unverified",
+                  "withdrawn"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Status"
+          },
+          "slip_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slip Days"
+          },
+          "tracked": {
+            "type": "boolean",
+            "title": "Tracked"
+          }
+        },
+        "type": "object",
+        "required": [
+          "records",
+          "date",
+          "date_status",
+          "slip_days",
+          "tracked"
+        ],
+        "title": "PlanEngineering"
+      },
+      "PlanItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "draft"
+            ],
+            "title": "Origin"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemChange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanItemPrd"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roadmap": {
+            "$ref": "#/components/schemas/PlanItemRoadmap"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Goal Ids"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "done",
+              "slipped",
+              "at_risk",
+              "on_track",
+              "planned"
+            ],
+            "title": "State"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/PlanReason"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "engineering": {
+            "$ref": "#/components/schemas/PlanEngineering"
+          },
+          "next": {
+            "$ref": "#/components/schemas/PlanNext"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title",
+          "horizon",
+          "position",
+          "origin",
+          "change",
+          "prd",
+          "roadmap",
+          "track_id",
+          "goal_ids",
+          "state",
+          "reasons",
+          "engineering",
+          "next"
+        ],
+        "title": "PlanItem"
+      },
+      "PlanItemPrd": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "version",
+          "approved",
+          "link"
+        ],
+        "title": "PlanItemPrd"
+      },
+      "PlanItemRoadmap": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "anchor": {
+            "type": "string",
+            "title": "Anchor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "version",
+          "anchor"
+        ],
+        "title": "PlanItemRoadmap"
+      },
+      "PlanNext": {
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "review_prd",
+                  "verify_date",
+                  "reverify_date",
+                  "decide_slip",
+                  "resolve_blocker",
+                  "reconcile",
+                  "link_issue"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "who": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanWho"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "href": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Href"
+          },
+          "viewer_may": {
+            "type": "boolean",
+            "title": "Viewer May",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "label",
+          "who"
+        ],
+        "title": "PlanNext"
+      },
+      "PlanOut": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "all",
+              "approved"
+            ],
+            "title": "Scope"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/PlanCounts"
+          },
+          "prds": {
+            "items": {
+              "$ref": "#/components/schemas/PlanPrd"
+            },
+            "type": "array",
+            "title": "Prds"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlanItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "generated_at",
+          "counts",
+          "prds",
+          "items"
+        ],
+        "title": "PlanOut"
+      },
+      "PlanPrd": {
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/PlanDocument"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "idea",
+              "drafting",
+              "waiting",
+              "draft",
+              "in_review",
+              "approved",
+              "in_build",
+              "paused",
+              "closed"
+            ],
+            "title": "Stage"
+          },
+          "stage_label": {
+            "type": "string",
+            "title": "Stage Label"
+          },
+          "journey_step": {
+            "type": "integer",
+            "title": "Journey Step"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "approved_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Version"
+          },
+          "run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "track": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanTrack"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "figure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Figure"
+          },
+          "waiting_for_viewer": {
+            "type": "boolean",
+            "title": "Waiting For Viewer",
+            "default": false
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document",
+          "stage",
+          "stage_label",
+          "journey_step",
+          "latest_version",
+          "approved_version",
+          "run",
+          "track",
+          "figure",
+          "updated_at"
+        ],
+        "title": "PlanPrd"
+      },
+      "PlanReason": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "detail"
+        ],
+        "title": "PlanReason"
+      },
+      "PlanRun": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "checkpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint"
+          },
+          "checkpoint_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Role"
+          },
+          "segment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "PlanRun"
+      },
+      "PlanTrack": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "on_track",
+              "at_risk",
+              "off_track",
+              "no_roadmap",
+              "paused",
+              "closed"
+            ],
+            "title": "Health"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "health"
+        ],
+        "title": "PlanTrack"
+      },
+      "PlanWho": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner",
+              "track_owner",
+              "engineering_lead"
+            ],
+            "title": "Role"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "PlanWho"
       },
       "PrdAnchor": {
         "properties": {

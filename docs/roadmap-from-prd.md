@@ -131,3 +131,27 @@ every export work as before. What it adds (code in `api/oracle/roadmap/`, migrat
 - **Product tracks.** An accepted PRD starts a track (`/v1/tracks`), which follows its
   roadmap: health, the next milestone, items at risk (blocked, stale, slipping) and drift.
   `POST /v1/tracks/{id}/roadmap-run` drafts the next `prd_to_roadmap` run.
+
+## Plan screen (F1, c7 Plan rename)
+
+The Roadmap page became **Plan** (`/plan`; `/roadmap` redirects there, 308): one view of
+where the plan stands. Its tabs are a registry, `web/app/plan/_tabs.ts` (`PLAN_TABS`):
+**Plan** and **Roadmap documents** (`/plan/documents`, the roadmap list with Build roadmap,
+as before); later specs add Dates, Outcomes, Launches and Changelog. A roadmap document's
+breadcrumb and rail highlight say Plan. API routes keep their names.
+
+The Plan tab shows Home's goals band, one card per PRD in play (an active or paused track,
+an unfinished run, or a latest version not approved) with its journey stage, and every
+roadmap item under Now / Next / Later (or grouped by goal or PRD) with its state,
+engineering status and the next decision, the selected item in the inspector. One read
+assembles it: `GET /v1/plan` (`scope=all|approved`, viewer and up; code in
+`api/oracle/plan/`). It reads the items of each roadmap's latest approved version and of
+its latest draft; a draft's item replaces its approved twin and says how it differs
+through the one item diff (`roadmap/diff.py`: new, moved, changed; a confidence change or
+a one-place rank shift is no change). Track health and at-risk reasons are the track
+overview's (`views.assess`), dates are re-checked as `live_milestones` does. It writes
+nothing, calls no model, issues a fixed number of statements whatever the number of
+tracks, and refuses run tokens (MCP: `get_plan`, `get_plan_item_history` for people).
+`GET /v1/plan/items/history?roadmap=<slug>&item=<key>` lists the item's horizon in each
+roadmap version that has it. "Approved + drafts" or "Approved only" is remembered per
+viewer in the browser.

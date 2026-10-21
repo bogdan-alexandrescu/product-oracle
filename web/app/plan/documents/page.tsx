@@ -118,10 +118,11 @@ function PrdInspector({ d, built }: { d: Doc; built: Doc[] }) {
 }
 
 /**
- * Roadmaps (O4b): each opens in the document view, so brief / full, Present, review and
- * the exports work as for a PRD. Approved PRDs below can each build a roadmap.
+ * Plan's Roadmap documents tab (c7: roadmap documents live inside Plan). Roadmaps (O4b): each
+ * opens in the document view, so brief / full, Present, review and the exports work as for a
+ * PRD. Approved PRDs below can each build a roadmap.
  */
-export default function RoadmapPage() {
+export default function RoadmapDocumentsPage() {
   const q = useQuery("documents|roadmap", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "roadmap" } } })));
   const prds = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const latestReport = useQuery("alignment-reports|latest", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 1 } } })));
@@ -232,13 +233,13 @@ export default function RoadmapPage() {
   return (
     <Page>
       <PageHeader
-        title="Roadmap"
+        title="Plan"
         status={
           q.data && (
             <>
               <Chip kind="acc">{roadmaps.length} {roadmaps.length === 1 ? "roadmap" : "roadmaps"}</Chip>
               {inReview > 0 && <Chip kind="acc">{inReview} in review</Chip>}
-              <InfoTip label="Roadmap" align="start" side="bottom">
+              <InfoTip label="Roadmap documents" align="start" side="bottom">
                 Each roadmap opens in the document view. A run turns an approved PRD&apos;s version into roadmap items
                 and a roadmap draft for review.
               </InfoTip>
