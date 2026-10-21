@@ -17,7 +17,7 @@ this revision survive it. The downgrade deletes spec documents and prd_to_spec r
 old schema cannot hold them), then removes the one value again the same way.
 
 Revision ID: 0015_specs
-Revises: 0017_source_config_version
+Revises: 0018_source_unavailable_items
 """
 
 import re
@@ -27,7 +27,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0015_specs"
-down_revision: str | None = "0017_source_config_version"
+down_revision: str | None = "0018_source_unavailable_items"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

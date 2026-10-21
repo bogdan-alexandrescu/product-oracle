@@ -769,8 +769,8 @@ async def test_a_connection_switch_before_the_sync_starts_is_superseded(
         calls = _recording(connector, monkeypatch)
         loaded = sources_router._owned
 
-        async def owned_then_switched(db, principal, sid):
-            source = await loaded(db, principal, sid)
+        async def owned_then_switched(db, principal, sid, **kw):
+            source = await loaded(db, principal, sid, **kw)
             await _change_source(tenant_id, sid, alice, "connection")
             return source
 
@@ -809,8 +809,8 @@ async def test_the_sync_runs_what_the_database_holds_at_its_start(
         calls = _recording(connector, monkeypatch)
         loaded = sources_router._owned
 
-        async def owned_then_reset(db, principal, sid):
-            source = await loaded(db, principal, sid)
+        async def owned_then_reset(db, principal, sid, **kw):
+            source = await loaded(db, principal, sid, **kw)
             async with tenant_session(tenant_id) as s:
                 (await s.get(Source, sid)).cursor = None
                 await s.commit()

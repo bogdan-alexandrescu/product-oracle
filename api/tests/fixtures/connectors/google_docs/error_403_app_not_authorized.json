@@ -1,0 +1,16 @@
+{
+  "error": {
+    "code": 403,
+    "message": "The user has not granted the app 123456789012 read access to the file 1DocUnsharedExample.",
+    "errors": [
+      {
+        "message": "The user has not granted the app 123456789012 read access to the file 1DocUnsharedExample.",
+        "domain": "global",
+        "reason": "appNotAuthorizedToFile",
+        "location": "Authorization",
+        "locationType": "header"
+      }
+    ],
+    "status": "PERMISSION_DENIED"
+  }
+}

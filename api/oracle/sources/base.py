@@ -7,6 +7,8 @@ A connector is stateless and does no database work. The sync engine
 - :class:`ItemUpsert` creates or updates an item (a new version only when the
   content changes);
 - :class:`ItemDelete` marks an item deleted;
+- :class:`ItemUnavailable` reports one allowlisted item the connector cannot read
+  (unshared, access removed); the rest of the source still syncs;
 - :class:`CursorCheckpoint` is a resumable position: everything yielded before it is
   stored, then the cursor is saved, so an interrupted sync resumes from there.
 
@@ -55,6 +57,13 @@ from typing import Any, Protocol, runtime_checkable
 
 from oracle.sources.models import ITEM_KINDS
 
+# Added to a Google Docs source's config by the sync engine, never stored: the company's
+# email domains (oracle.sources.service.company_domains). Config keys starting with "_"
+# are refused from people.
+COMPANY_DOMAINS = "_company_domains"
+# The ids of the shared drives that are the company's, added the same way (S5).
+COMPANY_SHARED_DRIVES = "_company_shared_drives"
+
 
 class ConnectorError(Exception):
     """Base class of connector failures."""
@@ -62,6 +71,11 @@ class ConnectorError(Exception):
 
 class ConnectorConfigError(ConnectorError):
     """The config or credential is invalid (bad repo name, missing scope, ...)."""
+
+
+class ConnectorBadInput(ConnectorConfigError):
+    """The config itself is malformed (an id that is not an id): answered 400, before
+    the provider is called."""
 
 
 class ConnectorAuthError(ConnectorError):
@@ -116,6 +130,21 @@ class ItemDelete:
 
 
 @dataclass(frozen=True)
+class ItemUnavailable:
+    """An allowlisted item that cannot be read now. Shown on the source, per item."""
+
+    external_id: str
+    # One short line for the owner, e.g. "No access: removed, or no longer shared".
+    reason: str
+    # The item's name when the source config does not name it (a doc found in a folder).
+    name: str | None = None
+    # "unavailable": cannot be read; "skipped": readable, left out on purpose (a doc in
+    # a picked folder owned outside the company); "flagged": pulled in, with a warning;
+    # "limited": a folder listing stopped at the source's cap.
+    status: str = "unavailable"
+
+
+@dataclass(frozen=True)
 class CursorCheckpoint:
     cursor: dict[str, Any]
 
@@ -129,7 +158,7 @@ class Attention:
     message: str
 
 
-SyncEvent = ItemUpsert | ItemDelete | CursorCheckpoint | Attention
+SyncEvent = ItemUpsert | ItemDelete | ItemUnavailable | CursorCheckpoint | Attention
 
 # The key of the saved cursor holding the engine's fingerprint of the selection.
 SCOPE_KEY = "_scope"

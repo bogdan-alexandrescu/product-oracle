@@ -42,6 +42,9 @@ class Principal:
     role: Role
     user_id: uuid.UUID | None = None
     token_id: uuid.UUID | None = None
+    # An MCP client approved with oracle:read only: it reads as the user and changes
+    # nothing of theirs, including what the role check would allow (their own sources).
+    read_only: bool = False
     # The run whose token made this call (through MCP), else None.
     run_id: uuid.UUID | None = None
 
@@ -58,6 +61,13 @@ class Principal:
     def actor(self) -> str:
         """Audit actor string, e.g. ``user:<uuid>``."""
         return f"{self.kind}:{self.id}"
+
+
+_READ_METHODS = frozenset({"GET", "HEAD"})
+READ_ONLY = (
+    "This credential can only read (oracle:read): it cannot add, change or delete anything. "
+    "Approve the MCP client with oracle:write to make changes"
+)
 
 
 def _unauthorized() -> HTTPException:
@@ -158,7 +168,12 @@ async def _authenticate(
 ) -> Principal:
     iap_user = await _iap_user(request)
     if bearer is not None:
-        return await _bearer_principal(bearer.credentials)
+        principal = await _bearer_principal(bearer.credentials)
+        if principal.read_only and request.method not in _READ_METHODS:
+            # AC1: a read-only credential changes nothing, whatever the route or role
+            # allows; checked here once, over MCP and on REST alike.
+            raise HTTPException(status.HTTP_403_FORBIDDEN, READ_ONLY)
+        return principal
     if iap_user is not None:
         return Principal(
             tenant_id=iap_user.tenant_id, kind="user", role=iap_user.role, user_id=iap_user.id

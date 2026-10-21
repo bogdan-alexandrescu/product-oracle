@@ -36,6 +36,7 @@ async def make_connection(
     *,
     credential: dict[str, Any] | None = None,
     status: str = "active",
+    scopes: list[str] | None = None,
 ) -> uuid.UUID:
     async with tenant_session(tenant_id) as s:
         conn = Connection(
@@ -48,6 +49,7 @@ async def make_connection(
                 json.dumps(credential or {"access_token": SECRET_TOKEN}).encode()
             ),
             key_version=crypto.KEY_VERSION,
+            scopes=scopes or [],
             status=status,
         )
         s.add(conn)

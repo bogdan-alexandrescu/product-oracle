@@ -242,9 +242,15 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
         {c.scopes.length > 0 && (
           <InfoTip label={`${name} scopes`}>Scopes: {c.scopes.join(", ")}</InfoTip>
         )}
+        {c.reconnect_reason && (
+          <InfoTip label={`why reconnect ${name}`}>
+            This Google sign-in cannot read folders. Reconnect once, then choose files and folders on Sources.
+            Oracle can read your Drive; it pulls in only the files and folders you choose there.
+          </InfoTip>
+        )}
         <span className="flex flex-none items-center gap-1">
-          <Button onClick={reconnect} disabled={pending}>
-            Reconnect
+          <Button onClick={reconnect} disabled={pending} variant={c.reconnect_reason ? "solid" : undefined}>
+            {c.reconnect_reason ?? "Reconnect"}
           </Button>
           {confirming ? (
             <>
