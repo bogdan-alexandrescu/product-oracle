@@ -94,6 +94,11 @@ class FlowSegmentOut(BaseModel):
     approver_role: Role
 
 
+class FlowStart(BaseModel):
+    label: str
+    href: str | None = None
+
+
 class FlowOut(BaseModel):
     key: Flow
     title: str
@@ -104,6 +109,10 @@ class FlowOut(BaseModel):
     # The kind of approved document the run reads (prd_to_roadmap: a PRD).
     source_kind: DocumentKind | None = None
     segments: list[FlowSegmentOut]
+    # D12: the New run dialog offers this flow (one rule for every flow).
+    in_new_run_dialog: bool = False
+    # Where a flow with its own door starts: a pointer line under the dialog's list.
+    starts_from: FlowStart | None = None
 
 
 class FlowCatalog(BaseModel):
@@ -463,6 +472,8 @@ class InboxFeedbackItem(BaseModel):
     resolution_note: str | None = None
     addressed_in_version: int | None = None
     staged_for_version: int | None = None
+    # D12: staged for the agents (no section text): the next draft goes to the agents.
+    staged_for_agents: bool = False
     # The status of Oracle's live suggestion on the item, if it has one (open: "Review
     # suggestions").
     suggestion_status: SuggestionStatus | None = None

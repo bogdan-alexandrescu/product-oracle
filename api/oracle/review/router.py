@@ -165,6 +165,28 @@ async def update_feedback(
     return out
 
 
+@router.post("/feedback/{feedback_id}/stage-for-agents", response_model=FeedbackItemOut)
+async def stage_feedback_for_agents(
+    feedback_id: uuid.UUID, principal: ApproverNow, db: TenantDB
+) -> FeedbackItemOut:
+    """Stage an open item with no section text to accept for the agents (D12): the next
+    draft goes to the agents with it. 409 when it is already staged as a text change or
+    is not open."""
+    out = await _call(service.stage_for_agents(db, principal, feedback_id, True))
+    await db.commit()
+    return out
+
+
+@router.delete("/feedback/{feedback_id}/stage-for-agents", response_model=FeedbackItemOut)
+async def unstage_feedback_for_agents(
+    feedback_id: uuid.UUID, principal: ApproverNow, db: TenantDB
+) -> FeedbackItemOut:
+    """Unstage an item staged for the agents: it is Open again."""
+    out = await _call(service.stage_for_agents(db, principal, feedback_id, False))
+    await db.commit()
+    return out
+
+
 @router.get(VERSION + "/feedback-package", response_model=FeedbackPackage)
 async def get_feedback_package(doc: str, n: int, db: TenantDB) -> FeedbackPackage:
     return await _call(service.feedback_package(db, doc, n))

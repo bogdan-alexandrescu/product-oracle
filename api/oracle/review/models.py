@@ -108,6 +108,11 @@ class FeedbackItem(TenantScoped, Base):
     resolution_note: Mapped[str | None] = mapped_column(Text)
     # A change request's severity (v2, §9); null when not classified.
     severity: Mapped[str | None] = mapped_column(Text)
+    # D12: an approver staged this item for the agents (no section text to accept): the
+    # next draft goes to the agents with it. Cleared when a draft's resolutions close it.
+    staged_for_agents_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Who staged it: a user id or an API token id (no FK, as author_id).
+    staged_for_agents_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

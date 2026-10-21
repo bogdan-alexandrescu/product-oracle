@@ -8,14 +8,23 @@ approver sees one combined preview, may drop sections or edit them, and **Apply*
 imports exactly one new version. Suggestions of dropped (or skipped) sections stay
 staged, and so does everything when the build is discarded.
 
+D12: one Build next draft for two engines. :func:`choose_engine` holds the rule: the
+chosen staged items go to the agents (a ``feedback_loop`` run in SwarmCloud, with exactly
+those items and the accepted text) when any of them was staged for the agents or a chosen
+text change's section is gone; otherwise Oracle's own refinement batch builds them.
+:func:`plan` says which and why, for the web, the Inbox and MCP clients alike.
+
 Service functions flush but never commit, except :func:`apply`, which imports a
-version through the document importer (it commits) and then records what was applied.
+version through the document importer (it commits) and then records what was applied,
+and :func:`start_run`, which creates, estimates and starts a run (each step commits).
 """
 
 import uuid
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,8 +37,11 @@ from oracle.docs.schemas import VersionOut
 from oracle.jobs import kinds, prompting
 from oracle.jobs.models import LlmJob, LlmSuggestion
 from oracle.jobs.schemas import (
+    AgentItem,
     NextDraftFeedback,
+    NextDraftPlan,
     NextDraftPreview,
+    NextDraftReason,
     NextDraftSection,
     SkippedSection,
     StagedChange,
@@ -40,6 +52,7 @@ from oracle.jobs.service import (
     _data_point_lines,
     _is_sources,
     compose_markdown,
+    enabled,
     enqueue,
     get_document,
     job_out,
@@ -48,11 +61,14 @@ from oracle.jobs.service import (
 )
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
+from oracle.runs import flows
 
 if TYPE_CHECKING:
     from oracle.auth.deps import Principal
 
 KIND = "refinement_batch"
+#: The run the agents write a next draft in.
+AGENT_FLOW = "feedback_loop"
 #: Earlier refinements a cost estimate is drawn from.
 ESTIMATE_SAMPLE = 20
 
@@ -214,6 +230,18 @@ async def staged_changes(db: AsyncSession, doc: str, include_gone: bool = False)
         )
     job = await current_job(db, document.id)
     buildable = {c.section_key for c in out if not c.section_gone}
+    agent_rows = list(
+        await db.scalars(
+            select(FeedbackItem)
+            .where(
+                FeedbackItem.document_id == document.id,
+                FeedbackItem.status == "open",
+                FeedbackItem.staged_for_agents_at.is_not(None),
+            )
+            .order_by(FeedbackItem.staged_for_agents_at, FeedbackItem.id)
+        )
+    )
+    stagers = await names(db, {f.staged_for_agents_by for f in agent_rows})
     return StagedChanges(
         document_id=document.id,
         slug=document.slug,
@@ -223,14 +251,197 @@ async def staged_changes(db: AsyncSession, doc: str, include_gone: bool = False)
         gone_count=gone,
         estimate_usd=await _estimate(db, len(buildable)),
         draft_job=await job_out(db, job) if job else None,
+        agent_items=[
+            AgentItem(
+                feedback_id=f.id,
+                summary=f.summary,
+                section_key=f.section_key,
+                staged_by_name=stagers.get(f.staged_for_agents_by),
+                staged_at=f.staged_for_agents_at,
+            )
+            for f in agent_rows
+        ],
     )
+
+
+# --- the engine (D12) ---------------------------------------------------------------------
+
+
+@dataclass
+class Plan:
+    engine: Literal["oracle", "agents"]
+    why: list[NextDraftReason] = field(default_factory=list)
+
+
+def _n(count: int, one: str, many: str) -> str:
+    return f"{count} {one if count == 1 else many}"
+
+
+def choose_engine(
+    text_changes: Sequence[StagedChange], agent_items: Sequence[AgentItem], document: Any
+) -> Plan:
+    """The one rule for which engine builds the chosen staged items.
+
+    ``agents`` when any chosen item was staged for the agents (a remark about the whole
+    draft, or an item that needs more than a section's text changed) or a chosen text
+    change's section is gone from the latest version; otherwise ``oracle`` (Oracle's own
+    refinement batch). A locked section is the built-in path's refusal, not a reason for
+    the agents. A roadmap's items needing re-deriving joins as ``roadmap_items`` once
+    roadmap-per-draft items exist (group E); ``document`` is taken for it."""
+    why: list[NextDraftReason] = []
+    general = [i.feedback_id for i in agent_items if i.section_key is None]
+    sectioned = [i.feedback_id for i in agent_items if i.section_key is not None]
+    gone = [c for c in text_changes if c.section_gone]
+    if general:
+        why.append(
+            NextDraftReason(
+                code="whole_draft",
+                text=_n(len(general), "remark is", "remarks are") + " about the whole draft",
+                feedback_ids=general,
+            )
+        )
+    if sectioned:
+        why.append(
+            NextDraftReason(
+                code="structure",
+                text=_n(len(sectioned), "item needs", "items need")
+                + " more than a section's text changed",
+                feedback_ids=sectioned,
+            )
+        )
+    if gone:
+        sections = len({c.section_key for c in gone})
+        why.append(
+            NextDraftReason(
+                code="section_gone",
+                text=_n(sections, "section", "sections")
+                + (" to change is gone" if sections == 1 else " to change are gone"),
+                suggestion_ids=[c.suggestion_id for c in gone],
+            )
+        )
+    return Plan(engine="agents" if why else "oracle", why=why)
+
+
+async def _chosen(
+    db: AsyncSession,
+    doc: str,
+    suggestion_ids: list[uuid.UUID] | None,
+    feedback_ids: list[uuid.UUID] | None,
+) -> tuple[StagedChanges, list[StagedChange], list[AgentItem]]:
+    """The staged items a build takes: the ones named (each must be staged), else every
+    staged text change whose section exists and every item staged for the agents."""
+    staged = await staged_changes(db, doc, include_gone=True)
+    if suggestion_ids is None:
+        changes = [c for c in staged.items if not c.section_gone]
+    else:
+        wanted = set(suggestion_ids)
+        changes = [c for c in staged.items if c.suggestion_id in wanted]
+        if len(changes) != len(wanted):
+            raise JobError(422, "every suggestion must be a staged (accepted, not applied) change")
+    if feedback_ids is None:
+        items = list(staged.agent_items)
+    else:
+        wanted = set(feedback_ids)
+        items = [i for i in staged.agent_items if i.feedback_id in wanted]
+        if len(items) != len(wanted):
+            raise JobError(422, "every feedback item must be staged for the agents")
+    if not changes and not items:
+        raise JobError(422, "nothing is staged for the next draft")
+    return staged, changes, items
+
+
+def _locked_refusal(changes: Sequence[StagedChange]) -> str | None:
+    hit = sorted({(c.section_heading, c.section_key) for c in changes if c.section_locked})
+    if not hit:
+        return None
+    named = ", ".join(f"{h} ({k})" for h, k in hit)
+    return f"approved and locked, never changed: {named}; untick them"
+
+
+def _agent_estimate(depth: str) -> Decimal:
+    flow = flows.FLOWS[AGENT_FLOW]
+    knobs = flows.resolve_knobs(flow, {"depth": depth})
+    return sum((flows.segment_estimate(s, knobs) for s in flow.segments), Decimal(0))
+
+
+async def plan(
+    db: AsyncSession,
+    doc: str,
+    suggestion_ids: list[uuid.UUID] | None,
+    feedback_ids: list[uuid.UUID] | None,
+    depth: str = "standard",
+) -> NextDraftPlan:
+    """Which engine builds the chosen staged items (default: every staged one), and why;
+    the agents' run estimate, or why the built-in build cannot start."""
+    staged, changes, items = await _chosen(db, doc, suggestion_ids, feedback_ids)
+    chosen = choose_engine(changes, items, await get_document(db, doc))
+    out = NextDraftPlan(
+        engine=chosen.engine,
+        why=chosen.why,
+        text_changes=len(changes),
+        agent_items=len(items),
+        sections=len({c.section_key for c in changes}),
+        next_version=staged.next_version,
+    )
+    if chosen.engine == "agents":
+        estimate = _agent_estimate(depth)
+        out.estimate_usd = float(estimate)
+        out.needs_owner_approval = estimate > flows.APPROVAL_THRESHOLD_USD
+    elif not enabled(await get_document(db, doc), KIND):
+        out.refused = "Refinement is turned off for this document"
+    else:
+        out.refused = _locked_refusal(changes)
+    return out
+
+
+class NeedsAgents(JobError):
+    """The built-in build was asked for items only the agents can build (409)."""
+
+    def __init__(self, why: list[NextDraftReason]):
+        self.why = why
+        super().__init__(409, "these changes need the agents: " + "; ".join(w.text for w in why))
+
+
+async def start_run(
+    db: AsyncSession,
+    principal: "Principal",
+    doc: str,
+    suggestion_ids: list[uuid.UUID] | None,
+    feedback_ids: list[uuid.UUID] | None,
+    depth: str = "standard",
+) -> uuid.UUID:
+    """Start the agents' feedback-loop run with exactly the chosen items: created,
+    estimated and started (or left awaiting an owner's approval over the threshold)."""
+    from oracle.runs import service as runs
+    from oracle.runs.schemas import KnobsIn, RunCreate
+
+    staged, changes, items = await _chosen(db, doc, suggestion_ids, feedback_ids)
+    document = await get_document(db, doc)
+    if choose_engine(changes, items, document).engine == "oracle":
+        raise JobError(409, "these changes need no agents; build them with Oracle")
+    run_id = await runs.create_run(
+        db,
+        principal,
+        RunCreate(flow=AGENT_FLOW, document=document.slug, knobs=KnobsIn(depth=depth)),
+        oracle_knobs={
+            "feedback_ids": [str(i.feedback_id) for i in items],
+            "suggestion_ids": [str(c.suggestion_id) for c in changes],
+        },
+    )
+    await runs.estimate(db, principal, run_id)
+    await runs.start(db, principal, run_id)
+    return run_id
 
 
 # --- build --------------------------------------------------------------------------------
 
 
 async def build(
-    db: AsyncSession, principal: "Principal", doc: str, suggestion_ids: list[uuid.UUID] | None
+    db: AsyncSession,
+    principal: "Principal",
+    doc: str,
+    suggestion_ids: list[uuid.UUID] | None,
+    feedback_ids: list[uuid.UUID] | None = None,
 ) -> LlmJob:
     document = await get_document(db, doc)
     # Serialise builds per document: the row lock is held until the request commits, so a
@@ -245,6 +456,11 @@ async def build(
             409,
             f"a build is already running (job {pending.id}); wait for it or discard it",
         )
+    # D12: the built-in engine builds only what needs no agents.
+    _, changes, items = await _chosen(db, doc, suggestion_ids, feedback_ids)
+    chosen = choose_engine(changes, items, document)
+    if chosen.engine == "agents":
+        raise NeedsAgents(chosen.why)
     sections = await _sections(db, latest)
     headings = {s.section_key: s.heading for s in sections}
     ids = [str(i) for i in suggestion_ids] if suggestion_ids is not None else None

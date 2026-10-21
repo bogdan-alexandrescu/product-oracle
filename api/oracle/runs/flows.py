@@ -133,6 +133,12 @@ class FlowDef:
     # The kind of the approved document the run reads (prd_to_roadmap: a PRD); None:
     # the run reads no source document.
     source_kind: str | None = None
+    # D12: the one rule for which flows the New run dialog offers; a flow with its own
+    # door elsewhere stays out of it and says where it starts instead (``starts_from``).
+    in_new_run_dialog: bool = False
+    # (label, href) of the pointer line the dialog shows for a flow with its own door;
+    # href None: no link (the door is on every document).
+    starts_from: tuple[str, str | None] | None = None
 
     def segment(self, name: str) -> SegmentDef:
         return next(s for s in self.segments if s.name == name)
@@ -153,6 +159,7 @@ FLOWS: dict[str, FlowDef] = {
             key="baseline_to_prd",
             title="Baseline to PRD",
             description="Baseline proposal, feature set and design, priority order, PRD draft.",
+            in_new_run_dialog=True,
             segments=(
                 SegmentDef(
                     name="baseline",
@@ -229,6 +236,8 @@ FLOWS: dict[str, FlowDef] = {
             description="Pull open feedback on a PRD or roadmap, write the next draft, review it.",
             requires_document=True,
             target_kind=None,
+            # Started from Build next draft on a PRD or roadmap, with the staged items.
+            starts_from=("Build next draft · open a PRD or roadmap and use Build next draft", None),
             segments=(
                 SegmentDef(
                     name="next_draft",
@@ -264,6 +273,7 @@ FLOWS: dict[str, FlowDef] = {
             "dependencies, priority), then a roadmap draft in the chosen template.",
             target_kind="roadmap",
             source_kind="prd",
+            starts_from=("PRD to roadmap · Plan", "/roadmap"),
             segments=(
                 SegmentDef(
                     name="roadmap_items",
@@ -450,8 +460,11 @@ class PromptContext:
     prior_outputs: dict[str, str] = field(default_factory=dict)
     # Notes from checkpoint approvals and requested changes.
     reviewer_notes: list[str] = field(default_factory=list)
-    # Open feedback for the feedback loop: id, section, summary.
+    # Feedback for the feedback loop: id, section, summary (and, for a staged text
+    # change, its accepted_text).
     feedback: list[dict[str, Any]] = field(default_factory=list)
+    # True: ``feedback`` holds only what an approver staged for this draft (D12).
+    staged: bool = False
     locked_sections: list[str] = field(default_factory=list)
     attempt: int = 1
     change_request: str | None = None
@@ -542,11 +555,15 @@ def step_prompt(
         lines += ["", "Reviewer notes from earlier checkpoints:"]
         lines += [f"- {n}" for n in ctx.reviewer_notes]
     if ctx.feedback:
-        lines += ["", "Open feedback items:"]
         lines += [
-            f"- {f['id']} [{f.get('section_key') or 'general'}]: {f['summary']}"
-            for f in ctx.feedback
+            "",
+            "Feedback items staged for this draft:" if ctx.staged else "Open feedback items:",
         ]
+        for f in ctx.feedback:
+            lines.append(f"- {f['id']} [{f.get('section_key') or 'general'}]: {f['summary']}")
+            if f.get("accepted_text"):
+                text = f["accepted_text"].strip().replace("\n", "\n  ")
+                lines.append(f"  Accepted change for this section: {text}")
     if ctx.locked_sections:
         lines += ["", "Locked (approved) sections: " + ", ".join(ctx.locked_sections)]
     if ctx.source is not None:

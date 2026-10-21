@@ -387,8 +387,12 @@ async def test_the_runs_draft_closes_the_items_and_applies_the_text_it_was_sent(
     resolutions = "resolutions:\n" + "".join(
         f"  - feedback_id: {f}\n    status: addressed\n    note: Done.\n" for f in sent
     )
-    markdown = draft("prd_v1.md").replace("---\n", "---\n" + resolutions, 1)
-    markdown = markdown.replace("Owner: product.", "Owner: growth.")
+    markdown = (
+        draft("prd_v1.md")
+        .replace("---\n", "---\n" + resolutions, 1)
+        .replace("Serves G1 (activation): more first-time buyers complete a purchase", GOAL_TEXT)
+        .replace("Too many shoppers leave checkout before paying.", PROBLEM_TEXT)
+    )
     runtime.script["next_draft"] = [Outcome(artifacts={"prd.md": markdown})]
 
     run = (await client.post(f"{DOC}/next-draft/run", json={}, headers=auth)).json()
@@ -397,9 +401,16 @@ async def test_the_runs_draft_closes_the_items_and_applies_the_text_it_was_sent(
 
     assert run["segments"][0]["draft_import"]["version"] == 2
     fb = {f["id"]: f for f in (await client.get(f"{DOC}/feedback", headers=auth)).json()}
-    for fid in sent:
+    for fid in (ids["goal"], ids["problem"]):
         assert (fb[fid]["status"], fb[fid]["state"]) == ("addressed", "done"), fid
-    assert fb[ids["general"]]["staged_for_agents"] is False
+    # An agent never closes a whole-draft item itself (a person confirms it in the
+    # version's review); answered by the draft, it leaves Staged.
+    general = fb[ids["general"]]
+    assert (general["status"], general["state"], general["staged_for_agents"]) == (
+        "open",
+        "open",
+        False,
+    )
     assert fb[ids["other"]]["state"] == "open"
     async with tenant_session(ids["tenant_id"]) as s:
         rows = list(
