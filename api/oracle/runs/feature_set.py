@@ -45,7 +45,8 @@ When the segment ends Oracle writes a **proposed scope** (:func:`write_scope`,
 oracle.runs.scope_models), even with blocking problems; approving the checkpoint
 approves it after :func:`check_scope` re-checks the rows as stored with the same rules
 (:func:`check_rows`, on the parse pool too: a re-check that takes longer than
-``PARSE_SECONDS`` is the blocking problem ``too_slow``). The priority order, the PRD
+``PARSE_SECONDS`` is the blocking problem ``too_slow``); the file's problems the rows
+cannot show (``ONLY_IN_THE_FILE``) stay until it is sent back. The priority order, the PRD
 draft and the document's next drafts read the approved scope (``GET /v1/runs/{id}/scope``,
 ``GET /v1/documents/{doc}/scope``, the curated MCP tool ``get_prd_scope``, or
 :func:`scope_yaml_async`, rendered on the parse pool and pasted in the prompt).
@@ -112,6 +113,10 @@ FLAG_ORDER = (
 )
 # Problems of the file itself, not of its features: kept when the rows are re-checked.
 FILE_PROBLEMS = ("unreadable_yaml", "missing_file", "wrong_version", "wrong_document")
+# Problems the stored rows cannot show again (:func:`rows_of` drops duplicate and keyless
+# entries, :func:`write_scope` fills a missing title and goals): kept when the rows are
+# re-checked too, until the file is sent back.
+ONLY_IN_THE_FILE = (*FILE_PROBLEMS, "duplicate_key", "missing_field", "invalid_field")
 # Features a scope leaves out (scope-only: the baseline keeps them).
 LEFT_OUT = ("exclude", "defer")
 
@@ -879,14 +884,19 @@ def _rows(items: list[PrdScopeItem]) -> list[dict[str, Any]]:
     ]
 
 
+def _problem_id(p: dict[str, Any]) -> tuple[Any, ...]:
+    return (p.get("code"), p.get("feature"), p.get("requirement"), p.get("message"))
+
+
 async def check_scope(db: AsyncSession, scope: PrdScope) -> FeatureSetCheck:
     """Re-check the scope as stored, with the same rules as the file (:func:`check_rows`)
     against the baseline now (a proposal rejected since, a goal unconfirmed): its stored
     check and each feature's flags follow. The caller commits."""
     stored = scope.check_result or {}
     # What the file said beyond its rows (its version, its document, whether it could be
-    # read at all) stays until the file is sent back: rows cannot fix it.
-    carried = [p for p in stored.get("problems") or [] if p.get("code") in FILE_PROBLEMS]
+    # read at all, a key twice, a feature without a key or goals) stays until the file is
+    # sent back: rows cannot fix it.
+    carried = [p for p in stored.get("problems") or [] if p.get("code") in ONLY_IN_THE_FILE]
     if any(p["code"] in ("unreadable_yaml", "missing_file") for p in carried):
         return FeatureSetCheck(problems=carried)
     items = await scope_items(db, scope.id)
@@ -904,7 +914,9 @@ async def check_scope(db: AsyncSession, scope: PrdScope) -> FeatureSetCheck:
             "too_slow", f"the scope took more than {PARSE_SECONDS:g} s to check; keep it smaller"
         )
         return out
-    check.problems = carried + check.problems
+    # A problem the rows show again (a requirement without text) is counted once.
+    seen = {_problem_id(p) for p in carried}
+    check.problems = carried + [p for p in check.problems if _problem_id(p) not in seen]
     scope.check_result = check.as_json()
     for item in items:
         if item.kind == "feature" and item.decision == "include":
