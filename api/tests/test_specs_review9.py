@@ -29,6 +29,7 @@ from oracle.export.pdf import pdf_available
 from oracle.swarm import FakeRuntime, set_runtime
 from tests.baseline_helpers import make_ctx
 from tests.specs_helpers import import_md, make_world
+from tests.test_mcp import api_token
 from tests.test_specs_review2 import generated
 from tests.test_specs_review3 import _edit
 from tests.test_specs_review7 import _after_anchor
@@ -141,11 +142,16 @@ async def test_a_queue_wait_does_not_count_against_the_parse_cap():
 
 async def test_slow_posts_do_not_make_a_small_honest_import_fail(client, monkeypatch):
     monkeypatch.setattr(safe_yaml, "PARSE_SECONDS", 0.3)
-    owner = (await make_ctx()).as_("owner")
+    ctx = await make_ctx()
+    owner = ctx.as_("owner")
     # Nested brackets (depth 10, closed): slow for markdown-it (seconds each), under every
-    # linear cap.
+    # linear cap. Four people post two each (one person has at most two parses at once).
     slow = FRONT + "\n".join(["[[[[[[[[[[a]]]]]]]]]] " * 800] * 10) + "\n"
-    posts = [asyncio.create_task(import_md(client, owner, slow, doc=f"slow-{i}")) for i in range(8)]
+    posters = [{"Authorization": f"Bearer {await api_token(ctx.tenant_id)}"} for _ in range(4)]
+    posts = [
+        asyncio.create_task(import_md(client, posters[i % 4], slow, doc=f"slow-{i}"))
+        for i in range(8)
+    ]
     # The slow posts hold every worker of the parse pool and more wait for one.
     pool = safe_yaml._EXECUTOR
     for _ in range(500):

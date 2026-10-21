@@ -12,6 +12,7 @@ import pytest
 
 from oracle.docs.parser import CITATION_STRIP_RE, SECTION_ID_RE, DraftError, parse_draft
 from tests.fixtures import draft, import_draft, seed_auth
+from tests.test_mcp import api_token
 
 PRD = draft("prd_v1.md")
 CPU_LIMIT = 2.0
@@ -58,7 +59,7 @@ async def test_import_is_linear_on_a_space_run(client, shape):
 
 @pytest.mark.parametrize("shape", sorted(SHAPES))
 async def test_honest_import_after_four_big_posts(client, shape):
-    _, auth = await seed_auth()
+    tenant, auth = await seed_auth()
     big = SHAPES[shape](50)  # ~1 MB
     assert len(big.encode()) < 1024 * 1024
     await import_draft(client, auth, PRD)
@@ -75,7 +76,8 @@ async def test_honest_import_after_four_big_posts(client, shape):
         for i in range(4)
     ]
     await asyncio.sleep(0)
-    honest = await import_draft(client, auth, PRD)
+    # Another person's: one person has at most two parses at once.
+    honest = await import_draft(client, {"Authorization": f"Bearer {await api_token(tenant)}"}, PRD)
     took = time.perf_counter() - start
     assert honest.status_code in (200, 201), honest.text[:300]
     assert took < 10, f"the honest import took {took:.1f}s behind four big posts"
