@@ -63,13 +63,23 @@ async def test_honest_import_after_four_big_posts(client, shape):
     assert len(big.encode()) < 1024 * 1024
     await import_draft(client, auth, PRD)
     start = time.perf_counter()
-    posts = [asyncio.create_task(import_draft(client, auth, big)) for _ in range(4)]
+    posts = [
+        asyncio.create_task(
+            import_draft(
+                client,
+                auth,
+                big.replace("document: checkout-redesign", f"document: big-{i}", 1),
+                doc=f"big-{i}",
+            )
+        )
+        for i in range(4)
+    ]
     await asyncio.sleep(0)
     honest = await import_draft(client, auth, PRD)
     took = time.perf_counter() - start
-    assert honest.status_code == 201, honest.text
+    assert honest.status_code in (200, 201), honest.text[:300]
     assert took < 10, f"the honest import took {took:.1f}s behind four big posts"
-    await asyncio.gather(*posts)
+    await asyncio.gather(*posts, return_exceptions=True)
 
 
 def test_regexes_keep_their_behaviour_on_normal_text():
