@@ -7,9 +7,11 @@ import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { Icon, useDocumentDestination } from "@/components/ds";
 import type { DocumentOut } from "@/lib/api/client";
 
-/** The list a document belongs to: Plan for roadmaps (c7), PRDs for the rest. */
+/** The list a document belongs to: Plan for roadmaps (c7), Company › Strategy for a vision or strategy (H4), PRDs for the rest. */
 function home(doc?: DocumentOut) {
-  return doc?.kind === "roadmap" ? { href: "/plan", label: "Plan" } : { href: "/documents", label: "PRDs" };
+  if (doc?.kind === "roadmap") return { href: "/plan", label: "Plan" };
+  if (doc?.kind === "vision" || doc?.kind === "strategy") return { href: "/company/strategy", label: "Company › Strategy" };
+  return { href: "/documents", label: "PRDs" };
 }
 
 /**
@@ -18,7 +20,7 @@ function home(doc?: DocumentOut) {
  */
 export function DocCrumb({ doc, withTitle = true }: { doc?: DocumentOut; withTitle?: boolean }) {
   const h = home(doc);
-  // The rail highlights the same list (Plan for a roadmap) once the kind is known.
+  // The rail highlights the same list (Plan for a roadmap, Company for a strategy) once the kind is known.
   useDocumentDestination(doc?.slug, doc ? h.href : undefined);
   return (
     <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">

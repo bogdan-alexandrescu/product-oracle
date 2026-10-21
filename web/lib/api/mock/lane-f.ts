@@ -396,7 +396,9 @@ export function ranking(method: Method): Schemas["PriorityRanking"] {
 
 type TemplateSeed = {
   key: string;
-  kind: Kind;
+  kind: Kind | "vision" | "strategy";
+  /** How many leading sections are the brief (default 2). */
+  brief?: number;
   name: string;
   description: string;
   suggest_when: string;
@@ -567,7 +569,51 @@ const TEMPLATE_SEEDS: TemplateSeed[] = [
       ["cool-down", "Cool-down", "Fixes and exploration between cycles."],
     ],
   },
+  // H4: the built-in vision and product strategy templates, started from Company › Strategy.
+  {
+    key: "vision-narrative",
+    kind: "vision",
+    name: "Vision narrative",
+    description: "The future we see, for whom, what we believe and why now",
+    suggest_when: "A product vision two to ten years out",
+    theme: "editorial-memo",
+    brief: 4,
+    sections: [
+      ["headline", "Headline", "One sentence."],
+      ["future", "The future we see", "The narrative, about 300 words."],
+      ["for-whom", "Who it is for", "Customers and segments."],
+      ["beliefs", "What we believe", "Three to seven beliefs, each with evidence for and against."],
+      ["why-now", "Why now", "What makes this the moment."],
+      ["not", "What it is not", "What the vision leaves out."],
+      ["horizon", "Horizon and review", "Years covered and a review date."],
+    ],
+  },
+  {
+    key: "product-strategy",
+    kind: "strategy",
+    name: "Product strategy",
+    description: "The few problems that matter now, what we stop, and why",
+    suggest_when: "A product strategy for the next one to two years",
+    theme: "editorial-memo",
+    brief: 3,
+    sections: [
+      ["summary", "Strategy in one paragraph", "The strategy in one paragraph."],
+      ["focus", "Focus", "One subsection per focus choice: the problem, the insight, the goals it serves."],
+      ["stop", "What we stop or won't do", "One subsection per stop choice: the work and why it stops."],
+      ["insights", "Insights", "From data and customers."],
+      ["company", "How this serves the company strategy", "The company strategy it serves."],
+      ["tradeoffs", "Trade-offs and risks", "What we give up."],
+      ["horizon", "Horizon and review", "Dates, and a quarterly check."],
+    ],
+  },
 ];
+
+const TEMPLATE_TITLE: Record<TemplateSeed["kind"], string> = {
+  prd: "<Feature> PRD",
+  roadmap: "<Product> roadmap",
+  vision: "Vision",
+  strategy: "Product strategy",
+};
 
 function templateBody(t: TemplateSeed): string {
   const lines = [
@@ -575,10 +621,10 @@ function templateBody(t: TemplateSeed): string {
     `template: ${t.key}`,
     `theme: ${t.theme}`,
     `suggest_when: ${JSON.stringify(t.suggest_when)}`,
-    `brief: [${t.sections.slice(0, 2).map(([id]) => id).join(", ")}]`,
+    `brief: [${t.sections.slice(0, t.brief ?? 2).map(([id]) => id).join(", ")}]`,
     "---",
     "",
-    `# ${t.kind === "prd" ? "<Feature> PRD" : "<Product> roadmap"} {#title}`,
+    `# ${TEMPLATE_TITLE[t.kind]} {#title}`,
     "",
   ];
   for (const [id, heading, hint] of t.sections) lines.push(`## ${heading} {#${id}}`, `<!-- ${hint} -->`, "");
@@ -1421,7 +1467,7 @@ const KEY_RE = /^[a-z0-9][a-z0-9-]{1,62}$/;
  * Handles /v1/priorities, /v1/templates, /v1/themes and /v1/drafts; returns null for
  * any other route so server.ts carries on.
  */
-export async function laneF(db: Db, req: Request, p: string[], m: string): Promise<Response | null> {
+export async function laneF(db: Db, req: Request, p: string[], m: string, role?: Schemas["Me"]["role"]): Promise<Response | null> {
   const area = p[1];
   if (!["priorities", "templates", "themes", "drafts"].includes(area)) return null;
   const st = state(db);
@@ -1668,6 +1714,12 @@ export async function laneF(db: Db, req: Request, p: string[], m: string): Promi
       return json(200, st.defaults);
     }
   }
-  if (p.length === 2 && m === "POST") return startDraft(db, st, await body<Schemas["StartDraftIn"]>());
+  if (p.length === 2 && m === "POST") {
+    const input = await body<Schemas["StartDraftIn"]>();
+    // As the API (MIN_STARTER_ROLE): a vision or a product strategy is an owner's to start.
+    const words = input.kind === "vision" ? "a vision" : input.kind === "strategy" ? "a product strategy" : null;
+    if (words && role !== "owner") return json(403, { detail: `Only an owner can start ${words}` });
+    return startDraft(db, st, input);
+  }
   return notFound("Route");
 }

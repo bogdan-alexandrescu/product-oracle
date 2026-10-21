@@ -22066,7 +22066,7 @@ export interface components {
              */
             stance: "focus" | "stop";
             /** Goals */
-            goals: components["schemas"]["StackNode"][];
+            goals: components["schemas"]["StackGoal"][];
             /** Features */
             features: components["schemas"]["StackNode"][];
             /** Items */
@@ -22093,6 +22093,23 @@ export interface components {
             version: number;
             /** Approved At */
             approved_at: string | null;
+        };
+        /** StackGoal */
+        StackGoal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Items
+             * @default 0
+             */
+            items: number;
         };
         /** StackNode */
         StackNode: {

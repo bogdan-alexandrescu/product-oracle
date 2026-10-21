@@ -108,11 +108,20 @@ function finding(id: string, extra: Partial<Finding>): Finding {
   };
 }
 
-/** Four open findings (two high: items still planned under the stop choice) and one waived. */
-export function seedStrategy(uuid: () => string): StrategyDb {
-  const node = (key: string, title: string) => ({ id: uuid(), key, title });
-  const activation = node("activation", "Activation");
-  const conversion = node("paid-conversion", "Paid conversion");
+type GoalRow = { id: string; type: string; key: string; title: string };
+
+/**
+ * Four open findings (two high: items still planned under the stop choice) and one waived.
+ * The focus goals are the mock baseline's own (`entities`), so their distance to go is the
+ * baseline's; `vision: false` is the company with a strategy and no vision yet.
+ */
+export function seedStrategy(uuid: () => string, entities: GoalRow[] = [], { vision = true } = {}): StrategyDb {
+  const node = (key: string, title: string) => {
+    const e = entities.find((x) => x.type === "goal" && x.key === key);
+    return e ? { id: e.id, key: e.key, title: e.title } : { id: uuid(), key, title };
+  };
+  const activation = node("g.activation", "Raise activation");
+  const conversion = node("g.paid-conversion", "Grow paid conversion");
   const retention = node("retention", "Retention");
   const reports = node("custom-reports", "Custom report builder");
   const items = [uuid(), uuid(), uuid()];
@@ -147,7 +156,7 @@ export function seedStrategy(uuid: () => string): StrategyDb {
   return {
     findings,
     stack: {
-      vision: {
+      vision: !vision ? null : {
         document: doc("vision", "Vision", 1),
         headline: "Every small team plans its product like a large one.",
         horizon_years: 5,
@@ -163,7 +172,7 @@ export function seedStrategy(uuid: () => string): StrategyDb {
         summary: "Win self-serve teams first; stop custom reporting.",
         review_on: "2027-10-01",
         choices: [
-          { entity_id: uuid(), id: "self-serve", title: "Self-serve onboarding", stance: "focus", goals: [activation, conversion], features: [], items: 4, open_findings: 0 },
+          { entity_id: uuid(), id: "self-serve", title: "Self-serve onboarding", stance: "focus", goals: [{ ...activation, items: 3 }, { ...conversion, items: 2 }], features: [], items: 4, open_findings: 0 },
           { entity_id: uuid(), id: "team-plans", title: "Team plans", stance: "focus", goals: [], features: [], items: 1, open_findings: 0 },
           { entity_id: uuid(), id: "custom-reports", title: "Custom report builder", stance: "stop", goals: [], features: [reports], items: 2, open_findings: 2 },
         ],

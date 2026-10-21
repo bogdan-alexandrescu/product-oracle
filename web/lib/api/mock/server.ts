@@ -429,11 +429,11 @@ function seedManyPeople(): Db {
 
 /**
  * The default company plus an approved vision, a product strategy (v1 approved, v2 in
- * review) and open strategy drift findings (H4).
+ * review) and open strategy drift findings (H4); "strategy-no-vision" leaves the vision out.
  */
-function seedStrategyScenario(): Db {
+function seedStrategyScenario(vision = true): Db {
   const db = seed();
-  for (const d of STRATEGY_DOCUMENTS) {
+  for (const d of STRATEGY_DOCUMENTS.filter((x) => vision || x.kind !== "vision")) {
     const doc: DocumentRow = {
       id: uuid(),
       slug: d.slug,
@@ -453,7 +453,7 @@ function seedStrategyScenario(): Db {
       db.versions.push(row);
     }
   }
-  db.strategy = seedStrategy(uuid);
+  db.strategy = seedStrategy(uuid, db.baseline.entities, { vision });
   return db;
 }
 
@@ -1201,8 +1201,8 @@ function load(): Db {
               ? seedPrivateFinding
               : scenario === "many-people"
                 ? seedManyPeople
-                : scenario === "strategy"
-                  ? seedStrategyScenario
+                : scenario === "strategy" || scenario === "strategy-no-vision"
+                  ? () => seedStrategyScenario(scenario === "strategy")
                   : seed,
   );
   // Revokes a disable could not make: none, unless a spec asks for them.
@@ -2135,7 +2135,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     return (await routeRuns({ ...runsContext(db), db: db.runs }, forwarded, ["v1", "runs"]))!;
   }
 
-  const handled = await laneF(db, req, p, m);
+  const handled = await laneF(db, req, p, m, me.role);
   if (handled) return handled;
 
   const followUp = followUpsRoute(db, req, p, me);

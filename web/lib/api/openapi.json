@@ -67236,7 +67236,7 @@
           },
           "goals": {
             "items": {
-              "$ref": "#/components/schemas/StackNode"
+              "$ref": "#/components/schemas/StackGoal"
             },
             "type": "array",
             "title": "Goals"
@@ -67328,6 +67328,35 @@
           "approved_at"
         ],
         "title": "StackDocument"
+      },
+      "StackGoal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title"
+        ],
+        "title": "StackGoal"
       },
       "StackNode": {
         "properties": {

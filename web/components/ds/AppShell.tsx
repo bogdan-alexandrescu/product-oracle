@@ -55,7 +55,7 @@ function subscribeDocumentHomes(listener: () => void) {
   };
 }
 
-/** A document page says which destination it belongs to (`href`, e.g. "/plan"). */
+/** A document page says which destination it belongs to (`href`, e.g. "/plan", or "/company/strategy" for a vision or strategy). */
 export function useDocumentDestination(slug: string | undefined, href: string | undefined) {
   useLayoutEffect(() => {
     if (!slug || !href || documentHomes.get(slug) === href) return;
@@ -77,8 +77,8 @@ function useDocumentHome(pathname: string): string | undefined {
 }
 
 function isActive(pathname: string, d: Dest, home?: string): boolean {
-  // A document page: the list its document belongs to.
-  if (home) return d.href === home;
+  // A document page: the list its document belongs to (Company for /company/strategy).
+  if (home) return d.href === home || home.startsWith(`${d.href}/`);
   const base = d.match ?? d.href;
   // /sources (evidence search) lives under Settings › Sources.
   if (d === SETTINGS && pathname.startsWith("/sources")) return true;

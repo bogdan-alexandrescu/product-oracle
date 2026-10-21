@@ -146,3 +146,17 @@ async def test_only_a_strategy_draft_run_takes_a_brief(client, ctx):
     )
     assert resp.status_code == 422, resp.text
     assert "only a Vision or strategy draft run takes a brief" in resp.text
+
+
+async def test_the_flow_catalog_points_to_company_strategy(client, ctx):
+    """protects=the New run dialog says where a vision or strategy draft starts (Company ›
+    Strategy) and does not offer the flow itself; fails_when=the pointer is missing or the
+    flow is in the dialog; no_claim=the page itself (Playwright)."""
+    resp = await client.get("/v1/flows", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    flow = {f["key"]: f for f in resp.json()["flows"]}["strategy_draft"]
+    assert flow["in_new_run_dialog"] is False
+    assert flow["starts_from"] == {
+        "label": "Vision or strategy · Company › Strategy, New vision or Draft next version",
+        "href": "/company/strategy",
+    }
