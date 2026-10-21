@@ -116,7 +116,14 @@ async def _get_section(session: AsyncSession, version: DocumentVersion, key: str
 
 
 async def _get_comment(session: AsyncSession, comment_id: uuid.UUID) -> Comment:
-    comment = await session.get(Comment, comment_id)
+    # Joined to its document: a comment on a document the caller may not see is not found
+    # (H8, oracle.docs.visibility).
+    comment = await session.scalar(
+        select(Comment)
+        .join(DocumentVersion, DocumentVersion.id == Comment.version_id)
+        .join(Document, Document.id == DocumentVersion.document_id)
+        .where(Comment.id == comment_id)
+    )
     if comment is None:
         raise ReviewError("not_found", f"Comment {comment_id} not found")
     return comment

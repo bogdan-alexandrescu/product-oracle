@@ -95,7 +95,5 @@ def _add_visibility_criteria(state: ORMExecuteState) -> None:
     if not restricted(principal):
         return
     state.statement = state.statement.options(
-        with_loader_criteria(
-            Document, lambda cls: cls.visibility == COMPANY, include_aliases=True
-        )
+        with_loader_criteria(Document, lambda cls: cls.visibility == COMPANY, include_aliases=True)
     )

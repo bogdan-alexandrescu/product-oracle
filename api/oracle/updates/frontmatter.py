@@ -26,8 +26,7 @@ ASKS_KEY = "asks"
 # What the built-in templates write in Asks; a company template's own text is read from
 # its body (:func:`placeholder_of`).
 ASKS_PLACEHOLDER = {
-    INVESTOR: "Owner to fill: what you need from investors this month (intros, hires, "
-    "customers).",
+    INVESTOR: "Owner to fill: what you need from investors this month (intros, hires, customers).",
     BOARD: "Owner to fill: the decisions you need from the board this meeting.",
 }
 

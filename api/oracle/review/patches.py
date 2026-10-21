@@ -131,9 +131,15 @@ async def propose_held(
 
 
 async def get_patch(db: AsyncSession, patch_id: uuid.UUID, *, lock: bool = False) -> SectionPatch:
-    stmt = select(SectionPatch).where(SectionPatch.id == patch_id)
+    # Joined to its document: a patch on a document the caller may not see is not found
+    # (H8, oracle.docs.visibility).
+    stmt = (
+        select(SectionPatch)
+        .join(Document, Document.id == SectionPatch.document_id)
+        .where(SectionPatch.id == patch_id)
+    )
     if lock:
-        stmt = stmt.with_for_update()
+        stmt = stmt.with_for_update(of=SectionPatch)
     row = await db.scalar(stmt)
     if row is None:
         raise PatchError("not_found", f"Section patch {patch_id} not found")

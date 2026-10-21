@@ -212,11 +212,18 @@ async def _update_periods(db: AsyncSession, documents: list[Document]) -> dict[u
     ids = [d.id for d in documents if d.kind == "update"]
     if not ids:
         return {}
-    rows = await db.execute(
-        select(DocumentVersion.document_id, DocumentVersion.front_matter)
+    latest = (
+        select(DocumentVersion.document_id, func.max(DocumentVersion.number).label("n"))
         .where(DocumentVersion.document_id.in_(ids))
-        .order_by(DocumentVersion.document_id, DocumentVersion.number.desc())
-        .distinct(DocumentVersion.document_id)
+        .group_by(DocumentVersion.document_id)
+        .subquery()
+    )
+    rows = await db.execute(
+        select(DocumentVersion.document_id, DocumentVersion.front_matter).join(
+            latest,
+            (DocumentVersion.document_id == latest.c.document_id)
+            & (DocumentVersion.number == latest.c.n),
+        )
     )
     out: dict[uuid.UUID, dict] = {}
     for doc_id, fm in rows.all():

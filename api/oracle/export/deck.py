@@ -170,9 +170,7 @@ def slide_groups(front_matter: dict | None, template: str | None) -> list[list[s
             groups = slide_groups_of(split_front_matter(builtin_body(builtin))[0])
     if not isinstance(groups, list):
         return []
-    return [
-        [k for k in g if isinstance(k, str)] for g in groups if isinstance(g, list) and g
-    ]
+    return [[k for k in g if isinstance(k, str)] for g in groups if isinstance(g, list) and g]
 
 
 def _grouped(ev: ExportVersion, brief: list[Section]) -> list[tuple[Section, str]]:

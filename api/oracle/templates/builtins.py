@@ -487,8 +487,8 @@ async def ensure_builtins(session: AsyncSession) -> bool:
 
 async def ensure_kind_templates(session: AsyncSession, kind: str) -> bool:
     """Seed the built-ins (:func:`ensure_builtins`) and the built-in templates of a
-    vision, strategy or update ``kind`` (no commit). A company that archived or edited it keeps its own.
-    Returns True when something was added."""
+    vision, strategy or update ``kind`` (no commit). A company that archived or edited
+    one keeps its own. Returns True when something was added."""
     added = await ensure_builtins(session)
     missing = [
         t
