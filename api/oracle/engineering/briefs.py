@@ -205,6 +205,13 @@ def check(
     data, problems = _load(text)
     if data is None:
         return problems
+    return _check(data, feature_keys, code_map)
+
+
+def _check(
+    data: dict[str, Any], feature_keys: Collection[str], code_map: Collection[str] | None
+) -> list[Problem]:
+    """:func:`check` on the file's loaded mapping."""
     out: list[Problem] = []
     cm = data.get("code_map")
     if not isinstance(cm, dict) or not isinstance(cm.get("used"), bool):
@@ -320,7 +327,8 @@ def check(
 def parse(text: str) -> TechBriefs:
     """The briefs of a file whose entries are well formed (references are not checked:
     :func:`check` does that against the feature set and the code map). Raises
-    :class:`BriefsInvalid` otherwise."""
+    :class:`BriefsInvalid` otherwise. The file is loaded once. Untrusted text: callers
+    on the event loop run it on the parse pool (:func:`oracle.engineering.store.prepare`)."""
     data, problems = _load(text)
     if data is None:
         raise BriefsInvalid(problems)
@@ -328,7 +336,7 @@ def parse(text: str) -> TechBriefs:
     keys = [f.get("feature") for f in features] if _list_of(features, dict) else []
     structural = [
         p
-        for p in check(text, [k for k in keys if isinstance(k, str)], None)
+        for p in _check(data, [k for k in keys if isinstance(k, str)], None)
         if p.code in ("bad_entry", "too_large")
     ]
     if structural:

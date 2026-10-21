@@ -26,17 +26,19 @@ A feature without a recorded verdict gets the check's approval (``value`` null, 
 approval's note).
 """
 
+import dataclasses
 import hashlib
 import json
 import logging
 import uuid
+from collections.abc import Collection
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion
@@ -100,25 +102,110 @@ async def _requirements(db: AsyncSession, feature_id: uuid.UUID) -> list[uuid.UU
     )
 
 
-def _decisions(cp: Checkpoint | None, key: str) -> tuple[dict[str, Any] | None, list[dict]]:
-    """(verdict, answers) for a feature: recorded on an approved check, else none."""
+@dataclasses.dataclass(frozen=True)
+class Decided:
+    """What an approved Engineering check recorded, read off its checkpoint as plain data
+    (:func:`prepare` uses it on the parse pool)."""
+
+    recorded: dict[str, Any]
+    by: str | None
+    note: str | None
+    at: str | None
+
+
+def _decided(cp: Checkpoint | None) -> Decided | None:
     if cp is None or cp.status != "approved":
+        return None
+    recorded = (cp.payload or {}).get("briefs")
+    return Decided(
+        recorded=recorded if isinstance(recorded, dict) else {},
+        by=str(cp.decided_by) if cp.decided_by else None,
+        note=cp.note,
+        at=_iso(cp.decided_at),
+    )
+
+
+def _str(value: Any) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _of(recorded: dict[str, Any], name: str, key: str) -> Any:
+    by_feature = recorded.get(name)
+    return by_feature.get(key) if isinstance(by_feature, dict) else None
+
+
+def _decisions(decided: Decided | None, key: str) -> tuple[dict[str, Any] | None, list[dict]]:
+    """(verdict, answers) for a feature: recorded on an approved check, else none. The
+    payload is written by a screen: a value that is not text is dropped (a verdict's
+    value or note left out, an answer or question id that is not text skips the answer)."""
+    if decided is None:
         return None, []
-    recorded = (cp.payload or {}).get("briefs") or {}
-    by = str(cp.decided_by) if cp.decided_by else None
-    v = (recorded.get("verdicts") or {}).get(key) or {}
+    v = _of(decided.recorded, "verdicts", key)
+    v = v if isinstance(v, dict) else {}
     verdict = {
-        "value": v.get("value"),
-        "note": v.get("note") or cp.note,
-        "by": by,
-        "at": _iso(cp.decided_at),
+        "value": _str(v.get("value")),
+        "note": _str(v.get("note")) or decided.note,
+        "by": decided.by,
+        "at": decided.at,
     }
+    listed = _of(decided.recorded, "answers", key)
     answers = [
-        {"question_id": a.get("question_id"), "answer": a.get("answer"), "by": a.get("by") or by}
-        for a in (recorded.get("answers") or {}).get(key) or []
+        {
+            "question_id": a["question_id"],
+            "answer": a["answer"],
+            "by": _str(a.get("by")) or decided.by,
+        }
+        for a in (listed if isinstance(listed, list) else [])
         if isinstance(a, dict)
+        and isinstance(a.get("question_id"), str)
+        and isinstance(a.get("answer"), str)
     ]
     return verdict, answers
+
+
+@dataclasses.dataclass(frozen=True)
+class Prepared:
+    """A feature's brief ready to store: its ``brief.json`` and ``brief.md``."""
+
+    entry: briefs.Brief
+    body: str
+    markdown: str
+    verdict: dict[str, Any] | None
+    answers: list[dict[str, Any]]
+
+
+def _prepare(
+    text: str, decided: Decided | None, skip: Collection[str] = ()
+) -> tuple[briefs.TechBriefs, list[Prepared]]:
+    """Parse ``text`` once and render the briefs of the features not in ``skip``.
+    Untrusted text: :func:`prepare` runs this on the parse pool."""
+    parsed = briefs.parse(text)
+    out = []
+    for entry in parsed.features:
+        if entry.feature in skip:
+            continue
+        verdict, answers = _decisions(decided, entry.feature)
+        body = json.dumps(
+            {
+                **entry.model_dump(),
+                "code_map": parsed.code_map.model_dump(),
+                "verdict": verdict,
+                "answers": answers,
+            },
+            indent=2,
+        )
+        markdown = briefs.render_markdown(entry, parsed.code_map, verdict=verdict, answers=answers)
+        out.append(Prepared(entry, body, markdown, verdict, answers))
+    return parsed, out
+
+
+async def prepare(
+    text: str, decided: Decided | None, skip: Collection[str] = ()
+) -> tuple[briefs.TechBriefs, list[Prepared]]:
+    """:func:`_prepare` on the parse pool (:func:`oracle.safe_yaml.run_parse_within`), at
+    most ``PARSE_SECONDS``: the event loop never parses or renders the briefs. Raises
+    :class:`briefs.BriefsInvalid` or :class:`oracle.safe_yaml.ParseTimeout`."""
+    return await safe_yaml.run_parse_within(_prepare, text, decided, skip, name=briefs.FILE)
 
 
 async def _existing(db: AsyncSession, run_id: uuid.UUID, seq: int) -> dict[str, ArtifactRequest]:
@@ -149,39 +236,30 @@ async def _register(
     text = _files(segment).get(briefs.FILE)
     if text is None:
         return []
+    existing = await _existing(db, run.id, segment.seq)
     try:
-        parsed = briefs.parse(text)
-    except briefs.BriefsInvalid as exc:
+        parsed, fresh = await prepare(text, _decided(cp), frozenset(existing))
+    except (briefs.BriefsInvalid, safe_yaml.ParseTimeout) as exc:
         # The Engineering check shows the file's problems; nothing is registered.
         log.warning("run %s: %s not registered: %s", run.id, briefs.FILE, exc)
         return []
-    existing = await _existing(db, run.id, segment.seq)
     approved = cp is not None and cp.status == "approved"
     repos = [r.model_dump() for r in parsed.code_map.repos]
     out: list[ArtifactVersion] = []
-    for entry in parsed.features:
-        request = existing.get(entry.feature)
-        if request is not None:
-            if version is not None and request.source_version_id is None:
-                request.source_version_id = version.id
-                for av in await db.scalars(
-                    select(ArtifactVersion).where(ArtifactVersion.request_id == request.id)
-                ):
-                    av.source_version_id = av.source_version_id or version.id
-            continue
+    if version is not None:
+        for request in existing.values():
+            if request.source_version_id is not None:
+                continue
+            request.source_version_id = version.id
+            for av in await db.scalars(
+                select(ArtifactVersion).where(ArtifactVersion.request_id == request.id)
+            ):
+                av.source_version_id = av.source_version_id or version.id
+    for item in fresh:
+        entry, body, markdown = item.entry, item.body, item.markdown
+        verdict, answers = item.verdict, item.answers
         feature = await _feature(db, entry.feature)
         requirement_ids = await _requirements(db, feature.id) if feature else []
-        verdict, answers = _decisions(cp, entry.feature)
-        body = json.dumps(
-            {
-                **entry.model_dump(),
-                "code_map": parsed.code_map.model_dump(),
-                "verdict": verdict,
-                "answers": answers,
-            },
-            indent=2,
-        )
-        markdown = briefs.render_markdown(entry, parsed.code_map, verdict=verdict, answers=answers)
         request = ArtifactRequest(
             kind=KIND,
             title=entry.title,
