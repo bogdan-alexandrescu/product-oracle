@@ -464,10 +464,11 @@ CURATED: tuple[Curated, ...] = (
     Curated(
         name="get_prd_scope",
         description=(
-            "Read the approved PRD scope this run works within: the features and requirements "
-            "the PRD includes (with goals, dependencies and acceptance criteria), and those "
-            "it excludes or defers, with reasons, plus the check of the feature set. Write "
-            "only for what it includes. Falls back to the document's approved scope when the "
+            "Read this run's latest PRD scope, in any status (proposed, approved or "
+            "superseded: see its status): the features and requirements the PRD includes "
+            "(with goals, dependencies and acceptance criteria), and those it excludes or "
+            "defers, with reasons, plus the check of the feature set. Write only for what an "
+            "approved scope includes. Falls back to the document's approved scope when the "
             "run has none. No arguments."
         ),
         needs={

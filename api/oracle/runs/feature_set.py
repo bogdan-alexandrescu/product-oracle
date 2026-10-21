@@ -44,13 +44,16 @@ which checks on the parse pool (:func:`oracle.safe_yaml.run_parse_within`), at m
 When the segment ends Oracle writes a **proposed scope** (:func:`write_scope`,
 oracle.runs.scope_models), even with blocking problems; approving the checkpoint
 approves it after :func:`check_scope` re-checks the rows as stored with the same rules
-(:func:`check_rows`). The priority order, the PRD draft and the document's next drafts
-read the approved scope (``GET /v1/runs/{id}/scope``, ``GET /v1/documents/{doc}/scope``,
-the curated MCP tool ``get_prd_scope``, or :func:`scope_yaml` pasted in the prompt).
+(:func:`check_rows`, on the parse pool too: a re-check that takes longer than
+``PARSE_SECONDS`` is the blocking problem ``too_slow``). The priority order, the PRD
+draft and the document's next drafts read the approved scope (``GET /v1/runs/{id}/scope``,
+``GET /v1/documents/{doc}/scope``, the curated MCP tool ``get_prd_scope``, or
+:func:`scope_yaml_async`, rendered on the parse pool and pasted in the prompt).
 Excluded and deferred features are scope-only: nothing in the baseline changes.
 """
 
 import json
+import logging
 import re
 import uuid
 from collections import Counter
@@ -69,6 +72,8 @@ from oracle.runs.schemas import FeatureSetCheck as CheckOut
 from oracle.runs.schemas import PrdScopeOut, ScopeFeatureOut, ScopeGoal, ScopeRequirementOut
 from oracle.runs.scope_models import PrdScope, PrdScopeItem
 from oracle.tenant_settings import TenantSetting
+
+log = logging.getLogger(__name__)
 
 FILE = "feature_set.yaml"
 # A parsed feature_set.yaml is at most this large as JSON.
@@ -515,6 +520,10 @@ def _cycles(graph: dict[str, list[str]]) -> list[list[str]]:
 
 def _flags(features: list[dict[str, Any]], known: Known) -> dict[str, list[str]]:
     flags: dict[str, list[str]] = {}
+    # The baseline's keys by normalized title, read once: one lookup per feature.
+    by_title: dict[str, set[str]] = {}
+    for k, t in known.titles:
+        by_title.setdefault(t, set()).add(k)
     for f in features:
         key = f["key"]
         if not key:
@@ -530,7 +539,7 @@ def _flags(features: list[dict[str, Any]], known: Known) -> dict[str, list[str]]
         if ref is not None and ref.new:
             mine.append("new_feature")
         title = norm_title(f["title"] or "")
-        if title and any(t == title and k != key for k, t in known.titles):
+        if title and by_title.get(title, set()) - {key}:
             mine.append("duplicate_of_existing")
         if mine:
             flags[key] = mine
@@ -881,7 +890,20 @@ async def check_scope(db: AsyncSession, scope: PrdScope) -> FeatureSetCheck:
     if any(p["code"] in ("unreadable_yaml", "missing_file") for p in carried):
         return FeatureSetCheck(problems=carried)
     items = await scope_items(db, scope.id)
-    check = check_rows(_rows(items), known=await known_for_run(db, scope.run_id))
+    known = await known_for_run(db, scope.run_id)
+    # On the parse pool, at most PARSE_SECONDS: a scope near the cap against a large
+    # baseline never holds the event loop on an approve.
+    try:
+        check = await safe_yaml.run_parse_within(
+            check_rows, _rows(items), name="the scope", seconds=PARSE_SECONDS, known=known
+        )
+    except safe_yaml.ParseTimeout:
+        # The stored check and flags stay as they were; the approve is refused.
+        out = FeatureSetCheck(problems=carried)
+        out.add(
+            "too_slow", f"the scope took more than {PARSE_SECONDS:g} s to check; keep it smaller"
+        )
+        return out
     check.problems = carried + check.problems
     scope.check_result = check.as_json()
     for item in items:
@@ -973,9 +995,7 @@ async def fill_document(db: AsyncSession, run_id: uuid.UUID, document_id: uuid.U
             await supersede_others(db, scope)
 
 
-def scope_yaml(scope: PrdScope, items: list[PrdScopeItem]) -> str:
-    """The scope as pasted in a prompt when MCP is not attached: the included features
-    with their kept requirements, then the excluded and deferred keys with reasons."""
+def _scope_data(scope: PrdScope, items: list[PrdScopeItem]) -> dict[str, Any]:
     features = [i for i in items if i.kind == "feature"]
     by_parent: dict[uuid.UUID, list[PrdScopeItem]] = {}
     for i in items:
@@ -1003,8 +1023,31 @@ def scope_yaml(scope: PrdScope, items: list[PrdScopeItem]) -> str:
         for f in sorted(features, key=lambda i: i.position)
         if f.decision in LEFT_OUT
     ]
-    data = {"status": scope.status, "features": included, "excluded": left}
+    return {"status": scope.status, "features": included, "excluded": left}
+
+
+def _dump_scope(data: dict[str, Any]) -> str:
     return safe_yaml.dump(data, sort_keys=False, allow_unicode=True)
+
+
+def scope_yaml(scope: PrdScope, items: list[PrdScopeItem]) -> str:
+    """The scope as pasted in a prompt when MCP is not attached: the included features
+    with their kept requirements, then the excluded and deferred keys with reasons."""
+    return _dump_scope(_scope_data(scope, items))
+
+
+async def scope_yaml_async(scope: PrdScope, items: list[PrdScopeItem]) -> str | None:
+    """:func:`scope_yaml` for async callers: the rows are read here, the YAML is rendered
+    on the parse pool, at most ``PARSE_SECONDS``. None when it takes longer or fails (the
+    prompt then goes without the pasted scope)."""
+    data = _scope_data(scope, items)
+    try:
+        return await safe_yaml.run_parse_within(
+            _dump_scope, data, name="the scope", seconds=PARSE_SECONDS
+        )
+    except Exception:  # noqa: BLE001 - a prompt is never held up by its pasted scope
+        log.warning("the scope could not be rendered for the prompt", exc_info=True)
+        return None
 
 
 def scope_out(scope: PrdScope, items: list[PrdScopeItem]) -> PrdScopeOut:

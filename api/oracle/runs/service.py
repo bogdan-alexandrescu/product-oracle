@@ -1646,7 +1646,8 @@ async def _prompt_context(
     if not attached and "get_prd_scope" in _flow(run).segment(segment.name).tools:
         scope = await feature_set.approved_scope(db, run_id=run.id, document_id=run.document_id)
         if scope is not None:
-            scope_yaml = feature_set.scope_yaml(scope, await feature_set.scope_items(db, scope.id))
+            scope_rows = await feature_set.scope_items(db, scope.id)
+            scope_yaml = await feature_set.scope_yaml_async(scope, scope_rows)
     return flows.PromptContext(
         run_id=str(run.id),
         document=document,
