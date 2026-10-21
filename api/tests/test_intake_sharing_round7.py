@@ -14,6 +14,7 @@ Synthetic placeholders only.
 
 import asyncio
 import json
+import re
 import uuid
 from datetime import UTC, datetime
 
@@ -197,7 +198,7 @@ async def test_a_withdrawn_proposal_keeps_no_answer_text(client, fake):  # noqa:
     [proposal] = await _baseline_proposals(ctx)
     assert proposal.status == "withdrawn"
     assert ANSWER not in json.dumps(proposal.payload)
-    assert "1000" not in json.dumps(proposal.payload)
+    assert not re.search(r"\b1000\b", json.dumps(proposal.payload))  # not inside random ids
 
 
 async def test_a_reanalysis_that_makes_a_finding_private_withdraws_its_proposal(client, fake):  # noqa: F811
