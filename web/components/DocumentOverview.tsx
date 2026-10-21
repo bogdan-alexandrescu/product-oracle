@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { FRESHNESS, sizeText } from "@/app/briefs/_brief-detail";
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { DocToolbar } from "@/components/DocToolbar";
@@ -22,6 +21,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { JobsPanel } from "@/components/JobsPanel";
+import { FRESHNESS, sizeText } from "@/components/tech-brief";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type VersionSummary } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -137,10 +137,17 @@ function VersionInspector({ doc, v, latest }: { doc: string; v: VersionSummary; 
   );
 }
 
-/** The PRD's tech briefs, one per feature (F5-1), each opening its brief page. Hidden until there is one. */
+/** The PRD's tech briefs, one per feature (F5-1), each opening its brief page. Hidden until there is one; a failed load shows its error. */
 function TechBriefs({ doc }: { doc: string }) {
   const q = useQuery(`tech-briefs|${doc}`, () => unwrap(api.GET("/v1/tech-briefs", { params: { query: { prd: doc } } })));
   const briefs = q.data ?? [];
+  if (q.error) {
+    return (
+      <Panel title="Tech briefs" testId="tech-briefs" bodyClassName="p-4">
+        <ErrorNote>{q.error}</ErrorNote>
+      </Panel>
+    );
+  }
   if (briefs.length === 0) return null;
   return (
     <Panel title="Tech briefs" count={briefs.length} testId="tech-briefs">

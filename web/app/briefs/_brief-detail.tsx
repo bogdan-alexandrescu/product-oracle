@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Chip, Icon, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
+import { FRESHNESS, sizeText } from "@/components/tech-brief";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
@@ -11,24 +12,11 @@ import { useQuery } from "@/lib/use-query";
 
 type TechBrief = Schemas["TechBriefOut"];
 
-export const FRESHNESS: Record<TechBrief["freshness"], { label: string; kind: ChipKind }> = {
-  fresh: { label: "Fresh", kind: "pass" },
-  potentially_stale: { label: "Potentially stale", kind: "warn" },
-  under_review: { label: "Under review", kind: "na" },
-  reconciled: { label: "Reconciled", kind: "pass" },
-};
 const KIND: Record<string, string> = { module: "Module", api: "API", data_model: "Data model", flag: "Flag", job: "Job" };
 const CHANGE: Record<string, string> = { new: "New", change: "Change", remove: "Remove" };
 const LEVEL: Record<string, ChipKind> = { low: "na", medium: "warn", high: "crit" };
-/** Size and its person-weeks (oracle.engineering.briefs.SIZES). */
-const WEEKS: Record<string, number> = { xs: 0.5, s: 1, m: 2, l: 4, xl: 8 };
 
 const sentence = (value: string) => value.charAt(0).toUpperCase() + value.slice(1).replaceAll("_", " ");
-
-export function sizeText(size: string): string {
-  const weeks = WEEKS[size];
-  return weeks == null ? size.toUpperCase() : `${size.toUpperCase()} · about ${weeks} person-week${weeks === 1 ? "" : "s"}`;
-}
 
 function Block({ title, testId, children }: { title: string; testId: string; children: ReactNode }) {
   return (
