@@ -640,7 +640,8 @@ async def test_a_demoted_approvers_staged_actions_need_an_approver_again(review)
         "gift-cards": ["suggested"],
         "payment-step": ["staged"],
     }
-    assert got["revision"] == revision + 2
+    # One change of the draft, however many actions it turned back.
+    assert got["revision"] == revision + 1
     # A disable does the same.
     resp = await review.client.post(
         f"/v1/members/{other.user_id}/disable", headers={**review.auth, "Origin": "http://test"}
