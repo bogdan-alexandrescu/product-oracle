@@ -6180,6 +6180,194 @@ export interface paths {
         patch: operations["update_milestone"];
         trace?: never;
     };
+    "/v1/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Requests
+         * @description The request queue, newest first, with the tab counts and the Sources facet.
+         */
+        get: operations["list_requests"];
+        put?: never;
+        /**
+         * Create Request
+         * @description Add a request, in the asker's words. A ``source_item_id`` of one of your own items
+         *     shares its title, link and a 400-character excerpt with everyone who sees Requests.
+         */
+        post: operations["create_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Request
+         * @description A request with what was merged into it and its linked PRD's review progress.
+         */
+        get: operations["get_request"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Request
+         * @description The filer edits title and body while New; approvers set goals, theme, feature and
+         *     the linked PRD.
+         */
+        patch: operations["update_request"];
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/qualify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Qualify Request
+         * @description Qualify a New request; it needs a confirmed goal (decision F3b).
+         */
+        post: operations["qualify_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Request
+         * @description Merge into another request (the root of its chain); a cycle is refused (409).
+         */
+        post: operations["merge_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/disqualify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disqualify Request
+         * @description Disqualify with a reason; Other needs a note.
+         */
+        post: operations["disqualify_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Request
+         * @description Bring a merged or disqualified request back to New.
+         */
+        post: operations["reopen_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/suggestion/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Request Suggestion
+         * @description Accept parts of Oracle's suggestion: theme, goals, feature, or duplicate (merges).
+         */
+        post: operations["accept_request_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-themes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Request Themes */
+        get: operations["list_request_themes"];
+        put?: never;
+        /** Create Request Theme */
+        post: operations["create_request_theme"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-themes/{theme_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Request Theme
+         * @description Rename, describe, relink or archive a theme (archived: takes no new requests).
+         */
+        patch: operations["update_request_theme"];
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -6346,6 +6534,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcceptSuggestionIn */
+        AcceptSuggestionIn: {
+            /** Lock Version */
+            lock_version: number;
+            /** Parts */
+            parts: ("theme" | "goals" | "duplicate" | "feature")[];
+        };
         /** AccountCreated */
         AccountCreated: {
             account: components["schemas"]["AccountOut"];
@@ -9106,6 +9301,18 @@ export interface components {
         DismissIn: {
             /** Reason */
             reason?: string | null;
+        };
+        /** DisqualifyIn */
+        DisqualifyIn: {
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other";
+            /** Note */
+            note?: string | null;
         };
         /** DocumentBlockerStrategy */
         DocumentBlockerStrategy: {
@@ -12718,6 +12925,16 @@ export interface components {
              */
             role: "viewer" | "commenter" | "approver" | "owner";
         };
+        /** MergeIn */
+        MergeIn: {
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Into Id
+             * Format: uuid
+             */
+            into_id: string;
+        };
         /** MilestoneCreate */
         MilestoneCreate: {
             /** Name */
@@ -14105,6 +14322,15 @@ export interface components {
             /** Confidence */
             confidence?: number | null;
         };
+        /** QualifyIn */
+        QualifyIn: {
+            /** Lock Version */
+            lock_version: number;
+            /** Goal Ids */
+            goal_ids?: string[] | null;
+            /** Note */
+            note?: string | null;
+        };
         /** QuestionBatch */
         QuestionBatch: {
             /**
@@ -14585,6 +14811,11 @@ export interface components {
              */
             credential: "deleted";
         };
+        /** ReopenIn */
+        ReopenIn: {
+            /** Lock Version */
+            lock_version: number;
+        };
         /** ReplyCreate */
         ReplyCreate: {
             /** Body */
@@ -14625,6 +14856,323 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** RequestCreate */
+        RequestCreate: {
+            /** Title */
+            title: string;
+            /** Body */
+            body?: string | null;
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other";
+            /** Requester Name */
+            requester_name?: string | null;
+            /**
+             * Requester Kind
+             * @default unknown
+             * @enum {string}
+             */
+            requester_kind: "customer" | "team" | "unknown";
+            /**
+             * Goal Ids
+             * @default []
+             */
+            goal_ids: string[];
+            /** Theme Id */
+            theme_id?: string | null;
+            /** Source Item Id */
+            source_item_id?: string | null;
+        };
+        /** RequestDetail */
+        RequestDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string | null;
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "person" | "oracle" | "interview";
+            /** Requester Name */
+            requester_name: string | null;
+            /**
+             * Requester Kind
+             * @enum {string}
+             */
+            requester_kind: "customer" | "team" | "unknown";
+            /** Verified */
+            verified: boolean;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "qualified" | "merged" | "disqualified";
+            /** Merged Into Id */
+            merged_into_id: string | null;
+            /** Disqualify Reason */
+            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other") | null;
+            /** Decision Note */
+            decision_note: string | null;
+            theme: components["schemas"]["RequestThemeRef"] | null;
+            /** Goal Ids */
+            goal_ids: string[];
+            /** Feature Id */
+            feature_id: string | null;
+            document: components["schemas"]["RequestDocumentProgress"] | null;
+            /** Intake Id */
+            intake_id: string | null;
+            /** Interview Id */
+            interview_id: string | null;
+            source: components["schemas"]["SourceCopy"] | null;
+            /** Mentions */
+            mentions: number;
+            suggestion: components["schemas"]["Suggestion"] | null;
+            /** Filed By */
+            filed_by: string | null;
+            /** Decided By */
+            decided_by: string | null;
+            /** Decided At */
+            decided_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Lock Version */
+            lock_version: number;
+            /** Merged */
+            merged: components["schemas"]["RequestOut"][];
+        };
+        /**
+         * RequestDocumentProgress
+         * @description The linked PRD on the inspector: its latest version and review progress.
+         */
+        RequestDocumentProgress: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Latest Version */
+            latest_version: number | null;
+            /** Reviewed Sections */
+            reviewed_sections: number;
+            /** Sections */
+            sections: number;
+        };
+        /** RequestDocumentRef */
+        RequestDocumentRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
+        /** RequestList */
+        RequestList: {
+            /** Items */
+            items: components["schemas"]["RequestOut"][];
+            /** Total */
+            total: number;
+            counts: components["schemas"]["StateCounts"];
+            /** By Channel */
+            by_channel: {
+                [key: string]: number;
+            };
+            /** New This Week */
+            new_this_week: number;
+        };
+        /** RequestOut */
+        RequestOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string | null;
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "person" | "oracle" | "interview";
+            /** Requester Name */
+            requester_name: string | null;
+            /**
+             * Requester Kind
+             * @enum {string}
+             */
+            requester_kind: "customer" | "team" | "unknown";
+            /** Verified */
+            verified: boolean;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "qualified" | "merged" | "disqualified";
+            /** Merged Into Id */
+            merged_into_id: string | null;
+            /** Disqualify Reason */
+            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other") | null;
+            /** Decision Note */
+            decision_note: string | null;
+            theme: components["schemas"]["RequestThemeRef"] | null;
+            /** Goal Ids */
+            goal_ids: string[];
+            /** Feature Id */
+            feature_id: string | null;
+            document: components["schemas"]["RequestDocumentRef"] | null;
+            /** Intake Id */
+            intake_id: string | null;
+            /** Interview Id */
+            interview_id: string | null;
+            source: components["schemas"]["SourceCopy"] | null;
+            /** Mentions */
+            mentions: number;
+            suggestion: components["schemas"]["Suggestion"] | null;
+            /** Filed By */
+            filed_by: string | null;
+            /** Decided By */
+            decided_by: string | null;
+            /** Decided At */
+            decided_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** RequestPatch */
+        RequestPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Title */
+            title?: string | null;
+            /** Body */
+            body?: string | null;
+            /** Goal Ids */
+            goal_ids?: string[] | null;
+            /** Theme Id */
+            theme_id?: string | null;
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+        };
+        /** RequestThemeCreate */
+        RequestThemeCreate: {
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Goal Ids
+             * @default []
+             */
+            goal_ids: string[];
+        };
+        /** RequestThemeOut */
+        RequestThemeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string | null;
+            /** Goal Ids */
+            goal_ids: string[];
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "person" | "oracle";
+            /** Archived */
+            archived: boolean;
+            /** Archived At */
+            archived_at: string | null;
+            /** Request Count */
+            request_count: number;
+            /** Created By */
+            created_by: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** RequestThemePatch */
+        RequestThemePatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Goal Ids */
+            goal_ids?: string[] | null;
+            /** Archived */
+            archived?: boolean | null;
+        };
+        /** RequestThemeRef */
+        RequestThemeRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
         };
         /** RescoreResult */
         RescoreResult: {
@@ -16426,6 +16974,24 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * SourceCopy
+         * @description What filing shared of the source item, copied onto the request.
+         */
+        SourceCopy: {
+            /** Item Id */
+            item_id: string | null;
+            /** Title */
+            title: string | null;
+            /** Url */
+            url: string | null;
+            /** Kind */
+            kind: string | null;
+            /** Removed */
+            removed: boolean;
+            /** Excerpt */
+            excerpt: string | null;
+        };
         /** SourceCreate */
         SourceCreate: {
             /**
@@ -16824,6 +17390,19 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** StateCounts */
+        StateCounts: {
+            /** All */
+            all: number;
+            /** New */
+            new: number;
+            /** Qualified */
+            qualified: number;
+            /** Merged */
+            merged: number;
+            /** Disqualified */
+            disqualified: number;
+        };
         /** StateIn */
         StateIn: {
             /** State */
@@ -16839,6 +17418,38 @@ export interface components {
             account: components["schemas"]["AccountOut"];
             /** Moving */
             moving: number;
+        };
+        /**
+         * Suggestion
+         * @description Oracle's triage proposal for a New request; nothing changes until accepted.
+         */
+        Suggestion: {
+            /** Theme Id */
+            theme_id?: string | null;
+            /** Theme Title */
+            theme_title?: string | null;
+            /**
+             * Goal Ids
+             * @default []
+             */
+            goal_ids: string[];
+            /** Duplicate Of */
+            duplicate_of?: string | null;
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Rationale */
+            rationale?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+            /** At */
+            at?: string | null;
+            /**
+             * Accepted
+             * @default []
+             */
+            accepted: ("theme" | "goals" | "duplicate" | "feature")[];
         };
         /** SuggestionAccept */
         SuggestionAccept: {
@@ -30525,6 +31136,418 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MilestoneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_requests: {
+        parameters: {
+            query?: {
+                state?: ("new" | "qualified" | "merged" | "disqualified") | null;
+                /** @description A theme id, or `none` for requests with no theme */
+                theme_id?: string | null;
+                goal_id?: string | null;
+                channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other") | null;
+                /** @description Title or body search */
+                q?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    qualify_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QualifyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    merge_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disqualify_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisqualifyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReopenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_request_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptSuggestionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_request_themes: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestThemeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_request_theme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestThemeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestThemeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_request_theme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                theme_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestThemePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestThemeOut"];
                 };
             };
             /** @description Validation Error */

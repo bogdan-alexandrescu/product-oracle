@@ -30,10 +30,10 @@ from oracle.requests.schemas import (
     RequestList,
     RequestOut,
     RequestPatch,
+    RequestThemeCreate,
+    RequestThemeOut,
+    RequestThemePatch,
     State,
-    ThemeCreate,
-    ThemeOut,
-    ThemePatch,
 )
 
 router = APIRouter(prefix="/v1", tags=["requests"])
@@ -183,15 +183,17 @@ async def accept_request_suggestion(
     return await service.out_one(db, row)
 
 
-@router.get("/request-themes", response_model=list[ThemeOut])
+@router.get("/request-themes", response_model=list[RequestThemeOut])
 async def list_request_themes(
     db: TenantDB, _: Viewer, include_archived: bool = False
-) -> list[ThemeOut]:
+) -> list[RequestThemeOut]:
     return await service.list_themes(db, include_archived)
 
 
-@router.post("/request-themes", response_model=ThemeOut, status_code=status.HTTP_201_CREATED)
-async def create_request_theme(data: ThemeCreate, db: TenantDB, principal: Approver) -> ThemeOut:
+@router.post("/request-themes", response_model=RequestThemeOut, status_code=status.HTTP_201_CREATED)
+async def create_request_theme(
+    data: RequestThemeCreate, db: TenantDB, principal: Approver
+) -> RequestThemeOut:
     try:
         theme = await service.create_theme(db, principal, data)
     except service.RequestError as e:
@@ -201,10 +203,10 @@ async def create_request_theme(data: ThemeCreate, db: TenantDB, principal: Appro
     return (await service.themes_out(db, [theme]))[0]
 
 
-@router.patch("/request-themes/{theme_id}", response_model=ThemeOut)
+@router.patch("/request-themes/{theme_id}", response_model=RequestThemeOut)
 async def update_request_theme(
-    theme_id: uuid.UUID, data: ThemePatch, db: TenantDB, principal: Approver
-) -> ThemeOut:
+    theme_id: uuid.UUID, data: RequestThemePatch, db: TenantDB, principal: Approver
+) -> RequestThemeOut:
     """Rename, describe, relink or archive a theme (archived: takes no new requests)."""
     try:
         theme = await service.patch_theme(db, principal, theme_id, data)

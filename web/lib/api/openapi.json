@@ -22045,6 +22045,807 @@
         }
       }
     },
+    "/v1/requests": {
+      "get": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "List Requests",
+        "description": "The request queue, newest first, with the tab counts and the Sources facet.",
+        "operationId": "list_requests",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "new",
+                    "qualified",
+                    "merged",
+                    "disqualified"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "name": "theme_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A theme id, or `none` for requests with no theme",
+              "title": "Theme Id"
+            },
+            "description": "A theme id, or `none` for requests with no theme"
+          },
+          {
+            "name": "goal_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "support",
+                    "sales",
+                    "team",
+                    "interview",
+                    "slack",
+                    "meeting",
+                    "doc",
+                    "other"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Title or body search",
+              "title": "Q"
+            },
+            "description": "Title or body search"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Create Request",
+        "description": "Add a request, in the asker's words. A ``source_item_id`` of one of your own items\nshares its title, link and a 400-character excerpt with everyone who sees Requests.",
+        "operationId": "create_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/requests/{request_id}": {
+      "get": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Get Request",
+        "description": "A request with what was merged into it and its linked PRD's review progress.",
+        "operationId": "get_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Update Request",
+        "description": "The filer edits title and body while New; approvers set goals, theme, feature and\nthe linked PRD.",
+        "operationId": "update_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/requests/{request_id}/qualify": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Qualify Request",
+        "description": "Qualify a New request; it needs a confirmed goal (decision F3b).",
+        "operationId": "qualify_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QualifyIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/requests/{request_id}/merge": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Merge Request",
+        "description": "Merge into another request (the root of its chain); a cycle is refused (409).",
+        "operationId": "merge_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/requests/{request_id}/disqualify": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Disqualify Request",
+        "description": "Disqualify with a reason; Other needs a note.",
+        "operationId": "disqualify_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisqualifyIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/requests/{request_id}/reopen": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Reopen Request",
+        "description": "Bring a merged or disqualified request back to New.",
+        "operationId": "reopen_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReopenIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/requests/{request_id}/suggestion/accept": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Accept Request Suggestion",
+        "description": "Accept parts of Oracle's suggestion: theme, goals, feature, or duplicate (merges).",
+        "operationId": "accept_request_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptSuggestionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/request-themes": {
+      "get": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "List Request Themes",
+        "operationId": "list_request_themes",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Archived"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RequestThemeOut"
+                  },
+                  "title": "Response List Request Themes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Create Request Theme",
+        "operationId": "create_request_theme",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestThemeCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestThemeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/request-themes/{theme_id}": {
+      "patch": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Update Request Theme",
+        "description": "Rename, describe, relink or archive a theme (archived: takes no new requests).",
+        "operationId": "update_request_theme",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "theme_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Theme Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestThemePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestThemeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/.well-known/oauth-protected-resource": {
       "get": {
         "tags": [
@@ -22514,6 +23315,36 @@
   },
   "components": {
     "schemas": {
+      "AcceptSuggestionIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "parts": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "theme",
+                "goals",
+                "duplicate",
+                "feature"
+              ]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Parts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version",
+          "parts"
+        ],
+        "title": "AcceptSuggestionIn"
+      },
       "AccountCreated": {
         "properties": {
           "account": {
@@ -30372,6 +31203,45 @@
         },
         "type": "object",
         "title": "DismissIn"
+      },
+      "DisqualifyIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "no_goal",
+              "out_of_scope",
+              "duplicate",
+              "not_a_request",
+              "wont_do",
+              "other"
+            ],
+            "title": "Reason"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version",
+          "reason"
+        ],
+        "title": "DisqualifyIn"
       },
       "DocumentBlockerStrategy": {
         "properties": {
@@ -40329,6 +41199,26 @@
         ],
         "title": "MemberPatch"
       },
+      "MergeIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "into_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Into Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version",
+          "into_id"
+        ],
+        "title": "MergeIn"
+      },
       "MilestoneCreate": {
         "properties": {
           "name": {
@@ -43966,6 +44856,48 @@
         ],
         "title": "PushbackSource"
       },
+      "QualifyIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "goal_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Ids"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "QualifyIn"
+      },
       "QuestionBatch": {
         "properties": {
           "intake_id": {
@@ -45427,6 +46359,20 @@
         ],
         "title": "RemovedOut"
       },
+      "ReopenIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "ReopenIn"
+      },
       "ReplyCreate": {
         "properties": {
           "body": {
@@ -45522,6 +46468,1122 @@
           "created_at"
         ],
         "title": "ReportRef"
+      },
+      "RequestCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "support",
+              "sales",
+              "team",
+              "interview",
+              "slack",
+              "meeting",
+              "doc",
+              "other"
+            ],
+            "title": "Channel"
+          },
+          "requester_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requester Name"
+          },
+          "requester_kind": {
+            "type": "string",
+            "enum": [
+              "customer",
+              "team",
+              "unknown"
+            ],
+            "title": "Requester Kind",
+            "default": "unknown"
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Goal Ids",
+            "default": []
+          },
+          "theme_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Id"
+          },
+          "source_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Item Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "channel"
+        ],
+        "title": "RequestCreate"
+      },
+      "RequestDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "support",
+              "sales",
+              "team",
+              "interview",
+              "slack",
+              "meeting",
+              "doc",
+              "other"
+            ],
+            "title": "Channel"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "person",
+              "oracle",
+              "interview"
+            ],
+            "title": "Origin"
+          },
+          "requester_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requester Name"
+          },
+          "requester_kind": {
+            "type": "string",
+            "enum": [
+              "customer",
+              "team",
+              "unknown"
+            ],
+            "title": "Requester Kind"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "qualified",
+              "merged",
+              "disqualified"
+            ],
+            "title": "State"
+          },
+          "merged_into_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged Into Id"
+          },
+          "disqualify_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "no_goal",
+                  "out_of_scope",
+                  "duplicate",
+                  "not_a_request",
+                  "wont_do",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disqualify Reason"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestThemeRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Goal Ids"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "document": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestDocumentProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "intake_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Id"
+          },
+          "interview_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interview Id"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceCopy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Suggestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "filed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filed By"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "merged": {
+            "items": {
+              "$ref": "#/components/schemas/RequestOut"
+            },
+            "type": "array",
+            "title": "Merged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "body",
+          "channel",
+          "origin",
+          "requester_name",
+          "requester_kind",
+          "verified",
+          "state",
+          "merged_into_id",
+          "disqualify_reason",
+          "decision_note",
+          "theme",
+          "goal_ids",
+          "feature_id",
+          "document",
+          "intake_id",
+          "interview_id",
+          "source",
+          "mentions",
+          "suggestion",
+          "filed_by",
+          "decided_by",
+          "decided_at",
+          "created_at",
+          "updated_at",
+          "lock_version",
+          "merged"
+        ],
+        "title": "RequestDetail"
+      },
+      "RequestDocumentProgress": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "reviewed_sections": {
+            "type": "integer",
+            "title": "Reviewed Sections"
+          },
+          "sections": {
+            "type": "integer",
+            "title": "Sections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "latest_version",
+          "reviewed_sections",
+          "sections"
+        ],
+        "title": "RequestDocumentProgress",
+        "description": "The linked PRD on the inspector: its latest version and review progress."
+      },
+      "RequestDocumentRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title"
+        ],
+        "title": "RequestDocumentRef"
+      },
+      "RequestList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RequestOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/StateCounts"
+          },
+          "by_channel": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Channel"
+          },
+          "new_this_week": {
+            "type": "integer",
+            "title": "New This Week"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "counts",
+          "by_channel",
+          "new_this_week"
+        ],
+        "title": "RequestList"
+      },
+      "RequestOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "support",
+              "sales",
+              "team",
+              "interview",
+              "slack",
+              "meeting",
+              "doc",
+              "other"
+            ],
+            "title": "Channel"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "person",
+              "oracle",
+              "interview"
+            ],
+            "title": "Origin"
+          },
+          "requester_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requester Name"
+          },
+          "requester_kind": {
+            "type": "string",
+            "enum": [
+              "customer",
+              "team",
+              "unknown"
+            ],
+            "title": "Requester Kind"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "qualified",
+              "merged",
+              "disqualified"
+            ],
+            "title": "State"
+          },
+          "merged_into_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged Into Id"
+          },
+          "disqualify_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "no_goal",
+                  "out_of_scope",
+                  "duplicate",
+                  "not_a_request",
+                  "wont_do",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disqualify Reason"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestThemeRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Goal Ids"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "document": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestDocumentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "intake_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Id"
+          },
+          "interview_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interview Id"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceCopy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mentions": {
+            "type": "integer",
+            "title": "Mentions"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Suggestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "filed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filed By"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "body",
+          "channel",
+          "origin",
+          "requester_name",
+          "requester_kind",
+          "verified",
+          "state",
+          "merged_into_id",
+          "disqualify_reason",
+          "decision_note",
+          "theme",
+          "goal_ids",
+          "feature_id",
+          "document",
+          "intake_id",
+          "interview_id",
+          "source",
+          "mentions",
+          "suggestion",
+          "filed_by",
+          "decided_by",
+          "decided_at",
+          "created_at",
+          "updated_at",
+          "lock_version"
+        ],
+        "title": "RequestOut"
+      },
+      "RequestPatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "goal_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Ids"
+          },
+          "theme_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Id"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "RequestPatch"
+      },
+      "RequestThemeCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Goal Ids",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "RequestThemeCreate"
+      },
+      "RequestThemeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Goal Ids"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "person",
+              "oracle"
+            ],
+            "title": "Origin"
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "request_count": {
+            "type": "integer",
+            "title": "Request Count"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description",
+          "goal_ids",
+          "origin",
+          "archived",
+          "archived_at",
+          "request_count",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "lock_version"
+        ],
+        "title": "RequestThemeOut"
+      },
+      "RequestThemePatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "goal_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Ids"
+          },
+          "archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "RequestThemePatch"
+      },
+      "RequestThemeRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "RequestThemeRef"
       },
       "RescoreResult": {
         "properties": {
@@ -50728,6 +52790,81 @@
         ],
         "title": "SnapshotOut"
       },
+      "SourceCopy": {
+        "properties": {
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "removed": {
+            "type": "boolean",
+            "title": "Removed"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id",
+          "title",
+          "url",
+          "kind",
+          "removed",
+          "excerpt"
+        ],
+        "title": "SourceCopy",
+        "description": "What filing shared of the source item, copied onto the request."
+      },
       "SourceCreate": {
         "properties": {
           "kind": {
@@ -51905,6 +54042,39 @@
         ],
         "title": "StartDraftOut"
       },
+      "StateCounts": {
+        "properties": {
+          "all": {
+            "type": "integer",
+            "title": "All"
+          },
+          "new": {
+            "type": "integer",
+            "title": "New"
+          },
+          "qualified": {
+            "type": "integer",
+            "title": "Qualified"
+          },
+          "merged": {
+            "type": "integer",
+            "title": "Merged"
+          },
+          "disqualified": {
+            "type": "integer",
+            "title": "Disqualified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "all",
+          "new",
+          "qualified",
+          "merged",
+          "disqualified"
+        ],
+        "title": "StateCounts"
+      },
       "StateIn": {
         "properties": {
           "state": {
@@ -51943,6 +54113,129 @@
           "moving"
         ],
         "title": "StateOut"
+      },
+      "Suggestion": {
+        "properties": {
+          "theme_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Id"
+          },
+          "theme_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Title"
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Goal Ids",
+            "default": []
+          },
+          "duplicate_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duplicate Of"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "accepted": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "theme",
+                "goals",
+                "duplicate",
+                "feature"
+              ]
+            },
+            "type": "array",
+            "title": "Accepted",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "Suggestion",
+        "description": "Oracle's triage proposal for a New request; nothing changes until accepted."
       },
       "SuggestionAccept": {
         "properties": {

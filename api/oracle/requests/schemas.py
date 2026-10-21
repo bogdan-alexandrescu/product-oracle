@@ -81,18 +81,18 @@ class AcceptSuggestionIn(_In):
     parts: Annotated[list[SuggestionPart], Field(min_length=1, max_length=4)]
 
 
-class ThemeRef(BaseModel):
+class RequestThemeRef(BaseModel):
     id: uuid.UUID
     title: str
 
 
-class DocumentRef(BaseModel):
+class RequestDocumentRef(BaseModel):
     id: uuid.UUID
     slug: str
     title: str
 
 
-class DocumentProgress(DocumentRef):
+class RequestDocumentProgress(RequestDocumentRef):
     """The linked PRD on the inspector: its latest version and review progress."""
 
     latest_version: int | None
@@ -141,10 +141,10 @@ class RequestOut(BaseModel):
     merged_into_id: uuid.UUID | None
     disqualify_reason: DisqualifyReason | None
     decision_note: str | None
-    theme: ThemeRef | None
+    theme: RequestThemeRef | None
     goal_ids: list[uuid.UUID]
     feature_id: uuid.UUID | None
-    document: DocumentRef | None
+    document: RequestDocumentRef | None
     intake_id: uuid.UUID | None
     interview_id: uuid.UUID | None
     source: SourceCopy | None
@@ -162,7 +162,7 @@ class RequestOut(BaseModel):
 class RequestDetail(RequestOut):
     # Requests merged into this one, directly or through a chain.
     merged: list[RequestOut]
-    document: DocumentProgress | None
+    document: RequestDocumentProgress | None
 
 
 class StateCounts(BaseModel):
@@ -188,13 +188,13 @@ class RequestList(BaseModel):
 # --- themes ---------------------------------------------------------------------------
 
 
-class ThemeCreate(_In):
+class RequestThemeCreate(_In):
     title: ThemeTitle
     description: Note | None = None
     goal_ids: GoalIds = []
 
 
-class ThemePatch(_In):
+class RequestThemePatch(_In):
     lock_version: int
     title: ThemeTitle | None = None
     description: Note | None = None
@@ -202,7 +202,7 @@ class ThemePatch(_In):
     archived: bool | None = None
 
 
-class ThemeOut(BaseModel):
+class RequestThemeOut(BaseModel):
     id: uuid.UUID
     title: str
     description: str | None

@@ -29,23 +29,23 @@ from oracle.requests.models import EXCERPT_MAX, ProductRequest, RequestTheme
 from oracle.requests.schemas import (
     AcceptSuggestionIn,
     DisqualifyIn,
-    DocumentProgress,
-    DocumentRef,
     MergeIn,
     QualifyIn,
     ReopenIn,
     RequestCreate,
     RequestDetail,
+    RequestDocumentProgress,
+    RequestDocumentRef,
     RequestList,
     RequestOut,
     RequestPatch,
+    RequestThemeCreate,
+    RequestThemeOut,
+    RequestThemePatch,
+    RequestThemeRef,
     SourceCopy,
     StateCounts,
     Suggestion,
-    ThemeCreate,
-    ThemeOut,
-    ThemePatch,
-    ThemeRef,
 )
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
 from oracle.v2.concurrency import expect_version, flush_or_conflict
@@ -309,10 +309,12 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
                 merged_into_id=r.merged_into_id,
                 disqualify_reason=r.disqualify_reason,
                 decision_note=r.decision_note,
-                theme=ThemeRef(id=theme.id, title=theme.title) if theme else None,
+                theme=RequestThemeRef(id=theme.id, title=theme.title) if theme else None,
                 goal_ids=list(r.goal_ids),
                 feature_id=r.feature_id,
-                document=DocumentRef(id=doc.id, slug=doc.slug, title=doc.title) if doc else None,
+                document=RequestDocumentRef(id=doc.id, slug=doc.slug, title=doc.title)
+                if doc
+                else None,
                 intake_id=r.intake_id,
                 interview_id=r.interview_id,
                 source=source,
@@ -334,7 +336,7 @@ async def out_one(db: AsyncSession, row: ProductRequest) -> RequestOut:
     return (await to_out(db, [row]))[0]
 
 
-async def _progress(db: AsyncSession, document_id: uuid.UUID) -> DocumentProgress | None:
+async def _progress(db: AsyncSession, document_id: uuid.UUID) -> RequestDocumentProgress | None:
     from oracle.review.state import approved_keys
 
     doc = await db.get(Document, document_id)
@@ -352,7 +354,7 @@ async def _progress(db: AsyncSession, document_id: uuid.UUID) -> DocumentProgres
             select(func.count()).select_from(Section).where(Section.version_id == version.id)
         )
         reviewed = len(await approved_keys(db, doc.id, version))
-    return DocumentProgress(
+    return RequestDocumentProgress(
         id=doc.id,
         slug=doc.slug,
         title=doc.title,
@@ -739,7 +741,7 @@ async def _accept(
 # --- themes ------------------------------------------------------------------------------
 
 
-async def themes_out(db: AsyncSession, themes: list[RequestTheme]) -> list[ThemeOut]:
+async def themes_out(db: AsyncSession, themes: list[RequestTheme]) -> list[RequestThemeOut]:
     ids = [t.id for t in themes]
     counts = (
         dict(
@@ -755,7 +757,7 @@ async def themes_out(db: AsyncSession, themes: list[RequestTheme]) -> list[Theme
         else {}
     )
     return [
-        ThemeOut(
+        RequestThemeOut(
             id=t.id,
             title=t.title,
             description=t.description,
@@ -773,7 +775,7 @@ async def themes_out(db: AsyncSession, themes: list[RequestTheme]) -> list[Theme
     ]
 
 
-async def list_themes(db: AsyncSession, include_archived: bool) -> list[ThemeOut]:
+async def list_themes(db: AsyncSession, include_archived: bool) -> list[RequestThemeOut]:
     stmt = select(RequestTheme).order_by(func.lower(RequestTheme.title), RequestTheme.id)
     if not include_archived:
         stmt = stmt.where(RequestTheme.archived_at.is_(None))
@@ -798,7 +800,9 @@ async def _flush_theme(db: AsyncSession) -> None:
         raise
 
 
-async def create_theme(db: AsyncSession, principal: Principal, body: ThemeCreate) -> RequestTheme:
+async def create_theme(
+    db: AsyncSession, principal: Principal, body: RequestThemeCreate
+) -> RequestTheme:
     goal_ids = await _goal_ids(db, body.goal_ids)
     await _title_free(db, body.title)
     theme = RequestTheme(
@@ -817,7 +821,7 @@ async def create_theme(db: AsyncSession, principal: Principal, body: ThemeCreate
 
 
 async def patch_theme(
-    db: AsyncSession, principal: Principal, theme_id: uuid.UUID, body: ThemePatch
+    db: AsyncSession, principal: Principal, theme_id: uuid.UUID, body: RequestThemePatch
 ) -> RequestTheme:
     theme = await db.scalar(
         select(RequestTheme)
