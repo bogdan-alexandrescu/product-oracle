@@ -22,6 +22,10 @@ READ_AREAS = {
         "blocker-options",
         "feasibility-experiments",
         "blocker-events",
+        # Requests and their themes (C1): a triage run lists them. Not
+        # request-candidates: those are a person's private findings (S6).
+        "requests",
+        "request-themes",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }
