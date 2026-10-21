@@ -115,8 +115,8 @@ Validator = Callable[[ActionIn, ValidationContext], None]
 HORIZONS = ("now", "next", "later")
 # kind=edit: the fields of the D2 vocabulary, and the bound of the strings among them.
 TEXT_FIELDS = {"milestone_name": 120, "title": 200, "outcome": 500}
-NULL_FIELDS = ("milestone_date", "order")
-EDIT_FIELDS = ("horizon", *NULL_FIELDS, *TEXT_FIELDS, "depends_on", "prd_section")
+NULL_FIELDS = ("milestone_date",)
+EDIT_FIELDS = ("horizon", *NULL_FIELDS, "order", *TEXT_FIELDS, "depends_on", "prd_section")
 # clear:<field>: the optional fields a malformed-field reason names (D2).
 CLEARABLE = frozenset(reasons.MALFORMED.values())
 QUESTION_TEXT = 1000
@@ -160,9 +160,14 @@ def _edit(body: ActionIn, ctx: ValidationContext) -> None:
             raise InvalidAction(
                 "milestone_date can only be removed (value null): a date is added through a "
                 "schedule basis"
-                if f == "milestone_date"
-                else "order takes no value (null): Fix order"
             )
+    elif f == "order":
+        # "Fix order": null, or after the dependency it must follow (D2's fix).
+        if v is not None:
+            after = v.get("after") if isinstance(v, dict) and set(v) == {"after"} else None
+            if not isinstance(after, str) or not after:
+                raise InvalidAction('order is null or {"after": id}')
+            _known([after], ctx, "order")
     elif f in TEXT_FIELDS:
         limit = TEXT_FIELDS[f]
         if not isinstance(v, str) or not v.strip() or len(v) > limit:

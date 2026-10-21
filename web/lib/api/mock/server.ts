@@ -230,6 +230,28 @@ export const MOCK_ROLE_KEY = "po-mock-role";
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
 export const MOCK_FAIL_KEY = "po-mock-fail";
+/**
+ * D8: tests set this localStorage key to a member's email to have them change a checkpoint's
+ * shared draft after the page loaded it: the next decide bumps the draft's revision by one
+ * change of theirs (then refuses a decision sent with the older one). Read once.
+ */
+export const MOCK_REVIEW_CHANGE_KEY = "po-mock-review-change";
+/**
+ * Each tab keeps its own sign-in (sessionStorage): the mock's data is one browser context's
+ * localStorage, so a second reviewer is a second tab of it signed in as someone else (D8).
+ */
+const TAB_SESSION_KEY = "po-mock-tab-session";
+
+/** The signed-in member's email: this tab's sign-in, else the last one in any tab. */
+function sessionOf(db: Db): string | null {
+  return sessionStorage.getItem(TAB_SESSION_KEY) ?? db.session;
+}
+
+function setSession(db: Db, email: string | null) {
+  db.session = email;
+  if (email) sessionStorage.setItem(TAB_SESSION_KEY, email);
+  else sessionStorage.removeItem(TAB_SESSION_KEY);
+}
 const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approver", "owner"];
 
 /** The signed-in member, with the role overridden when a test set MOCK_ROLE_KEY. */
@@ -1079,12 +1101,20 @@ function importSections(
 }
 
 function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
-  const member = db.members.find((m) => m.email === db.session) ?? db.members.find((m) => m.id === db.user_id);
+  const session = sessionOf(db);
+  const member = db.members.find((m) => m.email === session) ?? db.members.find((m) => m.id === db.user_id);
   return {
     db: db.runs,
     userId: db.user_id,
-    userName: db.session ?? db.members.find((m) => m.id === db.user_id)?.email ?? null,
+    userName: session ?? db.members.find((m) => m.id === db.user_id)?.email ?? null,
     userRole: member ? withMockRole(member).role : null,
+    member: member ? { id: member.id, email: member.email, role: withMockRole(member).role } : null,
+    members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role })),
+    reviewChange: () => {
+      const who = localStorage.getItem(MOCK_REVIEW_CHANGE_KEY);
+      localStorage.removeItem(MOCK_REVIEW_CHANGE_KEY);
+      return who;
+    },
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     feedback: db.feedback,
     documents: db.documents,
@@ -1859,15 +1889,15 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (!member || member.status === "disabled" || !passwordOk(db.account, member.email, password, MOCK_LOGIN.password)) {
       return json(401, { detail: "Invalid credentials" });
     }
-    db.session = member.email;
+    setSession(db, member.email);
     member.last_sign_in_at = now();
     return json(200, meOut(db, withMockRole(member)));
   }
   if (p[1] === "auth" && p[2] === "logout" && m === "POST") {
-    db.session = null;
+    setSession(db, null);
     return json(204, undefined);
   }
-  const member = db.members.find((x) => x.email === db.session);
+  const member = db.members.find((x) => x.email === sessionOf(db));
   if (!member || member.status === "disabled") return json(401, { detail: "Not authenticated" });
   const me = withMockRole(member);
   // v2 review routes (./review-v2.ts) check roles themselves.
@@ -1898,7 +1928,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       defaultPassword: MOCK_LOGIN.password,
       uuid,
       now,
-      endSession: () => (db.session = null),
+      endSession: () => setSession(db, null),
     },
     req,
     p,
