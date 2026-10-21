@@ -95,7 +95,7 @@ def test_0013_follows_0012_and_the_0014_lanes_chain_on_it():
         "0016_refinement_batch"
     )
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
-    assert script.get_revision("0015_specs").down_revision == "0017_source_config_version"
+    assert script.get_revision("0015_specs").down_revision == "0018_source_unavailable_items"
 
 
 def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):

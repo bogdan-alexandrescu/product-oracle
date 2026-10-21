@@ -101,7 +101,7 @@ def test_chains_on_the_refinement_batch_head():
     # The sources lane's migrations chain after it: 0016_source_needs_attention,
     # 0016_browse_calls, 0017_item_provenance.
     assert script.get_revision("0016_source_needs_attention").down_revision == "0014_intake"
-    assert script.get_revision("0015_specs").down_revision == "0017_source_config_version"
+    assert script.get_revision("0015_specs").down_revision == "0018_source_unavailable_items"
 
 
 def test_an_oracle_citation_inserts_after_upgrade(scratch_db):
