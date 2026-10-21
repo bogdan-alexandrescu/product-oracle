@@ -22,6 +22,7 @@ from typing import Any
 
 from oracle.docs.schemas import citation_contract
 from oracle.engineering import briefs
+from oracle.runs.feature_set import FORMAT as FEATURE_SET_FORMAT
 
 # Runs whose estimate is above this wait for an owner's approval (P3).
 APPROVAL_THRESHOLD_USD = Decimal(50)
@@ -52,6 +53,11 @@ MCP_TOOLS = {
     "push_draft": "hand back a draft for import as the document's next version",
     "get_run_output": "a file an earlier segment of this run wrote (seq and name), or with "
     "attempt a segment's previous attempt",
+    "list_decisions": "decided judgement calls the company made (pass class=checkpoint for "
+    "the run stops' approvals and send-backs); a draft never contradicts a decided one "
+    "without flagging it",
+    "get_prd_scope": "the approved PRD scope: the features and requirements this PRD includes, "
+    "and those it excludes or defers, with reasons",
     "get_checkpoint_review": "decisions people made at this run's checkpoints (notes, applied "
     "edits, reviews)",
     "get_strategy_stack": "the approved vision and strategy: focus choices with their goals, "
@@ -80,6 +86,12 @@ READ_DECISIONS_FIRST = (
 # Segment tasks that can change the baseline say this (H11 Autonomy).
 AUTONOMY_SENTENCE = (
     "Read get_autonomy: where a responsibility is below Act, propose instead of writing."
+)
+
+# H1: the drafting segments read the company's decided calls first.
+DECISIONS_TASK = (
+    " Before writing, call list_decisions with class=judgement and status=decided: where "
+    "the draft departs from a decided call, say so and name its D-number."
 )
 
 
@@ -182,6 +194,12 @@ class FlowDef:
     # False: the flow's prompts describe the source document themselves (a registered
     # prompt extension), instead of the roadmap's source lines.
     source_prompt: bool = True
+    # D12: the one rule for which flows the New run dialog offers; a flow with its own
+    # door elsewhere stays out of it and says where it starts instead (``starts_from``).
+    in_new_run_dialog: bool = False
+    # (label, href) of the pointer line the dialog shows for a flow with its own door;
+    # href None: no link (the door is on every document).
+    starts_from: tuple[str, str | None] | None = None
     # With target_kind None: the kinds of existing document the run may work on (None:
     # any).
     document_kinds: tuple[str, ...] | None = None
@@ -190,8 +208,6 @@ class FlowDef:
     # The depth and checkpoints a run gets when its knobs do not say.
     default_depth: str = "standard"
     default_checkpoints: dict[str, bool] = field(default_factory=dict)
-    # Offered in the New run dialog; False for flows Oracle starts from elsewhere.
-    in_new_run_dialog: bool = True
 
     def segment(self, name: str) -> SegmentDef:
         return next(s for s in self.segments if s.name == name)
@@ -236,6 +252,7 @@ FLOWS: dict[str, FlowDef] = {
             key="baseline_to_prd",
             title="Baseline to PRD",
             description="Baseline proposal, feature set and design, priority order, PRD draft.",
+            in_new_run_dialog=True,
             segments=(
                 SegmentDef(
                     name="baseline",
@@ -270,8 +287,16 @@ FLOWS: dict[str, FlowDef] = {
                     checkpoint="feature_set",
                     task="From the confirmed baseline, propose the feature set for the next "
                     "version: each feature traces to a confirmed goal or is flagged as "
-                    "serving none; list depends_on and blocks edges. Write the set to "
-                    "feature_set.yaml and a high-level design to design.md." + STRATEGY_FLAG,
+                    "serving none; list depends_on and blocks edges. Every included feature "
+                    "lists at least one confirmed goal or `goals: []`; Oracle flags the "
+                    "second kind. Use baseline feature and requirement keys, or propose new "
+                    "ones with propose_change first. List what you considered and left out "
+                    "under excluded, with the reason. Oracle checks the file when the "
+                    "segment ends; what the approver approves becomes this PRD's scope. "
+                    "Write the set to feature_set.yaml in this format (YAML, version 1):\n"
+                    + FEATURE_SET_FORMAT
+                    + "Write a high-level design to design.md."
+                    + STRATEGY_FLAG,
                     tools=(
                         "get_baseline",
                         "trace_feature",
@@ -290,9 +315,11 @@ FLOWS: dict[str, FlowDef] = {
                     scopes=("read:baseline", "write:proposals"),
                     outputs=("priority.yaml",),
                     checkpoint="priority_order",
-                    task="Order the approved feature set by goal-weighted priority, respecting "
-                    "dependencies. Explain every number. Write the order to priority.yaml.",
+                    task="Order only the features included in the approved PRD scope "
+                    "(get_prd_scope) by goal-weighted priority, respecting dependencies. "
+                    "Explain every number. Write the order to priority.yaml.",
                     tools=(
+                        "get_prd_scope",
                         "get_baseline",
                         "trace_feature",
                         "propose_change",
@@ -308,20 +335,25 @@ FLOWS: dict[str, FlowDef] = {
                     outputs=("prd.md",),
                     checkpoint="prd_review",
                     imports_draft=True,
-                    task="Write the PRD draft for the approved, ordered feature set as prd.md: "
+                    task="Write the PRD for the features and requirements the approved PRD "
+                    "scope includes (get_prd_scope), and nothing it excludes or defers, in "
+                    "the approved priority order, as prd.md: "
                     "markdown with YAML front matter (title, template, citations) and a "
                     "{#id} on every heading. Every claim cites; no evidence in the body, a "
                     "final Sources and data points section."
                     + STRATEGY_FLAG
                     + " "
-                    + CITATION_CONTRACT,
+                    + CITATION_CONTRACT
+                    + DECISIONS_TASK,
                     tools=(
+                        "get_prd_scope",
                         "get_baseline",
                         "get_strategy_stack",
                         "get_document",
                         "search",
                         "get_source_item",
                         "push_draft",
+                        "list_decisions",
                         "get_checkpoint_review",
                     ),
                 ),
@@ -333,6 +365,8 @@ FLOWS: dict[str, FlowDef] = {
             description="Pull open feedback on a PRD or roadmap, write the next draft, review it.",
             requires_document=True,
             target_kind=None,
+            # Started from Build next draft on a PRD or roadmap, with the staged items.
+            starts_from=("Build next draft · open a PRD or roadmap and use Build next draft", None),
             segments=(
                 SegmentDef(
                     name="next_draft",
@@ -348,8 +382,10 @@ FLOWS: dict[str, FlowDef] = {
                     "template, template_version, brief) and its section ids. Write the "
                     "draft as {draft} with a resolutions list in its front matter "
                     "(feedback_id, status addressed | declined, note) for every item. "
-                    + CITATION_CONTRACT,
+                    "Stay within the document's approved scope (get_prd_scope) unless a "
+                    "feedback item asks to change it. " + CITATION_CONTRACT + DECISIONS_TASK,
                     tools=(
+                        "get_prd_scope",
                         "get_document",
                         "get_document_markdown",
                         "get_feedback_package",
@@ -357,6 +393,7 @@ FLOWS: dict[str, FlowDef] = {
                         "search",
                         "get_source_item",
                         "push_draft",
+                        "list_decisions",
                         "get_checkpoint_review",
                     ),
                 ),
@@ -369,6 +406,8 @@ FLOWS: dict[str, FlowDef] = {
             "dependencies, priority), then a roadmap draft in the chosen template.",
             target_kind="roadmap",
             source_kind="prd",
+            # The PRDs are picked under Plan › Roadmap documents (F1 Plan screen).
+            starts_from=("PRD to roadmap · Plan › Roadmap documents", "/plan/documents"),
             segments=(
                 SegmentDef(
                     name="roadmap_items",
@@ -392,7 +431,9 @@ FLOWS: dict[str, FlowDef] = {
                     "and economics (value, cost, effort). List items in an order that respects "
                     "dependencies: an item comes after the items it depends on and is "
                     "never in an earlier horizon than them. Write roadmap_items.yaml: "
-                    "version: 1, prd: {document, version}, items: [...]." + STRATEGY_FLAG,
+                    "version: 1, prd: {document, version}, items: [...]."
+                    + STRATEGY_FLAG
+                    + DECISIONS_TASK,
                     tools=(
                         "get_document",
                         "get_document_markdown",
@@ -402,6 +443,7 @@ FLOWS: dict[str, FlowDef] = {
                         "get_priorities",
                         "search",
                         "get_source_item",
+                        "list_decisions",
                         "get_checkpoint_review",
                     ),
                 ),
@@ -423,13 +465,14 @@ FLOWS: dict[str, FlowDef] = {
                     "lists every source, every data point (value, as of, source) and the "
                     "evidence by section, with citations in the front matter. Each item "
                     "links back to the PRD section it comes from with a cross-document "
-                    "link of the form given below. " + CITATION_CONTRACT,
+                    "link of the form given below. " + CITATION_CONTRACT + DECISIONS_TASK,
                     tools=(
                         "get_document",
                         "get_document_markdown",
                         "get_baseline",
                         "search",
                         "get_source_item",
+                        "list_decisions",
                         "get_checkpoint_review",
                     ),
                 ),
@@ -481,6 +524,8 @@ FLOWS: dict[str, FlowDef] = {
             requires_document=True,
             target_kind=None,
             document_kinds=("vision", "strategy"),
+            # D12: not in the New run dialog. Its door is Company › Strategy (H4's later
+            # lane); no pointer until that page exists.
             segments=(
                 SegmentDef(
                     name="strategy_draft",
@@ -526,7 +571,8 @@ FLOWS: dict[str, FlowDef] = {
             default_depth="quick",
             # The launch page is where people review the drafts.
             default_checkpoints={"launch_review": False},
-            in_new_run_dialog=False,
+            # D12: started from a launch's Draft with Oracle, never from the New run dialog.
+            starts_from=("Launch kit · Launches", "/roadmap/launches"),
             segments=(
                 SegmentDef(
                     name="launch_kit",
@@ -715,8 +761,11 @@ class PromptContext:
     prior_outputs: dict[str, str] = field(default_factory=dict)
     # Notes from checkpoint approvals and requested changes.
     reviewer_notes: list[str] = field(default_factory=list)
-    # Open feedback for the feedback loop: id, section, summary.
+    # Feedback for the feedback loop: id, section, summary (and, for a staged text
+    # change, its accepted_text).
     feedback: list[dict[str, Any]] = field(default_factory=list)
+    # True: ``feedback`` holds only what an approver staged for this draft (D12).
+    staged: bool = False
     locked_sections: list[str] = field(default_factory=list)
     attempt: int = 1
     change_request: str | None = None
@@ -745,6 +794,9 @@ class PromptContext:
     # tools, never pasted here) and, for research, the gaps to look into.
     intake_id: str | None = None
     intake_gap_ids: list[str] = field(default_factory=list)
+    # The approved PRD scope as YAML (oracle.runs.feature_set.scope_yaml): pasted, within
+    # the earlier outputs' budget, when MCP is not attached.
+    scope_yaml: str | None = None
     # A launch_kit run: the launch it drafts for.
     launch_id: str | None = None
 
@@ -838,11 +890,15 @@ def step_prompt(
         lines += ["", "Reviewer notes from earlier checkpoints:"]
         lines += [f"- {n}" for n in ctx.reviewer_notes]
     if ctx.feedback:
-        lines += ["", "Open feedback items:"]
         lines += [
-            f"- {f['id']} [{f.get('section_key') or 'general'}]: {f['summary']}"
-            for f in ctx.feedback
+            "",
+            "Feedback items staged for this draft:" if ctx.staged else "Open feedback items:",
         ]
+        for f in ctx.feedback:
+            lines.append(f"- {f['id']} [{f.get('section_key') or 'general'}]: {f['summary']}")
+            if f.get("accepted_text"):
+                text = f["accepted_text"].strip().replace("\n", "\n  ")
+                lines.append(f"  Accepted change for this section: {text}")
     if ctx.locked_sections:
         lines += ["", "Locked (approved) sections: " + ", ".join(ctx.locked_sections)]
     if ctx.source is not None:
@@ -874,9 +930,31 @@ def step_prompt(
             ]
             for seq, title, names in ctx.prior_files:
                 lines.append(f"- seq {seq} ({title}): {', '.join(names)}")
-    elif ctx.prior_outputs:
+    else:
+        lines += _pasted_outputs(ctx)
+    return "\n".join(lines)
+
+
+def _pasted_outputs(ctx: PromptContext) -> list[str]:
+    """Earlier outputs and the approved PRD scope, pasted (MCP not attached), together at
+    most ``MAX_PRIOR_CHARS``: the scope first."""
+    lines: list[str] = []
+    budget = MAX_PRIOR_CHARS
+    if ctx.scope_yaml:
+        part = ctx.scope_yaml[:budget]
+        budget -= len(part)
+        lines += [
+            "",
+            "Approved PRD scope (what get_prd_scope returns): write only for the included "
+            "features and their requirements; the excluded and deferred ones stay out.",
+            "--- PRD scope ---",
+            part,
+        ]
+        if budget <= 0:
+            lines.append("(truncated)")
+            return lines
+    if ctx.prior_outputs:
         lines += ["", "Outputs of earlier segments:"]
-        budget = MAX_PRIOR_CHARS
         for name, content in ctx.prior_outputs.items():
             part = content[:budget]
             budget -= len(part)
@@ -884,7 +962,7 @@ def step_prompt(
             if budget <= 0:
                 lines.append("(truncated)")
                 break
-    return "\n".join(lines)
+    return lines
 
 
 def previous_lines(ctx: PromptContext, *, files: bool) -> list[str]:

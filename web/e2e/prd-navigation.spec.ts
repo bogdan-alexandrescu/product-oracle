@@ -324,7 +324,8 @@ test("review panel: three tabs; Feedback is one list by state, scope and kind, w
     });
   await expect(suggestion.getByTestId("feedback-actions").getByRole("button")).toHaveText(["Accept", "Edit and accept", "Dismiss"]);
   expect(await order(suggestion)).toBe(true);
-  await expect(comment.getByTestId("feedback-actions").getByRole("button")).toHaveText(["Resolve", "Reply"]);
+  // D12: an open item with no section text to accept can go to the agents.
+  await expect(comment.getByTestId("feedback-actions").getByRole("button")).toHaveText(["Resolve", "Stage for agents", "Reply"]);
   expect(await order(comment)).toBe(true);
   // Go to <section> uses the one section link.
   await expect(comment.getByTestId("feedback-goto")).toHaveText("Go to 5.4 Import from a spreadsheet");

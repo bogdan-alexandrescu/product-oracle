@@ -81,6 +81,8 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
   confidence_weights: {},
   blocker_risk_acceptance_role: "owner",
   blocker_risk_review_max_days: 90,
+  // H1: hard-to-reverse decisions are an owner's call unless an owner lowers it.
+  decision_irreversible_role: "owner",
   // S5 (owner settings, Settings > Sources > Google Drive). The API's default is []; the
   // mock company's members are all @example.com.
   company_email_domains: ["example.com"],
@@ -150,6 +152,12 @@ function load(): ConnDb {
     // fall through to a fresh state
   }
   return { connections: [], settings: {} };
+}
+
+/** A company setting as the mock stores it (its default when unset). */
+export function mockSetting(key: string): unknown {
+  const db = load();
+  return key in db.settings ? db.settings[key] : SETTING_DEFAULTS[key];
 }
 
 function save(db: ConnDb) {

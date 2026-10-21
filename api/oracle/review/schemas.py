@@ -130,6 +130,8 @@ class FeedbackItemOut(ORM):
     state: FeedbackState = "open"
     # Staged: the draft the next build would make (the latest version + 1).
     staged_for_version: int | None = None
+    # D12: an approver staged it for the agents (Staged while it is open).
+    staged_for_agents: bool = False
 
 
 class FeedbackPatch(BaseModel):

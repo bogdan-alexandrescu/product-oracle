@@ -5,7 +5,7 @@ import { useId, type ReactNode } from "react";
 
 import { Button, Chip, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { BUILD_PARAM } from "@/components/NextDraft";
 import { sectionHref } from "@/lib/section-link";
 
@@ -196,6 +196,7 @@ export type NeedGroup =
   | "questions"
   | "searches"
   | "revising"
+  | "decisions"
   | "launches"
   | "shipped";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
@@ -974,6 +975,7 @@ export function allNeeds(
     ...stated(launches.counted, "launches"),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),
+    ...decisionNeeds(inbox, busy, act, seenBefore),
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.
     ...stated(n.deliveries, "deliveries", false).map((r) => ({ ...r, state: "open" as const })),
@@ -981,6 +983,67 @@ export function allNeeds(
     ...stated(n.revising, "revising", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(launches.shipped, "shipped", false),
   ];
+}
+
+const DECISION_KIND: Record<InboxOut["decisions"][number]["reason"], string> = {
+  needs_decision: "Decision needs you",
+  review_due: "Review due",
+  oracle_decided: "Oracle decided",
+  informed: "Decided",
+};
+
+/**
+ * The decision log's rows (H1): a proposal I decide (Open, Decide) and a review that has come
+ * due (Reaffirm for 90 more days in place, Open) count; a decision made that I am informed of
+ * is shown for a week, and what I just handled moves to Done. Checkpoint records add none.
+ */
+export function decisionNeeds(inbox: InboxOut, busy: string | null, act: Act, seenBefore: string | null | undefined): StatedNeed[] {
+  return (inbox.decisions ?? []).map((d) => {
+    const href = `/company/decisions?d=${d.number}`;
+    const live = d.state !== "done";
+    const label = `${DECISION_KIND[d.reason]} · ${d.ref} ${d.title}`;
+    return {
+      key: `decision-${d.id}-${d.reason}`,
+      icon: "company",
+      kind: "Decision",
+      item: (
+        <span className="truncate" title={label}>
+          {d.reason === "informed" ? `${DECISION_KIND[d.reason]} · ${d.ref} ${d.title}` : label}
+        </span>
+      ),
+      context: <span className="block truncate">{d.review_at && d.reason === "review_due" ? `Review was due ${formatDate(`${d.review_at}T12:00:00`)}` : "Decision log"}</span>,
+      at: d.since,
+      action: (
+        <>
+          {live && d.reason === "needs_decision" && <LinkButton href={`${href}&act=decide`}>Decide</LinkButton>}
+          {live && d.reason === "review_due" && (
+            <Button
+              aria-label={`Reaffirm ${d.ref} for 90 more days`}
+              disabled={busy !== null}
+              onClick={() =>
+                act(`reaffirm-${d.id}`, () =>
+                  unwrap(
+                    api.POST("/v1/decisions/{decision}/reviews", {
+                      params: { path: { decision: String(d.number) } },
+                      body: { verdict: "reaffirmed", note: "Reaffirmed from the Inbox for 90 more days" },
+                    }),
+                  ),
+                )
+              }
+            >
+              Reaffirm +90 days
+            </Button>
+          )}
+          <LinkButton href={href} aria-label={`Open ${d.ref}`}>
+            Open
+          </LinkButton>
+        </>
+      ),
+      state: d.state === "done" ? "done" : isNew(d.since, seenBefore) ? "new" : "open",
+      counted: d.counts,
+      group: "decisions" as const,
+    };
+  });
 }
 
 /** What the rail badge counts: the new and open items. */

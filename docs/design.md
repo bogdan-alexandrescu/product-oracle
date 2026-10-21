@@ -144,7 +144,11 @@ writing the PRD alone from memory plus a few searches.
   PRD review, plus an eng review stop (E1); each toggleable when a flow starts, all on
   by default, each one approver per stop (C2 Approvals). Each is a SwarmCloud
   `await_input` step once #1436 lands; until then Oracle runs one workflow per segment
-  between checkpoints.
+  between checkpoints. Approving the feature set approves the **PRD scope**: the
+  checked `feature_set.yaml` (every feature traces to a confirmed goal or is flagged;
+  blocking problems disable Approve) becomes the features and requirements this PRD
+  includes, excludes or defers, and the priority order, the PRD draft and the
+  document's next drafts read that scope, not the whole baseline (C6).
 - **Outputs:** PRD with multiple versioned templates (O1); feature design = stories,
   acceptance criteria, SVG flow, low-fi HTML wireframes, with hi-fi mockups and
   clickable prototypes opt-in in v2 (O2); goal-weighted prioritization by default,

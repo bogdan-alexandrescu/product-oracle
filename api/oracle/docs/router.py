@@ -25,6 +25,8 @@ from oracle.docs.schemas import (
 from oracle.http import read_capped_body
 from oracle.jobs import service as jobs_service
 from oracle.review.schemas import ConflictResponse
+from oracle.runs import feature_set
+from oracle.runs.schemas import PrdScopeOut
 
 # Every route needs at least a viewer; importing a version needs an approver.
 router = APIRouter(
@@ -131,6 +133,22 @@ async def import_version(
         result.version.model_dump(mode="json"),
         status.HTTP_201_CREATED if result.created else status.HTTP_200_OK,
     )
+
+
+@router.get("/{doc}/scope", response_model=PrdScopeOut)
+async def get_document_scope(doc: str, db: TenantDB) -> PrdScopeOut:
+    """The document's approved PRD scope (C6): the features and requirements its last
+    approved feature set includes, excludes or defers. 404 when none is approved yet."""
+    try:
+        document = await service.get_document_or_404(db, doc)
+    except service.NotFoundError as exc:
+        raise _not_found(exc) from exc
+    scope = await feature_set.approved_scope(db, document_id=document.id)
+    if scope is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"document '{doc}' has no approved PRD scope"
+        )
+    return feature_set.scope_out(scope, await feature_set.scope_items(db, scope.id))
 
 
 @router.get("/{doc}/versions", response_model=list[VersionSummary])

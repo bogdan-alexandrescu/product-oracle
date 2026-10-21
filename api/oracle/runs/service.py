@@ -136,17 +136,20 @@ from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.baseline import yaml_io
 from oracle.baseline.models import Edge, Entity, Proposal
+from oracle.decisions import capture as decisions_capture
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
+from oracle.jobs.models import LlmSuggestion
 from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
 from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
+from oracle.review.schemas import Resolution
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import doc_dates, schedule
-from oracle.runs import extensions, flows, reasons, rejection, roadmap, workflow
+from oracle.runs import extensions, feature_set, flows, reasons, rejection, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -155,9 +158,11 @@ from oracle.runs.schemas import (
     ConsoleAnswer,
     DraftImport,
     EstimateOut,
+    FeatureSetCheck,
     FlowCatalog,
     FlowOut,
     FlowSegmentOut,
+    FlowStart,
     InboxCheckpoint,
     InboxCounts,
     InboxDocument,
@@ -170,6 +175,7 @@ from oracle.runs.schemas import (
     ItemsCheck,
     KnobsIn,
     KnobsOut,
+    PrdScopeOut,
     PreviousAttempt,
     RunCreate,
     RunDecision,
@@ -182,6 +188,7 @@ from oracle.runs.schemas import (
     SegmentOut,
     TickOut,
 )
+from oracle.runs.scope_models import PrdScope
 from oracle.runtokens import mint_run_token, revoke_run_tokens
 from oracle.sources.models import Snapshot
 from oracle.swarm import (
@@ -232,6 +239,10 @@ ORACLE_KNOBS = (
     "intake_id",
     "intake_snapshot_id",
     "intake_gap_ids",
+    # D12: a feedback loop started from Build next draft: exactly the items staged for
+    # it, the agent-staged feedback and the accepted section-text suggestions.
+    "feedback_ids",
+    "suggestion_ids",
     # A launch_kit run (oracle.launches): the launch it drafts for.
     "launch_id",
 )
@@ -331,10 +342,13 @@ def flow_catalog() -> FlowCatalog:
                 title=f.title,
                 description=f.description,
                 requires_document=f.requires_document,
-                in_new_run_dialog=f.in_new_run_dialog,
                 target_kind=f.target_kind,  # type: ignore[arg-type]
                 source_kind=f.source_kind,  # type: ignore[arg-type]
                 entry=f.entry,
+                in_new_run_dialog=f.in_new_run_dialog,
+                starts_from=FlowStart(label=f.starts_from[0], href=f.starts_from[1])
+                if f.starts_from
+                else None,
                 segments=[
                     FlowSegmentOut(
                         name=s.name,
@@ -792,6 +806,7 @@ def _segment_out(
         )
         if isinstance(previous := art.get("previous"), dict)
         else None,
+        feature_set_check=FeatureSetCheck(**fs) if (fs := art.get("feature_set_check")) else None,
         autonomy_note=(merged.get("autonomy") or {}).get("note"),
         started_at=segment.started_at,
         finished_at=segment.finished_at,
@@ -987,10 +1002,20 @@ def _holds_token(cp: Checkpoint) -> bool:
     return bool(wait.get("workflow_id")) and not wait.get("ended") and needs not in _COUNTED
 
 
+def console_blocked(cp: Checkpoint) -> bool:
+    """A console approval held because the feature set has blocking problems (C6)."""
+    return bool((((cp.payload or {}).get("wait") or {}).get("console") or {}).get("blocking"))
+
+
 def _hold_reason(cp: Checkpoint) -> str:
     needs = (((cp.payload or {}).get("wait") or {}).get("console") or {}).get("needs")
     if _owes(cp):
         why = "has a decision recorded in Oracle that is not delivered to the run yet"
+    elif needs == "confirm" and console_blocked(cp):
+        why = (
+            "was approved in SwarmCloud's console while the feature set has blocking "
+            "problems; an Oracle approver confirms it once they are fixed or waived"
+        )
     elif needs == "confirm":
         why = (
             "was answered in SwarmCloud's console by someone whose answer does not count "
@@ -1267,6 +1292,15 @@ async def list_runs(db: AsyncSession, status: str | None = None) -> list[RunSumm
         for seg in rows:
             segments[seg.run_id].append(seg)
     return [_summary(r, refs, pending.get(r.id), segments[r.id], owed.get(r.id)) for r in runs]
+
+
+async def read_scope(db: AsyncSession, run_id: uuid.UUID) -> PrdScopeOut:
+    """The run's latest PRD scope, any status (C6)."""
+    run = await _get_run(db, run_id)
+    scope = await feature_set.latest_scope(db, run.id)
+    if scope is None:
+        raise NotFound(f"run {run_id} has no PRD scope yet")
+    return feature_set.scope_out(scope, await feature_set.scope_items(db, scope.id))
 
 
 async def read_artifact(
@@ -1730,6 +1764,38 @@ async def _low_threshold(db: AsyncSession) -> float:
     return float(confidence.merged(overrides)["low"])
 
 
+async def _loop_feedback(db: AsyncSession, run: Run) -> list[dict[str, Any]]:
+    """D12: the items a feedback loop started from Build next draft was given: the
+    feedback staged for the agents and each accepted section-text change, with its text."""
+    knobs = run.knobs or {}
+    fids = [uuid.UUID(str(i)) for i in knobs.get("feedback_ids") or []]
+    sids = [uuid.UUID(str(i)) for i in knobs.get("suggestion_ids") or []]
+    texts: dict[uuid.UUID, str] = {}
+    for sug in await db.scalars(
+        select(LlmSuggestion).where(
+            LlmSuggestion.id.in_(sids), LlmSuggestion.document_id == run.document_id
+        )
+    ):
+        texts[sug.feedback_item_id] = sug.edited_text or sug.text or ""
+    items = await db.scalars(
+        select(FeedbackItem)
+        .where(
+            FeedbackItem.document_id == run.document_id,
+            FeedbackItem.id.in_([*fids, *texts]),
+        )
+        .order_by(FeedbackItem.created_at, FeedbackItem.id)
+    )
+    return [
+        {
+            "id": str(f.id),
+            "section_key": f.section_key,
+            "summary": f.summary,
+            **({"accepted_text": texts[f.id]} if f.id in texts else {}),
+        }
+        for f in items
+    ]
+
+
 async def _prompt_context(
     db: AsyncSession,
     run: Run,
@@ -1789,15 +1855,18 @@ async def _prompt_context(
     ]
     feedback: list[dict[str, Any]] = []
     locked: list[str] = []
+    chosen = "feedback_ids" in (run.knobs or {}) or "suggestion_ids" in (run.knobs or {})
     if run.flow == "feedback_loop" and run.document_id:
-        items = await db.scalars(
-            select(FeedbackItem)
-            .where(FeedbackItem.document_id == run.document_id, FeedbackItem.status == "open")
-            .order_by(FeedbackItem.created_at, FeedbackItem.id)
-        )
-        feedback = [
-            {"id": str(f.id), "section_key": f.section_key, "summary": f.summary} for f in items
-        ]
+        feedback = await _loop_feedback(db, run) if chosen else []
+        if not chosen:
+            items = await db.scalars(
+                select(FeedbackItem)
+                .where(FeedbackItem.document_id == run.document_id, FeedbackItem.status == "open")
+                .order_by(FeedbackItem.created_at, FeedbackItem.id)
+            )
+            feedback = [
+                {"id": str(f.id), "section_key": f.section_key, "summary": f.summary} for f in items
+            ]
         latest = await db.scalar(
             select(DocumentVersion)
             .where(DocumentVersion.document_id == run.document_id)
@@ -1806,6 +1875,12 @@ async def _prompt_context(
         )
         if latest is not None:
             locked = sorted(await locked_section_keys(db, latest.id))
+    scope_yaml = None
+    if not attached and "get_prd_scope" in _flow(run).segment(segment.name).tools:
+        scope = await feature_set.approved_scope(db, run_id=run.id, document_id=run.document_id)
+        if scope is not None:
+            scope_rows = await feature_set.scope_items(db, scope.id)
+            scope_yaml = await feature_set.scope_yaml_async(scope, scope_rows)
     return flows.PromptContext(
         run_id=str(run.id),
         document=document,
@@ -1815,6 +1890,7 @@ async def _prompt_context(
         prior_outputs=prior,
         reviewer_notes=notes,
         feedback=feedback,
+        staged=chosen,
         locked_sections=locked,
         attempt=attempt,
         change_request=change_request,
@@ -1833,6 +1909,7 @@ async def _prompt_context(
         extra_lines=await extensions.prompt_lines(db, run),
         intake_id=run.knobs.get("intake_id"),
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
+        scope_yaml=scope_yaml,
         launch_id=run.knobs.get("launch_id"),
     )
 
@@ -3277,6 +3354,10 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
                 # Without its date markers (the import checked its dates; none of the
                 # markers is read here): never a wait for dates in the middle of a tick.
                 result.version = await docs_service.read_version(s, row, require_dates=False)
+        if run.flow == "feedback_loop" and (
+            knobs.get("suggestion_ids") or knobs.get("feedback_ids")
+        ):
+            await _settle_sent_items(s, run, result.version.number, result.resolutions)
         document = await s.get(Document, result.version.document_id)
         out: dict[str, Any] = {
             "document_id": str(result.version.document_id),
@@ -3309,6 +3390,45 @@ async def _run_importer(
     # DESIGN_CHECK_SECONDS): this session holds none open meanwhile.
     await db.commit()
     return await extensions.run_importer(name, db, run, files, principal)
+
+
+async def _settle_sent_items(
+    s: AsyncSession, run: Run, number: int, resolutions: list[Resolution]
+) -> None:
+    """D12: what a feedback loop started from Build next draft was sent, once its draft
+    is version ``number``: the accepted section-text changes are applied in it (as the
+    built-in path's apply records them), and the items staged for the agents that the
+    draft's resolutions answer leave Staged. Their status is the import's: an agent never
+    closes a whole-draft item itself, so a person confirms it in the version's review.
+    ``resolutions`` are the import's own parse of the draft: it is not parsed again."""
+    knobs = run.knobs or {}
+    answered = {str(r.feedback_id) for r in resolutions}
+    sent = [uuid.UUID(str(i)) for i in knobs.get("feedback_ids") or [] if str(i) in answered]
+    items = list(
+        await s.scalars(
+            select(FeedbackItem).where(
+                FeedbackItem.id.in_(sent), FeedbackItem.document_id == run.document_id
+            )
+        )
+    )
+    for item in items:
+        item.staged_for_agents_at = item.staged_for_agents_by = None
+    ids = [uuid.UUID(str(i)) for i in knobs.get("suggestion_ids") or []]
+    rows = list(
+        await s.scalars(
+            select(LlmSuggestion).where(
+                LlmSuggestion.id.in_(ids),
+                LlmSuggestion.document_id == run.document_id,
+                LlmSuggestion.status == "accepted",
+                LlmSuggestion.applied_in_version.is_(None),
+            )
+        )
+    )
+    for row in rows:
+        row.status = "applied"
+        row.applied_in_version = number
+    if rows or items:
+        await s.commit()
 
 
 async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, Any]:
@@ -3484,6 +3604,25 @@ async def _advance(
                 None,
             )
         art["items_check"] = items_check
+    fs_check: dict[str, Any] | None = None
+    scope_id: uuid.UUID | None = None
+    if feature_set.FILE in sdef.outputs:
+        try:
+            # In a savepoint, as the items check: a database error rolls back the check's
+            # own reads and writes only.
+            async with db.begin_nested():
+                fs_check, scope_id = await _check_feature_set(
+                    db, run, segment, number, art["files"].get(feature_set.FILE)
+                )
+        except Exception as exc:  # noqa: BLE001 - a bad file fails the check, never the tick
+            log.exception("checking %s of run %s failed", feature_set.FILE, run.id)
+            failed = feature_set.FeatureSetCheck()
+            failed.add(
+                "unreadable_yaml",
+                f"{feature_set.FILE} could not be checked ({type(exc).__name__})",
+            )
+            fs_check = failed.as_json()
+        art["feature_set_check"] = fs_check
     launch_import: dict[str, Any] | None = None
     if flows.LAUNCH_FILE in sdef.outputs:
         from oracle.launches import service as launches_service
@@ -3527,6 +3666,8 @@ async def _advance(
             if imported.get("document_id"):
                 run.document_id = uuid.UUID(imported["document_id"])
                 _set_knob(run, "document_slug", None)
+                # Rule 6 (C6): the run's PRD scope names the document from now on.
+                await feature_set.fill_document(db, run.id, run.document_id)
         art["import"] = imported
     if sdef.importer:
         # Committed first: the importer runs in its own transaction.
@@ -3560,6 +3701,10 @@ async def _advance(
         payload["baseline_import"] = baseline_import
     if items_check is not None:
         payload["items_check"] = items_check
+    if fs_check is not None:
+        payload["feature_set_check"] = fs_check
+        if scope_id is not None:
+            payload["scope_id"] = str(scope_id)
     if launch_import is not None:
         payload["launch_import"] = launch_import
     if wait is not None:
@@ -3576,9 +3721,11 @@ async def _advance(
         )
     ):
         return True
+    checkpoint_id = uuid.uuid4()
     if knobs.checkpoints.get(sdef.checkpoint, True):
         db.add(
             Checkpoint(
+                id=checkpoint_id,
                 run_id=run.id,
                 kind=checkpoint_kind,
                 status="pending",
@@ -3586,10 +3733,12 @@ async def _advance(
                 payload=payload,
             )
         )
+        await _link_scope(db, scope_id, checkpoint_id)
         run.status = "awaiting_checkpoint"
         return True
     db.add(
         Checkpoint(
+            id=checkpoint_id,
             run_id=run.id,
             kind=checkpoint_kind,
             status="skipped",
@@ -3599,6 +3748,7 @@ async def _advance(
             decided_at=_now(),
         )
     )
+    await _link_scope(db, scope_id, checkpoint_id)
     for result in (baseline_import, imported, launch_import):
         if result is not None and result.get("error"):
             await _finish(db, run, "failed", result["error"])
@@ -3607,8 +3757,58 @@ async def _advance(
         problems = "; ".join(f"[{p['code']}] {p['message']}" for p in items_check["problems"][:5])
         await _finish(db, run, "failed", f"{ITEMS_FILE} was rejected: {problems}")
         return True
+    if fs_check is not None:
+        blocking = [p for p in fs_check["problems"] if p.get("blocking", True)]
+        if blocking or scope_id is None:
+            problems = "; ".join(f"[{p['code']}] {p['message']}" for p in blocking[:5])
+            await _finish(db, run, "failed", f"{feature_set.FILE} was rejected: {problems}")
+            return True
+        # Rule 5 (C6): the stop is off and nothing blocks, so Oracle approves the scope.
+        scope = await db.get(PrdScope, scope_id)
+        if scope is not None:
+            await feature_set.approve(db, scope, None, run.document_id)
+            await audit.record(
+                db,
+                audit.ORACLE,
+                "prd_scope.approved",
+                "prd_scope",
+                scope.id,
+                {"by": "oracle", "reason": "stop off", "run_id": str(run.id)},
+            )
     await _next(db, run, segment, segments)
     return True
+
+
+async def _check_feature_set(
+    db: AsyncSession, run: Run, segment: RunSegment, attempt: int, text: str | None
+) -> tuple[dict[str, Any], uuid.UUID]:
+    """C6: feature_set.yaml checked against the run's PRD slug and the baseline, and the
+    proposed scope written from it (even with blocking problems, so they can be fixed)."""
+    known = await feature_set.known_for_run(db, run.id)
+    if text is None:
+        check = feature_set.FeatureSetCheck()
+        check.add("missing_file", f"the segment left no {feature_set.FILE}")
+    else:
+        doc = await db.get(Document, run.document_id) if run.document_id else None
+        slug = doc.slug if doc is not None else (run.knobs or {}).get("document_slug")
+        # In a worker thread with a time cap: agent output never holds the event loop.
+        check = await feature_set.check_feature_set_async(text, document=slug, known=known)
+    scope = await feature_set.write_scope(
+        db, run, segment_seq=segment.seq, attempt=attempt, check=check, known=known
+    )
+    return check.as_json(), scope.id
+
+
+async def _link_scope(
+    db: AsyncSession, scope_id: uuid.UUID | None, checkpoint_id: uuid.UUID
+) -> None:
+    """The proposed scope names the checkpoint that decides it (added in the same flush)."""
+    if scope_id is None:
+        return
+    await db.flush()
+    scope = await db.get(PrdScope, scope_id)
+    if scope is not None:
+        scope.checkpoint_id = checkpoint_id
 
 
 # Who Oracle's own answer is from, on the revision's attempt.
@@ -5142,6 +5342,10 @@ async def _take_answer(
             else await _console_member(db, cp, by, altered=record.answered_by_altered)
         )
     counted = ours or reason is None
+    if counted and approved and not ours and cp.kind == "feature_set":
+        if await _recheck_scope(db, cp):
+            await _hold_console_approval(db, run, cp, segment, record, wait, at, revise, member)
+            return
     if not counted or (not approved and not revise):
         console = _console_record(run, segment, record, at, revise)
         console.update(
@@ -5208,6 +5412,12 @@ async def _take_answer(
         # Oracle's own post: the label is the one Oracle sent, for its Inbox user.
         cp.decided_by = await db.scalar(select(User.id).where(User.email == record.on_behalf_of))
     _set_wait(cp, wait)
+    # H1: a counted answer from the console (or Oracle's own lost post) is the stop's
+    # decision: a checkpoint record, unless one was recorded when it was decided here.
+    await decisions_capture.checkpoint(
+        db, None, run, cp, decided_via="oracle" if ours else "swarmcloud_console"
+    )
+    await _scope_decided(db, None, run, cp)
     await audit.record(
         db,
         None,
@@ -5642,6 +5852,8 @@ async def decide_checkpoint(
     note = (note or "").strip() or None
     wait = (cp.payload or {}).get("wait") or {}
     redo = False
+    # A choice about an answer SwarmCloud's console recorded is decided through it (H1).
+    via = "swarmcloud_console" if decision in ("confirm", "redo", "continue") else "oracle"
     # Who decided, as the run's agents read it (list_decisions): the Inbox's decider, or
     # for a confirmed console answer its author, by role.
     decider: tuple[str | None, str] = (principal.role, "oracle")
@@ -5670,6 +5882,12 @@ async def decide_checkpoint(
             )
             await db.commit()
             return
+    if decision == "approved" and cp.kind == "feature_set" and await _recheck_scope(db, cp):
+        # The scope as stored still has blocking problems: the refreshed check is kept for
+        # the run page and the Inbox, and nothing is decided.
+        blocked = _cannot_approve(cp)
+        await db.commit()
+        raise RunError(blocked or "the feature set has blocking problems")
     if decision == "approved" and (blocked := _cannot_approve(cp)):
         # Approve, a confirmed console approval and Continue alike: nothing is decided.
         raise RunError(blocked)
@@ -5698,6 +5916,9 @@ async def decide_checkpoint(
         cp.id,
         {"run_id": str(run.id), "kind": cp.kind},
     )
+    # H1: the stop's decision is a checkpoint record, in this transaction.
+    await decisions_capture.checkpoint(db, principal, run, cp, decided_via=via)
+    await _scope_decided(db, principal, run, cp)
     if decision == "approved":
         # F5-1: an approved Engineering check registers its tech briefs when the run's
         # PRD exists (else the prd_draft import does), in this transaction.
@@ -6056,6 +6277,9 @@ async def _void_owed(
     cp.decided_by = None
     cp.decided_at = None
     cp.note = None
+    # H1: a decision voided before it reached the run is not in the decision log.
+    await decisions_capture.checkpoint_voided(db, cp.id)
+    await _scope_reopened(db, cp)
     segments = await _segments(db, run.id)
     target = next((s for s in segments if s.seq == (cp.payload or {}).get("segment_seq")), None)
     if target is not None:
@@ -6164,6 +6388,9 @@ async def void_decision(
     cp.decided_by = None
     cp.decided_at = None
     cp.note = None
+    # H1: a decision voided before it reached the run is not in the decision log.
+    await decisions_capture.checkpoint_voided(db, cp.id)
+    await _scope_reopened(db, cp)
     run.status = "awaiting_checkpoint"
     await revoke_run_tokens(db, run.id)
     await audit.record(
@@ -6216,6 +6443,9 @@ async def _undecide(db: AsyncSession, run: Run, cp: Checkpoint) -> bool:
     cp.decided_by = None
     cp.decided_at = None
     cp.note = None
+    # H1: a decision voided before it reached the run is not in the decision log.
+    await decisions_capture.checkpoint_voided(db, cp.id)
+    await _scope_reopened(db, cp)
     await audit.record(
         db, None, "checkpoint.decision_not_posted", "checkpoint", cp.id,
         {"run_id": str(run.id), "decision": kind, "decided_by": str(decided_by)},
@@ -6986,6 +7216,126 @@ def _review_of(checkpoints: list[Checkpoint], seq: int) -> Checkpoint | None:
     return ours[-1] if ours else None
 
 
+async def _scope_of(db: AsyncSession, cp: Checkpoint) -> PrdScope | None:
+    """The PRD scope a feature-set checkpoint decides (C6), if it has one."""
+    if cp.kind != "feature_set":
+        return None
+    raw = (cp.payload or {}).get("scope_id")
+    if raw:
+        try:
+            found = await db.get(PrdScope, uuid.UUID(str(raw)))
+        except ValueError:
+            found = None
+        if found is not None:
+            return found
+    return await db.scalar(select(PrdScope).where(PrdScope.checkpoint_id == cp.id))
+
+
+async def _recheck_scope(db: AsyncSession, cp: Checkpoint) -> int:
+    """Re-check the scope a feature-set checkpoint decides as stored (C6 rule 3,
+    :func:`feature_set.check_scope`) and keep the result on the checkpoint, so every
+    approval path (the web, the Inbox, MCP, a console approval) refuses on the same
+    problems. Returns the blocking problems now open (0 without a scope: a run from
+    before scopes approves as before)."""
+    scope = await _scope_of(db, cp)
+    if scope is None:
+        return 0
+    check = (await feature_set.check_scope(db, scope)).as_json()
+    cp.payload = {**(cp.payload or {}), "feature_set_check": check}
+    return feature_set.blocking_of(check)
+
+
+async def _scope_decided(
+    db: AsyncSession, principal: Principal | None, run: Run, cp: Checkpoint
+) -> None:
+    """A feature-set checkpoint was decided (any path): approved, its scope is approved
+    and supersedes the document's earlier approved one (rule 3); changes requested, the
+    proposed scope is superseded (rule 4) and the re-run writes the next attempt's."""
+    scope = await _scope_of(db, cp)
+    if scope is None:
+        return
+    if cp.status == "approved":
+        await feature_set.approve(db, scope, cp.decided_by, run.document_id)
+        await audit.record(
+            db,
+            principal if principal is not None else audit.ORACLE,
+            "prd_scope.approved",
+            "prd_scope",
+            scope.id,
+            {"run_id": str(run.id), "checkpoint_id": str(cp.id), "by": str(cp.decided_by)},
+        )
+    elif cp.status == "changes_requested" and scope.status == "proposed":
+        scope.status = "superseded"
+        scope.lock_version += 1
+
+
+async def _scope_reopened(db: AsyncSession, cp: Checkpoint) -> None:
+    """A feature-set decision was voided or not posted: its scope is proposed again (an
+    earlier approved scope it superseded stays superseded until this one is decided)."""
+    scope = await _scope_of(db, cp)
+    if scope is None or scope.status == "proposed":
+        return
+    scope.status = "proposed"
+    scope.approved_by = None
+    scope.approved_at = None
+    scope.lock_version += 1
+
+
+# What the Inbox says of a console approval held while the feature set has blocking problems
+# (D3 Approve blocked by problems, "Console gate", decided 2026-10-20).
+CONSOLE_BLOCKED = "Blocking problems are open: fix or waive them, then confirm"
+
+
+async def _hold_console_approval(
+    db: AsyncSession,
+    run: Run,
+    cp: Checkpoint,
+    segment: RunSegment,
+    record: RecordedAnswer,
+    wait: dict[str, Any],
+    at: str | None,
+    revise: bool,
+    member: User | None,
+) -> None:
+    """A counted console approval of a feature set with blocking problems open: recorded,
+    not followed. The checkpoint stays pending with ``needs = "confirm"`` (so the run's
+    token stays read-only, :func:`_holds_token`), nothing is posted to the workflow, and
+    Confirm is refused like Approve until the problems are fixed or waived."""
+    console = _console_record(run, segment, record, at, revise)
+    console.update(
+        counted=True,
+        reason=CONSOLE_BLOCKED,
+        needs="confirm",
+        role=member.role if member is not None else None,
+        blocking=True,
+    )
+    wait["console"] = console
+    _set_wait(cp, wait)
+    await audit.record(
+        db,
+        None,
+        "checkpoint.console_answer",
+        "checkpoint",
+        cp.id,
+        {
+            "run_id": str(run.id),
+            "kind": cp.kind,
+            "answered_in": "swarmcloud",
+            "answered_by": record.answered_by,
+            "verdict": record.verdict,
+            "counted": True,
+            "held": "blocking_problems",
+        },
+    )
+    _note(
+        segment,
+        f"{cp.kind} was approved in SwarmCloud by {record.answered_by or 'someone'}: "
+        f"{_said(record, at)}. The feature set has blocking problems, so Oracle recorded the "
+        "approval and did not follow it: the checkpoint stays open in the Inbox, and an "
+        "approver confirms it once the problems are fixed or waived, or requests changes.",
+    )
+
+
 # Approving a review is refused while its draft is not imported (owner, 2026-10-20): a
 # run approved past a refused draft finished with no document.
 NOT_IMPORTED = "the draft was not imported: retry import, or request changes"
@@ -6993,10 +7343,17 @@ NOT_IMPORTED = "the draft was not imported: retry import, or request changes"
 
 def _cannot_approve(cp: Checkpoint) -> str | None:
     """Why approving this checkpoint is refused now (web, Inbox and MCP alike): the draft
-    its segment left was refused at import (until Retry import imports it)."""
+    its segment left was refused at import (until Retry import imports it), or the feature
+    set it stands for has blocking problems (C6, as last checked: :func:`_recheck_scope`)."""
     imp = (cp.payload or {}).get("import")
     if cp.status == "pending" and isinstance(imp, dict) and imp.get("error"):
         return NOT_IMPORTED
+    if cp.status == "pending" and cp.kind == "feature_set":
+        # C6 (call c3): Approve waits while the feature set has a blocking problem. Pick D3
+        # Approve blocked by problems takes this over in its one approve gate.
+        n = feature_set.blocking_of((cp.payload or {}).get("feature_set_check"))
+        if n:
+            return feature_set.blocking_message(n)
     return None
 
 
@@ -7133,6 +7490,7 @@ async def retry_draft_import(
         # As at segment end (:func:`_advance`).
         run.document_id = uuid.UUID(imported["document_id"])
         _set_knob(run, "document_slug", None)
+        await feature_set.fill_document(db, run.id, run.document_id)
         _note_art(
             art,
             f"{who} retried importing {name}{after}: imported as {imported.get('slug')} "
@@ -7852,9 +8210,12 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         failed_refs = await _refs(db, failed_runs)
         imports = [_summary(r, failed_refs, None) for r in failed_runs]
     revising = await _revising(db, principal)
+    from oracle.decisions.service import inbox_rows as decision_rows
     from oracle.reports.service import inbox_rows
 
     reports, report_failures = await inbox_rows(db, principal)
+    decisions = await decision_rows(db, principal, seen)
+    counted = sum(1 for d in decisions if d.counts)
     from oracle.launches import service as launches_service
 
     launch_rows = await launches_service.inbox_rows(db, principal)
@@ -7895,12 +8256,14 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         # Strategy drift: one row, however many findings.
         + (1 if strategy else 0)
         + sum(1 for r in launch_rows if r.counted)
-        + sum(a.counts for a in oracle_actions),
+        + sum(a.counts for a in oracle_actions)
+        + counted,
         launches=launch_rows,
         items=states,
         counts=counts,
         staged=staged,
-        needs_me=counts.new + counts.open,
+        decisions=decisions,
+        needs_me=counts.new + counts.open + counted,
         last_seen_at=seen,
     )
 

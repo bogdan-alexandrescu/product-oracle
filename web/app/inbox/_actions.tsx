@@ -186,6 +186,27 @@ export function InboxActions({
     );
   }
 
+  // D12: no section text to accept here: the item can go to the agents with the next draft.
+  const stage =
+    !compact &&
+    primary !== "Accept" &&
+    primary !== "Merge" &&
+    (f.suggestion_kind !== "section_text" || f.suggestion_status === "dismissed") && (
+    <Button
+      variant="ghost"
+      disabled={busy}
+      onClick={() =>
+        void run(
+          () => unwrap(api.POST("/v1/feedback/{feedback_id}/stage-for-agents", feedbackPath(f.id))),
+          "Staged",
+          { message: `Staged for draft ${(f.latest_version ?? f.raised_on_version) + 1} · agents: ${f.summary}` },
+        )
+      }
+      className={stack}
+    >
+      Stage for agents
+    </Button>
+  );
   const decline = primary !== "Merge" && (
     <Button variant={primary ? "ghost" : "secondary"} disabled={busy} onClick={() => open("decline")} className={stack}>
       Decline
@@ -202,6 +223,7 @@ export function InboxActions({
         </Button>
       )}
       {(!compact || !primary) && decline}
+      {stage}
       <LinkButton variant="ghost" href={href} aria-label={`Open ${f.summary}`} className={stack}>
         Open
       </LinkButton>

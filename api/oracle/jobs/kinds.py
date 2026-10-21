@@ -40,6 +40,7 @@ MAX_TOKENS = {
     "intake_analysis": 4000,
     "quality_review": 4000,
     "refinement_batch": 16000,
+    "decision_options": 4000,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -772,6 +773,144 @@ async def quality_review(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, An
     return await judge.run(s, job, ask, await _context(s, job))
 
 
+# --- decision options (H1) ---------------------------------------------------------------
+
+DECISION_EVIDENCE = 20
+MIN_OPTIONS, MAX_OPTIONS = 2, 4
+
+
+async def decision_options(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Ask Oracle for options: 2-4 options for a proposed decision, each with pros, cons,
+    the evidence it rests on (only evidence it was given) and what it costs if wrong, one
+    of them recommended. They are added to the decision's options (people's stay).
+
+    The decision is read without a lock: deciding, editing, reassigning or withdrawing it
+    never waits for the model. It is locked again only to write the options, which are
+    dropped if it changed meanwhile (its lock_version moved)."""
+    import re
+
+    from oracle.decisions.models import Decision
+
+    decision = await s.get(Decision, job.decision_id) if job.decision_id else None
+    if decision is None:
+        raise JobInputError("the decision no longer exists")
+    if decision.status != "proposed":
+        raise JobInputError(f"D-{decision.number} is {decision.status}: options are for a proposal")
+    read_version = decision.lock_version
+    related = (
+        list(await s.scalars(select(Entity).where(Entity.id.in_(list(decision.entity_ids or [])))))
+        if decision.entity_ids
+        else []
+    )
+    query = select(Evidence, Entity.title).join(Entity, Entity.id == Evidence.entity_id)
+    scoped = [Evidence.entity_id.in_([e.id for e in related])] if related else []
+    if decision.evidence_ids:
+        scoped.append(Evidence.id.in_(list(decision.evidence_ids)))
+    if scoped:
+        from sqlalchemy import or_
+
+        query = query.where(or_(*scoped))
+    rows = (
+        await s.execute(
+            query.where(Entity.status != "rejected")
+            .order_by(Evidence.confidence.desc().nulls_last(), Evidence.created_at.desc())
+            .limit(DECISION_EVIDENCE)
+        )
+    ).all()
+    given = {str(ev.id) for ev, _ in rows}
+    payload = {
+        "limits": {"min_options": MIN_OPTIONS, "max_options": MAX_OPTIONS},
+        "decision": {
+            "ref": f"D-{decision.number}",
+            "title": decision.title,
+            "question": decision.question,
+            "context": _short(decision.context, 4000),
+            "reversibility": decision.reversibility,
+            "options": [
+                {"key": o.get("key"), "label": o.get("label"), "summary": o.get("summary")}
+                for o in decision.options or []
+            ],
+        },
+        "entities": [
+            {"id": str(e.id), "type": e.type, "key": e.key, "title": e.title,
+             "body": _short(e.body)}
+            for e in related
+        ],
+        "evidence": [
+            {
+                "id": str(ev.id),
+                "about": title,
+                "confidence": float(ev.confidence) if ev.confidence is not None else None,
+                "excerpt": _short(ev.excerpt),
+                "url": ev.url,
+            }
+            for ev, title in rows
+        ],
+    }  # fmt: skip
+    answer = await ask("decision_options", payload)
+    raw = answer.get("options")
+    if not isinstance(raw, list):
+        raise prompting.AnswerError("the answer has no options list")
+    taken = {str(o.get("key")) for o in decision.options or []}
+    options: list[dict[str, Any]] = []
+    recommended = False
+    for item in raw[:MAX_OPTIONS]:
+        if not isinstance(item, dict):
+            continue
+        label = prompting.as_str(item.get("label"), 200).strip()
+        if not label:
+            continue
+        key = re.sub(r"[^A-Za-z0-9_.:-]+", "-", prompting.as_str(item.get("key"), 60)).strip("-")
+        key = key or re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")[:60] or "option"
+        while key in taken:
+            key = f"{key}-{len(taken) + 1}"
+        taken.add(key)
+
+        def lines(value: Any) -> list[str]:
+            items = value if isinstance(value, list) else []
+            return [
+                prompting.as_str(v, 500).strip()
+                for v in items[:8]
+                if prompting.as_str(v, 500).strip()
+            ]
+
+        pick = bool(item.get("recommended")) and not recommended
+        recommended = recommended or pick
+        options.append(
+            {
+                "key": key,
+                "label": label,
+                "summary": prompting.as_str(item.get("summary"), 1000).strip() or None,
+                "pros": lines(item.get("pros")),
+                "cons": lines(item.get("cons")),
+                "evidence_ids": [str(e) for e in item.get("evidence_ids") or [] if str(e) in given],
+                "cost_if_wrong": prompting.as_str(item.get("cost_if_wrong"), 1000).strip() or None,
+                "recommended": pick,
+            }
+        )
+    if len(options) < MIN_OPTIONS:
+        raise prompting.AnswerError(f"the answer has {len(options)} usable options, not 2-4")
+    # Locked only for the write, read afresh (read committed): the copy read before the
+    # model call is dropped, so a newer lock_version is compared here, not raised as stale.
+    s.expunge(decision)
+    decision = await s.get(Decision, decision.id, with_for_update=True)
+    if decision is None:
+        raise JobInputError("the decision no longer exists")
+    if decision.lock_version != read_version or decision.status != "proposed":
+        raise JobInputError(f"D-{decision.number} changed while Oracle prepared options: ask again")
+    kept = [{**o, "recommended": False} for o in decision.options or []]
+    # People's options are taken as written: only Oracle's are cut to fit six.
+    options = options[: max(0, 6 - len(kept))]
+    decision.options = kept + options
+    await s.flush()
+    return {
+        "decision_id": str(decision.id),
+        "options": [o["key"] for o in options],
+        "recommended": next((o["key"] for o in options if o["recommended"]), None),
+        "evidence_given": len(given),
+    }
+
+
 RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any]]]] = {
     "review_comments": review_comments,
     "reporting": reporting,
@@ -779,6 +918,7 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "intake_analysis": intake_analysis,
     "quality_review": quality_review,
     "refinement_batch": refinement_batch,
+    "decision_options": decision_options,
 }
 
 

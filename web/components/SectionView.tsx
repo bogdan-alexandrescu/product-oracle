@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { memo, useMemo, useState, type ReactNode } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
@@ -13,6 +14,7 @@ import { SpecStateBadge } from "@/components/ui";
 import { IGNORE_ATTR } from "@/lib/anchor";
 import type { CitationOut, DateMarkOut, EntityOut, SectionOut, Verdict } from "@/lib/api/client";
 import { blocksText, type Block } from "@/lib/markdown";
+import { hasRole, useMe } from "@/lib/me";
 
 const HEADING_CLASS: Record<number, string> = {
   1: "font-display text-[26px] leading-8 font-bold tracking-heading max-[600px]:text-[22px] max-[600px]:leading-7",
@@ -105,6 +107,10 @@ export const SectionView = memo(function SectionView({
     return (named(section.heading) ?? named(section.body_text))?.id ?? null;
   }, [evidenceTargets, section.heading, section.body_text]);
   const canRefine = !!refine && !locked;
+  // H1: commenters and above record a decision about this section (Propose decision).
+  const { role } = useMe();
+  const router = useRouter();
+  const mayDecide = hasRole(role, "commenter") && !!section.id;
   const unplaced = useMemo(() => unplacedMarks(blocks, dateMarks), [blocks, dateMarks]);
   const pick = (kind: Tool) => setTool((t) => ({ kind, n: (t?.n ?? 0) + 1 }));
   const close = () => setTool(null);
@@ -148,7 +154,7 @@ export const SectionView = memo(function SectionView({
                 </Button>
               )
             : headTools}
-          {!nested && (evidenceTargets || canRefine || ask) && (
+          {!nested && (evidenceTargets || canRefine || ask || mayDecide) && (
             <Menu label={`Actions for ${section.heading}`} icon="more" iconOnly>
               {(closeMenu) => (
                 <span role="menu" aria-label={`Actions for ${section.heading}`} className="flex min-w-44 flex-col gap-0.5">
@@ -183,6 +189,18 @@ export const SectionView = memo(function SectionView({
                       }}
                     >
                       Ask a teammate
+                    </MenuItem>
+                  )}
+                  {mayDecide && (
+                    <MenuItem
+                      label={`Record a decision about ${section.heading}`}
+                      onClick={() => {
+                        closeMenu();
+                        const subject = encodeURIComponent(`section:${section.id}`);
+                        router.push(`/company/decisions?subject=${subject}&ref=${encodeURIComponent(section.heading)}&propose=1`);
+                      }}
+                    >
+                      Record a decision
                     </MenuItem>
                   )}
                 </span>

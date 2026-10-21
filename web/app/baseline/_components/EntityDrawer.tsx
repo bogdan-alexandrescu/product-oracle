@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
@@ -7,6 +8,7 @@ import { Button, Chip, GoalTag, InfoTip, Inspector, InspectorSection, Notice } f
 import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type GraphOut, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { EvidenceChip } from "./EvidenceChip";
@@ -244,6 +246,8 @@ export function EntityDrawer({
                 </p>
               </InspectorSection>
             )}
+
+            {blocker && <RecordDecision entity={d ?? entity} />}
 
             {promoting && suggestion ? (
               <InspectorSection label="Promote to blocker">
@@ -528,5 +532,24 @@ function EditForm({
         </InfoTip>
       </div>
     </form>
+  );
+}
+
+/** H1: commenters and above record a decision about a blocker (Propose decision, about it). */
+function RecordDecision({ entity }: { entity: EntityOut }) {
+  const { role } = useMe();
+  if (!hasRole(role, "commenter")) return null;
+  const href = `/company/decisions?subject=${encodeURIComponent(`blocker:${entity.id}`)}&ref=${encodeURIComponent(entity.title)}&propose=1`;
+  return (
+    <InspectorSection label="Decisions">
+      <p className="flex flex-wrap gap-3 text-sm">
+        <Link href={href} className="font-medium text-accent-ink hover:underline">
+          Record a decision
+        </Link>
+        <Link href={`/company/decisions?subject=${encodeURIComponent(`blocker:${entity.id}`)}&class=all`} className="font-medium text-accent-ink hover:underline">
+          Decisions about this blocker
+        </Link>
+      </p>
+    </InspectorSection>
   );
 }

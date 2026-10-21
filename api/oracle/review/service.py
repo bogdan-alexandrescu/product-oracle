@@ -16,7 +16,7 @@ commit; the router commits once per request. Every mutation writes an audit even
 import uuid
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -186,7 +186,7 @@ async def feedback_out(
     for item in items:
         anchor = anchors.get(item.comment_id) if item.comment_id else None
         suggestion = suggestions.get(item.id)
-        state = feedback_state(item.status, suggestion)
+        state = feedback_state(item.status, suggestion, item.staged_for_agents_at)
         out.append(
             FeedbackItemOut(
                 id=item.id,
@@ -211,6 +211,7 @@ async def feedback_out(
                 staged_for_version=(latest.get(item.document_id) or 0) + 1
                 if state == "staged"
                 else None,
+                staged_for_agents=staged_for_agents(item),
             )
         )
     return out
@@ -226,19 +227,28 @@ def is_staged(suggestion) -> bool:
     )
 
 
-def feedback_state(status: str, suggestion) -> str:
-    """open / staged / declined / done, from the item's status and its live suggestion.
+def staged_for_agents(item: FeedbackItem) -> bool:
+    """D12: an open item an approver staged for the agents."""
+    return item.status == "open" and item.staged_for_agents_at is not None
+
+
+def feedback_state(status: str, suggestion, agents_at: datetime | None = None) -> str:
+    """open / staged / declined / done, from the item's status, its live suggestion and
+    whether an approver staged it for the agents (``agents_at``, D12).
 
     Staged first (owner, 2026-10-20): an accepted change carries into the next draft until
     a draft applies it or someone discards it, whatever happened to its item since (closed
     by a draft's resolutions, an approval or by hand). The build action counts the same
-    changes (``kinds.staged_suggestions``)."""
+    changes (``kinds.staged_suggestions``). An item staged for the agents is Staged while
+    it is open: the draft's resolutions close it."""
     if is_staged(suggestion):
         return "staged"
     if status == "declined":
         return "declined"
     if status != "open":
         return "done"
+    if agents_at is not None:
+        return "staged"
     if suggestion is not None and suggestion.status == "applied":
         return "done"
     return "open"
@@ -773,6 +783,9 @@ async def update_feedback(
             raise ReviewError("invalid", f"Version {number} does not exist for this document")
     if fields.get("status") == "open" and "addressed_in_version" not in fields:
         fields["addressed_in_version"] = None
+    if fields.get("status") not in (None, "open") and item.staged_for_agents_at is not None:
+        # Closed by hand: no longer staged for the agents (D12).
+        item.staged_for_agents_at = item.staged_for_agents_by = None
     before = {k: getattr(item, k) for k in fields}
     for key, value in fields.items():
         setattr(item, key, value)
@@ -786,6 +799,48 @@ async def update_feedback(
             item.id,
             {"before": before, "after": fields},
         )
+    await session.refresh(item)
+    return (await feedback_out(session, [item]))[0]
+
+
+async def stage_for_agents(
+    session: AsyncSession, principal: "Principal", feedback_id: uuid.UUID, on: bool
+) -> FeedbackItemOut:
+    """D12: stage an open item with no section text to accept for the agents (``on``), or
+    unstage it. The next draft goes to the agents with it; it stays open until the
+    draft's resolutions close it."""
+    from oracle.jobs.service import latest_suggestions
+
+    item = await session.get(FeedbackItem, feedback_id, with_for_update=True)
+    if item is None:
+        raise ReviewError("not_found", f"Feedback item {feedback_id} not found")
+    suggestion = (await latest_suggestions(session, [item.id])).get(item.id)
+    if is_staged(suggestion):
+        raise ReviewError("conflict", "already staged as a text change for the next draft")
+    if item.status != "open":
+        raise ReviewError("conflict", f"the item is {item.status}, not open")
+    if (
+        on
+        and suggestion is not None
+        and suggestion.kind == "section_text"
+        and suggestion.status == "open"
+    ):
+        raise ReviewError(
+            "conflict", "it has a text suggestion: accept it (a text change) or dismiss it first"
+        )
+    if on and item.staged_for_agents_at is None:
+        item.staged_for_agents_at, item.staged_for_agents_by = _now(), principal.id
+    elif not on:
+        item.staged_for_agents_at = item.staged_for_agents_by = None
+    await session.flush()
+    await audit.record(
+        session,
+        principal,
+        "feedback.stage_for_agents" if on else "feedback.unstage_for_agents",
+        "feedback_item",
+        item.id,
+        {},
+    )
     await session.refresh(item)
     return (await feedback_out(session, [item]))[0]
 
@@ -831,6 +886,8 @@ async def apply_resolutions(
         item.status = res.status
         item.resolution_note = res.note
         item.addressed_in_version = version.number
+        # D12: closed by the draft it was staged for: no longer staged for the agents.
+        item.staged_for_agents_at = item.staged_for_agents_by = None
         await audit.record(
             session,
             principal,
@@ -923,6 +980,18 @@ async def resolution_report(session: AsyncSession, doc: str, n: int) -> Resoluti
 # --- Approval ----------------------------------------------------------------------------
 
 
+def readiness_summary(report: Any) -> str | None:
+    """One line of a passing readiness report, for the decision log (H1)."""
+    if report is None or not getattr(report, "results", None):
+        return None
+    counts: dict[str, int] = {}
+    for r in report.results:
+        counts[r.status] = counts.get(r.status, 0) + 1
+    order = (("pass", "passed"), ("warning", "warned"), ("critical", "critical"))
+    parts = [f"{counts[k]} {word}" for k, word in order if counts.get(k)]
+    return "Readiness at approval: " + (", ".join(parts) or "no checks applied")
+
+
 async def approve_version(
     session: AsyncSession, principal: "Principal", doc: str, n: int
 ) -> tuple[Document, DocumentVersion]:
@@ -964,7 +1033,7 @@ async def approve_version(
             "forbidden", "Only the designated decider approves this document's versions"
         )
     # A PRD: the publish gate (only the latest version, then readiness), in its words.
-    await publish_gate.check(session, document, version)
+    gate = await publish_gate.check(session, document, version)
     latest = await session.scalar(
         select(DocumentVersion.number)
         .where(DocumentVersion.document_id == document.id)
@@ -1011,6 +1080,13 @@ async def approve_version(
             ),
         },
     )
+    if not already:
+        # H1: the first approval of a version is a decision ("Publish <document> v<n>").
+        from oracle.decisions import capture
+
+        await capture.version_approved(
+            session, principal, document, version, readiness_summary(gate)
+        )
     if document.kind == "prd":
         # V2b, T2: approving a PRD version publishes it; a published PRD starts (or
         # advances) its product track.

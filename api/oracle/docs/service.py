@@ -6,7 +6,7 @@ apply resolutions -> audit -> commit.
 """
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Literal
 
@@ -44,6 +44,7 @@ from oracle.docs.schemas import (
 )
 from oracle.review import service as review_service
 from oracle.review.models import SectionReview
+from oracle.review.schemas import Resolution
 from oracle.sources.models import SourceItem
 from oracle.templates.builtins import BUILTIN_TEMPLATES_BY_KEY
 from oracle.templates.models import Template, TemplateVersion
@@ -97,6 +98,9 @@ IMPORT_CAUSES = ("draft_imported", "section_edited", "patch_accepted", "run_draf
 class ImportResult:
     version: VersionOut
     created: bool
+    # The draft's resolutions as parsed (all of them, applied or not): a caller reads them
+    # here rather than parse the draft again on the event loop.
+    resolutions: list[Resolution] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -813,7 +817,9 @@ async def import_draft(
                 )
                 await db.commit()
             return ImportResult(
-                version=await read_version(db, existing, require_dates=False), created=False
+                version=await read_version(db, existing, require_dates=False),
+                created=False,
+                resolutions=draft.resolutions,
             )
 
     brief, brief_source, layer_of = await _layers(db, document, draft)
@@ -1048,7 +1054,11 @@ async def import_draft(
         from oracle.roadmap import doc_dates
 
         doc_dates.keep_for_version(version.id, dates.ref, dates.found)
-    return ImportResult(version=await read_version(db, version, require_dates=False), created=True)
+    return ImportResult(
+        version=await read_version(db, version, require_dates=False),
+        created=True,
+        resolutions=draft.resolutions,
+    )
 
 
 def _unknown_base(base: int, latest: int | None) -> DraftError:

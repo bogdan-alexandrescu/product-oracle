@@ -31,14 +31,12 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // A flow that reads an approved document (prd_to_roadmap) starts from Plan › Roadmap documents,
-  // where the PRD is picked, and a vision or strategy draft from Company › Strategy; this
-  // dialog offers the others.
-  const flows = useMemo(
-    () => catalog.data?.flows.filter((f) => !f.source_kind && f.key !== "strategy_draft" && f.in_new_run_dialog !== false) ?? [],
-    [catalog.data],
-  );
-  const flow = flows.find((f) => f.key === flowKey);
+  // D12: the catalog's one rule says which flows this dialog offers; a flow with its own
+  // door elsewhere (Build next draft, Plan › Roadmap documents, a launch) is a pointer line
+  // instead.
+  const flows = useMemo(() => catalog.data?.flows.filter((f) => f.in_new_run_dialog) ?? [], [catalog.data]);
+  const pointers = useMemo(() => catalog.data?.flows.filter((f) => f.starts_from) ?? [], [catalog.data]);
+  const flow = flows.find((f) => f.key === flowKey) ?? flows[0];
 
   // Choices on top of the flow's defaults; a new flow starts from its defaults again.
   const segmentRoles = (s: Flow["segments"][number]) => roles[s.name] ?? s.roles;
@@ -85,9 +83,9 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
       const body = { document: document.trim() || null, knobs };
       // A draft's flow is fixed: a different flow gets a fresh draft.
       const run =
-        draft && draft.flow === flowKey
+        draft && draft.flow === flow?.key
           ? await unwrap(api.PATCH("/v1/runs/{run_id}", { params: { path: { run_id: draft.id } }, body }))
-          : await unwrap(api.POST("/v1/runs", { body: { flow: flowKey, ...body } }));
+          : await unwrap(api.POST("/v1/runs", { body: { flow: flow!.key, ...body } }));
       setDraft({ id: run.id, flow: run.flow });
       setEstimate(await unwrap(api.POST("/v1/runs/{run_id}/estimate", { params: { path: { run_id: run.id } } })));
     } catch (e) {
@@ -124,7 +122,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
       >
         <div className="flex min-h-14 items-center gap-2 border-b border-line px-5 max-[600px]:px-4">
           <h2 id="new-run-title" className="font-display text-xl font-bold tracking-heading">
-            New run
+            {catalog.data && !flows.length ? "Start a run" : "New run"}
           </h2>
           {catalog.data && (
             <InfoTip label="where runs execute" align="start" side="bottom">
@@ -137,6 +135,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
         <div className="space-y-5 px-5 py-4 text-[15px] max-[600px]:px-4">
           {catalog.error && <ErrorNote>{catalog.error}</ErrorNote>}
           {!catalog.data && !catalog.error && <Loading />}
+          {catalog.data && !flow && <FlowPointers flows={pointers} />}
           {catalog.data && flow && (
             <>
               {catalog.data.runtime_notes.length > 0 && (
@@ -153,14 +152,14 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                     <label
                       key={f.key}
                       className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-button border px-3 py-2 ${
-                        f.key === flowKey ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line-strong hover:bg-surface2"
+                        f.key === flow.key ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line-strong hover:bg-surface2"
                       }`}
                     >
                       <input
                         type="radio"
                         name="flow"
                         value={f.key}
-                        checked={f.key === flowKey}
+                        checked={f.key === flow.key}
                         onChange={() => selectFlow(f.key)}
                         className="accent-[var(--accent)]"
                       />
@@ -169,17 +168,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                     </label>
                   ))}
                 </div>
-                {catalog.data.flows.some((f) => f.source_kind) && (
-                  <p className="mt-2 flex items-center gap-1.5 text-sm text-text2" data-testid="roadmap-flow-note">
-                    PRD to roadmap:{" "}
-                    <Link href="/plan/documents" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
-                      Roadmap documents
-                    </Link>
-                    <InfoTip label="roadmap runs" align="start">
-                      A roadmap from an approved PRD starts from Plan › Roadmap documents.
-                    </InfoTip>
-                  </p>
-                )}
+                <FlowPointers flows={pointers} />
               </fieldset>
 
               <label className="block">
@@ -308,5 +297,28 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Where the flows with their own door start: one line each, linked when there is a screen. */
+function FlowPointers({ flows }: { flows: Flow[] }) {
+  if (!flows.length) return null;
+  return (
+    <ul className="mt-2 space-y-1 text-sm text-text2" data-testid="flow-pointers">
+      {flows.map((f) => {
+        const start = f.starts_from!;
+        return (
+          <li key={f.key} className="flex items-center gap-1.5" data-testid="flow-pointer">
+            {start.href ? (
+              <Link href={start.href} className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+                {start.label}
+              </Link>
+            ) : (
+              <span>{start.label}</span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

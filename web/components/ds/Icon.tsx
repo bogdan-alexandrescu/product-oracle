@@ -31,6 +31,13 @@ const PATHS = {
       <circle cx="16" cy="12" r="2" />
     </>
   ),
+  // Company (H1): a building.
+  company: (
+    <>
+      <path d="M5 21V5l7-2v18M12 8h7v13M3 21h18" />
+      <path d="M8 8h1M8 12h1M8 16h1M15 12h1M15 16h1" />
+    </>
+  ),
   runs: (
     <>
       <circle cx="12" cy="12" r="8" />

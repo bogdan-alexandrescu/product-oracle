@@ -54,6 +54,7 @@ from oracle.claude_accounts.models import (  # noqa: E402
     ClaudeSweepLease,
 )
 from oracle.connections.models import Connection  # noqa: E402
+from oracle.decisions.models import Decision, DecisionReview  # noqa: E402
 from oracle.docs.models import Citation, Document, DocumentVersion, Section  # noqa: E402
 from oracle.intake.models import IntakeProposal, IntakeWithheldItem  # noqa: E402
 from oracle.integrations.models import CompanyIntegration  # noqa: E402
@@ -94,6 +95,7 @@ from oracle.roadmap.models import (  # noqa: E402
     TrackMilestone,
 )
 from oracle.runs.models import Checkpoint, Run, RunSegment  # noqa: E402
+from oracle.runs.scope_models import PrdScope, PrdScopeItem  # noqa: E402
 from oracle.runtokens import RunToken  # noqa: E402
 from oracle.sources.models import (  # noqa: E402
     Snapshot,
@@ -146,6 +148,8 @@ __all__ = [
     "BlockerResolutionEvent",
     "ChangeEvent",
     "Checkpoint",
+    "Decision",
+    "DecisionReview",
     "Citation",
     "ClaudeAccount",
     "ClaudeAccountHold",
@@ -202,6 +206,8 @@ __all__ = [
     "RoadmapItem",
     "Run",
     "RunSegment",
+    "PrdScope",
+    "PrdScopeItem",
     "RunToken",
     "ScheduleBasis",
     "Section",

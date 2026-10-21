@@ -180,6 +180,10 @@ export function RunDetail({ id }: { id: string }) {
                 {run.theme && `, theme ${run.theme}`}
               </Chip>
             )}
+            {/* H1: the stops this run had approved or sent back, in the decision log. */}
+            <Link href={`/company/decisions?run=${run.id}`} data-testid="run-decision-log" className="text-sm font-medium text-accent-ink hover:underline">
+              Decisions in this run
+            </Link>
           </>
         }
         action={
@@ -551,7 +555,8 @@ function SegmentItem({
   const waiting = checkpoints.some((c) => c.status === "pending");
   // Decided, not delivered to the run yet: said under the segment, with why it waits.
   const delivering = checkpoints.filter((c) => c.delivery && !s.sent_back);
-  const details = s.error || s.autonomy_note || s.items_check || s.draft_import || s.artifacts.length > 0 || deciding.length > 0 || delivering.length > 0;
+  const details =
+    s.error || s.autonomy_note || s.items_check || s.feature_set_check || s.draft_import || s.artifacts.length > 0 || deciding.length > 0 || delivering.length > 0;
   const rejected = !!s.draft_import?.error;
   // Each open decision's note, here so Send back to writer can fill it in.
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -681,6 +686,7 @@ function SegmentItem({
             </p>
           )}
           {s.items_check && <ItemsCheckLine check={s.items_check} />}
+          {s.feature_set_check && <FeatureSetCheckLine check={s.feature_set_check} />}
           {s.draft_import && (
             <DraftImportLine
               imp={s.draft_import}
@@ -947,6 +953,63 @@ function ItemsCheckLine({ check }: { check: ItemsCheck }) {
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const FEATURE_FLAG_LABEL: Record<string, string> = {
+  serves_no_goal: "serves no goal",
+  low_confidence: "low confidence",
+  linked_blocker: "linked blocker",
+  new_feature: "new feature",
+  duplicate_of_existing: "duplicate of existing",
+};
+
+/** C6: the check of feature_set.yaml, counts on one line; every problem in full and the flags per feature behind it. */
+function FeatureSetCheckLine({ check }: { check: NonNullable<SegmentOut["feature_set_check"]> }) {
+  const [open, setOpen] = useState(false);
+  const listId = useId();
+  const n = check.problems.length;
+  const counts = `Feature set: ${plural(check.features, "feature")}, ${plural(check.requirements, "requirement")}, ${check.excluded} left out`;
+  const problems = n === 0 ? "no problems" : plural(n, "problem");
+  const flagged = Object.entries(check.flags ?? {}).filter(([, f]) => f.length > 0);
+  return (
+    <div data-testid="feature-set-check">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-label={`${counts} · ${problems}`}
+        onClick={() => setOpen((o) => !o)}
+        className="flex max-w-full flex-wrap items-center gap-2 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        <span className="tnum">{counts}</span>
+        <Chip kind={n === 0 ? "pass" : "warn"}>{problems}</Chip>
+        <Icon name={open ? "chevron-up" : "chevron-down"} size={16} className="text-text2" />
+      </button>
+      {open && (
+        <div id={listId}>
+          {n > 0 && (
+            <ul data-testid="feature-set-problems" className="mt-1.5 space-y-0.5 rounded-button bg-warn-bg px-3 py-1.5 text-sm text-warn">
+              {check.problems.map((p, i) => (
+                <li key={i} className="break-words">
+                  {p.message}
+                </li>
+              ))}
+            </ul>
+          )}
+          {flagged.length > 0 && (
+            <ul data-testid="feature-set-flags" className="mt-1.5 space-y-0.5 text-sm text-text2">
+              {flagged.map(([key, flags]) => (
+                <li key={key} className="break-words">
+                  <span className="font-mono text-[13px] text-text">{key}</span>: {flags.map((f) => FEATURE_FLAG_LABEL[f] ?? f.replaceAll("_", " ")).join(", ")}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   );

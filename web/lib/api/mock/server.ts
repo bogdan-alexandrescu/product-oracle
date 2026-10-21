@@ -15,6 +15,7 @@ import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, 
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
+import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeEngineering } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
@@ -22,7 +23,7 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
-import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { enlargeRuns, routeRuns, seedFeatureSetRun, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
@@ -47,7 +48,11 @@ type CommentRow = Omit<Schemas["CommentOut"], "replies">;
 /** A stored section review; a spec may mark an approval lapsed (C2). */
 type ReviewRow = Schemas["SectionReviewOut"] & { lapsed_at?: string | null; lapse_reason?: string | null };
 /** Stored without its derived C1e state (withSuggestion adds it on the way out). */
-type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version">;
+type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version" | "staged_for_agents"> & {
+  /** D12: staged for the agents (when, by whom); open items only count. */
+  staged_for_agents_at?: string | null;
+  staged_for_agents_by?: string | null;
+};
 type MemberRow = Schemas["MemberOut"];
 type InviteRow = Schemas["InviteOut"];
 type Role = MemberRow["role"];
@@ -70,6 +75,8 @@ export interface Db {
   lane_f?: LaneFState;
   /** Runs, checkpoints and their artifacts (./runs.ts); absent in data saved before runs existed. */
   runs?: RunsDb;
+  /** D12: the agents' run estimate in the "next-draft-costly" scenario. */
+  next_draft_run_usd?: number;
   /** Built-in model jobs and suggestions (./llm-jobs.ts); absent in older saved data. */
   llm?: LlmDb;
   /** Product Oracle v2 tables (./v2.ts); absent in data saved before v2. */
@@ -90,6 +97,8 @@ export interface Db {
   specs?: SpecsDb;
   /** Requests, their themes and the found items of the seed owner (./requests.ts, C1). */
   requests?: RequestsDb;
+  /** The decision log (./decisions.ts, H1); absent in data saved before it. */
+  decisions?: DecisionsDb;
   /** Launches, their checklist and notes, and the changelog (./launches.ts, H6). */
   launches?: LaunchesDb;
   /** Per-user preferences (O1f document_view), by member email. */
@@ -195,7 +204,7 @@ export const MOCK_ROLE_KEY = "po-mock-role";
 /**
  * Tests and screenshots set this localStorage key before the first call: "empty" starts as a
  * new company (members only, no goals, documents, runs or questions); "large" as a big one
- * (30 goals, 50 more active runs, questions asked of the signed-in member); "suggestions" as the
+ * (30 goals, 50 more active runs, 250 more decisions, questions asked of the signed-in member); "suggestions" as the
  * default company plus a PRD with three open Oracle suggestions (fleet-next); "big-prd" adds a PRD
  * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts); "revoke-failures" as the
  * default company plus two provider revokes a removed member's disable could not make (C2);
@@ -214,7 +223,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * signed-in owner (./autonomy.ts);
  * "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
- * ./roadmap-items.json).
+ * ./roadmap-items.json);
+ * "feature-set" as the default company plus a run waiting at a feature set with a blocking
+ * problem (C6, saved-addresses).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -575,6 +586,93 @@ function seedSuggestions(): Db {
   return db;
 }
 
+/** The default seed plus a run waiting at its feature set with a blocking problem (C6, ./runs.ts). */
+function seedFeatureSet(): Db {
+  const db = seed();
+  seeded("feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db)));
+  return db;
+}
+
+/**
+ * D12 "next-draft" scenario: the fleet PRD on draft 2 with two accepted section-text
+ * changes (F-33, F-34), a whole-draft remark staged for the agents and one nobody staged
+ * yet. "next-draft-costly": the same, with the agents' run estimated over the owner-approval
+ * threshold.
+ */
+function seedNextDraft(costly: boolean): Db {
+  const db = seed();
+  const doc: DocumentRow = {
+    id: uuid(),
+    slug: FLEET_DOC.slug,
+    title: FLEET_DOC.title,
+    status: "in_review",
+    kind: "prd",
+    template: FLEET_DOC.template ?? null,
+    template_version: FLEET_DOC.template_version ?? null,
+    theme: null,
+    created_at: FLEET_DOC.versions[0].created_at,
+    updated_at: FLEET_DOC.versions.at(-1)!.created_at,
+  };
+  db.documents.push(doc);
+  for (const v of FLEET_DOC.versions) db.versions.push(buildVersion(doc, v));
+  const v2 = findVersion(db, doc, 2)!;
+  const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
+  const item = (key: string | null, summary: string, created_at: string, staged = false): FeedbackRow => {
+    const f: FeedbackRow = {
+      id: uuid(),
+      document_id: doc.id,
+      raised_on_version: 2,
+      kind: "general",
+      comment_id: null,
+      section_review_id: null,
+      section_key: key,
+      summary,
+      anchor: null,
+      verdict: null,
+      status: "open",
+      addressed_in_version: null,
+      resolution_note: null,
+      created_at,
+      updated_at: created_at,
+      staged_for_agents_at: staged ? "2026-10-19T12:00:00Z" : null,
+      staged_for_agents_by: staged ? db.user_id : null,
+    };
+    db.feedback.push(f);
+    return f;
+  };
+  FLEET_SUGGESTIONS.filter((x) => x.key !== "f-36").forEach((x, i) => {
+    const created_at = `2026-10-19T10:0${i}:00Z`;
+    const f = item(x.key, x.summary, created_at);
+    llm.suggestions.push({
+      id: uuid(),
+      document_id: doc.id,
+      feedback_item_id: f.id,
+      job_id: null,
+      version_number: v2.number,
+      classification: "change_request",
+      group_key: null,
+      duplicate_of: null,
+      kind: "section_text",
+      section_key: x.key,
+      text: x.text,
+      edited_text: null,
+      rationale: x.rationale,
+      pushback: null,
+      status: "accepted",
+      override_reason: null,
+      decided_by: db.user_id,
+      decided_at: "2026-10-19T11:00:00Z",
+      applied_in_version: null,
+      created_at,
+      updated_at: created_at,
+    });
+  });
+  item(null, "The draft never says how drivers learn the new app.", "2026-10-19T10:05:00Z", true);
+  item(null, "Say which fleets join the pilot first.", "2026-10-19T10:06:00Z");
+  if (costly) db.next_draft_run_usd = 64;
+  return db;
+}
+
 /** The default seed plus one PRD of 100+ sections in nested chapters (./big-prd.ts). */
 function seedBigPrd(): Db {
   const db = seed();
@@ -855,8 +953,37 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       importSections(db, doc, base as VersionRow, { [key]: { heading, body } }, resolutions),
     importSections: (doc, base, replace, resolutions) => importSections(db, doc, base as VersionRow, replace, resolutions),
     memberName: (id) => db.members.find((m) => m.id === id)?.email ?? null,
+    runEstimateUsd: () => db.next_draft_run_usd ?? null,
+    // D12: Build next draft with the agents: a feedback-loop run, estimated and started.
+    startRun: async (doc, input) => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const rc = { ...runsContext(db), db: db.runs };
+      const call = (path: string, payload?: unknown) =>
+        routeRuns(
+          rc,
+          new Request(new URL(path, "http://localhost"), {
+            method: "POST",
+            body: payload ? JSON.stringify(payload) : undefined,
+            headers: { "Content-Type": "application/json" },
+          }),
+          path.split("/").filter(Boolean),
+        );
+      const created = await call("/v1/runs", { flow: "feedback_loop", document: doc.slug, knobs: { depth: input.depth } });
+      if (!created || !created.ok) return created ?? notFound("Route");
+      const { id } = (await created.json()) as Schemas["RunOut"];
+      await call(`/v1/runs/${id}/estimate`);
+      const run = db.runs.runs.find((r) => r.id === id)! as SentRun;
+      run.estimate_usd = input.estimate_usd;
+      run.segments[0].estimate_usd = input.estimate_usd;
+      run.sent = { feedback_ids: input.feedback_ids, suggestion_ids: input.suggestion_ids };
+      const started = (await call(`/v1/runs/${id}/start`))!;
+      return new Response(started.body, { status: started.ok ? 201 : started.status, headers: started.headers });
+    },
   };
 }
+
+/** D12: a feedback-loop run started from Build next draft, with the items it was sent. */
+type SentRun = Schemas["RunOut"] & { sent?: { feedback_ids: string[]; suggestion_ids: string[] } };
 
 /**
  * C1e: the Inbox's feedback by state for approvers (new since my last visit, open, staged,
@@ -886,6 +1013,18 @@ function withInboxStates(
     total: base.total + states.needs_me,
     ...states,
     last_seen_at: seen,
+  };
+}
+
+/** What the decision log mock reads: the signed-in member, the members, the runs' stops. */
+function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
+  return {
+    me: { id: me.id, email: me.email, role: me.role, status: me.status },
+    members: db.members.map((m) => ({ id: m.id, email: m.email, role: m.role, status: m.status })),
+    runs: (db.runs?.runs ?? []) as unknown as DecisionsContext["runs"],
+    documentTitle: (slug) => db.documents.find((d) => d.slug === slug)?.title ?? null,
+    uuid,
+    now,
   };
 }
 
@@ -1011,6 +1150,16 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       const v = buildVersion(doc, base);
       v.source = run.source ?? null;
       db.versions.push(v);
+      // D12: what Build next draft sent the agents: the text changes are applied in this
+      // version and the agent-staged items leave Staged (the draft answers them).
+      const sent = (run as SentRun).sent;
+      for (const sug of db.llm?.suggestions ?? []) {
+        if (sent?.suggestion_ids.includes(sug.id) && sug.status === "accepted")
+          Object.assign(sug, { status: "applied", applied_in_version: v.number, updated_at: now() });
+      }
+      for (const f of db.feedback) {
+        if (sent?.feedback_ids.includes(f.id)) Object.assign(f, { staged_for_agents_at: null, staged_for_agents_by: null });
+      }
       touch(db, doc.id);
       return {
         document_id: doc.id,
@@ -1042,6 +1191,10 @@ function load(): Db {
         ? seedSuggestions
         : scenario === "big-prd"
           ? seedBigPrd
+          : scenario === "feature-set"
+            ? seedFeatureSet
+          : scenario === "next-draft" || scenario === "next-draft-costly"
+            ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "questions"
             ? seedQuestions
             : scenario === "private-finding"
@@ -1989,10 +2142,24 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (followUp) return followUp;
 
   db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+  // The decision log (H1): judgement calls, and a record of every run stop decided.
+  const decisionsCtx = decisionsContext(db, me);
+  db.decisions ??= seeded("decisions", () => {
+    const log = seedDecisions(decisionsCtx);
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large") enlargeDecisions(decisionsCtx, log, 250);
+    return log;
+  });
+  const decided = await routeDecisions(decisionsCtx, db.decisions, req, p, q);
+  if (decided) return decided;
+  const seenBefore = db.inbox_seen?.[me.id] ?? null;
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   if (runs && p[1] === "inbox") {
     tick(llm);
-    const inbox = withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true");
+    const withStates = withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true");
+    // Decision rows: proposals I decide and reviews due count; informed and done do not.
+    const decisions = decisionInbox(decisionsCtx, db.decisions, seenBefore);
+    const counted = decisions.filter((d) => d.counts).length;
+    const inbox = { ...withStates, decisions, total: withStates.total + counted, needs_me: (withStates.needs_me ?? 0) + counted };
     // Launch rows (H6): Ready to launch, Set tier and Notes to send count; Shipped is shown only.
     const launchRows = launchInboxRows(launchesContext(db, me), ensureLaunches(db));
     inbox.launches = launchRows;

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -104,13 +104,16 @@ class FlowSegmentOut(BaseModel):
     approver_role: Role
 
 
+class FlowStart(BaseModel):
+    label: str
+    href: str | None = None
+
+
 class FlowOut(BaseModel):
     key: Flow
     title: str
     description: str
     requires_document: bool
-    # Offered in the New run dialog (launch_kit starts from a launch instead).
-    in_new_run_dialog: bool = True
     # The kind of document the run writes; None: the existing document's kind.
     target_kind: DocumentKind | None = None
     # The kind of approved document the run reads (prd_to_roadmap: a PRD).
@@ -119,6 +122,10 @@ class FlowOut(BaseModel):
     # POST /v1/runs.
     entry: str | None = None
     segments: list[FlowSegmentOut]
+    # D12: the New run dialog offers this flow (one rule for every flow).
+    in_new_run_dialog: bool = False
+    # Where a flow with its own door starts: a pointer line under the dialog's list.
+    starts_from: FlowStart | None = None
 
 
 class FlowCatalog(BaseModel):
@@ -260,6 +267,85 @@ class PreviousAttempt(BaseModel):
     artifacts: list[str]
 
 
+class FeatureSetProblem(BaseModel):
+    """One problem of feature_set.yaml or of the stored scope (oracle.runs.feature_set). A
+    blocking one refuses Approve until it is fixed (call c3)."""
+
+    code: str
+    blocking: bool = True
+    feature: str | None = None
+    requirement: str | None = None
+    message: str
+
+
+class FeatureSetCheck(BaseModel):
+    """The check of feature_set.yaml (C6): counts, every problem, and the advisory flags
+    per feature key (serves_no_goal, low_confidence, linked_blocker, new_feature,
+    duplicate_of_existing)."""
+
+    features: int
+    requirements: int
+    excluded: int
+    problems: list[FeatureSetProblem]
+    flags: dict[str, list[str]] = {}
+
+
+class ScopeGoal(BaseModel):
+    goal_id: uuid.UUID | None = None
+    key: str
+    contribution: int | None = None
+
+
+class ScopeRequirementOut(BaseModel):
+    id: uuid.UUID
+    key: str
+    title: str
+    text: str | None = None
+    acceptance: list[str] = []
+    # keep | cut
+    decision: Literal["keep", "cut"]
+    decision_reason: str | None = None
+    origin: Literal["agent", "person"]
+    entity_id: uuid.UUID | None = None
+    proposal_id: uuid.UUID | None = None
+
+
+class ScopeFeatureOut(BaseModel):
+    id: uuid.UUID
+    key: str
+    title: str
+    # include | exclude | defer
+    decision: Literal["include", "exclude", "defer"]
+    decision_reason: str | None = None
+    origin: Literal["agent", "person"]
+    goals: list[ScopeGoal] = []
+    depends_on: list[str] = []
+    blocker_keys: list[str] = []
+    confidence: float | None = None
+    flags: list[str] = []
+    entity_id: uuid.UUID | None = None
+    proposal_id: uuid.UUID | None = None
+    requirements: list[ScopeRequirementOut] = []
+
+
+class PrdScopeOut(BaseModel):
+    """A PRD scope (C6): the features and requirements a feature-set stop approves for one
+    PRD, in file order. Later segments and the document's next drafts read the approved
+    one."""
+
+    id: uuid.UUID
+    run_id: uuid.UUID
+    document_id: uuid.UUID | None = None
+    segment_seq: int
+    attempt: int
+    status: Literal["proposed", "approved", "superseded"]
+    check: FeatureSetCheck
+    features: list[ScopeFeatureOut]
+    approved_by: uuid.UUID | None = None
+    approved_at: datetime | None = None
+    lock_version: int
+
+
 class SegmentOut(BaseModel):
     id: uuid.UUID
     seq: int
@@ -289,6 +375,8 @@ class SegmentOut(BaseModel):
     can_retry_draft_import: bool = False
     items_check: ItemsCheck | None = None
     previous_attempt: PreviousAttempt | None = None
+    # The feature-set segment's check of feature_set.yaml (C6).
+    feature_set_check: FeatureSetCheck | None = None
     # H11: the baseline's level changed this segment's merge (skipped at observe, or
     # every change a proposal): one line saying so, else None.
     autonomy_note: str | None = None
@@ -360,7 +448,8 @@ class CheckpointOut(BaseModel):
     # Whether the caller's role may decide it (pending checkpoints only).
     can_decide: bool = False
     # Why approving it is refused now (owner, 2026-10-20): the draft its segment left was
-    # not imported. Request changes, or Retry import on the segment, first.
+    # not imported (Request changes, or Retry import on the segment, first), or the feature
+    # set has blocking problems (C6: Request changes).
     cannot_approve: str | None = None
     # An open checkpoint answered in SwarmCloud's console, waiting on an approver (W5).
     console: ConsoleAnswer | None = None
@@ -569,6 +658,8 @@ class InboxFeedbackItem(BaseModel):
     resolution_note: str | None = None
     addressed_in_version: int | None = None
     staged_for_version: int | None = None
+    # D12: staged for the agents (no section text): the next draft goes to the agents.
+    staged_for_agents: bool = False
     # The status of Oracle's live suggestion on the item, if it has one (open: "Review
     # suggestions").
     suggestion_status: SuggestionStatus | None = None
@@ -674,6 +765,24 @@ class InboxCounts(BaseModel):
     done: int = 0
 
 
+class InboxDecision(BaseModel):
+    """A decision row (H1): a proposal I decide, a review that came due (both counted),
+    a decision made that I am informed of, or one I just handled (shown only)."""
+
+    id: uuid.UUID
+    number: int
+    # "D-12"
+    ref: str
+    title: str
+    reason: Literal["needs_decision", "review_due", "oracle_decided", "informed"]
+    review_at: date | None = None
+    # When it reached me (proposed, came due, decided): what "new" is measured against.
+    since: datetime
+    state: Literal["new", "open", "done"]
+    # False for "informed" and done rows: they add to neither needs_me nor total.
+    counts: bool
+
+
 class InboxStrategy(BaseModel):
     """Owners: open strategy drift findings (H4), one Inbox row however many."""
 
@@ -728,7 +837,9 @@ class InboxOut(BaseModel):
     items: list[InboxFeedbackItem] = []
     counts: InboxCounts = InboxCounts()
     staged: list[InboxStaged] = []
-    # Feedback that needs me: new + open (staged, declined and done do not).
+    # H1: decision rows (proposals I decide, reviews due, informed, just handled).
+    decisions: list[InboxDecision] = []
+    # Feedback and decisions that need me: new + open (staged, declined and done do not).
     needs_me: int = 0
     # Launch rows (H6): Ready to launch and Notes to send (the launch's owner), Set tier
     # (approvers), counted in ``total``; Shipped (a member's personal note), shown only.

@@ -30,6 +30,7 @@ from oracle.runs.schemas import (
     FlowCatalog,
     InboxOut,
     McpServerRegistration,
+    PrdScopeOut,
     RunCreate,
     RunDecision,
     RunOut,
@@ -309,6 +310,14 @@ async def get_run_artifact(
 ) -> PlainTextResponse:
     content = await _call(service.read_artifact(db, run_id, seq, name, attempt))
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
+
+
+@router.get("/runs/{run_id}/scope", response_model=PrdScopeOut)
+async def get_run_scope(run_id: uuid.UUID, db: TenantDB) -> PrdScopeOut:
+    """The run's latest PRD scope, any status (C6): what its feature set includes, excludes
+    or defers, with the check. Proposed until the feature-set stop approves it. 404 while
+    the run has none."""
+    return await _call(service.read_scope(db, run_id))
 
 
 @router.get("/inbox", response_model=InboxOut)
