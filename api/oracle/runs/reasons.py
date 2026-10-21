@@ -25,7 +25,6 @@ from typing import Any, NamedTuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import safe_yaml
 from oracle.baseline import trace as baseline_trace
 from oracle.baseline.models import Entity
 from oracle.blockers.service import UNRESOLVED
@@ -697,35 +696,17 @@ async def _target_document(db: AsyncSession, run: Run) -> uuid.UUID | None:
     slug = (run.knobs or {}).get("document_slug")
     if not slug:
         return None
-    return await db.scalar(select(Document.id).where(Document.slug == slug))
+    return await db.scalar(
+        select(Document.id).where(Document.slug == slug, Document.kind == "roadmap")
+    )
 
 
 async def _base(
-    db: AsyncSession, run: Run, previous: dict[str, Any] | None
+    db: AsyncSession, run: Run
 ) -> tuple[dict[str, Any] | None, dict[str, dict[str, Any]]]:
-    """The comparison base: the previous attempt's file, else the latest version of the
-    target roadmap with items, else none. The previous file is agent output: it is read on
-    the parse pool, at most ``PARSE_SECONDS``, as the check reads the new one; a refused or
-    too slow file is no base."""
-    text = ((previous or {}).get("files") or {}).get(ITEMS_FILE)
-    if isinstance(text, str):
-        try:
-            data = await safe_yaml.run_parse_within(
-                roadmap.load_items_yaml, text, name=ITEMS_FILE, seconds=roadmap.PARSE_SECONDS
-            )
-        except (roadmap.ItemsYamlError, safe_yaml.SafeYamlError):
-            data = None
-        raw_items = data.get("items") if isinstance(data, dict) else None
-        if isinstance(raw_items, list):
-            attempt = int((previous or {}).get("attempt") or 1)
-            items = {}
-            for n, raw in enumerate(raw_items, start=1):
-                if isinstance(raw, dict):
-                    key = roadmap._text(raw.get("id")) or f"#{n}"
-                    items.setdefault(key, {"horizon": raw.get("horizon"), "raw": raw})
-            base = {"kind": "attempt", "label": f"attempt {attempt}", "version": None,
-                    "attempt": attempt}  # fmt: skip
-            return base, items
+    """The comparison base: the latest version of the target roadmap with items, else none
+    (a first roadmap). D5 Re-run keeps its output (#163) will feed the previous attempt's
+    file as a base ahead of it."""
     document_id = await _target_document(db, run)
     if document_id is None:
         return None, {}
@@ -761,12 +742,8 @@ async def reason_context(
     db: AsyncSession,
     run: Run,
     items: list[dict[str, Any]],
-    previous: dict[str, Any] | None = None,
 ) -> ReasonContext:
-    """Everything the advisory reasons read, for the run's items, as of now.
-
-    ``previous``: the segment's previous attempt (``{"attempt": n, "files": {...}}``), the
-    comparison base when it holds a ``roadmap_items.yaml``."""
+    """Everything the advisory reasons read, for the run's items, as of now."""
     from oracle.roadmap.items import derive_trace
     from oracle.runs.service import _low_threshold, _source_id
 
@@ -811,6 +788,7 @@ async def reason_context(
                 elif theirs[key] != section.content_hash:
                     section_changes[key] = (v.number, False)
 
+    # Without a user on purpose: only the features' flags are read, for "serves no goal".
     report = await baseline_trace.report(db)
     flags = {f.id: f for f in report.features}
     traced: dict[str, dict[str, Any]] = {}
@@ -848,7 +826,7 @@ async def reason_context(
                 linked.append(LinkedBlocker(entity.key, entity.title, spec["status"], str(bid)))
         blockers[key] = linked
 
-    base, base_items = await _base(db, run, previous)
+    base, base_items = await _base(db, run)
     prd_titles = {
         item["id"]: headings[s]
         for item in items

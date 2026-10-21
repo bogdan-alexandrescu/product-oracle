@@ -3195,9 +3195,7 @@ async def _advance(
             # reads only, and the tick's transaction (the segment, the run's row lock)
             # stays usable.
             async with db.begin_nested():
-                items_check = await _check_items(
-                    db, run, art["files"].get(ITEMS_FILE), art.get("previous")
-                )
+                items_check = await _check_items(db, run, art["files"].get(ITEMS_FILE))
         except Exception as exc:  # noqa: BLE001 - a bad file fails the check, never the tick
             log.exception("checking %s of run %s failed", ITEMS_FILE, run.id)
             items_check = reasons.summarize(
@@ -3540,12 +3538,9 @@ def _resume_error(run_id: uuid.UUID, segment: RunSegment, failed: dict[str, Any]
     )
 
 
-async def _check_items(
-    db: AsyncSession, run: Run, text: str | None, previous: dict[str, Any] | None = None
-) -> dict[str, Any]:
+async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str, Any]:
     """roadmap_items.yaml checked against the run's PRD version (oracle.runs.roadmap),
-    with every item's reasons (oracle.runs.reasons). ``previous``: the segment's previous
-    attempt, the comparison base when it kept its file."""
+    with every item's reasons (oracle.runs.reasons)."""
     if text is None:
         missing = {
             "items": 0,
@@ -3575,7 +3570,7 @@ async def _check_items(
         # In a savepoint: a database or trace error loses the advisory reasons only; the
         # blocking ones (the check's) are still stored, flagged partial.
         async with db.begin_nested():
-            context = await reasons.reason_context(db, run, check.items, previous)
+            context = await reasons.reason_context(db, run, check.items)
         partial = False
     except Exception:  # noqa: BLE001 - advisory reasons never fail the check or the tick
         log.exception("the reasons of %s of run %s could not be loaded", ITEMS_FILE, run.id)
