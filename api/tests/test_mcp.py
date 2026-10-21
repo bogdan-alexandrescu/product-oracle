@@ -253,7 +253,9 @@ async def test_routes_added_later_become_tools(tenant_id):
 async def test_document_round_trip_with_an_api_token(tenant_id):
     token = await api_token(tenant_id, "owner")
     async with mcp_client(token) as c:
-        pushed = await c.call_tool("push_draft", {"doc": DOC, "markdown": PRD_V1})
+        pushed = await c.call_tool(
+            "push_draft", {"doc": DOC, "markdown": PRD_V1, "base_version": 0}
+        )
         assert not pushed.is_error, text_of(pushed)
         assert pushed.structured_content["number"] == 1
         listed = await c.call_tool("list_documents", {})
@@ -326,6 +328,9 @@ async def test_rest_role_checks_apply_to_api_tokens(tenant_id, guarded_app, role
         ("POST", "/v1/documents/{doc}/versions/{n}/approve", None),
         ("POST", "/v1/documents/{doc}/versions/{n}/comments", None),
         ("GET", "/v1/me", None),
+        # Browsing a person's connection spends their provider quota: never a run's.
+        ("GET", "/v1/connections/{connection_id}/fireflies/meetings", None),
+        ("GET", "/v1/connections/{connection_id}/fireflies/series", None),
         ("GET", "/v1/runs", None),
         ("GET", "/healthz", None),
     ],
@@ -337,7 +342,9 @@ def test_scope_map(method, path, scope):
 async def test_run_token_scopes_limit_tools_and_calls(tenant_id):
     owner = await user_with_role(tenant_id, "owner")
     async with mcp_client(await api_token(tenant_id)) as c:
-        assert not (await c.call_tool("push_draft", {"doc": DOC, "markdown": PRD_V1})).is_error
+        assert not (
+            await c.call_tool("push_draft", {"doc": DOC, "markdown": PRD_V1, "base_version": 0})
+        ).is_error
 
     token = await run_token(tenant_id, ["read:documents"], owner.id)
     async with mcp_client(token) as c:
@@ -348,7 +355,9 @@ async def test_run_token_scopes_limit_tools_and_calls(tenant_id):
         ok = await c.call_tool("get_document_markdown", {"doc": DOC})
         assert text_of(ok) == PRD_V1
         # Hidden tools are refused too, not just hidden.
-        refused = await c.call_tool("push_draft", {"doc": DOC, "markdown": PRD_V1})
+        refused = await c.call_tool(
+            "push_draft", {"doc": DOC, "markdown": PRD_V1, "base_version": 0}
+        )
         assert refused.is_error and "needs the write:drafts scope" in text_of(refused)
         refused = await c.call_tool("approve_version", {"doc": DOC, "n": 1})
         assert refused.is_error and "not available to run tokens" in text_of(refused)
@@ -362,7 +371,9 @@ async def test_run_token_acts_for_the_run_creator(tenant_id):
     async with mcp_client(token) as c:
         names = {t.name for t in (await c.list_tools()).tools}
         assert {"push_draft", "import_version"} <= names
-        pushed = await c.call_tool("push_draft", {"doc": DOC, "markdown": PRD_V1})
+        pushed = await c.call_tool(
+            "push_draft", {"doc": DOC, "markdown": PRD_V1, "base_version": 0}
+        )
     assert not pushed.is_error, text_of(pushed)
     assert pushed.structured_content["imported_by"] == str(pm.id)
 
@@ -533,3 +544,39 @@ async def test_rest_client_fixture_still_works(client):
     # The mount does not shadow REST routes.
     assert (await client.get("/v1/documents")).status_code == 401
     assert isinstance(client, httpx.AsyncClient)
+
+
+async def test_update_source_over_mcp_requires_the_version_that_was_read(tenant_id):
+    """Owner 2026-10-20: base_version is required wherever config or connection change,
+    MCP included; the tool says to read the source first."""
+    pm = await user_with_role(tenant_id, "commenter")
+    token = await user_token(tenant_id, pm)
+    async with await _rest(token) as rest:
+        src = (await rest.post("/v1/sources", json={"kind": "upload", "name": "Notes"})).json()
+    path = {"source_id": src["id"]}
+    async with mcp_client(token) as c:
+        tools = {t.name: t for t in (await c.list_tools()).tools}
+        said = tools["update_source"].description
+        assert "get_source" in said and "config_version" in said and "base_version" in said
+
+        refused = await c.call_tool("update_source", {**path, "body": {"config": {}}})
+        assert refused.is_error
+        assert "HTTP 422" in text_of(refused) and "base_version_required" in text_of(refused)
+
+        # A rename needs none, and bumps the version.
+        renamed = await c.call_tool("update_source", {**path, "body": {"name": "Renamed"}})
+        assert not renamed.is_error, text_of(renamed)
+        version = renamed.structured_content["config_version"]
+        assert version == src["config_version"] + 1
+
+        stale = await c.call_tool(
+            "update_source", {**path, "body": {"name": "Again", "base_version": 1}}
+        )
+        assert stale.is_error and "source_changed" in text_of(stale)
+
+        read = await c.call_tool("get_source", path)
+        base = read.structured_content["config_version"]
+        saved = await c.call_tool(
+            "update_source", {**path, "body": {"config": {}, "base_version": base}}
+        )
+        assert not saved.is_error, text_of(saved)

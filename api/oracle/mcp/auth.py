@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from oracle.auth import service
-from oracle.auth.deps import RUN_HEADER
+from oracle.auth.deps import RUN_HEADER, RUN_TOKEN_HEADER
 from oracle.auth.models import User
 from oracle.config import get_settings
 from oracle.runtokens import RUN_TOKEN_PREFIX, verify_run_token
@@ -82,10 +82,16 @@ def user_caller(
     scopes: frozenset[str] | None = None,
     token_id: uuid.UUID | None = None,
     run_id: uuid.UUID | None = None,
+    run_token: str | None = None,
 ) -> McpCaller:
-    """A caller acting for ``user``: the REST call carries a session for that user."""
+    """A caller acting for ``user``: the REST call carries a session for that user, and
+    for a run also the run's token (``RUN_TOKEN_HEADER``) and a server-signed run binding
+    (``RUN_HEADER``), so REST knows the call is the run's (an agent's draft keeps approved
+    text as patches; a run reads as a run, S6)."""
     cookie = f"{get_settings().session_cookie_name}={service.make_session_cookie(user)}"
     credentials = {"cookie": cookie}
+    if run_token is not None:
+        credentials[RUN_TOKEN_HEADER] = run_token
     if kind == "run" and run_id is not None:
         # REST sees the creator's session; this marks the call as the run's (S6).
         credentials[RUN_HEADER] = service.sign_run_binding(user.id, run_id)
@@ -106,6 +112,11 @@ async def verify_api_token(raw: str) -> McpCaller | None:
     token = await service.resolve_api_token(raw)
     if token is None:
         return None
+    if token.user_id is not None:
+        # A token for a disabled member acts for no one.
+        async with tenant_session(token.tenant_id) as s:
+            if not service.may_sign_in(await s.get(User, token.user_id)):
+                return None
     return McpCaller(
         tenant_id=token.tenant_id,
         kind="token",
@@ -149,8 +160,8 @@ async def verify_run_token_caller(raw: str) -> McpCaller | None:
     async with tenant_session(claims.tenant_id) as s:
         run = await s.get(Run, claims.run_id)
         user = await s.get(User, run.created_by) if run and run.created_by else None
-    # A run nobody started (or whose creator is gone) has no one to act for.
-    if user is None:
+    # A run nobody started (or whose creator is gone or disabled) has no one to act for.
+    if not service.may_sign_in(user):
         return None
     return user_caller(
         user,
@@ -158,6 +169,7 @@ async def verify_run_token_caller(raw: str) -> McpCaller | None:
         scopes=claims.scopes,
         token_id=claims.token_id,
         run_id=claims.run_id,
+        run_token=raw,
     )
 
 

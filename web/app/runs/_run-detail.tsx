@@ -22,23 +22,26 @@ import {
   type ChipKind,
 } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
+import { api, ApiError, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import {
   CANCEL_AGAIN_CONFIRM,
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   RETRY_CONFIRM,
-  RUN_STATUS_LABEL,
+  runStatusLabel,
   RunStatusBadge,
   STOP_CANCELLING_CONFIRM,
   RunsWhere,
   SEGMENT_STATUS_KIND,
   SEGMENT_STATUS_LABEL,
+  SENT_BACK_STATE,
   SpendBar,
+  deliveryText,
   shortId,
   usd,
   type CheckpointChoice,
@@ -69,8 +72,9 @@ export function RunDetail({ id }: { id: string }) {
   const run = q.data;
   const { reload } = q;
 
-  // Agents work in the background: re-read while the run is moving.
-  const moving = run?.status === "running";
+  // Agents work in the background: re-read while the run is moving, and while a recorded
+  // decision is still being delivered to it (Oracle sends it again on every tick).
+  const moving = run?.status === "running" || !!run?.checkpoints.some((c) => c.delivery);
   useEffect(() => {
     if (!moving) return;
     const t = setInterval(() => void reload(), POLL_MS);
@@ -86,7 +90,9 @@ export function RunDetail({ id }: { id: string }) {
     if (window.location.hash === "#decide") toDecision();
   }, [ready]);
 
-  async function act(call: () => Promise<RunOut | unknown>) {
+  /** `recover`: for a call that may have changed the run though it failed; it re-reads the run
+   * and says whether the page now shows what happened (then no error is shown). */
+  async function act(call: () => Promise<RunOut | unknown>, recover?: (e: unknown) => Promise<boolean>) {
     setBusy(true);
     setError(null);
     try {
@@ -94,8 +100,11 @@ export function RunDetail({ id }: { id: string }) {
       if (out && typeof out === "object" && "segments" in out) q.setData(() => out as RunOut);
       else await q.reload();
     } catch (e) {
-      setError(errorMessage(e));
+      if (!(recover && (await recover(e)))) setError(errorMessage(e));
     } finally {
+      // What waits on me may have changed (a review decided, a run approved): the rail re-reads it.
+      invalidateWaiting();
+      waitingChanged();
       setBusy(false);
     }
   }
@@ -119,14 +128,23 @@ export function RunDetail({ id }: { id: string }) {
     );
   }
 
+  // A decision is recorded before SwarmCloud is told: a failed decide re-reads the run. A 503
+  // left it recorded and delivering, which the review now says; a 409 (decided meanwhile,
+  // say) keeps its message.
   const decide: Decide = (cp, decision, note) =>
-    act(() =>
-      unwrap(
-        api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide", {
-          params: { path: { run_id: id, checkpoint_id: cp.id } },
-          body: { decision, note: note || null },
-        }),
-      ),
+    act(
+      () =>
+        unwrap(
+          api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide", {
+            params: { path: { run_id: id, checkpoint_id: cp.id } },
+            body: { decision, note: note || null },
+          }),
+        ),
+      async (e) => {
+        const after = await unwrap(api.GET("/v1/runs/{run_id}", path)).catch(() => null);
+        if (after) q.setData(() => after);
+        return e instanceof ApiError && e.status === 503 && !!after?.checkpoints.some((c) => c.id === cp.id && c.delivery);
+      },
     );
   // Imports a segment's refused draft again (the review still waits for a person).
   const retryImport = (seq: number) =>
@@ -142,7 +160,7 @@ export function RunDetail({ id }: { id: string }) {
         title={run.flow_title}
         status={
           <>
-            <RunStatusBadge status={run.status} />
+            <RunStatusBadge run={run} />
             {run.document_slug &&
               (run.document_id ? (
                 <Link href={`/documents/${run.document_slug}`} className="font-mono text-sm text-accent-ink hover:underline">
@@ -355,7 +373,7 @@ function RunInspector({ run }: { run: RunOut }) {
   return (
     <Inspector
       label="Run"
-      eyebrow={waiting ? "Checkpoint · waiting" : `Run · ${RUN_STATUS_LABEL[run.status].toLowerCase()}`}
+      eyebrow={waiting ? "Checkpoint · waiting" : `Run · ${runStatusLabel(run).toLowerCase()}`}
       title={waiting ? CHECKPOINT_LABEL[waiting] : (run.document_slug ?? run.flow_title)}
       chips={
         <>
@@ -439,7 +457,7 @@ const CP_KIND: Record<CheckpointOut["status"], ChipKind> = {
   skipped: "na",
 };
 /** A checkpoint name in full: it wraps to a second line rather than truncating. */
-const WRAP_CHIP = "h-auto min-h-[26px] py-1 leading-4 whitespace-normal";
+const WRAP_CHIP = "h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left max-[600px]:max-w-[9.5rem]";
 const CP_LABEL = { pending: "Waiting", approved: "Approved", changes_requested: "Changes requested", skipped: "Skipped" } as const;
 
 function SegmentItem({
@@ -461,7 +479,9 @@ function SegmentItem({
   const deciding = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
   const compact = checkpoints.filter((c) => !(c.status === "pending" && c.can_decide));
   const waiting = checkpoints.some((c) => c.status === "pending");
-  const details = s.error || s.items_check || s.draft_import || s.artifacts.length > 0 || deciding.length > 0;
+  // Decided, not delivered to the run yet: said under the segment, with why it waits.
+  const delivering = checkpoints.filter((c) => c.delivery && !s.sent_back);
+  const details = s.error || s.items_check || s.draft_import || s.artifacts.length > 0 || deciding.length > 0 || delivering.length > 0;
   const rejected = !!s.draft_import?.error;
   // Each open decision's note, here so Send back to writer can fill it in.
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -506,7 +526,13 @@ function SegmentItem({
           ))}
         </span>
         <span>
-          {rejected ? (
+          {s.sent_back ? (
+            // Oracle refused the draft and sent it back to the writer itself: revising, with
+            // nothing for a person to decide yet. Not "Draft rejected".
+            <Chip kind="acc" className={WRAP_CHIP}>
+              <span data-testid="segment-state">{SENT_BACK_STATE}</span>
+            </Chip>
+          ) : rejected ? (
             // The segment ran, but Oracle refused the draft it left: not "Succeeded".
             <Chip kind="crit">
               <span data-testid="segment-state">Draft rejected</span>
@@ -521,12 +547,12 @@ function SegmentItem({
         <span className="flex min-w-0 flex-wrap gap-1.5 max-[600px]:col-span-full max-[600px]:col-start-2">
           {checkpoints.length === 0 &&
             (s.checkpoint_on ? (
-              <Chip kind="line" title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className={WRAP_CHIP}>
+              <Chip kind="line" title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className={WRAP_CHIP} data-testid="segment-checkpoint">
                 <span className="sr-only">Stops for </span>
                 {CHECKPOINT_LABEL[kind]}
               </Chip>
             ) : (
-              <Chip kind="na" title={`${CHECKPOINT_LABEL[kind]}: off`} className={WRAP_CHIP}>
+              <Chip kind="na" title={`${CHECKPOINT_LABEL[kind]}: off`} className={WRAP_CHIP} data-testid="segment-checkpoint">
                 {CHECKPOINT_LABEL[kind]}: off
               </Chip>
             ))}
@@ -551,10 +577,11 @@ function SegmentItem({
                 title={[CHECKPOINT_LABEL[cp.kind], cp.decided_at && formatDateTime(cp.decided_at), cp.note].filter(Boolean).join(" · ")}
               >
                 <span className="sr-only">{CHECKPOINT_LABEL[cp.kind]}: </span>
-                {cp.status === "approved" && <Icon name="check" size={16} />}
-                {cp.status === "pending" && <Icon name="clock" size={16} />}
+                {cp.status === "approved" && !cp.delivery && <Icon name="check" size={16} />}
+                {(cp.status === "pending" || cp.delivery) && <Icon name="clock" size={16} />}
                 {CP_LABEL[cp.status]}
                 {cp.status === "pending" && <span className="sr-only"> for an {cp.approver_role} or above</span>}
+                {cp.delivery && <span className="sr-only">, not delivered to the run yet</span>}
               </Chip>
               {cp.console && (
                 // Answered in SwarmCloud's console; who answered and what Oracle still needs, on hover.
@@ -579,11 +606,15 @@ function SegmentItem({
             <DraftImportLine
               imp={s.draft_import}
               busy={busy}
+              sentBack={s.sent_back}
               onRetry={s.can_retry_draft_import ? () => onRetryImport(s.seq) : undefined}
               onSendBack={sendBack}
             />
           )}
           {s.artifacts.length > 0 && <Artifacts runId={run.id} seq={s.seq} names={s.artifacts} />}
+          {delivering.map((cp) => (
+            <DeliveryLine key={cp.id} cp={cp} />
+          ))}
           {deciding.map((cp, i) => (
             <CheckpointRow
               key={cp.id}
@@ -604,20 +635,39 @@ function SegmentItem({
   );
 }
 
+/** A decision recorded in Oracle that SwarmCloud has not taken yet (owner, 2026-10-20). */
+function DeliveryLine({ cp }: { cp: CheckpointOut }) {
+  return (
+    <p className="flex items-start gap-2 text-text" data-testid="checkpoint-delivering">
+      <Icon name="clock" size={16} className="mt-1 flex-none text-warn" />
+      <span className="min-w-0 break-words">
+        {deliveryText(cp)}{" "}
+        <InfoTip label="delivering the decision" align="start">
+          The decision is recorded and final: nobody needs to decide again. SwarmCloud has not taken it yet, so Oracle sends it
+          again on every tick until it does.
+        </InfoTip>
+      </span>
+    </p>
+  );
+}
+
 function DraftImportLine({
   imp,
   busy,
+  sentBack = false,
   onRetry,
   onSendBack,
 }: {
   imp: NonNullable<SegmentOut["draft_import"]>;
   busy: boolean;
+  /** The import was refused and Oracle sent the draft back to the writer itself: revising. */
+  sentBack?: boolean;
   /** The import was refused and its review is open: Retry import (owners and approvers). */
   onRetry?: () => void;
   /** The import was refused and this member decides its review: Send back to writer. */
   onSendBack?: () => void;
 }) {
-  if (imp.error) return <DraftRejected imp={imp} busy={busy} onRetry={onRetry} onSendBack={onSendBack} />;
+  if (imp.error) return <DraftRejected imp={imp} busy={busy} sentBack={sentBack} onRetry={onRetry} onSendBack={onSendBack} />;
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-text">
       <span>
@@ -644,15 +694,21 @@ function DraftImportLine({
   );
 }
 
-/** A draft Oracle refused: one line grouped by cause (the API's summary), every problem behind a disclosure. */
+/**
+ * A draft Oracle refused: one line grouped by cause (the API's summary), every problem behind a
+ * disclosure. `sentBack`: Oracle sent it back to the writer itself and the revision runs, so it
+ * reads as what the writer is fixing, not as a refusal waiting on a person.
+ */
 function DraftRejected({
   imp,
   busy,
+  sentBack = false,
   onRetry,
   onSendBack,
 }: {
   imp: NonNullable<SegmentOut["draft_import"]>;
   busy: boolean;
+  sentBack?: boolean;
   onRetry?: () => void;
   onSendBack?: () => void;
 }) {
@@ -661,11 +717,18 @@ function DraftRejected({
   const problems = imp.problems ?? [];
   const n = problems.length;
   const listId = useId();
+  const testId = sentBack ? "draft-sent-back" : "draft-rejected";
   return (
-    <div className="flex flex-col items-start gap-2" data-testid="draft-rejected">
-      <p className="text-crit" data-testid="draft-rejected-summary">
+    <div className="flex flex-col items-start gap-2" data-testid={testId}>
+      <p className={sentBack ? "text-text" : "text-crit"} data-testid={`${testId}-summary`}>
         {imp.summary ?? `Draft not imported: ${imp.error}`}
       </p>
+      {sentBack && (
+        <p className="text-text2">
+          Oracle sent the draft back to the writer to fix this. Nothing needs you yet: the revision is imported when the writer is done, and only a draft
+          still refused comes to the Inbox.
+        </p>
+      )}
       {n > 0 && (
         <>
           <button

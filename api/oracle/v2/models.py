@@ -139,6 +139,7 @@ CHANGE_SUBJECTS = (
     "document_version",
     "entity",
     "artifact_version",
+    "member",
     # A product track's monitoring (oracle.roadmap, migration 0016_roadmap).
     "product_track",
 )

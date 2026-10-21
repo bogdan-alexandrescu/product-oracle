@@ -33,6 +33,10 @@ REFRESH_MARGIN = timedelta(minutes=5)
 HTTP_TIMEOUT = httpx.Timeout(20.0)
 
 
+class MemberDisabled(Exception):
+    """The connection's member was removed (disabled): nothing is stored for them."""
+
+
 class ConnectionUnavailable(Exception):
     """No usable credential: not found, not the caller's, expired, revoked or failing."""
 
@@ -99,7 +103,17 @@ async def save(
     scopes: list[str] | None = None,
     label: str | None = None,
 ) -> Connection:
-    """Create the connection, or replace the credential of the same account (reconnect)."""
+    """Create the connection, or replace the credential of the same account (reconnect).
+
+    The member's row is locked (shared) first and they must still be an active member: a
+    request that authenticated before a disable never stores a credential for them
+    while the disable runs (it waits for the disable, then is refused), C2."""
+    from oracle.auth.models import User
+    from oracle.auth.service import may_sign_in
+
+    member = await session.scalar(select(User).where(User.id == user_id).with_for_update(read=True))
+    if not may_sign_in(member):
+        raise MemberDisabled("Your access to this company was removed")
     conn = await session.scalar(
         select(Connection).where(
             Connection.user_id == user_id,
@@ -213,9 +227,16 @@ async def _refresh(
 
 
 async def credential_for(
-    session: AsyncSession, conn: Connection, http: httpx.AsyncClient | None = None
+    session: AsyncSession,
+    conn: Connection,
+    http: httpx.AsyncClient | None = None,
+    *,
+    touch: bool = True,
 ) -> Credential:
-    """A usable credential for a connection row already checked by the caller. Commits."""
+    """A usable credential for a connection row already checked by the caller. Commits.
+
+    ``touch`` records the use in ``last_used_at`` (syncs, validation); browsing a
+    picker's list passes ``False`` so typing a search writes nothing."""
     if conn.status != "active":
         raise ConnectionUnavailable(
             f"The {conn.provider} connection is {conn.status}; reconnect it", conn.status
@@ -237,7 +258,8 @@ async def credential_for(
                 bundle = await _refresh(session, conn, bundle, own)
         else:
             bundle = await _refresh(session, conn, bundle, http)
-    conn.last_used_at = _now()
+    if touch:
+        conn.last_used_at = _now()
     await session.commit()
     extra = {k: v for k, v in bundle.items() if k not in ("access_token", "refresh_token")}
     return Credential(

@@ -130,7 +130,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
     target: EntityRow,
     source_kind: string,
     f: Factors,
-    e: { url: string; ref: string; excerpt: string; retrieved_at: string; private?: boolean; itemTitle?: string },
+    e: { url: string; ref: string; excerpt: string; retrieved_at: string; private?: boolean; itemTitle?: string; removed?: boolean },
   ) => {
     const row: EvidenceRow = {
       id: uuid(),
@@ -152,6 +152,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
             url: e.url,
           },
       source_item_private: !!e.private,
+      source_removed: !!e.removed,
       ...scored(f, e.retrieved_at),
       created_at: e.retrieved_at,
     };
@@ -272,6 +273,8 @@ export function seedBaseline(uuid: () => string): BaselineState {
     excerpt: "Agreed to ship the checklist before the sample store work lands.",
     retrieved_at: "2026-10-15T09:30:00Z",
     itemTitle: "Onboarding review",
+    // Narrowed out of its source since (S5): cited as 'source removed'.
+    removed: true,
   });
   cite(sample, "notion", { source: 0.8, freshness: 0.7, mentions: 0.5, goal_impact: 0.7 }, {
     url: "https://www.notion.so/example/Sample-store-0000000000",

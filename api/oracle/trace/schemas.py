@@ -243,6 +243,9 @@ class SectionLinkTarget(BaseModel):
     source_kind: str | None = None
     # A source item the caller cannot read (per-user sources, AUD-9): only its kind shows.
     restricted: bool = False
+    # The source item (or the item the evidence came from) was removed: a narrowed
+    # source or deleted upstream (S5). Shown as 'source removed'; what is stored stays.
+    source_removed: bool = False
 
 
 class SectionLinkView(BaseModel):

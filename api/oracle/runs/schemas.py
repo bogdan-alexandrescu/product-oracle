@@ -205,6 +205,12 @@ class SegmentOut(BaseModel):
     artifacts: list[str]
     attempts: list[SegmentAttempt]
     draft_import: DraftImport | None = None
+    # The draft's import was refused and Oracle sent it back to the writer itself (its own
+    # NOT_YET, owner 2026-10-20): the revision runs and is not imported yet. The run page
+    # reads "Revising: sent back by Oracle", not "Draft rejected"; nothing waits for a
+    # person. Cleared once the revision is imported, or still refused (then its review
+    # waits in the Inbox), or the run ends.
+    sent_back: bool = False
     # Retry import (owner, 2026-10-20): the draft's import was refused and its file is
     # kept, and either its review is still open and I have the review's approver role or
     # above, or the run finished with no version imported and I am an owner.
@@ -246,6 +252,23 @@ class ConsoleAnswer(BaseModel):
     can_redo: bool = False
 
 
+class CheckpointDelivery(BaseModel):
+    """A decision recorded in Oracle that has not reached the run's workflow yet (owner,
+    2026-10-20: a recorded decision is final; Oracle sends it again on every tick until
+    SwarmCloud takes it). The decision is the checkpoint's ``status``, ``decided_by`` and
+    ``decided_at``. None once delivered: the checkpoint then shows its decided state."""
+
+    # Who decided: their email, or the API token's name.
+    decided_by_name: str | None = None
+    # When Oracle recorded it.
+    since: datetime | None = None
+    # Tries that did not deliver it (0 while the first is under way).
+    tries: int = 0
+    # What SwarmCloud answered the last of them (redacted, at most 200 characters).
+    last_error: str | None = None
+    last_tried_at: datetime | None = None
+
+
 class CheckpointOut(BaseModel):
     id: uuid.UUID
     run_id: uuid.UUID
@@ -265,6 +288,8 @@ class CheckpointOut(BaseModel):
     cannot_approve: str | None = None
     # An open checkpoint answered in SwarmCloud's console, waiting on an approver (W5).
     console: ConsoleAnswer | None = None
+    # A decided checkpoint whose decision Oracle has not delivered to the run yet.
+    delivery: CheckpointDelivery | None = None
 
 
 class RunProgress(BaseModel):
@@ -330,7 +355,17 @@ class RunSummary(BaseModel):
     can_retry_import: bool = False
     # A draft one of its segments left that Oracle refused to import: its summary
     # (``segments[].draft_import.summary``, else the error). Set where ``progress`` is.
+    # None while Oracle has that draft back with the writer (``sent_back``).
     draft_rejected: str | None = None
+    # Waiting on its checkpoint, the run delivers a decision recorded there that SwarmCloud
+    # has not taken yet (owner, 2026-10-20: shown as "Delivering decision"; the status
+    # stays awaiting_checkpoint): that checkpoint's kind. Set where ``progress`` is.
+    delivering: CheckpointKind | None = None
+    # A refused draft Oracle sent back to the writer itself, being revised
+    # (``segments[].sent_back``): its summary, as ``draft_rejected``. The runs list and
+    # the Inbox read "Revising: sent back by Oracle"; nothing waits for a person. Set
+    # where ``progress`` is, and on the Inbox's ``revising`` rows.
+    sent_back: str | None = None
     # Set by GET /v1/runs and GET /v1/runs/{id}; None where a summary is embedded (inbox).
     progress: RunProgress | None = None
 
@@ -394,6 +429,8 @@ class TickOut(BaseModel):
     errors: list[str]
     claude_accounts: ClaudeSweepSummary | None = None
     llm_jobs: LlmJobsTick | None = None
+    # Calls a member's disable still owed (a provider revoke, a runtime cancel), retried.
+    member_follow_ups: int = 0
 
 
 class InboxCheckpoint(CheckpointOut):
@@ -461,6 +498,27 @@ class InboxDocument(BaseModel):
     items: list[InboxFeedbackItem]
 
 
+class InboxRevokeFailure(BaseModel):
+    """A provider revoke a member's disable still owes, whose last attempt did not
+    revoke (C2): retried by the tick for 24 hours, then waiting for an owner."""
+
+    id: uuid.UUID
+    member_id: uuid.UUID
+    member_email: str | None = None
+    provider: str | None = None
+    provider_name: str | None = None
+    # "Couldn't revoke <member>'s <provider> access at <provider>"
+    title: str
+    # pending: still retried (next_attempt_at); failed: retries stopped (retry_until).
+    status: Literal["pending", "failed"]
+    outcome: str | None = None
+    last_error: str | None = None
+    attempts: int
+    created_at: datetime
+    next_attempt_at: datetime | None = None
+    retry_until: datetime
+
+
 class InboxStaged(BaseModel):
     """'N changes staged for draft N+1' on one document, with the build action."""
 
@@ -487,6 +545,10 @@ class InboxCounts(BaseModel):
 
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
+    # Those with the checkpoint's approver role: decisions recorded and not delivered to
+    # the run yet (``delivery``), until SwarmCloud takes them. Shown only: nothing to
+    # decide, not in ``total``.
+    deliveries: list[InboxCheckpoint] = []
     # Owners only: runs waiting for cost approval, and runs paused on overrun.
     approvals: list[RunSummary]
     overruns: list[RunSummary]
@@ -496,11 +558,17 @@ class InboxOut(BaseModel):
     # Owners and the run's creator: runs looking for an earlier submission given up on
     # (RunSummary.searching); shown only, nothing to decide, not in ``total``.
     searches: list[RunSummary] = []
+    # Those with a review's approver role or above: runs whose refused draft Oracle sent
+    # back to the writer itself, being revised (RunSummary.sent_back). Shown only, the
+    # review's state instead of a decision request: not in ``total``.
+    revising: list[RunSummary] = []
     # Owners only: runs whose output Oracle stopped trying to import
     # (RunSummary.import_failed), to Retry.
     imports: list[RunSummary] = []
     # Approvers and owners: open feedback (not staged) on documents they can approve.
     feedback: list[InboxDocument]
+    # Owners only: provider revokes a member's disable could not make (Retry, Dismiss).
+    revoke_failures: list[InboxRevokeFailure] = []
     total: int
     # Approvers and owners: feedback in every state, newest first (declined and done
     # capped to the most recent), the counts per state, and the staged rows.

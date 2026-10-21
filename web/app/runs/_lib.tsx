@@ -1,4 +1,4 @@
-import { Chip, CostFigure, InfoTip, type ChipKind } from "@/components/ds";
+import { Chip, CostFigure, Icon, InfoTip, type ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
 
 export type RunOut = Schemas["RunOut"];
@@ -35,11 +35,24 @@ export const RUN_STATUS_KIND: Record<RunStatus, ChipKind> = {
   cancelled: "na",
 };
 
+/** A run's state as shown, from its status and `delivering`. */
+type RunState = Pick<RunSummary, "status"> & { delivering?: RunSummary["delivering"] };
+
+/**
+ * Owner decision 2026-10-20: waiting on its checkpoint while the decision recorded there is
+ * delivered to SwarmCloud, a run reads "Delivering decision", amber with a clock, as other
+ * in-progress states (its status stays awaiting_checkpoint).
+ */
+export const isDelivering = (run: RunState) => run.status === "awaiting_checkpoint" && !!run.delivering;
+export const runStatusLabel = (run: RunState) => (isDelivering(run) ? "Delivering decision" : RUN_STATUS_LABEL[run.status]);
+export const runStatusKind = (run: RunState): ChipKind => (isDelivering(run) ? "warn" : RUN_STATUS_KIND[run.status]);
+
 /** The run's state chip; the label carries data-testid="run-status". */
-export function RunStatusBadge({ status }: { status: RunStatus }) {
+export function RunStatusBadge({ run }: { run: RunState }) {
   return (
-    <Chip kind={RUN_STATUS_KIND[status]}>
-      <span data-testid="run-status">{RUN_STATUS_LABEL[status]}</span>
+    <Chip kind={runStatusKind(run)}>
+      {isDelivering(run) && <Icon name="clock" size={16} />}
+      <span data-testid="run-status">{runStatusLabel(run)}</span>
     </Chip>
   );
 }
@@ -81,6 +94,13 @@ export const SEGMENT_STATUS_LABEL: Record<SegmentOut["status"], string> = {
   cancelled: "Cancelled",
 };
 
+/**
+ * A draft Oracle refused and sent back to the writer itself, while the revision runs (owner,
+ * 2026-10-20): the run page, the runs list and the Inbox name this state, never "Draft rejected",
+ * and nobody is asked to decide until the revision is imported or still refused.
+ */
+export const SENT_BACK_STATE = "Revising: sent back by Oracle";
+
 export const FINAL_STATUSES: RunStatus[] = ["succeeded", "failed", "cancelled"];
 
 /** Asked before Retry on a lost submission: if the lost one landed, both run (and are paid for) until Oracle finds and cancels it. */
@@ -101,6 +121,21 @@ export function usd(value: number | null | undefined): string {
 
 /** A run's short id, as B1 shows it ("0412"). */
 export const shortId = (id: string) => id.replace(/-/g, "").slice(0, 4);
+
+/**
+ * A decision recorded in Oracle that SwarmCloud has not taken yet (owner, 2026-10-20): final,
+ * and sent again on every tick until it is delivered. "Approved by <name>, delivering to the
+ * run… (N tries, last: <error>)".
+ */
+export function deliveryText(cp: Pick<CheckpointOut, "status" | "delivery">): string {
+  const d = cp.delivery;
+  if (!d) return "";
+  const verb = cp.status === "approved" ? "Approved" : "Changes requested";
+  const by = d.decided_by_name ? ` by ${d.decided_by_name}` : "";
+  const tries = d.tries ?? 0;
+  const tried = tries > 0 ? ` (${tries} ${tries === 1 ? "try" : "tries"}${d.last_error ? `, last: ${d.last_error}` : ""})` : "";
+  return `${verb}${by}, delivering to the run…${tried}`;
+}
 
 /** "12m", "3h", "2d": how long an item has waited. */
 export function age(iso: string | null | undefined, now = Date.now()): string {

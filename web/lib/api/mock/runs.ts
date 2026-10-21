@@ -23,6 +23,14 @@ export interface RunsDb {
 export interface RunsContext {
   db: RunsDb;
   userId: string;
+  /** The signed-in member's email: who decided, on a decision not delivered yet. */
+  userName?: string | null;
+  /**
+   * The "undelivered" scenario: SwarmCloud does not take a checkpoint decision until the
+   * next tick. The decision is recorded (and final) but the decide call answers 503, as the
+   * API does when SwarmCloud did not confirm it; the tick delivers it.
+   */
+  undelivered?: boolean;
   feedback: FeedbackRow[];
   documents: DocumentRow[];
   latestVersion: (documentId: string) => number | null;
@@ -152,8 +160,10 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     searching: r.searching,
     import_failed: r.import_failed,
     can_retry_import: r.can_retry_import,
-    draft_rejected: draftRejected(r),
+    draft_rejected: refused(r, false),
+    sent_back: refused(r, true),
     progress: progressOf(r),
+    delivering: r.delivering ?? null,
   };
 }
 
@@ -190,6 +200,7 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     artifacts: [],
     attempts: [],
     draft_import: null,
+    sent_back: false,
     can_retry_draft_import: false,
     items_check: null,
     started_at: null,
@@ -204,12 +215,27 @@ function progressOf(r: RunOut): Schemas["RunProgress"] {
   return { done: r.segments.filter((s) => s.status === "succeeded").length, total: r.segments.length, now: now?.title ?? null };
 }
 
+/** Whose answer the revision applies when Oracle sent a refused draft back itself (the API's SENT_BACK_BY). */
+const SENT_BACK_BY = "Oracle";
+
+/**
+ * As the API: Oracle sent the segment's refused draft back to the writer itself (its own
+ * NOT_YET) and the revision is not imported yet, on a run that has not ended. The run page
+ * and the Inbox read "Revising: sent back by Oracle", not "Draft rejected". The mock knows
+ * the revision by its running attempt, started with Oracle's findings.
+ */
+function sentBack(r: RunOut, s: SegmentOut): boolean {
+  const a = s.attempts[s.attempts.length - 1];
+  return !FINAL.includes(r.status) && !!s.draft_import?.error && a?.note_by === SENT_BACK_BY && a.state === "running";
+}
+
 /**
  * As the API: the summary of a draft a segment left that Oracle refused (stored with its
- * problems at the import, oracle.runs.rejection), else its error; the runs list's "Draft rejected".
+ * problems at the import, oracle.runs.rejection), else its error: one Oracle sent back and is
+ * being revised (`revising`, the runs list's "Revising"), or one that is not ("Draft rejected").
  */
-function draftRejected(r: RunOut): string | null {
-  const imp = r.segments.find((s) => s.draft_import?.error)?.draft_import;
+function refused(r: RunOut, revising: boolean): string | null {
+  const imp = r.segments.find((s) => s.draft_import?.error && sentBack(r, s) === revising)?.draft_import;
   return imp ? (imp.summary ?? imp.error ?? null) : null;
 }
 
@@ -234,9 +260,14 @@ function finishedReview(r: RunOut, s: SegmentOut): CheckpointOut | undefined {
 
 function refresh(r: RunOut) {
   r.progress = progressOf(r);
-  r.draft_rejected = draftRejected(r);
+  r.draft_rejected = refused(r, false);
+  r.sent_back = refused(r, true);
+  for (const s of r.segments) s.sent_back = sentBack(r, s);
   r.spent_usd = round2(r.segments.reduce((sum, s) => sum + s.cost_usd, 0));
   r.waiting_on = r.checkpoints.find((c) => c.status === "pending")?.kind ?? null;
+  // As the API: waiting on its checkpoint, a decision recorded there and not delivered yet.
+  // Oracle's send-back means no decision is owed: Revising wins.
+  r.delivering = r.status === "awaiting_checkpoint" && !r.sent_back ? (r.checkpoints.find((c) => c.delivery)?.kind ?? null) : null;
   for (const c of r.checkpoints) Object.assign(c, { can_decide: c.status === "pending", cannot_approve: cannotApprove(c) });
   // As the API: a refused draft whose file is kept, while the run waits at its review.
   const file = r.document_kind === "roadmap" ? "roadmap.md" : "prd.md";
@@ -320,9 +351,32 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
 }
 
 function tick(ctx: RunsContext): Schemas["TickOut"] {
-  const out = { runs_checked: 0, segments_finished: 0, runs_advanced: 0, runs_paused: 0, errors: [] as string[] };
+  const out = {
+    runs_checked: 0,
+    segments_finished: 0,
+    runs_advanced: 0,
+    runs_paused: 0,
+    errors: [] as string[],
+    member_follow_ups: 0,
+  };
+  // Decisions recorded and not delivered yet: SwarmCloud takes them now, and the run goes on
+  // (its next segment runs from the next tick).
+  const delivered = new Set<string>();
   for (const r of ctx.db.runs) {
-    if (r.status !== "running") continue;
+    const owed = r.checkpoints.find((c) => c.delivery);
+    if (!owed) continue;
+    const wait = { ...((owed.payload.wait as Record<string, unknown> | undefined) ?? {}) };
+    delete wait.posting;
+    Object.assign(owed, { delivery: null, payload: { ...owed.payload, wait } });
+    const s = r.segments.find((x) => x.seq === owed.segment_seq)!;
+    if (owed.status === "approved") next(ctx, r, s);
+    else submit(ctx, r, s, owed.note);
+    refresh(r);
+    delivered.add(r.id);
+    out.runs_checked += 1;
+  }
+  for (const r of ctx.db.runs) {
+    if (r.status !== "running" || delivered.has(r.id)) continue;
     out.runs_checked += 1;
     const s = r.segments.find((x) => x.status === "running");
     if (!s) continue;
@@ -365,8 +419,21 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
         segment_title: r.segments.find((s) => s.seq === c.segment_seq)?.title ?? null,
       })),
   );
+  // Decided, not delivered to the run yet: shown, nothing to decide, not in the total.
+  const deliveries = ctx.db.runs.flatMap((r) =>
+    r.checkpoints
+      .filter((c) => c.delivery && !r.segments.some((s) => sentBack(r, s)))
+      .map((c) => ({
+        ...c,
+        can_decide: false,
+        flow: r.flow,
+        flow_title: r.flow_title,
+        document_slug: r.document_slug,
+        segment_title: r.segments.find((s) => s.seq === c.segment_seq)?.title ?? null,
+      })),
+  );
   // The inbox embeds summaries without their progress, as the API does.
-  const bare = (r: RunOut) => ({ ...summary(r), progress: null });
+  const bare = (r: RunOut) => ({ ...summary(r), progress: null, delivering: null });
   const approvals = ctx.db.runs.filter((r) => r.status === "awaiting_approval").map(bare);
   const overruns = ctx.db.runs.filter((r) => r.status === "paused_overrun").map(bare);
   const byDoc = new Map<string, FeedbackRow[]>();
@@ -416,14 +483,20 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   // Dismiss), and work given up on that is still looked for (shown only, not in the total).
   const lookups = ctx.db.runs.filter((r) => r.stuck).map(summary);
   const searches = ctx.db.runs.filter((r) => r.searching).map(summary);
+  // Refused drafts Oracle sent back to the writer itself, being revised: the review's state,
+  // shown only (nothing to decide, not in the total).
+  const revising = ctx.db.runs.filter((r) => r.segments.some((s) => sentBack(r, s))).map(bare);
   return {
     checkpoints,
+    deliveries,
     approvals,
     overruns,
     lookups,
     searches,
+    revising,
     imports,
     feedback,
+    revoke_failures: [],
     // Every new or open item (C1e, 2026-10-20): the server adds the feedback items' New + Open (./next-draft.ts).
     total: checkpoints.length + approvals.length + overruns.length + lookups.length + imports.length,
     // Feedback states (C1e) are added by the server, which holds the suggestions (./next-draft.ts).
@@ -666,6 +739,10 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (action === "checkpoints" && p[5] === "decide" && m === "POST") {
     const cp = r.checkpoints.find((c) => c.id === p[4]);
     if (!cp) return fail(404, "checkpoint not found");
+    if (cp.status === "approved" || cp.status === "changes_requested") {
+      // A recorded decision is final, delivered to the run or not yet.
+      return fail(409, `already decided: this checkpoint is ${cp.status.replace("_", " ")}; a recorded decision is final`);
+    }
     if (cp.status !== "pending" || r.status !== "awaiting_checkpoint") return fail(409, `checkpoint is ${cp.status}`);
     const { decision, note } = await body<Schemas["CheckpointDecision"]>();
     const blocked = cannotApprove(cp);
@@ -673,6 +750,19 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const text = note?.trim() || null;
     if (decision === "changes_requested" && !text) return fail(422, "say what to change: a note is required to request changes");
     Object.assign(cp, { status: decision, note: text, decided_by: ctx.userId, decided_at: ctx.now() });
+    if (ctx.undelivered) {
+      // Recorded, and final; SwarmCloud did not take it: the tick delivers it.
+      const at = ctx.now();
+      const error = "SwarmCloud HTTP 503 unavailable";
+      cp.payload = { ...cp.payload, wait: { ...((cp.payload.wait as object | undefined) ?? {}), posting: { redo: false, at, tries: 1, error, tried_at: at } } };
+      cp.delivery = { decided_by_name: ctx.userName ?? null, since: at, tries: 1, last_error: error, last_tried_at: at };
+      refresh(r);
+      return fail(
+        503,
+        "SwarmCloud did not confirm the decision (SwarmCloud refused POST /v1/workflows/mock-wf/steps/review/answer: HTTP 503 unavailable); " +
+          "the decision is recorded and Oracle posts it again on its next tick, there is no need to decide again",
+      );
+    }
     const s = r.segments.find((x) => x.seq === cp.segment_seq)!;
     if (decision === "approved") next(ctx, r, s);
     else submit(ctx, r, s, text);

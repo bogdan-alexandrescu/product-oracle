@@ -23,8 +23,12 @@ class Tenant(IdMixin, Base):
 class AuditEvent(TenantScoped, Base):
     __tablename__ = "audit_events"
 
-    # "user:<uuid>", "token:<uuid>" or "system".
+    # "user:<uuid>", "token:<uuid>", "oracle" (oracle.audit.ORACLE) or "system".
     actor: Mapped[str] = mapped_column(Text, nullable=False)
+    # The API token the actor acted through (also a token acting for a user), C2.
+    actor_token_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # The MCP OAuth grant (oauth_tokens.family_id) the actor acted through, C2.
+    actor_grant_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     action: Mapped[str] = mapped_column(Text, nullable=False)
     entity: Mapped[str] = mapped_column(Text, nullable=False)
     entity_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
@@ -53,11 +57,21 @@ from oracle.docs.models import Citation, Document, DocumentVersion, Section  # n
 from oracle.intake.models import IntakeProposal, IntakeWithheldItem  # noqa: E402
 from oracle.jobs.models import LlmJob, LlmSuggestion  # noqa: E402
 from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken  # noqa: E402
-from oracle.members.models import Invite  # noqa: E402
+from oracle.members.models import Invite, MemberFollowUp  # noqa: E402
 from oracle.preferences.models import UserPreference  # noqa: E402
 from oracle.priorities.models import PrioritySnapshot  # noqa: E402
 from oracle.quality.models import OutcomeRecord, QualityLearning  # noqa: E402
-from oracle.review.models import Comment, FeedbackItem, SectionReview  # noqa: E402
+from oracle.review.models import (  # noqa: E402
+    Comment,
+    DocumentPublication,
+    DocumentReviewPolicy,
+    FeedbackItem,
+    Notification,
+    ReviewCampaign,
+    SectionPatch,
+    SectionReview,
+    SectionReviewState,
+)
 from oracle.roadmap.models import (  # noqa: E402
     ProductTrack,
     RoadmapItem,
@@ -126,6 +140,8 @@ __all__ = [
     "Connection",
     "Document",
     "DocumentComposition",
+    "DocumentPublication",
+    "DocumentReviewPolicy",
     "DocumentSectionLink",
     "DocumentVersion",
     "Edge",
@@ -140,12 +156,14 @@ __all__ = [
     "IntakeProposal",
     "IntakeWithheldItem",
     "Invite",
+    "MemberFollowUp",
     "KnowledgeGap",
     "LearnedFeature",
     "LlmJob",
     "LlmSuggestion",
     "ModuleDefinition",
     "ModuleVersion",
+    "Notification",
     "OAuthClient",
     "OAuthCode",
     "OAuthToken",
@@ -154,6 +172,7 @@ __all__ = [
     "ProductIntake",
     "ProductTrack",
     "Proposal",
+    "ReviewCampaign",
     "QualityLearning",
     "RoadmapItem",
     "Run",
@@ -161,7 +180,9 @@ __all__ = [
     "RunToken",
     "ScheduleBasis",
     "Section",
+    "SectionPatch",
     "SectionReview",
+    "SectionReviewState",
     "Snapshot",
     "Source",
     "SourceItem",

@@ -66,6 +66,8 @@ function RoleSelect({
 const pageTip = (
   <InfoTip label="roles" align="start" side="bottom">
     Everyone who signs in to this company&apos;s Oracle has one role. Owners see members, change roles and invite people.
+    Removing someone disables them: they can no longer sign in, their connections and sources are revoked and their
+    approvals stop counting for good. History keeps their name, and an owner can restore them.
   </InfoTip>
 );
 
@@ -130,6 +132,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
   const invitesQ = useQuery("invites", () => unwrap(api.GET("/v1/invites")));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   // The invite form lives in the inspector with its own submit; the header's Invite (the
   // page's one primary action) takes you to it, which on a phone is below the table.
@@ -151,6 +154,27 @@ function OwnerView({ selfId }: { selfId: string | null }) {
       setError(errorMessage(e));
     } finally {
       setSaving(null);
+    }
+  }
+
+  async function setDisabled(m: Member, disable: boolean) {
+    setSaving(m.id);
+    setError(null);
+    try {
+      const path = { params: { path: { user_id: m.id } } };
+      const updated = await unwrap(
+        disable
+          ? api.POST("/v1/members/{user_id}/disable", path)
+          : api.POST("/v1/members/{user_id}/restore", path),
+      );
+      membersQ.setData((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)));
+      // Removing someone also revokes the open invite for their email.
+      if (disable) invitesQ.setData((prev) => prev?.filter((i) => i.email !== updated.email));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSaving(null);
+      setConfirming(null);
     }
   }
 
@@ -187,10 +211,15 @@ function OwnerView({ selfId }: { selfId: string | null }) {
       cell: (m) => (
         <span className="flex min-w-0 items-center gap-2.5">
           <Avatar name={m.email} size={28} tone={m.id === selfId ? "me" : "default"} />
-          <span className="min-w-0 truncate font-medium">{m.email}</span>
+          <span className={`min-w-0 truncate font-medium ${m.status === "disabled" ? "text-text2" : ""}`}>{m.email}</span>
           {m.id === selfId && (
             <Chip kind="acc">
               <span className="sr-only">(</span>you<span className="sr-only">)</span>
+            </Chip>
+          )}
+          {m.status === "disabled" && (
+            <Chip kind="na" title={m.disabled_at ? `Removed ${formatDate(m.disabled_at)}` : undefined}>
+              Removed
             </Chip>
           )}
         </span>
@@ -204,7 +233,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
         <RoleSelect
           value={m.role}
           label={`Role for ${m.email}`}
-          disabled={saving === m.id}
+          disabled={saving === m.id || m.status === "disabled"}
           onChange={(role) => changeRole(m, role)}
         />
       ),
@@ -216,6 +245,37 @@ function OwnerView({ selfId }: { selfId: string | null }) {
       align: "right",
       hideOnPhone: true,
       cell: (m) => <span className="tnum text-text2">{formatDate(m.created_at)}</span>,
+    },
+    {
+      key: "actions",
+      header: <span className="sr-only">Actions</span>,
+      width: "190px",
+      align: "right",
+      phone: "action",
+      cell: (m) =>
+        m.status === "disabled" ? (
+          <Button
+            variant="ghost"
+            aria-label={`Restore ${m.email}`}
+            disabled={saving === m.id}
+            onClick={() => setDisabled(m, false)}
+          >
+            Restore
+          </Button>
+        ) : m.id === selfId ? null : confirming === m.id ? (
+          <span className="inline-flex items-center gap-1" role="group" aria-label={`Confirm removing ${m.email}`}>
+            <Button variant="danger" disabled={saving === m.id} onClick={() => setDisabled(m, true)}>
+              {saving === m.id ? "Removing…" : "Confirm"}
+            </Button>
+            <Button variant="ghost" onClick={() => setConfirming(null)}>
+              Cancel
+            </Button>
+          </span>
+        ) : (
+          <Button variant="ghost" aria-label={`Remove ${m.email}`} onClick={() => setConfirming(m.id)}>
+            Remove
+          </Button>
+        ),
     },
   ];
 
@@ -324,7 +384,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
               rows={membersQ.data}
               loading={!membersQ.data}
               rowKey={(m) => m.id}
-              rowProps={() => ({ "data-testid": "member-row" })}
+              rowProps={(m) => ({ "data-testid": "member-row", "data-status": m.status })}
               empty="No members"
             />
           )}

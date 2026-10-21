@@ -235,7 +235,29 @@ What Oracle does with an answer (adapter v2 review fixes, 2026-10-19):
 | 409 `not_open`, `expired`, `cancelled` | the wait is closed: cancel, continue as a new workflow with the decision |
 | 403 `person_required` | service answers recorded as off until SwarmCloud reports them on (or Oracle's API restarts); cancel, continue as a new workflow (today's flow); later runs keep checkpoints in the Inbox |
 | other refusals (403, 404 `not_found` in SwarmCloud's envelope, 422) | not posted: cancel, continue as a new workflow, with a note |
-| 503, 429, timeout, a bare (non-envelope) 404 or a 404 with another reason | nothing recorded: "decide again" (the same answer replays); after 5 such 404s for the checkpoint, the run also shows in the Inbox with Cancel |
+| 503, 429, timeout (or any other failure after Oracle recorded the decision) | recorded; Oracle keeps delivering it: the decide call answers 503 "the decision is recorded", the tick posts it again (the same answer replays) until SwarmCloud takes it, and a second decision gets 409 "already decided" (owner, 2026-10-20). Until then the run page says "Approved by <name>, delivering to the run… (N tries, last: <error>)" and the Inbox lists it under "Decision not delivered yet" (`CheckpointOut.delivery`, `InboxOut.deliveries`; not counted) |
+| a bare (non-envelope) 404 or a 404 with another reason | nothing recorded: "decide again" (the same answer replays); after 5 such 404s for the checkpoint, the run also shows in the Inbox with Cancel |
+
+**A refused draft goes back to the writer first (owner, 2026-10-20).** When the import at
+segment end refuses the draft and the wait is review1 of the workflow's last segment (a
+revise step and a later review follow it), Oracle answers review1 itself: NOT_YET, with
+the import's problems grouped in plain words as findings (citations, front matter,
+headings and section ids, feedback resolutions, the file), each group with what a valid
+draft does. The revision runs in the same workflow and its draft is imported when review2
+opens; only one still refused there reaches the Inbox, where a person decides review2
+(Retry import, or Request changes for revise2). The answer is Oracle's, never a person's:
+no checkpoint stands for review1, nothing is decided or approved, it is noted on the
+segment and audited as `run.draft_sent_back` with actor `oracle`, and the run's token
+stays read-only (W5) until review2's checkpoint stands. An earlier segment's checkpoint
+(one round, no revise step) is never answered this way; neither is a wait already
+answered or closed, one with too little credential left for the revision (the tail rule),
+or one SwarmCloud did not take the answer for (tried twice): the review waits for a person.
+While the revision runs, the run page reads "Revising: sent back by Oracle", not "Draft
+rejected" (`SegmentOut.sent_back`; `RunSummary.sent_back` carries the refusal's summary and
+`draft_rejected` is null), and the Inbox shows the run under Open as that state with
+nothing to decide (`InboxOut.revising`, for the review's approver role and above, not in
+`total`). It clears when the revision is imported, when it is still refused (review2 then
+waits in the Inbox, "Draft rejected"), or when the run ends.
 
 No case runs a segment in two workflows unless an approver chose Redo: a workflow is
 cancelled before its successor is submitted, and a cancel SwarmCloud does not confirm

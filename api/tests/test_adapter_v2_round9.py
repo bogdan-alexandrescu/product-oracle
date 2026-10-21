@@ -163,6 +163,23 @@ async def test_a_failing_resume_does_not_skip_the_ceiling(client, owner, monkeyp
     assert got["status"] == "paused_overrun", got["status"]
 
 
+async def test_a_failing_resume_is_tried_and_counted_once_per_tick(client, owner, monkeypatch):
+    """PR #128 minor: the pass that pauses on the ceiling cancels the workflow (a runtime
+    call), so it runs again (_replay): the resumed advance is not tried again in that
+    tick, and its failure is counted once, its error reported once."""
+    tenant_id, auth = owner
+    swarm = on()
+    run, fails = await _interrupted(client, auth, monkeypatch, swarm)
+    await _ceiling(tenant_id, run["id"], "0.01")
+    swarm.workflows["wf_1"].steps[0].cost += 5.0
+    errors = await _tick_errors(client, auth)
+    assert (await get(client, auth, run["id"]))["status"] == "paused_overrun"
+    seg = await _segment(tenant_id, run["id"])
+    assert seg.artifacts["attempts"][-1]["resume_failures"]["count"] == 1
+    assert fails.calls == 2
+    assert len([e for e in errors if "importing" in e]) == 1, errors
+
+
 async def test_a_failing_resume_does_not_skip_a_workflow_that_ended(client, owner, monkeypatch):
     _, auth = owner
     swarm = on()
@@ -374,7 +391,7 @@ async def _curated_writes(token: str) -> dict[str, tuple[bool, str]]:
     out = {}
     async with mcp_session(token, f"{EGRESS[0]}, {LB}") as c:
         for name, args in (
-            ("push_draft", {"doc": "r9-held", "markdown": _draft_markdown()}),
+            ("push_draft", {"doc": "r9-held", "markdown": _draft_markdown(), "base_version": 0}),
             ("propose_change", {"body": {"op": "add", "kind": "goal", "data": {"key": "g9"}}}),
         ):
             res = await c.call_tool(name, args)

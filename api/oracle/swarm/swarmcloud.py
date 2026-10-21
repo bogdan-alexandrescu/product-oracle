@@ -84,6 +84,10 @@ NO_MCP_NOTE = (
 # Text artifacts worth bringing back; agent streams and logs stay in SwarmCloud.
 TEXT_SUFFIXES = (".md", ".yaml", ".yml", ".json", ".txt")
 MAX_ARTIFACT_BYTES = 1_000_000
+# How many text artifacts one read of a workflow downloads at most (the agent decides how
+# many it leaves), and the largest artifact listing it reads.
+MAX_ARTIFACT_FILES = 32
+MAX_LISTING_BYTES = 1_000_000
 # A wait's form artifact (a verdict and its findings) is small; anything larger is not read.
 MAX_FORM_BYTES = 256 * 1024
 MAX_FINDINGS = 50
@@ -1110,20 +1114,33 @@ class SwarmCloudRuntime:
             order = [r.get("task_id") for r in rows]
             task_ids = [t for t in order if t] or [t.get("id") for t in payload.get("tasks") or []]
         files: dict[str, str] = {}
+        read = 0
         async with self._client() as client:
             # Step order: a later step's file of the same name wins (the revised draft).
+            # At most MAX_ARTIFACT_FILES are downloaded, each refused past
+            # MAX_ARTIFACT_BYTES while it is read: the agent decides what it leaves.
             for task_id in task_ids:
-                listing = _json(await self._call(client, "GET", f"/v1/tasks/{task_id}/artifacts"))
-                for entry in listing.get("artifacts") or []:
-                    name = entry.get("name") or ""
+                path = f"/v1/tasks/{task_id}/artifacts"
+                raw = await self._read_limited(client, path, {}, MAX_LISTING_BYTES)
+                try:
+                    listing = json.loads(raw) if raw is not None else {}
+                except ValueError:
+                    listing = {}
+                entries = listing.get("artifacts") if isinstance(listing, dict) else None
+                for entry in entries if isinstance(entries, list) else []:
+                    if not isinstance(entry, dict):
+                        continue
+                    name = str(entry.get("name") or "")
                     if entry.get("role") or not name.lower().endswith(TEXT_SUFFIXES):
                         continue
-                    resp = await self._call(
-                        client, "GET", f"/v1/tasks/{task_id}/artifacts/raw", params={"name": name}
+                    if read >= MAX_ARTIFACT_FILES:
+                        return files
+                    read += 1
+                    content = await self._read_limited(
+                        client, f"{path}/raw", {"name": name}, MAX_ARTIFACT_BYTES
                     )
-                    if len(resp.content) > MAX_ARTIFACT_BYTES:
-                        continue
-                    files[name.rsplit("/", 1)[-1]] = resp.content.decode("utf-8", "replace")
+                    if content is not None:
+                        files[name.rsplit("/", 1)[-1]] = content.decode("utf-8", "replace")
         return files
 
     async def cancel(self, workflow_id: str) -> None:

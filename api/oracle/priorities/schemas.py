@@ -23,6 +23,8 @@ class EvidenceUsed(BaseModel):
     id: str
     confidence: float | None
     ref: str | None
+    # From a source item since removed (a narrowed source, or deleted upstream: S5).
+    source_removed: bool = False
 
 
 class ConfidenceUsed(BaseModel):

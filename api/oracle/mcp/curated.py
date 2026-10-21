@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from sqlalchemy import select
 
 from oracle import confidence
+from oracle.docs.schemas import citation_contract
 from oracle.mcp.auth import McpCaller
 from oracle.mcp.tools import Operation, ToolError, call_operation, to_result
 from oracle.tenancy import tenant_session
@@ -210,6 +211,15 @@ _PUSH_DRAFT_SCHEMA = {
             "type": "string",
             "description": "The full draft: YAML front matter, then the markdown body",
         },
+        "base_version": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The version the draft was written on (the one you read with "
+            "get_document_markdown); 0 when the draft creates the document. A newer "
+            "version that changed what the draft has is a conflict to merge, never "
+            "overwritten. Optional: left out, the document's latest version (0 when "
+            "it has none yet).",
+        },
     },
     "required": ["doc", "markdown"],
 }
@@ -220,8 +230,29 @@ async def _push_draft(app, caller, ops, args) -> types.CallToolResult:
     missing = [k for k in ("doc", "markdown") if not args.get(k)]
     if missing:
         raise ToolError(f"Missing required argument(s): {', '.join(missing)}")
+    base = args.get("base_version")
+    if base is None:
+        # Left out: the draft is taken as written on the latest version (0: a new
+        # document). Read as part of this call (its scope is the push's); the caller's own
+        # access still applies.
+        found = await call_operation(
+            app, caller, ops["document"], {"doc": args["doc"]}, check_scopes=False
+        )
+        if found.ok:
+            base = found.json().get("latest_version") or 0
+        elif found.status_code == 404:
+            base = 0
+        else:
+            return to_result(found)
+    elif isinstance(base, bool) or not isinstance(base, int) or base < 0:
+        raise ToolError("base_version must be a whole number, 0 for a new document")
     return to_result(
-        await call_operation(app, caller, op, {"doc": args["doc"], op.body_key: args["markdown"]})
+        await call_operation(
+            app,
+            caller,
+            op,
+            {"doc": args["doc"], "base_version": base, op.body_key: args["markdown"]},
+        )
     )
 
 
@@ -346,10 +377,12 @@ CURATED: tuple[Curated, ...] = (
         name="get_document_markdown",
         description=(
             "Read a document version as markdown (the latest version unless one is given). "
-            "Sections approved in review should not be changed in a new draft. In a roadmap, "
-            "a date that rests on no verified schedule basis has '<!-- oracle: date "
-            "unverified -->' or '<!-- oracle: date withdrawn -->' after it, and date_marks "
-            "lists them: the next draft must drop such a date or name a verified basis."
+            "Sections approved in review should not be changed in a new draft. Push the "
+            "draft with push_draft and base_version set to the version you read "
+            "(get_document lists latest_version). In a roadmap, a date that rests on no "
+            "verified schedule basis has '<!-- oracle: date unverified -->' or '<!-- oracle: "
+            "date withdrawn -->' after it, and date_marks lists them: the next draft must "
+            "drop such a date or name a verified basis."
         ),
         needs={
             "document": _by("GET", ("get_document",)),
@@ -380,11 +413,16 @@ CURATED: tuple[Curated, ...] = (
         name="push_draft",
         description=(
             "Import a draft as the next version of a document (markdown with YAML front "
-            "matter); creates the document on first import. Keep the template's final "
+            "matter); creates the document on first import (base_version 0). Pass the "
+            "version you wrote it on as base_version (left out, the latest version is "
+            "taken). Keep the template's final "
             "Sources and data points section, with each data point's confidence, and flag "
-            "claims that rest only on low-confidence evidence."
+            "claims that rest only on low-confidence evidence. " + citation_contract()
         ),
-        needs={"op": _by("POST", ("import_version",))},
+        needs={
+            "op": _by("POST", ("import_version",)),
+            "document": _by("GET", ("get_document",)),
+        },
         schema=lambda ops: copy.deepcopy(_PUSH_DRAFT_SCHEMA),
         run=_push_draft,
     ),

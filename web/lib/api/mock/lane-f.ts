@@ -165,7 +165,7 @@ function confidenceOf(f: FeatureSeed): Schemas["ConfidenceUsed"] {
       value,
       source: "evidence",
       explain: `mean confidence of ${f.evidence.length} evidence item(s): ${value}`,
-      evidence: f.evidence,
+      evidence: f.evidence.map((e) => ({ ...e, source_removed: false })),
     };
   }
   const raw = f.attrs.confidence;
@@ -1351,8 +1351,10 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
     content_hash: hash(sections.map((s) => s.content_hash).join("")),
     snapshot: null,
     warnings: [],
+    notes: [],
     imported_by: "draft-picker",
     approved_at: null,
+    approval_lapses: [],
     brief_source: briefKeys.size ? "draft" : "none",
     created_at: created,
     front_matter: { document: slug, title, template: t.key },

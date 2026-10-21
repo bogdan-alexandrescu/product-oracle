@@ -8,10 +8,11 @@ front matter), so the agent track can fix a draft in one pass.
 """
 
 import hashlib
+import json
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from markdown_it import MarkdownIt
@@ -21,7 +22,13 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from oracle import safe_yaml
 from oracle.config import get_settings
 from oracle.docs import layers
-from oracle.docs.schemas import CitationSource, ImportProblem
+from oracle.docs.schemas import (
+    CONFIDENCE_MAX,
+    CONFIDENCE_MIN,
+    CONFIDENCE_RANGE,
+    CitationSource,
+    ImportProblem,
+)
 from oracle.review.schemas import Resolution
 
 # Levels 1-3 start a section; deeper headings are part of the section body.
@@ -66,7 +73,7 @@ class CitationIn(BaseModel):
     # kept as written: the import checks it against the company's source items and drops
     # one it does not have with a warning, never a refusal.
     item: str | None = None
-    confidence: float | None = Field(default=None, ge=0, le=1)
+    confidence: float | None = Field(default=None, ge=CONFIDENCE_MIN, le=CONFIDENCE_MAX)
     # Why there is no score, or how it was reached ("owner decision, locked").
     confidence_note: str | None = None
     low_confidence: bool = False
@@ -113,6 +120,47 @@ class ParsedDraft:
 
 def sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+# (cite key, ref, title, excerpt, source, retrieved_at) of a citation a section cites.
+CitedEntry = tuple[str, str | None, str | None, str | None, str | None, str | None]
+
+
+def section_revision(content_hash: str, layer: str, cited: list[CitedEntry]) -> str:
+    """A section's revision: its text (``content_hash``), the citation entries it cites
+    (ref, title, excerpt, source and retrieved_at, in citing order) and its brief-layer
+    membership, so changing the evidence behind a section, or moving it in or out of the
+    brief, is a new revision (CR-06). A detail section that cites nothing keeps its
+    content hash. Section links are not part of it: they are added after a version is
+    imported, so the review state adds them (``oracle.review.state.review_revision``)."""
+    if layer != "brief" and not cited:
+        return content_hash
+    canonical = json.dumps(
+        [content_hash, layer, [list(c) for c in cited]], ensure_ascii=False, separators=(",", ":")
+    )
+    return sha256(canonical)
+
+
+def instant(value: datetime | str | None) -> str | None:
+    """A citation's ``retrieved_at`` as the revision reads it: UTC, ISO 8601 (a time
+    without a zone is UTC, as the database stores it)."""
+    if value is None or isinstance(value, str):
+        return value
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC).isoformat()
+    return value.astimezone(UTC).isoformat()
+
+
+def cited_entries(citation_keys: list[str], citations: dict[str, Any]) -> list[CitedEntry]:
+    """The entries a section cites, from ``citations`` by cite key (objects with
+    ``ref``, ``title``, ``excerpt``, ``source`` and ``retrieved_at``); unknown keys are
+    skipped."""
+    out: list[CitedEntry] = []
+    for key in citation_keys:
+        c = citations.get(key)
+        if c is not None:
+            out.append((key, c.ref, c.title, c.excerpt, c.source, instant(c.retrieved_at)))
+    return out
 
 
 def normalize(markdown: str) -> str:
@@ -195,6 +243,39 @@ def body_text(body_md: str) -> str:
     return "\n".join(blocks)
 
 
+def unclosed_fence(body_md: str) -> str | None:
+    """The marker of a code fence ``body_md`` leaves open at its end, else ``None``. An
+    open fence swallows whatever follows it, headings of later sections included, so a
+    draft composed from sections closes it (``oracle.jobs.service.compose_markdown``).
+    Trailing whitespace-only lines are ignored: the parser may or may not count them
+    into the fence."""
+    lines = body_md.split("\n")
+    while lines and not lines[-1].strip():
+        lines.pop()
+    for token in reversed(_md.parse(body_md)):
+        if token.level != 0 or token.map is None:
+            continue
+        if token.type != "fence":
+            return None
+        start, end = token.map
+        if end < len(lines):
+            return None
+        marker = token.markup
+        closing = re.compile(rf" {{0,3}}{re.escape(marker[0])}{{{len(marker)},}}[ \t]*")
+        last = len(lines) - 1
+        if last > start and closing.fullmatch(lines[last]):
+            return None
+        return marker
+    return None
+
+
+def section_keys(markdown: str) -> list[str]:
+    """The section keys of a draft, in order, as :func:`parse_draft` reads them; other
+    problems are ignored (a composed draft is checked for lost sections with it)."""
+    _, body, offset = split_front_matter(normalize(markdown))
+    return [s.section_key for s in _parse_sections(body, offset, []) if s.section_key]
+
+
 def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) -> dict[str, Any]:
     if yaml_text is None:
         problems.append(
@@ -226,10 +307,13 @@ def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) ->
 
 
 def _citation_field(error: Any) -> str:
-    """What is wrong with one field of a citation: the field, and a source this Oracle does
-    not accept by name (the run page groups refused citations by it)."""
+    """What is wrong with one field of a citation: the field, a source this Oracle does not
+    accept by name, and a confidence that is not a number from 0 to 1 (the run page groups
+    refused citations by it)."""
     if tuple(error["loc"]) == ("source",) and error["type"] == "literal_error":
         return f"source '{error['input']}' isn't accepted"
+    if tuple(error["loc"]) == ("confidence",):
+        return f"confidence must be {CONFIDENCE_RANGE}"
     return ".".join(map(str, error["loc"]))
 
 

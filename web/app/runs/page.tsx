@@ -28,11 +28,13 @@ import { useQuery } from "@/lib/use-query";
 
 import {
   CHECKPOINT_LABEL,
-  RUN_STATUS_KIND,
-  RUN_STATUS_LABEL,
+  isDelivering,
+  runStatusKind,
+  runStatusLabel,
   RunCost,
   RunStatusBadge,
   RunsWhere,
+  SENT_BACK_STATE,
   WAITING_STATUSES,
   shortId,
   type RunSummary,
@@ -52,8 +54,9 @@ export default function RunsPage() {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
   const runs = (q.data ?? []).filter((r) => r.status !== "draft");
-  const waiting = runs.filter((r) => WAITING_STATUSES.includes(r.status));
-  const checkpoints = runs.filter((r) => r.status === "awaiting_checkpoint").length;
+  // A run delivering a decision recorded at its checkpoint waits on no one.
+  const waiting = runs.filter((r) => WAITING_STATUSES.includes(r.status) && !isDelivering(r));
+  const checkpoints = runs.filter((r) => r.status === "awaiting_checkpoint" && !isDelivering(r)).length;
   const selected = runs.find((r) => r.id === picked) ?? waiting[0] ?? runs[0];
 
   const columns: Column<RunSummary>[] = [
@@ -83,9 +86,10 @@ export default function RunsPage() {
       cell: (r) => (
         // P3d: the cost stays on every size; prominent on approvals and overruns.
         <span className="flex min-w-0 flex-wrap items-center gap-2.5 gap-y-1">
-          <RunStatusBadge status={r.status} />
+          <RunStatusBadge run={r} />
           {r.waiting_on && <span className="sr-only">: {CHECKPOINT_LABEL[r.waiting_on]}</span>}
           {r.draft_rejected && <DraftRejectedChip summary={r.draft_rejected} />}
+          {r.sent_back && <SentBackChip summary={r.sent_back} />}
           <RunCost run={r} />
         </span>
       ),
@@ -97,7 +101,7 @@ export default function RunsPage() {
       align: "right",
       phone: "action",
       cell: (r) =>
-        ACTION[r.status] ? (
+        ACTION[r.status] && !isDelivering(r) ? (
           <Button
             onClick={(e) => {
               e.stopPropagation();
@@ -183,8 +187,8 @@ function RunInspector({ run }: { run: RunSummary }) {
       }
       chips={
         <>
-          <Chip hero kind={RUN_STATUS_KIND[run.status]}>
-            {RUN_STATUS_LABEL[run.status]}
+          <Chip hero kind={runStatusKind(run)}>
+            {runStatusLabel(run)}
           </Chip>
           <Chip hero>{run.flow_title}</Chip>
         </>
@@ -193,6 +197,11 @@ function RunInspector({ run }: { run: RunSummary }) {
       {run.draft_rejected && (
         <InspectorSection label="Draft rejected">
           <p className="text-[15px] text-crit">{run.draft_rejected}</p>
+        </InspectorSection>
+      )}
+      {run.sent_back && (
+        <InspectorSection label={SENT_BACK_STATE}>
+          <p className="text-[15px] text-text">{run.sent_back}</p>
         </InspectorSection>
       )}
       {run.waiting_on && (
@@ -217,6 +226,15 @@ function DraftRejectedChip({ summary }: { summary: string }) {
   return (
     <Chip kind="crit" title={summary} data-testid="run-draft-rejected">
       Draft rejected
+    </Chip>
+  );
+}
+
+/** A refused draft Oracle sent back to the writer itself, being revised: nothing to decide yet. */
+function SentBackChip({ summary }: { summary: string }) {
+  return (
+    <Chip kind="acc" title={`${SENT_BACK_STATE}. ${summary}`} data-testid="run-sent-back">
+      Revising
     </Chip>
   );
 }

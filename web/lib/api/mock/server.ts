@@ -20,9 +20,12 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { inboxStates, isStaged } from "./next-draft";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { routeFirefliesBrowse } from "./fireflies";
+import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake } from "./intake";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
+import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { dateMarks, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeTrace } from "./trace";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
@@ -33,7 +36,8 @@ export type VersionRow = Omit<Schemas["VersionOut"], "sections" | "date_marks"> 
   sections: Omit<Schemas["SectionOut"], "verdict">[];
 };
 type CommentRow = Omit<Schemas["CommentOut"], "replies">;
-type ReviewRow = Schemas["SectionReviewOut"];
+/** A stored section review; a spec may mark an approval lapsed (C2). */
+type ReviewRow = Schemas["SectionReviewOut"] & { lapsed_at?: string | null; lapse_reason?: string | null };
 /** Stored without its derived C1e state (withSuggestion adds it on the way out). */
 type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version">;
 type MemberRow = Schemas["MemberOut"];
@@ -62,6 +66,8 @@ export interface Db {
   llm?: LlmDb;
   /** Product Oracle v2 tables (./v2.ts); absent in data saved before v2. */
   v2?: V2Db;
+  /** v2 review state, campaigns, notifications, publications (./review-v2.ts). */
+  review_v2?: ReviewV2Db;
   /** Outcome records and learnings (./quality.ts); absent in data saved before CR-08. */
   quality?: QualityDb;
   /** Module catalogue and compositions (./modules.ts); absent in older saved data. */
@@ -74,6 +80,75 @@ export interface Db {
   roadmap?: RoadmapDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
+  /** Provider revokes a removed member's disable could not make (C2); seeded in the
+   * "revoke-failures" scenario only. */
+  revoke_failures?: RevokeFailureRow[];
+}
+
+type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
+
+/** Two revokes still owed: GitHub (24 hours of retries over) and Slack (not configured, still retried). */
+function seedRevokeFailures(): RevokeFailureRow[] {
+  const member = { member_id: uuid(), member_email: "former.pm@example.com" };
+  const item = (provider: string, name: string, extra: Partial<RevokeFailureRow>): RevokeFailureRow => ({
+    id: uuid(),
+    ...member,
+    provider,
+    provider_name: name,
+    title: `Couldn't revoke ${member.member_email}'s ${name} access at ${name}`,
+    status: "pending",
+    outcome: "failed",
+    last_error: null,
+    attempts: 1,
+    created_at: "2026-10-18T09:00:00Z",
+    next_attempt_at: null,
+    retry_until: "2026-10-19T09:00:00Z",
+    ...extra,
+  });
+  return [
+    item("github", "GitHub", { status: "failed", attempts: 12, last_error: "the provider did not answer in time" }),
+    item("slack", "Slack", {
+      outcome: "not_configured",
+      attempts: 3,
+      created_at: "2026-10-19T20:00:00Z",
+      next_attempt_at: "2026-10-19T20:30:00Z",
+      retry_until: "2026-10-20T20:00:00Z",
+    }),
+  ];
+}
+
+/** Retry and Dismiss of a revoke a disable owes: owners only, as in the API. A retry succeeds,
+ * except while the provider's OAuth app is not configured. */
+function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Response | null {
+  if (p[1] !== "member-follow-ups" || req.method !== "POST") return null;
+  if (!atLeast(me.role, "owner")) return forbidden("owner");
+  db.revoke_failures ??= [];
+  const row = db.revoke_failures.find((r) => r.id === p[2]);
+  if (!row) return notFound("Follow-up");
+  if (row.dismissed) return json(409, { detail: "This follow-up is dismissed; nothing to do" });
+  const out = (status: string) => ({
+    id: row.id,
+    member_id: row.member_id,
+    kind: "provider_revoke",
+    provider: row.provider,
+    status,
+    attempts: row.attempts,
+    outcome: row.outcome,
+    last_error: row.last_error,
+    created_at: row.created_at,
+    next_attempt_at: row.next_attempt_at,
+  });
+  if (p[3] === "dismiss") {
+    row.dismissed = true;
+    return json(200, { ...out("dismissed"), dismissed_at: now(), dismissed_by: me.id });
+  }
+  if (p[3] === "retry") {
+    row.attempts += 1;
+    if (row.outcome === "not_configured") return json(200, out(row.status));
+    db.revoke_failures = db.revoke_failures.filter((r) => r.id !== row.id);
+    return json(200, { ...out("done"), outcome: "revoked", last_error: null });
+  }
+  return notFound("Route");
 }
 
 const STORAGE_KEY = "po-mock-db-v2";
@@ -84,7 +159,10 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * new company (members only, no goals, documents, runs or questions); "large" as a big one
  * (30 goals, 50 more active runs, questions asked of the signed-in member); "suggestions" as the
  * default company plus a PRD with three open Oracle suggestions (fleet-next); "big-prd" adds a PRD
- * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts).
+ * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts); "revoke-failures" as the
+ * default company plus two provider revokes a removed member's disable could not make (C2);
+ * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
+ * next tick (recorded, the decide call answers 503; ./runs.ts).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -135,8 +213,10 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     content_hash: hash(sections.map((s) => s.content_hash).join("")),
     snapshot: seed.snapshot ?? null,
     warnings: [],
+    notes: [],
     imported_by: "agent-track",
     approved_at: null,
+    approval_lapses: [],
     created_at: seed.created_at,
     front_matter: { document: doc.slug, title: doc.title, template: doc.template ?? undefined },
     sections,
@@ -174,7 +254,13 @@ function seedEmpty(): Db {
     runs: { runs: [], artifacts: {} },
     v2: emptyV2(),
   };
-  db.members = MOCK_MEMBERS.map((m) => ({ ...m, id: m.email === MOCK_LOGIN.email ? db.user_id : uuid() }));
+  db.members = MOCK_MEMBERS.map((m) => ({
+    ...m,
+    id: m.email === MOCK_LOGIN.email ? db.user_id : uuid(),
+    disabled_at: null,
+    disabled_by: null,
+    status: "active" as const,
+  }));
   return db;
 }
 
@@ -352,7 +438,13 @@ function seed(): Db {
     feedback: [],
     baseline: seedBaseline(uuid),
   };
-  db.members = MOCK_MEMBERS.map((m) => ({ ...m, id: m.email === MOCK_LOGIN.email ? db.user_id : uuid() }));
+  db.members = MOCK_MEMBERS.map((m) => ({
+    ...m,
+    id: m.email === MOCK_LOGIN.email ? db.user_id : uuid(),
+    disabled_at: null,
+    disabled_by: null,
+    status: "active" as const,
+  }));
   db.invites = MOCK_INVITES.map((i) => ({
     ...i,
     id: uuid(),
@@ -559,7 +651,8 @@ function withInboxStates(
   db.inbox_seen ??= {};
   const seen = db.inbox_seen[me.id] ?? null;
   if (markSeen) db.inbox_seen[me.id] = now();
-  if (!atLeast(me.role, "approver")) return { ...base, last_seen_at: seen };
+  // Decisions not delivered yet show to the review's approver role and above, as the API.
+  if (!atLeast(me.role, "approver")) return { ...base, deliveries: [], last_seen_at: seen };
   const states = inboxStates(llm, seen);
   // Open feedback per document comes from ./runs.ts (staged items left out there); its
   // items carry their state here.
@@ -627,6 +720,8 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
   return {
     db: db.runs,
     userId: db.user_id,
+    userName: db.session ?? db.members.find((m) => m.id === db.user_id)?.email ?? null,
+    undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     feedback: db.feedback,
     documents: db.documents,
     suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
@@ -723,6 +818,8 @@ function load(): Db {
           ? seedBigPrd
           : seed,
   );
+  // Revokes a disable could not make: none, unless a spec asks for them.
+  db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
   save(db);
   return db;
 }
@@ -786,6 +883,7 @@ function summary(v: VersionRow): Schemas["VersionSummary"] {
     content_hash: v.content_hash,
     snapshot: v.snapshot,
     warnings: v.warnings,
+    notes: v.notes,
     imported_by: v.imported_by,
     approved_at: v.approved_at,
     brief_source: v.brief_source ?? "none",
@@ -825,7 +923,16 @@ function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
       const r = latestReview(db, v.id, s.section_key);
       return {
         ...s,
-        verdict: r ? { verdict: r.verdict, note: r.note, reviewer_id: r.reviewer_id, created_at: r.created_at } : null,
+        verdict: r
+          ? {
+              verdict: r.verdict,
+              note: r.note,
+              reviewer_id: r.reviewer_id,
+              created_at: r.created_at,
+              // An approval that lapsed (C2): set on a stored review by the specs.
+              ...(r.lapsed_at ? { lapsed_at: r.lapsed_at, lapse_reason: r.lapse_reason ?? null } : {}),
+            }
+          : null,
       };
     }),
   };
@@ -1062,12 +1169,31 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
     if (!p[2] && m === "GET") return json(200, db.members);
     const target = db.members.find((x) => x.id === p[2]);
     if (!target) return notFound("Member");
+    // A disabled owner is not another owner.
+    const otherOwner = db.members.some((x) => x.id !== target.id && x.role === "owner" && x.status !== "disabled");
     if (m === "PATCH") {
       const { role } = await body<Schemas["MemberPatch"]>();
-      if (target.role === "owner" && role !== "owner" && db.members.filter((x) => x.role === "owner").length <= 1) {
+      if (target.role === "owner" && role !== "owner" && target.status !== "disabled" && !otherOwner) {
         return json(409, { detail: "Cannot demote the last owner; make someone else owner" });
       }
       target.role = role;
+      return json(200, target);
+    }
+    // Removing a member disables them (C2): the row stays; an owner can restore them.
+    if ((m === "POST" && p[3] === "disable") || (m === "DELETE" && !p[3])) {
+      if (target.status !== "disabled") {
+        if (target.role === "owner" && !otherOwner) {
+          return json(409, { detail: "Cannot remove the last owner; make someone else owner" });
+        }
+        Object.assign(target, { status: "disabled", disabled_at: now(), disabled_by: me.id });
+        for (const i of db.invites) {
+          if (i.email === target.email && i.status === "open") Object.assign(i, { status: "revoked", revoked_at: now() });
+        }
+      }
+      return m === "DELETE" ? json(204, undefined) : json(200, target);
+    }
+    if (m === "POST" && p[3] === "restore") {
+      Object.assign(target, { status: "active", disabled_at: null, disabled_by: null });
       return json(200, target);
     }
   }
@@ -1109,6 +1235,44 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
     }
   }
   return notFound("Route");
+}
+
+/** The v2 review mock's view of the db; a section save copies the latest version. */
+function reviewV2Context(db: Db, userId: string, role: Role) {
+  return {
+    db: db.review_v2!,
+    documents: db.documents,
+    versions: db.versions,
+    reviews: db.reviews,
+    me: { id: userId, role },
+    uuid,
+    now,
+    hash,
+    exportHtml: (doc: { id: string }, v: { id: string }) =>
+      exportHtml(db.documents.find((d) => d.id === doc.id)!, db.versions.find((x) => x.id === v.id)!),
+    editSection: (doc: { id: string }, key: string, heading: string | null, bodyMd: string) => {
+      const latest = docVersions(db, db.documents.find((d) => d.id === doc.id)!).pop()!;
+      const sections = latest.sections.map((s) =>
+        s.section_key === key
+          ? { ...s, id: uuid(), heading: heading ?? s.heading, body_md: bodyMd, body_text: plainText(bodyMd), content_hash: hash(`${s.level}\n${heading ?? s.heading}\n${bodyMd}`) }
+          : { ...s, id: uuid() },
+      );
+      const next: VersionRow = {
+        ...latest,
+        id: uuid(),
+        number: latest.number + 1,
+        content_hash: hash(sections.map((s) => s.content_hash).join(":")),
+        approved_at: null,
+        approval_lapses: [],
+        warnings: [],
+        created_at: now(),
+        sections,
+      };
+      db.versions.push(next);
+      touch(db, doc.id);
+      return versionOut(db, next);
+    },
+  };
 }
 
 /**
@@ -1174,7 +1338,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "auth" && p[2] === "login" && m === "POST") {
     const { email, password } = await body<Schemas["LoginRequest"]>();
     const member = db.members.find((x) => x.email === email.trim().toLowerCase());
-    if (!member || password !== MOCK_LOGIN.password) {
+    if (!member || member.status === "disabled" || password !== MOCK_LOGIN.password) {
       return json(401, { detail: "Invalid credentials" });
     }
     db.session = member.email;
@@ -1185,8 +1349,15 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(204, undefined);
   }
   const member = db.members.find((x) => x.email === db.session);
-  if (!member) return json(401, { detail: "Not authenticated" });
+  if (!member || member.status === "disabled") return json(401, { detail: "Not authenticated" });
   const me = withMockRole(member);
+  // v2 review routes (./review-v2.ts) check roles themselves.
+  if (!db.review_v2) {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id);
+  }
+  const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
+  if (reviewV2) return reviewV2;
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
     const mine = (db.preferences[me.email] ??= { document_view: "brief" });
@@ -1225,8 +1396,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
+  const fireflies = routeFirefliesBrowse(p, q);
+  if (fireflies) return fireflies;
   // Company settings are the owner's, as in the API (tenant_settings_api.py).
   if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
+  const browse = sourceBrowseRoute(req, p, q);
+  if (browse) return browse;
   const connections = await connectionsRoute(req, p);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.
@@ -1363,11 +1538,20 @@ async function route(db: Db, req: Request): Promise<Response> {
   const handled = await laneF(db, req, p, m);
   if (handled) return handled;
 
+  const followUp = followUpsRoute(db, req, p, me);
+  if (followUp) return followUp;
+
   db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   if (runs && p[1] === "inbox") {
     tick(llm);
-    return json(200, withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true"));
+    const inbox = withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true");
+    // Owners also see the provider revokes a removed member's disable could not make.
+    db.revoke_failures ??= [];
+    const failures = atLeast(me.role, "owner")
+      ? db.revoke_failures.filter((r) => !r.dismissed).map((r) => ({ ...r, dismissed: undefined }))
+      : [];
+    return json(200, { ...inbox, revoke_failures: failures, total: inbox.total + failures.length });
   }
   if (runs) return runs;
 

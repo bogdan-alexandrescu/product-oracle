@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
-from oracle.docs.schemas import VersionOut
+from oracle.docs.schemas import ImportProblem, VersionOut
 from oracle.jobs import kinds, prompting
 from oracle.jobs.models import LlmJob, LlmSuggestion
 from oracle.jobs.schemas import (
@@ -343,8 +343,10 @@ async def _suggestion(db: AsyncSession, suggestion_id: uuid.UUID) -> LlmSuggesti
     return row
 
 
-def _clean_text(row: LlmSuggestion, text: str) -> str:
-    return prompting.clean_body(text).text if row.kind == "section_text" else text.strip()
+async def _clean_text(row: LlmSuggestion, text: str) -> str:
+    if row.kind != "section_text":
+        return text.strip()
+    return (await prompting.clean_body_in_thread(text)).text
 
 
 async def _check_section_open(db: AsyncSession, row: LlmSuggestion) -> None:
@@ -368,7 +370,7 @@ async def edit_suggestion(
         raise JobError(409, f"an {row.status} suggestion cannot be edited")
     if row.kind not in ("section_text", "answer"):
         raise JobError(422, "only proposed section text or an answer can be edited")
-    row.edited_text = _clean_text(row, text)
+    row.edited_text = await _clean_text(row, text)
     await db.flush()
     await audit.record(db, principal, "suggestion.edit", "llm_suggestion", row.id, {})
     return row
@@ -396,7 +398,7 @@ async def accept_suggestion(
     if text is not None:
         if row.kind not in ("section_text", "answer"):
             raise JobError(422, "only proposed section text or an answer can be edited")
-        row.edited_text = _clean_text(row, text)
+        row.edited_text = await _clean_text(row, text)
     row.status = "accepted"
     row.decided_by = principal.id
     row.decided_at = _now()
@@ -560,19 +562,57 @@ def compose_markdown(
     """A draft from a version's sections, with some sections' (heading, body) replaced.
 
     Untouched sections come out byte-for-byte as stored, so their content hash (and an
-    approved section's lock) is unchanged.
+    approved section's lock) is unchanged. A body that leaves a code fence open is
+    closed before the next section, so it cannot swallow the sections after it (a
+    stored version never has one but in its last section). And the draft is checked:
+    every section key must come out, in order, or it raises
+    :class:`~oracle.docs.parser.DraftError` (``section_lost``) rather than drop one.
     """
+    from oracle.docs import parser
+
     fm = {k: v for k, v in front_matter.items() if k != "resolutions"}
     if resolutions:
         fm["resolutions"] = resolutions
     head = yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).strip()
     parts = [f"---\n{head}\n---\n"]
-    for s in sections:
+    for i, s in enumerate(sections):
         heading, body = replace.get(s.section_key, (s.heading, s.body_md))
         parts.append(f"{'#' * s.level} {heading} {{#{s.section_key}}}\n")
+        if body and i + 1 < len(sections) and (marker := parser.unclosed_fence(body)):
+            body = f"{body}\n{marker}"
         if body:
             parts.append(f"{body}\n")
-    return "\n".join(parts)
+    out = "\n".join(parts)
+    lost = lost_sections([s.section_key for s in sections], out)
+    if lost:
+        raise parser.DraftError(
+            [
+                ImportProblem(
+                    code="section_lost",
+                    message=f"composing the draft would lose or add section {k!r}; "
+                    "nothing was imported",
+                    section_key=k,
+                )
+                for k in lost
+            ]
+        )
+    return out
+
+
+def lost_sections(expected: list[str], markdown: str) -> list[str]:
+    """Where ``markdown``'s sections differ from ``expected``: the keys it does not have,
+    else the first out of order, else the keys it adds (a heading inside the last
+    section's body adds a section after it). Empty when they are exactly ``expected``."""
+    from oracle.docs.parser import section_keys
+
+    keys = section_keys(markdown)
+    if keys == expected:
+        return []
+    return (
+        [k for k in expected if k not in keys]
+        or [k for k, got in zip(expected, keys, strict=False) if k != got][:1]
+        or keys[len(expected) :]
+    )
 
 
 async def apply_refinement(
@@ -607,7 +647,9 @@ async def apply_refinement(
         raise JobError(409, f"section {key!r} is no longer in version {base.number}")
     new_heading = kinds.clean_heading(heading or "", out["heading"]) if heading else out["heading"]
     new_body = (
-        prompting.clean_body(body_md, new_heading).text if body_md is not None else out["body_md"]
+        (await prompting.clean_body_in_thread(body_md, new_heading)).text
+        if body_md is not None
+        else out["body_md"]
     )
     replace = {key: (new_heading, new_body)}
     points = out.get("data_points") or []
@@ -651,12 +693,31 @@ async def apply_refinement(
                 }
             )
     resolutions = [r for r in resolutions if uuid.UUID(r["feedback_id"]) in open_items]
-    markdown = compose_markdown(base.front_matter, sections, replace, resolutions)
     try:
-        # A roadmap's dates are checked in the sections this revision changes only (not
-        # the title): a flagged date elsewhere is the previous version's, marked there.
+        markdown = compose_markdown(base.front_matter, sections, replace, resolutions)
+    except docs_service.DraftError as e:
+        raise JobError(422, f"the revised draft does not import: {e}") from e
+    # Imported as a person, so nothing downstream holds sections: every section of the
+    # base must survive, or nothing is imported.
+    lost = lost_sections([s.section_key for s in sections], markdown)
+    if lost:
+        raise JobError(
+            422,
+            f"the revised draft would lose or add section(s) {', '.join(lost)}; "
+            "nothing was imported",
+        )
+    try:
+        # An accepted AI patch: the change event invalidates the section's approval.
         result = await docs_service.import_draft(
-            db, document.slug, markdown, principal, date_sections=set(replace)
+            db,
+            document.slug,
+            markdown,
+            principal,
+            base_version=base.number,
+            cause="patch_accepted",
+            # A roadmap's dates are checked in the sections this revision changes only (not
+            # the title): a flagged date elsewhere is the previous version's, marked there.
+            date_sections=set(replace),
         )
     except docs_service.DraftError as e:
         await db.rollback()

@@ -123,10 +123,9 @@ async def test_the_monitor_isolates_a_failing_track(client, owner, runtime, monk
         await s.commit()
         bad = (await s.scalar(select(ProductTrack).where(ProductTrack.title == "Billing"))).id
     seen = []
-    monkeypatch.setattr(ticker, "_sweep_if_due", lambda *a: _none())
-    out = SimpleNamespace(runs=SimpleNamespace(checked=0, segments_finished=0, advanced=0,
-                                               paused=0, errors=0))  # fmt: skip
-    await ticker._tick_company(tenant_id, out, SimpleNamespace(add=seen.append))
+    # The account sweep is a step of oracle.ticker.body.tick_company.
+    monkeypatch.setattr(ticker.body.claude_sweep, "sweep_if_due", lambda *a: _none())
+    await ticker._tick_company(tenant_id, ticker.TickerOut(), SimpleNamespace(add=seen.append))
     assert seen == [tenant_id]
 
 

@@ -1,0 +1,610 @@
+"""Product Oracle v2 review correctness and immutable publish (wave 1, lane v2-review)
+
+Additive only. Per-section review state across versions (owner, reviewer assignees, due
+date, invalidated approvals), document review policies (designated decider, mandatory
+reviewers, required sections), organization-wide feedback campaigns, in-app
+notifications, section patches (an agent rewrite or removal of an approved section,
+reviewed as a diff), and immutable document publications. ``feedback_items`` gains a
+nullable ``severity``; ``document_versions`` gains ``notes`` (e.g. imported without a base version);
+``sections`` gains ``revision`` (the text, the cited evidence (ref, title, excerpt,
+source, retrieved_at) and the brief membership; backfilled, and verdicts given on a
+content hash move to it); ``change_events.subject_kind`` admits ``member`` (a role
+change or removal). A
+trigger refuses any UPDATE of a publication and any DELETE that is not a cascade from
+its document or company. See
+docs/product-oracle-v2/08-review-and-publish.md.
+
+The integrator re-chains this revision onto the head in merge order.
+
+Revision ID: 0014_review
+Revises: 0018_source_unavailable_items
+"""
+
+import hashlib
+import json
+import re
+from collections.abc import Sequence
+from datetime import UTC, datetime
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects import postgresql
+
+revision: str = "0014_review"
+down_revision: str | None = "0018_source_unavailable_items"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+# Refuses any UPDATE, and any DELETE that is not a cascade from deleting the document or
+# the company (a foreign-key cascade runs inside the referential trigger, so its depth
+# is above 1).
+IMMUTABLE_FUNCTION = """
+CREATE OR REPLACE FUNCTION oracle_refuse_publication_update() RETURNS trigger AS $$
+BEGIN
+    IF TG_OP = 'DELETE' AND pg_trigger_depth() > 1 THEN
+        RETURN OLD;
+    END IF;
+    RAISE EXCEPTION 'document publications are immutable (publication %)', OLD.id
+        USING ERRCODE = 'restrict_violation';
+END;
+$$ LANGUAGE plpgsql
+"""
+
+
+# change_events.subject_kind gains this; every other value is read from the live
+# constraint (other lanes widen it too), never rebuilt from a fixed list.
+MEMBER_SUBJECT = "member"
+SUBJECT_KIND_CHECK = "ck_change_events_subject_kind"
+
+
+def _quoted(values: tuple[str, ...]) -> str:
+    return ", ".join(f"'{v}'" for v in values)
+
+
+def _subject_kinds() -> tuple[str, ...]:
+    """The values ``ck_change_events_subject_kind`` admits now, in their order."""
+    definition = op.get_bind().scalar(
+        sa.text(
+            "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c "
+            "JOIN pg_class t ON t.oid = c.conrelid "
+            "WHERE c.conname = :name AND t.relname = 'change_events' "
+            "AND t.relnamespace = to_regnamespace(current_schema())"
+        ),
+        {"name": SUBJECT_KIND_CHECK},
+    )
+    if definition is None:
+        raise RuntimeError(f"{SUBJECT_KIND_CHECK} is missing on change_events")
+    return tuple(dict.fromkeys(re.findall(r"'((?:[^']|'')*)'", definition)))
+
+
+def _set_subject_kinds(values: tuple[str, ...]) -> None:
+    op.drop_constraint(op.f(SUBJECT_KIND_CHECK), "change_events", type_="check")
+    op.create_check_constraint(
+        op.f(SUBJECT_KIND_CHECK), "change_events", f"subject_kind IN ({_quoted(values)})"
+    )
+
+
+def _instant(value: datetime | None) -> str | None:
+    """oracle.docs.parser.instant, frozen as of this migration."""
+    if value is None or isinstance(value, str):
+        return value
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC).isoformat()
+    return value.astimezone(UTC).isoformat()
+
+
+def _revision(content_hash: str, layer: str, cited: list[list]) -> str:
+    """oracle.docs.parser.section_revision, frozen as of this migration."""
+    if layer != "brief" and not cited:
+        return content_hash
+    canonical = json.dumps([content_hash, layer, cited], ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _backfill_revisions() -> None:
+    """Every section's revision; verdicts given on a section's content hash move to its
+    revision, so existing approvals still hold."""
+    conn = op.get_bind()
+    rows = conn.execute(
+        sa.text(
+            "SELECT id, version_id, content_hash, layer, citation_keys FROM sections "
+            "WHERE layer = 'brief' OR cardinality(citation_keys) > 0"
+        )
+    ).all()
+    versions = list({r.version_id for r in rows})
+    citations: dict = {}
+    for i in range(0, len(versions), 500):
+        for c in conn.execute(
+            sa.text(
+                "SELECT version_id, cite_key, ref, title, excerpt, source, retrieved_at "
+                "FROM citations "
+                "WHERE version_id = ANY(:ids)"
+            ),
+            {"ids": versions[i : i + 500]},
+        ):
+            citations[(c.version_id, c.cite_key)] = [
+                c.cite_key,
+                c.ref,
+                c.title,
+                c.excerpt,
+                c.source,
+                _instant(c.retrieved_at),
+            ]
+    for r in rows:
+        cited = [
+            citations[(r.version_id, k)] for k in r.citation_keys if (r.version_id, k) in citations
+        ]
+        revision = _revision(r.content_hash, r.layer, cited)
+        if revision != r.content_hash:
+            conn.execute(
+                sa.text("UPDATE sections SET revision = :r WHERE id = :id"),
+                {"r": revision, "id": r.id},
+            )
+    op.execute(
+        "UPDATE section_reviews r SET section_hash = s.revision FROM sections s "
+        "WHERE s.version_id = r.version_id AND s.section_key = r.section_key "
+        "AND r.section_hash = s.content_hash AND s.revision <> s.content_hash"
+    )
+
+
+def upgrade() -> None:
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.create_table(
+        "document_review_policies",
+        sa.Column("document_id", sa.Uuid(), nullable=False),
+        sa.Column("decider_id", sa.Uuid(), nullable=True),
+        sa.Column(
+            "mandatory_reviewer_ids",
+            postgresql.ARRAY(sa.Uuid()),
+            server_default="{}",
+            nullable=False,
+        ),
+        sa.Column(
+            "required_section_keys",
+            postgresql.ARRAY(sa.Text()),
+            server_default="{}",
+            nullable=False,
+        ),
+        sa.Column(
+            "section_approval", sa.Text(), server_default="required_sections", nullable=False
+        ),
+        sa.Column(
+            "rereview_on_change", sa.Boolean(), server_default=sa.text("true"), nullable=False
+        ),
+        sa.Column("updated_by", sa.Uuid(), nullable=True),
+        sa.Column("lock_version", sa.Integer(), server_default="1", nullable=False),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "section_approval IN ('required_sections', 'all_sections', 'none')",
+            name=op.f("ck_document_review_policies_section_approval"),
+        ),
+        sa.ForeignKeyConstraint(
+            ["document_id"],
+            ["documents.id"],
+            name=op.f("fk_document_review_policies_document_id_documents"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_document_review_policies_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_document_review_policies")),
+        sa.UniqueConstraint("document_id", name=op.f("uq_document_review_policies_document_id")),
+    )
+    op.create_index(
+        op.f("ix_document_review_policies_tenant_id"),
+        "document_review_policies",
+        ["tenant_id"],
+        unique=False,
+    )
+    op.create_table(
+        "review_campaigns",
+        sa.Column("document_id", sa.Uuid(), nullable=False),
+        sa.Column("version_number", sa.Integer(), nullable=False),
+        sa.Column("title", sa.Text(), nullable=False),
+        sa.Column("message", sa.Text(), nullable=True),
+        sa.Column("due_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "audience_roles", postgresql.ARRAY(sa.Text()), server_default="{}", nullable=False
+        ),
+        sa.Column("status", sa.Text(), nullable=False),
+        sa.Column("created_by", sa.Uuid(), nullable=True),
+        sa.Column("closed_by", sa.Uuid(), nullable=True),
+        sa.Column("closed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("lock_version", sa.Integer(), server_default="1", nullable=False),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint("status IN ('open', 'closed')", name=op.f("ck_review_campaigns_status")),
+        sa.ForeignKeyConstraint(
+            ["document_id"],
+            ["documents.id"],
+            name=op.f("fk_review_campaigns_document_id_documents"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_review_campaigns_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_review_campaigns")),
+    )
+    op.create_index(
+        op.f("ix_review_campaigns_document_id"), "review_campaigns", ["document_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_review_campaigns_tenant_id"), "review_campaigns", ["tenant_id"], unique=False
+    )
+    op.create_table(
+        "document_publications",
+        sa.Column("document_id", sa.Uuid(), nullable=False),
+        sa.Column("number", sa.Integer(), nullable=False),
+        sa.Column("version_id", sa.Uuid(), nullable=False),
+        sa.Column("version_number", sa.Integer(), nullable=False),
+        sa.Column("content_hash", sa.Text(), nullable=False),
+        sa.Column("manifest", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("manifest_hash", sa.Text(), nullable=False),
+        sa.Column("markdown", sa.Text(), nullable=False),
+        sa.Column("html_full", sa.Text(), nullable=False),
+        sa.Column("html_brief", sa.Text(), nullable=True),
+        sa.Column("html_deck", sa.Text(), nullable=True),
+        sa.Column("published_by", sa.Uuid(), nullable=True),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["document_id"],
+            ["documents.id"],
+            name=op.f("fk_document_publications_document_id_documents"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_document_publications_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["version_id"],
+            ["document_versions.id"],
+            name=op.f("fk_document_publications_version_id_document_versions"),
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_document_publications")),
+        sa.UniqueConstraint(
+            "document_id", "number", name=op.f("uq_document_publications_document_id_number")
+        ),
+        sa.UniqueConstraint(
+            "document_id",
+            "version_id",
+            name=op.f("uq_document_publications_document_id_version_id"),
+        ),
+    )
+    op.create_index(
+        op.f("ix_document_publications_document_id"),
+        "document_publications",
+        ["document_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_document_publications_tenant_id"),
+        "document_publications",
+        ["tenant_id"],
+        unique=False,
+    )
+    op.create_table(
+        "section_patches",
+        sa.Column("document_id", sa.Uuid(), nullable=False),
+        sa.Column("section_key", sa.Text(), nullable=False),
+        sa.Column("base_version", sa.Integer(), nullable=False),
+        sa.Column("base_hash", sa.Text(), nullable=False),
+        sa.Column("heading", sa.Text(), nullable=False),
+        sa.Column("body_md", sa.Text(), nullable=False),
+        sa.Column("origin", sa.Text(), nullable=False),
+        sa.Column("action", sa.Text(), server_default="replace", nullable=False),
+        sa.Column("run_id", sa.Uuid(), nullable=True),
+        sa.Column("rationale", sa.Text(), nullable=True),
+        sa.Column("status", sa.Text(), nullable=False),
+        sa.Column("created_by", sa.Uuid(), nullable=True),
+        sa.Column("decided_by", sa.Uuid(), nullable=True),
+        sa.Column("decided_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("decision_note", sa.Text(), nullable=True),
+        sa.Column("applied_version", sa.Integer(), nullable=True),
+        sa.Column("lock_version", sa.Integer(), server_default="1", nullable=False),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "origin IN ('run', 'llm_job', 'agent', 'person')",
+            name=op.f("ck_section_patches_origin"),
+        ),
+        sa.CheckConstraint(
+            "status IN ('open', 'accepted', 'rejected', 'superseded')",
+            name=op.f("ck_section_patches_status"),
+        ),
+        sa.ForeignKeyConstraint(
+            ["document_id"],
+            ["documents.id"],
+            name=op.f("fk_section_patches_document_id_documents"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["run_id"],
+            ["runs.id"],
+            name=op.f("fk_section_patches_run_id_runs"),
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_section_patches_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_section_patches")),
+    )
+    op.create_index(
+        "ix_section_patches_document_status",
+        "section_patches",
+        ["document_id", "status"],
+        unique=False,
+    )
+    op.create_index(op.f("ix_section_patches_run_id"), "section_patches", ["run_id"], unique=False)
+    op.create_index(
+        op.f("ix_section_patches_tenant_id"), "section_patches", ["tenant_id"], unique=False
+    )
+    op.create_table(
+        "section_review_states",
+        sa.Column("document_id", sa.Uuid(), nullable=False),
+        sa.Column("section_key", sa.Text(), nullable=False),
+        sa.Column("owner_id", sa.Uuid(), nullable=True),
+        sa.Column("reviewer_ids", postgresql.ARRAY(sa.Uuid()), server_default="{}", nullable=False),
+        sa.Column("due_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("rereview_requested_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "invalidated_review_ids",
+            postgresql.ARRAY(sa.Uuid()),
+            server_default="{}",
+            nullable=False,
+        ),
+        sa.Column("invalidated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("invalidated_change_id", sa.Uuid(), nullable=True),
+        sa.Column("invalidated_hash", sa.Text(), nullable=True),
+        sa.Column("lock_version", sa.Integer(), server_default="1", nullable=False),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["document_id"],
+            ["documents.id"],
+            name=op.f("fk_section_review_states_document_id_documents"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["invalidated_change_id"],
+            ["change_events.id"],
+            name=op.f("fk_section_review_states_invalidated_change_id_change_events"),
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_section_review_states_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_section_review_states")),
+        sa.UniqueConstraint(
+            "document_id",
+            "section_key",
+            name=op.f("uq_section_review_states_document_id_section_key"),
+        ),
+    )
+    op.create_index(
+        op.f("ix_section_review_states_document_id"),
+        "section_review_states",
+        ["document_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_section_review_states_tenant_id"),
+        "section_review_states",
+        ["tenant_id"],
+        unique=False,
+    )
+    op.create_table(
+        "notifications",
+        sa.Column("user_id", sa.Uuid(), nullable=False),
+        sa.Column("kind", sa.Text(), nullable=False),
+        sa.Column("title", sa.Text(), nullable=False),
+        sa.Column("document_id", sa.Uuid(), nullable=True),
+        sa.Column("version_number", sa.Integer(), nullable=True),
+        sa.Column("section_key", sa.Text(), nullable=True),
+        sa.Column("comment_id", sa.Uuid(), nullable=True),
+        sa.Column("campaign_id", sa.Uuid(), nullable=True),
+        sa.Column("actor", sa.Text(), nullable=False),
+        sa.Column(
+            "data", postgresql.JSONB(astext_type=sa.Text()), server_default="{}", nullable=False
+        ),
+        sa.Column("read_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "kind IN ('comment', 'reply', 'assignment', 'rereview_requested', 'campaign', "
+            "'patch_proposed', 'published')",
+            name=op.f("ck_notifications_kind"),
+        ),
+        sa.ForeignKeyConstraint(
+            ["campaign_id"],
+            ["review_campaigns.id"],
+            name=op.f("fk_notifications_campaign_id_review_campaigns"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["comment_id"],
+            ["comments.id"],
+            name=op.f("fk_notifications_comment_id_comments"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["document_id"],
+            ["documents.id"],
+            name=op.f("fk_notifications_document_id_documents"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_notifications_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["users.id"],
+            name=op.f("fk_notifications_user_id_users"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_notifications")),
+    )
+    op.create_index(
+        op.f("ix_notifications_document_id"), "notifications", ["document_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_notifications_tenant_id"), "notifications", ["tenant_id"], unique=False
+    )
+    op.create_index(
+        "ix_notifications_user_read", "notifications", ["user_id", "read_at"], unique=False
+    )
+    op.add_column("feedback_items", sa.Column("severity", sa.Text(), nullable=True))
+    op.create_check_constraint(
+        op.f("ck_feedback_items_severity"),
+        "feedback_items",
+        "severity IS NULL OR severity IN ('critical', 'major', 'minor')",
+    )
+    # ### end Alembic commands ###
+    op.create_check_constraint(
+        op.f("ck_section_patches_action"), "section_patches", "action IN ('replace', 'remove')"
+    )
+    # The review revision of a section: its text, cited evidence and brief membership.
+    op.add_column(
+        "document_versions",
+        sa.Column(
+            "notes", postgresql.JSONB(astext_type=sa.Text()), server_default="[]", nullable=False
+        ),
+    )
+    op.add_column("sections", sa.Column("revision", sa.Text(), nullable=True))
+    op.execute("UPDATE sections SET revision = content_hash")
+    _backfill_revisions()
+    op.alter_column("sections", "revision", nullable=False)
+    # A member's role change or removal is a change event (approvals count only while
+    # the approver still is one).
+    # Widened additively: the values the constraint has now, and "member".
+    kinds = _subject_kinds()
+    if MEMBER_SUBJECT not in kinds:
+        _set_subject_kinds((*kinds, MEMBER_SUBJECT))
+    # A publication is immutable: later edits and source updates never change it, and
+    # only deleting its document or company removes it.
+    op.execute(IMMUTABLE_FUNCTION)
+    op.execute(
+        "CREATE TRIGGER document_publications_immutable BEFORE UPDATE OR DELETE "
+        "ON document_publications "
+        "FOR EACH ROW EXECUTE FUNCTION oracle_refuse_publication_update()"
+    )
+
+
+def downgrade() -> None:
+    op.execute("DELETE FROM change_events WHERE subject_kind = 'member'")
+    kinds = _subject_kinds()
+    if MEMBER_SUBJECT in kinds:
+        _set_subject_kinds(tuple(k for k in kinds if k != MEMBER_SUBJECT))
+    op.execute("DROP TRIGGER IF EXISTS document_publications_immutable ON document_publications")
+    op.execute("DROP FUNCTION IF EXISTS oracle_refuse_publication_update()")
+    op.execute(
+        "UPDATE section_reviews r SET section_hash = s.content_hash FROM sections s "
+        "WHERE s.version_id = r.version_id AND s.section_key = r.section_key "
+        "AND r.section_hash = s.revision"
+    )
+    op.drop_column("sections", "revision")
+    op.drop_column("document_versions", "notes")
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_constraint(op.f("ck_feedback_items_severity"), "feedback_items", type_="check")
+    op.drop_column("feedback_items", "severity")
+    op.drop_index("ix_notifications_user_read", table_name="notifications")
+    op.drop_index(op.f("ix_notifications_tenant_id"), table_name="notifications")
+    op.drop_index(op.f("ix_notifications_document_id"), table_name="notifications")
+    op.drop_table("notifications")
+    op.drop_index(op.f("ix_section_review_states_tenant_id"), table_name="section_review_states")
+    op.drop_index(op.f("ix_section_review_states_document_id"), table_name="section_review_states")
+    op.drop_table("section_review_states")
+    op.drop_index(op.f("ix_section_patches_tenant_id"), table_name="section_patches")
+    op.drop_index(op.f("ix_section_patches_run_id"), table_name="section_patches")
+    op.drop_index("ix_section_patches_document_status", table_name="section_patches")
+    op.drop_table("section_patches")
+    op.drop_index(op.f("ix_document_publications_tenant_id"), table_name="document_publications")
+    op.drop_index(op.f("ix_document_publications_document_id"), table_name="document_publications")
+    op.drop_table("document_publications")
+    op.drop_index(op.f("ix_review_campaigns_tenant_id"), table_name="review_campaigns")
+    op.drop_index(op.f("ix_review_campaigns_document_id"), table_name="review_campaigns")
+    op.drop_table("review_campaigns")
+    op.drop_index(
+        op.f("ix_document_review_policies_tenant_id"), table_name="document_review_policies"
+    )
+    op.drop_table("document_review_policies")
+    # ### end Alembic commands ###

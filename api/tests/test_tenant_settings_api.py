@@ -30,8 +30,20 @@ async def test_defaults_and_unknown_keys(client, owner):
     assert {s["key"]: s["value"] for s in listed} == {
         "iap_default_role": "commenter",
         "confidence_weights": {},
+        # v2-review: the company's default review policy (oracle.review.state).
+        "review_policy": {
+            "decider_id": None,
+            "mandatory_reviewer_ids": [],
+            "required_section_keys": [],
+            "section_approval": "required_sections",
+            "rereview_on_change": True,
+        },
+        # v2-review: only the latest version of a document is published.
+        "publish_latest_only": True,
         "blocker_risk_acceptance_role": "owner",
         "blocker_risk_review_max_days": 90,
+        "company_email_domains": [],
+        "company_shared_drives": [],
     }
     assert all(s["is_default"] for s in listed)
     assert (await client.get("/v1/settings/nope", headers=owner.headers)).status_code == 404
@@ -108,3 +120,29 @@ def test_confidence_weights_accepts_defaults_shape():
     assert validate_confidence_weights({"half_life_days": {"slack": 14}}) == {
         "half_life_days": {"slack": 14}
     }
+
+
+async def test_company_email_domains(client, owner):
+    url = "/v1/settings/company_email_domains"
+    ok = await client.put(
+        url, json={"value": ["Example.COM", "@corp.example", "example.com"]}, headers=owner.headers
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["value"] == ["example.com", "corp.example"]
+    for bad in (["not a domain"], "example.com", [1], ["example"], ["-x.com"]):
+        resp = await client.put(url, json={"value": bad}, headers=owner.headers)
+        assert resp.status_code == 422, bad
+
+
+async def test_company_shared_drives(client, owner):
+    url = "/v1/settings/company_shared_drives"
+    ok = await client.put(
+        url,
+        json={"value": [{"id": "0AProduct000", "name": " Product "}, {"id": "0AProduct000"}]},
+        headers=owner.headers,
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["value"] == [{"id": "0AProduct000", "name": "Product"}]
+    for bad in ([{"id": "root"}], [{"id": "../x"}], [{"name": "x"}], ["0AProduct000"], {}):
+        resp = await client.put(url, json={"value": bad}, headers=owner.headers)
+        assert resp.status_code == 422, bad

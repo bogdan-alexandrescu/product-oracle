@@ -1,16 +1,18 @@
 /**
  * A section's review state as a mark that differs in SHAPE as well as colour, so it reads
  * without colour too: a filled disc with a check (approved), a diamond with ! (changes
- * requested), a filled square with a cross (rejected), a ring (not reviewed), a lock
- * (locked: the version's review is closed). Only "approved" ever draws a check.
+ * requested), a filled square with a cross (rejected), a ring (not reviewed), a dashed
+ * ring with ! (lapsed: an approval that no longer counts, the section view's "Lapsed"), a
+ * lock (locked: the version's review is closed). Only "approved" ever draws a check.
  */
-export type MarkState = "approved" | "changes_requested" | "rejected" | "none" | "locked";
+export type MarkState = "approved" | "changes_requested" | "rejected" | "none" | "lapsed" | "locked";
 
 export const MARK_LABEL: Record<MarkState, string> = {
   approved: "Approved",
   changes_requested: "Changes requested",
   rejected: "Rejected",
   none: "Not reviewed",
+  lapsed: "Lapsed",
   locked: "Locked",
 };
 
@@ -19,6 +21,7 @@ const TONE: Record<MarkState, string> = {
   changes_requested: "text-warn",
   rejected: "text-crit",
   none: "text-line-strong",
+  lapsed: "text-warn",
   locked: "text-text2",
 };
 
@@ -57,6 +60,13 @@ export function StatusMark({
           </>
         )}
         {state === "none" && <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.8" />}
+        {state === "lapsed" && (
+          <>
+            <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeDasharray="2.6 2" />
+            <path d="M8 4.8v3.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            <circle cx="8" cy="11.2" r="1" fill="currentColor" />
+          </>
+        )}
         {state === "locked" && (
           <>
             <rect x="3" y="7" width="10" height="7.5" rx="1.6" fill="currentColor" />

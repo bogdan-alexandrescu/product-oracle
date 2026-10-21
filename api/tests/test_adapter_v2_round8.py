@@ -60,7 +60,9 @@ def _reads(swarm, wid: str = "wf_1") -> int:
 
 async def _push(token: str, doc: str = "r8-draft") -> tuple[bool, str]:
     async with mcp_session(token, FORWARDED) as c:
-        res = await c.call_tool("push_draft", {"doc": doc, "markdown": _draft_markdown()})
+        res = await c.call_tool(
+            "push_draft", {"doc": doc, "markdown": _draft_markdown(), "base_version": 0}
+        )
     return res.is_error, res.content[0].text
 
 

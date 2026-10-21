@@ -1,6 +1,6 @@
 import uuid
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -10,6 +10,33 @@ DocumentStatus = Literal["draft", "in_review", "approved"]
 CitationSource = Literal[
     "slack", "notion", "gdocs", "github", "fireflies", "upload", "web", "oracle"
 ]
+# A citation's confidence (owner, 2026-10-20): a number from 0 to 1, or none. The import
+# (oracle.docs.parser.CitationIn), the API (CitationOut), the contract agents read and the
+# database's check (migration 0019_citation_confidence) keep these bounds.
+CONFIDENCE_MIN = 0
+CONFIDENCE_MAX = 1
+CONFIDENCE_RANGE = f"a number from {CONFIDENCE_MIN} to {CONFIDENCE_MAX}"
+
+
+def citation_contract() -> str:
+    """The citation contract as agents read it (draft prompts, push_draft), its sources
+    generated from :data:`CitationSource` and its confidence bounds from
+    :data:`CONFIDENCE_MIN` and :data:`CONFIDENCE_MAX`, so they cannot drift."""
+    sources = ", ".join(get_args(CitationSource))
+    return (
+        "Citation contract: citations are a list under citations in the YAML front matter; "
+        f"each has id, source (one of: {sources}), ref (a URL to the item; for oracle, the "
+        'baseline item\'s kind and key, e.g. "baseline decision <key>"), title, excerpt and '
+        "retrieved_at (when you read it, ISO 8601), and may have item (the id of the source "
+        f"item you read), confidence ({CONFIDENCE_RANGE}: how much the evidence counts; "
+        "null when there is no score, with confidence_note saying why) and low_confidence "
+        "(true when the confidence is under the company's low threshold). Every [c:id] chip "
+        "in the body must match a citation's id. Oracle refuses a draft with any other "
+        f"source, a confidence outside {CONFIDENCE_MIN} to {CONFIDENCE_MAX}, or a chip that "
+        "matches no id."
+    )
+
+
 Verdict = Literal["approved", "changes_requested", "rejected"]
 # O1f: brief sections make up the brief layer; the full layer is every section.
 Layer = Literal["brief", "detail"]
@@ -82,6 +109,9 @@ class VersionSummary(ORM):
     content_hash: str
     snapshot: str | None = None
     warnings: list[VersionWarning] = []
+    # How the version came in, e.g. base_version_missing: imported without a base
+    # version, so nothing checked that it keeps the changes made since.
+    notes: list[VersionWarning] = []
     imported_by: uuid.UUID | None = None
     approved_at: datetime | None = None
     # Where the brief layer came from; "none": no brief, the version opens on the full
@@ -108,7 +138,7 @@ class CitationOut(ORM):
     # company has no such item), its confidence 0-1 and the low-confidence flag. With no
     # confidence, ``confidence_note`` says why ("owner decision, locked").
     item_id: uuid.UUID | None = None
-    confidence: float | None = Field(default=None, ge=0, le=1)
+    confidence: float | None = Field(default=None, ge=CONFIDENCE_MIN, le=CONFIDENCE_MAX)
     confidence_note: str | None = None
     low_confidence: bool = False
 
@@ -120,6 +150,10 @@ class SectionVerdict(ORM):
     note: str | None = None
     reviewer_id: uuid.UUID | None = None
     created_at: datetime
+    # Set when an approval lapsed for good (C2: its approver was demoted or removed, its
+    # API token or OAuth grant revoked): it no longer counts, and never will again.
+    lapsed_at: datetime | None = None
+    lapse_reason: str | None = None
 
 
 class SectionOut(ORM):
@@ -135,12 +169,26 @@ class SectionOut(ORM):
         "a cell is '\\|'."
     )
     content_hash: str
+    # The review revision: the text, the citation entries it cites and its layer. Send
+    # it as ``base_revision`` when saving the section.
+    revision: str | None = None
     citation_keys: list[str] = []
     verdict: SectionVerdict | None = None
     layer: Layer = "detail"
     # Presenter notes: the section's fenced ``notes`` block only; guidance is never used
     # (O1g).
     notes: str | None = None
+
+
+class ApprovalLapse(BaseModel):
+    """A version approval that lapsed for good (C2), kept after a new approval."""
+
+    approved_at: datetime | None = None
+    approved_by: uuid.UUID | None = None
+    approved_token_id: uuid.UUID | None = None
+    approved_grant_id: uuid.UUID | None = None
+    lapsed_at: datetime
+    reason: str | None = None
 
 
 class DateMarkOut(BaseModel):
@@ -162,6 +210,8 @@ class DateMarkOut(BaseModel):
 
 
 class VersionOut(VersionSummary):
+    # Every approval of this version that lapsed, oldest first.
+    approval_lapses: list[ApprovalLapse] = []
     front_matter: dict[str, Any] = {}
     sections: list[SectionOut] = []
     citations: list[CitationOut] = []

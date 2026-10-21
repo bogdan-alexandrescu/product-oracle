@@ -36,6 +36,7 @@ async def make_connection(
     *,
     credential: dict[str, Any] | None = None,
     status: str = "active",
+    scopes: list[str] | None = None,
 ) -> uuid.UUID:
     async with tenant_session(tenant_id) as s:
         conn = Connection(
@@ -48,6 +49,7 @@ async def make_connection(
                 json.dumps(credential or {"access_token": SECRET_TOKEN}).encode()
             ),
             key_version=crypto.KEY_VERSION,
+            scopes=scopes or [],
             status=status,
         )
         s.add(conn)
@@ -113,3 +115,13 @@ class FakeConnector:
             if not self.pages[n] and n in self.fail:
                 raise self.fail[n]
             yield CursorCheckpoint({"page": n + 1})
+
+
+async def patch_source(client, source_id, body: dict[str, Any], **kwargs):
+    """PATCH a source the way a client must: read it first and send its ``config_version``
+    as ``base_version`` (owner 2026-10-20: required wherever config or connection change)."""
+    if "base_version" not in body:
+        got = await client.get(f"/v1/sources/{source_id}", **kwargs)
+        assert got.status_code == 200, got.text
+        body = {**body, "base_version": got.json()["config_version"]}
+    return await client.patch(f"/v1/sources/{source_id}", json=body, **kwargs)

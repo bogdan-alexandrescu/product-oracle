@@ -1,21 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from "@/components/ds";
 import { TabBar } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingChanged } from "@/lib/waiting";
 
-import { allNeeds, NeedTable, questionNeeds, STATE_TABS, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
+import { allNeeds, NeedTable, questionNeeds, sourceNeeds, STATE_TABS, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
+
+type Source = Schemas["SourceOut"];
 
 export default function InboxPage() {
   const q = useQuery("inbox", loadInbox);
   // Questions asked of me (I3): their own group, counted with the rest as the rail badge counts.
   const questionsQ = useQuery("inbox|questions", loadMyQuestions);
   const docsQ = useQuery("inbox|documents", () => unwrap(api.GET("/v1/documents")));
+  // My sources needing an edit before they sync again (a failure here only hides the group).
+  const sourcesQ = useQuery("inbox|sources", () => unwrap(api.GET("/v1/sources")));
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // C1e: my previous visit, read once on arrival; what was new then stays New for this visit.
@@ -59,19 +63,54 @@ export default function InboxPage() {
         </div>
       )}
       {inbox && rows && <InboxTabs rows={rows} waiting={waiting ?? 0} questionsError={questionsQ.error} />}
+      {sourcesQ.data && <SourcesNeedingAttention sources={sourcesQ.data} />}
     </Page>
   );
 }
 
-/** The groups a tab draws, in order; each is one table under its own label. */
-const GROUPS: { id: NeedGroup; title: string }[] = [
+/**
+ * My sources that need an edit before they sync again: their own panel, outside "Needs you",
+ * whose count is the rail badge's and Home's (lib/waiting), as is the header's.
+ */
+function SourcesNeedingAttention({ sources }: { sources: Source[] }) {
+  const rows = sourceNeeds(sources);
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-3">
+      <Panel title="Sources that need attention" count={rows.length}>
+        <NeedTable title="Sources that need attention" testId="inbox-sources" rows={rows} />
+      </Panel>
+    </div>
+  );
+}
+
+/**
+ * The groups a tab draws, in order; each is one table under its own label. `heading`: shown
+ * above the group, for one that is not something to act on.
+ */
+const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "checkpoints", title: "Checkpoints" },
+  {
+    id: "deliveries",
+    title: "Decision not delivered yet",
+    heading: (
+      <>
+        Decision not delivered yet
+        <InfoTip label="decisions not delivered yet" align="start">
+          These decisions are recorded and final: nobody needs to decide again. SwarmCloud has not taken them yet, so Oracle sends
+          each again on every tick until it does.
+        </InfoTip>
+      </>
+    ),
+  },
   { id: "approvals", title: "Cost approvals" },
   { id: "overruns", title: "Paused on overrun" },
   { id: "lookups", title: "Stuck runs" },
   { id: "imports", title: "Couldn't import" },
+  { id: "revoke-failures", title: "Couldn't revoke access" },
   { id: "feedback", title: "Feedback" },
   { id: "questions", title: "Questions" },
+  { id: "revising", title: "Sent back by Oracle" },
   { id: "searches", title: "Looking for earlier submissions" },
 ];
 
@@ -120,7 +159,7 @@ function InboxTabs({
           </Empty>
         ) : (
           GROUPS.map((g) => (
-            <NeedTable key={g.id} title={g.title} testId={`inbox-${g.id}`} rows={shown.filter((r) => r.group === g.id)} />
+            <NeedTable key={g.id} title={g.title} heading={g.heading} testId={`inbox-${g.id}`} rows={shown.filter((r) => r.group === g.id)} />
           ))
         )}
       </div>

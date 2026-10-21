@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from oracle.docs.schemas import WordOp
+from oracle.jobs.prompting import MAX_BODY_CHARS
 
 JobKind = Literal[
     "review_comments", "reporting", "refinement", "quality_review", "refinement_batch"
@@ -22,6 +23,8 @@ JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 Classification = Literal["question", "change_request", "factual_correction", "approval", "other"]
 SuggestionKind = Literal["section_text", "answer", "none", "duplicate"]
 SuggestionStatus = Literal["open", "accepted", "dismissed", "applied", "superseded"]
+# Section text an approver sends: at most the spec's 200k characters (422 past it).
+SectionText = Annotated[str, Field(max_length=MAX_BODY_CHARS)]
 
 
 class ORM(BaseModel):
@@ -90,7 +93,7 @@ class RefinementApply(BaseModel):
     """Accept a refinement, optionally with the approver's own edit of it."""
 
     heading: str | None = Field(default=None, min_length=1, max_length=300)
-    body_md: str | None = None
+    body_md: SectionText | None = None
 
 
 class PushbackSource(BaseModel):
@@ -132,12 +135,12 @@ class SuggestionOut(ORM):
 
 
 class SuggestionPatch(BaseModel):
-    text: str = Field(min_length=1)
+    text: str = Field(min_length=1, max_length=MAX_BODY_CHARS)
 
 
 class SuggestionAccept(BaseModel):
     # Accept with this text instead of the suggestion's (an edit at the same time).
-    text: str | None = Field(default=None, min_length=1)
+    text: str | None = Field(default=None, min_length=1, max_length=MAX_BODY_CHARS)
     # Required when Oracle pushed back: why the approver keeps their call (C1b).
     reason: str | None = None
 
@@ -322,4 +325,4 @@ class NextDraftApply(BaseModel):
     # Sections not to change in this draft; their suggestions stay staged.
     drop_sections: list[str] = []
     # The approver's own body for a kept section (house rules applied).
-    edits: dict[str, str] = {}
+    edits: dict[str, SectionText] = {}

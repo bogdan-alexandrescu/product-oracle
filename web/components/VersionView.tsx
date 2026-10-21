@@ -587,8 +587,10 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       )),
   });
 
-  // A section is locked once its version is approved; before that an approved section is 'Approved'.
-  const lockedCount = version?.sections.filter((s) => s.verdict?.verdict === "approved").length ?? 0;
+  // A section is locked once its version is approved; before that an approved section is
+  // 'Approved'. A lapsed approval (C2) does not lock it.
+  const lockedCount =
+    version?.sections.filter((s) => s.verdict?.verdict === "approved" && !s.verdict.lapsed_at).length ?? 0;
   const reviewedCount = version?.sections.filter((s) => s.verdict).length ?? 0;
   const reviewedShown = shownSections.filter((s) => s.verdict).length;
   const error = docQ.error || verQ.error;
