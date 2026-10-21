@@ -11111,7 +11111,7 @@
           "priorities"
         ],
         "summary": "Get Priorities",
-        "description": "Rank the baseline's features by ``method``, in dependency order.\n\nFeatures that serve no confirmed goal sink to the bottom and are flagged;\ndependency cycles are listed in ``cycles`` and their members flagged.",
+        "description": "Rank the baseline's features by ``method``, in dependency order.\n\nFeatures that serve no confirmed goal sink to the bottom and are flagged;\ndependency cycles are listed in ``cycles`` and their members flagged. People's\nactive moves and pins apply after the formula (``overrides=false`` leaves them out):\neach row carries ``formula_rank`` (Oracle's rank) and the ``override`` that placed it.",
         "operationId": "get_priorities",
         "security": [
           {
@@ -11137,6 +11137,18 @@
               "default": "goal_weighted",
               "title": "Method"
             }
+          },
+          {
+            "name": "overrides",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "false: Oracle's order only, without people's moves and pins",
+              "default": true,
+              "title": "Overrides"
+            },
+            "description": "false: Oracle's order only, without people's moves and pins"
           }
         ],
         "responses": {
@@ -11146,6 +11158,218 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PriorityRanking"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/priorities/overrides": {
+      "post": {
+        "tags": [
+          "priorities"
+        ],
+        "summary": "Create Priority Override",
+        "description": "Move a feature directly above another, or pin it at a rank, with a reason.\n\nOracle checks the change first: four rules on the ranking's numbers, then its own\nmodel reads the reason against the evidence (at most one more message). When any\nmessage results, nothing is stored and the answer is 409 with Oracle's pushback;\nthe same body with ``confirm: true`` keeps the change (no second check). A move or\npin never puts a feature above one it depends on (``held_below``). A new change on a\nfeature replaces its active one.",
+        "operationId": "create_priority_override",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverrideCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverrideOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Oracle disagrees: nothing stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushbackOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "priorities"
+        ],
+        "summary": "List Priority Overrides",
+        "description": "People's moves and pins, newest first: active ones, or all ever made\n(``include_removed``), with Oracle's pushback and whether each was kept.",
+        "operationId": "list_priority_overrides",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "snapshot_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Snapshot Id"
+            }
+          },
+          {
+            "name": "include_removed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Removed"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OverrideOut"
+                  },
+                  "title": "Response List Priority Overrides"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/priorities/overrides/{override_id}": {
+      "delete": {
+        "tags": [
+          "priorities"
+        ],
+        "summary": "Remove Priority Override",
+        "description": "End a move or pin: the feature returns to Oracle's order. The log keeps it.",
+        "operationId": "remove_priority_override",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "override_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Override Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/OverrideRemove"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Data"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverrideOut"
                 }
               }
             }
@@ -41328,6 +41552,52 @@
         ],
         "title": "EvaluationReportOut"
       },
+      "EvidenceChip": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source_kind": {
+            "type": "string",
+            "title": "Source Kind"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "source_kind"
+        ],
+        "title": "EvidenceChip",
+        "description": "A piece of evidence as a citation chip shows it."
+      },
       "EvidenceCitation": {
         "properties": {
           "cite_key": {
@@ -42023,6 +42293,39 @@
             "type": "boolean",
             "title": "Source Removed",
             "default": false
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "source_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Kind"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
           }
         },
         "type": "object",
@@ -42656,6 +42959,30 @@
           "reason"
         ],
         "title": "FeasibilityScopeIn"
+      },
+      "FeatureRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title"
+        ],
+        "title": "FeatureRef"
       },
       "FeatureSetCheck": {
         "properties": {
@@ -53150,6 +53477,291 @@
         ],
         "title": "OutlineEntry"
       },
+      "OverrideCreate": {
+        "properties": {
+          "feature_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feature Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "move",
+              "pin"
+            ],
+            "title": "Kind"
+          },
+          "above_feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Above Feature Id"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Evidence Ids"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          },
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature_id",
+          "kind",
+          "reason"
+        ],
+        "title": "OverrideCreate"
+      },
+      "OverrideOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "feature": {
+            "$ref": "#/components/schemas/FeatureRef"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "move",
+              "pin"
+            ],
+            "title": "Kind"
+          },
+          "above": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Evidence Ids"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceChip"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "pushback": {
+            "items": {
+              "$ref": "#/components/schemas/PushbackMessage"
+            },
+            "type": "array",
+            "title": "Pushback"
+          },
+          "kept_after_pushback": {
+            "type": "boolean",
+            "title": "Kept After Pushback"
+          },
+          "reason_check": {
+            "$ref": "#/components/schemas/ReasonCheckOut"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          },
+          "created_by": {
+            "$ref": "#/components/schemas/PersonRef"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "removed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed At"
+          },
+          "removed_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "removed_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed Reason"
+          },
+          "replaced_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaced By"
+          },
+          "no_longer_applies": {
+            "type": "boolean",
+            "title": "No Longer Applies",
+            "default": false
+          },
+          "preview_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Rank"
+          },
+          "held_below": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Below"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "feature",
+          "kind",
+          "above",
+          "position",
+          "reason",
+          "evidence_ids",
+          "pushback",
+          "kept_after_pushback",
+          "reason_check",
+          "snapshot_id",
+          "created_by",
+          "created_at",
+          "removed_at",
+          "removed_by",
+          "removed_reason",
+          "replaced_by"
+        ],
+        "title": "OverrideOut"
+      },
+      "OverrideRemove": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "title": "OverrideRemove"
+      },
       "PackModuleOut": {
         "properties": {
           "key": {
@@ -53310,6 +53922,25 @@
         ],
         "title": "PersonOut",
         "description": "A member as the member directory shows them to everyone (``GET /v1/people``):\nno other field, so a picker never learns more than whom it may name."
+      },
+      "PersonRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "PersonRef"
       },
       "PersonalTokenCreate": {
         "properties": {
@@ -55845,6 +56476,111 @@
         ],
         "title": "Pushback"
       },
+      "PushbackMessage": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "numbers": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numbers"
+          },
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EvidenceChip"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "PushbackMessage"
+      },
+      "PushbackOut": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "pushback": {
+            "items": {
+              "$ref": "#/components/schemas/PushbackMessage"
+            },
+            "type": "array",
+            "title": "Pushback"
+          },
+          "reason_check": {
+            "$ref": "#/components/schemas/ReasonCheckOut"
+          },
+          "preview_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Rank"
+          },
+          "held_below": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Below"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "pushback",
+          "reason_check",
+          "preview_rank",
+          "held_below"
+        ],
+        "title": "PushbackOut",
+        "description": "409: Oracle disagrees. Nothing is stored; ``confirm: true`` keeps the change."
+      },
       "PushbackSource": {
         "properties": {
           "ref": {
@@ -56239,6 +56975,17 @@
             "type": "integer",
             "title": "Score Rank"
           },
+          "formula_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula Rank"
+          },
           "entity_id": {
             "type": "string",
             "title": "Entity Id"
@@ -56293,6 +57040,27 @@
           },
           "explanation": {
             "$ref": "#/components/schemas/Explanation"
+          },
+          "override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowOverride"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "held_below": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Below"
           }
         },
         "type": "object",
@@ -56951,6 +57719,37 @@
         ],
         "title": "ReasonBase",
         "description": "What moved, new and dropped compare with: the previous attempt or roadmap version."
+      },
+      "ReasonCheckOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "contradiction",
+              "no_contradiction",
+              "skipped",
+              "failed",
+              "timed_out"
+            ],
+            "title": "Status"
+          },
+          "ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "ReasonCheckOut"
       },
       "ReasonFix": {
         "properties": {
@@ -61196,6 +61995,78 @@
           "items"
         ],
         "title": "RoadmapItemsOut"
+      },
+      "RowOverride": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "move",
+              "pin"
+            ],
+            "title": "Kind"
+          },
+          "by": {
+            "type": "string",
+            "title": "By"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "kept_after_pushback": {
+            "type": "boolean",
+            "title": "Kept After Pushback",
+            "default": false
+          },
+          "above": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Above"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "by",
+          "reason"
+        ],
+        "title": "RowOverride",
+        "description": "The active move or pin that placed a row (C9)."
       },
       "RunCreate": {
         "properties": {
