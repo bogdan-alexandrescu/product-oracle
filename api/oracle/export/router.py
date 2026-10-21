@@ -4,16 +4,22 @@ O1f: ``layer=full`` (default) exports every section as before; ``layer=brief`` t
 brief sections and the Sources and data points appendix (HTML, PDF); ``layer=deck``
 the brief as slides (PDF, PPTX; HTML is the page the PDF is printed from).
 ``/deck`` returns the slides as JSON for Present mode.
+
+Every format renders on the export pool, never on the event loop, and a render that takes
+longer than ``offload.SECONDS`` is refused: 422 "This document is too large to export
+quickly" (oracle.export.offload). A roadmap's dates are read once per version, off the
+loop too (oracle.roadmap.doc_dates: 503 while they are still being found).
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from starlette.concurrency import run_in_threadpool
 
 from oracle.auth.deps import TenantDB
 from oracle.authz import require_role
+from oracle.export import offload
 from oracle.export.deck import build_deck, render_deck_html, theme_class
 from oracle.export.pdf import PdfUnavailable, html_to_pdf
 from oracle.export.render import (
+    ExportVersion,
     NoBrief,
     NotFound,
     apply_layer,
@@ -52,12 +58,20 @@ async def _load(db, doc: str, n: int, layer: str):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
 
 
-async def _pdf(html: str) -> bytes:
-    # CPU-bound and synchronous: keep it off the event loop.
-    try:
-        return await run_in_threadpool(html_to_pdf, html)
-    except PdfUnavailable as e:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from None
+def render_export(ev: ExportVersion, layer: str, fmt: str) -> str | bytes:
+    """The exported file. CPU-bound: run on the export pool (:func:`offload.run`)."""
+    if layer == "deck":
+        deck = build_deck(ev)
+        if fmt == "pptx":
+            from oracle.export.pptx import deck_to_pptx
+
+            return deck_to_pptx(deck)
+        html = render_deck_html(deck)
+        return html_to_pdf(html) if fmt == "pdf" else html
+    if fmt == "md":
+        return render_markdown(ev)
+    html = render_html(ev)
+    return html_to_pdf(html) if fmt == "pdf" else html
 
 
 @router.get(
@@ -91,23 +105,10 @@ async def export_version(
             f"the {layer} layer exports as {', '.join(LAYER_FORMATS[layer])}, not {fmt}",
         )
     ev = await _load(db, doc, n, layer)
-    content: str | bytes
-    if layer == "deck":
-        deck = build_deck(ev)
-        if fmt == "pptx":
-            from oracle.export.pptx import deck_to_pptx
-
-            content = await run_in_threadpool(deck_to_pptx, deck)
-        else:
-            content = render_deck_html(deck)
-            if fmt == "pdf":
-                content = await _pdf(content)
-    elif fmt == "md":
-        content = render_markdown(ev)
-    else:
-        content = render_html(ev)
-        if fmt == "pdf":
-            content = await _pdf(content)
+    try:
+        content = await offload.run(render_export, ev, layer, fmt)
+    except PdfUnavailable as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from None
     return Response(
         content=content,
         media_type=MEDIA_TYPES[fmt],
@@ -121,7 +122,7 @@ async def get_deck(doc: str, n: int, db: TenantDB) -> DeckOut:
     presenter notes and the detail each slide can expand. 422 when the version has no
     brief sections."""
     ev = await _load(db, doc, n, "deck")
-    deck = build_deck(ev)
+    deck = await offload.run(build_deck, ev)
     return DeckOut(
         document_id=ev.document.id,
         slug=deck.slug,

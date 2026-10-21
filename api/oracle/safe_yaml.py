@@ -31,7 +31,7 @@ import math
 import re
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Executor, ThreadPoolExecutor
 from typing import Any
 
 import yaml
@@ -321,12 +321,15 @@ def dump(data: Any, **kwargs: Any) -> str:
 _EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="safe-yaml")
 
 
-async def run_parse[T](fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
-    """``fn(*args, **kwargs)`` on the parse pool (4 threads), so a slow parse of untrusted
-    text never stalls other requests. Exceptions propagate unchanged."""
+async def run_parse[T](
+    fn: Callable[..., T], /, *args: Any, pool: Executor | None = None, **kwargs: Any
+) -> T:
+    """``fn(*args, **kwargs)`` on the parse pool (4 threads), or on ``pool`` (the exports
+    have their own, so a slow export never holds up a draft's parse), so a slow parse of
+    untrusted text never stalls other requests. Exceptions propagate unchanged."""
     ctx = contextvars.copy_context()
     call = functools.partial(ctx.run, fn, *args, **kwargs)
-    return await asyncio.get_running_loop().run_in_executor(_EXECUTOR, call)
+    return await asyncio.get_running_loop().run_in_executor(pool or _EXECUTOR, call)
 
 
 class ParseTimeout(SafeYamlError):
@@ -345,6 +348,7 @@ async def run_parse_within[T](
     *args: Any,
     name: str = "the text",
     seconds: float | None = None,
+    pool: Executor | None = None,
     **kwargs: Any,
 ) -> T:
     """:func:`run_parse`, waiting at most ``seconds`` (``PARSE_SECONDS``): a run's file or a
@@ -353,6 +357,6 @@ async def run_parse_within[T](
     bounded by :func:`load`'s caps."""
     limit = PARSE_SECONDS if seconds is None else seconds
     try:
-        return await asyncio.wait_for(run_parse(fn, *args, **kwargs), timeout=limit)
+        return await asyncio.wait_for(run_parse(fn, *args, pool=pool, **kwargs), timeout=limit)
     except TimeoutError:
         raise ParseTimeout(name, limit) from None

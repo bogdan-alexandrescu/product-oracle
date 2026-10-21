@@ -20,6 +20,7 @@ from markupsafe import escape
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.docs.schemas import VersionOut
+from oracle.export import offload
 from oracle.intake import sharing
 from oracle.jobs import next_draft, service
 from oracle.jobs.schemas import (
@@ -302,11 +303,13 @@ async def export_version_reports(
             headers={"Content-Disposition": f'attachment; filename="{stem}.md"'},
         )
     title = escape(f"{document.title}: reports for version {n}")
+    # Rendered on the export pool, within its cap (oracle.export.offload).
+    body = await offload.run(_md.render, text)
     html = (
         f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{title}</title>'
         "<style>body{font:15px/1.55 system-ui,sans-serif;max-width:46rem;margin:2rem auto;"
         "padding:0 1rem;color:#171717}h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:2rem}"
-        "</style></head><body>" + _md.render(text) + "</body></html>"
+        "</style></head><body>" + body + "</body></html>"
     )
     return Response(
         html,
