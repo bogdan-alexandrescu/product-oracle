@@ -171,7 +171,13 @@ async def test_a_draft_still_rejected_keeps_the_new_error(client, owner, runtime
     seg = run["segments"][3]
     after = seg["draft_import"]["error"]
     assert after != before and "prd.md was rejected" in after and "front_matter" in after
-    assert pending(run)["payload"]["import"] == {"error": after}
+    # The new problems (the findings if the draft goes back to the writer) and their
+    # summary replace the old ones too.
+    imp = pending(run)["payload"]["import"]
+    assert set(imp) == {"error", "problems", "summary"} and imp["error"] == after
+    assert [p["code"] for p in imp["problems"]] == ["missing_front_matter"]
+    assert imp["summary"] == seg["draft_import"]["summary"]
+    assert imp["summary"].startswith("Oracle refused prd.md: draft must start with YAML")
     assert pending(run)["cannot_approve"] == NOT_IMPORTED
     # Still waiting, still retryable, no document.
     assert seg["can_retry_draft_import"] is True

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { DocCrumb } from "@/components/DocToolbar";
 import {
@@ -16,6 +16,7 @@ import {
   PageHeader,
   Panel,
   Split,
+  useFocusTrap,
   type ChipKind,
 } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
@@ -42,7 +43,6 @@ const PHONE = "(max-width: 600px)";
 const DAY = 86_400_000;
 /** B4 defaults (api/oracle/tenant_settings_api.py), used when the caller cannot read the settings. */
 const RISK_DEFAULTS = { role: "owner" as Role, maxDays: 90 };
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** One reason the API refuses the publish: a gating blocker, or another critical hard check. */
 type Block = {
@@ -418,53 +418,6 @@ function AdvisoryRow({ item, index }: { item: Item; index: number }) {
       </Chip>
     </li>
   );
-}
-
-/**
- * While `open`: focus moves to the `[data-autofocus]` element (else the dialog), Tab and
- * Shift+Tab stay inside `ref`, Escape calls `onClose`; on close, focus goes back to what
- * had it when the dialog opened.
- */
-function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean, onClose: () => void) {
-  const close = useRef(onClose);
-  useEffect(() => {
-    close.current = onClose;
-  });
-  useEffect(() => {
-    if (!open) return;
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    (ref.current?.querySelector<HTMLElement>("[data-autofocus]") ?? ref.current)?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        close.current();
-        return;
-      }
-      const root = ref.current;
-      if (e.key !== "Tab" || !root) return;
-      const items = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)];
-      if (items.length === 0) {
-        e.preventDefault();
-        root.focus();
-        return;
-      }
-      const first = items[0];
-      const last = items[items.length - 1];
-      const at = document.activeElement;
-      if (e.shiftKey && (at === first || !root.contains(at))) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && (at === last || !root.contains(at))) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      if (opener?.isConnected) opener.focus();
-    };
-  }, [open, ref]);
 }
 
 /** Publish (B1): blocks, hard checks and advisory on the left, the selected block right. */

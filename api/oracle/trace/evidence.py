@@ -8,7 +8,11 @@ inspectable here and listed in the Sources and data points appendix of exports
 
 Visibility follows today's rules (AUD-9): baseline evidence and entities are visible to
 everyone in the company, a source item only to the user whose source it is. Others see
-that a source item backs the claim, and its kind, not what it says.
+that a source item backs the claim, and its kind, not what it says. A run (S6) reads a
+source item as it reads it everywhere else: one its user's intakes withhold, one
+deleted upstream, or one ever frozen by sharing with no release readable now is
+restricted; one a share released shows the title and link released, never the item's
+current ones.
 """
 
 import uuid
@@ -18,9 +22,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import Principal
+from oracle.baseline.evidence import run_versions, withheld_from
 from oracle.baseline.models import Entity, Evidence
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
-from oracle.sources.models import Source, SourceItem
+from oracle.sources.models import Source, SourceItem, SourceItemVersion
 from oracle.trace.schemas import (
     EvidenceCitation,
     EvidenceInspector,
@@ -71,6 +76,19 @@ async def targets(
         evidence = {
             e.id: e for e in (await db.scalars(select(Evidence).where(Evidence.id.in_(ev_ids))))
         }
+    # Evidence copied from a source item since removed (S5) says so too.
+    from_items = {e.source_item_id for e in evidence.values() if e.source_item_id}
+    removed: set[uuid.UUID] = set()
+    if from_items:
+        removed = set(
+            (
+                await db.scalars(
+                    select(SourceItem.id).where(
+                        SourceItem.id.in_(from_items), SourceItem.deleted_at.is_not(None)
+                    )
+                )
+            ).all()
+        )
     items: dict[uuid.UUID, tuple[SourceItem, Source]] = {}
     if item_ids:
         rows = await db.execute(
@@ -85,6 +103,19 @@ async def targets(
             e.id: e for e in (await db.scalars(select(Entity).where(Entity.id.in_(ent_ids))))
         }
     user_id = principal.user_id if principal is not None else None
+    # A run reads an item as everywhere else (S6): withheld, deleted or frozen with no
+    # release readable now is restricted; a released one is read at that version.
+    withheld: set[uuid.UUID] = set()
+    released: dict[uuid.UUID, SourceItemVersion] = {}
+    frozen: dict[uuid.UUID, uuid.UUID | None] = {}
+    if principal is not None and principal.is_run and items:
+        withheld = await withheld_from(db, principal)
+        frozen = await run_versions(db, principal, set(items))
+        if version_ids := {v for v in frozen.values() if v}:
+            rows = await db.scalars(
+                select(SourceItemVersion).where(SourceItemVersion.id.in_(version_ids))
+            )
+            released = {v.item_id: v for v in rows}
     out: dict[uuid.UUID, SectionLinkTarget] = {}
     for lk in links:
         if lk.evidence_id in evidence:
@@ -92,17 +123,28 @@ async def targets(
             out[lk.id] = SectionLinkTarget(
                 type="evidence", id=e.id, title=e.ref or e.url, confidence=_float(e.confidence),
                 url=e.url, ref=e.ref, excerpt=e.excerpt, source_kind=e.kind,
+                source_removed=e.source_item_id in removed,
             )  # fmt: skip
         elif lk.source_item_id in items:
             item, source = items[lk.source_item_id]
+            title, url = item.title, item.url
             readable = user_id is not None and source.owner_user_id == user_id
+            if principal is not None and principal.is_run:
+                if item.id in withheld or item.deleted_at is not None:
+                    readable = False
+                elif item.id in frozen:
+                    version = released.get(item.id)
+                    readable = version is not None
+                    if version is not None:
+                        title, url = version.title, version.url
             out[lk.id] = SectionLinkTarget(
                 type="source_item",
                 id=item.id,
-                title=item.title if readable else None,
-                url=item.url if readable else None,
+                title=title if readable else None,
+                url=url if readable else None,
                 source_kind=source.kind,
                 restricted=not readable,
+                source_removed=item.deleted_at is not None,
             )
         elif lk.entity_id in entities:
             n = entities[lk.entity_id]
@@ -224,18 +266,24 @@ async def inspector(
     )
 
 
+SOURCE_REMOVED = "source removed"
+
+
 def _label(target: SectionLinkTarget) -> str:
     if target.type == "source_item":
-        return f"{target.source_kind} source item"
-    if target.type == "entity":
+        label = f"{target.source_kind} source item"
+    elif target.type == "entity":
         return f"{(target.entity_type or 'item').replace('_', ' ').capitalize()}: {target.title}"
-    return target.title or target.excerpt or "evidence"
+    else:
+        label = target.title or target.excerpt or "evidence"
+    return f"{label} ({SOURCE_REMOVED})" if target.source_removed else label
 
 
 async def appendix_links(db: AsyncSession, version: DocumentVersion) -> list[dict[str, Any]]:
     """For the Sources and data points appendix: per body section (in order), its links
     as {claim, label, kind, confidence}. Source items show their kind only (an export
-    is not addressed to a source's owner); rejected or superseded baseline items are
+    is not addressed to a source's owner); a removed item, or evidence from one, is
+    labelled '(source removed)' (S5); rejected or superseded baseline items are
     left out (their titles no longer hold). Document-wide links go under the section
     they name (:func:`section_key_of`)."""
     links = await version_links(db, version)

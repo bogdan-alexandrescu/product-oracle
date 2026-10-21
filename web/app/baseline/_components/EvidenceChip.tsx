@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
+import { Chip } from "@/components/ds";
 import type { EvidenceOut } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 
@@ -31,6 +32,8 @@ const fmt = (v: unknown) => (typeof v === "number" ? v.toFixed(2) : "—");
  * One piece of evidence: source kind and confidence. Hover or focus previews the
  * card (excerpt, ref, link, factor breakdown); click pins it open, as CitationChip does.
  * The card is fixed to the viewport, so the inspector's rounded clip never cuts it.
+ * Evidence from a source item since removed (a narrowed source, or deleted upstream)
+ * says 'source removed' and no longer links out; its stored excerpt stays.
  */
 export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: EvidenceOut; low?: number }) {
   const [hover, setHover] = useState(false);
@@ -41,6 +44,7 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
   const cardId = useId();
   const open = hover || pinned;
   const label = sourceKindLabel(evidence.source_kind);
+  const removed = !!evidence.source_removed;
   const factors = breakdownOf(evidence);
 
   useLayoutEffect(() => {
@@ -97,7 +101,7 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
         data-testid="evidence-chip"
         aria-expanded={open}
         aria-describedby={open ? cardId : undefined}
-        aria-label={`Evidence: ${label}, confidence ${evidence.confidence != null ? evidence.confidence.toFixed(2) : "not scored"}`}
+        aria-label={`Evidence: ${label}${removed ? ", source removed" : ""}, confidence ${evidence.confidence != null ? evidence.confidence.toFixed(2) : "not scored"}`}
         onClick={() => setPinned((p) => !p)}
         onFocus={() => setHover(true)}
         onBlur={() => setHover(false)}
@@ -106,6 +110,11 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
         }`}
       >
         {label}
+        {removed && (
+          <Chip kind="na" data-testid="source-removed">
+            source removed
+          </Chip>
+        )}
         <ConfidenceBadge value={evidence.confidence} low={low} />
       </button>
       {open && (
@@ -142,6 +151,11 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
                 {evidence.link.last_modified && ` · page updated ${formatDate(evidence.link.last_modified)}`}
               </span>
             )}
+            {removed && (
+              <span className="mt-2 block rounded-lg bg-na-bg px-2 py-1 text-[13px] text-na" data-testid="source-removed-note">
+                Source removed: the item was taken out of its source or deleted where it came from. The stored excerpt stays.
+              </span>
+            )}
             {evidence.source_item_private && (
               <span className="mt-2 block rounded-lg bg-warn-bg px-2 py-1 text-[13px] text-warn" data-testid="private-note">
                 From another person&apos;s private source: you see the excerpt, not the item.
@@ -169,7 +183,7 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
                 </table>
               </span>
             )}
-            {evidence.url && (
+            {evidence.url && !removed && (
               <a
                 href={evidence.url}
                 target="_blank"

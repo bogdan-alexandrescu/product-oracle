@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from oracle.docs.schemas import DocumentKind, VersionSource
+from oracle.docs.schemas import DocumentKind, ImportProblem, VersionSource
 from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
 from oracle.review.schemas import FeedbackKind
 
@@ -165,6 +165,10 @@ class DraftImport(BaseModel):
     created: bool | None = None
     warnings: list[str] = []
     error: str | None = None
+    # A refused draft (owner, 2026-10-20): the parser's problems, and one plain line
+    # grouped by cause (oracle.runs.rejection), the same on the run page, Inbox and MCP.
+    problems: list[ImportProblem] = []
+    summary: str | None = None
     # Provenance recorded on the version (a roadmap's PRD version).
     source: VersionSource | None = None
     prd_links: PrdLinks | None = None
@@ -201,6 +205,12 @@ class SegmentOut(BaseModel):
     artifacts: list[str]
     attempts: list[SegmentAttempt]
     draft_import: DraftImport | None = None
+    # The draft's import was refused and Oracle sent it back to the writer itself (its own
+    # NOT_YET, owner 2026-10-20): the revision runs and is not imported yet. The run page
+    # reads "Revising: sent back by Oracle", not "Draft rejected"; nothing waits for a
+    # person. Cleared once the revision is imported, or still refused (then its review
+    # waits in the Inbox), or the run ends.
+    sent_back: bool = False
     # Retry import (owner, 2026-10-20): the draft's import was refused and its file is
     # kept, and either its review is still open and I have the review's approver role or
     # above, or the run finished with no version imported and I am an owner.
@@ -324,6 +334,15 @@ class RunSummary(BaseModel):
     # failing (the error's class, never what the agents wrote); Retry tries again.
     import_failed: str | None = None
     can_retry_import: bool = False
+    # A draft one of its segments left that Oracle refused to import: its summary
+    # (``segments[].draft_import.summary``, else the error). Set where ``progress`` is.
+    # None while Oracle has that draft back with the writer (``sent_back``).
+    draft_rejected: str | None = None
+    # A refused draft Oracle sent back to the writer itself, being revised
+    # (``segments[].sent_back``): its summary, as ``draft_rejected``. The runs list and
+    # the Inbox read "Revising: sent back by Oracle"; nothing waits for a person. Set
+    # where ``progress`` is, and on the Inbox's ``revising`` rows.
+    sent_back: str | None = None
     # Set by GET /v1/runs and GET /v1/runs/{id}; None where a summary is embedded (inbox).
     progress: RunProgress | None = None
 
@@ -489,6 +508,10 @@ class InboxOut(BaseModel):
     # Owners and the run's creator: runs looking for an earlier submission given up on
     # (RunSummary.searching); shown only, nothing to decide, not in ``total``.
     searches: list[RunSummary] = []
+    # Those with a review's approver role or above: runs whose refused draft Oracle sent
+    # back to the writer itself, being revised (RunSummary.sent_back). Shown only, the
+    # review's state instead of a decision request: not in ``total``.
+    revising: list[RunSummary] = []
     # Owners only: runs whose output Oracle stopped trying to import
     # (RunSummary.import_failed), to Retry.
     imports: list[RunSummary] = []

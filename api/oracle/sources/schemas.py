@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 SourceKind = Literal["upload", "github", "slack", "notion", "fireflies", "google_docs"]
-SourceStatus = Literal["active", "paused", "error"]
+SourceStatus = Literal["active", "paused", "error", "needs_attention"]
 
 
 class ORM(BaseModel):
@@ -25,6 +25,11 @@ class SourcePatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     connection_id: uuid.UUID | None = None
     config: dict[str, Any] | None = None
+    # The config_version the form loaded. When given and the source has changed since
+    # (another save), the save is refused with 409 source_changed and nothing changes.
+    # Required (422 base_version_required) when config or connection_id change; a rename
+    # or pause may omit it, and if given it is checked.
+    base_version: int | None = Field(default=None, ge=1)
 
 
 class UnavailableItem(BaseModel):
@@ -45,6 +50,9 @@ class SourceOut(ORM):
     connection_id: uuid.UUID | None
     config: dict[str, Any]
     status: SourceStatus
+    # Counts the saves that changed the config, connection or name; send it back as
+    # base_version when saving.
+    config_version: int = 1
     last_error: str | None
     last_synced_at: datetime | None
     created_at: datetime
@@ -81,9 +89,11 @@ class SyncResult(BaseModel):
     source_id: uuid.UUID
     # completed: ran to the end; rate_limited: stopped cleanly, resumes from the saved
     # cursor; error: the source is now in status error (see error); superseded: the
-    # source's settings or connection were changed while it ran, so nothing more was
-    # saved and the next sync uses the new ones.
-    outcome: Literal["completed", "rate_limited", "error", "superseded"]
+    # source's config or connection (for Google Docs, also the company's Drive settings)
+    # changed while it ran, so nothing it read after its last checkpoint was kept and the
+    # next sync uses the new ones;
+    # needs_attention: the saved selection breaks a newer rule, edit the source (see error).
+    outcome: Literal["completed", "rate_limited", "error", "superseded", "needs_attention"]
     upserted: int = 0
     versions_written: int = 0
     deleted: int = 0

@@ -24,6 +24,10 @@ segment, the token still attached while MCP is on; MCP off: nothing attached. Th
 notes say which.
 
     running --wait opens--> awaiting_checkpoint (the workflow parked on its step)
+    running --review1 of the last segment opens, its draft refused at import--> running
+            (Oracle answers NOT_YET with the import's problems, :func:`_send_back`; the
+            revision's draft is imported when review2 opens, for a person. Meanwhile the
+            run reads "Revising: sent back by Oracle", :func:`_sent_back`)
             --approved / changes posted--> running (the same workflow goes on)
             --already answered, the workflow ran what the decision needs (same verdict,
               or an approval)--> running (the workflow goes on)
@@ -79,7 +83,9 @@ return once Oracle has read an answer that counts. The hold is decided just befo
 run token's write runs (never for a read, initialize or tools/list): Oracle's records are
 read and released first, then a review step no checkpoint stands for yet is read from
 SwarmCloud (:func:`run_token_hold`; one read shared by concurrent writes, bounded by
-``HOLD_READ_SECONDS``; reached in any state, not listed or not read, it holds; a
+``HOLD_READ_SECONDS``; reached once the step it depends on succeeded, whatever its own
+row says, and in any state but parked on that unfinished step, not listed or not read,
+it holds; a
 read-only answer is reused for up to 5 seconds, 'may write' never; a request joining a
 read in flight shares only a read-only answer, and on 'may write' reads for itself).
 A lost submission holds its token until it is resolved. Agents are told a fixed reason. An
@@ -129,14 +135,14 @@ from oracle.baseline.models import Edge, Entity
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
-from oracle.docs.schemas import VersionSource
+from oracle.docs.schemas import ImportProblem, VersionSource
 from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
 from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import schedule
-from oracle.runs import flows, roadmap, workflow
+from oracle.runs import flows, rejection, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -178,6 +184,7 @@ from oracle.swarm import (
     WorkflowSpec,
     WorkflowStatus,
     get_runtime,
+    load_learned,
     redact,
 )
 from oracle.swarm.runtime import MERGE, NOT_YET, not_reached
@@ -197,7 +204,18 @@ log = logging.getLogger(__name__)
 FINAL = ("succeeded", "failed", "cancelled")
 ACTIVE = ("running", "awaiting_checkpoint", "paused_overrun")
 # Run knobs Oracle sets (not the user's knobs): kept when a draft's knobs change.
-ORACLE_KNOBS = ("document_slug", "source_version_id", "template", "template_version", "theme")
+ORACLE_KNOBS = (
+    "document_slug",
+    "source_version_id",
+    "template",
+    "template_version",
+    "theme",
+    # A run started from a product intake (oracle.intake): the intake, the snapshot it
+    # pinned (the run reads that one, S4) and, for research, the gaps to look into.
+    "intake_id",
+    "intake_snapshot_id",
+    "intake_gap_ids",
+)
 ITEMS_FILE = "roadmap_items.yaml"
 
 
@@ -427,7 +445,36 @@ def _summary(
         import_failed=_import_failed_text(run, refs),
         can_retry_import=_import_failed(run) is not None,
         progress=_progress(run, segments) if segments is not None else None,
+        draft_rejected=_refused(run, segments, False) if segments is not None else None,
+        sent_back=_refused(run, segments, True) if segments is not None else None,
     )
+
+
+def _sent_back(run: Run, segment: RunSegment) -> bool:
+    """Oracle sent the segment's refused draft back to the writer (:func:`_send_back`), and
+    the revision is not imported yet: its attempt is Oracle's send-back and was not
+    advanced, on a run that has not ended. The run page and the Inbox read "Revising: sent
+    back by Oracle", not "Draft rejected": nothing waits for a person until the revision is
+    imported (cleared) or still refused (review2's checkpoint, "Draft rejected")."""
+    art = segment.artifacts or {}
+    imp = art.get("import")
+    if run.status in FINAL or not isinstance(imp, dict) or not imp.get("error"):
+        return False
+    if not art.get("attempts"):
+        return False
+    attempt = _current_attempt(art, segment)
+    return attempt.get("sent_back") is True and attempt.get("advanced") is not True
+
+
+def _refused(run: Run, segments: list[RunSegment], sent_back: bool) -> str | None:
+    """The summary of a draft the run's segments left that Oracle refused to import, else
+    None: one Oracle sent back to the writer and is being revised (``sent_back``, the
+    runs list's "Revising"), or one that is not (the runs list's "Draft rejected")."""
+    for s in segments:
+        imp = (s.artifacts or {}).get("import")
+        if isinstance(imp, dict) and imp.get("error") and _sent_back(run, s) is sent_back:
+            return imp.get("summary") or imp["error"]
+    return None
 
 
 def _import_failed(run: Run) -> dict[str, Any] | None:
@@ -642,6 +689,7 @@ def _segment_out(
         artifacts=sorted((art.get("files") or {}).keys()),
         attempts=[SegmentAttempt(**a) for a in art.get("attempts") or []],
         draft_import=DraftImport(**imp) if imp else None,
+        sent_back=_sent_back(run, segment),
         can_retry_draft_import=can_retry_draft_import,
         items_check=ItemsCheck(**check) if check else None,
         started_at=segment.started_at,
@@ -667,6 +715,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
             if n not in notes:
                 notes.append(n)
     if run.status == "draft" or not segments or not any(s.swarm_workflow_id for s in segments):
+        await load_learned(runtime)
         notes += [n for n in runtime.notes() if n not in notes]
     return RunOut(
         **_summary(run, refs, waiting, segments).model_dump(),
@@ -758,7 +807,10 @@ HOLD_READ_SECONDS = 3.0
 HOLD_CACHE_SECONDS = 5.0
 _hold_clock = time.monotonic
 
-_HoldKey = tuple[uuid.UUID, str, tuple[str, ...]]
+# Run, workflow, and each review step no checkpoint stands for yet with the step it
+# depends on (None: not known, so it holds).
+_Reviews = tuple[tuple[str, str | None], ...]
+_HoldKey = tuple[uuid.UUID, str, _Reviews]
 _hold_cache: dict[_HoldKey, tuple[float, str]] = {}
 _hold_reads: dict[_HoldKey, "asyncio.Task[str | None]"] = {}
 
@@ -767,12 +819,25 @@ _hold_reads: dict[_HoldKey, "asyncio.Task[str | None]"] = {}
 class _HoldPlan:
     """What Oracle's records say of a run token's hold: held (``reason``, and the
     ``detail`` logged for it), or decided by a live read of workflow ``workflow_id``:
-    its review steps no checkpoint stands for yet (``reviews``)."""
+    its review steps no checkpoint stands for yet, each with the step it depends on
+    (``reviews``)."""
 
     reason: str | None = None
     detail: str | None = None
     workflow_id: str | None = None
-    reviews: tuple[str, ...] = ()
+    reviews: _Reviews = ()
+
+
+def _review_predecessors(entry: dict[str, Any]) -> list[tuple[str, str | None]]:
+    """A segment's review steps, each with the step it depends on in Oracle's own plan
+    (:func:`workflow.build_plan`): the segment's last work step for the first round, the
+    previous round's revise step after it. None when Oracle's record does not say."""
+    work = entry.get("work") or []
+    before = [work[-1] if work else None, *(entry.get("revises") or [])]
+    return [
+        (str(r), before[i] if i < len(before) else None)
+        for i, r in enumerate(entry.get("reviews") or [])
+    ]
 
 
 async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
@@ -801,8 +866,23 @@ async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
         for c in checkpoints
         if ((c.payload or {}).get("wait") or {}).get("workflow_id") == wf.get("id")
     }
-    reviews = [r for e in wf.get("segments") or [] for r in e.get("reviews") or []]
-    unknown = tuple(r for r in reviews if r not in known)
+    for e in wf.get("segments") or []:
+        reviews = e.get("reviews") or []
+        for answered in e.get("oracle_answered") or []:
+            # Oracle's answer is no person's (_send_back): held until the checkpoint of a
+            # later round stands, and then as that checkpoint holds.
+            later = reviews[reviews.index(answered) + 1 :] if answered in reviews else []
+            if not any(r in known for r in later):
+                return _HoldPlan(
+                    HOLD_DECISION, f"{e.get('name')}'s refused draft is back with the writer"
+                )
+    reviews = [
+        p
+        for e in wf.get("segments") or []
+        for p in _review_predecessors(e)
+        if p[0] not in (e.get("oracle_answered") or [])
+    ]
+    unknown = tuple(p for p in reviews if p[0] not in known)
     if not unknown or not wf.get("id"):
         return _HoldPlan()
     return _HoldPlan(workflow_id=wf["id"], reviews=unknown)
@@ -810,7 +890,8 @@ async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
 
 async def _read_hold(key: _HoldKey) -> str | None:
     """One live read of a workflow's status: whether it reached a review step no
-    checkpoint stands for yet (not :func:`not_reached`, or not listed).
+    checkpoint stands for yet (not :func:`not_reached` given the step it depends on in
+    the same read, or not listed).
     Bounded by :data:`HOLD_READ_SECONDS`; a read-only answer
     is kept for :data:`HOLD_CACHE_SECONDS`."""
     run_id, workflow_id, reviews = key
@@ -827,16 +908,19 @@ async def _read_hold(key: _HoldKey) -> str | None:
         )
         held = HOLD_UNKNOWN
     else:
-        for review in reviews:
+        for review, after in reviews:
             step = status.step(review)
-            if step is None or not not_reached(step):
+            before = status.step(after) if after else None
+            if step is None or not not_reached(step, before):
                 log.info(
-                    "run %s: token read-only, step %s of %s is %s (park reason %s)",
+                    "run %s: token read-only, step %s of %s is %s (park reason %s, after %s: %s)",
                     run_id,
                     review,
                     workflow_id,
                     step.state if step else "not listed",
                     step.park_reason if step else None,
+                    after,
+                    before.state if before else "not listed",
                 )
                 held = HOLD_DECISION
                 break
@@ -860,7 +944,7 @@ def _cached_hold(key: _HoldKey) -> str | None:
     return cached[1] if cached is not None else None
 
 
-async def _live_hold(run_id: uuid.UUID, workflow_id: str, reviews: tuple[str, ...]) -> str | None:
+async def _live_hold(run_id: uuid.UUID, workflow_id: str, reviews: _Reviews) -> str | None:
     """The live read's answer: a read-only one from the last 5 seconds, else a read.
 
     W5, shared status checks (owner, 2026-10-20): a request that starts a read uses its
@@ -902,7 +986,9 @@ async def token_hold(db: AsyncSession, run_id: uuid.UUID, *, live: bool = True) 
 
     From the moment the workflow reaches the wait, not from Oracle's next look at it: a
     review step of the live workflow that no checkpoint stands for yet is read from
-    SwarmCloud, and reached in any state (or not listed, or not read) it holds.
+    SwarmCloud, and reached (once the step it depends on succeeded, whatever its own row
+    says; in any state but parked on that unfinished step; not listed, or not read) it
+    holds.
     ``live`` False: from what Oracle recorded only (the run's page). A write checks it
     with :func:`run_token_hold`, which releases the database before SwarmCloud is read."""
     plan = await _hold_plan(db, run_id)
@@ -1174,7 +1260,16 @@ async def _reset_segments(db: AsyncSession, run: Run, flow: flows.FlowDef) -> No
     run.estimate_usd = None
 
 
-async def create_run(db: AsyncSession, principal: Principal, body: RunCreate) -> uuid.UUID:
+async def create_run(
+    db: AsyncSession,
+    principal: Principal,
+    body: RunCreate,
+    *,
+    oracle_knobs: dict[str, Any] | None = None,
+    commit: bool = True,
+) -> uuid.UUID:
+    """A draft run. ``oracle_knobs``: knobs Oracle sets (``ORACLE_KNOBS``), e.g. the
+    intake a run starts from; ``commit=False`` leaves the commit to the caller."""
     flow = flows.FLOWS[body.flow]
     knobs = _resolve_knobs(flow, body.knobs)
     document_id, oracle = await _resolve_inputs(
@@ -1182,10 +1277,11 @@ async def create_run(db: AsyncSession, principal: Principal, body: RunCreate) ->
         flow,
         _Inputs(body.document, body.source, body.source_version, body.template, body.theme),
     )
+    extra = {k: v for k, v in (oracle_knobs or {}).items() if k in ORACLE_KNOBS}
     run = Run(
         flow=flow.key,
         status="draft",
-        knobs={**knobs.as_json(), **oracle},
+        knobs={**knobs.as_json(), **oracle, **extra},
         document_id=document_id,
         created_by=principal.id,
     )
@@ -1195,8 +1291,11 @@ async def create_run(db: AsyncSession, principal: Principal, body: RunCreate) ->
     details: dict[str, Any] = {"flow": flow.key}
     if oracle.get("source_version_id"):
         details["source_version_id"] = oracle["source_version_id"]
+    if extra.get("intake_id"):
+        details["intake_id"] = extra["intake_id"]
     await audit.record(db, principal, "run.created", "run", run.id, details)
-    await db.commit()
+    if commit:
+        await db.commit()
     return run.id
 
 
@@ -1237,7 +1336,9 @@ async def update_run(
         for k in ("document", "source_version", "template", "theme"):
             if getattr(body, k) is not None:
                 setattr(current, k, getattr(body, k))
+        intake = {k: v for k, v in oracle.items() if k.startswith("intake_")}
         run.document_id, oracle = await _resolve_inputs(db, flow, current)
+        oracle.update(intake)
     run.knobs = {**stored, **oracle}
     await _reset_segments(db, run, flow)
     await audit.record(db, principal, "run.updated", "run", run.id, {})
@@ -1297,14 +1398,17 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
             f"the estimate (${run.estimate_usd:.2f}) is over the budget "
             f"(${knobs.budget_usd:.2f}): lower the depth or roles, or raise the budget"
         )
-    # The sources the run reads are pinned now, for the user who created it.
-    snapshot = Snapshot(
-        label=f"Run {str(run.id)[:8]} ({_flow(run).title})",
-        as_of=_now(),
-        created_by=run.created_by,
-    )
-    db.add(snapshot)
-    await db.flush()
+    # The sources the run reads are pinned now, for the user who created it; a run
+    # started from an intake reads the snapshot the intake pinned (S4).
+    snapshot = await _intake_snapshot(db, run)
+    if snapshot is None:
+        snapshot = Snapshot(
+            label=f"Run {str(run.id)[:8]} ({_flow(run).title})",
+            as_of=_now(),
+            created_by=run.created_by,
+        )
+        db.add(snapshot)
+        await db.flush()
     run.snapshot_id = snapshot.id
     if run.estimate_usd > flows.APPROVAL_THRESHOLD_USD:
         run.status = "awaiting_approval"
@@ -1316,6 +1420,16 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
     await audit.record(db, principal, "run.started", "run", run.id, {})
     await _launch(db, run)
     await db.commit()
+
+
+async def _intake_snapshot(db: AsyncSession, run: Run) -> Snapshot | None:
+    raw = (run.knobs or {}).get("intake_snapshot_id")
+    if not raw:
+        return None
+    try:
+        return await db.get(Snapshot, uuid.UUID(str(raw)))
+    except ValueError:
+        return None
 
 
 async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
@@ -1429,6 +1543,8 @@ async def _prompt_context(
         kind=kind,
         source=source,
         roadmap=roadmap_ctx,
+        intake_id=run.knobs.get("intake_id"),
+        intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
     )
 
 
@@ -2395,7 +2511,14 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
             )
         except DraftError as exc:
             problems = "; ".join(f"[{p.code}] {p.message}" for p in exc.problems)
-            return {"error": f"{name} was rejected: {problems}"}
+            # The string stays (older readers); the run page, the Inbox and MCP read the
+            # problems and their summary, and the problems are the findings when the draft
+            # goes back to the writer (_send_back).
+            return {
+                "error": f"{name} was rejected: {problems}",
+                "problems": [p.model_dump(mode="json") for p in exc.problems],
+                "summary": rejection.summary(name, exc.problems),
+            }
         except (docs_service.NotFoundError, docs_service.ImportConflictError) as exc:
             return {"error": f"{name} was not imported: {exc}"}
         if not result.created and source_id and result.version.source is None:
@@ -2536,7 +2659,16 @@ async def _advance(
         name = flows.draft_file(kind)
         markdown = art["files"].get(name)
         if markdown is None:
-            imported = {"error": f"the segment left no {name}"}
+            # The same shape as a refusal (_import_draft): the run page, the Inbox, MCP
+            # and the send-back findings read it alike.
+            missing = [
+                ImportProblem(code=rejection.MISSING_DRAFT, message=f"the segment left no {name}")
+            ]
+            imported = {
+                "error": missing[0].message,
+                "problems": [p.model_dump(mode="json") for p in missing],
+                "summary": rejection.summary(name, missing),
+            }
         else:
             # Committed first: the import runs in its own transaction.
             _set_art(segment, art)
@@ -2567,6 +2699,16 @@ async def _advance(
         payload["wait"] = wait
         _set_knob(run, "opening_wait", None)
     checkpoint_kind = sdef.checkpoint_for(await _target_kind(db, run))
+    if (
+        wait is not None
+        and imported is not None
+        and imported.get("problems")
+        and knobs.checkpoints.get(sdef.checkpoint, True)
+        and await _send_back(
+            db, run, segment, segments, wait, imported, await _target_kind(db, run), checkpoint_kind
+        )
+    ):
+        return True
     if knobs.checkpoints.get(sdef.checkpoint, True):
         db.add(
             Checkpoint(
@@ -2599,6 +2741,143 @@ async def _advance(
         await _finish(db, run, "failed", f"{ITEMS_FILE} was rejected: {problems}")
         return True
     await _next(db, run, segment, segments)
+    return True
+
+
+# Who Oracle's own answer is from, on the revision's attempt.
+SENT_BACK_BY = "Oracle"
+
+
+def _send_back_entry(
+    run: Run, segment: RunSegment, wait: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    """The live workflow and the segment's plan entry when Oracle answers this wait itself
+    (:func:`_send_back`): a review of the workflow's last segment, open (not answered or
+    ended), followed by a revise step and by a later review for the person."""
+    wf = _drivable(run)
+    if wf is None or wf.get("id") != wait.get("workflow_id"):
+        return None
+    if not wait.get("task_id") or wait.get("console") or wait.get("ended"):
+        return None
+    planned = wf.get("segments") or []
+    entry = _plan_entry(wf, segment.seq)
+    if entry is None or planned[-1].get("seq") != segment.seq:
+        return None
+    round_ = int(wait.get("round") or 1)
+    reviews, revises = entry.get("reviews") or [], entry.get("revises") or []
+    if round_ > len(revises) or round_ >= len(reviews) or reviews[round_ - 1] != wait["step_id"]:
+        return None
+    return wf, entry
+
+
+async def _send_back(
+    db: AsyncSession,
+    run: Run,
+    segment: RunSegment,
+    segments: list[RunSegment],
+    wait: dict[str, Any],
+    imported: dict[str, Any],
+    kind: str,
+    checkpoint: str,
+) -> bool:
+    """A refused draft goes back to the writer before a person is asked (owner,
+    2026-10-20). When the segment-end import refused the draft and the wait is a review
+    of the workflow's last segment that a revise step and a later review follow, Oracle
+    answers it itself: NOT_YET, with the import's problems grouped in plain words as
+    findings (:func:`workflow.import_findings`). The revision runs in the same workflow
+    and its draft is imported when the next review opens; only one still refused there
+    reaches the Inbox (a person decides that review).
+
+    The answer is Oracle's, never a person's: no checkpoint stands for the wait, nothing
+    is decided or approved, it is noted on the segment and audited with actor ``oracle``,
+    and the run's token stays read-only (W5) until the next round's checkpoint stands
+    (:func:`_hold_plan`). Returns False, leaving the review to the person, when the wait
+    does not qualify (an earlier segment's checkpoint has one round and no revise step),
+    too little of the credential is left for the revision (the tail rule), or SwarmCloud
+    did not take the answer."""
+    found = _send_back_entry(run, segment, wait)
+    if found is None:
+        return False
+    wf, entry = found
+    round_ = int(wait.get("round") or 1)
+    step = wait["step_id"]
+    name = flows.draft_file(kind)
+    left = _left(wf)
+    steps = workflow.agent_steps_after(wf.get("segments") or [], segment.seq, False, round_)
+    tail = workflow.tail_seconds(steps, get_runtime_settings())
+    if left < tail:
+        _note(
+            segment,
+            f"{name} was refused at import. With {_duration(left)} of the run's credential "
+            f"left, under the {_duration(tail)} the revision needs, Oracle did not send it "
+            f"back to the writer: {checkpoint} waits for a person.",
+        )
+        return False
+    findings = workflow.import_findings(name, imported.get("problems") or [])
+    payload = {"verdict": NOT_YET, "findings": findings}
+    # The same id for the same wait: a post repeated after a lost response is a replay.
+    answer_id = str(uuid.uuid5(run.id, f"send-back/{wf['id']}/{step}"))
+    runtime = get_runtime()
+    for tries in (1, 2):
+        try:
+            await runtime.answer(wf["id"], step, answer_id=answer_id, payload=payload)
+            break
+        except RuntimeUnavailable as exc:
+            if exc.retryable and tries == 1:
+                continue
+            log.warning("run %s: refused draft not sent back on %s: %s", run.id, step, exc)
+            _note(
+                segment,
+                f"{name} was refused at import, and Oracle could not send it back to the "
+                f"writer (SwarmCloud: {_shown(exc)}): {checkpoint} waits for a person.",
+            )
+            return False
+    _note(
+        segment,
+        f"{name} was refused at import, so Oracle sent the draft back to the writer before "
+        f"asking a person: it answered {step} (round {round_}) with NOT_YET and the import's "
+        "problems as findings. This is Oracle's answer, not a person's decision: nothing is "
+        "approved, and the run's agents may not write to Oracle until a person's answer "
+        "counts. The revision is imported when the next review opens; if it is still "
+        f"refused, {checkpoint} waits in the Inbox.",
+    )
+    await audit.record(
+        db,
+        audit.ORACLE,
+        "run.draft_sent_back",
+        "run",
+        run.id,
+        {
+            "segment": segment.name,
+            "seq": segment.seq,
+            "kind": checkpoint,
+            "workflow_id": wf["id"],
+            "step_id": step,
+            "round": round_,
+            "verdict": NOT_YET,
+            "findings": findings,
+            "error": imported.get("error"),
+        },
+    )
+    entry["oracle_answered"] = [*(entry.get("oracle_answered") or []), step]
+    await _follow(
+        db,
+        run,
+        None,
+        segment,
+        segments,
+        wf,
+        entry,
+        round_,
+        False,
+        note="\n".join(findings),
+        note_by=SENT_BACK_BY,
+    )
+    # The revision's attempt is Oracle's send-back: the run reads "Revising: sent back by
+    # Oracle" until it is imported (_sent_back).
+    art = _art(segment)
+    art["attempts"][-1]["sent_back"] = True
+    _set_art(segment, art)
     return True
 
 
@@ -4793,7 +5072,7 @@ async def _read_recorded(
 async def _follow(
     db: AsyncSession,
     run: Run,
-    cp: Checkpoint,
+    cp: Checkpoint | None,
     segment: RunSegment,
     segments: list[RunSegment],
     wf: dict[str, Any],
@@ -4811,11 +5090,12 @@ async def _follow(
 
     ``note``/``note_by``: the findings the revision applies and whose they are; None for
     the Inbox note (Oracle's own answer was posted), "" for none (SwarmCloud recorded no
-    findings: the Inbox note is not what was applied). ``stop_rest``: after an approval at the
-    last checkpoint, the workflow's rest is work nobody uses (a recorded NOT_YET's
-    revision). Returns False, when ``strict`` (the Inbox decision path), if stopping the
-    rest was not confirmed: the caller says "decide again". Otherwise the run goes on and
-    the tick cancels the workflow again."""
+    findings: the Inbox note is not what was applied). ``cp`` None: no checkpoint stands
+    for the wait (Oracle sent a refused draft back, :func:`_send_back`). ``stop_rest``:
+    after an approval at the last checkpoint, the workflow's rest is work nobody uses (a
+    recorded NOT_YET's revision). Returns False, when ``strict`` (the Inbox decision
+    path), if stopping the rest was not confirmed: the caller says "decide again".
+    Otherwise the run goes on and the tick cancels the workflow again."""
     run.status = "running"
     last = wf["segments"][-1].get("seq") == segment.seq if wf.get("segments") else True
     if approved:
@@ -4843,7 +5123,7 @@ async def _follow(
             "workflow_id": wf["id"],
             "submitted_at": _now().isoformat(),
             "cost_usd": 0,
-            "note": cp.note if note is None else (note or None),
+            "note": (cp.note if cp is not None else None) if note is None else (note or None),
             "note_by": note_by,
             "not_applied": not_applied,
             "state": "running",
@@ -5622,6 +5902,39 @@ def _waits_for(item: FeedbackItem, suggestion: str | None) -> str:
     return "other"
 
 
+async def _revising(db: AsyncSession, principal: Principal) -> list[RunSummary]:
+    """The Inbox's Revising rows (owner, 2026-10-20): runs whose refused draft Oracle sent
+    back to the writer itself (:func:`_sent_back`), for those with that review's approver
+    role or above, who would decide it otherwise. Shown only: nothing to decide, so not
+    counted. Each carries ``sent_back``, the summary of what Oracle refused."""
+    rows = (
+        await db.execute(
+            select(Run, RunSegment)
+            .join(RunSegment, RunSegment.run_id == Run.id)
+            .where(Run.status.not_in(FINAL), RunSegment.artifacts.has_key("import"))
+            .order_by(Run.created_at, Run.id, RunSegment.seq)
+        )
+    ).all()
+    runs: dict[uuid.UUID, Run] = {}
+    for run, segment in rows:
+        role = _flow(run).segment(segment.name).approver_role
+        if _sent_back(run, segment) and has_role(principal.role, role):  # type: ignore[arg-type]
+            runs.setdefault(run.id, run)
+    if not runs:
+        return []
+    refs = await _refs(db, list(runs.values()))
+    segments: dict[uuid.UUID, list[RunSegment]] = {i: [] for i in runs}
+    for seg in await db.scalars(
+        select(RunSegment).where(RunSegment.run_id.in_(runs)).order_by(RunSegment.seq)
+    ):
+        segments[seg.run_id].append(seg)
+    # Embedded in the Inbox: without its progress, as the Inbox's other run rows.
+    return [
+        _summary(r, refs, None, segments[r.id]).model_copy(update={"progress": None})
+        for r in runs.values()
+    ]
+
+
 async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False) -> InboxOut:
     """``mark_seen``: record this visit as my last one (after reading what was new)."""
     pending = list(
@@ -5772,6 +6085,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         ]
         failed_refs = await _refs(db, failed_runs)
         imports = [_summary(r, failed_refs, None) for r in failed_runs]
+    revising = await _revising(db, principal)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -5781,6 +6095,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         overruns=overruns,
         lookups=lookups,
         searches=searches,
+        revising=revising,
         imports=imports,
         feedback=feedback,
         # Every new or open item (C1e, owner 2026-10-20): the rail badge, = New + Open.

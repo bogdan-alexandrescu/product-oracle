@@ -166,6 +166,7 @@ export async function routeEvidenceLinks(
     source_kind: page.kind,
     source_item: null,
     source_item_private: false,
+    source_removed: false,
     ...result,
     created_at: fetchedAt,
     kind: page.kind,

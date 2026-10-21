@@ -116,7 +116,7 @@ brief: [summary, goal-trace, problem, brief-items, brief-roadmap, not-doing, top
 <!-- The only place for sources, numbers and evidence. The body above states conclusions only. List each source with its citation id from the front matter as plain text; no inline citation markers anywhere. -->
 
 ### Sources {#sources-list}
-<!-- One line per source: citation id, kind (slack, notion, gdocs, github, fireflies, upload, web), title, date retrieved. -->
+<!-- One line per source: citation id, kind (slack, notion, gdocs, github, fireflies, upload, web, oracle), title, date retrieved. -->
 
 ### Data points {#sources-data}
 <!-- Each number used in the document: the value, what it measures, period, and the source id it came from. -->

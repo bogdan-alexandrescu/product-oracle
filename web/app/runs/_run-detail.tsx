@@ -1,18 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { SourceLink } from "@/components/BuildRoadmap";
 import {
   Button,
   Chip,
+  confirmInPage,
   Icon,
   InfoTip,
   Inspector,
   InspectorRow,
   InspectorSection,
-  LinkButton,
   Notice,
   Page,
   PageHeader,
@@ -37,6 +38,7 @@ import {
   RunsWhere,
   SEGMENT_STATUS_KIND,
   SEGMENT_STATUS_LABEL,
+  SENT_BACK_STATE,
   SpendBar,
   shortId,
   usd,
@@ -50,6 +52,15 @@ import {
 const POLL_MS = 5000;
 
 type Decide = (cp: CheckpointOut, decision: CheckpointChoice, note: string) => void;
+
+/** The decision panel (#decide): scrolled to and focused, so the keyboard continues from it. */
+function toDecision() {
+  const panel = document.getElementById("decide");
+  if (!panel) return;
+  window.history.replaceState(window.history.state, "", "#decide");
+  panel.scrollIntoView({ block: "start" });
+  panel.focus({ preventScroll: true });
+}
 
 export function RunDetail({ id }: { id: string }) {
   const q = useQuery(`run|${id}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: id } } })));
@@ -66,6 +77,15 @@ export function RunDetail({ id }: { id: string }) {
     const t = setInterval(() => void reload(), POLL_MS);
     return () => clearInterval(t);
   }, [moving, reload]);
+
+  // Arrived at #decide (the Inbox's Decide): to the decision once it shows, once.
+  const arrived = useRef(false);
+  const ready = !!run;
+  useEffect(() => {
+    if (!ready || arrived.current) return;
+    arrived.current = true;
+    if (window.location.hash === "#decide") toDecision();
+  }, [ready]);
 
   async function act(call: () => Promise<RunOut | unknown>) {
     setBusy(true);
@@ -153,10 +173,10 @@ export function RunDetail({ id }: { id: string }) {
               </Button>
             )}
             {deciding && (
-              // The run waits on a checkpoint this member decides: jump to its decision.
-              <LinkButton variant="primary" href="#decide" icon="flag">
+              // The run waits on a checkpoint this member decides: scroll to its decision and focus it.
+              <Button variant="primary" icon="flag" onClick={toDecision}>
                 Decide
-              </LinkButton>
+              </Button>
             )}
             {owner && run.status === "paused_overrun" && (
               <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/resume", path)))}>
@@ -178,8 +198,8 @@ export function RunDetail({ id }: { id: string }) {
                   {run.can_retry && (
                     <Button
                       disabled={busy}
-                      onClick={() => {
-                        if (window.confirm(RETRY_CONFIRM)) {
+                      onClick={async () => {
+                        if (await confirmInPage({ action: "Retry", message: RETRY_CONFIRM })) {
                           void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry", path)));
                         }
                       }}
@@ -190,8 +210,8 @@ export function RunDetail({ id }: { id: string }) {
                   {run.can_stop_cancelling && (
                     <Button
                       disabled={busy}
-                      onClick={() => {
-                        if (window.confirm(STOP_CANCELLING_CONFIRM)) {
+                      onClick={async () => {
+                        if (await confirmInPage({ destructive: true, action: "Stop cancelling", message: STOP_CANCELLING_CONFIRM })) {
                           void act(() => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path)));
                         }
                       }}
@@ -208,8 +228,8 @@ export function RunDetail({ id }: { id: string }) {
                     <Button
                       key={wid}
                       disabled={busy}
-                      onClick={() => {
-                        if (window.confirm(CANCEL_AGAIN_CONFIRM)) {
+                      onClick={async () => {
+                        if (await confirmInPage({ destructive: true, action: "Cancel again", message: CANCEL_AGAIN_CONFIRM })) {
                           void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path, body: { workflow_id: wid } })));
                         }
                       }}
@@ -280,8 +300,9 @@ export function RunDetail({ id }: { id: string }) {
               {mayManage && !FINAL_STATUSES.includes(run.status) && (
                 <Button
                   disabled={busy}
-                  onClick={() => {
-                    if (window.confirm("Cancel this run? Agents still working are stopped.")) {
+                  data-testid="run-cancel"
+                  onClick={async () => {
+                    if (await confirmInPage({ destructive: true, action: "Cancel run", message: "Cancel this run? Agents still working are stopped." })) {
                       void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel", path)));
                     }
                   }}
@@ -419,7 +440,7 @@ const CP_KIND: Record<CheckpointOut["status"], ChipKind> = {
   skipped: "na",
 };
 /** A checkpoint name in full: it wraps to a second line rather than truncating. */
-const WRAP_CHIP = "h-auto min-h-[26px] py-1 leading-4 whitespace-normal";
+const WRAP_CHIP = "h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left max-[600px]:max-w-[9.5rem]";
 const CP_LABEL = { pending: "Waiting", approved: "Approved", changes_requested: "Changes requested", skipped: "Skipped" } as const;
 
 function SegmentItem({
@@ -442,6 +463,28 @@ function SegmentItem({
   const compact = checkpoints.filter((c) => !(c.status === "pending" && c.can_decide));
   const waiting = checkpoints.some((c) => c.status === "pending");
   const details = s.error || s.items_check || s.draft_import || s.artifacts.length > 0 || deciding.length > 0;
+  const rejected = !!s.draft_import?.error;
+  // Each open decision's note, here so Send back to writer can fill it in.
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const noteFields = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  // Send back to writer: the Request changes flow of this segment's review, its note the
+  // summary of what Oracle refused (kept with anything already written), to edit and send.
+  const review = deciding.find((cp) => cp.console?.needs !== "redo_or_continue");
+  const sendBack =
+    rejected && review
+      ? () => {
+          const imp = s.draft_import!;
+          const text = imp.summary ?? `Draft not imported: ${imp.error}`;
+          const had = (notes[review.id] ?? "").trim();
+          const note = !had ? text : had.includes(text) ? had : `${text}\n\n${had}`;
+          flushSync(() => setNotes((n) => ({ ...n, [review.id]: note })));
+          const field = noteFields.current[review.id];
+          if (!field) return;
+          field.scrollIntoView({ block: "center" });
+          field.focus({ preventScroll: true });
+          field.setSelectionRange(note.length, note.length);
+        }
+      : undefined;
   return (
     <li
       className={`border-t border-line ${waiting ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)]" : ""}`}
@@ -464,20 +507,33 @@ function SegmentItem({
           ))}
         </span>
         <span>
-          <Chip kind={SEGMENT_STATUS_KIND[s.status]}>
-            {s.status === "succeeded" && <Icon name="check" size={16} />}
-            {SEGMENT_STATUS_LABEL[s.status]}
-          </Chip>
+          {s.sent_back ? (
+            // Oracle refused the draft and sent it back to the writer itself: revising, with
+            // nothing for a person to decide yet. Not "Draft rejected".
+            <Chip kind="acc" className={WRAP_CHIP}>
+              <span data-testid="segment-state">{SENT_BACK_STATE}</span>
+            </Chip>
+          ) : rejected ? (
+            // The segment ran, but Oracle refused the draft it left: not "Succeeded".
+            <Chip kind="crit">
+              <span data-testid="segment-state">Draft rejected</span>
+            </Chip>
+          ) : (
+            <Chip kind={SEGMENT_STATUS_KIND[s.status]}>
+              {s.status === "succeeded" && <Icon name="check" size={16} />}
+              <span data-testid="segment-state">{SEGMENT_STATUS_LABEL[s.status]}</span>
+            </Chip>
+          )}
         </span>
         <span className="flex min-w-0 flex-wrap gap-1.5 max-[600px]:col-span-full max-[600px]:col-start-2">
           {checkpoints.length === 0 &&
             (s.checkpoint_on ? (
-              <Chip kind="line" title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className={WRAP_CHIP}>
+              <Chip kind="line" title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className={WRAP_CHIP} data-testid="segment-checkpoint">
                 <span className="sr-only">Stops for </span>
                 {CHECKPOINT_LABEL[kind]}
               </Chip>
             ) : (
-              <Chip kind="na" title={`${CHECKPOINT_LABEL[kind]}: off`} className={WRAP_CHIP}>
+              <Chip kind="na" title={`${CHECKPOINT_LABEL[kind]}: off`} className={WRAP_CHIP} data-testid="segment-checkpoint">
                 {CHECKPOINT_LABEL[kind]}: off
               </Chip>
             ))}
@@ -529,12 +585,26 @@ function SegmentItem({
           {s.draft_import && (
             <DraftImportLine
               imp={s.draft_import}
-              retry={s.can_retry_draft_import ? { busy, onRetry: () => onRetryImport(s.seq) } : undefined}
+              busy={busy}
+              sentBack={s.sent_back}
+              onRetry={s.can_retry_draft_import ? () => onRetryImport(s.seq) : undefined}
+              onSendBack={sendBack}
             />
           )}
           {s.artifacts.length > 0 && <Artifacts runId={run.id} seq={s.seq} names={s.artifacts} />}
           {deciding.map((cp, i) => (
-            <CheckpointRow key={cp.id} cp={cp} busy={busy} onDecide={onDecide} anchor={i === 0} />
+            <CheckpointRow
+              key={cp.id}
+              cp={cp}
+              busy={busy}
+              onDecide={onDecide}
+              anchor={i === 0}
+              note={notes[cp.id] ?? ""}
+              onNote={(text) => setNotes((n) => ({ ...n, [cp.id]: text }))}
+              noteRef={(el) => {
+                noteFields.current[cp.id] = el;
+              }}
+            />
           ))}
         </div>
       )}
@@ -544,24 +614,21 @@ function SegmentItem({
 
 function DraftImportLine({
   imp,
-  retry,
+  busy,
+  sentBack = false,
+  onRetry,
+  onSendBack,
 }: {
   imp: NonNullable<SegmentOut["draft_import"]>;
+  busy: boolean;
+  /** The import was refused and Oracle sent the draft back to the writer itself: revising. */
+  sentBack?: boolean;
   /** The import was refused and its review is open: Retry import (owners and approvers). */
-  retry?: { busy: boolean; onRetry: () => void };
+  onRetry?: () => void;
+  /** The import was refused and this member decides its review: Send back to writer. */
+  onSendBack?: () => void;
 }) {
-  if (imp.error) {
-    return (
-      <div className="flex flex-col items-start gap-2">
-        <p className="text-crit">Draft not imported: {imp.error}</p>
-        {retry && (
-          <Button disabled={retry.busy} onClick={retry.onRetry}>
-            Retry import
-          </Button>
-        )}
-      </div>
-    );
-  }
+  if (imp.error) return <DraftRejected imp={imp} busy={busy} sentBack={sentBack} onRetry={onRetry} onSendBack={onSendBack} />;
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-text">
       <span>
@@ -585,6 +652,86 @@ function DraftImportLine({
         </span>
       )}
     </p>
+  );
+}
+
+/**
+ * A draft Oracle refused: one line grouped by cause (the API's summary), every problem behind a
+ * disclosure. `sentBack`: Oracle sent it back to the writer itself and the revision runs, so it
+ * reads as what the writer is fixing, not as a refusal waiting on a person.
+ */
+function DraftRejected({
+  imp,
+  busy,
+  sentBack = false,
+  onRetry,
+  onSendBack,
+}: {
+  imp: NonNullable<SegmentOut["draft_import"]>;
+  busy: boolean;
+  sentBack?: boolean;
+  onRetry?: () => void;
+  onSendBack?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  // Imports refused before the problems were kept carry the error alone.
+  const problems = imp.problems ?? [];
+  const n = problems.length;
+  const listId = useId();
+  const testId = sentBack ? "draft-sent-back" : "draft-rejected";
+  return (
+    <div className="flex flex-col items-start gap-2" data-testid={testId}>
+      <p className={sentBack ? "text-text" : "text-crit"} data-testid={`${testId}-summary`}>
+        {imp.summary ?? `Draft not imported: ${imp.error}`}
+      </p>
+      {sentBack && (
+        <p className="text-text2">
+          Oracle sent the draft back to the writer to fix this. Nothing needs you yet: the revision is imported when the writer is done, and only a draft
+          still refused comes to the Inbox.
+        </p>
+      )}
+      {n > 0 && (
+        <>
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={listId}
+            onClick={() => setOpen((o) => !o)}
+            className="inline-flex items-center gap-1 rounded-sm text-sm font-medium text-accent-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            {open ? "Hide the problems" : `Show all ${n} problem${n === 1 ? "" : "s"}`}
+          </button>
+          {open && (
+            <ul
+              id={listId}
+              data-testid="draft-problems"
+              className="max-h-80 w-full space-y-0.5 overflow-auto rounded-button border border-line bg-surface2 px-3 py-2 font-mono text-[13px] text-text"
+            >
+              {problems.map((p, i) => (
+                <li key={i} className="break-words">
+                  {p.line != null && `Line ${p.line}: `}
+                  {p.message}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      {(onRetry || onSendBack) && (
+        <div className="flex flex-wrap gap-2">
+          {onSendBack && (
+            <Button disabled={busy} onClick={onSendBack}>
+              Send back to writer
+            </Button>
+          )}
+          {onRetry && (
+            <Button disabled={busy} onClick={onRetry}>
+              Retry import
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -662,8 +809,23 @@ function Artifacts({ runId, seq, names }: { runId: string; seq: number; names: s
   );
 }
 
-function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy: boolean; onDecide: Decide; anchor?: boolean }) {
-  const [note, setNote] = useState("");
+function CheckpointRow({
+  cp,
+  busy,
+  onDecide,
+  anchor,
+  note,
+  onNote: setNote,
+  noteRef,
+}: {
+  cp: CheckpointOut;
+  busy: boolean;
+  onDecide: Decide;
+  anchor?: boolean;
+  note: string;
+  onNote: (note: string) => void;
+  noteRef: (el: HTMLTextAreaElement | null) => void;
+}) {
   const answer = cp.console;
   // A counted console change request the workflow went on past: Redo or Continue only.
   const redoOrContinue = answer?.needs === "redo_or_continue";
@@ -674,7 +836,11 @@ function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy
   return (
     <div
       id={anchor ? "decide" : undefined}
-      className="scroll-mt-24 rounded-button border border-line bg-surface p-3"
+      // Decide in the header focuses it; the keyboard continues from here.
+      tabIndex={anchor ? -1 : undefined}
+      role="group"
+      aria-label={`Decide: ${CHECKPOINT_LABEL[cp.kind]}`}
+      className="scroll-mt-24 rounded-button border border-line bg-surface p-3 focus:outline-2 focus:outline-offset-2 focus:outline-accent"
       data-testid={`checkpoint-${cp.kind}`}
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -697,6 +863,7 @@ function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy
         </p>
       )}
       <textarea
+        ref={noteRef}
         aria-label="Note for the agents"
         placeholder={redoOrContinue ? "Note (optional, added to the findings)" : "Note (required to request changes)"}
         value={note}

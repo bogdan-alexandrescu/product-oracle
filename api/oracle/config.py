@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     secret_key: str = "dev-insecure-change-me"
     session_cookie_name: str = "oracle_session"
     session_max_age_seconds: int = 60 * 60 * 24 * 7
+    # A run binding is minted per request by the MCP layer: it only has to outlive one call.
+    run_binding_max_age_seconds: int = 300
     cookie_secure: bool = False
     # Origins allowed to call the API with credentials (the web app in dev).
     cors_origins: list[str] = ["http://localhost:3000"]

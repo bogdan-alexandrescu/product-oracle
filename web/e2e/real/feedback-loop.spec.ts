@@ -16,7 +16,7 @@ async function login(page: Page) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/documents$/);
+  await expect(page).toHaveURL(/\/home$/);
 }
 
 type OpenItem = { id: string; kind: string; section_key: string | null; status: string };
@@ -29,6 +29,7 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
 
   // The reviewer comments inline and gives two section verdicts.
   await login(page);
+  await page.goto("/documents");
   await page.getByRole("link", { name: "Team invoices PRD" }).click();
   await page.getByRole("link", { name: "Version 1" }).click();
   await expect(page).toHaveURL(new RegExp(`/documents/${DOC}/v/1$`));

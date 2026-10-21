@@ -23,7 +23,7 @@ class Tenant(IdMixin, Base):
 class AuditEvent(TenantScoped, Base):
     __tablename__ = "audit_events"
 
-    # "user:<uuid>", "token:<uuid>" or "system".
+    # "user:<uuid>", "token:<uuid>", "oracle" (oracle.audit.ORACLE) or "system".
     actor: Mapped[str] = mapped_column(Text, nullable=False)
     action: Mapped[str] = mapped_column(Text, nullable=False)
     entity: Mapped[str] = mapped_column(Text, nullable=False)
@@ -50,6 +50,7 @@ from oracle.claude_accounts.models import (  # noqa: E402
 )
 from oracle.connections.models import Connection  # noqa: E402
 from oracle.docs.models import Citation, Document, DocumentVersion, Section  # noqa: E402
+from oracle.intake.models import IntakeProposal, IntakeWithheldItem  # noqa: E402
 from oracle.jobs.models import LlmJob, LlmSuggestion  # noqa: E402
 from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken  # noqa: E402
 from oracle.members.models import Invite  # noqa: E402
@@ -72,6 +73,7 @@ from oracle.sources.models import (  # noqa: E402
     SourceItem,
     SourceItemVersion,
 )
+from oracle.swarm.learned import LearnedFeature  # noqa: E402
 from oracle.templates.models import Template, TemplateVersion, Theme  # noqa: E402
 from oracle.tenant_settings import TenantSetting  # noqa: E402
 from oracle.v2.models import (  # noqa: E402
@@ -135,8 +137,11 @@ __all__ = [
     "EvidenceLinkSnapshot",
     "FeasibilityExperiment",
     "FeedbackItem",
+    "IntakeProposal",
+    "IntakeWithheldItem",
     "Invite",
     "KnowledgeGap",
+    "LearnedFeature",
     "LlmJob",
     "LlmSuggestion",
     "ModuleDefinition",

@@ -10,7 +10,7 @@ every open item is new.
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.docs.models import Document, DocumentVersion, Section
@@ -54,21 +54,38 @@ async def mark_seen(db: AsyncSession, principal_id: uuid.UUID, at: datetime | No
     await db.flush()
 
 
+def _with_staged_change():
+    """Items with an accepted section-text change no draft has applied yet. They stay live
+    (Staged) whatever their own status (owner, 2026-10-20): closing the item, as a draft's
+    resolutions or an approval do, does not take the change out of the next draft."""
+    return select(LlmSuggestion.feedback_item_id).where(
+        LlmSuggestion.kind == "section_text",
+        LlmSuggestion.status == "accepted",
+        LlmSuggestion.applied_in_version.is_(None),
+    )
+
+
 async def feedback_states(
     db: AsyncSession, seen: datetime | None
 ) -> tuple[list[InboxFeedbackItem], InboxCounts]:
-    """Every live item (open) and the most recent settled ones, newest first."""
+    """Every live item (open, or with a staged change) and the most recent settled ones,
+    newest first."""
     live = list(
         await db.scalars(
             select(FeedbackItem)
-            .where(FeedbackItem.status == "open")
+            .where(or_(FeedbackItem.status == "open", FeedbackItem.id.in_(_with_staged_change())))
             .order_by(FeedbackItem.created_at.desc(), FeedbackItem.id)
         )
+    )
+    live_ids = {f.id for f in live}
+    settled_only = (
+        FeedbackItem.status != "open",
+        FeedbackItem.id.not_in(_with_staged_change()),
     )
     settled = list(
         await db.scalars(
             select(FeedbackItem)
-            .where(FeedbackItem.status != "open")
+            .where(*settled_only)
             .order_by(FeedbackItem.updated_at.desc(), FeedbackItem.id)
             .limit(SETTLED_LIMIT * 2)
         )
@@ -77,7 +94,7 @@ async def feedback_states(
         (
             await db.execute(
                 select(FeedbackItem.status, func.count())
-                .where(FeedbackItem.status != "open")
+                .where(*settled_only)
                 .group_by(FeedbackItem.status)
             )
         ).all()
@@ -102,7 +119,7 @@ async def feedback_states(
         state = feedback_state(f.status, s)
         if state == "open" and (seen is None or f.created_at > seen):
             state = "new"
-        if f.status == "open":
+        if f.id in live_ids:
             if state == "done":
                 counts.done += 1
             else:

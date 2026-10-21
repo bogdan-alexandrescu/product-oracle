@@ -142,20 +142,26 @@ export function Empty({ children, testId, icon }: { children: ReactNode; testId?
   );
 }
 
-/** Notices: an error, or a one-line result of an action; with `action`, the buttons sit at its end. */
+/** Notices: an error, a warning, or a one-line result of an action; with `action`, the buttons sit at its end. */
 export function Notice({
   tone = "info",
   action,
   testId,
   children,
 }: {
-  tone?: "info" | "error" | "pass";
+  tone?: "info" | "error" | "pass" | "warn";
   action?: ReactNode;
   testId?: string;
   children: ReactNode;
 }) {
   const cls =
-    tone === "error" ? "bg-crit-bg text-crit" : tone === "pass" ? "bg-pass-bg text-pass" : "bg-accent-soft text-accent-ink";
+    tone === "error"
+      ? "bg-crit-bg text-crit"
+      : tone === "pass"
+        ? "bg-pass-bg text-pass"
+        : tone === "warn"
+          ? "bg-warn-bg text-warn"
+          : "bg-accent-soft text-accent-ink";
   const role = tone === "error" ? "alert" : "status";
   if (action) {
     return (

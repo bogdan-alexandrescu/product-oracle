@@ -150,6 +150,9 @@ class FakeSwarmCloud:
         self.fail_next_server_write: httpx.Response | None = None
         # Agent steps run per poll (None: all that can).
         self.steps_per_poll: int | None = None
+        # Step id -> task fields served instead of the real ones (None drops a field): a
+        # task row another SwarmCloud worker rewrote, which Oracle must not trust alone.
+        self.forged: dict[str, dict[str, Any]] = {}
         # Other tasks of Oracle's, newer than any workflow here (for paging).
         self.other_tasks = 0
         # Other tasks of Oracle's, a day older than any workflow here (listed after them).
@@ -178,6 +181,8 @@ class FakeSwarmCloud:
         self.wind_down_reads = 0
         self._winding: dict[str, int] = {}
         self.step_failure: dict[str, tuple[str, str]] = {}  # step_id -> (code, message)
+        # Files an agent step writes instead of the default content: step_id -> files.
+        self.step_files: dict[str, dict[str, str]] = {}
         self._n = 0
 
     def runtime(self, **kw: Any) -> SwarmCloudRuntime:
@@ -683,6 +688,7 @@ class FakeSwarmCloud:
         elif m3 := _NOTES.search(prompt):
             names = [m3[1]]
         s.files = {n: _default_content(n, segment, attempt) for n in names}
+        s.files.update(self.step_files.get(s.step_id, {}))
         s.cost = AGENT_COST
         s.state = "SUCCEEDED"
 
@@ -711,6 +717,11 @@ class FakeSwarmCloud:
                     "opened_at": s.opened_at.isoformat(),
                     "expires_at": s.expires_at.isoformat() if s.expires_at else None,
                 }
+            for k, v in self.forged.get(s.step_id, {}).items():
+                if v is None:
+                    task.pop(k, None)
+                else:
+                    task[k] = v
             tasks.append(task)
         return {
             "workflow": {

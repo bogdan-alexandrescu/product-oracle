@@ -34,7 +34,11 @@ Narrowing without Drive (S5, owner 2026-10-20): :func:`outside_picks` and
 :func:`outside_company` say, from the cursor's ``tree`` and the items' stored ``acl``,
 which live items a narrower allowlist or narrower company settings leave out, so they
 are deleted when the edit is saved (:mod:`oracle.sources.service`); :func:`forget` drops
-them from the cursor, so a later sync that finds them again reads them again.
+them from the cursor, so a later sync that finds them again reads them again. Whether an
+edit only narrows is :meth:`GoogleDocsConnector.narrows`, the rule every kind's save
+uses (``service._only_narrows``). Drive items carry no provenance, so the generic sweep
+by ``scope`` does not apply: this connector has none, and keeps its whole cursor across
+a change of selection (:meth:`GoogleDocsConnector.rescope_cursor`).
 
 Cursor::
 
@@ -539,8 +543,39 @@ class GoogleDocsConnector:
             yield _Drive(client, token)
 
     def check_config(self, config: dict[str, Any]) -> None:
-        """The config's shape and ids, without calling Drive."""
+        """The rules a stored config must still meet (shape, ids, the cap), without
+        calling Drive. Display names are not judged: a sync ignores or trims bad ones."""
+        _options(config, check_names=False)
+
+    def check_new_config(self, config: dict[str, Any]) -> None:
+        """What a save must meet, without calling Drive: :meth:`check_config` and the
+        display names (picked ids only, at most :data:`MAX_NAME` characters each)."""
         _options(config)
+
+    def narrows(self, old: dict[str, Any], new: dict[str, Any]) -> bool:
+        """Whether ``new`` only removes picked docs or folders from ``old`` (and maybe
+        renames what stays): nothing to ask Drive about (S5, owner 2026-10-20). What
+        left is deleted on save from the cursor's tree (:func:`outside_picks`)."""
+
+        def picked(config: dict[str, Any], key: str) -> set[str] | None:
+            value = config.get(key) or []
+            if not isinstance(value, list) or not all(isinstance(i, str) for i in value):
+                return None
+            return set(value)
+
+        rest = ("docs", "folders", "names")
+        before = {k: v for k, v in old.items() if k not in rest}
+        after = {k: v for k, v in new.items() if k not in rest}
+        pairs = [(picked(new, k), picked(old, k)) for k in ("docs", "folders")]
+        return before == after and all(n is not None and o is not None and n <= o for n, o in pairs)
+
+    def rescope_cursor(
+        self, old_cursor: dict[str, Any] | None, new_config: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """The whole cursor: the sync lists the folders again when the allowlist changed
+        (``listing.for``), compares what it finds with ``files`` (deleting what is no longer
+        under it) and keeps ``tree`` and ``notes`` as narrowing on save left them."""
+        return old_cursor
 
     async def validate(self, config: dict[str, Any], credential: dict[str, Any] | None) -> None:
         folders, docs = _options(config)

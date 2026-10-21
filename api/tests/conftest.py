@@ -127,3 +127,18 @@ async def client():
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+
+
+@pytest.fixture(autouse=True)
+def intake_local_runtime(request):
+    """The intake lane's tests read as runs over MCP (tests.test_mcp.mcp_client): a local
+    runtime there, so run tokens come from any address, as tests.test_mcp's own
+    ``local_runtime`` fixture does (the egress check has its own tests)."""
+    if not request.module.__name__.rsplit(".", 1)[-1].startswith("test_intake"):
+        yield
+        return
+    from oracle.swarm import FakeRuntime, set_runtime
+
+    set_runtime(FakeRuntime())
+    yield
+    set_runtime(None)

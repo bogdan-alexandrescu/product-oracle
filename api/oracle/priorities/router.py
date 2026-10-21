@@ -24,14 +24,14 @@ router = APIRouter(prefix="/v1", tags=["priorities"])
 
 @router.get("/priorities", response_model=PriorityRanking)
 async def get_priorities(
-    db: TenantDB, _: CurrentPrincipal, method: Method = "goal_weighted"
+    db: TenantDB, principal: CurrentPrincipal, method: Method = "goal_weighted"
 ) -> PriorityRanking:
     """Rank the baseline's features by ``method``, in dependency order.
 
     Features that serve no confirmed goal sink to the bottom and are flagged;
     dependency cycles are listed in ``cycles`` and their members flagged.
     """
-    return await service.compute(db, method)
+    return await service.compute(db, method, principal)
 
 
 @router.post(

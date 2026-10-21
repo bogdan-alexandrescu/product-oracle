@@ -14,12 +14,15 @@ from oracle.blockers.router import router as blockers_router
 from oracle.claude_accounts.router import router as claude_accounts_router
 from oracle.claude_accounts.sweep import get_pool_settings, run_scheduler
 from oracle.config import get_settings
+from oracle.connections.browse_github import router as github_browse_router
 from oracle.connections.browse_google import router as drive_browse_router
+from oracle.connections.browse_slack import router as slack_browse_router
 from oracle.connections.notion_pages import router as notion_pages_router
 from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
 from oracle.export.router import router as export_router
+from oracle.intake.router import router as intake_router
 from oracle.jobs.router import router as llm_jobs_router
 from oracle.jobs.worker import (
     JOB_OVERHEAD_SECONDS,
@@ -38,6 +41,8 @@ from oracle.quality.router import router as quality_router
 from oracle.review.router import router as review_router
 from oracle.roadmap.router import router as roadmap_router
 from oracle.runs.router import router as runs_router
+from oracle.sources.fireflies_browse import router as fireflies_browse_router
+from oracle.sources.repair import run_at_startup as repair_version_urls_at_startup
 from oracle.sources.router import router as sources_router
 from oracle.swarm import close_runtime
 from oracle.templates.router import router as templates_router
@@ -75,6 +80,9 @@ async def lifespan(app: FastAPI):
     # Scheduler): it sweeps the companies due, never one within five minutes of its last
     # sweep. Not started while the run ticker is configured: the ticker sweeps then, once
     # for every instance. ORACLE_CLAUDE_SWEEP_SECONDS=0 turns it off.
+    # Versions an old image wrote without a link during the rollout (0014_intake):
+    # repaired now and once more later, in the background (oracle.sources.repair).
+    repair = asyncio.create_task(repair_version_urls_at_startup())
     interval = get_pool_settings().sweep_seconds
     tasks = [asyncio.create_task(run_scheduler(interval))] if interval > 0 and not ticker else []
     # The local worker for built-in model jobs; `oracle tick` runs them too.
@@ -82,6 +90,7 @@ async def lifespan(app: FastAPI):
     every = get_worker_settings().worker_seconds
     if every > 0:
         tasks.append(asyncio.create_task(run_worker(every)))
+    tasks.append(repair)
     yield
     for task in tasks:
         task.cancel()
@@ -133,17 +142,22 @@ def create_app() -> FastAPI:
     # v1 lanes add their routes to these (empty until then).
     app.include_router(members_router)
     app.include_router(connections_router)
+    app.include_router(slack_browse_router)
+    app.include_router(github_browse_router)
     app.include_router(drive_browse_router)
     app.include_router(notion_pages_router)
     app.include_router(settings_router)
     app.include_router(claude_accounts_router)
     app.include_router(sources_router)
+    app.include_router(fireflies_browse_router)
     app.include_router(baseline_router)
     app.include_router(priorities_router)
     app.include_router(templates_router)
     app.include_router(runs_router)
     # Product Oracle v2: thin read routes over the shared tables; lanes add writes.
     app.include_router(v2_router)
+    # v2 lanes: intake, gaps, questions and answers (CR-03).
+    app.include_router(intake_router)
     # CR-08: PRD quality and readiness, outcome tracking and learnings.
     app.include_router(quality_router)
     # Modules and compositions (CR-01/02): catalogue, packs, manifests, revisions.

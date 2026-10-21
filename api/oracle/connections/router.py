@@ -25,6 +25,7 @@ from oracle.connections import oauth, service
 from oracle.connections.models import Connection
 from oracle.connections.providers import (
     PROVIDERS,
+    CredentialRefused,
     CredentialRejected,
     Provider,
     ProviderUnavailable,
@@ -150,6 +151,10 @@ def _provider(key: str) -> Provider:
 
 
 def _rejected(e: Exception) -> HTTPException:
+    # Refused (it works, but Oracle will not use it, e.g. a Slack bot token): 422.
+    # Rejected by the provider (invalid, expired, revoked): 400.
+    if isinstance(e, CredentialRefused):
+        return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e))
     return HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
 
 
@@ -235,7 +240,10 @@ async def google_picker_config(principal: UserPrincipal, _: Viewer) -> PickerCon
 @router.post(
     "/connections/{provider}/token",
     response_model=ConnectionOut,
-    responses={400: {"description": "The provider rejected the token"}},
+    responses={
+        400: {"description": "The provider rejected the token"},
+        422: {"description": "A token Oracle will not use (a Slack bot token)"},
+    },
 )
 async def connect_with_token(
     provider: str, body: TokenIn, principal: UserPrincipal, db: TenantDB, http: ProviderHttp
@@ -348,7 +356,10 @@ async def delete_connection(
 @router.post(
     "/connections/{connection_id}/reconnect",
     response_model=ReconnectOut,
-    responses={400: {"description": "The provider rejected the token"}},
+    responses={
+        400: {"description": "The provider rejected the token"},
+        422: {"description": "A token Oracle will not use (a Slack bot token)"},
+    },
 )
 async def reconnect_connection(
     connection_id: uuid.UUID,

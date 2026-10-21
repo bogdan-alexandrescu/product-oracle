@@ -23,9 +23,10 @@ from oracle.connections.providers import (
     DRIVE_FILE,
     DRIVE_READONLY,
     RECONNECT_TO_CHOOSE_FILES,
+    get_provider,
     reconnect_reason,
 )
-from oracle.sources import base
+from oracle.sources import base, store
 from oracle.sources.connectors import google_docs
 from oracle.sources.models import SOURCE_KINDS, Source, SourceItem
 from oracle.v2 import links
@@ -55,12 +56,31 @@ class ConflictError(Exception):
     pass
 
 
+class StaleError(Exception):
+    """The save loaded an older ``config_version`` than the source has now (answered 409)."""
+
+    code = "source_changed"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This source changed since you opened it. Reload to see the current picks."
+        )
+
+
 class InvalidError(Exception):
     """The request cannot be carried out as asked (answered 422)."""
 
 
 class BadRequestError(InvalidError):
     """The config is malformed, e.g. an id that is not one (answered 400)."""
+
+
+class RateLimitedError(Exception):
+    """The provider asked to slow down while checking a config (answered 429)."""
+
+    def __init__(self, message: str, retry_after: int):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 _loaded = False
@@ -118,16 +138,16 @@ async def _read_credential(db: AsyncSession, conn: Connection) -> dict[str, Any]
         raise InvalidError(f"{e}") from None
 
 
-async def mark_connection_rejected(db: AsyncSession, source: Source, error: str) -> None:
-    """A provider rejected the credential during a sync: mark the user's connection
-    expired with the error, so Settings > Connections offers Reconnect. Commits."""
-    if source.connection_id is None:
+async def mark_connection_rejected(
+    db: AsyncSession, connection_id: uuid.UUID | None, owner_id: uuid.UUID, error: str
+) -> None:
+    """A provider rejected the credential of ``connection_id`` (the one a sync used)
+    during a sync: mark the user's connection expired with the error, so Settings >
+    Connections offers Reconnect. Commits."""
+    if connection_id is None:
         return
     conn = await db.scalar(
-        select(Connection).where(
-            Connection.id == source.connection_id,
-            Connection.user_id == source.owner_user_id,
-        )
+        select(Connection).where(Connection.id == connection_id, Connection.user_id == owner_id)
     )
     if conn is not None:
         await connections.mark_failure(db, conn, "expired", error)
@@ -145,17 +165,17 @@ async def owned_connection(
 
 
 async def credential_for(
-    db: AsyncSession, source: Source
+    db: AsyncSession, source: Source, connection_id: uuid.UUID | None = None
 ) -> tuple[dict[str, Any] | None, Connection | None]:
-    """The decrypted credential of the source's connection (``None`` for uploads)."""
+    """The decrypted credential of the source's connection (``None`` for uploads), or of
+    ``connection_id`` when given (the connection a sync read when it started)."""
     if KIND_PROVIDER[source.kind] is None:
         return None, None
-    if source.connection_id is None:
+    connection_id = connection_id or source.connection_id
+    if connection_id is None:
         raise InvalidError("This source has no connection: pick one of your connections")
     try:
-        credential = await connections.get_credential(
-            db, source.connection_id, source.owner_user_id
-        )
+        credential = await connections.get_credential(db, connection_id, source.owner_user_id)
     except connections.ConnectionUnavailable as e:
         if e.status is None:
             raise NotFoundError("Connection not found") from None
@@ -238,7 +258,9 @@ def _check_shape(kind: str, config: dict[str, Any]) -> None:
     connector = connector_for(kind)
     if connector is None:
         raise InvalidError(CONNECTOR_UNAVAILABLE)
-    check = getattr(connector, "check_config", None)
+    # A connector may be stricter with what is saved than with what it syncs (Google
+    # Docs: the display names a stored config carries are trimmed when it syncs).
+    check = getattr(connector, "check_new_config", None) or getattr(connector, "check_config", None)
     if check is not None:
         try:
             check(config)
@@ -264,6 +286,13 @@ async def _validate(
         await connector.validate(config, credential)
     except base.ConnectorBadInput as e:
         raise BadRequestError(redact(str(e), credential)) from None
+    except base.ConnectorRateLimited as e:
+        wait = max(1, round(e.retry_after)) if e.retry_after else 60
+        provider = get_provider(KIND_PROVIDER[kind] or "")
+        name = provider.name if provider else kind
+        raise RateLimitedError(
+            f"{name} is busy checking the selection: try again in {wait} seconds", wait
+        ) from None
     except base.ConnectorAuthError as e:
         raise InvalidError(f"The connection was rejected: {redact(str(e), credential)}") from None
     except base.ConnectorError as e:
@@ -303,14 +332,21 @@ async def list_sources(db: AsyncSession, user_id: uuid.UUID) -> list[Source]:
     return list(rows)
 
 
-async def item_counts(db: AsyncSession, source_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+async def item_counts(
+    db: AsyncSession, source_ids: list[uuid.UUID], exclude: set[uuid.UUID] | None = None
+) -> dict[uuid.UUID, int]:
+    """Live items per source; ``exclude``: items the caller may not read (not counted,
+    so a count never tells how many are withheld)."""
     if not source_ids:
         return {}
-    rows = await db.execute(
+    stmt = (
         select(SourceItem.source_id, func.count())
         .where(SourceItem.source_id.in_(source_ids), SourceItem.deleted_at.is_(None))
         .group_by(SourceItem.source_id)
     )
+    if exclude:
+        stmt = stmt.where(SourceItem.id.not_in(exclude))
+    rows = await db.execute(stmt)
     return {sid: n for sid, n in rows.all()}
 
 
@@ -334,6 +370,7 @@ async def create_source(
     _check_config(config)
     conn = await _check_connection(db, user_id, kind, connection_id)
     await _validate(db, kind, config, conn)
+    config = normalize_config(kind, config)
     source = Source(
         owner_user_id=user_id,
         connection_id=connection_id,
@@ -450,12 +487,13 @@ async def company_scope(db: AsyncSession, tenant_id: uuid.UUID) -> tuple[list[st
 # (soft delete) what falls outside in the same request, judged from what Oracle stored:
 # no provider call, so it works with an expired connection or a paused source.
 #
-# Locks: the source row first (FOR NO KEY UPDATE, as a sync's checkpoint takes it), then
-# the items with SKIP LOCKED, so a save never waits on a running sync's item rows (a sync
-# takes item rows, then the source row: waiting here could deadlock). A row skipped that
-# way was written by a sync that has not committed; that sync then finds the source
-# changed at its next checkpoint, rolls back and runs tidy_drive_source
-# (oracle.sources.sync), which deletes it.
+# Locks: the source row first (a save's FOR UPDATE, or FOR NO KEY UPDATE as a sync takes
+# it before its first item write and every checkpoint, oracle.sources.sync._hold), then
+# the items with SKIP LOCKED. A running sync holds the source row while it holds item
+# rows, so a save waits for its commit and then finds nothing locked; SKIP LOCKED keeps a
+# save from ever waiting on item rows all the same. A row skipped that way was written by
+# a sync that has not committed; that sync then finds the source changed at its next
+# hold, rolls back and runs tidy_drive_source, which deletes it.
 
 
 async def _lock_source(db: AsyncSession, source_id: uuid.UUID) -> Source | None:
@@ -510,32 +548,22 @@ async def _hide_items(db: AsyncSession, source: Source, external_ids: set[str]) 
     return hidden
 
 
-def _only_removes_picks(old: dict[str, Any], new: dict[str, Any]) -> bool:
-    """Whether a Google Docs config edit only removes picked docs or folders (and maybe
-    renames what stays): nothing to ask the provider about."""
-
-    def picked(config: dict[str, Any], key: str) -> set[str] | None:
-        value = config.get(key) or []
-        if not isinstance(value, list) or not all(isinstance(i, str) for i in value):
-            return None
-        return set(value)
-
-    rest = ("docs", "folders", "names")
-    before = {k: v for k, v in old.items() if k not in rest}
-    after = {k: v for k, v in new.items() if k not in rest}
-    pairs = [(picked(new, k), picked(old, k)) for k in ("docs", "folders")]
-    return before == after and all(n is not None and o is not None and n <= o for n, o in pairs)
-
-
 async def _apply_drive_edit(
-    db: AsyncSession, source: Source, config: dict[str, Any], *, reconnect: bool
+    db: AsyncSession,
+    source: Source,
+    old: dict[str, Any],
+    config: dict[str, Any],
+    *,
+    reconnect: bool,
 ) -> None:
-    """Lock the Google Docs source and delete, now, its items ``config`` no longer picks
-    (google_docs.outside_picks). On a new connection the next sync reads everything
-    again, keeping which folder each doc came from; otherwise the cursor stays (the
-    folders are listed again since the allowlist changed) and so does what the last sync
-    said about what is still picked."""
-    old = dict((await _lock_source(db, source.id) or source).config or {})
+    """Delete, now, the Google Docs source's items ``config`` no longer picks
+    (google_docs.outside_picks); the caller holds the source row (update_source). On a
+    new connection the next sync reads everything again, keeping which folder each doc
+    came from; otherwise the cursor stays (the folders are listed again since the
+    allowlist changed) and so does what the last sync said about what is still picked.
+    A change of display names alone changes nothing else."""
+    if not reconnect and _picks(old) == _picks(config):
+        return
     old_folders, old_docs = google_docs.picked_ids(old)
     new_folders, new_docs = google_docs.picked_ids(config)
     removed = (old_folders | old_docs) - (new_folders | new_docs)
@@ -616,65 +644,159 @@ def _check_config(config: dict[str, Any]) -> None:
 
 
 async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any]) -> Source:
-    reconnect = "connection_id" in changes and changes["connection_id"] != source.connection_id
-    reconfigure = changes.get("config") is not None and changes["config"] != source.config
-    if reconfigure and not reconnect and _picks(changes["config"]) == _picks(source.config):
-        # Only the display names of picked items changed: the ids were validated when
-        # they were picked, so nothing is sent to the provider again, and what the last
-        # sync reported still stands.
+    changes = dict(changes)
+    base_version = changes.pop("base_version", None)
+    if changes.get("config") is not None:
         _check_config(changes["config"])
-        _check_shape(source.kind, changes["config"])
-        source.config = changes["config"]
-        reconfigure = False
-    # Removing Google Docs picks asks the provider nothing (S5, narrowing takes effect on
-    # save; owner 2026-10-20): no connection check and no validation, so it works with an
-    # expired connection or a paused source.
-    narrowing = (
-        reconfigure
-        and not reconnect
-        and source.kind == "google_docs"
-        and _only_removes_picks(dict(source.config or {}), changes["config"])
-    )
-    if reconnect or reconfigure:
-        connection_id = changes["connection_id"] if reconnect else source.connection_id
-        config = changes["config"] if reconfigure else source.config
-        _check_config(config)
-        if narrowing:
-            _check_shape(source.kind, config)
-        else:
+        changes = {**changes, "config": normalize_config(source.kind, changes["config"])}
+    asks = "connection_id" in changes or changes.get("config") is not None
+    if asks or base_version is not None:
+        # The row was loaded when the request started (sessions do not expire on
+        # commit): a sync, or another save, may have changed it since. Read it again,
+        # locked until the commit below, and compare what is asked with THAT copy (a
+        # request asking for the config it loaded, after another save narrowed it, is a
+        # widening, and is validated as one). A running sync takes the same row lock
+        # before it writes items (sync._hold), so this sweep and its checkpoints never
+        # wait on each other's rows.
+        await db.refresh(source, with_for_update=True)
+        _check_base(source, base_version)
+        reconnect, reconfigure, narrowing = _what_changed(source, changes)
+        if reconnect or (reconfigure and not narrowing):
+            connection_id = changes["connection_id"] if reconnect else source.connection_id
+            config = changes["config"] if reconfigure else source.config
+            # Validating reads the credential, which commits (and so frees the lock):
+            # nothing is changed before it, and the row is read again, locked, after it.
+            # What was validated is the target (connection and config), whatever the row
+            # looked like meanwhile.
+            await db.commit()
             conn = await _check_connection(db, source.owner_user_id, source.kind, connection_id)
-            # Validating reads the credential, which commits: change nothing before it.
             await _validate(db, source.kind, config, conn)
-        # A new account: sync from the start. A new allowlist: Google Docs deletes what
-        # left it now, other kinds on the next sync. Unchanged content writes no new
-        # versions, so a full pass is cheap in storage. A connector that deletes by its
-        # cursor (items it knew minus items still live) must keep its known ids across a
-        # config change, or narrowing the source could never delete anything (S5).
+            await db.refresh(source, with_for_update=True)
+            _check_base(source, base_version)  # another save may have landed meanwhile
+            reconnect, reconfigure, narrowing = _what_changed(source, changes)
+        if narrowing:
+            # Nothing is asked of the provider (S5, owner 2026-10-20), so the connection
+            # may be expired; the shape and ids are still checked, offline.
+            _check_shape(source.kind, changes["config"])
+        old_config = dict(source.config or {})
+        connection_id = changes.get("connection_id", source.connection_id)
+    else:
+        reconnect = reconfigure = narrowing = False
+    if reconnect or reconfigure:
+        config = changes["config"] if reconfigure else source.config
         if source.kind == "google_docs":
-            # Keeps its cursor for a new allowlist (it lists the folders again when the
-            # allowlist changes); the sync engine adds every live item to what it knows
-            # (oracle.sources.sync), and a sync still running saves nothing more.
-            await _apply_drive_edit(db, source, config, reconnect=reconnect)
-        elif source.kind == "notion":
-            # Keep the page ids, drop the render cache: every live page is re-rendered
-            # and pages now outside the roots are deleted.
-            pages = (source.cursor or {}).get("pages") or {}
-            source.cursor = {"pages": {page_id: {} for page_id in pages}}
-            source.unavailable_items = []
+            # Google Docs narrows on save from its cursor's tree (which folder each doc
+            # came from), not from item provenance: it has no ``scope``, so _sweep below
+            # does nothing for it. Its cursor stays for a new allowlist (the folders are
+            # listed again when the allowlist changes); a new connection keeps the tree.
+            await _apply_drive_edit(db, source, old_config, config, reconnect=reconnect)
         else:
-            source.cursor = None
+            if reconnect:
+                # Another connection may sign in to another account: its position in the
+                # old one means nothing. Start over (unchanged content writes no version).
+                source.cursor = None
             source.unavailable_items = []
         source.connection_id = connection_id
         source.config = config
-        if source.status == "error" and not narrowing:
-            # Checked with the provider just now. A narrowing asked it nothing, so an
-            # error (a rejected connection) still stands.
+        if reconfigure:
+            # Narrowing takes effect on save (S5, owner 2026-10-20): what the stored items
+            # show to fall outside the new selection is deleted (soft) in this request,
+            # without calling the provider. What only the provider can tell (a Fireflies
+            # series, a Notion sub-page) goes on the next sync's pass.
+            await _sweep(db, source, old_config, config)
+        # A config change keeps the cursor: the next sync sees the selection changed (its
+        # fingerprint, oracle.sources.sync), sweeps again (nothing left by then) and asks
+        # the connector how much of the cursor still holds (rescope_cursor), so it only
+        # re-reads what remains. A sync running now keeps none of what it reads from here
+        # on (it holds the row before each write and finds the source changed).
+        if source.status == "needs_attention" or (source.status == "error" and not narrowing):
+            # An error was checked with the provider just now; a pure narrowing asked it
+            # nothing, so an error (a rejected connection) still stands.
             source.status = "active"
             source.last_error = None
-    if "name" in changes and changes["name"] is not None:
-        source.name = changes["name"].strip()
+    name = changes.get("name")
+    renamed = name is not None and name.strip() != source.name
+    if renamed:
+        source.name = name.strip()
+    if reconnect or reconfigure or renamed:
+        # In SQL: a rename-only save holds no lock, so the row may have moved on since it
+        # was read at request start; add one to what is stored now.
+        source.config_version = Source.config_version + 1
     await _commit_unique(db)
+    await db.refresh(source)  # config_version was an SQL expression
     return source
+
+
+def _check_base(source: Source, base_version: int | None) -> None:
+    """Refuse (nothing is changed yet) a save that loaded another version than the
+    locked row has. Omitted (the API requires it when config or connection change; a
+    rename or pause may leave it out): not checked."""
+    if base_version is not None and base_version != source.config_version:
+        raise StaleError
+
+
+def _what_changed(source: Source, changes: dict[str, Any]) -> tuple[bool, bool, bool]:
+    """(connection changed, config changed, the config change only narrows), each against
+    ``source`` as it is now. A pure narrowing (no new pick, no wider date, same connection;
+    owner S5 2026-10-20: "no provider call") needs neither the provider nor an active
+    connection."""
+    reconnect = "connection_id" in changes and changes["connection_id"] != source.connection_id
+    reconfigure = changes.get("config") is not None and changes["config"] != source.config
+    narrowing = (
+        reconfigure
+        and not reconnect
+        and _only_narrows(source.kind, source.config, changes["config"])
+    )
+    return reconnect, reconfigure, narrowing
+
+
+def _only_narrows(kind: str, old: dict[str, Any] | None, new: dict[str, Any]) -> bool:
+    """The one rule for a pure narrowing, whatever the kind: the connector's ``narrows``
+    when it has one (Fireflies, Google Docs), else its ``scope`` of each config compared
+    by base.scope_narrows. A kind with neither never narrows without the provider."""
+    connector = connector_for(kind)
+    narrows = getattr(connector, "narrows", None)
+    scope = getattr(connector, "scope", None)
+    try:
+        if narrows is not None:
+            return bool(narrows(dict(old or {}), new))
+        if scope is not None:
+            return base.scope_narrows(scope(dict(old or {})), scope(new))
+    except base.ConnectorConfigError:
+        return False  # saved before a rule it now breaks, or refused now: validate
+    return False
+
+
+async def _sweep(
+    db: AsyncSession, source: Source, old_config: dict[str, Any], config: dict[str, Any]
+) -> int:
+    """Soft-delete the source's stored items outside ``config`` (the connector's
+    ``scope``), in the caller's transaction; how many. A selection that keeps the same
+    scope (new labels, say) sweeps nothing: an item of unknown provenance is only swept
+    when the picks change."""
+    scope = getattr(connector_for(source.kind), "scope", None)
+    if scope is None:
+        return 0
+    new_scope = scope(config)
+    try:
+        old_scope = scope(old_config)
+    except base.ConnectorConfigError:
+        old_scope = None  # saved before a rule it now breaks: sweep by the new one
+    if new_scope == old_scope:
+        return 0
+    return await store.delete_out_of_scope(db, source, new_scope)
+
+
+def normalize_config(kind: str, config: dict[str, Any]) -> dict[str, Any]:
+    """``config`` in the connector's canonical form (oracle.sources.base), as it is saved
+    and fingerprinted; unchanged when it does not parse (validating says why)."""
+    normalize = getattr(connector_for(kind), "normalize_config", None)
+    if normalize is None:
+        return config
+    try:
+        return normalize(config)
+    except base.ConnectorConfigError:
+        return config
 
 
 async def set_paused(db: AsyncSession, source: Source, paused: bool) -> Source:

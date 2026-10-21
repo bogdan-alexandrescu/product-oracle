@@ -37,6 +37,7 @@ MAX_TOKENS = {
     "review_comments": 8000,
     "reporting": 4000,
     "refinement": 6000,
+    "intake_analysis": 4000,
     "quality_review": 4000,
     "refinement_batch": 16000,
 }
@@ -587,6 +588,13 @@ async def refinement(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
     }
 
 
+async def intake_analysis(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Light extraction for a product intake (oracle.intake.job)."""
+    from oracle.intake import job as intake_job
+
+    return await intake_job.run(s, job, ask)
+
+
 def _resolutions(raw: Any, asked: set[str], default_note: str) -> list[dict[str, Any]]:
     out = []
     for r in raw or []:
@@ -758,6 +766,7 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "review_comments": review_comments,
     "reporting": reporting,
     "refinement": refinement,
+    "intake_analysis": intake_analysis,
     "quality_review": quality_review,
     "refinement_batch": refinement_batch,
 }

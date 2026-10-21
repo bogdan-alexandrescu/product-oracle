@@ -33,6 +33,7 @@ import {
   RunCost,
   RunStatusBadge,
   RunsWhere,
+  SENT_BACK_STATE,
   WAITING_STATUSES,
   shortId,
   type RunSummary,
@@ -82,9 +83,11 @@ export default function RunsPage() {
       phone: "meta",
       cell: (r) => (
         // P3d: the cost stays on every size; prominent on approvals and overruns.
-        <span className="flex min-w-0 items-center gap-2.5 max-[600px]:flex-wrap max-[600px]:gap-y-1">
+        <span className="flex min-w-0 flex-wrap items-center gap-2.5 gap-y-1">
           <RunStatusBadge status={r.status} />
           {r.waiting_on && <span className="sr-only">: {CHECKPOINT_LABEL[r.waiting_on]}</span>}
+          {r.draft_rejected && <DraftRejectedChip summary={r.draft_rejected} />}
+          {r.sent_back && <SentBackChip summary={r.sent_back} />}
           <RunCost run={r} />
         </span>
       ),
@@ -189,6 +192,16 @@ function RunInspector({ run }: { run: RunSummary }) {
         </>
       }
     >
+      {run.draft_rejected && (
+        <InspectorSection label="Draft rejected">
+          <p className="text-[15px] text-crit">{run.draft_rejected}</p>
+        </InspectorSection>
+      )}
+      {run.sent_back && (
+        <InspectorSection label={SENT_BACK_STATE}>
+          <p className="text-[15px] text-text">{run.sent_back}</p>
+        </InspectorSection>
+      )}
       {run.waiting_on && (
         <InspectorSection label="Waiting on">
           <InspectorRow>{CHECKPOINT_LABEL[run.waiting_on]}</InspectorRow>
@@ -203,5 +216,23 @@ function RunInspector({ run }: { run: RunSummary }) {
         {run.finished_at && <InspectorRow value={formatDateTime(run.finished_at)}>Finished</InspectorRow>}
       </InspectorSection>
     </Inspector>
+  );
+}
+
+/** A draft of the run Oracle refused to import; what it refused, on hover and in the inspector. */
+function DraftRejectedChip({ summary }: { summary: string }) {
+  return (
+    <Chip kind="crit" title={summary} data-testid="run-draft-rejected">
+      Draft rejected
+    </Chip>
+  );
+}
+
+/** A refused draft Oracle sent back to the writer itself, being revised: nothing to decide yet. */
+function SentBackChip({ summary }: { summary: string }) {
+  return (
+    <Chip kind="acc" title={`${SENT_BACK_STATE}. ${summary}`} data-testid="run-sent-back">
+      Revising
+    </Chip>
   );
 }
