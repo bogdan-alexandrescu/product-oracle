@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { PresentMode } from "@/components/PresentMode";
 import { Loading } from "@/components/ui";
+import type { PageProps } from "@/lib/route-props";
 
 type Props = PageProps<"/documents/[doc]/v/[n]/present">;
 

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Loading } from "@/components/ui";
 
 import { RunDetail } from "../_run-detail";
+import type { PageProps } from "@/lib/route-props";
 
 async function Detail({ params }: { params: PageProps<"/runs/[id]">["params"] }) {
   const { id } = await params;

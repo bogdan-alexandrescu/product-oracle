@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { VersionView } from "@/components/VersionView";
 import { Loading } from "@/components/ui";
+import type { PageProps } from "@/lib/route-props";
 
 async function Version({ params }: { params: PageProps<"/documents/[doc]/v/[n]">["params"] }) {
   const { doc, n } = await params;

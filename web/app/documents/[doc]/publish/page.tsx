@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { PublishView } from "@/components/PublishView";
 import { Loading } from "@/components/ui";
+import type { PageProps } from "@/lib/route-props";
 
 async function Publish({ params }: { params: PageProps<"/documents/[doc]/publish">["params"] }) {
   const { doc } = await params;

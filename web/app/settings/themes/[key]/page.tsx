@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { ThemeDetail } from "@/components/ThemeDetail";
 import { Loading } from "@/components/ui";
+import type { PageProps } from "@/lib/route-props";
 
 async function Detail({ params }: { params: PageProps<"/settings/themes/[key]">["params"] }) {
   const { key } = await params;

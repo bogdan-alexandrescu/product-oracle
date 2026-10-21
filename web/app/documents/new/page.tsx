@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { NewDraft } from "@/components/NewDraft";
 import { Loading } from "@/components/ui";
+import type { PageProps } from "@/lib/route-props";
 
 async function Picker({ searchParams }: { searchParams: PageProps<"/documents/new">["searchParams"] }) {
   const { kind } = await searchParams;

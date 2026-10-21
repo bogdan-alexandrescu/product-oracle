@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { DiffView } from "@/components/DiffView";
 import { Loading } from "@/components/ui";
+import type { PageProps } from "@/lib/route-props";
 
 type Props = PageProps<"/documents/[doc]/diff">;
 

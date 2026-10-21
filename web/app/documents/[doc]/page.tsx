@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { DocumentOverview } from "@/components/DocumentOverview";
 import { Loading } from "@/components/ui";
+import type { PageProps } from "@/lib/route-props";
 
 async function Overview({ params }: { params: PageProps<"/documents/[doc]">["params"] }) {
   const { doc } = await params;

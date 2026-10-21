@@ -6,6 +6,7 @@ import { AppShell } from "@/components/ds/AppShell";
 import { MeProvider, MeSync } from "@/lib/me";
 import { THEME_SCRIPT } from "@/lib/theme";
 import "./globals.css";
+import type { LayoutProps } from "@/lib/route-props";
 
 // I3 type (Open sky): Inter Tight for the UI and headings, DM Mono for figures, ids and code.
 // Self-hosted by next/font: no runtime request to Google Fonts.
