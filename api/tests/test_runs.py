@@ -434,6 +434,32 @@ async def test_cancel_a_draft(client, owner, runtime):
     assert resp.json()["status"] == "cancelled"
 
 
+# --------------------------------------------------------------------------- cost data
+
+
+async def test_runs_api_keeps_every_cost_field(client, owner, runtime):
+    """P3d Cost prominence hides cost in the web outside details and decisions; the API keeps it all."""
+    _, auth = owner
+    run = await started(client, auth)
+    await tick(client, auth)
+
+    run = await get(client, auth, run["id"])
+    first = run["segments"][0]
+    assert run["estimate_usd"] == 26.5
+    assert sum(s["estimate_usd"] for s in run["segments"]) == pytest.approx(26.5)
+    assert run["overrun_ceiling_usd"] == pytest.approx(39.75)
+    assert all("cost_usd" in s for s in run["segments"])
+    assert first["cost_usd"] == pytest.approx(first["estimate_usd"] * 0.9)
+    assert first["attempts"][0]["cost_usd"] == pytest.approx(first["cost_usd"])
+    assert run["spent_usd"] == pytest.approx(first["cost_usd"])
+
+    listed = await client.get("/v1/runs", headers=auth)
+    assert listed.status_code == 200, listed.text
+    row = next(r for r in listed.json() if r["id"] == run["id"])
+    assert row["estimate_usd"] == 26.5
+    assert row["spent_usd"] == pytest.approx(run["spent_usd"])
+
+
 # --------------------------------------------------------------------------- checkpoints
 
 
