@@ -188,6 +188,14 @@ class ItemsCheck(BaseModel):
     problems: list[ItemsProblem]
 
 
+class PreviousAttempt(BaseModel):
+    """The attempt before the current one, kept when a person sent the segment back (D5):
+    its number and file names (read with ``?attempt=``)."""
+
+    attempt: int
+    artifacts: list[str]
+
+
 class SegmentOut(BaseModel):
     id: uuid.UUID
     seq: int
@@ -216,6 +224,7 @@ class SegmentOut(BaseModel):
     # above, or the run finished with no version imported and I am an owner.
     can_retry_draft_import: bool = False
     items_check: ItemsCheck | None = None
+    previous_attempt: PreviousAttempt | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error: str | None = None

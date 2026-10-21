@@ -47,6 +47,9 @@ async def test_attached_agents_read_the_previous_files_with_get_run_output(clien
     await tick(client, auth)
     run = await get(client, auth, run["id"])
     assert run["segments"][0]["previous_attempt"]["attempt"] == 1
+    # The next segment's agents (a live run token) read both attempts.
+    run = await decide(client, auth, run, note="ok")
+    assert len(swarm.submissions()) == 3
     token = token_of(swarm)
     async with mcp_session(token, f"{EGRESS[0]}, {LB}") as c:
         now = await c.call_tool("get_run_output", {"seq": 1, "name": "summary.md"})

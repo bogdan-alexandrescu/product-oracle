@@ -48,7 +48,8 @@ MCP_TOOLS = {
     "get_feedback_package": "a version's open feedback items and locked sections",
     "propose_change": "propose a baseline change (locked items become proposals)",
     "push_draft": "hand back a draft for import as the document's next version",
-    "get_run_output": "a file an earlier segment of this run wrote (seq and name)",
+    "get_run_output": "a file an earlier segment of this run wrote (seq and name), or with "
+    "attempt a segment's previous attempt",
 }
 
 
@@ -455,6 +456,12 @@ class PromptContext:
     locked_sections: list[str] = field(default_factory=list)
     attempt: int = 1
     change_request: str | None = None
+    # A re-run a person sent back (D5): the segment's previous attempt (its seq and number),
+    # the files it wrote and the problems Oracle's check found in them.
+    previous_attempt: int | None = None
+    previous_seq: int | None = None
+    previous_files: dict[str, str] = field(default_factory=dict)
+    previous_problems: list[str] = field(default_factory=list)
     # False until the runtime can attach Oracle's MCP server (SwarmCloud #1433).
     mcp_reachable: bool = True
     # True when the run token reaches the agents through the runtime: earlier outputs are
@@ -479,9 +486,15 @@ MAX_SOURCE_CHARS = 30_000
 
 
 def step_prompt(
-    flow: FlowDef, segment: SegmentDef, role: str, *, last: bool, ctx: PromptContext
+    flow: FlowDef,
+    segment: SegmentDef,
+    role: str,
+    *,
+    last: bool,
+    ctx: PromptContext,
+    first: bool = True,
 ) -> str:
-    """The prompt of one agent step."""
+    """The prompt of one agent step (``first``: the step that starts the attempt)."""
     r = ROLES[role]
     lines = [
         f"You are the {r.title.lower()} ({r.description.lower()}) in Product Oracle's "
@@ -538,6 +551,7 @@ def step_prompt(
         lines.append(f"Write your working notes to {role}.md for the next step.")
     if ctx.change_request:
         lines += ["", f"Attempt {ctx.attempt}. The reviewer requested changes:", ctx.change_request]
+        lines += previous_lines(ctx, files=first or last)
     if ctx.reviewer_notes:
         lines += ["", "Reviewer notes from earlier checkpoints:"]
         lines += [f"- {n}" for n in ctx.reviewer_notes]
@@ -573,6 +587,38 @@ def step_prompt(
                 lines.append("(truncated)")
                 break
     return "\n".join(lines)
+
+
+def previous_lines(ctx: PromptContext, *, files: bool) -> list[str]:
+    """A send-back's previous attempt: its files (``files``: for the steps that start and
+    finish the attempt; middle steps get the problems only), pasted up to the cap each or
+    named for get_run_output, then the problems Oracle's check found in them."""
+    n = ctx.previous_attempt
+    if n is None:
+        return []
+    lines: list[str] = []
+    if files and ctx.previous_files:
+        lines += [
+            "",
+            f"Your previous attempt (attempt {n}) wrote these files. Start from them and "
+            "change only what the review asks; keep the rest as it is.",
+        ]
+        if ctx.mcp_attached:
+            lines.append("Read them with get_run_output:")
+            lines += [
+                f"- get_run_output(seq={ctx.previous_seq}, name={name})"
+                for name in sorted(ctx.previous_files)
+            ]
+        else:
+            for name, content in ctx.previous_files.items():
+                part = content[:MAX_PRIOR_CHARS]
+                lines += [f"--- {name} ---", part]
+                if len(part) < len(content):
+                    lines.append("(truncated: read the rest with get_run_output)")
+    if ctx.previous_problems:
+        lines += ["", f"Oracle's check found these problems in attempt {n}; fix each one:"]
+        lines += [f"- {p}" for p in ctx.previous_problems]
+    return lines
 
 
 def basis_line(b: dict[str, Any]) -> str:
@@ -672,7 +718,7 @@ def build_steps(
             (
                 key,
                 role,
-                step_prompt(flow, segment, role, last=i == len(roles) - 1, ctx=ctx),
+                step_prompt(flow, segment, role, last=i == len(roles) - 1, ctx=ctx, first=i == 0),
                 (prev[0],) if prev else (),
                 {prev[0]: f"{prev[1]}.md"} if prev else {},
             )

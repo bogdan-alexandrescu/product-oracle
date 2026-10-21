@@ -168,6 +168,7 @@ from oracle.runs.schemas import (
     ItemsCheck,
     KnobsIn,
     KnobsOut,
+    PreviousAttempt,
     RunCreate,
     RunOut,
     RunPatch,
@@ -775,6 +776,11 @@ def _segment_out(
         sent_back=_sent_back(run, segment),
         can_retry_draft_import=can_retry_draft_import,
         items_check=ItemsCheck(**check) if check else None,
+        previous_attempt=PreviousAttempt(
+            attempt=previous["attempt"], artifacts=sorted(previous.get("files") or {})
+        )
+        if isinstance(previous := art.get("previous"), dict)
+        else None,
         started_at=segment.started_at,
         finished_at=segment.finished_at,
         error=segment.error,
@@ -1139,12 +1145,28 @@ async def list_runs(db: AsyncSession, status: str | None = None) -> list[RunSumm
     return [_summary(r, refs, pending.get(r.id), segments[r.id], owed.get(r.id)) for r in runs]
 
 
-async def read_artifact(db: AsyncSession, run_id: uuid.UUID, seq: int, name: str) -> str:
+async def read_artifact(
+    db: AsyncSession, run_id: uuid.UUID, seq: int, name: str, attempt: int | None = None
+) -> str:
+    """A segment's file; with ``attempt``, that attempt's: the current one, or the previous
+    one a send-back kept (D5). Older attempts are not kept."""
     await _get_run(db, run_id)
     segment = await db.scalar(
         select(RunSegment).where(RunSegment.run_id == run_id, RunSegment.seq == seq)
     )
-    files = ((segment.artifacts or {}).get("files") or {}) if segment else {}
+    art = (segment.artifacts or {}) if segment else {}
+    files = art.get("files") or {}
+    if attempt is not None:
+        previous = art.get("previous") or {}
+        attempts = art.get("attempts") or []
+        current = int(attempts[-1].get("attempt") or len(attempts)) if attempts else None
+        if previous and attempt == previous.get("attempt") and attempt != current:
+            files = previous.get("files") or {}
+        elif attempt != current:
+            raise NotFound(
+                f"attempt {attempt} of segment {seq} is not kept: only the current and the "
+                "previous attempt are kept"
+            )
     if name not in files:
         raise NotFound(f"artifact {name!r} not found")
     return files[name]
@@ -1595,6 +1617,20 @@ async def _prompt_context(
             if files:
                 prior_files.append((s.seq, _flow(run).segment(s.name).title, sorted(files)))
     prior_files += list(planned or [])
+    # A person sent the segment back (D5): it starts from its previous files and the
+    # problems Oracle's check found in them. A runtime retry has no change request.
+    previous = (segment.artifacts or {}).get("previous") if change_request else None
+    previous_attempt: int | None = None
+    previous_files: dict[str, str] = {}
+    previous_problems: list[str] = []
+    if attempt > 1 and isinstance(previous, dict) and int(previous.get("attempt") or 0) < attempt:
+        previous_attempt = int(previous["attempt"])
+        previous_files = dict(previous.get("files") or {})
+        previous_problems = workflow.check_problems(
+            ITEMS_FILE, previous.get("items_check"), []
+        ) + workflow.check_problems(
+            flows.draft_file(kind), None, list(previous.get("import_problems") or [])
+        )
     notes = [
         f"{c.kind}: {c.note}"
         for c in await _checkpoints(db, [run.id])
@@ -1631,6 +1667,10 @@ async def _prompt_context(
         locked_sections=locked,
         attempt=attempt,
         change_request=change_request,
+        previous_attempt=previous_attempt,
+        previous_seq=segment.seq if previous_attempt is not None else None,
+        previous_files=previous_files,
+        previous_problems=previous_problems,
         # SwarmCloud reaches Oracle only through the credential it attaches; the local
         # runtime's agents are Oracle's own.
         mcp_reachable=attached or (runtime.can_reach_oracle and runtime.name != "swarmcloud"),
@@ -2549,12 +2589,31 @@ async def _submit(
     call. Every path that starts a segment queues; none submits under a lock."""
     art = _art(segment)
     if change_request:
+        _keep_previous(art)
         art["pending_note"] = change_request
     art.pop("claim", None)
     _set_art(segment, art)
     segment.status = "pending"
     segment.error = QUEUED
     run.status = "running"
+
+
+def _keep_previous(art: dict[str, Any]) -> None:
+    """A person sent the segment back (D5): its current files and what Oracle's check found
+    in them become ``previous``, the files the re-run starts from (and that ``?attempt=``
+    serves). One level only: an earlier ``previous`` is replaced."""
+    files = art.get("files") or {}
+    if not files or not art["attempts"]:
+        return
+    last = art["attempts"][-1]
+    imported = art.get("import") or {}
+    art["previous"] = {
+        "attempt": int(last.get("attempt") or len(art["attempts"])),
+        "files": dict(files),
+        "items_check": art.get("items_check"),
+        "import_problems": list(imported.get("problems") or []),
+        "kept_at": _now().isoformat(),
+    }
 
 
 def unqueue(segment: RunSegment) -> None:
@@ -6046,7 +6105,10 @@ async def _decide_in_workflow(
     payload: dict[str, Any] = (
         {"verdict": MERGE, "findings": []}
         if approved
-        else {"verdict": NOT_YET, "findings": [cp.note] if cp.note else []}
+        else {
+            "verdict": NOT_YET,
+            "findings": ([cp.note] if cp.note else []) + await _problem_findings(db, run, cp),
+        }
     )
     on_behalf_of = await _email(db, user_id)
     runtime = _rt()
@@ -6101,6 +6163,20 @@ async def _decide_in_workflow(
     ):
         raise _unconfirmed("end the run")
     return True
+
+
+async def _problem_findings(db: AsyncSession, run: Run, cp: Checkpoint) -> list[str]:
+    """What Oracle's check found in the files a review shows (D5): the items check's
+    blocking problems and a refused draft's import problems, after the person's note."""
+    payload = cp.payload or {}
+    imported = payload.get("import") or {}
+    return workflow.check_findings(
+        ITEMS_FILE, payload.get("items_check"), []
+    ) + workflow.check_findings(
+        flows.draft_file(await _target_kind(db, run)),
+        None,
+        list(imported.get("problems") or []),
+    )
 
 
 async def _already_answered(
