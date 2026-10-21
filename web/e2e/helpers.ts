@@ -212,3 +212,58 @@ export async function seedSentBack(page: Page): Promise<string> {
     { id: SENT_BACK_RUN, summary: SENT_BACK_SUMMARY },
   );
 }
+
+/** The finished run seedDecidedRun adds. */
+export const DECIDED_RUN = "7a11c0de-0000-4000-8000-0000000000d1";
+
+/**
+ * Seeds the mock with a finished Baseline to PRD run for checkout-redesign whose stops were
+ * decided in the Inbox: the baseline approved with a note, the feature set sent back once and
+ * approved on its second attempt, the priority order and the PRD review approved. The decision
+ * log records each decided stop (H1 checkpoint records). Returns the run's id.
+ */
+export async function seedDecidedRun(page: Page): Promise<string> {
+  return page.evaluate((id) => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    type S = Record<string, unknown> & { seq: number; checkpoint: string };
+    const base = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
+    const at = (minute: number) => `2026-10-15T09:${String(minute).padStart(2, "0")}:00Z`;
+    const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "checkout-redesign", created_at: at(0), started_at: at(0), finished_at: at(50) };
+    const segments: S[] = run.segments;
+    for (const s of segments) {
+      Object.assign(s, {
+        id: crypto.randomUUID(),
+        status: "succeeded",
+        cost_usd: 1,
+        attempts: [{ attempt: 1, workflow_id: "mock-wf-decided", submitted_at: at(s.seq * 10), cost_usd: 1, note: null, note_by: null, state: "succeeded" }],
+      });
+    }
+    const stop = (s: S, status: string, note: string | null, minute: number) => ({
+      id: crypto.randomUUID(),
+      run_id: id,
+      kind: s.checkpoint,
+      status,
+      approver_role: "approver",
+      segment_seq: s.seq,
+      decided_by: db.user_id,
+      decided_at: at(minute),
+      note,
+      payload: {},
+      created_at: at(minute - 1),
+      can_decide: false,
+      cannot_approve: null,
+    });
+    run.checkpoints = [
+      stop(segments[0], "approved", "Goals read right", 5),
+      stop(segments[1], "changes_requested", "Size the export feature again", 15),
+      stop(segments[1], "approved", null, 25),
+      stop(segments[2], "approved", null, 35),
+      stop(segments[3], "approved", null, 45),
+    ];
+    Object.assign(run, { status: "succeeded", waiting_on: null });
+    db.runs.runs.push(run);
+    localStorage.setItem(key, JSON.stringify(db));
+    return id;
+  }, DECIDED_RUN);
+}
