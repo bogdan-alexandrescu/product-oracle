@@ -125,8 +125,8 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="font-semibold">{item.title}</span>
         {!item.wired && (
-          <Chip kind="line" data-testid="autonomy-pending">
-            Takes effect when {item.wired_by_name} ships
+          <Chip kind="line" data-testid="autonomy-pending" title={`Takes effect when ${item.wired_by_name} ships`}>
+            <span className="truncate">Takes effect when {item.wired_by_name} ships</span>
           </Chip>
         )}
       </div>
@@ -134,8 +134,8 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
       <p className="col-span-full flex min-w-0 flex-wrap items-center gap-x-2 text-[15px] text-text2">
         <span data-testid="autonomy-sentence">{item.levels[item.level]}</span>
         {showLimits && (
-          <Chip kind="acc" data-testid="autonomy-limits">
-            {item.limits_summary}
+          <Chip kind="acc" data-testid="autonomy-limits" title={item.limits_summary ?? undefined}>
+            <span className="truncate">{item.limits_summary}</span>
           </Chip>
         )}
       </p>
