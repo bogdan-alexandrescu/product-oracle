@@ -26,6 +26,8 @@ const NEXT = [
 ];
 const ROW = "grid grid-cols-[88px_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 max-[600px]:grid-cols-1 max-[600px]:gap-1.5 max-[600px]:px-3";
 const ROW_LABEL = "text-[15px] font-semibold";
+/** A months field: INPUT at a fixed width. */
+const MONTHS = INPUT.replace("w-full", "w-20");
 
 function formOf(h: Horizons): Form {
   return { short: String(h.short_quarters), medium: String(h.medium_quarters), from: String(h.long_from_months), to: String(h.long_to_months) };
@@ -131,7 +133,7 @@ function HorizonsPanel() {
                   inputMode="numeric"
                   min={3}
                   max={36}
-                  className={`${INPUT} w-20`}
+                  className={MONTHS}
                   value={form.from}
                   onChange={(e) => set({ from: e.target.value })}
                 />
@@ -144,7 +146,7 @@ function HorizonsPanel() {
                   inputMode="numeric"
                   min={4}
                   max={60}
-                  className={`${INPUT} w-20`}
+                  className={MONTHS}
                   value={form.to}
                   onChange={(e) => set({ to: e.target.value })}
                 />
