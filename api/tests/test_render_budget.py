@@ -301,6 +301,17 @@ EXPORTS = [
 ]
 
 
+def test_the_export_cap_and_pool_are_the_owner_s():
+    """Owner decision 2026-10-20: every export format waits at most 60 s, on its own
+    2-thread pool (not the parse pool)."""
+    from oracle import safe_yaml
+    from oracle.export import offload
+
+    assert offload.SECONDS == 60.0
+    assert offload.POOL._max_workers == 2
+    assert offload.POOL is not safe_yaml._EXECUTOR
+
+
 @pytest.mark.parametrize("path", EXPORTS)
 async def test_an_export_past_its_time_cap_is_refused(client, tenant_id, doc, monkeypatch, path):  # noqa: F811
     monkeypatch.setattr("oracle.export.offload.SECONDS", 0)

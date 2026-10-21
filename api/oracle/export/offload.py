@@ -19,9 +19,10 @@ from fastapi import HTTPException, status
 from oracle import safe_yaml
 
 POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="export")
-# The longest a request waits for its export to render (the whole wait, a queue included).
-# The abandoned render finishes on the pool.
-SECONDS = 20.0
+# The longest a request waits for its export to render (the whole wait, a queue included),
+# every format alike (owner decision 2026-10-20: 60 s). The abandoned render finishes on
+# the pool.
+SECONDS = 60.0
 TOO_LARGE = "This document is too large to export quickly"
 
 
