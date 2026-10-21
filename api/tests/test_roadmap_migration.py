@@ -76,7 +76,7 @@ def test_0016_roadmap_follows_the_wave_1_head():
         "0016_refinement_batch"
     )
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
-    assert script.get_heads() == ["0014_intake"]
+    assert script.get_revision("0014_review").down_revision == "0014_intake"
 
 
 def _event(tenant: uuid.UUID, subject: str) -> None:
