@@ -3280,6 +3280,18 @@ class _TickStats:
     pass_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 
+def _resetter(stats: _TickStats) -> Callable[[], None]:
+    """``reset`` for one :func:`_replay`: puts ``stats`` back as they are now, before it."""
+    saved = replace(stats, errors=list(stats.errors))
+
+    def reset() -> None:
+        for f in ("checked", "finished", "advanced", "paused"):
+            setattr(stats, f, getattr(saved, f))
+        stats.errors[:] = saved.errors
+
+    return reset
+
+
 async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: float) -> None:
     """One run's tick pass (the run locked by the caller, inside :func:`_replay`: in a
     live workflow's pass the runtime calls (status, artifacts, a wait's record, the
@@ -4887,13 +4899,6 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
         # One cap on the runtime calls of this run's whole pass, its submission included.
         deadline = loop.time() + TICK_RUN_SECONDS
         stats.pass_id = uuid.uuid4().hex
-        saved = replace(stats, errors=list(stats.errors))
-
-        def reset(saved: _TickStats = saved) -> None:
-            for f in ("checked", "finished", "advanced", "paused"):
-                setattr(stats, f, getattr(saved, f))
-            stats.errors[:] = saved.errors
-
         try:
             owed = await _owed_decision(db, run_id)
             if owed is not None:
@@ -4905,17 +4910,19 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
                     await _complete_decision(db, run_id, owed, deadline)
                 except Unavailable as exc:
                     errors.append(f"run {run_id}: {exc}")
+            # Each replay puts back only what its own unfinished passes counted: what an
+            # earlier one committed (the searches' pause, say) stays counted.
             await _replay(
                 db,
                 deadline,
                 lambda run_id=run_id: _tick_searches(db, run_id, stats),
-                reset=reset,
+                reset=_resetter(stats),
             )
             ran = await _replay(
                 db,
                 deadline,
                 lambda run_id=run_id, deadline=deadline: _tick_one(db, run_id, stats, deadline),
-                reset=reset,
+                reset=_resetter(stats),
             )
             if not ran:
                 if owed is None:
