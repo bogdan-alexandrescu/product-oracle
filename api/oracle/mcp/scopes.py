@@ -26,6 +26,10 @@ READ_AREAS = {
         # request-candidates: those are a person's private findings (S6).
         "requests",
         "request-themes",
+        # H4: the approved vision and strategy, and the drift findings against them.
+        "strategy",
+        # Outcomes tracked against goals (a strategy draft reads them).
+        "outcomes",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }

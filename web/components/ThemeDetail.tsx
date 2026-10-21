@@ -63,7 +63,13 @@ const FEATURES = [
   { name: "appendix_break", label: "Appendix on a new page" },
 ] as const;
 
-const KIND_LABEL: Record<ThemeKind, string> = { prd: "PRD", roadmap: "Roadmap", any: "Any document" };
+const KIND_LABEL: Record<ThemeKind, string> = {
+  prd: "PRD",
+  roadmap: "Roadmap",
+  vision: "Vision",
+  strategy: "Product strategy",
+  any: "Any document",
+};
 
 function formOf(t: ThemeOut): Form {
   return {

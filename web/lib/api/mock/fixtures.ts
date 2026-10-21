@@ -39,7 +39,7 @@ export type VersionSeed = {
 export type DocumentSeed = {
   slug: string;
   title: string;
-  kind?: "prd" | "roadmap" | "spec";
+  kind?: "prd" | "roadmap" | "spec" | "vision" | "strategy";
   /** A spec's depth: a technical brief or a full engineering spec (E1). */
   depth?: "brief" | "full";
   template?: string;

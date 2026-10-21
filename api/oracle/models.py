@@ -94,6 +94,7 @@ from oracle.sources.models import (  # noqa: E402
     SourceItem,
     SourceItemVersion,
 )
+from oracle.strategy.models import StrategyCheck, StrategyFinding  # noqa: E402
 from oracle.swarm.learned import LearnedFeature  # noqa: E402
 from oracle.templates.models import Template, TemplateVersion, Theme  # noqa: E402
 from oracle.tenant_settings import TenantSetting  # noqa: E402
@@ -166,11 +167,11 @@ __all__ = [
     "IntakeProposal",
     "IntakeWithheldItem",
     "Invite",
-    "MemberFollowUp",
     "KnowledgeGap",
     "LearnedFeature",
     "LlmJob",
     "LlmSuggestion",
+    "MemberFollowUp",
     "ModuleDefinition",
     "ModuleVersion",
     "Notification",
@@ -183,10 +184,10 @@ __all__ = [
     "ProductIntake",
     "ProductTrack",
     "Proposal",
-    "ReviewCampaign",
     "QualityLearning",
     "RequestCandidate",
     "RequestTheme",
+    "ReviewCampaign",
     "RoadmapItem",
     "Run",
     "RunSegment",
@@ -202,6 +203,8 @@ __all__ = [
     "SourceItemVersion",
     "StakeholderAnswer",
     "StakeholderQuestion",
+    "StrategyCheck",
+    "StrategyFinding",
     "Template",
     "TemplateModuleAssignment",
     "TemplateVersion",

@@ -85,6 +85,9 @@ function readSelection(): Selection | null {
   };
 }
 
+/** Document kinds only an owner approves (H4), in the words the page uses. */
+const OWNER_APPROVES: Partial<Record<string, string>> = { vision: "a vision", strategy: "a product strategy" };
+
 /**
  * A version under review, ONE SECTION AT A TIME (I3, 2026-10-19), with the navigation the
  * owner picked on 2026-10-20: an outline rail left of the section (>= 1280 px), a section
@@ -602,6 +605,10 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           .map((m) => `${m.text} (${m.label})`)
           .join(", ")}. Record a basis or import a draft without ${flaggedDates.length === 1 ? "it" : "them"}.`
       : undefined;
+  // H4: a vision or a product strategy is an owner's to approve; approvers still set
+  // section verdicts and comment.
+  const ownerApproves = document_ ? OWNER_APPROVES[document_.kind] : undefined;
+  const canApprove = canDecide && (!ownerApproves || hasRole(role, "owner"));
   const sectionProps = (s: SectionOut) => ({
     section: s,
     blocks: parsed.get(s.section_key)!.blocks,
@@ -843,8 +850,13 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             <>
               {/* C1e: accepted changes staged for the next draft, built in one job. */}
               {document_?.kind === "prd" && <BuildDraftButton doc={doc} />}
+              {version && canDecide && !canApprove && !version.approved_at && (
+                <span className="text-sm font-medium text-text2" data-testid="owner-approves-note">
+                  Only an owner approves {ownerApproves}
+                </span>
+              )}
               {version &&
-                (version.approved_at || canDecide) &&
+                (version.approved_at || canApprove) &&
                 (document_?.kind === "prd" && !version.approved_at ? (
                   // T2 publish gate: a PRD is published from the Publish screen, latest version only.
                   <LinkButton

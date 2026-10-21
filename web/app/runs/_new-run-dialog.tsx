@@ -32,8 +32,12 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
 
   // A flow that reads an approved document (prd_to_roadmap) starts from Plan › Roadmap documents,
-  // where the PRD is picked; this dialog offers the others.
-  const flows = useMemo(() => catalog.data?.flows.filter((f) => !f.source_kind) ?? [], [catalog.data]);
+  // where the PRD is picked, and a vision or strategy draft from Company › Strategy; this
+  // dialog offers the others.
+  const flows = useMemo(
+    () => catalog.data?.flows.filter((f) => !f.source_kind && f.key !== "strategy_draft") ?? [],
+    [catalog.data],
+  );
   const flow = flows.find((f) => f.key === flowKey);
 
   // Choices on top of the flow's defaults; a new flow starts from its defaults again.

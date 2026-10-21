@@ -31,6 +31,7 @@ import { publishRefusal, routeQuality, seedQuality, type QualityContext, type Qu
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
+import { inboxStrategy, routeStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
@@ -94,6 +95,8 @@ export interface Db {
   /** Alignment reports, their reads and Oracle's Slack install (./reports.ts, F6); seeded in
    * the "alignment-report" scenario only. */
   reports?: ReportsDb;
+  /** H4: drift findings and the strategy stack (./strategy.ts); the "strategy" scenario only. */
+  strategy?: StrategyDb;
 }
 
 type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
@@ -381,6 +384,36 @@ function seedManyPeople(): Db {
   });
   for (let i = 0; i < 20; i++) db.members.push(join(`member.${String(i).padStart(2, "0")}@example.com`, i));
   db.members.push(join("zoe.zimmer@example.com", 20));
+  return db;
+}
+
+/**
+ * The default company plus an approved vision, a product strategy (v1 approved, v2 in
+ * review) and open strategy drift findings (H4).
+ */
+function seedStrategyScenario(): Db {
+  const db = seed();
+  for (const d of STRATEGY_DOCUMENTS) {
+    const doc: DocumentRow = {
+      id: uuid(),
+      slug: d.slug,
+      title: d.title,
+      status: d.versions.length > 1 ? "in_review" : "approved",
+      kind: d.kind ?? "prd",
+      template: d.template ?? null,
+      template_version: d.template_version ?? null,
+      theme: d.theme ?? null,
+      created_at: d.versions[0].created_at,
+      updated_at: d.versions.at(-1)!.created_at,
+    };
+    db.documents.push(doc);
+    for (const v of d.versions) {
+      const row = buildVersion(doc, v);
+      if (v.number === 1) row.approved_at = "2026-10-01T09:00:00Z";
+      db.versions.push(row);
+    }
+  }
+  db.strategy = seedStrategy(uuid);
   return db;
 }
 
@@ -976,7 +1009,9 @@ function load(): Db {
               ? seedPrivateFinding
               : scenario === "many-people"
                 ? seedManyPeople
-                : seed,
+                : scenario === "strategy"
+                  ? seedStrategyScenario
+                  : seed,
   );
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
@@ -1888,17 +1923,22 @@ async function route(db: Db, req: Request): Promise<Response> {
     const failures = atLeast(me.role, "owner")
       ? db.revoke_failures.filter((r) => !r.dismissed).map((r) => ({ ...r, dismissed: undefined }))
       : [];
-    // Owners also get the weekly alignment reports and the posts Slack refused (F6).
+    // Owners also get the weekly alignment reports and the posts Slack refused (F6), and
+    // one strategy drift row however many findings are open (H4).
     const reported = inboxReports(ensureReports(db, db.user_id), me);
+    const strategy = inboxStrategy(db.strategy, me.role);
     return json(200, {
       ...inbox,
       revoke_failures: failures,
       reports: reported.reports,
       report_failures: reported.report_failures,
-      total: inbox.total + failures.length + reported.unread,
+      strategy,
+      total: inbox.total + failures.length + reported.unread + (strategy ? 1 : 0),
     });
   }
   if (runs) return runs;
+  const strategy = await routeStrategy(db.strategy, req, p, q, me.role);
+  if (strategy) return strategy;
 
   if (p[1] !== "documents") return notFound("Route");
   if (p.length === 2) {
@@ -2033,6 +2073,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, { document_id: doc.id, version: v.number, items, counts });
   }
   if (sub === "approve" && m === "POST") {
+    // H4: a vision or a product strategy is an owner's to approve.
+    const words = doc.kind === "vision" ? "a vision" : doc.kind === "strategy" ? "a product strategy" : null;
+    if (words && me.role !== "owner") return json(403, { detail: `Only an owner can approve ${words}` });
     // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
     if (doc.kind === "prd") {
       const latest = docVersions(db, doc).pop()!.number;

@@ -118,6 +118,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "revoke-failures", title: "Couldn't revoke access" },
   { id: "report-failures", title: "Report not posted to Slack" },
   { id: "reports", title: "Reports" },
+  { id: "strategy", title: "Strategy drift" },
   { id: "feedback", title: "Feedback" },
   { id: "questions", title: "Questions" },
   { id: "revising", title: "Sent back by Oracle" },

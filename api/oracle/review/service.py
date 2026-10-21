@@ -64,6 +64,11 @@ class ReviewError(Exception):
         super().__init__(message)
 
 
+# H4: the lowest role that approves a version of these kinds.
+MIN_APPROVER_ROLE = {"vision": "owner", "strategy": "owner"}
+KIND_WORDS = {"vision": "a vision", "strategy": "a product strategy"}
+
+
 def _now() -> datetime:
     # Wall clock, not the transaction's now(): verdict order must hold even when two
     # verdicts land in one transaction.
@@ -938,6 +943,11 @@ async def approve_version(
     await _still_an_approver(session, principal)
     document = await lock_document(session, version.document_id)
     await session.refresh(version)
+    # H4: a vision or a product strategy is an owner's to approve (section verdicts stay
+    # open to approvers).
+    needed = MIN_APPROVER_ROLE.get(document.kind)
+    if needed is not None and not has_role(principal.role, needed):  # type: ignore[arg-type]
+        raise ReviewError("forbidden", f"Only an {needed} can approve {KIND_WORDS[document.kind]}")
     policy = await effective_policy(session, document)
     # The person behind the call: an API token acting for a user is that user.
     who = principal.user_id or principal.id
@@ -999,4 +1009,13 @@ async def approve_version(
         from oracle.roadmap import tracks
 
         await tracks.ensure_track(session, document, version, actor=principal, cause="approved")
+    if document.kind in ("strategy", "vision", "roadmap") and (
+        not already or previous_approver != who
+    ):
+        # H4: the strategy stack in the graph (choices, beliefs, a roadmap's dependencies
+        # on the choices), then the drift check.
+        from oracle.strategy import drift, sync
+
+        await sync.on_approval(session, principal, document, version)
+        await drift.run_check(session, "approval")
     return document, version

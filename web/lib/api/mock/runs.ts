@@ -117,7 +117,13 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
 };
 
 const THRESHOLD = 50;
-const KIND_NAME: Record<Kind, string> = { prd: "PRD", roadmap: "roadmap", spec: "engineering spec" };
+const KIND_NAME: Record<Kind, string> = {
+  prd: "PRD",
+  roadmap: "roadmap",
+  spec: "engineering spec",
+  vision: "vision",
+  strategy: "product strategy",
+};
 // O4: a roadmap starts from Now / Next / Later on the roadmap board unless a run names others.
 const ROADMAP_DEFAULTS = { template: "now-next-later", theme: "roadmap-board" };
 const FACTOR = 1.5;
@@ -828,6 +834,7 @@ const CHECKPOINT_TITLES: Record<CheckpointOut["kind"], string> = {
   eng_review: "Engineering review",
   roadmap_items: "Roadmap items",
   roadmap_review: "Roadmap review",
+  strategy_review: "Vision or strategy review",
 };
 
 function decisionSummary(d: Omit<RunDecision, "summary">): string {

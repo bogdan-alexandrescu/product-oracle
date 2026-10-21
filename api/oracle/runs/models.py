@@ -22,7 +22,14 @@ from oracle.docs.models import _in
 
 # request_triage (C1 Requests, migration 0020_requests): its flow definition comes with
 # the triage lane; the database already allows it.
-FLOWS = ("baseline_to_prd", "feedback_loop", "prd_to_roadmap", "prd_to_spec", "request_triage")
+FLOWS = (
+    "baseline_to_prd",
+    "feedback_loop",
+    "prd_to_roadmap",
+    "prd_to_spec",
+    "request_triage",
+    "strategy_draft",
+)
 RUN_STATUSES = (
     "draft",
     "awaiting_approval",
@@ -43,6 +50,7 @@ CHECKPOINT_KINDS = (
     "roadmap_items",
     "roadmap_review",
     "request_triage",
+    "strategy_review",
 )
 CHECKPOINT_STATUSES = ("pending", "approved", "changes_requested", "skipped")
 

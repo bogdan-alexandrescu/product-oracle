@@ -41,7 +41,7 @@ Verdict = Literal["approved", "changes_requested", "rejected"]
 # O1f: brief sections make up the brief layer; the full layer is every section.
 Layer = Literal["brief", "detail"]
 BriefSource = Literal["draft", "template", "full_heading", "none"]
-DocumentKind = Literal["prd", "roadmap", "spec"]
+DocumentKind = Literal["prd", "roadmap", "spec", "vision", "strategy"]
 
 
 class ORM(BaseModel):
