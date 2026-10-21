@@ -6012,6 +6012,39 @@
         }
       }
     },
+    "/v1/setup": {
+      "get": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Get Setup",
+        "description": "Home's Set up checklist: the caller's setup steps, which are done, and whether they\nhid the checklist. Owners get every step; approvers and commenters connecting tools\nand picking sources; viewers none.",
+        "operationId": "get_setup",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a person"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
     "/v1/claude-accounts": {
       "get": {
         "tags": [
@@ -43699,11 +43732,16 @@
             ],
             "title": "Document View",
             "default": "brief"
+          },
+          "setup_hidden": {
+            "type": "boolean",
+            "title": "Setup Hidden",
+            "default": false
           }
         },
         "type": "object",
         "title": "Preferences",
-        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document."
+        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again."
       },
       "PreferencesUpdate": {
         "properties": {
@@ -43721,6 +43759,17 @@
               }
             ],
             "title": "Document View"
+          },
+          "setup_hidden": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Setup Hidden"
           }
         },
         "type": "object",
@@ -51683,6 +51732,77 @@
           "is_default"
         ],
         "title": "SettingOut"
+      },
+      "SetupOut": {
+        "properties": {
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/SetupStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "done": {
+            "type": "integer",
+            "title": "Done"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "hidden": {
+            "type": "boolean",
+            "title": "Hidden"
+          }
+        },
+        "type": "object",
+        "required": [
+          "steps",
+          "done",
+          "total",
+          "hidden"
+        ],
+        "title": "SetupOut"
+      },
+      "SetupStep": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "done": {
+            "type": "boolean",
+            "title": "Done"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "done"
+        ],
+        "title": "SetupStep"
       },
       "SharedDriveList": {
         "properties": {

@@ -464,6 +464,9 @@ class SourceContext:
     # Verified schedule bases (CR-11): kind, reference, supports_date. The only sources
     # a milestone date may name.
     schedule_bases: list[dict[str, Any]] = field(default_factory=list)
+    # The run's planning horizons (A1, the planning_horizons setting as the run started,
+    # run.knobs["planning_horizons"]); empty: B2's defaults (HORIZONS).
+    horizons: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -481,6 +484,30 @@ HORIZONS = (
     ("next", "medium", "the next two quarters"),
     ("later", "long", "12 to 24 months"),
 )
+# The planning_horizons value HORIZONS words (oracle.tenant_settings_api.DEFAULTS).
+DEFAULT_HORIZONS = {
+    "short_quarters": 1,
+    "medium_quarters": 2,
+    "long_from_months": 12,
+    "long_to_months": 24,
+}
+
+
+def horizon_lines(h: dict[str, int]) -> tuple[tuple[str, str, str], ...]:
+    """(roadmap column, horizon, span) for each horizon of a planning_horizons value. The
+    defaults keep HORIZONS' text word for word, so prompts did not change with A1."""
+    if not h or h == DEFAULT_HORIZONS:
+        return HORIZONS
+    n = h["medium_quarters"]
+    if h["short_quarters"] == 1:
+        short = "the current quarter"
+        medium = "the next quarter" if n == 1 else f"the next {n} quarters"
+    else:
+        # Now holds the next quarter too, so Next never says "next": it starts after Now.
+        short = "the current and next quarter"
+        medium = "the quarter after those two" if n == 1 else f"the {n} quarters after those two"
+    later = f"{h['long_from_months']} to {h['long_to_months']} months"
+    return (("now", "short", short), ("next", "medium", medium), ("later", "long", later))
 
 
 def prd_link(slug: str, version: int, section: str) -> str:
@@ -695,7 +722,9 @@ def source_lines(src: SourceContext, *, paste: bool = True) -> list[str]:
         "PRD section ids: " + ", ".join(f"{k} ({h})" for k, h in src.sections),
         "",
         "Horizons (B2): "
-        + "; ".join(f"{col} = {name} term, {span}" for col, name, span in HORIZONS)
+        + "; ".join(
+            f"{col} = {name} term, {span}" for col, name, span in horizon_lines(src.horizons)
+        )
         + ". Dated milestones only in now, and only from a source that gives a date or an "
         "estimate (O4).",
     ]

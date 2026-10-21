@@ -20,6 +20,11 @@ The known keys and how each value is checked:
   providers (gmail.com, outlook.com, gmx.de, ...) are refused: anyone has an address there.
 - ``company_shared_drives`` (S5): ``[{"id", "name"}]``, the Google shared drives that are
   the company's. A doc in a picked folder in any other shared drive is skipped.
+- ``planning_horizons`` (A1): what Now / Next / Later mean on every roadmap, B2 Goals
+  framework's defaults (veto any time): ``short_quarters`` (Now: the current quarter and
+  maybe the next), ``medium_quarters`` (Next: the quarters after it) and
+  ``long_from_months`` to ``long_to_months`` (Later). Read with :func:`company_horizons`;
+  dated with :func:`horizon_windows`. A stored row is the Set up step being done.
 
 Removing a domain or a shared drive (or resetting either) takes effect on save (S5, owner
 2026-10-20): the docs in picked folders that now fall outside are deleted (soft delete)
@@ -30,7 +35,8 @@ from every member's Google Docs sources in the same request, with no Drive call
 """
 
 import re
-from datetime import datetime
+from calendar import monthrange
+from datetime import date, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -64,6 +70,14 @@ DEFAULTS: dict[str, Any] = {
     # S5 (owner, 2026-10-20): explicit, never inferred in production.
     "company_email_domains": [],
     "company_shared_drives": [],
+    # A1, B2 Goals framework: short = current quarter, medium = next 2 quarters,
+    # long = 12-24 months.
+    "planning_horizons": {
+        "short_quarters": 1,
+        "medium_quarters": 2,
+        "long_from_months": 12,
+        "long_to_months": 24,
+    },
 }
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
@@ -77,6 +91,7 @@ DOMAIN = re.compile(
 )
 MAX_COMPANY_LIST = 100
 MAX_REVIEW_DAYS = 365
+HORIZON_KEYS = ("short_quarters", "medium_quarters", "long_from_months", "long_to_months")
 KNOWN_KEYS = tuple(DEFAULTS)
 
 
@@ -94,6 +109,38 @@ async def get_setting(session: AsyncSession, key: str) -> Any:
 
 async def clear_setting(session: AsyncSession, key: str) -> None:
     await session.execute(delete(TenantSetting).where(TenantSetting.key == key))
+
+
+async def company_horizons(session: AsyncSession) -> dict[str, int]:
+    """The company's planning horizons: the stored value or B2's defaults. Later picks
+    read the horizons through this and :func:`horizon_windows`, never on their own."""
+    return dict(await get_setting(session, "planning_horizons"))
+
+
+def _add_months(day: date, months: int) -> date:
+    """``day`` moved ``months`` calendar months on, clamped to the month's last day."""
+    year, month = divmod(day.month - 1 + months, 12)
+    year += day.year
+    return date(year, month + 1, min(day.day, monthrange(year, month + 1)[1]))
+
+
+def horizon_windows(h: dict[str, int], today: date) -> dict[str, tuple[date, date]]:
+    """The date span of each horizon on ``today`` (both ends included): short from the
+    first day of the current calendar quarter to the end of ``short_quarters`` quarters,
+    medium the ``medium_quarters`` quarters after it, long from ``today`` plus
+    ``long_from_months`` to ``today`` plus ``long_to_months``."""
+    quarter_start = date(today.year, 3 * ((today.month - 1) // 3) + 1, 1)
+    medium_start = _add_months(quarter_start, 3 * h["short_quarters"])
+    medium_end = _add_months(medium_start, 3 * h["medium_quarters"])
+    day = timedelta(days=1)
+    return {
+        "short": (quarter_start, medium_start - day),
+        "medium": (medium_start, medium_end - day),
+        "long": (
+            _add_months(today, h["long_from_months"]),
+            _add_months(today, h["long_to_months"]),
+        ),
+    }
 
 
 # --- Validation ---------------------------------------------------------------------
@@ -191,7 +238,37 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         return validate_company_domains(value)
     if key == "company_shared_drives":
         return validate_shared_drives(value)
+    if key == "planning_horizons":
+        return validate_planning_horizons(value)
     raise KeyError(key)
+
+
+def validate_planning_horizons(value: Any) -> dict[str, int]:
+    """B2's horizons, in whole quarters and months, each starting after the one before."""
+    if (
+        not isinstance(value, dict)
+        or set(value) != set(HORIZON_KEYS)
+        or any(isinstance(v, bool) or not isinstance(v, int) for v in value.values())
+    ):
+        raise InvalidSetting(
+            "planning_horizons needs short_quarters, medium_quarters, long_from_months and "
+            "long_to_months as whole numbers"
+        )
+    short, medium = value["short_quarters"], value["medium_quarters"]
+    long_from, long_to = value["long_from_months"], value["long_to_months"]
+    if not 1 <= short <= 2:
+        raise InvalidSetting("short_quarters must be 1 or 2")
+    if not 1 <= medium <= 4:
+        raise InvalidSetting("medium_quarters must be between 1 and 4")
+    next_ends = 3 * (short + medium)
+    if not next_ends <= long_from <= 36:
+        raise InvalidSetting(
+            f"long_from_months must start after Next ends (at least {next_ends} months) "
+            "and be at most 36"
+        )
+    if not long_from < long_to <= 60:
+        raise InvalidSetting("long_to_months must be after long_from_months and at most 60")
+    return {k: value[k] for k in HORIZON_KEYS}
 
 
 def validate_company_domains(value: Any) -> list[str]:

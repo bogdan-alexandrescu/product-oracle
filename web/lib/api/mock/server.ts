@@ -13,7 +13,7 @@ import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./bl
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
-import { connectionsRoute } from "./connections";
+import { connectionsRoute, setupFacts } from "./connections";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
@@ -22,7 +22,7 @@ import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
-import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
+import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake } from "./intake";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
@@ -1175,6 +1175,38 @@ function meOut(db: Db, m: MemberRow): Schemas["Me"] {
   return { kind: "user", tenant_id: db.tenant_id, user_id: m.id, email: m.email, role: m.role };
 }
 
+/**
+ * GET /v1/setup (A1), as oracle.setup: the caller's steps from the mock's own stores. The
+ * connections and sources stores are the company's in the mock, not each person's.
+ */
+function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
+  const facts = setupFacts();
+  const sources = sourceCount();
+  const people = db.members.filter((x) => x.status !== "disabled").length;
+  const invites = db.invites.filter((i) => i.status === "open").length;
+  const personal: Schemas["SetupStep"][] = [
+    { key: "connect", done: facts.connections > 0, count: facts.connections, detail: null },
+    { key: "sources", done: sources > 0, count: sources, detail: null },
+  ];
+  const owner: Schemas["SetupStep"][] = [
+    { key: "invite", done: people >= 2 || invites >= 1, count: people, detail: null },
+    {
+      key: "domains",
+      done: facts.domains.length > 0,
+      count: facts.domains.length,
+      detail: facts.domains.length === 1 ? facts.domains[0] : null,
+    },
+    { key: "horizons", done: facts.horizons, count: null, detail: null },
+  ];
+  const steps = me.role === "owner" ? [...personal, ...owner] : me.role === "viewer" ? [] : personal;
+  return {
+    steps,
+    done: steps.filter((st) => st.done).length,
+    total: steps.length,
+    hidden: db.preferences?.[me.email]?.setup_hidden === true,
+  };
+}
+
 /** Members, invites: owners only, as in the API. */
 async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): Promise<Response> {
   if (!atLeast(me.role, "owner")) return forbidden("owner");
@@ -1375,14 +1407,17 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (reviewV2) return reviewV2;
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
-    const mine = (db.preferences[me.email] ??= { document_view: "brief" });
+    const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false });
     if (m === "PATCH") {
       const patch = await body<Schemas["PreferencesUpdate"]>();
       if (patch.document_view && !["brief", "full"].includes(patch.document_view)) return json(422, { detail: "document_view" });
       if (patch.document_view) mine.document_view = patch.document_view;
+      if (typeof patch.setup_hidden === "boolean") mine.setup_hidden = patch.setup_hidden;
     }
+    mine.setup_hidden ??= false; // saved before A1
     return json(200, mine);
   }
+  if (p[1] === "setup" && !p[2] && m === "GET") return json(200, setupOut(db, me));
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
   // Trace, impact, staleness and evidence-inspector routes (./trace.ts), on the v2 rows.
