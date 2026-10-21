@@ -123,3 +123,20 @@ test("spec: a remote image is a link, a stored image still renders", async ({ pa
   await expect(rollout.locator('img[src="/uploads/rollout.png"]')).toHaveCount(1);
   expect(outside).toEqual([]);
 });
+
+// A path a browser reads as another host ('/\evil.com'), any other path of the app and a
+// dot segment out of /uploads/ are no stored image: each shows its alt text, as text.
+test("spec: only an image under /uploads/ loads; anything else is its alt text", async ({ page }) => {
+  const outside: string[] = [];
+  await page.route("https://evil.com/**", (route) => {
+    outside.push(route.request().url());
+    return route.abort();
+  });
+  await login(page);
+  await page.goto(`${BRIEF}/v/2`);
+  const rollout = await openSection(page, "rollout-notes");
+  await expect(rollout.locator("img")).toHaveCount(1);
+  await expect(rollout.locator('a[href*="evil.com"]')).toHaveCount(0);
+  await expect(rollout).toContainText("evil other up after the images.");
+  expect(outside).toEqual([]);
+});

@@ -33,11 +33,8 @@ def _problems(body: str):
     return contract.structure_problems(draft.markdown, draft)
 
 
-def test_a_900_kb_line_of_tags_is_refused_quickly():
-    started = time.monotonic()
-    problems = _problems("<b>" * 300_000)
-    assert time.monotonic() - started < 2
-    assert "line_too_long" in {p.code for p in problems}
+# A line over the cap is refused by the draft parse, before any markdown parse
+# (tests/test_specs_review9.py): the structure check never sees one.
 
 
 def test_a_line_just_under_the_cap_is_parsed():

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { blocksText, isSafeHref, parseBlocks } from "../lib/markdown";
+import { blocksText, isSafeHref, parseBlocks, storedImageSrc } from "../lib/markdown";
 
 // E1 (owner, 2026-10-20): the document view reads a section body as the API's check does
 // (CommonMark through markdown-it), so a body the API reads as paragraph text never shows
@@ -54,5 +54,52 @@ test("many unclosed image and link openers parse in linear time", () => {
     const started = Date.now();
     parseBlocks(unit.repeat(50_000));
     expect(Date.now() - started, unit).toBeLessThan(1500);
+  }
+});
+
+// Emphasis is bounded like link text: many unclosed '*' or '_' openers scan a bounded
+// stretch each (60 KB of " *a" took about a second, a megabyte froze the tab).
+for (const unit of [" *a", " _a", " **a", "*a ", "_a ", "** a"]) {
+  test(`many unclosed emphasis openers (${JSON.stringify(unit)}) parse in linear time`, () => {
+    const started = Date.now();
+    parseBlocks(unit.repeat(50_000));
+    expect(Date.now() - started).toBeLessThan(1500);
+  });
+}
+
+test("a megabyte of unclosed emphasis openers parses in linear time", () => {
+  const started = Date.now();
+  parseBlocks(" *a _b **c".repeat(100_000));
+  expect(Date.now() - started).toBeLessThan(1500);
+});
+
+test("emphasis still renders", () => {
+  const [p] = parseBlocks("a *b* c _d_ **e** f");
+  if (p.t !== "p") throw new Error("paragraph expected");
+  expect(p.c.map((n) => n.t)).toEqual(["text", "em", "text", "em", "text", "strong", "text"]);
+});
+
+// Owner decision (2026-10-20): only an image Oracle stores loads. A stored image is a path
+// under /uploads/ of this origin; a backslash, a control character, a dot segment or
+// another origin makes it something else (a browser reads '/\evil.com' as evil.com).
+test("only a same-origin path under /uploads/ is a stored image", () => {
+  for (const ok of ["/uploads/a.png", "/uploads/2026/a-b_c.png", "/uploads/a.png?v=2"]) {
+    expect(storedImageSrc(ok), ok).not.toBeNull();
+  }
+  for (const bad of [
+    "/\\evil.com/p.png",
+    "/uploads\\..\\v1/me",
+    "//evil.com/uploads/a.png",
+    "/v1/me",
+    "/uploads/../v1/me",
+    "/uploads/%2e%2e/v1/me",
+    "/uploads/%2E%2E/v1/me",
+    "/uploads/a\u0001.png",
+    "/uploads/a\tb.png",
+    "https://evil.com/uploads/a.png",
+    "uploads/a.png",
+    "javascript:alert(1)",
+  ]) {
+    expect(storedImageSrc(bad), bad).toBeNull();
   }
 });
