@@ -102,7 +102,7 @@ class FlowSegmentOut(BaseModel):
     scopes: list[str]
     outputs: list[str]
     # None: the segment opens no stop (the code_map flow's index).
-    checkpoint: CheckpointKind | None = None
+    checkpoint: CheckpointKind | None
     approver_role: Role
 
 
@@ -357,7 +357,7 @@ class SegmentOut(BaseModel):
     roles: list[str]
     scopes: list[str]
     # The checkpoint this segment ends at (None: it has none), and whether it is on.
-    checkpoint: CheckpointKind | None = None
+    checkpoint: CheckpointKind | None
     checkpoint_on: bool
     estimate_usd: float | None = None
     cost_usd: float

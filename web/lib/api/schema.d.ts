@@ -13856,7 +13856,7 @@ export interface components {
             /** Outputs */
             outputs: string[];
             /** Checkpoint */
-            checkpoint?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review") | null;
+            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review") | null;
             /**
              * Approver Role
              * @enum {string}
@@ -21592,7 +21592,7 @@ export interface components {
             /** Scopes */
             scopes: string[];
             /** Checkpoint */
-            checkpoint?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review") | null;
+            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review") | null;
             /** Checkpoint On */
             checkpoint_on: boolean;
             /** Estimate Usd */

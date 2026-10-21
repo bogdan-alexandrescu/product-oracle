@@ -44465,6 +44465,7 @@
           "roles",
           "scopes",
           "outputs",
+          "checkpoint",
           "approver_role"
         ],
         "title": "FlowSegmentOut"
@@ -65926,6 +65927,7 @@
           "status",
           "roles",
           "scopes",
+          "checkpoint",
           "checkpoint_on",
           "cost_usd",
           "artifacts",

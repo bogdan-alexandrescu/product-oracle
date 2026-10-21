@@ -621,6 +621,7 @@ function SegmentItem({
         </span>
         <span className="flex min-w-0 flex-wrap gap-1.5 max-[600px]:col-span-full max-[600px]:col-start-2">
           {checkpoints.length === 0 &&
+            kind &&
             (s.checkpoint_on ? (
               <Chip kind="line" title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className={WRAP_CHIP} data-testid="segment-checkpoint">
                 <span className="sr-only">Stops for </span>

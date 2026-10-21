@@ -16,7 +16,7 @@ import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from 
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
-import { routeEngineering } from "./engineering";
+import { routeEngineering, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
@@ -95,6 +95,8 @@ export interface Db {
   roadmap?: RoadmapDb;
   /** Specs, flows and wireframes (./specs.ts); absent in data saved before CR-09. */
   specs?: SpecsDb;
+  /** F5-2 code maps (./engineering.ts); absent in older saved data. */
+  code_maps?: CodeMapRow[];
   /** Requests, their themes and the found items of the seed owner (./requests.ts, C1). */
   requests?: RequestsDb;
   /** The decision log (./decisions.ts, H1); absent in data saved before it. */
@@ -1908,7 +1910,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
   // Tech briefs (./engineering.ts): every member reads.
-  const briefs = routeEngineering(req, p, q, db.documents);
+  const briefs = await routeEngineering(req, p, q, {
+    documents: db.documents,
+    maps: () => (db.code_maps ??= []),
+    me: { id: me.id, email: me.email },
+    now,
+    uuid,
+  });
   if (briefs) return briefs;
   // Trace, impact, staleness and evidence-inspector routes (./trace.ts), on the v2 rows.
   if (["documents", "section-links", "baseline", "trace"].includes(p[1])) {

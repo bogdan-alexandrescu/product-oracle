@@ -207,7 +207,7 @@ function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut["knobs"
     roles[s.name] = [...chosen];
   }
   const checkpoints: Record<string, boolean> = {};
-  for (const s of flow.segments) checkpoints[s.checkpoint] = raw?.checkpoints?.[s.checkpoint] ?? true;
+  for (const s of flow.segments) if (s.checkpoint) checkpoints[s.checkpoint] = raw?.checkpoints?.[s.checkpoint] ?? true;
   return { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null };
 }
 
@@ -221,7 +221,7 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     roles: knobs.roles[s.name],
     scopes: s.scopes,
     checkpoint: s.checkpoint,
-    checkpoint_on: knobs.checkpoints[s.checkpoint] ?? true,
+    checkpoint_on: s.checkpoint ? (knobs.checkpoints[s.checkpoint] ?? true) : false,
     estimate_usd: null,
     cost_usd: 0,
     workflow_id: null,
@@ -536,6 +536,11 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     artifacts: s.artifacts,
     ...(s.feature_set_check ? { feature_set_check: s.feature_set_check } : {}),
   };
+  if (!def.checkpoint) {
+    // No stop (F5-2's code_map index): the run goes on, or ends.
+    next(ctx, r, s);
+    return;
+  }
   const on = r.knobs.checkpoints[def.checkpoint] ?? true;
   if (!on && s.feature_set_check) decideScope(ctx, r, "approved", null);
   const cp: CheckpointOut = {
