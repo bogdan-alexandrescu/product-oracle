@@ -28,6 +28,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 type Summary = Schemas["LaunchSummary"];
 type Task = Schemas["TaskOut"];
@@ -258,7 +259,10 @@ function LaunchInspector({ id, canApprove, onChanged }: { id: string; canApprove
     setError(null);
     try {
       await call();
+      // Ready, Set tier and Notes to send rows may have changed: the Inbox and the badge re-read.
+      invalidateWaiting();
       await Promise.all([q.reload(), notesQ.reload(), onChanged()]);
+      waitingChanged();
     } catch (e) {
       setError(errorMessage(e));
     } finally {

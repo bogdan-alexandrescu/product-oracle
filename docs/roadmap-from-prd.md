@@ -131,3 +131,5 @@ every export work as before. What it adds (code in `api/oracle/roadmap/`, migrat
 - **Product tracks.** An accepted PRD starts a track (`/v1/tracks`), which follows its
   roadmap: health, the next milestone, items at risk (blocked, stale, slipping) and drift.
   `POST /v1/tracks/{id}/roadmap-run` drafts the next `prd_to_roadmap` run.
+- **Launches.** Approving a roadmap version plans a launch for each item in Now; see
+  [launches-and-changelog.md](launches-and-changelog.md).

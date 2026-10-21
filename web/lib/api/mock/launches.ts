@@ -158,7 +158,8 @@ export function seedLaunches(ctx: LaunchesContext): LaunchesDb {
       created_at: "2026-10-01T09:00:00Z",
     });
     db.launches.push(caps, digest, exportLaunch);
-    CHECKLIST.filter(([, , , , tiers]) => tiers.includes(1)).forEach(([key], i) => db.tasks.push(task(caps, key, i + 1, true)));
+    // The kit drafted every task it drafts but the pre-mortem: it waits for a person.
+    CHECKLIST.filter(([, , , , tiers]) => tiers.includes(1)).forEach(([key], i) => db.tasks.push(task(caps, key, i + 1, key !== "pre_mortem")));
     CHECKLIST.filter(([, , , , tiers]) => tiers.includes(2)).forEach(([key], i) => db.tasks.push(task(digest, key, i + 1, false)));
     CHECKLIST.filter(([, , , , tiers]) => tiers.includes(3)).forEach(([key], i) => {
       const t = task(exportLaunch, key, i + 1, false);

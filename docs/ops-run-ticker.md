@@ -5,7 +5,9 @@ segment is only noticed when something ticks. A Cloud Scheduler job, `oracle-tic
 `POST /internal/scheduler/tick` every minute with a Google ID token from the
 `oracle-ticker` service account. One tick, for every company: advances its runs, sweeps its
 Claude account pool and runs its queued built-in model jobs (what `POST /v1/internal/tick`
-does for one company).
+does for one company). It also checks each company's product tracks and marks planned
+launches Ready once their items have shipped, starting their launch kit run
+([launches-and-changelog.md](launches-and-changelog.md)).
 
 Placeholders: `$PROJECT` (the GCP project id), `$REGION` (the Cloud Scheduler region, e.g.
 the API's Cloud Run region) and `$HOST` (the host people open Oracle at, behind the load
