@@ -232,3 +232,25 @@ test.describe("phone", () => {
     await expect(questionRow(page, CLINIC)).toContainText("Answered ✓");
   });
 });
+
+test("many people: a teammate past the picker's first 20 is named on the Feedback tab", async ({ page }) => {
+  // protects="Waiting on <name>" in a company of 25; fails_when=the 25th member reads
+  // "Waiting on someone"; no_claim=the real API (tests/test_questions_people.py covers it).
+  const question = "Which carriers ship to the islands?";
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "many-people"));
+  await login(page);
+  await page.goto("/documents/checkout-redesign/v/2");
+  const s = await openSection(page, "metrics");
+  await s.getByRole("button", { name: "Actions for 7. Success metrics" }).click();
+  await page.getByRole("menuitem", { name: /Ask a teammate/ }).click();
+  const ask = page.getByTestId("ask-teammate");
+  await ask.getByLabel("Find a person").fill("zoe");
+  await ask.getByRole("option", { name: /Zoe Zimmer/ }).click();
+  await ask.getByLabel("Question").fill(question);
+  await ask.getByRole("button", { name: "Ask" }).click();
+  await expect(ask).toContainText("Asked Zoe Zimmer");
+
+  await openTab(page, "Feedback");
+  const asked = page.getByTestId("section-questions").filter({ visible: true }).getByTestId("section-question").filter({ hasText: question });
+  await expect(asked).toContainText("Waiting on Zoe Zimmer");
+});

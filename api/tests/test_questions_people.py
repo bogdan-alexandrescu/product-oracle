@@ -730,3 +730,90 @@ async def test_research_on_a_general_question_is_refused(client):
     )  # fmt: skip
     assert resp.status_code == 422, resp.text
     assert [r["question"]["status"] for r in await inbox(client, ctx, "approver")] == ["asked"]
+
+
+# --- review fixes: names by id, deferred reassign, API tokens ---------------------------
+
+
+async def test_people_resolves_named_ids_beyond_the_first_page(client):
+    """protects="Waiting on <name>" for anyone in a big company; fails_when=a member past
+    the first 20 (by email) has no name; no_claim=the picker's search."""
+    ctx = await company()
+    async with tenant_session(ctx.tenant_id) as s:
+        for n in range(20):
+            s.add(User(email=f"member.{n:02d}@example.com", password_hash="x", role="commenter"))
+        last = User(email="zoe.zimmer@example.com", password_hash="x", role="commenter")
+        gone = User(email="ada.gone@example.com", password_hash="x", role="commenter")
+        s.add_all([last, gone])
+        await s.commit()
+    resp = await client.post(f"/v1/members/{gone.id}/disable", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    first = (await client.get("/v1/people", headers=ctx.as_("viewer"))).json()
+    assert len(first) == 20 and str(last.id) not in {p["user_id"] for p in first}
+    other = await company("Other Co")
+    resp = await client.get(
+        "/v1/people",
+        params={"ids": [str(last.id), uid(ctx, "approver"), str(gone.id), uid(other, "owner")]},
+        headers=ctx.as_("viewer"),
+    )
+    assert resp.status_code == 200, resp.text
+    rows = {p["user_id"]: p for p in resp.json()}
+    assert set(rows) == {str(last.id), uid(ctx, "approver"), str(gone.id)}
+    assert rows[str(last.id)] == {
+        "user_id": str(last.id), "name": "Zoe Zimmer", "email": "zoe.zimmer@example.com",
+        "role": "commenter", "can_write": True,
+    }  # fmt: skip
+    # A disabled member keeps their name (who answered) but can no longer be asked.
+    assert rows[str(gone.id)]["name"] == "Ada Gone" and rows[str(gone.id)]["can_write"] is False
+    resp = await client.get(
+        "/v1/people", params={"ids": [str(uuid.uuid4())] * 101}, headers=ctx.as_("viewer")
+    )
+    assert resp.status_code == 422
+
+
+async def test_reassigning_a_deferred_question_asks_the_new_person(client):
+    """protects=a reassigned question reaches the new person's Inbox; fails_when=a deferred
+    question stays deferred after a reassign; no_claim=answered or withdrawn ones (final)."""
+    ctx = await company()
+    _, doc_id = await document_id(client, ctx)
+    q = await ask(
+        client, ctx, prompt="Who?", asked_to=uid(ctx, "approver"), subject=section_subject(doc_id)
+    )
+    await answer(client, ctx, q["id"], "approver", kind="defer")
+    assert await inbox(client, ctx, "approver") == []
+    resp = await client.patch(
+        f"/v1/questions/{q['id']}", json={"asked_to": uid(ctx, "owner")},
+        headers=ctx.as_("commenter"),
+    )  # fmt: skip
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "asked"
+    assert [r["question"]["id"] for r in await inbox(client, ctx, "owner")] == [q["id"]]
+    # An intake's deferred question: asked again, and its gap open again.
+    out = await create_intake(client, ctx, "commenter", batch_size=1)
+    [iq] = await questions_of(client, ctx, out["intake"]["id"], "asked")
+    await answer(client, ctx, iq["id"], "commenter", kind="defer")
+    resp = await client.patch(
+        f"/v1/questions/{iq['id']}", json={"asked_to": uid(ctx, "approver")},
+        headers=ctx.as_("commenter"),
+    )  # fmt: skip
+    assert resp.status_code == 200 and resp.json()["status"] == "asked"
+    assert iq["id"] in {r["question"]["id"] for r in await inbox(client, ctx, "approver")}
+    async with tenant_session(ctx.tenant_id) as s:
+        gap = await s.get(KnowledgeGap, uuid.UUID(iq["gap_id"]))
+        assert gap.status == "asked"
+
+
+async def test_an_api_token_asks_by_its_name_not_as_a_person(client):
+    """protects=the Inbox names who asks; fails_when=a company API token's question is
+    stored as asked by a person (the token's id) or reads "Someone asks"; no_claim=run
+    tokens (refused above)."""
+    ctx = await company()
+    _, doc_id = await document_id(client, ctx)
+    q = await ask(
+        client, ctx, "token",
+        prompt="Which tiers get caps?", asked_to=uid(ctx, "approver"),
+        subject=section_subject(doc_id),
+    )  # fmt: skip
+    assert q["asked_by"] is None
+    [row] = await inbox(client, ctx, "approver")
+    assert row["asked_by"] == {"kind": "api_client", "name": "agent-track"}
