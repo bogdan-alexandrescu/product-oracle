@@ -623,6 +623,10 @@ def reasons_for(
         else [None] * len(dep_problems)
     )
     dep_of = {id(p): d for p, d in zip(dep_problems, deps, strict=True)}
+    # Where each id first appears, so a problem's item is found without a scan per problem.
+    first_index: dict[str, int] = {}
+    for n, i in enumerate(items):
+        first_index.setdefault(i["id"], n)
     pointer = 0
     for p in problems:
         key = p.get("item")
@@ -637,7 +641,7 @@ def reasons_for(
         index = (
             pointer
             if pointer < len(items) and items[pointer]["id"] == key
-            else next((n for n, i in enumerate(items) if i["id"] == key), len(items))
+            else first_index.get(key, len(items))
         )
         item = items[index] if index < len(items) else {"id": key}
         add(
