@@ -163,7 +163,7 @@ test("Inbox: tabs by state with counts, New by default, and the badge counts onl
   const newRows = page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback").locator("tr[data-row]");
   await expect(newRows).toHaveCount(5);
   await expect(newRows.first()).toContainText("Add a metric that shows the outbound check works");
-  await expect(newRows.first().getByRole("link", { name: /^Review/ })).toHaveText("Review suggestions");
+  await expect(newRows.first().getByRole("button", { name: "Accept", exact: true })).toBeVisible();
 
   // The badge: checkpoints 1 + cost 2 + questions 2 + feedback 5 (new or open); staged, declined and done do not count.
   await expect(page.getByTestId("nav-inbox-badge")).toHaveText("10");
