@@ -26,15 +26,20 @@ Test cards (protects / fails_when / no_claim):
 - test_draft_reads_scope: protects=the draft is bound to the approved scope;
   fails_when=the prompt omits the tool or the pasted scope; no_claim=that the agent obeys
   it.
+- test_the_approve_recheck_and_the_pasted_scope_run_on_the_parse_pool: protects=the
+  approve re-check and the scope pasted in a prompt never run on the event loop;
+  fails_when=either runs on the loop's thread; no_claim=the pool's size.
 - test_get_prd_scope_*: protects=the curated tool reads the token's own run, falls back
   to the document's approved scope, and is refused to people; fails_when=another run's
   scope or a person gets through; no_claim=SwarmCloud's MCP transport.
 """
 
+import threading
 import uuid
 
 from sqlalchemy import select
 
+from oracle import safe_yaml
 from oracle.baseline.models import Entity, Proposal
 from oracle.models import AuditEvent
 from oracle.runs import feature_set as fs
@@ -441,6 +446,36 @@ async def test_draft_reads_scope(client, owner, runtime):  # noqa: F811
     assert out.json()["document_id"] == run["document_id"]
 
 
+async def test_the_approve_recheck_and_the_pasted_scope_run_on_the_parse_pool(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+    monkeypatch,
+):
+    _, auth = owner
+    run = await at_feature_set(client, owner, runtime)
+    checks: list[str] = []
+    dumps: list[str] = []
+    check_rows, dump = fs.check_rows, safe_yaml.dump
+
+    def watched_check(*args, **kwargs):
+        checks.append(threading.current_thread().name)
+        return check_rows(*args, **kwargs)
+
+    def watched_dump(data, **kwargs):
+        if isinstance(data, dict) and "excluded" in data:
+            dumps.append(threading.current_thread().name)
+        return dump(data, **kwargs)
+
+    monkeypatch.setattr(fs, "check_rows", watched_check)
+    monkeypatch.setattr(safe_yaml, "dump", watched_dump)
+    run = await decide(client, auth, run)
+    assert run["status"] == "running"
+    assert "Approved PRD scope" in runtime.submitted[-1].steps[-1].prompt
+    assert checks and all(name.startswith("safe-yaml") for name in checks), checks
+    assert dumps and all(name.startswith("safe-yaml") for name in dumps), dumps
+
+
 def test_prompts_name_the_tool_and_paste_the_scope():
     from oracle.runs import flows
 
@@ -494,6 +529,10 @@ async def test_get_prd_scope_reads_the_tokens_run_and_refuses_people(client, own
         assert not out.is_error, text_of(out)
         assert out.structured_content["run_id"] == run["id"]
         assert out.structured_content["status"] == "proposed"
+        # The description says what the tool returns: the latest scope, in any status.
+        (tool,) = [t for t in (await c.list_tools()).tools if t.name == "get_prd_scope"]
+        assert "latest" in tool.description and "any status" in tool.description
+        assert "approved PRD scope this run works within" not in tool.description
     async with mcp_client(await api_token(tenant_id)) as c:
         out = await c.call_tool("get_prd_scope", {})
         assert out.is_error

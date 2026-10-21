@@ -17,9 +17,20 @@ Test cards (protects / fails_when / no_claim):
 - test_a_clean_file_has_no_problems: protects=a good file passes with its counts;
   fails_when=a valid file is refused or miscounted; no_claim=the baseline lookups (see
   tests/test_prd_scope.py).
+- test_the_scope_recheck_runs_off_the_event_loop / test_the_scope_yaml_renders_off_the_event_loop:
+  protects=the approve re-check and the pasted scope run on the parse pool, at most
+  PARSE_SECONDS; fails_when=either holds the event loop, or a slow one raises instead of
+  answering; no_claim=how fast the pool is.
+- test_flags_index_the_baseline_titles / test_a_large_scope_checks_in_linear_time:
+  protects=duplicate_of_existing reads the baseline titles once, not once per feature;
+  fails_when=the titles are walked per feature, or a large scope is slow or misflagged;
+  no_claim=a wall-clock budget for the whole approve.
 """
 
+import asyncio
+import time
 import uuid
+from types import SimpleNamespace
 
 import pytest
 
@@ -299,3 +310,108 @@ def test_scope_rows_are_checked_by_the_same_rules():
     assert [p["code"] for p in fs.check_rows(rows, known=known()).problems] == [
         "depends_on_excluded"
     ]
+
+
+async def _beating(coro):
+    """Await ``coro`` while counting event-loop beats: the loop runs while it waits."""
+    beats = 0
+
+    async def beat():
+        nonlocal beats
+        while True:
+            await asyncio.sleep(0.01)
+            beats += 1
+
+    task = asyncio.create_task(beat())
+    started = time.monotonic()
+    try:
+        out = await coro
+    finally:
+        task.cancel()
+    return out, time.monotonic() - started, beats
+
+
+async def test_the_scope_recheck_runs_off_the_event_loop(monkeypatch):
+    def slow(rows, *, known):
+        time.sleep(1)
+        raise AssertionError("not reached")
+
+    async def items(db, scope_id):
+        return []
+
+    async def known_for_run(db, run_id):
+        return known()
+
+    monkeypatch.setattr(fs, "check_rows", slow)
+    monkeypatch.setattr(fs, "scope_items", items)
+    monkeypatch.setattr(fs, "known_for_run", known_for_run)
+    monkeypatch.setattr(fs, "PARSE_SECONDS", 0.05)
+    stored = {"problems": [], "features": 2}
+    scope = SimpleNamespace(id=uuid.uuid4(), run_id=uuid.uuid4(), check_result=stored)
+    out, elapsed, beats = await _beating(fs.check_scope(None, scope))
+    assert codes(out) == ["too_slow"] and out.blocking == 1
+    assert elapsed < 0.5 and beats >= 2
+    # A check that did not finish leaves the stored check as it was.
+    assert scope.check_result is stored
+
+
+async def test_the_scope_yaml_renders_off_the_event_loop(monkeypatch):
+    from oracle import safe_yaml
+
+    def slow(data, **kw):
+        time.sleep(1)
+        raise AssertionError("not reached")
+
+    feature = SimpleNamespace(
+        id=uuid.uuid4(), kind="feature", key="saved-addresses", title="Saved addresses",
+        text=None, goals=[], depends_on=[], decision="include", decision_reason=None,
+        position=0, parent_id=None, acceptance=[],
+    )  # fmt: skip
+    scope = SimpleNamespace(status="approved")
+    rendered = await fs.scope_yaml_async(scope, [feature])
+    assert rendered == fs.scope_yaml(scope, [feature]) and "saved-addresses" in rendered
+    monkeypatch.setattr(safe_yaml, "dump", slow)
+    monkeypatch.setattr(fs, "PARSE_SECONDS", 0.05)
+    out, elapsed, beats = await _beating(fs.scope_yaml_async(scope, [feature]))
+    assert out is None and elapsed < 0.5 and beats >= 2
+
+
+class _CountedTitles(list):
+    walks = 0
+
+    def __iter__(self):
+        type(self).walks += 1
+        return super().__iter__()
+
+
+def test_flags_index_the_baseline_titles():
+    titles = _CountedTitles(known().titles)
+    out = check(CLEAN.replace("Address lookup", "Address book"), k=known(titles=titles))
+    assert out.flags["address-lookup"] == ["duplicate_of_existing"]
+    assert "saved-addresses" not in out.flags
+    assert _CountedTitles.walks <= 1
+
+
+def test_a_large_scope_checks_in_linear_time():
+    n = 10_000
+    features = {f"f{i}": fs.Ref(entity_id=uuid.uuid4(), title=f"Feature {i}") for i in range(n)}
+    titles = [(f"b{i}", fs.norm_title(f"Baseline {i}")) for i in range(n)]
+    titles.append(("old", fs.norm_title("Feature 7")))
+    k = known(features=features, titles=titles)
+    rows = [
+        {
+            "kind": "feature",
+            "key": f"f{i}",
+            "title": f"Feature {i}",
+            "decision": "include",
+            "goals": [{"key": "activation", "contribution": 1}],
+            "position": i,
+        }
+        for i in range(n)
+    ]
+    started = time.monotonic()
+    out = fs.check_rows(rows, known=k)
+    elapsed = time.monotonic() - started
+    assert out.problems == [] and out.as_json()["features"] == n
+    assert out.flags == {"f7": ["duplicate_of_existing"]}
+    assert elapsed < 2
