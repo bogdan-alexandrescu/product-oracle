@@ -343,8 +343,10 @@ async def _suggestion(db: AsyncSession, suggestion_id: uuid.UUID) -> LlmSuggesti
     return row
 
 
-def _clean_text(row: LlmSuggestion, text: str) -> str:
-    return prompting.clean_body(text).text if row.kind == "section_text" else text.strip()
+async def _clean_text(row: LlmSuggestion, text: str) -> str:
+    if row.kind != "section_text":
+        return text.strip()
+    return (await prompting.clean_body_in_thread(text)).text
 
 
 async def _check_section_open(db: AsyncSession, row: LlmSuggestion) -> None:
@@ -368,7 +370,7 @@ async def edit_suggestion(
         raise JobError(409, f"an {row.status} suggestion cannot be edited")
     if row.kind not in ("section_text", "answer"):
         raise JobError(422, "only proposed section text or an answer can be edited")
-    row.edited_text = _clean_text(row, text)
+    row.edited_text = await _clean_text(row, text)
     await db.flush()
     await audit.record(db, principal, "suggestion.edit", "llm_suggestion", row.id, {})
     return row
@@ -396,7 +398,7 @@ async def accept_suggestion(
     if text is not None:
         if row.kind not in ("section_text", "answer"):
             raise JobError(422, "only proposed section text or an answer can be edited")
-        row.edited_text = _clean_text(row, text)
+        row.edited_text = await _clean_text(row, text)
     row.status = "accepted"
     row.decided_by = principal.id
     row.decided_at = _now()
@@ -607,7 +609,9 @@ async def apply_refinement(
         raise JobError(409, f"section {key!r} is no longer in version {base.number}")
     new_heading = kinds.clean_heading(heading or "", out["heading"]) if heading else out["heading"]
     new_body = (
-        prompting.clean_body(body_md, new_heading).text if body_md is not None else out["body_md"]
+        (await prompting.clean_body_in_thread(body_md, new_heading)).text
+        if body_md is not None
+        else out["body_md"]
     )
     replace = {key: (new_heading, new_body)}
     points = out.get("data_points") or []

@@ -267,7 +267,7 @@ async def review_comments(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, A
                     )
                 elif text is not None:
                     heading = next(x.heading for x in ctx.sections if x.section_key == section_key)
-                    text = prompting.clean_body(text, heading).text
+                    text = (await prompting.clean_body_in_thread(text, heading)).text
             if kind != "section_text":
                 section_key = item.section_key
             if kind == "none":
@@ -548,8 +548,12 @@ async def refinement(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
     raw_body = answer.get("body_md")
     if not isinstance(raw_body, str) or not raw_body.strip():
         raise prompting.AnswerError("the refinement has no body_md")
+    if len(raw_body) > prompting.MAX_BODY_CHARS:
+        raise prompting.AnswerError(
+            f"the refinement's body_md is longer than {prompting.MAX_BODY_CHARS:,} characters"
+        )
     heading = clean_heading(prompting.as_str(answer.get("heading")), section.heading)
-    cleaned = prompting.clean_body(raw_body, heading)
+    cleaned = await prompting.clean_body_in_thread(raw_body, heading)
 
     asked = {str(x.feedback_item_id) for x in suggestions}
     resolutions = []
@@ -717,17 +721,23 @@ async def refinement_batch(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
             continue
         mine = [x for x in usable if x.section_key == key]
         raw = entries.get(key)
-        if raw is None:
+        too_long = raw is not None and len(raw["body_md"]) > prompting.MAX_BODY_CHARS
+        if raw is None or too_long:
             skipped.append(
                 {
                     "section_key": key,
                     "suggestion_ids": [str(x.id) for x in mine],
-                    "reason": "Oracle returned no text for this section",
+                    "reason": (
+                        "Oracle's text for this section is longer than "
+                        f"{prompting.MAX_BODY_CHARS:,} characters"
+                        if too_long
+                        else "Oracle returned no text for this section"
+                    ),
                 }
             )
             continue
         heading = clean_heading(prompting.as_str(raw.get("heading")), sec.heading)
-        cleaned = prompting.clean_body(raw["body_md"], heading)
+        cleaned = await prompting.clean_body_in_thread(raw["body_md"], heading)
         asked = {str(x.feedback_item_id) for x in mine}
         out_sections.append(
             {

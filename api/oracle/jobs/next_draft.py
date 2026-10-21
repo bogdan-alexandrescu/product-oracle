@@ -420,7 +420,11 @@ async def apply(
     replace: dict[str, tuple[str, str]] = {}
     for k in kept:
         s = built[k]
-        body = prompting.clean_body(edits[k], s["heading"]).text if k in edits else s["body_md"]
+        body = (
+            (await prompting.clean_body_in_thread(edits[k], s["heading"])).text
+            if k in edits
+            else s["body_md"]
+        )
         replace[k] = (s["heading"], body)
     placed = False
     sources = next((s for s in sections if _is_sources(s)), None)
