@@ -632,6 +632,20 @@ async def test_a_refinement_of_an_outdated_version_is_refused(client, ctx, pool,
     assert resp.status_code == 409
 
 
+async def test_a_refined_body_past_the_200k_cap_fails_the_job(client, ctx, pool, fake):
+    # Model output is capped like an approver's edit: the house rules never read more.
+    await import_draft(client, ctx)
+    resp = await client.post(
+        V(1, "/sections/problem/refine"), json={"instruction": "Longer."}, headers=ctx["headers"]
+    )
+    job_id = resp.json()["id"]
+    too_long = {"heading": "Problem", "body_md": "a" * 200_001}
+    fake.script["refinement"] += [too_long, too_long]
+    await tick(client, ctx)
+    job = (await client.get(f"/v1/llm-jobs/{job_id}", headers=ctx["headers"])).json()
+    assert job["status"] == "failed" and "200,000 characters" in job["error"], job
+
+
 async def test_refine_needs_an_accepted_suggestion_or_an_instruction(client, ctx, pool, fake):
     await import_draft(client, ctx)
     resp = await client.post(V(1, "/sections/problem/refine"), json={}, headers=ctx["headers"])
