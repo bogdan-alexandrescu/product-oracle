@@ -241,6 +241,9 @@ class EvidenceOut(BaseModel):
     # True when the evidence comes from someone else's source item: you see the
     # excerpt, url and ref, never the item.
     source_item_private: bool = False
+    # The source item it came from was removed (a narrowed source, or deleted
+    # upstream: S5): show 'source removed'. The copied excerpt, url and ref stay.
+    source_removed: bool = False
     confidence: float | None = None
     # {"inputs": {...}, "breakdown": {factor: {value, weight}}, "weights": {...}}
     confidence_factors: dict[str, Any] = {}

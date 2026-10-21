@@ -76,6 +76,19 @@ async def targets(
         evidence = {
             e.id: e for e in (await db.scalars(select(Evidence).where(Evidence.id.in_(ev_ids))))
         }
+    # Evidence copied from a source item since removed (S5) says so too.
+    from_items = {e.source_item_id for e in evidence.values() if e.source_item_id}
+    removed: set[uuid.UUID] = set()
+    if from_items:
+        removed = set(
+            (
+                await db.scalars(
+                    select(SourceItem.id).where(
+                        SourceItem.id.in_(from_items), SourceItem.deleted_at.is_not(None)
+                    )
+                )
+            ).all()
+        )
     items: dict[uuid.UUID, tuple[SourceItem, Source]] = {}
     if item_ids:
         rows = await db.execute(
@@ -110,6 +123,7 @@ async def targets(
             out[lk.id] = SectionLinkTarget(
                 type="evidence", id=e.id, title=e.ref or e.url, confidence=_float(e.confidence),
                 url=e.url, ref=e.ref, excerpt=e.excerpt, source_kind=e.kind,
+                source_removed=e.source_item_id in removed,
             )  # fmt: skip
         elif lk.source_item_id in items:
             item, source = items[lk.source_item_id]
@@ -130,6 +144,7 @@ async def targets(
                 url=url if readable else None,
                 source_kind=source.kind,
                 restricted=not readable,
+                source_removed=item.deleted_at is not None,
             )
         elif lk.entity_id in entities:
             n = entities[lk.entity_id]
@@ -251,18 +266,24 @@ async def inspector(
     )
 
 
+SOURCE_REMOVED = "source removed"
+
+
 def _label(target: SectionLinkTarget) -> str:
     if target.type == "source_item":
-        return f"{target.source_kind} source item"
-    if target.type == "entity":
+        label = f"{target.source_kind} source item"
+    elif target.type == "entity":
         return f"{(target.entity_type or 'item').replace('_', ' ').capitalize()}: {target.title}"
-    return target.title or target.excerpt or "evidence"
+    else:
+        label = target.title or target.excerpt or "evidence"
+    return f"{label} ({SOURCE_REMOVED})" if target.source_removed else label
 
 
 async def appendix_links(db: AsyncSession, version: DocumentVersion) -> list[dict[str, Any]]:
     """For the Sources and data points appendix: per body section (in order), its links
     as {claim, label, kind, confidence}. Source items show their kind only (an export
-    is not addressed to a source's owner); rejected or superseded baseline items are
+    is not addressed to a source's owner); a removed item, or evidence from one, is
+    labelled '(source removed)' (S5); rejected or superseded baseline items are
     left out (their titles no longer hold). Document-wide links go under the section
     they name (:func:`section_key_of`)."""
     links = await version_links(db, version)
