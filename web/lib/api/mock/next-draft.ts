@@ -60,24 +60,84 @@ const latestOf = (ctx: LlmContext, docId: string) => versionsOf(ctx, docId).at(-
 export const isStaged = (s: Suggestion | null | undefined): boolean =>
   !!s && s.kind === "section_text" && s.status === "accepted" && s.applied_in_version == null;
 
+/** D12: an open item an approver staged for the agents. */
+export const stagedForAgents = (f: Pick<Feedback, "status" | "staged_for_agents_at">) =>
+  f.status === "open" && !!f.staged_for_agents_at;
+
 /**
  * C1e: open / staged / declined / done, from the item's status and its live suggestion.
  * Staged first, as the API (owner, 2026-10-20): an accepted change carries into the next
  * draft until a draft applies it or someone discards it, even once its item is closed.
+ * D12: an open item staged for the agents is Staged too.
  */
-export function feedbackState(status: Feedback["status"], s: Suggestion | null | undefined): Schemas["FeedbackItemOut"]["state"] {
+export function feedbackState(
+  status: Feedback["status"],
+  s: Suggestion | null | undefined,
+  agents = false,
+): Schemas["FeedbackItemOut"]["state"] {
   if (isStaged(s)) return "staged";
   if (status === "declined") return "declined";
   if (status !== "open") return "done";
+  if (agents) return "staged";
   if (s?.status === "applied") return "done";
   return "open";
 }
 
 /** The derived state and, when staged, the draft it waits for. */
 export function stateOf(f: Feedback, s: Suggestion | null, latest: number | null) {
-  const state = feedbackState(f.status, s);
-  return { state, staged_for_version: state === "staged" ? (latest ?? 0) + 1 : null };
+  const agents = stagedForAgents(f);
+  const state = feedbackState(f.status, s, agents);
+  return { state, staged_for_version: state === "staged" ? (latest ?? 0) + 1 : null, staged_for_agents: agents };
 }
+
+/** D12: the document's items staged for the agents, oldest first. */
+export function agentItems(ctx: LlmContext, docId: string): Schemas["AgentItem"][] {
+  return ctx.feedback
+    .filter((f) => f.document_id === docId && stagedForAgents(f))
+    .sort((a, b) => (a.staged_for_agents_at ?? "").localeCompare(b.staged_for_agents_at ?? ""))
+    .map((f) => ({
+      feedback_id: f.id,
+      summary: f.summary,
+      section_key: f.section_key ?? null,
+      staged_by_name: memberName(ctx, f.staged_for_agents_by),
+      staged_at: f.staged_for_agents_at ?? null,
+    }));
+}
+
+type Reason = Schemas["NextDraftReason"];
+const many = (n: number, one: string, more: string) => `${n} ${n === 1 ? one : more}`;
+
+/** The API's choose_engine: the agents when any chosen item needs them, else Oracle. */
+export function chooseEngine(texts: Schemas["StagedChange"][], agents: Schemas["AgentItem"][]): { engine: "oracle" | "agents"; why: Reason[] } {
+  const why: Reason[] = [];
+  const general = agents.filter((a) => !a.section_key).map((a) => a.feedback_id);
+  const sectioned = agents.filter((a) => a.section_key).map((a) => a.feedback_id);
+  const gone = texts.filter((t) => t.section_gone);
+  if (general.length)
+    why.push({ code: "whole_draft", text: `${many(general.length, "remark is", "remarks are")} about the whole draft`, feedback_ids: general, suggestion_ids: [] });
+  if (sectioned.length)
+    why.push({
+      code: "structure",
+      text: `${many(sectioned.length, "item needs", "items need")} more than a section's text changed`,
+      feedback_ids: sectioned,
+      suggestion_ids: [],
+    });
+  if (gone.length) {
+    const n = new Set(gone.map((t) => t.section_key)).size;
+    why.push({
+      code: "section_gone",
+      text: `${many(n, "section", "sections")} to change ${n === 1 ? "is" : "are"} gone`,
+      feedback_ids: [],
+      suggestion_ids: gone.map((t) => t.suggestion_id),
+    });
+  }
+  return { engine: why.length ? "agents" : "oracle", why };
+}
+
+/** The feedback loop's estimate, as the runs mock's cost table makes it (analyst + writer). */
+const RUN_BASE_USD = 9;
+const DEPTH: Record<string, number> = { quick: 0.5, standard: 1, deep: 2 };
+const OWNER_APPROVAL_USD = 50;
 
 export function staged(ctx: LlmContext, docId: string, ids?: string[] | null): Suggestion[] {
   return ctx.db.suggestions
@@ -144,7 +204,51 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
     gone_count: gone,
     estimate_usd: sections.size ? Math.round(sections.size * 0.0312 * 10000) / 10000 : null,
     draft_job: job,
+    agent_items: agentItems(ctx, doc.id),
   };
+}
+
+type Chosen = { texts: Schemas["StagedChange"][]; agents: Schemas["AgentItem"][]; staged: Schemas["StagedChanges"] };
+
+/** The staged items a build takes (the API's _chosen), or why not. */
+function chosen(ctx: LlmContext, doc: Doc, input: Schemas["NextDraftIn"]): Chosen | Response {
+  const all = stagedChanges(ctx, doc, true);
+  const sids = input.suggestion_ids ?? null;
+  const fids = input.feedback_ids ?? null;
+  const texts = sids ? all.items.filter((i) => sids.includes(i.suggestion_id)) : all.items.filter((i) => !i.section_gone);
+  if (sids && texts.length !== new Set(sids).size) return fail(422, "every suggestion must be a staged (accepted, not applied) change");
+  const agents = fids ? all.agent_items.filter((a) => fids.includes(a.feedback_id)) : all.agent_items;
+  if (fids && agents.length !== new Set(fids).size) return fail(422, "every feedback item must be staged for the agents");
+  if (!texts.length && !agents.length) return fail(422, "nothing is staged for the next draft");
+  return { texts, agents, staged: all };
+}
+
+/** The run estimate at a depth; the mock's "costly" setting stands in for a bigger run. */
+export function runEstimate(ctx: LlmContext, depth: string): number {
+  return ctx.runEstimateUsd?.() ?? RUN_BASE_USD * (DEPTH[depth] ?? 1);
+}
+
+export type StartRun = (
+  doc: Doc,
+  input: { feedback_ids: string[]; suggestion_ids: string[]; depth: string; estimate_usd: number },
+) => Promise<Response>;
+
+/** POST /v1/feedback/{id}/stage-for-agents (and DELETE): D12 staging for the agents; null for other paths. */
+export async function stageRoute(ctx: LlmContext, req: Request, p: string[], live: (f: Feedback) => Suggestion | null): Promise<Response | null> {
+  if (p[1] !== "feedback" || !p[2] || p[3] !== "stage-for-agents" || !["POST", "DELETE"].includes(req.method)) return null;
+  const f = ctx.feedback.find((x) => x.id === p[2]);
+  if (!f) return fail(404, `Feedback item ${p[2]} not found`);
+  const s = live(f);
+  if (isStaged(s)) return fail(409, "already staged as a text change for the next draft");
+  if (f.status !== "open") return fail(409, `the item is ${f.status}, not open`);
+  const on = req.method === "POST";
+  if (on && s?.kind === "section_text" && s.status === "open")
+    return fail(409, "it has a text suggestion: accept it (a text change) or dismiss it first");
+  if (on && !f.staged_for_agents_at) Object.assign(f, { staged_for_agents_at: ctx.now(), staged_for_agents_by: ctx.userId });
+  if (!on) Object.assign(f, { staged_for_agents_at: null, staged_for_agents_by: null });
+  f.updated_at = ctx.now();
+  const latest = latestOf(ctx, f.document_id)?.number ?? null;
+  return json(200, { ...f, suggestion: s, ...stateOf(f, s, latest) });
 }
 
 function strip(body: string) {
@@ -245,6 +349,8 @@ export async function nextDraftRoute(
   p: string[],
   q: URLSearchParams,
   hooks: {
+    /** D12: starts the agents' feedback-loop run with the chosen items. */
+    startRun?: StartRun;
     makeJob: (doc: Doc, v: Version, input: Record<string, unknown>) => Job;
     enabled: (doc: Doc) => boolean;
     /** A version was imported: queue its reports. */
@@ -260,6 +366,51 @@ export async function nextDraftRoute(
   if (p[3] !== "next-draft") return fail(404, "Route not found");
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
+  if (p[4] === "plan" && m === "POST") {
+    const input = (await body<Schemas["NextDraftPlanIn"]>()) ?? {};
+    const c = chosen(ctx, doc, input);
+    if (c instanceof Response) return c;
+    const { engine, why } = chooseEngine(c.texts, c.agents);
+    const estimate = engine === "agents" ? runEstimate(ctx, input.depth ?? "standard") : null;
+    const latest = latestOf(ctx, doc.id);
+    const locked = new Set(latest ? ctx.lockedKeys(latest) : []);
+    const hit = c.texts.filter((t) => locked.has(t.section_key));
+    const refused =
+      engine === "agents"
+        ? null
+        : !enabled(doc)
+          ? "Refinement is turned off for this document"
+          : hit.length
+            ? `approved and locked, never changed: ${hit.map((t) => `${t.section_heading} (${t.section_key})`).join(", ")}; untick them`
+            : null;
+    return json(200, {
+      engine,
+      why,
+      text_changes: c.texts.length,
+      agent_items: c.agents.length,
+      sections: new Set(c.texts.map((t) => t.section_key)).size,
+      next_version: c.staged.next_version,
+      needs_owner_approval: estimate != null && estimate > OWNER_APPROVAL_USD,
+      estimate_usd: estimate,
+      refused,
+    } satisfies Schemas["NextDraftPlan"]);
+  }
+
+  if (p[4] === "run" && m === "POST") {
+    const input = (await body<Schemas["NextDraftRunIn"]>()) ?? {};
+    const c = chosen(ctx, doc, input);
+    if (c instanceof Response) return c;
+    if (chooseEngine(c.texts, c.agents).engine === "oracle") return fail(409, "these changes need no agents; build them with Oracle");
+    if (!hooks.startRun) return fail(503, "runs are not available");
+    const depth = input.depth ?? "standard";
+    return hooks.startRun(doc, {
+      feedback_ids: c.agents.map((a) => a.feedback_id),
+      suggestion_ids: c.texts.map((t) => t.suggestion_id),
+      depth,
+      estimate_usd: runEstimate(ctx, depth),
+    });
+  }
+
   if (!p[4] && m === "POST") {
     const latest = latestOf(ctx, doc.id);
     if (!latest) return fail(409, `'${doc.slug}' has no version yet`);
@@ -269,6 +420,16 @@ export async function nextDraftRoute(
       return fail(409, "the next draft is already being built; wait for it or discard it");
     }
     const input = (await body<Schemas["NextDraftIn"]>()) ?? {};
+    // D12: the built-in engine builds only what needs no agents.
+    const c = chosen(ctx, doc, input);
+    if (c instanceof Response) return c;
+    const plan = chooseEngine(c.texts, c.agents);
+    if (plan.engine === "agents")
+      return json(409, {
+        detail: `these changes need the agents: ${plan.why.map((w) => w.text).join("; ")}`,
+        code: "needs_agents",
+        why: plan.why,
+      });
     const ids = input.suggestion_ids ?? null;
     let rows = staged(ctx, doc.id, ids);
     if (ids && rows.length !== new Set(ids).size)
@@ -371,7 +532,7 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
     if (!doc) continue;
     const s = live(f.id);
     const latest = latestOf(ctx, doc.id)?.number ?? null;
-    const { state: base, staged_for_version } = stateOf(f, s, latest);
+    const { state: base, staged_for_version, staged_for_agents } = stateOf(f, s, latest);
     const state: InboxItem["state"] = base === "open" && (!seen || f.created_at > seen) ? "new" : base;
     const acting = s?.status === "open" ? s : null;
     counts[state] += 1;
@@ -391,6 +552,7 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
       resolution_note: f.resolution_note ?? null,
       addressed_in_version: f.addressed_in_version ?? null,
       staged_for_version,
+      staged_for_agents,
       suggestion_status: s?.status ?? null,
       suggestion_kind: s?.kind ?? null,
       // D14: what the row's actions need, while the suggestion is open.
@@ -403,10 +565,12 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
   items.sort((a, b) => b.created_at.localeCompare(a.created_at));
   const stagedRows: Schemas["InboxStaged"][] = ctx.documents.flatMap((doc) => {
     const rows = staged(ctx, doc.id);
-    if (!rows.length) return [];
+    const agents = agentItems(ctx, doc.id).length;
+    if (!rows.length && !agents) return [];
     const latest = latestOf(ctx, doc.id);
     const keys = new Set(latest?.sections.map((s) => s.section_key) ?? []);
-    const count = rows.filter((s) => keys.has(s.section_key ?? "")).length;
+    const buildable = rows.filter((s) => keys.has(s.section_key ?? "")).length;
+    const count = buildable + agents;
     const job = currentJob(ctx, doc.id);
     return [
       {
@@ -416,7 +580,7 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
         latest_version: latest?.number ?? null,
         next_version: (latest?.number ?? 0) + 1,
         count,
-        gone_count: rows.length - count,
+        gone_count: rows.length - buildable,
         draft_job_id: job?.id ?? null,
         draft_job_status: job?.status ?? null,
       },

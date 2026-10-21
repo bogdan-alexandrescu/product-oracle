@@ -247,6 +247,17 @@ class StagedChange(BaseModel):
     section_locked: bool = False
 
 
+class AgentItem(BaseModel):
+    """D12: a feedback item an approver staged for the agents (no section text to accept)."""
+
+    feedback_id: uuid.UUID
+    summary: str
+    # None: a remark about the whole draft (General).
+    section_key: str | None = None
+    staged_by_name: str | None = None
+    staged_at: datetime | None = None
+
+
 class StagedChanges(BaseModel):
     document_id: uuid.UUID
     slug: str
@@ -261,11 +272,53 @@ class StagedChanges(BaseModel):
     estimate_usd: float | None = None
     # The current next-draft build (queued, running, failed, or ready to preview), if any.
     draft_job: LlmJobOut | None = None
+    # D12: feedback items staged for the agents, oldest first.
+    agent_items: list[AgentItem] = []
 
 
 class NextDraftIn(BaseModel):
     # The staged suggestions to build; default: every staged one whose section exists.
     suggestion_ids: list[uuid.UUID] | None = None
+    # D12: the items staged for the agents to build with; default: every one.
+    feedback_ids: list[uuid.UUID] | None = None
+
+
+class NextDraftPlanIn(NextDraftIn):
+    # The depth of the agents' run (its estimate); ignored when Oracle builds.
+    depth: Literal["quick", "standard", "deep"] = "standard"
+
+
+class NextDraftRunIn(NextDraftPlanIn):
+    pass
+
+
+class NextDraftReason(BaseModel):
+    """Why the agents write the next draft, in plain words, with the items it is about."""
+
+    code: Literal["whole_draft", "structure", "section_gone", "roadmap_items"]
+    text: str
+    feedback_ids: list[uuid.UUID] = []
+    suggestion_ids: list[uuid.UUID] = []
+
+
+class NextDraftPlan(BaseModel):
+    """D12: which engine builds the chosen staged items, and why.
+
+    ``oracle``: Oracle's own refinement batch rewrites the sections and shows a preview.
+    ``agents``: a feedback-loop run writes the draft (``why`` says why)."""
+
+    engine: Literal["oracle", "agents"]
+    why: list[NextDraftReason] = []
+    text_changes: int
+    agent_items: int
+    # The sections the chosen text changes touch.
+    sections: int
+    next_version: int
+    # The agents' run: its estimate, and whether it is over the owner-approval threshold.
+    needs_owner_approval: bool = False
+    estimate_usd: float | None = None
+    # Why a build cannot start (a locked section, the Refinement job switched off).
+    refused: str | None = None
 
 
 class NextDraftFeedback(BaseModel):

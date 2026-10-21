@@ -141,10 +141,12 @@ from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
+from oracle.jobs.models import LlmSuggestion
 from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
 from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
+from oracle.review.schemas import Resolution
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import schedule
 from oracle.runs import extensions, feature_set, flows, reasons, rejection, roadmap, workflow
@@ -160,6 +162,7 @@ from oracle.runs.schemas import (
     FlowCatalog,
     FlowOut,
     FlowSegmentOut,
+    FlowStart,
     InboxCheckpoint,
     InboxCounts,
     InboxDocument,
@@ -234,6 +237,10 @@ ORACLE_KNOBS = (
     "intake_id",
     "intake_snapshot_id",
     "intake_gap_ids",
+    # D12: a feedback loop started from Build next draft: exactly the items staged for
+    # it, the agent-staged feedback and the accepted section-text suggestions.
+    "feedback_ids",
+    "suggestion_ids",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -334,6 +341,10 @@ def flow_catalog() -> FlowCatalog:
                 target_kind=f.target_kind,  # type: ignore[arg-type]
                 source_kind=f.source_kind,  # type: ignore[arg-type]
                 entry=f.entry,
+                in_new_run_dialog=f.in_new_run_dialog,
+                starts_from=FlowStart(label=f.starts_from[0], href=f.starts_from[1])
+                if f.starts_from
+                else None,
                 segments=[
                     FlowSegmentOut(
                         name=s.name,
@@ -1626,6 +1637,38 @@ async def _low_threshold(db: AsyncSession) -> float:
     return float(confidence.merged(overrides)["low"])
 
 
+async def _loop_feedback(db: AsyncSession, run: Run) -> list[dict[str, Any]]:
+    """D12: the items a feedback loop started from Build next draft was given: the
+    feedback staged for the agents and each accepted section-text change, with its text."""
+    knobs = run.knobs or {}
+    fids = [uuid.UUID(str(i)) for i in knobs.get("feedback_ids") or []]
+    sids = [uuid.UUID(str(i)) for i in knobs.get("suggestion_ids") or []]
+    texts: dict[uuid.UUID, str] = {}
+    for sug in await db.scalars(
+        select(LlmSuggestion).where(
+            LlmSuggestion.id.in_(sids), LlmSuggestion.document_id == run.document_id
+        )
+    ):
+        texts[sug.feedback_item_id] = sug.edited_text or sug.text or ""
+    items = await db.scalars(
+        select(FeedbackItem)
+        .where(
+            FeedbackItem.document_id == run.document_id,
+            FeedbackItem.id.in_([*fids, *texts]),
+        )
+        .order_by(FeedbackItem.created_at, FeedbackItem.id)
+    )
+    return [
+        {
+            "id": str(f.id),
+            "section_key": f.section_key,
+            "summary": f.summary,
+            **({"accepted_text": texts[f.id]} if f.id in texts else {}),
+        }
+        for f in items
+    ]
+
+
 async def _prompt_context(
     db: AsyncSession,
     run: Run,
@@ -1685,15 +1728,18 @@ async def _prompt_context(
     ]
     feedback: list[dict[str, Any]] = []
     locked: list[str] = []
+    chosen = "feedback_ids" in (run.knobs or {}) or "suggestion_ids" in (run.knobs or {})
     if run.flow == "feedback_loop" and run.document_id:
-        items = await db.scalars(
-            select(FeedbackItem)
-            .where(FeedbackItem.document_id == run.document_id, FeedbackItem.status == "open")
-            .order_by(FeedbackItem.created_at, FeedbackItem.id)
-        )
-        feedback = [
-            {"id": str(f.id), "section_key": f.section_key, "summary": f.summary} for f in items
-        ]
+        feedback = await _loop_feedback(db, run) if chosen else []
+        if not chosen:
+            items = await db.scalars(
+                select(FeedbackItem)
+                .where(FeedbackItem.document_id == run.document_id, FeedbackItem.status == "open")
+                .order_by(FeedbackItem.created_at, FeedbackItem.id)
+            )
+            feedback = [
+                {"id": str(f.id), "section_key": f.section_key, "summary": f.summary} for f in items
+            ]
         latest = await db.scalar(
             select(DocumentVersion)
             .where(DocumentVersion.document_id == run.document_id)
@@ -1717,6 +1763,7 @@ async def _prompt_context(
         prior_outputs=prior,
         reviewer_notes=notes,
         feedback=feedback,
+        staged=chosen,
         locked_sections=locked,
         attempt=attempt,
         change_request=change_request,
@@ -3173,6 +3220,10 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
                 row.source_version_id = source_id
                 await s.commit()
                 result.version = await docs_service.read_version(s, row)
+        if run.flow == "feedback_loop" and (
+            knobs.get("suggestion_ids") or knobs.get("feedback_ids")
+        ):
+            await _settle_sent_items(s, run, result.version.number, result.resolutions)
         document = await s.get(Document, result.version.document_id)
         out: dict[str, Any] = {
             "document_id": str(result.version.document_id),
@@ -3205,6 +3256,45 @@ async def _run_importer(
     # DESIGN_CHECK_SECONDS): this session holds none open meanwhile.
     await db.commit()
     return await extensions.run_importer(name, db, run, files, principal)
+
+
+async def _settle_sent_items(
+    s: AsyncSession, run: Run, number: int, resolutions: list[Resolution]
+) -> None:
+    """D12: what a feedback loop started from Build next draft was sent, once its draft
+    is version ``number``: the accepted section-text changes are applied in it (as the
+    built-in path's apply records them), and the items staged for the agents that the
+    draft's resolutions answer leave Staged. Their status is the import's: an agent never
+    closes a whole-draft item itself, so a person confirms it in the version's review.
+    ``resolutions`` are the import's own parse of the draft: it is not parsed again."""
+    knobs = run.knobs or {}
+    answered = {str(r.feedback_id) for r in resolutions}
+    sent = [uuid.UUID(str(i)) for i in knobs.get("feedback_ids") or [] if str(i) in answered]
+    items = list(
+        await s.scalars(
+            select(FeedbackItem).where(
+                FeedbackItem.id.in_(sent), FeedbackItem.document_id == run.document_id
+            )
+        )
+    )
+    for item in items:
+        item.staged_for_agents_at = item.staged_for_agents_by = None
+    ids = [uuid.UUID(str(i)) for i in knobs.get("suggestion_ids") or []]
+    rows = list(
+        await s.scalars(
+            select(LlmSuggestion).where(
+                LlmSuggestion.id.in_(ids),
+                LlmSuggestion.document_id == run.document_id,
+                LlmSuggestion.status == "accepted",
+                LlmSuggestion.applied_in_version.is_(None),
+            )
+        )
+    )
+    for row in rows:
+        row.status = "applied"
+        row.applied_in_version = number
+    if rows or items:
+        await s.commit()
 
 
 async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, Any]:

@@ -181,7 +181,7 @@ async def feedback_out(
     for item in items:
         anchor = anchors.get(item.comment_id) if item.comment_id else None
         suggestion = suggestions.get(item.id)
-        state = feedback_state(item.status, suggestion)
+        state = feedback_state(item.status, suggestion, item.staged_for_agents_at)
         out.append(
             FeedbackItemOut(
                 id=item.id,
@@ -206,6 +206,7 @@ async def feedback_out(
                 staged_for_version=(latest.get(item.document_id) or 0) + 1
                 if state == "staged"
                 else None,
+                staged_for_agents=staged_for_agents(item),
             )
         )
     return out
@@ -221,19 +222,28 @@ def is_staged(suggestion) -> bool:
     )
 
 
-def feedback_state(status: str, suggestion) -> str:
-    """open / staged / declined / done, from the item's status and its live suggestion.
+def staged_for_agents(item: FeedbackItem) -> bool:
+    """D12: an open item an approver staged for the agents."""
+    return item.status == "open" and item.staged_for_agents_at is not None
+
+
+def feedback_state(status: str, suggestion, agents_at: datetime | None = None) -> str:
+    """open / staged / declined / done, from the item's status, its live suggestion and
+    whether an approver staged it for the agents (``agents_at``, D12).
 
     Staged first (owner, 2026-10-20): an accepted change carries into the next draft until
     a draft applies it or someone discards it, whatever happened to its item since (closed
     by a draft's resolutions, an approval or by hand). The build action counts the same
-    changes (``kinds.staged_suggestions``)."""
+    changes (``kinds.staged_suggestions``). An item staged for the agents is Staged while
+    it is open: the draft's resolutions close it."""
     if is_staged(suggestion):
         return "staged"
     if status == "declined":
         return "declined"
     if status != "open":
         return "done"
+    if agents_at is not None:
+        return "staged"
     if suggestion is not None and suggestion.status == "applied":
         return "done"
     return "open"
@@ -768,6 +778,9 @@ async def update_feedback(
             raise ReviewError("invalid", f"Version {number} does not exist for this document")
     if fields.get("status") == "open" and "addressed_in_version" not in fields:
         fields["addressed_in_version"] = None
+    if fields.get("status") not in (None, "open") and item.staged_for_agents_at is not None:
+        # Closed by hand: no longer staged for the agents (D12).
+        item.staged_for_agents_at = item.staged_for_agents_by = None
     before = {k: getattr(item, k) for k in fields}
     for key, value in fields.items():
         setattr(item, key, value)
@@ -781,6 +794,48 @@ async def update_feedback(
             item.id,
             {"before": before, "after": fields},
         )
+    await session.refresh(item)
+    return (await feedback_out(session, [item]))[0]
+
+
+async def stage_for_agents(
+    session: AsyncSession, principal: "Principal", feedback_id: uuid.UUID, on: bool
+) -> FeedbackItemOut:
+    """D12: stage an open item with no section text to accept for the agents (``on``), or
+    unstage it. The next draft goes to the agents with it; it stays open until the
+    draft's resolutions close it."""
+    from oracle.jobs.service import latest_suggestions
+
+    item = await session.get(FeedbackItem, feedback_id, with_for_update=True)
+    if item is None:
+        raise ReviewError("not_found", f"Feedback item {feedback_id} not found")
+    suggestion = (await latest_suggestions(session, [item.id])).get(item.id)
+    if is_staged(suggestion):
+        raise ReviewError("conflict", "already staged as a text change for the next draft")
+    if item.status != "open":
+        raise ReviewError("conflict", f"the item is {item.status}, not open")
+    if (
+        on
+        and suggestion is not None
+        and suggestion.kind == "section_text"
+        and suggestion.status == "open"
+    ):
+        raise ReviewError(
+            "conflict", "it has a text suggestion: accept it (a text change) or dismiss it first"
+        )
+    if on and item.staged_for_agents_at is None:
+        item.staged_for_agents_at, item.staged_for_agents_by = _now(), principal.id
+    elif not on:
+        item.staged_for_agents_at = item.staged_for_agents_by = None
+    await session.flush()
+    await audit.record(
+        session,
+        principal,
+        "feedback.stage_for_agents" if on else "feedback.unstage_for_agents",
+        "feedback_item",
+        item.id,
+        {},
+    )
     await session.refresh(item)
     return (await feedback_out(session, [item]))[0]
 
@@ -826,6 +881,8 @@ async def apply_resolutions(
         item.status = res.status
         item.resolution_note = res.note
         item.addressed_in_version = version.number
+        # D12: closed by the draft it was staged for: no longer staged for the agents.
+        item.staged_for_agents_at = item.staged_for_agents_by = None
         await audit.record(
             session,
             principal,

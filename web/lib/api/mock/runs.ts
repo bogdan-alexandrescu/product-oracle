@@ -13,7 +13,11 @@ type SegmentOut = Schemas["SegmentOut"];
 type CheckpointOut = Schemas["CheckpointOut"];
 type FeatureSetCheck = Schemas["FeatureSetCheck"];
 type PrdScopeOut = Schemas["PrdScopeOut"];
-type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version">;
+type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version" | "staged_for_agents"> & {
+  /** D12: staged for the agents (when, by whom); open items only count. */
+  staged_for_agents_at?: string | null;
+  staged_for_agents_by?: string | null;
+};
 type DocumentRow = Pick<Schemas["DocumentSummary"], "id" | "slug" | "title" | "kind" | "template" | "theme">;
 type VersionSource = Schemas["VersionSource"];
 type Kind = DocumentRow["kind"];
@@ -78,6 +82,8 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       requires_document: false,
       target_kind: "prd",
       source_kind: null,
+      in_new_run_dialog: true,
+      starts_from: null,
       segments: [
         { name: "baseline", title: "Baseline proposal", roles: ["researcher", "analyst"], scopes: [...READ, "write:proposals"], outputs: ["baseline.yaml", "summary.md"], checkpoint: "baseline_confirm", approver_role: "approver" },
         { name: "feature_set", title: "Feature set, dependencies and design", roles: ["analyst", "architect"], scopes: [...READ, "write:proposals"], outputs: ["feature_set.yaml", "design.md"], checkpoint: "feature_set", approver_role: "approver" },
@@ -92,6 +98,9 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       requires_document: true,
       target_kind: null,
       source_kind: null,
+      // D12: started from Build next draft on a document, never from the New run dialog.
+      in_new_run_dialog: false,
+      starts_from: { label: "Build next draft · open a PRD or roadmap and use Build next draft", href: null },
       segments: [
         { name: "next_draft", title: "Next draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver" },
       ],
@@ -103,6 +112,8 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       requires_document: false,
       target_kind: "roadmap",
       source_kind: "prd",
+      in_new_run_dialog: false,
+      starts_from: { label: "PRD to roadmap · Plan", href: "/roadmap" },
       segments: [
         { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver" },
         { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver" },
@@ -661,6 +672,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
           raised_on_version: f.raised_on_version,
           created_at: f.created_at,
           state: "open" as const,
+          staged_for_agents: false,
           suggestion_status: status(f),
         })),
       },

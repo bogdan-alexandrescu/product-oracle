@@ -14,6 +14,7 @@ from collections.abc import Awaitable
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import JSONResponse
 from markdown_it import MarkdownIt
 from markupsafe import escape
 
@@ -28,7 +29,10 @@ from oracle.jobs.schemas import (
     LlmJobOut,
     NextDraftApply,
     NextDraftIn,
+    NextDraftPlan,
+    NextDraftPlanIn,
     NextDraftPreview,
+    NextDraftRunIn,
     RefineIn,
     RefinementApply,
     RefinementPreview,
@@ -40,6 +44,8 @@ from oracle.jobs.schemas import (
     SuggestionStatus,
     VersionReports,
 )
+from oracle.runs import service as runs_service
+from oracle.runs.schemas import RunOut
 from oracle.v2.models import ProductIntake
 
 router = APIRouter(prefix="/v1", tags=["llm-jobs"], dependencies=[Depends(require_role("viewer"))])
@@ -177,14 +183,60 @@ async def list_staged_changes(
     return await _call(next_draft.staged_changes(db, doc, include_gone))
 
 
-@router.post(DOC + "/next-draft", response_model=LlmJobOut, status_code=201)
-async def build_next_draft(
-    doc: str, body: NextDraftIn, principal: Approver, db: TenantDB
-) -> LlmJobOut:
+@router.post(DOC + "/next-draft/plan", response_model=NextDraftPlan)
+async def plan_next_draft(
+    doc: str, body: NextDraftPlanIn, principal: Approver, db: TenantDB
+) -> NextDraftPlan:
+    """Which engine builds the chosen staged items (null: every staged one) and why:
+    ``oracle`` (Oracle rewrites the sections itself and shows a preview) or ``agents`` (a
+    feedback-loop run writes the draft, with its estimate and whether an owner must
+    approve it). ``refused`` says why a built-in build cannot start."""
+    return await _call(next_draft.plan(db, doc, body.suggestion_ids, body.feedback_ids, body.depth))
+
+
+@router.post(DOC + "/next-draft/run", response_model=RunOut, status_code=201)
+async def build_next_draft_with_agents(
+    doc: str, body: NextDraftRunIn, principal: ApproverNow, db: TenantDB
+) -> RunOut:
+    """Build the next draft with the agents: a feedback-loop run given exactly the chosen
+    items (accepted text included), estimated and started, or left awaiting an owner's
+    approval over the threshold. 409 when the plan says Oracle builds them."""
+    try:
+        run_id = await next_draft.start_run(
+            db, principal, doc, body.suggestion_ids, body.feedback_ids, body.depth
+        )
+    except service.JobError as e:
+        raise HTTPException(e.status, str(e)) from e
+    except runs_service.RunError as e:
+        raise HTTPException(e.status, str(e)) from e
+    await runs_service.submit_queued(db, run_id)
+    return await runs_service.read_run(db, run_id, principal)
+
+
+@router.post(
+    DOC + "/next-draft",
+    response_model=LlmJobOut,
+    status_code=201,
+    responses={409: {"description": "Locked sections, or ``needs_agents`` with ``why``"}},
+)
+async def build_next_draft(doc: str, body: NextDraftIn, principal: Approver, db: TenantDB):
     """Build the next draft: one job rewrites every section the chosen staged suggestions
     touch (default: all staged), over the latest version. Locked sections are refused
-    (409, naming them)."""
-    job = await _call(next_draft.build(db, principal, doc, body.suggestion_ids))
+    (409, naming them); so are items that need the agents (409 ``needs_agents``, with
+    why: build them with ``next-draft/run``)."""
+    try:
+        job = await next_draft.build(db, principal, doc, body.suggestion_ids, body.feedback_ids)
+    except next_draft.NeedsAgents as e:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": str(e),
+                "code": "needs_agents",
+                "why": [w.model_dump(mode="json") for w in e.why],
+            },
+        )
+    except service.JobError as e:
+        raise HTTPException(e.status, str(e)) from e
     await db.commit()
     return await service.job_out(db, job)
 

@@ -1267,6 +1267,108 @@
         }
       }
     },
+    "/v1/feedback/{feedback_id}/stage-for-agents": {
+      "post": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Stage Feedback For Agents",
+        "description": "Stage an open item with no section text to accept for the agents (D12): the next\ndraft goes to the agents with it. 409 when it is already staged as a text change or\nis not open.",
+        "operationId": "stage_feedback_for_agents",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feedback Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Unstage Feedback For Agents",
+        "description": "Unstage an item staged for the agents: it is Open again.",
+        "operationId": "unstage_feedback_for_agents",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feedback Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/documents/{doc}/versions/{n}/feedback-package": {
       "get": {
         "tags": [
@@ -3688,13 +3790,135 @@
         }
       }
     },
+    "/v1/documents/{doc}/next-draft/plan": {
+      "post": {
+        "tags": [
+          "llm-jobs"
+        ],
+        "summary": "Plan Next Draft",
+        "description": "Which engine builds the chosen staged items (null: every staged one) and why:\n``oracle`` (Oracle rewrites the sections itself and shows a preview) or ``agents`` (a\nfeedback-loop run writes the draft, with its estimate and whether an owner must\napprove it). ``refused`` says why a built-in build cannot start.",
+        "operationId": "plan_next_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NextDraftPlanIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextDraftPlan"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/next-draft/run": {
+      "post": {
+        "tags": [
+          "llm-jobs"
+        ],
+        "summary": "Build Next Draft With Agents",
+        "description": "Build the next draft with the agents: a feedback-loop run given exactly the chosen\nitems (accepted text included), estimated and started, or left awaiting an owner's\napproval over the threshold. 409 when the plan says Oracle builds them.",
+        "operationId": "build_next_draft_with_agents",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NextDraftRunIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/documents/{doc}/next-draft": {
       "post": {
         "tags": [
           "llm-jobs"
         ],
         "summary": "Build Next Draft",
-        "description": "Build the next draft: one job rewrites every section the chosen staged suggestions\ntouch (default: all staged), over the latest version. Locked sections are refused\n(409, naming them).",
+        "description": "Build the next draft: one job rewrites every section the chosen staged suggestions\ntouch (default: all staged), over the latest version. Locked sections are refused\n(409, naming them); so are items that need the agents (409 ``needs_agents``, with\nwhy: build them with ``next-draft/run``).",
         "operationId": "build_next_draft",
         "security": [
           {
@@ -3735,6 +3959,9 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Locked sections, or ``needs_agents`` with ``why``"
           },
           "422": {
             "description": "Validation Error",
@@ -25720,6 +25947,60 @@
         "title": "AdvisoryIn",
         "description": "An advisory signal for a conditional module (AI analysis or a priority score)."
       },
+      "AgentItem": {
+        "properties": {
+          "feedback_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feedback Id"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "staged_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staged By Name"
+          },
+          "staged_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staged At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feedback_id",
+          "summary"
+        ],
+        "title": "AgentItem",
+        "description": "D12: a feedback item an approver staged for the agents (no section text to accept)."
+      },
       "AgentRoleOut": {
         "properties": {
           "key": {
@@ -39390,6 +39671,11 @@
               }
             ],
             "title": "Staged For Version"
+          },
+          "staged_for_agents": {
+            "type": "boolean",
+            "title": "Staged For Agents",
+            "default": false
           }
         },
         "type": "object",
@@ -40068,6 +40354,21 @@
             },
             "type": "array",
             "title": "Segments"
+          },
+          "in_new_run_dialog": {
+            "type": "boolean",
+            "title": "In New Run Dialog",
+            "default": false
+          },
+          "starts_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FlowStart"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -40146,6 +40447,30 @@
           "approver_role"
         ],
         "title": "FlowSegmentOut"
+      },
+      "FlowStart": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "href": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Href"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "title": "FlowStart"
       },
       "FollowUpOut": {
         "properties": {
@@ -41847,6 +42172,11 @@
               }
             ],
             "title": "Staged For Version"
+          },
+          "staged_for_agents": {
+            "type": "boolean",
+            "title": "Staged For Agents",
+            "default": false
           },
           "suggestion_status": {
             "anyOf": [
@@ -46995,10 +47325,144 @@
               }
             ],
             "title": "Suggestion Ids"
+          },
+          "feedback_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback Ids"
           }
         },
         "type": "object",
         "title": "NextDraftIn"
+      },
+      "NextDraftPlan": {
+        "properties": {
+          "engine": {
+            "type": "string",
+            "enum": [
+              "oracle",
+              "agents"
+            ],
+            "title": "Engine"
+          },
+          "why": {
+            "items": {
+              "$ref": "#/components/schemas/NextDraftReason"
+            },
+            "type": "array",
+            "title": "Why",
+            "default": []
+          },
+          "text_changes": {
+            "type": "integer",
+            "title": "Text Changes"
+          },
+          "agent_items": {
+            "type": "integer",
+            "title": "Agent Items"
+          },
+          "sections": {
+            "type": "integer",
+            "title": "Sections"
+          },
+          "next_version": {
+            "type": "integer",
+            "title": "Next Version"
+          },
+          "needs_owner_approval": {
+            "type": "boolean",
+            "title": "Needs Owner Approval",
+            "default": false
+          },
+          "estimate_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate Usd"
+          },
+          "refused": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refused"
+          }
+        },
+        "type": "object",
+        "required": [
+          "engine",
+          "text_changes",
+          "agent_items",
+          "sections",
+          "next_version"
+        ],
+        "title": "NextDraftPlan",
+        "description": "D12: which engine builds the chosen staged items, and why.\n\n``oracle``: Oracle's own refinement batch rewrites the sections and shows a preview.\n``agents``: a feedback-loop run writes the draft (``why`` says why)."
+      },
+      "NextDraftPlanIn": {
+        "properties": {
+          "suggestion_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Ids"
+          },
+          "feedback_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback Ids"
+          },
+          "depth": {
+            "type": "string",
+            "enum": [
+              "quick",
+              "standard",
+              "deep"
+            ],
+            "title": "Depth",
+            "default": "standard"
+          }
+        },
+        "type": "object",
+        "title": "NextDraftPlanIn"
       },
       "NextDraftPreview": {
         "properties": {
@@ -47088,6 +47552,49 @@
         "title": "NextDraftPreview",
         "description": "The combined preview of a next-draft build: one entry per revised section.\n\nSections are empty until the job has succeeded (``job.status`` says where it is)."
       },
+      "NextDraftReason": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "whole_draft",
+              "structure",
+              "section_gone",
+              "roadmap_items"
+            ],
+            "title": "Code"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "feedback_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Feedback Ids",
+            "default": []
+          },
+          "suggestion_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Suggestion Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "text"
+        ],
+        "title": "NextDraftReason",
+        "description": "Why the agents write the next draft, in plain words, with the items it is about."
+      },
       "NextDraftResolution": {
         "properties": {
           "feedback_id": {
@@ -47121,6 +47628,52 @@
           "status"
         ],
         "title": "NextDraftResolution"
+      },
+      "NextDraftRunIn": {
+        "properties": {
+          "suggestion_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Ids"
+          },
+          "feedback_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback Ids"
+          },
+          "depth": {
+            "type": "string",
+            "enum": [
+              "quick",
+              "standard",
+              "deep"
+            ],
+            "title": "Depth",
+            "default": "standard"
+          }
+        },
+        "type": "object",
+        "title": "NextDraftRunIn"
       },
       "NextDraftSection": {
         "properties": {
@@ -60561,6 +61114,14 @@
                 "type": "null"
               }
             ]
+          },
+          "agent_items": {
+            "items": {
+              "$ref": "#/components/schemas/AgentItem"
+            },
+            "type": "array",
+            "title": "Agent Items",
+            "default": []
           }
         },
         "type": "object",

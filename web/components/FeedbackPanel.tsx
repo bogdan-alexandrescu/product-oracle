@@ -12,6 +12,7 @@ import { api, unwrap, type FeedbackItem, type FeedbackStatus, type Suggestion } 
 import { hasRole, useMe } from "@/lib/me";
 import { sectionHref } from "@/lib/section-link";
 import { useQuery } from "@/lib/use-query";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 /** Where a row's section link goes: the section in this version, else the version it was raised on. */
 export type GoTo = {
@@ -132,7 +133,14 @@ function SuggestionRowInner({ item, suggestion, doc, current, goTo, canDecide, o
       // C1e: a staged item is decided; it waits for "Build draft" in the page header.
       actions={
         canDecide &&
-        (open ? <SuggestionActions d={d} /> : item.state !== "staged" && <TriageActions item={item} onChanged={onChanged} />)
+        (open ? (
+          <>
+            <SuggestionActions d={d} />
+            <StageForAgents item={item} onChanged={onChanged} />
+          </>
+        ) : (
+          (item.state !== "staged" || item.staged_for_agents) && <TriageActions item={item} onChanged={onChanged} />
+        ))
       }
       form={canDecide && open && <SuggestionForm d={d} />}
     >
@@ -145,12 +153,70 @@ function PlainRow({ item, doc, current, goTo, canDecide, onChanged }: RowProps) 
   return <Row item={item} doc={doc} current={current} goTo={goTo} actions={canDecide && <TriageActions item={item} onChanged={onChanged} />} />;
 }
 
+/**
+ * D12: an open item with no section text to accept (its suggestion is an answer, none,
+ * dismissed or absent, or a whole-draft remark) can be staged for the agents.
+ */
+export function canStageForAgents(item: FeedbackItem): boolean {
+  if (item.status !== "open") return false;
+  if (item.staged_for_agents) return true;
+  if (item.state === "staged") return false;
+  const s = item.suggestion;
+  if (s?.kind === "duplicate" && s.status === "open") return false;
+  return !(s && s.kind === "section_text" && (s.status === "open" || s.status === "accepted"));
+}
+
+/** Stage for agents / Unstage: the next draft goes to the agents with the item. */
+export function StageForAgents({ item, onChanged }: { item: FeedbackItem; onChanged?: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!canStageForAgents(item)) return null;
+  const on = !item.staged_for_agents;
+  async function act() {
+    setBusy(true);
+    setError(null);
+    try {
+      const params = { params: { path: { feedback_id: item.id } } };
+      await unwrap(
+        on
+          ? api.POST("/v1/feedback/{feedback_id}/stage-for-agents", params)
+          : api.DELETE("/v1/feedback/{feedback_id}/stage-for-agents", params),
+      );
+      invalidateWaiting();
+      waitingChanged();
+      onChanged?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <Button variant={on ? "secondary" : "ghost"} icon={on ? "doc" : undefined} disabled={busy} onClick={act}>
+        {on ? "Stage for agents" : "Unstage"}
+      </Button>
+      {error && <InlineError>{error}</InlineError>}
+    </>
+  );
+}
+
+/** "Staged for draft N · agents" on an item staged for the agents. */
+export function AgentStagedNote({ item }: { item: FeedbackItem }) {
+  if (!item.staged_for_agents) return null;
+  return (
+    <p className="mt-1.5 text-sm font-semibold text-text2" data-testid="agent-staged">
+      Staged for draft {item.staged_for_version} · agents
+    </p>
+  );
+}
+
 export function TriageActions({ item, onChanged }: { item: FeedbackItem; onChanged?: () => void }) {
   const t = useTriage(item, onChanged);
   if (item.status === "superseded") return null;
   return (
     <>
-      {item.status === "open" ? (
+      {item.staged_for_agents ? null : item.status === "open" ? (
         <Button variant="solid" icon="check" disabled={t.busy} onClick={() => t.set("addressed")}>
           Resolve
         </Button>
@@ -159,6 +225,7 @@ export function TriageActions({ item, onChanged }: { item: FeedbackItem; onChang
           Reopen
         </Button>
       )}
+      <StageForAgents item={item} onChanged={onChanged} />
       {t.error && <InlineError>{t.error}</InlineError>}
     </>
   );
@@ -204,6 +271,7 @@ function Row({
       )}
       {form}
       <p className="mt-1.5 text-[15px] leading-[22px] text-text">{item.summary}</p>
+      <AgentStagedNote item={item} />
       {item.anchor && <Quote>{item.anchor.exact}</Quote>}
       {item.resolution_note && (
         <p className="mt-1 text-sm leading-5 text-text2">

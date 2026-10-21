@@ -6,7 +6,7 @@ apply resolutions -> audit -> commit.
 """
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from sqlalchemy import func, select
@@ -43,6 +43,7 @@ from oracle.docs.schemas import (
 )
 from oracle.review import service as review_service
 from oracle.review.models import SectionReview
+from oracle.review.schemas import Resolution
 from oracle.sources.models import SourceItem
 from oracle.templates.builtins import BUILTIN_TEMPLATES_BY_KEY
 from oracle.templates.models import Template, TemplateVersion
@@ -96,6 +97,9 @@ IMPORT_CAUSES = ("draft_imported", "section_edited", "patch_accepted", "run_draf
 class ImportResult:
     version: VersionOut
     created: bool
+    # The draft's resolutions as parsed (all of them, applied or not): a caller reads them
+    # here rather than parse the draft again on the event loop.
+    resolutions: list[Resolution] = field(default_factory=list)
 
 
 async def find_document(db: AsyncSession, doc: str, *, for_update: bool = False) -> Document | None:
@@ -751,7 +755,11 @@ async def import_draft(
                     db, principal, document, previous, held, origin=origin, run_id=run_id
                 )
                 await db.commit()
-            return ImportResult(version=await read_version(db, existing), created=False)
+            return ImportResult(
+                version=await read_version(db, existing),
+                created=False,
+                resolutions=draft.resolutions,
+            )
 
     brief, brief_source, layer_of = await _layers(db, document, draft)
     revisions = draft_revisions(draft, layer_of)
@@ -963,7 +971,9 @@ async def import_draft(
         },
     )
     await db.commit()
-    return ImportResult(version=await read_version(db, version), created=True)
+    return ImportResult(
+        version=await read_version(db, version), created=True, resolutions=draft.resolutions
+    )
 
 
 def _unknown_base(base: int, latest: int | None) -> DraftError:

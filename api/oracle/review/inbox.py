@@ -1,7 +1,8 @@
 """C1e: feedback in the Inbox by state, and the staged rows for the next draft.
 
 States: ``new`` (open and raised after my last Inbox visit), ``open``, ``staged`` (its
-suggestion was accepted and waits for the next draft), ``declined`` and ``done``
+suggestion was accepted and waits for the next draft, or an approver staged it for the
+agents, D12), ``declined`` and ``done``
 (addressed, applied or superseded). My last visit is a per-user preference
 (``inbox_last_seen_at``), set by ``GET /v1/inbox?mark_seen=true``; before the first visit
 every open item is new.
@@ -20,7 +21,7 @@ from oracle.jobs.next_draft import current_job
 from oracle.jobs.service import latest_suggestions
 from oracle.preferences.models import UserPreference
 from oracle.review.models import FeedbackItem
-from oracle.review.service import feedback_state, latest_numbers
+from oracle.review.service import feedback_state, latest_numbers, staged_for_agents
 from oracle.runs.schemas import InboxCounts, InboxFeedbackItem, InboxStaged
 
 LAST_SEEN = "inbox_last_seen_at"
@@ -124,7 +125,7 @@ async def feedback_states(
     settled_listed = 0
     for f in rows:
         s = suggestions.get(f.id)
-        state = feedback_state(f.status, s)
+        state = feedback_state(f.status, s, f.staged_for_agents_at)
         if state == "open" and (seen is None or f.created_at > seen):
             state = "new"
         if f.id in live_ids:
@@ -157,6 +158,7 @@ async def feedback_states(
                 staged_for_version=(latest.get(f.document_id) or 0) + 1
                 if state == "staged"
                 else None,
+                staged_for_agents=staged_for_agents(f),
                 suggestion_status=s.status if s else None,  # type: ignore[arg-type]
                 suggestion_kind=s.kind if s else None,
                 suggestion_id=acting.id if acting else None,
@@ -169,8 +171,14 @@ async def feedback_states(
     return items, counts
 
 
+def _agent_staged():
+    """D12: open items an approver staged for the agents."""
+    return (FeedbackItem.status == "open", FeedbackItem.staged_for_agents_at.is_not(None))
+
+
 async def staged_rows(db: AsyncSession) -> list[InboxStaged]:
-    """One row per document with staged changes: 'N changes staged for draft N+1'."""
+    """One row per document with staged changes: 'N changes staged for draft N+1',
+    counting the text changes and the items staged for the agents."""
     doc_ids = set(
         await db.scalars(
             select(LlmSuggestion.document_id).where(
@@ -180,6 +188,16 @@ async def staged_rows(db: AsyncSession) -> list[InboxStaged]:
             )
         )
     )
+    agents = dict(
+        (
+            await db.execute(
+                select(FeedbackItem.document_id, func.count())
+                .where(*_agent_staged())
+                .group_by(FeedbackItem.document_id)
+            )
+        ).all()
+    )
+    doc_ids |= set(agents)
     if not doc_ids:
         return []
     latest = await latest_numbers(db, doc_ids)
@@ -205,7 +223,7 @@ async def staged_rows(db: AsyncSession) -> list[InboxStaged]:
                 title=d.title,
                 latest_version=number,
                 next_version=(number or 0) + 1,
-                count=len(buildable),
+                count=len(buildable) + agents.get(d.id, 0),
                 gone_count=len(rows) - len(buildable),
                 draft_job_id=job.id if job else None,
                 draft_job_status=job.status if job else None,

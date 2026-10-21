@@ -203,7 +203,9 @@ async def test_items_staged_on_an_earlier_draft_stay_staged_for_the_latest(clien
     resp = await client.post(
         f"{DOC}/next-draft", json={"suggestion_ids": [ids["sol_s"]]}, headers=ctx["headers"]
     )
-    assert resp.status_code == 422 and "no longer" in resp.json()["detail"]
+    # D12: a chosen change whose section is gone needs the agents (one rule, choose_engine).
+    assert resp.status_code == 409 and resp.json()["code"] == "needs_agents"
+    assert [w["code"] for w in resp.json()["why"]] == ["section_gone"]
     job = await build(client, ctx, fake)
     assert job["input"]["suggestion_ids"] == [ids["goal_s"]]
     _, payload = fake.calls[-1]

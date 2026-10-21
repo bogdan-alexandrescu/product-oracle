@@ -365,6 +365,32 @@ export interface paths {
         patch: operations["update_feedback"];
         trace?: never;
     };
+    "/v1/feedback/{feedback_id}/stage-for-agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage Feedback For Agents
+         * @description Stage an open item with no section text to accept for the agents (D12): the next
+         *     draft goes to the agents with it. 409 when it is already staged as a text change or
+         *     is not open.
+         */
+        post: operations["stage_feedback_for_agents"];
+        /**
+         * Unstage Feedback For Agents
+         * @description Unstage an item staged for the agents: it is Open again.
+         */
+        delete: operations["unstage_feedback_for_agents"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{doc}/versions/{n}/feedback-package": {
         parameters: {
             query?: never;
@@ -1049,6 +1075,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{doc}/next-draft/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Plan Next Draft
+         * @description Which engine builds the chosen staged items (null: every staged one) and why:
+         *     ``oracle`` (Oracle rewrites the sections itself and shows a preview) or ``agents`` (a
+         *     feedback-loop run writes the draft, with its estimate and whether an owner must
+         *     approve it). ``refused`` says why a built-in build cannot start.
+         */
+        post: operations["plan_next_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/next-draft/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Build Next Draft With Agents
+         * @description Build the next draft with the agents: a feedback-loop run given exactly the chosen
+         *     items (accepted text included), estimated and started, or left awaiting an owner's
+         *     approval over the threshold. 409 when the plan says Oracle builds them.
+         */
+        post: operations["build_next_draft_with_agents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{doc}/next-draft": {
         parameters: {
             query?: never;
@@ -1062,7 +1133,8 @@ export interface paths {
          * Build Next Draft
          * @description Build the next draft: one job rewrites every section the chosen staged suggestions
          *     touch (default: all staged), over the latest version. Locked sections are refused
-         *     (409, naming them).
+         *     (409, naming them); so are items that need the agents (409 ``needs_agents``, with
+         *     why: build them with ``next-draft/run``).
          */
         post: operations["build_next_draft"];
         delete?: never;
@@ -7293,6 +7365,25 @@ export interface components {
             /** Rationale */
             rationale: string;
         };
+        /**
+         * AgentItem
+         * @description D12: a feedback item an approver staged for the agents (no section text to accept).
+         */
+        AgentItem: {
+            /**
+             * Feedback Id
+             * Format: uuid
+             */
+            feedback_id: string;
+            /** Summary */
+            summary: string;
+            /** Section Key */
+            section_key?: string | null;
+            /** Staged By Name */
+            staged_by_name?: string | null;
+            /** Staged At */
+            staged_at?: string | null;
+        };
         /** AgentRoleOut */
         AgentRoleOut: {
             /** Key */
@@ -12145,6 +12236,11 @@ export interface components {
             state: "open" | "staged" | "declined" | "done";
             /** Staged For Version */
             staged_for_version?: number | null;
+            /**
+             * Staged For Agents
+             * @default false
+             */
+            staged_for_agents: boolean;
         };
         /**
          * FeedbackPackage
@@ -12380,6 +12476,12 @@ export interface components {
             entry?: string | null;
             /** Segments */
             segments: components["schemas"]["FlowSegmentOut"][];
+            /**
+             * In New Run Dialog
+             * @default false
+             */
+            in_new_run_dialog: boolean;
+            starts_from?: components["schemas"]["FlowStart"] | null;
         };
         /** FlowSegmentOut */
         FlowSegmentOut: {
@@ -12403,6 +12505,13 @@ export interface components {
              * @enum {string}
              */
             approver_role: "viewer" | "commenter" | "approver" | "owner";
+        };
+        /** FlowStart */
+        FlowStart: {
+            /** Label */
+            label: string;
+            /** Href */
+            href?: string | null;
         };
         /**
          * FollowUpOut
@@ -13026,6 +13135,11 @@ export interface components {
             addressed_in_version?: number | null;
             /** Staged For Version */
             staged_for_version?: number | null;
+            /**
+             * Staged For Agents
+             * @default false
+             */
+            staged_for_agents: boolean;
             /** Suggestion Status */
             suggestion_status?: ("open" | "accepted" | "dismissed" | "applied" | "superseded") | null;
             /** Suggestion Kind */
@@ -15061,6 +15175,57 @@ export interface components {
         NextDraftIn: {
             /** Suggestion Ids */
             suggestion_ids?: string[] | null;
+            /** Feedback Ids */
+            feedback_ids?: string[] | null;
+        };
+        /**
+         * NextDraftPlan
+         * @description D12: which engine builds the chosen staged items, and why.
+         *
+         *     ``oracle``: Oracle's own refinement batch rewrites the sections and shows a preview.
+         *     ``agents``: a feedback-loop run writes the draft (``why`` says why).
+         */
+        NextDraftPlan: {
+            /**
+             * Engine
+             * @enum {string}
+             */
+            engine: "oracle" | "agents";
+            /**
+             * Why
+             * @default []
+             */
+            why: components["schemas"]["NextDraftReason"][];
+            /** Text Changes */
+            text_changes: number;
+            /** Agent Items */
+            agent_items: number;
+            /** Sections */
+            sections: number;
+            /** Next Version */
+            next_version: number;
+            /**
+             * Needs Owner Approval
+             * @default false
+             */
+            needs_owner_approval: boolean;
+            /** Estimate Usd */
+            estimate_usd?: number | null;
+            /** Refused */
+            refused?: string | null;
+        };
+        /** NextDraftPlanIn */
+        NextDraftPlanIn: {
+            /** Suggestion Ids */
+            suggestion_ids?: string[] | null;
+            /** Feedback Ids */
+            feedback_ids?: string[] | null;
+            /**
+             * Depth
+             * @default standard
+             * @enum {string}
+             */
+            depth: "quick" | "standard" | "deep";
         };
         /**
          * NextDraftPreview
@@ -15104,6 +15269,29 @@ export interface components {
              */
             skipped: components["schemas"]["SkippedSection"][];
         };
+        /**
+         * NextDraftReason
+         * @description Why the agents write the next draft, in plain words, with the items it is about.
+         */
+        NextDraftReason: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "whole_draft" | "structure" | "section_gone" | "roadmap_items";
+            /** Text */
+            text: string;
+            /**
+             * Feedback Ids
+             * @default []
+             */
+            feedback_ids: string[];
+            /**
+             * Suggestion Ids
+             * @default []
+             */
+            suggestion_ids: string[];
+        };
         /** NextDraftResolution */
         NextDraftResolution: {
             /**
@@ -15118,6 +15306,19 @@ export interface components {
             status: "addressed" | "declined";
             /** Note */
             note?: string | null;
+        };
+        /** NextDraftRunIn */
+        NextDraftRunIn: {
+            /** Suggestion Ids */
+            suggestion_ids?: string[] | null;
+            /** Feedback Ids */
+            feedback_ids?: string[] | null;
+            /**
+             * Depth
+             * @default standard
+             * @enum {string}
+             */
+            depth: "quick" | "standard" | "deep";
         };
         /** NextDraftSection */
         NextDraftSection: {
@@ -19757,6 +19958,11 @@ export interface components {
             /** Estimate Usd */
             estimate_usd?: number | null;
             draft_job?: components["schemas"]["LlmJobOut"] | null;
+            /**
+             * Agent Items
+             * @default []
+             */
+            agent_items: components["schemas"]["AgentItem"][];
         };
         /** StakeholderAnswerOut */
         StakeholderAnswerOut: {
@@ -22641,6 +22847,68 @@ export interface operations {
             };
         };
     };
+    stage_feedback_for_agents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unstage_feedback_for_agents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_feedback_package: {
         parameters: {
             query?: never;
@@ -23984,6 +24252,76 @@ export interface operations {
             };
         };
     };
+    plan_next_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NextDraftPlanIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextDraftPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    build_next_draft_with_agents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NextDraftRunIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     build_next_draft: {
         parameters: {
             query?: never;
@@ -24007,6 +24345,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LlmJobOut"];
                 };
+            };
+            /** @description Locked sections, or ``needs_agents`` with ``why`` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

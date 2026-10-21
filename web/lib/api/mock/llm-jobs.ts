@@ -9,12 +9,16 @@ import { wordDiff } from "@/lib/diff";
 import { turnedOff } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 
-import { KIND as BATCH, nextDraftRoute, runBatch, stateOf } from "./next-draft";
+import { KIND as BATCH, nextDraftRoute, runBatch, stageRoute, stateOf, type StartRun } from "./next-draft";
 
 type Job = Schemas["LlmJobOut"];
 type Suggestion = Schemas["SuggestionOut"];
 /** A stored feedback item; its C1e state is derived on the way out (withSuggestion). */
-type Feedback = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version">;
+type Feedback = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version" | "staged_for_agents"> & {
+  /** D12: staged for the agents (when, by whom); open items only count. */
+  staged_for_agents_at?: string | null;
+  staged_for_agents_by?: string | null;
+};
 type Role = Schemas["Me"]["role"];
 type Section = { section_key: string; level: number; heading: string; body_md: string; body_text: string };
 type Version = { id: string; document_id: string; number: number; created_at: string; sections: Section[] };
@@ -56,6 +60,10 @@ export type LlmContext = {
   ) => Version;
   /** A member's name (their email) for "accepted by". */
   memberName?: (id: string) => string | null;
+  /** D12: the mock's override of the agents' run estimate (the "costly" setting). */
+  runEstimateUsd?: () => number | null;
+  /** D12: starts the agents' feedback-loop run for Build next draft. */
+  startRun?: StartRun;
 };
 
 /** The per-document switches; the next-draft batch is refinement and shares its switch. */
@@ -547,6 +555,9 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
       p[3] === "staged-changes" ||
       p[3] === "next-draft" ||
       (p[3] === "versions" && (p[5] === "reports" || p[7] === "refine")));
+  if (p[1] === "feedback" && p[3] === "stage-for-agents" && !approver) return fail(403, "Requires the approver role");
+  const staging = await stageRoute(ctx, req, p, (f) => withSuggestion(db, f).suggestion ?? null);
+  if (staging) return staging;
   if (!jobRoute && !suggestionRoute && !docRoute) return null;
   if (m !== "GET" && !approver && !(docRoute && p[4] === "settings")) return fail(403, "Requires the approver role");
 
@@ -554,6 +565,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
   tick(ctx);
 
   const batch = await nextDraftRoute(ctx, req, p, q, {
+    startRun: ctx.startRun,
     makeJob: (doc, v, input) => makeJob(ctx, doc, BATCH, v, { input: { version: v.number, ...input } }),
     enabled: (doc) => enabled(doc, BATCH),
     onImported: (doc, v) => {
