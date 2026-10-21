@@ -77,22 +77,26 @@ test("Classify now: an approver starts triage and sees it finish", async ({ page
   await expect(found(page)).toHaveCount(0);
   await page.getByRole("button", { name: "About Classify now" }).click();
   await expect(page.getByText("Oracle also classifies new requests every day at 07:00 PT")).toBeVisible();
-  await page.getByRole("button", { name: "Classify now" }).click();
+  await page.getByRole("button", { name: "Classify now", exact: true }).click();
   const status = page.getByTestId("triage-status");
   await expect(status).toContainText(/Oracle is classifying · started (just now|\d+ min ago)/);
-  await expect(page.getByRole("button", { name: "Classify now" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Classify now", exact: true })).toBeDisabled();
   await expect(status).toContainText("4 suggestions, 0 found in your sources", { timeout: 15_000 });
-  await expect(page.getByRole("button", { name: "Classify now" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Classify now", exact: true })).toBeEnabled();
 });
 
-test("commenters and viewers do not start triage", async ({ page }) => {
-  // protects=behaviour rule 2 (approvers and owners start triage); fails_when=Classify now is
-  // offered to a commenter or a viewer; no_claim=the API's 403 (tests/test_requests_triage.py).
-  await login(page, "commenter@example.com");
-  await openRequests(page);
-  await expect(page.getByRole("button", { name: "Classify now" })).toHaveCount(0);
-  await expect(found(page)).toHaveCount(0);
-});
+for (const email of ["commenter@example.com", "viewer@example.com"]) {
+  test(`${email.split("@")[0]}s do not start triage`, async ({ page }) => {
+    // protects=behaviour rule 2 (approvers and owners start triage); fails_when=Classify now is
+    // offered to a commenter or a viewer, or someone else's found items show; no_claim=the API's
+    // 403 (tests/test_requests_triage.py).
+    await login(page, email);
+    await openRequests(page);
+    await expect(page.getByTestId("requests-empty")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Classify now", exact: true })).toHaveCount(0);
+    await expect(found(page)).toHaveCount(0);
+  });
+}
 
 test("phone: the found panel and the filing dialog fit 390 px", async ({ page }) => {
   // protects=the phone layout of lane 3's parts (no horizontal scroll; the dialog fits);

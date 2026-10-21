@@ -7369,6 +7369,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/requests/triage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Request Triage
+         * @description Oracle's latest triage run: under way, or how many suggestions it made and how many
+         *     possible requests it found in your own sources.
+         */
+        get: operations["get_request_triage"];
+        put?: never;
+        /**
+         * Start Request Triage
+         * @description Classify now: start Oracle's triage run (one analyst step, quick depth: $1.50). It
+         *     suggests a theme, goals, a duplicate and a feature for every New request and looks
+         *     through your own sources for requests; it decides nothing. 409 while one is under way.
+         *     Oracle also classifies new requests every day at 07:00 PT.
+         */
+        post: operations["start_request_triage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/requests/{request_id}": {
         parameters: {
             query?: never;
@@ -7530,6 +7558,68 @@ export interface paths {
          * @description Rename, describe, relink or archive a theme (archived: takes no new requests).
          */
         patch: operations["update_request_theme"];
+        trace?: never;
+    };
+    "/v1/request-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Request Candidates
+         * @description The possible requests Oracle found in your own sources: yours alone (S6).
+         */
+        get: operations["list_request_candidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-candidates/{candidate_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * File Request Candidate
+         * @description File a found item as a request, in its words unless you change them. Filing shares
+         *     the item: everyone who can see Requests reads your text, the item's title and link,
+         *     and a 400-character excerpt.
+         */
+        post: operations["file_request_candidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-candidates/{candidate_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Request Candidate
+         * @description Dismiss a found item: Oracle does not offer it again.
+         */
+        post: operations["dismiss_request_candidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/plan": {
@@ -9866,6 +9956,100 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * CandidateFile
+         * @description Filing a found item: its own words unless these say otherwise.
+         */
+        CandidateFile: {
+            /** Title */
+            title?: string | null;
+            /** Body */
+            body?: string | null;
+            /** Channel */
+            channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other") | null;
+            /** Requester Name */
+            requester_name?: string | null;
+            /** Requester Kind */
+            requester_kind?: ("customer" | "team" | "unknown") | null;
+            /** Goal Ids */
+            goal_ids?: string[] | null;
+            /** Theme Id */
+            theme_id?: string | null;
+        };
+        /**
+         * CandidateOut
+         * @description A possible request Oracle found in its owner's own source item (theirs alone).
+         */
+        CandidateOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Owner User Id
+             * Format: uuid
+             */
+            owner_user_id: string;
+            /** Run Id */
+            run_id: string | null;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string | null;
+            /** Requester Name */
+            requester_name: string | null;
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "support" | "sales" | "team" | "slack" | "meeting" | "doc" | "other";
+            /** Theme Title */
+            theme_title: string | null;
+            /** Goal Ids */
+            goal_ids: string[];
+            /** Confidence */
+            confidence: number | null;
+            /** Rationale */
+            rationale: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "filed" | "dismissed";
+            /** Request Id */
+            request_id: string | null;
+            source: components["schemas"]["CandidateSource"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * CandidateSource
+         * @description The item, as filing would share it: title, link, kind and excerpt.
+         */
+        CandidateSource: {
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Title */
+            title: string | null;
+            /** Url */
+            url: string | null;
+            /** Kind */
+            kind: string | null;
+            /** Excerpt */
+            excerpt: string | null;
+        };
         /** CatalogModuleDetail */
         CatalogModuleDetail: {
             /** Key */
@@ -10200,7 +10384,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review";
             /**
              * Status
              * @enum {string}
@@ -13585,7 +13769,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit";
             /** Title */
             title: string;
             /** Description */
@@ -13623,7 +13807,7 @@ export interface components {
              * Checkpoint
              * @enum {string}
              */
-            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review";
+            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review";
             /**
              * Approver Role
              * @enum {string}
@@ -14048,7 +14232,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review";
             /**
              * Status
              * @enum {string}
@@ -14089,7 +14273,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -20039,7 +20223,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit";
             /** Document */
             document?: string | null;
             /** Source */
@@ -20076,7 +20260,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review";
             /** Segment Seq */
             segment_seq?: number | null;
             /** Segment Title */
@@ -20127,7 +20311,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit";
             /** Flow Title */
             flow_title: string;
             /**
@@ -20162,7 +20346,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review") | null;
             /** Error */
             error?: string | null;
             /** Stuck */
@@ -20204,7 +20388,7 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
@@ -20277,7 +20461,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit";
             /** Flow Title */
             flow_title: string;
             /**
@@ -20312,7 +20496,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review") | null;
             /** Error */
             error?: string | null;
             /** Stuck */
@@ -20354,7 +20538,7 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
@@ -21357,7 +21541,7 @@ export interface components {
              * Checkpoint
              * @enum {string}
              */
-            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review";
+            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review";
             /** Checkpoint On */
             checkpoint_on: boolean;
             /** Estimate Usd */
@@ -24244,6 +24428,47 @@ export interface components {
             tracker: "linear" | "jira" | "github" | "other";
             /** Records */
             records: components["schemas"]["TrackerRecordIn"][];
+        };
+        /** TriageStart */
+        TriageStart: {
+            /** Depth */
+            depth?: ("quick" | "standard") | null;
+        };
+        /**
+         * TriageStatus
+         * @description The latest triage run, for the Requests header. Empty before the first one.
+         */
+        TriageStatus: {
+            /** Run Id */
+            run_id?: string | null;
+            /** Status */
+            status?: ("draft" | "awaiting_approval" | "running" | "awaiting_checkpoint" | "paused_overrun" | "succeeded" | "failed" | "cancelled") | null;
+            /**
+             * Active
+             * @default false
+             */
+            active: boolean;
+            /**
+             * Automatic
+             * @default false
+             */
+            automatic: boolean;
+            /** Started At */
+            started_at?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /**
+             * Suggestions
+             * @default 0
+             */
+            suggestions: number;
+            /**
+             * Found
+             * @default 0
+             */
+            found: number;
+            /** Error */
+            error?: string | null;
         };
         /** Unaligned */
         Unaligned: {
@@ -38791,6 +39016,59 @@ export interface operations {
             };
         };
     };
+    get_request_triage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriageStatus"];
+                };
+            };
+        };
+    };
+    start_request_triage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TriageStart"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_request: {
         parameters: {
             query?: never;
@@ -39118,6 +39396,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RequestThemeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_request_candidates: {
+        parameters: {
+            query?: {
+                status?: ("open" | "filed" | "dismissed") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    file_request_candidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CandidateFile"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_request_candidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateOut"];
                 };
             };
             /** @description Validation Error */

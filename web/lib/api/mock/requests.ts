@@ -5,11 +5,12 @@
  * (to the root, no cycles), disqualify (Other needs a note), reopen, accepting Oracle's
  * suggestion, and themes. It keeps the API's shapes and role rules.
  *
- * It also stands in for the requests Oracle found in the signed-in person's own sources
- * (GET /v1/request-candidates, file, dismiss): their API comes with the triage lane, so
- * their shape is local here. Each is its owner's alone; filing one shares the item's
- * title, link and a 400-character excerpt (C1 "Found items"). The mock has no source
- * items: a found item carries that copy itself.
+ * It also stands in for Oracle's triage (GET and POST /v1/requests/triage: Classify now
+ * starts a run that finishes on its own a few seconds later, suggesting a goal and theme for
+ * every New request with none) and for the requests Oracle found in the signed-in person's
+ * own sources (GET /v1/request-candidates, file, dismiss). Each found item is its owner's
+ * alone; filing one shares the item's title, link and a 400-character excerpt (C1 "Found
+ * items"). The mock has no source items: a found item carries that copy itself.
  *
  * Seed: 12 requests over 4 channels, 3 themes, 2 merged, 1 disqualified, 1 with a
  * suggestion, 2 found items for the seed owner. Synthetic placeholders only.
@@ -24,25 +25,14 @@ type Channel = RequestOut["channel"];
 type State = RequestOut["state"];
 type Part = Schemas["AcceptSuggestionIn"]["parts"][number];
 
-/** A found item (the triage lane's CandidateOut; local until its API lands). */
-export interface CandidateOut {
+export type CandidateOut = Schemas["CandidateOut"];
+
+/** Oracle's latest triage run, as the mock keeps it. */
+interface TriageRun {
   id: string;
-  owner_user_id: string;
-  run_id: string | null;
-  title: string;
-  body: string | null;
-  requester_name: string | null;
-  channel: Exclude<Channel, "interview">;
-  theme_title: string | null;
-  goal_ids: string[];
-  confidence: number | null;
-  rationale: string | null;
-  status: "open" | "filed" | "dismissed";
-  request_id: string | null;
-  /** What filing shares: the item's title, link, kind and excerpt (at most 400 characters). */
-  source: { item_id: string; title: string | null; url: string | null; kind: string; excerpt: string | null };
-  created_at: string;
-  updated_at: string;
+  created_by: string;
+  started_at: string;
+  finished_at: string | null;
 }
 
 /** A request as stored: the API's row, before themes, PRDs and mentions are joined. */
@@ -58,6 +48,7 @@ export interface RequestsDb {
   requests: Row[];
   themes: Theme[];
   candidates: CandidateOut[];
+  triage?: TriageRun | null;
 }
 
 interface GoalRef {
@@ -93,6 +84,8 @@ const STATES: State[] = ["new", "qualified", "merged", "disqualified"];
 const CHANNELS: Channel[] = ["support", "sales", "team", "interview", "slack", "meeting", "doc", "other"];
 const REASONS = ["no_goal", "out_of_scope", "duplicate", "not_a_request", "wont_do", "other"];
 const NEEDS_GOAL = "Link a confirmed goal first, or disqualify it as 'No goal'";
+/** How long the mock's triage run takes. */
+const TRIAGE_MS = 3_000;
 const EXCERPT_MAX = 400;
 
 const now = () => new Date().toISOString();
@@ -305,6 +298,41 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
     return row;
   }
 
+  // --- triage (Classify now and the header's status line) --------------------------------
+  if (p[1] === "requests" && p[2] === "triage" && p.length === 3) {
+    const run = db.triage ?? null;
+    if (run && !run.finished_at && Date.now() - Date.parse(run.started_at) >= TRIAGE_MS) {
+      // The run ends: a suggestion for every New request with none (data only; nothing decided).
+      const goal = [...confirmed][0];
+      for (const r of db.requests.filter((x) => x.state === "new" && !x.suggestion)) {
+        const theme = db.themes.find((t) => !t.archived_at && goal && t.goal_ids.includes(goal));
+        r.suggestion = {
+          theme_id: theme?.id ?? null, theme_title: theme?.title ?? null, goal_ids: goal ? [goal] : [], duplicate_of: null,
+          feature_id: null, confidence: 0.55, rationale: "Asked for in the same words as this theme's requests",
+          run_id: run.id, at: now(), accepted: [],
+        };
+      }
+      run.finished_at = now();
+    }
+    if (m === "GET") {
+      const status: Schemas["TriageStatus"] = run
+        ? {
+            run_id: run.id, status: run.finished_at ? "succeeded" : "running", active: !run.finished_at,
+            automatic: false, started_at: run.started_at, finished_at: run.finished_at,
+            suggestions: db.requests.filter((r) => r.suggestion?.run_id === run.id).length,
+            found: db.candidates.filter((c) => c.run_id === run.id && c.owner_user_id === ctx.userId).length, error: null,
+          }
+        : { run_id: null, status: null, active: false, automatic: false, started_at: null, finished_at: null, suggestions: 0, found: 0, error: null };
+      return json(200, status);
+    }
+    if (m === "POST") {
+      if (!atLeast(ctx.role, "approver")) return forbidden("approver");
+      if (run && !run.finished_at) return fail(409, "Oracle is already classifying requests");
+      db.triage = { id: mockUuid(), created_by: ctx.userId, started_at: now(), finished_at: null };
+      return json(201, { id: db.triage.id, flow: "request_triage", status: "running", estimate_usd: 1.5 });
+    }
+  }
+
   if (p[1] === "requests" && p[2]) {
     const row = db.requests.find((r) => r.id === p[2]);
     if (!row) return fail(404, "Request not found");
@@ -485,7 +513,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       const created = createRow(
         {
           title: candidate.title, body: candidate.body, channel: candidate.channel, requester_name: candidate.requester_name,
-          requester_kind: "customer", goal_ids: candidate.goal_ids.filter((g) => confirmed.has(g)),
+          requester_kind: "unknown", goal_ids: candidate.goal_ids.filter((g) => confirmed.has(g)),
           theme_id: candidate.theme_title ? byTitle(candidate.theme_title)?.id ?? null : null, ...input, source_item_id: null,
         },
         { ...candidate.source, removed: false },
