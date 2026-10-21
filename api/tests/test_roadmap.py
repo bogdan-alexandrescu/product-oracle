@@ -713,8 +713,8 @@ async def test_the_prompt_reads_the_companys_horizons(client, owner, runtime):
     await start(client, auth, await create(client, auth, source=PRD))
     prompt = runtime.submitted[0].steps[-1].prompt
     assert (
-        "now = short term, the current and next quarter; next = medium term, the next 2 "
-        "quarters; later = long term, 18 to 30 months"
+        "now = short term, the current and next quarter; next = medium term, the 2 quarters "
+        "after those two; later = long term, 18 to 30 months"
     ) in prompt
     assert "the current quarter;" not in prompt
 

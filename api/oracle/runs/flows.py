@@ -414,8 +414,8 @@ class SourceContext:
     # Verified schedule bases (CR-11): kind, reference, supports_date. The only sources
     # a milestone date may name.
     schedule_bases: list[dict[str, Any]] = field(default_factory=list)
-    # The company's planning horizons (A1, the planning_horizons setting); empty: B2's
-    # defaults (HORIZONS).
+    # The run's planning horizons (A1, the planning_horizons setting as the run started,
+    # run.knobs["planning_horizons"]); empty: B2's defaults (HORIZONS).
     horizons: dict[str, int] = field(default_factory=dict)
 
 
@@ -448,12 +448,14 @@ def horizon_lines(h: dict[str, int]) -> tuple[tuple[str, str, str], ...]:
     defaults keep HORIZONS' text word for word, so prompts did not change with A1."""
     if not h or h == DEFAULT_HORIZONS:
         return HORIZONS
-    short = "the current quarter" if h["short_quarters"] == 1 else "the current and next quarter"
-    medium = (
-        "the next quarter"
-        if h["medium_quarters"] == 1
-        else f"the next {h['medium_quarters']} quarters"
-    )
+    n = h["medium_quarters"]
+    if h["short_quarters"] == 1:
+        short = "the current quarter"
+        medium = "the next quarter" if n == 1 else f"the next {n} quarters"
+    else:
+        # Now holds the next quarter too, so Next never says "next": it starts after Now.
+        short = "the current and next quarter"
+        medium = "the quarter after those two" if n == 1 else f"the {n} quarters after those two"
     later = f"{h['long_from_months']} to {h['long_to_months']} months"
     return (("now", "short", short), ("next", "medium", medium), ("later", "long", later))
 

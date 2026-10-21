@@ -104,7 +104,8 @@ document the run will create), ``spend_ceiling_usd``, and for prd_to_roadmap
 ``theme`` (the roadmap's), ``workflow``: the live v2 workflow's id, label, credential
 expiry and plan (oracle.runs.workflow), ``stuck_lookup`` (a lost submission past the
 lookup cap, for Retry), ``searches`` (submissions given up on, still looked for),
-``post_404`` (404s that prove nothing on an answer post, counted), ``spent_at_end``
+``post_404`` (404s that prove nothing on an answer post, counted), ``planning_horizons``
+(prd_to_roadmap: the company's horizons when the run started, A1), ``spent_at_end``
 (the spend when the run ended) and ``import_failed`` (a resumed advance stopped after
 ``RESUME_TRIES`` failures, for an owner's Retry).
 
@@ -1507,6 +1508,9 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
         db.add(snapshot)
         await db.flush()
     run.snapshot_id = snapshot.id
+    if source_id is not None:
+        # Every segment, attempt and change request of the run reads these (A1).
+        _set_knob(run, "planning_horizons", await company_horizons(db))
     if run.estimate_usd > flows.APPROVAL_THRESHOLD_USD:
         run.status = "awaiting_approval"
         await audit.record(
@@ -1665,6 +1669,15 @@ def _explain(feature: dict[str, Any]) -> str:
     return " ".join(p for p in parts if p)[:400]
 
 
+async def _run_horizons(db: AsyncSession, run: Run) -> dict[str, int]:
+    """The planning horizons pinned when the run started (A1: runs under way keep what
+    they started with); a run started before they were pinned reads the company's."""
+    pinned = (run.knobs or {}).get("planning_horizons")
+    if isinstance(pinned, dict):
+        return dict(pinned)
+    return await company_horizons(db)
+
+
 async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | None:
     """prd_to_roadmap: the approved PRD version, priorities, edges and goals."""
     source_id = _source_id(run)
@@ -1733,7 +1746,7 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
     ]
     bases = await schedule.verified_bases(db, version.document_id)
     return flows.SourceContext(
-        horizons=await company_horizons(db),
+        horizons=await _run_horizons(db, run),
         schedule_bases=[b.as_json() for b in bases],
         slug=document.slug if document else str(version.document_id),
         title=document.title if document else "",
