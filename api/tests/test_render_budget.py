@@ -24,6 +24,7 @@ from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
 import pytest
+from markupsafe import Markup
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 
@@ -226,9 +227,9 @@ async def test_a_version_whose_dates_take_past_the_job_cap_is_refused_without_re
     assert finds[0] == 1
 
 
-async def _store_copy(tenant_id, slug: str) -> None:
-    """Version 2 of ``slug``: version 1's text, stored without an import (no dates found
-    for it yet)."""
+async def _store_copy(tenant_id, slug: str, number: int = 2) -> None:
+    """Version ``number`` of ``slug``: version 1's text, stored without an import (no dates
+    found for it yet)."""
     from sqlalchemy import select
 
     async with tenant_session(tenant_id) as s:
@@ -241,9 +242,9 @@ async def _store_copy(tenant_id, slug: str) -> None:
         sections = list(await s.scalars(select(Section).where(Section.version_id == v1.id)))
         v2 = DocumentVersion(
             document_id=document.id,
-            number=2,
-            markdown=v1.markdown + "\n",
-            content_hash=v1.content_hash + "-2",
+            number=number,
+            markdown=v1.markdown + "\n" * (number - 1),
+            content_hash=f"{v1.content_hash}-{number}",
             front_matter=v1.front_matter,
         )
         s.add(v2)
@@ -850,26 +851,326 @@ async def test_exports_waiting_for_the_pool_hold_no_database_connection(client, 
         assert (await t).status_code == 200
 
 
+# --------------------------------------------------------------------------- Present: its share
+
+# Owner decision 2026-10-20 (review of 7ab8fcf): a deck takes a place. Two deck builds per
+# person at once (their own counter, apart from exports); at most two places per company
+# for exports and decks together; a built deck is kept per version and served again
+# without a place or a render.
+
+
+def deck_url(n: int = 1) -> str:
+    return f"/v1/documents/checkout/versions/{n}/deck"
+
+
+class HeldDecks:
+    """Deck builds that wait until ``release()`` (on the export pool's threads), then
+    build the real deck."""
+
+    def __init__(self, monkeypatch, *, held: bool = True) -> None:
+        self.gate = threading.Event()
+        if not held:
+            self.gate.set()
+        self.lock = threading.Lock()
+        self.started = 0
+        self.real = export_router.build_deck
+        monkeypatch.setattr(export_router, "build_deck", self)
+
+    def __call__(self, ev):
+        with self.lock:
+            self.started += 1
+        self.gate.wait(30)
+        return self.real(ev)
+
+    def release(self) -> None:
+        self.gate.set()
+
+
+def _retry(resp) -> None:
+    assert resp.headers["retry-after"] == "5"
+
+
+async def _versions(tenant_id, *numbers: int) -> None:
+    for n in numbers:
+        await _store_copy(tenant_id, "checkout", n)
+
+
+def test_the_present_share_is_the_owner_s():
+    assert offload.PRESENTS_PER_PERSON == 2
+    assert offload.EXPORTS_PER_PERSON == 1
+    assert offload.EXPORTS_PER_COMPANY == 2
+    assert (
+        offload.PRESENT_BUSY_YOU
+        == "Your other Present views are still loading. Try again in a moment."
+    )
+
+
+async def test_one_person_s_third_concurrent_deck_is_refused_at_once(
+    client,
+    tenant_id,
+    doc,  # noqa: F811
+    monkeypatch,
+):
+    await _versions(tenant_id, 2, 3)
+    decks = HeldDecks(monkeypatch)
+    viewer = await _token(tenant_id, "viewer")
+    building = [asyncio.create_task(client.get(deck_url(n), headers=viewer)) for n in (1, 2)]
+    try:
+        await until(lambda: decks.started == 2)
+        third = await client.get(deck_url(3), headers=viewer)
+        assert third.status_code == 429, third.text
+        body = _busy(third, "present_busy_you")
+        assert body["message"] == (
+            "Your other Present views are still loading. Try again in a moment."
+        )
+        _retry(third)
+        assert decks.started == 2  # refused before it built anything
+    finally:
+        decks.release()
+    for t in building:
+        assert (await t).status_code == 200
+    assert offload.in_flight(tenant_id) == 0
+    assert (await client.get(deck_url(3), headers=viewer)).status_code == 200
+
+
 async def test_present_works_while_the_person_s_own_export_runs(
     client,
     tenant_id,
     doc,  # noqa: F811
     monkeypatch,
 ):
-    """Owner decision 2026-10-20: Present mode's deck is not counted against the export
-    caps (it still renders on the export pool, within its time cap)."""
+    """A deck build has its own per-person counter: the person's running export does not
+    refuse it. It takes a place in the company's share while it builds."""
     held = Held(monkeypatch)
+    decks = HeldDecks(monkeypatch)
     viewer = await _token(tenant_id, "viewer")
     exporting = asyncio.create_task(client.get(URL, headers=viewer))
     try:
         await until(lambda: held.started == 1)
-        deck = await client.get("/v1/documents/checkout/versions/1/deck", headers=viewer)
+        presenting = asyncio.create_task(client.get(deck_url(), headers=viewer))
+        await until(lambda: decks.started == 1)
+        assert offload.in_flight(tenant_id) == 2  # the export and the deck
+        decks.release()
+        deck = await presenting
         assert deck.status_code == 200, deck.text
         assert deck.json()["slides"]
-        assert offload.in_flight(tenant_id) == 1  # only the export holds a place
+        assert offload.in_flight(tenant_id) == 1  # the export still holds its place
     finally:
+        decks.release()
         held.release()
     assert (await exporting).status_code == 200
+
+
+@pytest.mark.parametrize("mix", ["exports", "decks", "export_and_deck"])
+async def test_a_company_with_two_places_in_use_is_refused_a_third(client, monkeypatch, mix):
+    """Exports and decks share the company's two places; another company's export still
+    starts at once."""
+    held = Held(monkeypatch)
+    decks = HeldDecks(monkeypatch)
+    a, b = await _company(client, "A Co"), await _company(client, "B Co")
+    await _versions(a, 2, 3)
+    urls = {
+        "exports": [URL, URL],
+        "decks": [deck_url(1), deck_url(2)],
+        "export_and_deck": [URL, deck_url(1)],
+    }[mix]
+    tasks = []
+    try:
+        for url in urls:
+            tasks.append(asyncio.create_task(client.get(url, headers=await _token(a, "viewer"))))
+        await until(lambda: offload.in_flight(a) == 2)
+        await until(lambda: held.started + decks.started == 2)
+        for url in (URL, deck_url(3)):  # a deck no request is building
+            resp = await client.get(url, headers=await _token(a, "viewer"))
+            assert resp.status_code == 429, resp.text
+            body = _busy(resp, "export_busy_you")
+            assert body["message"] == offload.BUSY_COMPANY
+            _retry(resp)
+        assert offload.in_flight(a) == 2
+        assert held.started + decks.started == 2  # refused before rendering
+        started = held.started
+        tasks.append(asyncio.create_task(client.get(URL, headers=await _token(b, "viewer"))))
+        await until(lambda: held.started == started + 1)  # B's export renders at once
+    finally:
+        decks.release()
+        held.release()
+    for t in tasks:
+        assert (await t).status_code == 200
+
+
+async def test_one_company_s_decks_never_take_more_than_two_workers(client, monkeypatch):
+    held = Held(monkeypatch)
+    decks = HeldDecks(monkeypatch)
+    a, b = await _company(client, "A Co"), await _company(client, "B Co")
+    await _versions(a, 2, 3, 4)
+    people = [await _token(a, "viewer") for _ in range(4)]
+    tasks = []
+    try:
+        tasks += [
+            asyncio.create_task(client.get(deck_url(n), headers=h))
+            for n, h in zip((1, 2), people[:2], strict=True)
+        ]
+        await until(lambda: decks.started == 2)
+        for n, h in zip((3, 4), people[2:], strict=True):
+            resp = await client.get(deck_url(n), headers=h)
+            assert resp.status_code == 429, resp.text
+            _busy(resp, "export_busy_you")
+        await asyncio.sleep(0.1)
+        assert decks.started == 2
+        assert offload.in_flight(a) == 2
+        # Two workers are left: B's two exports render at once.
+        tasks += [
+            asyncio.create_task(client.get(URL, headers=await _token(b, "viewer")))
+            for _ in range(2)
+        ]
+        await until(lambda: held.started == 2)
+    finally:
+        decks.release()
+        held.release()
+    for t in tasks:
+        assert (await t).status_code == 200
+
+
+async def test_a_deck_waiting_past_ten_seconds_for_a_worker_is_busy(client, monkeypatch):
+    held = Held(monkeypatch)
+    decks = HeldDecks(monkeypatch, held=False)
+    monkeypatch.setattr(offload, "QUEUE_SECONDS", 0.2)
+    a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
+    blockers = []
+    try:
+        blockers += await _fill(client, a, b)
+        await until(lambda: held.started == 4)
+        resp = await client.get(deck_url(), headers=await _token(c, "viewer"))
+        assert resp.status_code == 503, resp.text
+        _busy(resp, "export_busy")
+        _retry(resp)
+        assert offload.in_flight(c) == 0
+    finally:
+        held.release()
+    for t in blockers:
+        assert (await t).status_code == 200
+    assert decks.started == 0  # the refused deck never built
+    assert (await client.get(deck_url(), headers=await _token(c, "viewer"))).status_code == 200
+
+
+async def test_a_repeat_deck_is_served_from_the_cache_without_a_place(
+    client,
+    tenant_id,
+    doc,  # noqa: F811
+    monkeypatch,
+):
+    decks = HeldDecks(monkeypatch, held=False)
+    viewer = await _token(tenant_id, "viewer")
+    first = await client.get(deck_url(), headers=viewer)
+    assert first.status_code == 200, first.text
+    assert decks.started == 1
+    # The company's two places are taken by others' exports: the kept deck is still served.
+    held = Held(monkeypatch)
+    tasks = [
+        asyncio.create_task(client.get(URL, headers=await _token(tenant_id, "viewer")))
+        for _ in range(2)
+    ]
+    try:
+        await until(lambda: held.started == 2)
+        for _ in range(3):
+            again = await client.get(deck_url(), headers=viewer)
+            assert again.status_code == 200, again.text
+            assert again.json() == first.json()
+        assert decks.started == 1  # built once
+    finally:
+        held.release()
+    for t in tasks:
+        assert (await t).status_code == 200
+
+
+async def test_parallel_requests_for_one_deck_build_it_once(
+    client,
+    tenant_id,
+    doc,  # noqa: F811
+    monkeypatch,
+):
+    decks = HeldDecks(monkeypatch)
+    viewer = await _token(tenant_id, "viewer")
+    tasks = [asyncio.create_task(client.get(deck_url(), headers=viewer)) for _ in range(3)]
+    try:
+        await until(lambda: decks.started == 1)
+        await asyncio.sleep(0.1)
+        assert offload.in_flight(tenant_id) == 1
+    finally:
+        decks.release()
+    bodies = [(await t).json() for t in tasks]
+    assert decks.started == 1
+    assert bodies[0]["slides"] and all(b == bodies[0] for b in bodies)
+
+
+async def test_a_kept_deck_is_never_served_to_another_company(client, monkeypatch):
+    decks = HeldDecks(monkeypatch, held=False)
+    a, b = await _company(client, "A Co"), await _company(client, "B Co")
+    for company in (a, b, a, b):
+        resp = await client.get(deck_url(), headers=await _token(company, "viewer"))
+        assert resp.status_code == 200, resp.text
+    assert decks.started == 2  # one per company
+
+
+async def test_a_new_theme_or_a_new_latest_version_builds_the_deck_again(
+    client,
+    tenant_id,
+    doc,  # noqa: F811
+    monkeypatch,
+):
+    """The deck shows the version's status against the latest and the theme's styles:
+    either changing builds it again."""
+    decks = HeldDecks(monkeypatch, held=False)
+    viewer = await _token(tenant_id, "viewer")
+    assert (await client.get(deck_url(), headers=viewer)).status_code == 200
+    await _versions(tenant_id, 2)
+    resp = await client.get(deck_url(), headers=viewer)
+    assert resp.json()["status"] == "superseded"
+    assert decks.started == 2
+    from oracle.templates.models import Theme
+
+    async with tenant_session(tenant_id) as s:  # whichever theme the document resolves to
+        for theme in await s.scalars(select(Theme)):
+            theme.slide_css = (theme.slide_css or "") + "\n.deck { color: red; }"
+        await s.commit()
+    assert (await client.get(deck_url(), headers=viewer)).status_code == 200
+    assert decks.started == 3
+
+
+def _deck(size: int):
+    from oracle.export.deck import Deck, Slide
+
+    return Deck(
+        title="t",
+        slug="s",
+        number=1,
+        latest_number=1,
+        status="draft",
+        as_of="",
+        banner="",
+        theme_key=None,
+        theme_name=None,
+        tokens={},
+        css=Markup("x" * size),
+        slides=[Slide(index=1, kind="title", heading="t")],
+    )
+
+
+def test_kept_decks_are_bounded_and_an_oversized_one_evicts_nothing(monkeypatch):
+    from oracle.export import present
+
+    monkeypatch.setattr(present, "KEPT_BYTES", 200_000)  # at most 25,000 per deck
+    kept = present.Decks()
+    assert kept.put("a", _deck(20_000))
+    assert kept.put("b", _deck(20_000))
+    assert not kept.put("huge", _deck(30_000))  # above KEPT_BYTES / KEPT_SHARE
+    assert kept.get("huge") is None
+    assert kept.get("a") is not None and kept.get("b") is not None
+    for k in "cdefghij":
+        assert kept.put(k, _deck(20_000))
+    assert kept.weight <= 200_000
+    assert kept.get("a") is None  # least recently used out first
+    assert kept.get("j") is not None
 
 
 async def test_an_export_renders_rows_no_session_holds(client, tenant_id, doc, monkeypatch):  # noqa: F811
