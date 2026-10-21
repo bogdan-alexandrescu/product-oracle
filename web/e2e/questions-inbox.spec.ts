@@ -60,7 +60,7 @@ test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then
   await expect(row).toContainText("Oracle asks");
   await expect(row).toContainText("Before drafting · Clinic waitlist");
   await expect(questionRow(page, TIERS)).toContainText("Approver asks");
-  await expect(questionRow(page, TIERS)).toContainText("Checkout redesign PRD · 6. Success metrics");
+  await expect(questionRow(page, TIERS)).toContainText("Checkout redesign PRD · 7. Success metrics");
   await expect(badge(page)).toHaveText("12");
 
   await row.getByRole("button", { name: "Answer" }).click();
@@ -127,9 +127,9 @@ test("ask a teammate on a section: Waiting on them, then their answer on the Fee
   const question = "Do pilots keep their saved addresses after the trial?";
   const reply = "Yes, for 90 days after the trial ends.";
   await login(page);
-  await page.goto("/documents/checkout-redesign");
+  await page.goto("/documents/checkout-redesign/v/2");
   const s = await openSection(page, "metrics");
-  await s.getByRole("button", { name: "Actions for 6. Success metrics" }).click();
+  await s.getByRole("button", { name: "Actions for 7. Success metrics" }).click();
   await page.getByRole("menuitem", { name: /Ask a teammate/ }).click();
   const ask = page.getByTestId("ask-teammate");
   await ask.getByLabel("Find a person").fill("comm");
@@ -155,7 +155,7 @@ test("ask a teammate on a section: Waiting on them, then their answer on the Fee
 
   await signOut(page);
   await login(page);
-  await page.goto("/documents/checkout-redesign");
+  await page.goto("/documents/checkout-redesign/v/2");
   await openSection(page, "metrics");
   await openTab(page, "Feedback");
   const answered = page.getByTestId("section-questions").filter({ visible: true }).getByTestId("section-question").filter({ hasText: question });
