@@ -19,7 +19,8 @@ type Dest = { label: string; href: string; icon: IconName; testId: string; match
 
 /**
  * The destinations (I3), in rail order. Company (H1, owner 2026-10-21 "New pages") groups
- * Strategy, Decisions, Rituals and Updates; it sits after Plan (Roadmap) and before Runs.
+ * Strategy, Decisions, Rituals and Updates; it sits after Inbox, just above Settings (owner,
+ * 2026-10-21, "Rail order").
  */
 export const DESTINATIONS: Dest[] = [
   { label: "Home", href: "/home", icon: "home", testId: "nav-home" },
@@ -28,9 +29,9 @@ export const DESTINATIONS: Dest[] = [
   { label: "PRDs", href: "/documents", icon: "prds", testId: "nav-prds" },
   { label: "Priorities", href: "/priorities", icon: "priorities", testId: "nav-priorities" },
   { label: "Roadmap", href: "/roadmap", icon: "roadmap", testId: "nav-roadmap" },
-  { label: "Company", href: "/company", icon: "company", testId: "nav-company" },
   { label: "Runs", href: "/runs", icon: "runs", testId: "nav-runs" },
   { label: "Inbox", href: "/inbox", icon: "inbox", testId: "nav-inbox" },
+  { label: "Company", href: "/company", icon: "company", testId: "nav-company" },
 ];
 const SETTINGS: Dest = { label: "Settings", href: "/settings/members", icon: "settings", testId: "nav-settings", match: "/settings" };
 

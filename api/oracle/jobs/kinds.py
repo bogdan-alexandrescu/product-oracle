@@ -782,18 +782,21 @@ MIN_OPTIONS, MAX_OPTIONS = 2, 4
 async def decision_options(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
     """Ask Oracle for options: 2-4 options for a proposed decision, each with pros, cons,
     the evidence it rests on (only evidence it was given) and what it costs if wrong, one
-    of them recommended. They are added to the decision's options (people's stay)."""
+    of them recommended. They are added to the decision's options (people's stay).
+
+    The decision is read without a lock: deciding, editing, reassigning or withdrawing it
+    never waits for the model. It is locked again only to write the options, which are
+    dropped if it changed meanwhile (its lock_version moved)."""
     import re
 
     from oracle.decisions.models import Decision
 
-    decision = (
-        await s.get(Decision, job.decision_id, with_for_update=True) if job.decision_id else None
-    )
+    decision = await s.get(Decision, job.decision_id) if job.decision_id else None
     if decision is None:
         raise JobInputError("the decision no longer exists")
     if decision.status != "proposed":
         raise JobInputError(f"D-{decision.number} is {decision.status}: options are for a proposal")
+    read_version = decision.lock_version
     related = (
         list(await s.scalars(select(Entity).where(Entity.id.in_(list(decision.entity_ids or [])))))
         if decision.entity_ids
@@ -887,6 +890,14 @@ async def decision_options(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
         )
     if len(options) < MIN_OPTIONS:
         raise prompting.AnswerError(f"the answer has {len(options)} usable options, not 2-4")
+    # Locked only for the write, read afresh (read committed): the copy read before the
+    # model call is dropped, so a newer lock_version is compared here, not raised as stale.
+    s.expunge(decision)
+    decision = await s.get(Decision, decision.id, with_for_update=True)
+    if decision is None:
+        raise JobInputError("the decision no longer exists")
+    if decision.lock_version != read_version or decision.status != "proposed":
+        raise JobInputError(f"D-{decision.number} changed while Oracle prepared options: ask again")
     kept = [{**o, "recommended": False} for o in decision.options or []]
     decision.options = (kept + options)[-6:] if len(kept) + len(options) > 6 else kept + options
     await s.flush()

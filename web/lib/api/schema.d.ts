@@ -2840,7 +2840,8 @@ export interface paths {
          * List Decisions
          * @description Decisions, newest D-number first. ``class`` defaults to ``all`` (both judgement calls
          *     and checkpoint records); agents pass ``class=judgement`` to read the company's decided
-         *     calls, ``class=checkpoint`` for a run's stops approved and sent back.
+         *     calls, ``class=checkpoint`` for a run's stops approved and sent back. Every filter runs
+         *     here, so ``limit`` and ``offset`` page through what matches.
          */
         get: operations["list_decisions"];
         put?: never;
@@ -25203,12 +25204,15 @@ export interface operations {
         parameters: {
             query?: {
                 class?: "judgement" | "checkpoint" | "all";
-                status?: ("proposed" | "decided" | "review_due" | "superseded" | "reversed" | "withdrawn") | null;
+                /** @description open is proposed or review due: what waits on its approver */
+                status?: ("proposed" | "decided" | "review_due" | "open" | "superseded" | "reversed" | "withdrawn") | null;
                 /** @description me or a member id */
                 approver?: string | null;
                 due?: boolean | null;
                 /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, comma-separated */
                 origin?: string | null;
+                /** @description the chosen option's key */
+                chosen?: string | null;
                 run_id?: string | null;
                 subject_kind?: ("document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion") | null;
                 subject_id?: string | null;

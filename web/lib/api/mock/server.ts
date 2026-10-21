@@ -14,7 +14,7 @@ import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from 
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
-import { decisionInbox, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
@@ -160,7 +160,7 @@ export const MOCK_ROLE_KEY = "po-mock-role";
 /**
  * Tests and screenshots set this localStorage key before the first call: "empty" starts as a
  * new company (members only, no goals, documents, runs or questions); "large" as a big one
- * (30 goals, 50 more active runs, questions asked of the signed-in member); "suggestions" as the
+ * (30 goals, 50 more active runs, 250 more decisions, questions asked of the signed-in member); "suggestions" as the
  * default company plus a PRD with three open Oracle suggestions (fleet-next); "big-prd" adds a PRD
  * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts); "revoke-failures" as the
  * default company plus two provider revokes a removed member's disable could not make (C2);
@@ -1559,7 +1559,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
   // The decision log (H1): judgement calls, and a record of every run stop decided.
   const decisionsCtx = decisionsContext(db, me);
-  db.decisions ??= seeded("decisions", () => seedDecisions(decisionsCtx));
+  db.decisions ??= seeded("decisions", () => {
+    const log = seedDecisions(decisionsCtx);
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large") enlargeDecisions(decisionsCtx, log, 250);
+    return log;
+  });
   const decided = await routeDecisions(decisionsCtx, db.decisions, req, p, q);
   if (decided) return decided;
   const seenBefore = db.inbox_seen?.[me.id] ?? null;

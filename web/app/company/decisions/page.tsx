@@ -6,6 +6,7 @@ import { Suspense, useMemo, useState, useSyncExternalStore } from "react";
 import { Avatar, Button, Chip, DataTable, Empty, FilterChips, InfoTip, PageHeader, Panel, Sheet, Split, type Column } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import type { paths } from "@/lib/api/schema";
 import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -52,9 +53,31 @@ export default function DecisionsPage() {
   );
 }
 
-/** What waits on me: proposals I decide and reviews that have come due. */
-const needsMe = (d: DecisionSummary, me: string | null | undefined) =>
-  d.approver_id === me && (d.state === "proposed" || d.state === "review_due");
+/** Rows per call (the API's most); Show more loads the next page. */
+const PAGE = 200;
+
+/** A state chip as the API's filters: Needs me is what waits on me to decide or review. */
+const STATE_QUERY: Record<StateFilter, Pick<ListQuery, "status" | "approver">> = {
+  needs_me: { status: "open", approver: "me" },
+  proposed: { status: "proposed" },
+  review_due: { status: "review_due" },
+  decided: { status: "decided" },
+  all: {},
+};
+
+type ListQuery = NonNullable<paths["/v1/decisions"]["get"]["parameters"]["query"]>;
+
+/** The first `pages` pages of what matches, and whether there is more. */
+async function loadPages(query: ListQuery, pages: number): Promise<{ rows: DecisionSummary[]; more: boolean }> {
+  const rows: DecisionSummary[] = [];
+  for (let page = 0; page < pages; page++) {
+    const batch = await unwrap(api.GET("/v1/decisions", { params: { query: { ...query, limit: PAGE, offset: page * PAGE } } }));
+    rows.push(...batch);
+    if (batch.length < PAGE) return { rows, more: false };
+  }
+  const next = await unwrap(api.GET("/v1/decisions", { params: { query: { ...query, limit: 1, offset: pages * PAGE } } }));
+  return { rows, more: next.length > 0 };
+}
 
 /**
  * The decision log (H1): a one-line table of decisions on the left, the inspector on the
@@ -87,35 +110,36 @@ function Decisions() {
   }, [subjectParam, params]);
 
   const fromDef = FROM.find((f) => f.value === from);
-  const query = {
+  // Needs me is the default when something waits on me (judgement calls only).
+  const mineQ = useQuery(`decisions|mine|${me?.user_id}`, () =>
+    unwrap(api.GET("/v1/decisions", { params: { query: { class: "judgement", status: "open", approver: "me", limit: 1 } } })),
+  );
+  const peopleQ = useQuery("decisions|people", () => unwrap(api.GET("/v1/decisions/people")));
+  const people = peopleQ.data ?? [];
+  const stateParam = params.get("state") as StateFilter | null;
+  const state: StateFilter | null = stateParam ?? (mineQ.data ? (mineQ.data.length > 0 && !run ? "needs_me" : "all") : null);
+
+  // Every filter runs in the API, so an old decision is found however many newer ones there are.
+  const query: ListQuery = {
     class: cls,
     origin: fromDef?.origin,
+    chosen: fromDef?.chosen,
+    ...STATE_QUERY[state ?? "all"],
     run_id: run ?? undefined,
     subject_kind: subject?.kind,
     subject_id: subject?.id,
     q: q || undefined,
-    limit: 200,
   };
-  const listQ = useQuery(`decisions|${JSON.stringify(query)}`, () => unwrap(api.GET("/v1/decisions", { params: { query } })), { keepPrevious: true });
-  // Needs me is the default when something waits on me (any class: judgement calls only).
-  const mineQ = useQuery(`decisions|mine|${me?.user_id}`, () =>
-    unwrap(api.GET("/v1/decisions", { params: { query: { class: "judgement", approver: "me", limit: 200 } } })),
+  const filterKey = JSON.stringify(query);
+  const [paging, setPaging] = useState({ key: filterKey, pages: 1 });
+  const pages = paging.key === filterKey ? paging.pages : 1;
+  // The state is known once Needs me is (or the URL names one): no list of the wrong state first.
+  const listQ = useQuery(
+    state ? `decisions|${filterKey}|${pages}` : "decisions|pending",
+    () => (state ? loadPages(query, pages) : Promise.resolve(undefined)),
+    { keepPrevious: true },
   );
-  const peopleQ = useQuery("decisions|people", () => unwrap(api.GET("/v1/decisions/people")));
-  const people = peopleQ.data ?? [];
-  const waitingOnMe = (mineQ.data ?? []).filter((d) => needsMe(d, me?.user_id)).length;
-  const stateParam = params.get("state") as StateFilter | null;
-  const state: StateFilter = stateParam ?? (mineQ.data ? (waitingOnMe > 0 && !run ? "needs_me" : "all") : "all");
-
-  const rows = useMemo(() => {
-    let list = listQ.data ?? [];
-    if (fromDef?.chosen) list = list.filter((d) => d.chosen_option === fromDef.chosen);
-    if (state === "needs_me") list = list.filter((d) => needsMe(d, me?.user_id));
-    else if (state === "proposed") list = list.filter((d) => d.state === "proposed");
-    else if (state === "review_due") list = list.filter((d) => d.state === "review_due");
-    else if (state === "decided") list = list.filter((d) => d.status === "decided");
-    return list;
-  }, [listQ.data, fromDef, state, me?.user_id]);
+  const rows = useMemo(() => listQ.data?.rows ?? [], [listQ.data]);
 
   // The picked decision stays open after it leaves the filtered rows (decided from Needs me).
   const selectedSummary = rows.find((d) => String(d.number) === picked || d.id === picked) ?? (phone || picked ? undefined : rows[0]);
@@ -241,7 +265,7 @@ function Decisions() {
               label="State"
               testId="decision-state"
               items={STATE_FILTERS.map((s) => ({ value: s.value, label: s.label }))}
-              value={state}
+              value={state ?? "all"}
               onChange={(v) => setParams({ state: v, d: null })}
             />
             <div className="flex flex-wrap items-center gap-2">
@@ -298,6 +322,13 @@ function Decisions() {
               onSelect={(_, d) => select(d)}
               rowProps={(d) => ({ "data-testid": "decision-row", "data-number": String(d.number) })}
             />
+          )}
+          {listQ.data?.more && (
+            <div className="border-t border-line px-4 py-2 max-[600px]:px-3">
+              <Button variant="ghost" disabled={listQ.loading} onClick={() => setPaging({ key: filterKey, pages: pages + 1 })}>
+                Show more
+              </Button>
+            </div>
           )}
         </Panel>
       </Split>

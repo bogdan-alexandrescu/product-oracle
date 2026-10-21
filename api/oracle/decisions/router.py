@@ -63,14 +63,21 @@ async def list_decisions(
     principal: Viewer,
     class_: Annotated[Literal["judgement", "checkpoint", "all"], Query(alias="class")] = "all",
     status_: Annotated[
-        Literal["proposed", "decided", "review_due", "superseded", "reversed", "withdrawn"] | None,
-        Query(alias="status"),
+        Literal["proposed", "decided", "review_due", "open", "superseded", "reversed", "withdrawn"]
+        | None,
+        Query(
+            alias="status",
+            description="open is proposed or review due: what waits on its approver",
+        ),
     ] = None,
     approver: Annotated[str | None, Query(description="me or a member id")] = None,
     due: bool | None = None,
     origin: Annotated[
         str | None,
         Query(description=f"one or more of {', '.join(Origin.__args__)}, comma-separated"),
+    ] = None,
+    chosen: Annotated[
+        str | None, Query(max_length=60, description="the chosen option's key")
     ] = None,
     run_id: uuid.UUID | None = None,
     subject_kind: SubjectKind | None = None,
@@ -81,13 +88,15 @@ async def list_decisions(
 ) -> list[DecisionSummary]:
     """Decisions, newest D-number first. ``class`` defaults to ``all`` (both judgement calls
     and checkpoint records); agents pass ``class=judgement`` to read the company's decided
-    calls, ``class=checkpoint`` for a run's stops approved and sent back."""
+    calls, ``class=checkpoint`` for a run's stops approved and sent back. Every filter runs
+    here, so ``limit`` and ``offset`` page through what matches."""
     filters = service.Filters(
         class_=class_,
         status=status_,
         approver=approver,
         due=due,
         origin=origin,
+        chosen=chosen,
         run_id=run_id,
         subject_kind=subject_kind,
         subject_id=subject_id,

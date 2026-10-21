@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Text, any_, cast, func, inspect, or_, select, text
+from sqlalchemy import Text, and_, any_, cast, func, inspect, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
@@ -246,12 +246,22 @@ class Filters:
     approver: str | None = None
     due: bool | None = None
     origin: str | None = None
+    chosen: str | None = None
     run_id: uuid.UUID | None = None
     subject_kind: str | None = None
     subject_id: str | None = None
     q: str | None = None
     limit: int = 50
     offset: int = 0
+
+
+def _due():
+    """A decided judgement call whose review date has come (state ``review_due``)."""
+    return and_(
+        Decision.status == "decided",
+        Decision.origin != "checkpoint",
+        Decision.review_at <= today(),
+    )
 
 
 async def list_decisions(
@@ -262,6 +272,8 @@ async def list_decisions(
         query = query.where(Decision.class_ == f.class_)
     if f.status == "review_due":
         f.due = True
+    elif f.status == "open":
+        query = query.where(or_(Decision.status == "proposed", _due()))
     elif f.status:
         query = query.where(Decision.status == f.status)
     if f.approver == "me":
@@ -272,13 +284,11 @@ async def list_decisions(
         except ValueError:
             raise DecisionError(422, "approver is me or a member id") from None
     if f.due:
-        query = query.where(
-            Decision.status == "decided",
-            Decision.origin != "checkpoint",
-            Decision.review_at <= today(),
-        )
+        query = query.where(_due())
     if f.origin:
         query = query.where(Decision.origin.in_([o for o in f.origin.split(",") if o]))
+    if f.chosen:
+        query = query.where(Decision.chosen_option == f.chosen)
     if f.run_id is not None:
         query = query.where(Decision.run_id == f.run_id)
     if f.subject_kind or f.subject_id:

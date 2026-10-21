@@ -10099,7 +10099,7 @@
           "decisions"
         ],
         "summary": "List Decisions",
-        "description": "Decisions, newest D-number first. ``class`` defaults to ``all`` (both judgement calls\nand checkpoint records); agents pass ``class=judgement`` to read the company's decided\ncalls, ``class=checkpoint`` for a run's stops approved and sent back.",
+        "description": "Decisions, newest D-number first. ``class`` defaults to ``all`` (both judgement calls\nand checkpoint records); agents pass ``class=judgement`` to read the company's decided\ncalls, ``class=checkpoint`` for a run's stops approved and sent back. Every filter runs\nhere, so ``limit`` and ``offset`` page through what matches.",
         "operationId": "list_decisions",
         "security": [
           {
@@ -10136,6 +10136,7 @@
                     "proposed",
                     "decided",
                     "review_due",
+                    "open",
                     "superseded",
                     "reversed",
                     "withdrawn"
@@ -10146,8 +10147,10 @@
                   "type": "null"
                 }
               ],
+              "description": "open is proposed or review due: what waits on its approver",
               "title": "Status"
-            }
+            },
+            "description": "open is proposed or review due: what waits on its approver"
           },
           {
             "name": "approver",
@@ -10200,6 +10203,25 @@
               "title": "Origin"
             },
             "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, comma-separated"
+          },
+          {
+            "name": "chosen",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 60
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "the chosen option's key",
+              "title": "Chosen"
+            },
+            "description": "the chosen option's key"
           },
           {
             "name": "run_id",

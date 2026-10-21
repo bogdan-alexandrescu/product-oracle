@@ -233,6 +233,31 @@ export function seedDecisions(ctx: DecisionsContext): DecisionsDb {
   return db;
 }
 
+/** The "large" company's long log: `count` newer judgement calls the owner decided long ago, none due. */
+export function enlargeDecisions(ctx: DecisionsContext, db: DecisionsDb, count: number) {
+  const owner = ctx.members.find((m) => m.email === "admin@example.com")!.id;
+  for (let i = 1; i <= count; i++) {
+    db.decisions.push(
+      blank(ctx, db, {
+        title: `Release train call ${i}`,
+        origin: "manual",
+        driver: `user:${owner}`,
+        created_by: owner,
+        approver_id: owner,
+        status: "decided",
+        options: [option("ship", "Ship"), option("hold", "Hold")],
+        chosen_option: "ship",
+        rationale: "Ready on the train's date.",
+        decided_by: owner,
+        decided_actor: "user",
+        decided_at: `${day(-60)}T09:00:00Z`,
+        created_at: `${day(-61)}T09:00:00Z`,
+        review_at: day(120),
+      }),
+    );
+  }
+}
+
 /**
  * A checkpoint record for every run stop decided (approved or sent back), once per
  * checkpoint, as the API records them; a skipped or pending stop has none.
@@ -360,12 +385,15 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     if (cls === "judgement" || cls === "checkpoint") rows = rows.filter((d) => classOf(d) === cls);
     const status = q.get("status");
     if (status === "review_due") rows = rows.filter((d) => stateOf(d) === "review_due");
+    else if (status === "open") rows = rows.filter((d) => d.status === "proposed" || stateOf(d) === "review_due");
     else if (status) rows = rows.filter((d) => d.status === status);
     const approver = q.get("approver");
     if (approver) rows = rows.filter((d) => d.approver_id === (approver === "me" ? me.id : approver));
     if (q.get("due") === "true") rows = rows.filter((d) => stateOf(d) === "review_due");
     const origin = q.get("origin");
     if (origin) rows = rows.filter((d) => origin.split(",").includes(d.origin));
+    const chosen = q.get("chosen");
+    if (chosen) rows = rows.filter((d) => d.chosen_option === chosen);
     const run = q.get("run_id");
     if (run) rows = rows.filter((d) => d.run_id === run);
     const kind = q.get("subject_kind");
