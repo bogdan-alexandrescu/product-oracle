@@ -544,12 +544,14 @@ class NotionConnector:
         check_labels(config, MAX_LABELS, "labels must map page ids to titles")
 
     def normalize_config(self, config: dict[str, Any]) -> dict[str, Any]:
-        """Titles kept only for the picked roots, each cut to length. The roots stay as
-        saved, so a source's fingerprint does not change."""
+        """Titles kept only for the picked roots (by id, dashed or not, or a page link),
+        each cut to length. The roots stay as saved, so a source's fingerprint does not
+        change."""
         roots = config.get("roots")
         if not isinstance(roots, list) or not all(isinstance(r, str) for r in roots):
             return dict(config)
-        return normalize_labels(dict(config), roots, MAX_LABELS)
+        picked = set(roots) | {normalize_id(r) for r in roots} - {None}
+        return normalize_labels(dict(config), picked, MAX_LABELS)
 
     def scope(self, config: dict[str, Any]) -> Scope:
         """Still selected, as far as stored items tell: pulled in from a picked root."""

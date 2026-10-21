@@ -100,6 +100,10 @@ def test_notion_normalize_drops_unpicked_labels_and_trims_titles():
         {"roots": [CHILD], "labels": {CHILD: "T" * 300, DB: "Gone"}, "other": 1}
     )
     assert got == {"roots": [CHILD], "labels": {CHILD: "T" * 200}, "other": 1}
+    # A root saved undashed keeps the title the picker keyed by its dashed id.
+    undashed = CHILD.replace("-", "")
+    got = NotionConnector().normalize_config({"roots": [undashed], "labels": {CHILD: "Specs"}})
+    assert got == {"roots": [undashed], "labels": {CHILD: "Specs"}}
 
 
 # --- API: Slack ------------------------------------------------------------------------
