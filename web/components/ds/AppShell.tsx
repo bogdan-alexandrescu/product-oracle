@@ -123,7 +123,7 @@ const THEMES: { value: ThemeChoice; label: string; icon: IconName }[] = [
   { value: "dark", label: "Dark", icon: "moon" },
 ];
 
-/** The user menu: who is signed in, the theme switch, mock reset, sign out. */
+/** The user menu: who is signed in, the theme switch, My account, mock reset, sign out. */
 function UserMenu({ placement }: { placement: "rail" | "header" | "sheet" }) {
   const router = useRouter();
   const { me, clear } = useMe();
@@ -194,6 +194,18 @@ function UserMenu({ placement }: { placement: "rail" | "header" | "sheet" }) {
           </button>
         ))}
       </div>
+      {me?.kind === "user" && (
+        // A person's own account; a service token has none.
+        <Link
+          href="/account"
+          data-testid={placement === "sheet" ? "nav-my-account-sheet" : "nav-my-account"}
+          onClick={() => setOpen(placement === "sheet")}
+          className="mb-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2"
+        >
+          <Icon name="user" size={16} />
+          My account
+        </Link>
+      )}
       {MOCK_MODE && (
         <button
           type="button"

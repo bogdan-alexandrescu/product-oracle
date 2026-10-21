@@ -86,6 +86,12 @@ class Run(TenantScoped, Base):
     # Who approved the cost estimate (runs over the approval threshold).
     approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The last overrun Resume (a spend approval, C2): who gave it, when, and the ceiling
+    # it replaced (restored if a demotion or disable voids it before its next segment
+    # was submitted: oracle.members.service._void_spend_approvals).
+    resumed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    resumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resumed_from_ceiling_usd: Mapped[Decimal | None] = mapped_column(Usd)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error: Mapped[str | None] = mapped_column(Text)

@@ -45,8 +45,9 @@ class Principal:
     # The MCP OAuth grant (its refresh-token family) the call came through: approvals
     # record it, and revoking the grant voids them, as for API tokens (C2).
     grant_id: uuid.UUID | None = None
-    # An MCP client approved with oracle:read only: it reads as the user and changes
-    # nothing of theirs, including what the role check would allow (their own sources).
+    # An MCP client approved, or a personal API token created, without oracle:write: it
+    # reads as the user and changes nothing of theirs, including what the role check
+    # would allow (their own sources, preferences).
     read_only: bool = False
     # The run token of a call made for a run (below): re-read under the review gate.
     run_token_id: uuid.UUID | None = None
@@ -73,7 +74,8 @@ class Principal:
 _READ_METHODS = frozenset({"GET", "HEAD"})
 READ_ONLY = (
     "This credential can only read (oracle:read): it cannot add, change or delete anything. "
-    "Approve the MCP client with oracle:write to make changes"
+    "Approve the MCP client, or create the personal API token, with oracle:write to make "
+    "changes"
 )
 
 
@@ -132,11 +134,21 @@ async def _bearer_principal(raw: str) -> Principal:
         return Principal(
             tenant_id=token.tenant_id,
             kind="user",
-            role=user.role,
+            # A personal token's scope caps the user's role (oracle:read alone: viewer)
+            # and, without oracle:write (an empty or unknown scope too), it changes
+            # nothing, as a read-only MCP client (AC1).
+            role=service.token_role(user.role, token.scope),
             user_id=user.id,
             token_id=token.id,
+            read_only=service.token_read_only(token.scope),
         )
-    return Principal(tenant_id=token.tenant_id, kind="token", role=token.role, token_id=token.id)
+    return Principal(
+        tenant_id=token.tenant_id,
+        kind="token",
+        role=token.role,
+        token_id=token.id,
+        read_only=service.token_read_only(token.scope),
+    )
 
 
 # The MCP server's in-process REST call for a run token carries the run creator's session
@@ -239,6 +251,48 @@ async def _authenticate(
 
 
 CurrentPrincipal = Annotated[Principal, Depends(get_principal)]
+
+
+def _allowed_origins(request: Request) -> set[str]:
+    from urllib.parse import urlsplit
+
+    from oracle.mcp.oauth.service import oauth_settings
+
+    settings = get_settings()
+    hosts = {request.headers.get("host"), request.headers.get("x-forwarded-host")}
+    for url in (*settings.cors_origins, settings.app_url, oauth_settings().public_url):
+        if url:
+            hosts.add(urlsplit(url).netloc)
+    return {h.lower() for h in hosts if h}
+
+
+async def same_origin(request: Request) -> None:
+    """Refuse a cross-site request signed in by the browser's own credentials (403).
+
+    For a body-less POST that changes something (sign out everywhere, approve or resume
+    a run, disable a member): it has no JSON body, so the browser sends it cross-site
+    without a CORS preflight, and SameSite=Lax does not cover every case (a same-site
+    sibling host, IAP's own cookie). Checked only when the session cookie or Google
+    sign-in signs the request in: a bearer token is never sent by a browser on its own.
+    A browser sends ``Sec-Fetch-Site`` and ``Origin`` on such a request; a request with
+    neither is not a browser's, and passes."""
+    from urllib.parse import urlsplit
+
+    if request.headers.get("authorization"):
+        return
+    ambient = request.cookies.get(get_settings().session_cookie_name) or request.headers.get(
+        iap.ASSERTION_HEADER
+    )
+    if not ambient:
+        return
+    refused = HTTPException(status.HTTP_403_FORBIDDEN, "Cross-site request refused")
+    if request.headers.get("sec-fetch-site") == "cross-site":
+        raise refused
+    origin = request.headers.get("origin")
+    if origin is None:
+        return
+    if origin == "null" or urlsplit(origin).netloc.lower() not in _allowed_origins(request):
+        raise refused
 
 
 async def get_db(principal: CurrentPrincipal) -> AsyncIterator[AsyncSession]:

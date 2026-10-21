@@ -25,7 +25,13 @@ export default defineConfig({
     {
       command: "sh e2e/real/start-api.sh",
       url: `${API_URL}/healthz`,
-      env: { ORACLE_DATABASE_URL: DATABASE_URL, E2E_STATE_FILE: STATE_FILE, E2E_API_PORT: String(API_PORT) },
+      env: {
+        ORACLE_DATABASE_URL: DATABASE_URL,
+        E2E_STATE_FILE: STATE_FILE,
+        E2E_API_PORT: String(API_PORT),
+        // The test build: the seeded admin is admin@example.com, a reserved example domain.
+        ORACLE_ALLOW_RESERVED_EMAIL_DOMAINS: "1",
+      },
       timeout: 120_000,
       reuseExistingServer: false,
       stdout: "pipe",

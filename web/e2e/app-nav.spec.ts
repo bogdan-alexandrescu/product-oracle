@@ -75,6 +75,7 @@ test("settings: its own strip routes to each section, Settings stays active", as
   const strip = page.getByRole("navigation", { name: "Settings" });
   for (const [id, path, heading] of [
     ["nav-members", "/settings/members", "Members"],
+    ["nav-api-tokens", "/settings/api-tokens", "API tokens"],
     ["nav-connections", "/settings/connections", "Connections"],
     ["nav-claude-accounts", "/settings/claude-accounts", "Claude accounts"],
     ["nav-sources", "/settings/sources", "Sources"],

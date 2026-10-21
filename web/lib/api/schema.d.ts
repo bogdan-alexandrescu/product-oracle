@@ -1231,7 +1231,8 @@ export interface paths {
         /**
          * List Members
          * @description The users of this company's Oracle, their roles, and whether each is active or
-         *     disabled (a removed member: kept so history keeps their name).
+         *     disabled (a removed member: kept so history keeps their name), their last sign-in
+         *     when known, and how many credentials still act for them.
          */
         get: operations["list_members"];
         put?: never;
@@ -1323,7 +1324,10 @@ export interface paths {
         };
         /**
          * List Api Tokens
-         * @description Every API token of this company (never the secret), revoked ones included.
+         * @description Every credential of this company (never the secret), revoked ones included,
+         *     oldest first: personal and service API tokens, run tokens and MCP clients' OAuth
+         *     grants, each with its kind, the member it acts for, its scopes and when it was
+         *     created, last used, revoked and (run tokens, grants) expires.
          */
         get: operations["list_api_tokens"];
         put?: never;
@@ -1346,9 +1350,12 @@ export interface paths {
         post?: never;
         /**
          * Revoke Api Token
-         * @description Revoke an API token. The approvals given through it lapse for good (section
-         *     verdicts and version approvals); its user's own approvals stand. Revoking twice is
-         *     a no-op.
+         * @description Revoke a credential of any kind by its id: an API token, a run token or an MCP
+         *     client's grant (its access and refresh tokens). The approvals given through an API
+         *     token or a grant lapse for good (section verdicts and version approvals); its
+         *     member's own approvals stand, as do spend approvals and checkpoint decisions (C2: a
+         *     token revoke voids neither). A revoked run token ends its agents' access; the run
+         *     goes on. Revoking twice is a no-op.
          */
         delete: operations["revoke_api_token"];
         options?: never;
@@ -1485,6 +1492,170 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Account
+         * @description Your email, role, when you last signed in and how you sign in: with a password,
+         *     with Google (when this deployment signs in through Google), or both.
+         */
+        get: operations["get_my_account"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Password
+         * @description Change your password (the current one, then a new, different one of at least
+         *     ``password_min_length`` characters), from the signed-in browser only (a token or an
+         *     MCP client is refused). Every other session ends and this browser gets a fresh one;
+         *     your personal API tokens, the MCP clients you authorized (and their unexchanged
+         *     authorization codes) and the current run tokens of your runs still going are revoked
+         *     (those runs keep running; their next segment is given a new run token). Five wrong
+         *     current passwords in 15 minutes lock changes for the rest of the window.
+         */
+        post: operations["change_password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/sign-out-everywhere": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign Out Everywhere
+         * @description Sign out of every device, from the signed-in browser only: every session you
+         *     signed in with ends, this one too; your personal API tokens, every MCP client you
+         *     authorized (access and refresh tokens, and authorization codes not yet exchanged)
+         *     and the current run tokens of the runs you started that are still going are
+         *     revoked. Sign-out ends today's tokens and grants, not the runs: a run started
+         *     earlier keeps running, and its next segment is given a new run token. With Google
+         *     sign-in, Google signs the browser in again on its next visit.
+         */
+        post: operations["sign_out_everywhere"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Tokens
+         * @description Your personal API tokens, revoked ones included (never a secret).
+         */
+        get: operations["list_my_tokens"];
+        put?: never;
+        /**
+         * Create Personal Token
+         * @description Create a personal API token that acts as you, from the signed-in browser only (a
+         *     token or an MCP client never mints one). ``oracle:read`` alone acts as a viewer;
+         *     with ``oracle:write`` it has your role. It expires after ``expires_in_days`` (30, 90
+         *     or 365; null: never), then is listed as expired and refused. The secret is in this
+         *     answer only: copy it now, only its hash is kept.
+         */
+        post: operations["create_personal_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke My Token
+         * @description Revoke one of your personal API tokens. The approvals given through it lapse for
+         *     good; yours given in person stand. Twice is a no-op.
+         */
+        delete: operations["revoke_my_token"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/oauth-clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Oauth Clients
+         * @description The MCP clients you authorized (one row per authorization), revoked ones
+         *     included.
+         */
+        get: operations["list_my_oauth_clients"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/oauth-clients/{grant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke My Oauth Client
+         * @description Revoke an MCP client you authorized: its access and refresh tokens stop working
+         *     and the approvals made through it lapse. Twice is a no-op.
+         */
+        delete: operations["revoke_my_oauth_client"];
         options?: never;
         head?: never;
         patch?: never;
@@ -7988,7 +8159,10 @@ export interface components {
             /** Next Actions */
             next_actions: components["schemas"]["NextAction"][];
         };
-        /** ApiTokenOut */
+        /**
+         * ApiTokenOut
+         * @description A credential of this company, never its secret.
+         */
         ApiTokenOut: {
             /**
              * Id
@@ -7998,12 +8172,25 @@ export interface components {
             /** Name */
             name: string;
             /**
+             * Kind
+             * @default service
+             * @enum {string}
+             */
+            kind: "personal" | "service" | "run" | "mcp_client";
+            /**
              * Role
              * @enum {string}
              */
             role: "viewer" | "commenter" | "approver" | "owner";
             /** User Id */
             user_id?: string | null;
+            /** Owner Email */
+            owner_email?: string | null;
+            /**
+             * Scopes
+             * @default []
+             */
+            scopes: string[];
             /**
              * Created At
              * Format: date-time
@@ -8013,6 +8200,12 @@ export interface components {
             last_used_at?: string | null;
             /** Revoked At */
             revoked_at?: string | null;
+            /** Expires At */
+            expires_at?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+            /** Client Id */
+            client_id?: string | null;
         };
         /**
          * ApprovalLapse
@@ -15119,6 +15312,40 @@ export interface components {
             unmapped_sections: string[];
         };
         /**
+         * McpClientOut
+         * @description An MCP client you authorized: one OAuth grant (its access and refresh tokens).
+         */
+        McpClientOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Client Id */
+            client_id: string;
+            /** Client Name */
+            client_name: string;
+            /** Scopes */
+            scopes: string[];
+            /**
+             * Authorized At
+             * Format: date-time
+             */
+            authorized_at: string;
+            /**
+             * Last Used At
+             * Format: date-time
+             */
+            last_used_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Revoked At */
+            revoked_at?: string | null;
+        };
+        /**
          * McpServerRegistration
          * @description Oracle's MCP server in the runtime (``oracle``, at ORACLE_PUBLIC_URL + /mcp).
          */
@@ -15182,6 +15409,13 @@ export interface components {
             disabled_at?: string | null;
             /** Disabled By */
             disabled_by?: string | null;
+            /** Last Sign In At */
+            last_sign_in_at?: string | null;
+            /**
+             * Open Tokens
+             * @default 0
+             */
+            open_tokens: number;
             /**
              * Status
              * @enum {string}
@@ -15495,6 +15729,43 @@ export interface components {
             change_event_id: string | null;
             /** Changed */
             changed: string[];
+        };
+        /**
+         * MyAccountOut
+         * @description The signed-in member: who they are, their role and how they sign in.
+         */
+        MyAccountOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Email */
+            email: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Sign In At */
+            last_sign_in_at?: string | null;
+            /** Sign In Methods */
+            sign_in_methods: ("password" | "google")[];
+            /**
+             * Password Min Length
+             * @default 12
+             */
+            password_min_length: number;
+            /**
+             * Signed In Via
+             * @enum {string}
+             */
+            signed_in_via: "browser" | "api_token" | "mcp_client";
         };
         /**
          * NewEvidence
@@ -16050,6 +16321,13 @@ export interface components {
             /** Modules */
             modules: components["schemas"]["PackModuleOut"][];
         };
+        /** PasswordChange */
+        PasswordChange: {
+            /** Current Password */
+            current_password: string;
+            /** New Password */
+            new_password: string;
+        };
         /**
          * PersonAsker
          * @description A person's question to a teammate: "<name> asks".
@@ -16090,6 +16368,27 @@ export interface components {
             role: "viewer" | "commenter" | "approver" | "owner";
             /** Can Write */
             can_write: boolean;
+        };
+        /** PersonalTokenCreate */
+        PersonalTokenCreate: {
+            /** Name */
+            name: string;
+            /** Scopes */
+            scopes: ("oracle:read" | "oracle:write")[];
+            /**
+             * Expires In Days
+             * @default 90
+             */
+            expires_in_days: (30 | 90 | 365) | null;
+        };
+        /**
+         * PersonalTokenCreated
+         * @description The new token and its secret: shown this once, only its hash is kept.
+         */
+        PersonalTokenCreated: {
+            token: components["schemas"]["ApiTokenOut"];
+            /** Secret */
+            secret: string;
         };
         /**
          * PickerConfigOut
@@ -20070,6 +20369,31 @@ export interface components {
              * @enum {string}
              */
             sharing: "private" | "counts" | "summary" | "full";
+        };
+        /**
+         * SignedOutEverywhere
+         * @description Every session signed before ``sessions_valid_after`` is refused, this one too;
+         *     every personal API token, every MCP client (refresh tokens included) and the run
+         *     tokens of the runs you started that are still going are revoked (AC1).
+         */
+        SignedOutEverywhere: {
+            /**
+             * Sessions Valid After
+             * Format: date-time
+             */
+            sessions_valid_after: string;
+            /** Mcp Clients Revoked */
+            mcp_clients_revoked: number;
+            /**
+             * Api Tokens Revoked
+             * @default 0
+             */
+            api_tokens_revoked: number;
+            /**
+             * Runs Tokens Revoked
+             * @default 0
+             */
+            runs_tokens_revoked: number;
         };
         /** SkippedSection */
         SkippedSection: {
@@ -25852,7 +26176,12 @@ export interface operations {
     };
     list_api_tokens: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only this kind */
+                kind?: ("personal" | "service" | "run" | "mcp_client") | null;
+                /** @description Only those acting for this member */
+                user_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -25866,6 +26195,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiTokenOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -26155,6 +26493,278 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PersonOut"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_account: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyAccountOut"];
+                };
+            };
+        };
+    };
+    change_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The current password is not correct, or the new one is it */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not from the signed-in browser (a token, an MCP client or another site) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description You sign in with Google only: no password to change */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too many wrong attempts; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sign_out_everywhere: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedOutEverywhere"];
+                };
+            };
+            /** @description Not from the signed-in browser */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_my_tokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiTokenOut"][];
+                };
+            };
+        };
+    };
+    create_personal_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonalTokenCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalTokenCreated"];
+                };
+            };
+            /** @description Not from the signed-in browser (a token, an MCP client or another site) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_my_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A read-only credential changes nothing */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not one of your tokens */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_oauth_clients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpClientOut"][];
+                };
+            };
+        };
+    };
+    revoke_my_oauth_client: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A read-only credential changes nothing */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not one of your MCP clients */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

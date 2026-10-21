@@ -27,7 +27,7 @@ migrate:
 	$(COMPOSE) exec api alembic upgrade head
 
 # Creates the tenant, the admin user and a new API token (printed once).
-# Pass ARGS="--email you@example.com --password ..." to choose credentials.
+# The admin's email is required: ARGS="--email you@yourcompany.com [--password ...]".
 seed:
 	$(COMPOSE) exec api python -m oracle.seed $(ARGS)
 

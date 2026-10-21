@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from oracle.account.router import router as account_router
 from oracle.auth.router import router as auth_router
 from oracle.autonomy_router import router as autonomy_router
 from oracle.baseline.router import router as baseline_router
@@ -180,6 +181,7 @@ def create_app() -> FastAPI:
     # v1 lanes add their routes to these (empty until then).
     app.include_router(members_router)
     app.include_router(people_router)
+    app.include_router(account_router)
     app.include_router(connections_router)
     app.include_router(slack_browse_router)
     app.include_router(github_browse_router)

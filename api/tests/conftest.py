@@ -27,6 +27,8 @@ os.environ["ORACLE_DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["ORACLE_CLAUDE_SWEEP_SECONDS"] = "0"
 # Nor the built-in job worker; tests run jobs themselves.
 os.environ["ORACLE_LLM_JOBS_WORKER_SECONDS"] = "0"
+# The test build: users and invites at example.com and other reserved domains are fine.
+os.environ["ORACLE_ALLOW_RESERVED_EMAIL_DOMAINS"] = "1"
 
 import httpx  # noqa: E402
 import pytest  # noqa: E402

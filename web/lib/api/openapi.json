@@ -4314,7 +4314,7 @@
           "members"
         ],
         "summary": "List Members",
-        "description": "The users of this company's Oracle, their roles, and whether each is active or\ndisabled (a removed member: kept so history keeps their name).",
+        "description": "The users of this company's Oracle, their roles, and whether each is active or\ndisabled (a removed member: kept so history keeps their name), their last sign-in\nwhen known, and how many credentials still act for them.",
         "operationId": "list_members",
         "responses": {
           "200": {
@@ -4575,24 +4575,8 @@
           "members"
         ],
         "summary": "List Api Tokens",
-        "description": "Every API token of this company (never the secret), revoked ones included.",
+        "description": "Every credential of this company (never the secret), revoked ones included,\noldest first: personal and service API tokens, run tokens and MCP clients' OAuth\ngrants, each with its kind, the member it acts for, its scopes and when it was\ncreated, last used, revoked and (run tokens, grants) expires.",
         "operationId": "list_api_tokens",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ApiTokenOut"
-                  },
-                  "type": "array",
-                  "title": "Response List Api Tokens"
-                }
-              }
-            }
-          }
-        },
         "security": [
           {
             "HTTPBearer": []
@@ -4600,7 +4584,78 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "personal",
+                    "service",
+                    "run",
+                    "mcp_client"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this kind",
+              "title": "Kind"
+            },
+            "description": "Only this kind"
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only those acting for this member",
+              "title": "User Id"
+            },
+            "description": "Only those acting for this member"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiTokenOut"
+                  },
+                  "title": "Response List Api Tokens"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/api-tokens/{token_id}": {
@@ -4609,7 +4664,7 @@
           "members"
         ],
         "summary": "Revoke Api Token",
-        "description": "Revoke an API token. The approvals given through it lapse for good (section\nverdicts and version approvals); its user's own approvals stand. Revoking twice is\na no-op.",
+        "description": "Revoke a credential of any kind by its id: an API token, a run token or an MCP\nclient's grant (its access and refresh tokens). The approvals given through an API\ntoken or a grant lapse for good (section verdicts and version approvals); its\nmember's own approvals stand, as do spend approvals and checkpoint decisions (C2: a\ntoken revoke voids neither). A revoked run token ends its agents' access; the run\ngoes on. Revoking twice is a no-op.",
         "operationId": "revoke_api_token",
         "security": [
           {
@@ -5073,6 +5128,345 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/account": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Get My Account",
+        "description": "Your email, role, when you last signed in and how you sign in: with a password,\nwith Google (when this deployment signs in through Google), or both.",
+        "operationId": "get_my_account",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyAccountOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/me/password": {
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Change Password",
+        "description": "Change your password (the current one, then a new, different one of at least\n``password_min_length`` characters), from the signed-in browser only (a token or an\nMCP client is refused). Every other session ends and this browser gets a fresh one;\nyour personal API tokens, the MCP clients you authorized (and their unexchanged\nauthorization codes) and the current run tokens of your runs still going are revoked\n(those runs keep running; their next segment is given a new run token). Five wrong\ncurrent passwords in 15 minutes lock changes for the rest of the window.",
+        "operationId": "change_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "The current password is not correct, or the new one is it"
+          },
+          "403": {
+            "description": "Not from the signed-in browser (a token, an MCP client or another site)"
+          },
+          "409": {
+            "description": "You sign in with Google only: no password to change"
+          },
+          "429": {
+            "description": "Too many wrong attempts; see Retry-After"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/me/sign-out-everywhere": {
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Sign Out Everywhere",
+        "description": "Sign out of every device, from the signed-in browser only: every session you\nsigned in with ends, this one too; your personal API tokens, every MCP client you\nauthorized (access and refresh tokens, and authorization codes not yet exchanged)\nand the current run tokens of the runs you started that are still going are\nrevoked. Sign-out ends today's tokens and grants, not the runs: a run started\nearlier keeps running, and its next segment is given a new run token. With Google\nsign-in, Google signs the browser in again on its next visit.",
+        "operationId": "sign_out_everywhere",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedOutEverywhere"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not from the signed-in browser"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/me/tokens": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "List My Tokens",
+        "description": "Your personal API tokens, revoked ones included (never a secret).",
+        "operationId": "list_my_tokens",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApiTokenOut"
+                  },
+                  "type": "array",
+                  "title": "Response List My Tokens"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Create Personal Token",
+        "description": "Create a personal API token that acts as you, from the signed-in browser only (a\ntoken or an MCP client never mints one). ``oracle:read`` alone acts as a viewer;\nwith ``oracle:write`` it has your role. It expires after ``expires_in_days`` (30, 90\nor 365; null: never), then is listed as expired and refused. The secret is in this\nanswer only: copy it now, only its hash is kept.",
+        "operationId": "create_personal_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonalTokenCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalTokenCreated"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not from the signed-in browser (a token, an MCP client or another site)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/me/tokens/{token_id}": {
+      "delete": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Revoke My Token",
+        "description": "Revoke one of your personal API tokens. The approvals given through it lapse for\ngood; yours given in person stand. Twice is a no-op.",
+        "operationId": "revoke_my_token",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Token Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "A read-only credential changes nothing"
+          },
+          "404": {
+            "description": "Not one of your tokens"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/oauth-clients": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "List My Oauth Clients",
+        "description": "The MCP clients you authorized (one row per authorization), revoked ones\nincluded.",
+        "operationId": "list_my_oauth_clients",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/McpClientOut"
+                  },
+                  "type": "array",
+                  "title": "Response List My Oauth Clients"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/me/oauth-clients/{grant_id}": {
+      "delete": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Revoke My Oauth Client",
+        "description": "Revoke an MCP client you authorized: its access and refresh tokens stop working\nand the approvals made through it lapse. Twice is a no-op.",
+        "operationId": "revoke_my_oauth_client",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "grant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Grant Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "A read-only credential changes nothing"
+          },
+          "404": {
+            "description": "Not one of your MCP clients"
           },
           "422": {
             "description": "Validation Error",
@@ -27632,6 +28026,17 @@
             "type": "string",
             "title": "Name"
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "personal",
+              "service",
+              "run",
+              "mcp_client"
+            ],
+            "title": "Kind",
+            "default": "service"
+          },
           "role": {
             "type": "string",
             "enum": [
@@ -27653,6 +28058,25 @@
               }
             ],
             "title": "User Id"
+          },
+          "owner_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Email"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scopes",
+            "default": []
           },
           "created_at": {
             "type": "string",
@@ -27682,6 +28106,41 @@
               }
             ],
             "title": "Revoked At"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
           }
         },
         "type": "object",
@@ -27691,7 +28150,8 @@
           "role",
           "created_at"
         ],
-        "title": "ApiTokenOut"
+        "title": "ApiTokenOut",
+        "description": "A credential of this company, never its secret."
       },
       "ApprovalLapse": {
         "properties": {
@@ -47415,6 +47875,69 @@
         ],
         "title": "ManifestOut"
       },
+      "McpClientOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "client_name": {
+            "type": "string",
+            "title": "Client Name"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scopes"
+          },
+          "authorized_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Authorized At"
+          },
+          "last_used_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Used At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "client_id",
+          "client_name",
+          "scopes",
+          "authorized_at",
+          "last_used_at",
+          "expires_at"
+        ],
+        "title": "McpClientOut",
+        "description": "An MCP client you authorized: one OAuth grant (its access and refresh tokens)."
+      },
       "McpServerRegistration": {
         "properties": {
           "name": {
@@ -47573,6 +48096,23 @@
               }
             ],
             "title": "Disabled By"
+          },
+          "last_sign_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sign In At"
+          },
+          "open_tokens": {
+            "type": "integer",
+            "title": "Open Tokens",
+            "default": 0
           },
           "status": {
             "type": "string",
@@ -48340,6 +48880,82 @@
           "changed"
         ],
         "title": "MonitorOut"
+      },
+      "MyAccountOut": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_sign_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sign In At"
+          },
+          "sign_in_methods": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "password",
+                "google"
+              ]
+            },
+            "type": "array",
+            "title": "Sign In Methods"
+          },
+          "password_min_length": {
+            "type": "integer",
+            "title": "Password Min Length",
+            "default": 12
+          },
+          "signed_in_via": {
+            "type": "string",
+            "enum": [
+              "browser",
+              "api_token",
+              "mcp_client"
+            ],
+            "title": "Signed In Via"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "email",
+          "role",
+          "created_at",
+          "sign_in_methods",
+          "signed_in_via"
+        ],
+        "title": "MyAccountOut",
+        "description": "The signed-in member: who they are, their role and how they sign in."
       },
       "NewEvidence": {
         "properties": {
@@ -49781,6 +50397,28 @@
         ],
         "title": "PackOut"
       },
+      "PasswordChange": {
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Current Password"
+          },
+          "new_password": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 12,
+            "title": "New Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "PasswordChange"
+      },
       "PersonAsker": {
         "properties": {
           "kind": {
@@ -49847,6 +50485,69 @@
         ],
         "title": "PersonOut",
         "description": "A member as the member directory shows them to everyone (``GET /v1/people``):\nno other field, so a picker never learns more than whom it may name."
+      },
+      "PersonalTokenCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "scopes": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "oracle:read",
+                "oracle:write"
+              ]
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Scopes"
+          },
+          "expires_in_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  30,
+                  90,
+                  365
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires In Days",
+            "default": 90
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "title": "PersonalTokenCreate"
+      },
+      "PersonalTokenCreated": {
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/ApiTokenOut"
+          },
+          "secret": {
+            "type": "string",
+            "title": "Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "secret"
+        ],
+        "title": "PersonalTokenCreated",
+        "description": "The new token and its secret: shown this once, only its hash is kept."
       },
       "PickerConfigOut": {
         "properties": {
@@ -61440,6 +62141,36 @@
           "sharing"
         ],
         "title": "SharingIn"
+      },
+      "SignedOutEverywhere": {
+        "properties": {
+          "sessions_valid_after": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Sessions Valid After"
+          },
+          "mcp_clients_revoked": {
+            "type": "integer",
+            "title": "Mcp Clients Revoked"
+          },
+          "api_tokens_revoked": {
+            "type": "integer",
+            "title": "Api Tokens Revoked",
+            "default": 0
+          },
+          "runs_tokens_revoked": {
+            "type": "integer",
+            "title": "Runs Tokens Revoked",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "sessions_valid_after",
+          "mcp_clients_revoked"
+        ],
+        "title": "SignedOutEverywhere",
+        "description": "Every session signed before ``sessions_valid_after`` is refused, this one too;\nevery personal API token, every MCP client (refresh tokens included) and the run\ntokens of the runs you started that are still going are revoked (AC1)."
       },
       "SkippedSection": {
         "properties": {
