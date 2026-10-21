@@ -35,7 +35,10 @@ from tests.test_roadmap_reasons import SECOND, roadmap_items_check
 
 ITEMS = ["payment-step", "mobile-push", "gift-cards"]
 VOCAB = actions.ValidationContext(
-    item_keys=frozenset(ITEMS), prd_sections=frozenset({"s-5-1", "s-5-2"})
+    item_keys=frozenset(ITEMS),
+    prd_sections=frozenset({"s-5-1", "s-5-2"}),
+    # An item of the comparison base the file dropped (a "Keep" restores it).
+    dropped_keys=frozenset({"shipping-step"}),
 )
 
 
@@ -147,7 +150,7 @@ class Review:
         return self.auth if who == "owner" else self.people[who].headers
 
     def id(self, who: str) -> str:
-        return str(self.people[who].id)
+        return str(self.people[who].user_id)
 
     async def get(self, who: str = "viewer", expect: int = 200) -> dict:
         resp = await self.client.get(f"{self.base}/review", headers=self.h(who))
@@ -217,7 +220,7 @@ async def emails(review: Review) -> dict[str, str]:
     async with tenant_session(review.tenant_id) as s:
         rows = await s.scalars(select(User))
         by_id = {u.id: u.email for u in rows}
-    return {who: by_id[p.id] for who, p in review.people.items()}
+    return {who: by_id[p.user_id] for who, p in review.people.items()}
 
 
 async def test_every_member_reads_the_draft_with_items_reasons_and_rights(review):
