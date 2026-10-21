@@ -90,7 +90,7 @@ test("strategy: the PRDs list does not list the vision or the strategy", async (
   await login(page);
   await page.getByTestId("nav-prds").first().click();
   await expect(page).toHaveURL(/\/documents$/);
-  await expect(page.getByText("Checkout redesign").first()).toBeVisible();
-  await expect(page.getByText("Product strategy")).toHaveCount(0);
-  await expect(page.getByText(/^Vision$/)).toHaveCount(0);
+  const rows = page.getByTestId("documents-table").filter({ visible: true }).getByTestId("document-row");
+  await expect(rows.filter({ hasText: "Checkout redesign" })).toHaveCount(1);
+  await expect(rows.filter({ hasText: /Product strategy|^Vision/ })).toHaveCount(0);
 });
