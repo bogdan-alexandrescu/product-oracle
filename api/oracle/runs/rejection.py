@@ -93,7 +93,10 @@ def summary(name: str, problems: Sequence[ImportProblem]) -> str:
     knock_on: list[ImportProblem] = []
     for p in problems:
         what = None
-        if p.code == "invalid_citation" and (m := _INVALID.search(p.message)):
+        # Only the last line can match (".+$" stops at a newline), so only it is searched: a
+        # long line of " is invalid: " before it would be rescanned from each one.
+        last_line = p.message.rfind("\n", 0, len(p.message) - 1) + 1
+        if p.code == "invalid_citation" and (m := _INVALID.search(p.message, last_line)):
             what = m["what"]
         if p.code == "unknown_citation" and p.cite_key:
             knock_on.append(p)
