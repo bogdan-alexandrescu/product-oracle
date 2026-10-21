@@ -251,12 +251,9 @@ async def test_an_owed_decision_survives_a_pause_on_overrun_and_resume(client, o
     assert "Cover returns" in json.dumps(swarm.submissions()[1])
 
 
-async def test_a_redo_whose_cancel_is_not_confirmed_keeps_its_cancel_marker(client, owner):
-    """Redo cancels the workflow; SwarmCloud does not confirm the cancel: the decision is
-    recorded and the cancel's marker is kept, counted on every try, so a cancel answered
-    with 404s that prove nothing reaches the Inbox's Cancel / Stop cancelling."""
-    tenant_id, auth = owner
-    swarm = on()
+async def _redo_not_cancelled(client, auth, tenant_id, swarm) -> dict:
+    """A run whose approver chose Redo (on a console verdict Oracle could not read) and
+    whose workflow's cancel SwarmCloud did not confirm: the decision is owed."""
     run = await _waiting(client, auth, tenant_id, swarm)
     swarm.console_answer("wf_1", "next_draft-review1", "NOT_YET", ["x"], by="lead@example.com")
     step = swarm.workflows["wf_1"].step("next_draft-review1")
@@ -267,6 +264,16 @@ async def test_a_redo_whose_cancel_is_not_confirmed_keeps_its_cancel_marker(clie
     swarm.fail_cancels = 1
     resp = await _decide_raw(client, auth, run, "redo", "Cover refunds")
     assert resp.status_code == 503 and "recorded" in resp.text, resp.text
+    return run
+
+
+async def test_a_redo_whose_cancel_is_not_confirmed_keeps_its_cancel_marker(client, owner):
+    """Redo cancels the workflow; SwarmCloud does not confirm the cancel: the decision is
+    recorded and the cancel's marker is kept, counted on every try, so a cancel answered
+    with 404s that prove nothing reaches the Inbox's Cancel / Stop cancelling."""
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _redo_not_cancelled(client, auth, tenant_id, swarm)
     wf = (await _knobs_of(tenant_id, run["id"]))["workflow"]
     assert wf["state"] == "live" and wf["cancel_pending"]["tries"] == 1, wf
     assert await _owed(tenant_id, run["id"]) is not None
@@ -278,3 +285,21 @@ async def test_a_redo_whose_cancel_is_not_confirmed_keeps_its_cancel_marker(clie
     [item] = (await client.get("/v1/inbox", headers=auth)).json()["lookups"]
     assert item["id"] == run["id"] and item["can_stop_cancelling"] is True
     assert len(swarm.submissions()) == 1
+
+
+# --- minors ---------------------------------------------------------------------------
+
+
+async def test_what_an_owed_decisions_cancel_counts_is_the_ticks(client, owner):
+    """The owed decision's delivery retries the cancel it needs; still not confirmed and
+    over the ceiling, it pauses the run. That pause is the tick's (runs_paused), not
+    counted on a throwaway (PR #128 minor)."""
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _redo_not_cancelled(client, auth, tenant_id, swarm)
+    await _ceiling(tenant_id, run["id"], "0.01")
+    swarm.workflows["wf_1"].steps[0].cost += 1.0
+    swarm.fail_cancels = 10
+    out = await _tick_raw(client, auth)
+    assert (await get(client, auth, run["id"]))["status"] == "paused_overrun"
+    assert out["runs_paused"] == 1, out
