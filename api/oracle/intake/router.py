@@ -34,6 +34,7 @@ from oracle.intake.schemas import (
     DecisionIn,
     DecisionResult,
     DismissIn,
+    DraftGateClosedOut,
     EvidenceHit,
     EvidenceSearch,
     FindingOut,
@@ -48,6 +49,7 @@ from oracle.intake.schemas import (
     IntakeRunIn,
     IntakeSummary,
     NewEvidence,
+    NextBatch,
     QuestionBatch,
     QuestionBatchAsk,
     QuestionCreate,
@@ -286,6 +288,29 @@ async def get_question_batch(
     return out
 
 
+@router.get("/intakes/{intake_id}/next-batch", response_model=NextBatch)
+async def get_next_question_batch(
+    intake_id: uuid.UUID,
+    principal: Viewer,
+    db: TenantDB,
+    size: Annotated[int, Query(ge=1, le=10)] = 5,
+) -> NextBatch:
+    """The next batch as it would be asked, without asking it (C5; the author or an
+    approver, as asking it): the same questions in the same order as
+    ``POST .../question-batches`` with the same ``size`` asks next, each with the person
+    it would be asked of (the gap's owner, else the author), and how many are not asked
+    yet. ``assign`` on the ask changes only who is asked."""
+    intake = await _intake(db, intake_id)
+    if not sharing.is_author(principal, intake) and not has_role(principal.role, "approver"):  # type: ignore[arg-type]
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Only the intake's author or an approver sees the next batch",
+        )
+    out = await summary.next_batch(db, intake, principal, size)
+    await _audit_read(db, principal, intake, "get_next_question_batch", out)
+    return out
+
+
 @router.post("/intakes/{intake_id}/question-batches", response_model=QuestionBatch)
 async def ask_next_question_batch(
     intake_id: uuid.UUID,
@@ -321,12 +346,19 @@ async def get_intake_composition_inputs(
     return await summary.composition_inputs(db, await _intake(db, intake_id), principal)
 
 
-@router.post("/intakes/{intake_id}/runs", response_model=RunOut, status_code=201)
+@router.post(
+    "/intakes/{intake_id}/runs",
+    response_model=RunOut,
+    status_code=201,
+    responses={409: {"model": DraftGateClosedOut}},
+)
 async def start_intake_run(
     intake_id: uuid.UUID, body: IntakeRunIn, principal: Approver, db: TenantDB
 ) -> RunOut:
     """Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs
-    until an approver estimates and starts it."""
+    until an approver estimates and starts it. Drafting waits until decided (C5): 409
+    with ``blocking_gap_ids`` while a critical question everyone may see is neither
+    answered nor decided (a private one gates nothing until shared, S6)."""
     intake = await _intake(db, intake_id)
     try:
         run_id = await service.convert(db, principal, intake, body)

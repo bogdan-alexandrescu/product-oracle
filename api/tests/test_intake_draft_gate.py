@@ -25,6 +25,9 @@ from oracle.auth.service import sign_run_binding
 from oracle.intake import engine, sharing, summary
 from oracle.jobs import worker
 from oracle.llm import gateway
+from oracle.main import app
+from oracle.mcp.scopes import required_scope
+from oracle.mcp.tools import app_operations
 from oracle.runs.models import Run
 from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
@@ -37,6 +40,8 @@ from tests.intake_helpers import (
     company,
     create_intake,
     intake_with_source,
+)
+from tests.intake_helpers import (
     summary as read_summary,
 )
 from tests.test_intake_jobs import FakeClaude
@@ -133,8 +138,8 @@ def _draft(gap: KnowledgeGap | None, priority: int, **kw) -> StakeholderQuestion
 def _hidden_gap() -> tuple[KnowledgeGap, sharing.Registry]:
     """A model-written gap its author keeps private: hidden from everyone else."""
     gap = _gap(rule_key=None, category="release_rollout")
-    reg = sharing.Registry({str(gap.id): {"kind": "gap", "origin": "model",
-                                          "sharing": "private", "category": "release_rollout"}})  # fmt: skip
+    entry = {"kind": "gap", "origin": "model", "sharing": "private", "category": "release_rollout"}
+    reg = sharing.Registry({str(gap.id): entry})
     reg.analysed = True
     return gap, reg
 
@@ -251,6 +256,18 @@ async def test_next_batch_is_for_the_author_or_an_approver(client):
     for who in ("approver", "owner"):
         assert (await _next(client, ctx, intake_id, who)).status_code == 200
     assert (await _next(client, ctx, intake_id, "approver", 11)).status_code == 422
+
+
+def test_next_batch_is_an_mcp_tool_that_reads_sources():
+    paths = app.openapi()["paths"]
+    assert "get" in paths["/v1/intakes/{intake_id}/next-batch"]
+    ops = {(o.method, o.path): o for o in app_operations(app)}
+    op = ops[("GET", "/v1/intakes/{intake_id}/next-batch")]
+    assert not op.excluded and op.tool_name == "get_next_question_batch"
+    # Its cards carry evidence refs, as a question batch's do.
+    assert required_scope("GET", "/v1/intakes/{intake_id}/next-batch") == "read:sources"
+    conflict = paths["/v1/intakes/{intake_id}/runs"]["post"]["responses"]["409"]
+    assert conflict["content"]["application/json"]["schema"]["$ref"].endswith("DraftGateClosedOut")
 
 
 async def test_next_batch_is_empty_when_nothing_is_left(client):

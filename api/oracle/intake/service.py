@@ -482,6 +482,10 @@ async def create_run(
 async def convert(
     db: AsyncSession, principal: Principal, intake: ProductIntake, body: IntakeRunIn
 ) -> uuid.UUID:
+    """The intake's draft run, once the draft gate is clear (C5, ``drafting.check``)."""
+    from oracle.intake import drafting
+
+    await drafting.check(db, intake)
     run_id = await create_run(db, principal, intake, body)
     from oracle.runs.models import Run
 

@@ -239,6 +239,8 @@ ORACLE_KNOBS = (
     "intake_id",
     "intake_snapshot_id",
     "intake_gap_ids",
+    # C5: the intake's answers that existed when the run started (the ones it reads).
+    "intake_answer_ids",
     # D12: a feedback loop started from Build next draft: exactly the items staged for
     # it, the agent-staged feedback and the accepted section-text suggestions.
     "feedback_ids",
@@ -1693,6 +1695,11 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
     source_id = _source_id(run)
     if source_id is not None and await db.get(DocumentVersion, source_id) is None:
         raise Invalid("the PRD version this roadmap is built from no longer exists")
+    # A run started from an intake (C5): a draft waits at the draft gate, and it reads
+    # the intake's answers given before now, whichever segment asks.
+    from oracle.intake import drafting
+
+    pinned = await drafting.on_start(db, run)
     if knobs.budget_usd is not None and run.estimate_usd > knobs.budget_usd:
         raise Invalid(
             f"the estimate (${run.estimate_usd:.2f}) is over the budget "
@@ -1710,6 +1717,8 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
         db.add(snapshot)
         await db.flush()
     run.snapshot_id = snapshot.id
+    for key, value in (pinned or {}).items():
+        _set_knob(run, key, value)
     if source_id is not None:
         # Every segment, attempt and change request of the run reads these (A1).
         _set_knob(run, "planning_horizons", await company_horizons(db))

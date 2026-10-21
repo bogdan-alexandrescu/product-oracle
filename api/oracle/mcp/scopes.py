@@ -50,6 +50,8 @@ SOURCE_READS = {
     ("intakes", "new-evidence"),
     ("intakes", "summary"),
     ("intakes", "question-batch"),
+    # C5: the next batch's preview (the same cards as a question batch).
+    ("intakes", "next-batch"),
     # A launch's requester notes: what people asked, in their words.
     ("launches", "notes"),
 }

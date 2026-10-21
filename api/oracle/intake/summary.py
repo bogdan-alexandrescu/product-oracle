@@ -23,7 +23,7 @@ from oracle.baseline import scoring
 from oracle.baseline import trace as baseline_trace
 from oracle.baseline.models import Conflict, Entity
 from oracle.intake import categories as cats
-from oracle.intake import engine, sharing
+from oracle.intake import drafting, engine, sharing
 from oracle.intake import evidence as ev
 from oracle.intake.answers import next_actions
 from oracle.intake.models import IntakeProposal
@@ -46,6 +46,7 @@ from oracle.intake.schemas import (
     ModuleHint,
     NewEvidence,
     NewEvidenceItem,
+    NextBatch,
     Pinned,
     PinnedVersion,
     QuestionBatch,
@@ -632,20 +633,42 @@ async def build(
         proposals=await proposals_of(db, intake, principal),
         shared_counts=[FindingCount(**c) for c in sharing.counts(view.reg, view.v)],
         is_author=view.v.is_author,
+        **await _drafting(db, intake, view),
     )
 
 
-async def question_batch(
-    db: AsyncSession, intake: ProductIntake, principal: Principal | None, number: int | None
-) -> QuestionBatch:
-    view = await View(intake, principal).load(db)
-    questions = view.questions
-    if number is None:
-        number = max((q.batch for q in questions if q.batch is not None), default=None)
-    chosen = [q for q in questions if number is not None and q.batch == number]
+async def _drafting(db: AsyncSession, intake: ProductIntake, view: "View") -> dict[str, Any]:
+    """The intake's draft run, and how many answers the reader may see came after it
+    started (C5: that run reads the ones before)."""
+    run = await drafting.draft_run(db, intake)
+    if run is None:
+        return {}
+    since = 0
+    pinned = (run.knobs or {}).get(drafting.ANSWER_IDS)
+    if intake.status == "converted" and isinstance(pinned, list) and view.questions:
+        kept = {str(i) for i in pinned}
+        ids = await db.scalars(
+            select(StakeholderAnswer.id).where(
+                StakeholderAnswer.question_id.in_([q.id for q in view.questions])
+            )
+        )
+        since = sum(str(a) not in kept for a in ids)
+    return {"draft_run_id": run.id, "answers_since_run": since}
+
+
+async def _cards(
+    db: AsyncSession,
+    intake: ProductIntake,
+    principal: Principal | None,
+    view: "View",
+    chosen: list,
+) -> list[QuestionCard]:
+    """Question cards as the reader may see them: gap, evidence, answers. A run reads the
+    answers given before it started only (C5, :mod:`oracle.intake.drafting`)."""
     gaps = view.views
     answers: dict[uuid.UUID, list[StakeholderAnswer]] = {}
     if chosen:
+        pin = await drafting.pin_of(db, principal)
         rows = (
             await db.scalars(
                 select(StakeholderAnswer)
@@ -654,7 +677,8 @@ async def question_batch(
             )
         ).all()
         for a in rows:
-            answers.setdefault(a.question_id, []).append(a)
+            if pin is None or pin.keeps(intake.id, a.id):
+                answers.setdefault(a.question_id, []).append(a)
     pin = await pinned(db, intake)
     ids = {i for q in chosen if q.gap_id in gaps for i in gaps[q.gap_id].evidence_ids}
     refs = await view.refs(db, ids, pin)
@@ -670,11 +694,48 @@ async def question_batch(
                 answers=[StakeholderAnswerOut.model_validate(a) for a in answers.get(q.id, [])],
             )
         )
+    return cards
+
+
+async def question_batch(
+    db: AsyncSession, intake: ProductIntake, principal: Principal | None, number: int | None
+) -> QuestionBatch:
+    view = await View(intake, principal).load(db)
+    questions = view.questions
+    if number is None:
+        number = max((q.batch for q in questions if q.batch is not None), default=None)
+    chosen = [q for q in questions if number is not None and q.batch == number]
     return QuestionBatch(
         intake_id=intake.id,
         batch=number,
-        questions=cards,
+        questions=await _cards(db, intake, principal, view, chosen),
         remaining=sum(q.status == "draft" for q in questions),
+    )
+
+
+async def next_batch(
+    db: AsyncSession, intake: ProductIntake, principal: Principal, size: int
+) -> NextBatch:
+    """The next batch as ``principal`` would ask it (C5): the questions
+    :func:`engine.choose_batch` picks, in order, each with the person it would be asked of
+    (:func:`engine.default_person`). Nothing is asked or changed."""
+    view = await View(intake, principal).load(db)
+    raw = await engine.intake_questions(db, intake.id)
+    skip = await hidden_gap_ids(db, intake, principal)
+    batch = engine.choose_batch(raw, view.raw, view.reg, size, skip)
+    shown = {q.id: q for q in view.questions}
+    able: dict[uuid.UUID, bool] = {}
+    chosen = []
+    for q in batch.questions:
+        gap = view.raw.get(q.gap_id) if q.gap_id else None
+        hidden = gap is not None and sharing.gap_changes(gap, view.reg, sharing.EVERYONE) is None
+        person = await engine.default_person(db, intake, q, gap, principal.id, hidden, able)
+        # A copy: the stored row keeps its person until the batch is asked.
+        out = StakeholderQuestionOut.model_validate(shown[q.id])
+        chosen.append(out.model_copy(update={"asked_to": person}))
+    return NextBatch(
+        questions=await _cards(db, intake, principal, view, chosen),
+        remaining=sum(q.status == "draft" for q in view.questions),
     )
 
 
