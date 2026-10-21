@@ -288,6 +288,7 @@ export default function BaselinePage() {
                   from={from}
                   onFrom={chooseFrom}
                   graph={graph.data}
+                  meId={me?.user_id}
                   canWrite={canWrite}
                   busy={busy}
                   onOpen={setOpenId}

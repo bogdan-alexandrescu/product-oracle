@@ -55189,6 +55189,13 @@
               }
             ]
           },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "proposer": {
+            "$ref": "#/components/schemas/ProposalProposer"
+          },
           "actor": {
             "anyOf": [
               {
@@ -55243,10 +55250,73 @@
         "required": [
           "id",
           "payload",
+          "summary",
+          "proposer",
           "status",
           "created_at"
         ],
         "title": "ProposalOut"
+      },
+      "ProposalProposer": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "run",
+              "intake",
+              "person",
+              "token",
+              "oracle"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "ProposalProposer",
+        "description": "Who made a proposal, in words (B4): a run, an intake answer (never the person, S6),\na member, an API token, or Oracle itself."
       },
       "ProposalRun": {
         "properties": {

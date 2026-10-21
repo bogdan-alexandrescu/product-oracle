@@ -8,7 +8,7 @@ import { INPUT } from "@/components/ui";
 import type { GraphOut, ProposalOut, Schemas } from "@/lib/api/client";
 import { formatDateTime, formatDay } from "@/lib/format";
 
-import { formatValue, targetTitle } from "./common";
+import { formatValue, titleOf } from "./common";
 import { LIMIT_LABEL, suggestedBlocker } from "./PromoteBlocker";
 
 type Payload = { op?: string; kind?: string; fields?: Record<string, unknown>; reason?: string | null; origin?: string };
@@ -37,6 +37,7 @@ export function ProposalsTab({
   from,
   onFrom,
   graph,
+  meId,
   canWrite,
   busy,
   onOpen,
@@ -49,6 +50,8 @@ export function ProposalsTab({
   from: FromFilter;
   onFrom: (from: FromFilter) => void;
   graph: GraphOut | undefined;
+  /** The signed-in member: their own proposals say "You". */
+  meId?: string | null;
   canWrite: boolean;
   busy: boolean;
   onOpen: (id: string) => void;
@@ -104,6 +107,7 @@ export function ProposalsTab({
         from={from}
         onFrom={onFrom}
         graph={graph}
+        meId={meId}
         canWrite={canWrite}
         busy={busy}
         onOpen={onOpen}
@@ -139,22 +143,45 @@ function FromSelect({ runs, from, onFrom }: { runs: ProposalRun[]; from: FromFil
   );
 }
 
-/** A row's last line: the run that made it, as a link; else who proposed it and when. */
-function Source({ p }: { p: ProposalOut }) {
+/** Who made it and when: the run that made it, as a link; else the person (You), token or Oracle. */
+function Source({ p, meId }: { p: ProposalOut; meId?: string | null }) {
   const line = "tnum truncate text-[13px] text-text2";
   if (p.run)
     return (
-      <p className={line}>
+      <p className={line} data-testid="proposal-by">
         <Link href={`/runs/${p.run.id}`} className="text-accent-ink hover:underline">
           From run · {runLabel(p.run)}
         </Link>
       </p>
     );
   // A run that is gone: deleting it nulls run_id, but a run's own merge keeps "run:<id>" as the actor.
-  if (p.run_id || p.actor?.startsWith("run:")) return <p className={line}>From a run (removed)</p>;
+  if (p.proposer.kind === "run") return <p className={line} data-testid="proposal-by">From a run (removed)</p>;
+  const who = p.proposer.user_id && p.proposer.user_id === meId ? "You" : p.proposer.label;
   return (
-    <p className={line}>
-      {p.actor ?? "unknown"} · {formatDateTime(p.created_at)}
+    <p className={line} data-testid="proposal-by" title={p.proposer.email ?? undefined}>
+      {who} · {formatDateTime(p.created_at)}
+    </p>
+  );
+}
+
+/** The sentence, with the item it names as a button that opens its drawer. */
+function Sentence({ p, graph, onOpen }: { p: ProposalOut; graph: GraphOut | undefined; onOpen: (id: string) => void }) {
+  const op = (p.payload as Payload).op;
+  const title = p.entity_id && op !== "create" ? titleOf(graph, p.entity_id) : null;
+  const at = title ? p.summary.indexOf(title) : -1;
+  return (
+    <p data-testid="proposal-summary" className="line-clamp-2 min-w-0 font-semibold [overflow-wrap:anywhere]">
+      {at < 0 || !title ? (
+        p.summary
+      ) : (
+        <>
+          {p.summary.slice(0, at)}
+          <button type="button" onClick={() => onOpen(p.entity_id!)} className="inline text-left font-semibold hover:underline">
+            {title}
+          </button>
+          {p.summary.slice(at + title.length)}
+        </>
+      )}
     </p>
   );
 }
@@ -165,6 +192,7 @@ function ProposalList({
   from,
   onFrom,
   graph,
+  meId,
   canWrite,
   busy,
   onOpen,
@@ -175,6 +203,7 @@ function ProposalList({
   from: FromFilter;
   onFrom: (from: FromFilter) => void;
   graph: GraphOut | undefined;
+  meId?: string | null;
   canWrite: boolean;
   busy: boolean;
   onOpen: (id: string) => void;
@@ -199,49 +228,41 @@ function ProposalList({
           {proposals.map((p) => {
             const payload = p.payload as Payload;
             const fields = flatFields(payload.fields);
-            const target =
-              payload.op === "create" ? String(payload.fields?.title ?? "New item") : targetTitle(graph, p.entity_id, p.edge_id);
             return (
               <li
                 key={p.id}
                 data-testid="proposal"
                 className="flex items-start gap-4 border-t border-line px-4 py-3 first:border-t-0 max-[600px]:flex-col max-[600px]:gap-2.5 max-[600px]:px-3"
               >
-                <div className="flex min-w-0 flex-1 flex-col gap-1.5 max-[600px]:w-full">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <Chip kind="acc">{payload.op ?? "change"}</Chip>
-                    <Chip kind="na">{payload.kind ?? "entity"}</Chip>
-                    {(payload.fields?.attrs as Record<string, unknown> | undefined)?.proposed_blocker != null && (
+                <div className="flex min-w-0 flex-1 flex-col gap-1 max-[600px]:w-full">
+                  {(payload.fields?.attrs as Record<string, unknown> | undefined)?.proposed_blocker != null && (
+                    <div>
                       <Chip kind="warn">Suggested blocker</Chip>
-                    )}
-                    {p.entity_id && payload.op !== "create" ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpen(p.entity_id!)}
-                        className="min-w-0 truncate text-left font-semibold hover:underline"
-                      >
-                        {target}
-                      </button>
-                    ) : (
-                      <span className="min-w-0 truncate font-semibold">{target}</span>
-                    )}
-                  </div>
-                  {fields.length > 0 && (
-                    <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm" aria-label="Proposed fields">
-                      {fields.map(([k, v]) => (
-                        <div key={k} className="flex min-w-0 gap-1">
-                          <dt className="font-mono text-text2">{k}:</dt>
-                          <dd className="truncate font-semibold">{formatValue(v)}</dd>
-                        </div>
-                      ))}
-                    </dl>
+                    </div>
                   )}
+                  <Sentence p={p} graph={graph} onOpen={onOpen} />
+                  <Source p={p} meId={meId} />
                   {payload.reason && (
                     <p className="truncate text-sm text-text2" title={payload.reason}>
                       {payload.reason}
                     </p>
                   )}
-                  <Source p={p} />
+                  <details className="text-sm">
+                    <summary className="w-fit cursor-pointer text-[13px] font-semibold text-text2 hover:text-text">Details</summary>
+                    <p className="mt-1 font-mono text-text2">
+                      {payload.op ?? "change"} {payload.kind ?? "entity"}
+                    </p>
+                    {fields.length > 0 && (
+                      <dl className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5" aria-label="Proposed fields">
+                        {fields.map(([k, v]) => (
+                          <div key={k} className="flex min-w-0 gap-1">
+                            <dt className="font-mono text-text2">{k}:</dt>
+                            <dd className="truncate font-semibold">{formatValue(v)}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                  </details>
                 </div>
                 {canWrite && (
                   <div className="flex flex-none gap-2">

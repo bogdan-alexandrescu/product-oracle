@@ -8,6 +8,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { DEPOSITS_IDS } from "./blockers";
+import { describe, proposer } from "./describe";
 import { PRODUCT_CHAT_ID, seededItemId } from "./ids";
 import { routeEvidenceLinks } from "./public-links";
 
@@ -16,7 +17,8 @@ type EntityRow = Omit<Schemas["EntityOut"], "evidence_count">;
 type EdgeRow = Omit<Schemas["EdgeOut"], "evidence_count">;
 type EvidenceRow = Schemas["EvidenceOut"];
 type ConflictRow = Schemas["ConflictOut"];
-type ProposalRow = Schemas["ProposalOut"];
+/** Stored as the API stores it: the sentence and who made it are written when it is read (B4). */
+type ProposalRow = Omit<Schemas["ProposalOut"], "summary" | "proposer" | "run">;
 type Attrs = Record<string, unknown>;
 
 export interface BaselineState {
@@ -34,6 +36,8 @@ export type BaselineCaller = {
   role: Role;
   /** The run that made a proposal, as ProposalOut.run names it; null when it is gone. */
   runOf?: (runId: string) => Schemas["ProposalRun"] | null;
+  /** A member's email, for the proposer's name (B4); null when there is no such member. */
+  memberEmail?: (userId: string) => string | null;
 };
 
 /** The accepted intake constraint the seed keeps as a suggested blocker (B4). */
@@ -47,6 +51,8 @@ export const SUGGESTED_BLOCKER = {
 export const LOW_CONFIDENCE = 0.4;
 const WEIGHTS = { source: 0.35, freshness: 0.25, mentions: 0.2, goal_impact: 0.2 } as const;
 const ROLE_ORDER: readonly Role[] = ["viewer", "commenter", "approver", "owner"];
+/** The commenter's seeded proposal on Team invites; the mock server makes it the commenter's. */
+export const COMMENTER_PROPOSAL = "b3000000-0000-4000-8000-000000000001";
 // A colleague who locked an item before you signed in.
 const OTHER_MEMBER = "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e6f7";
 /** The Baseline to PRD run (./runs.ts) whose agents made the seeded proposals. */
@@ -422,10 +428,10 @@ export function seedBaseline(uuid: () => string): BaselineState {
   proposal(dark, { attrs: { status: "planned" } }, "Mentioned as next up in the planning call.", "2026-10-16T08:12:00Z");
   // And one from a commenter: no run. A fixed id, so the ids seeded after it stay put.
   s.proposals.push({
-    id: "b3000000-0000-4000-8000-000000000001",
+    id: COMMENTER_PROPOSAL,
     entity_id: invites.id,
     edge_id: null,
-    payload: { op: "update", kind: "entity", fields: { attrs: { effort: "S" } }, reason: "Most of the invite flow already exists.", origin: "agent" },
+    payload: { op: "update", kind: "entity", fields: { attrs: { effort: "XS" } }, reason: "Most of the invite flow already exists.", origin: "agent" },
     run_id: null,
     actor: `user:${OTHER_MEMBER}`,
     status: "open",
@@ -658,7 +664,17 @@ export async function routeBaseline(
   const entityOut = (e: EntityRow) => withCount(s, e, "entity_id") as Schemas["EntityOut"];
   const edgeOut = (e: EdgeRow) => withCount(s, e, "edge_id") as Schemas["EdgeOut"];
   const findEntity = (id: string) => s.entities.find((e) => e.id === id);
-  const withRun = (p: ProposalRow): ProposalRow => ({ ...p, run: p.run_id ? (caller.runOf?.(p.run_id) ?? null) : null });
+  /** ProposalOut: the run that made it, its sentence (kept from the decision once decided) and who made it. */
+  const proposalOut = (p: ProposalRow): Schemas["ProposalOut"] => {
+    const run = p.run_id ? (caller.runOf?.(p.run_id) ?? null) : null;
+    const stored = (p.payload as { summary?: unknown }).summary;
+    return {
+      ...p,
+      run,
+      summary: p.status !== "open" && typeof stored === "string" ? stored : describe(p, s.entities, s.edges),
+      proposer: proposer(p, { run, memberEmail: caller.memberEmail }),
+    };
+  };
 
   // Public-link evidence is open to commenters, so it is routed before the approver check.
   const link = await routeEvidenceLinks(s, caller, req, rest);
@@ -706,7 +722,7 @@ export async function routeBaseline(
           reason: input.reason,
           runId: input.run_id,
         });
-        const out: Schemas["EntityWriteOut"] = { applied: !proposal, entity: entityOut(e), proposal };
+        const out: Schemas["EntityWriteOut"] = { applied: !proposal, entity: entityOut(e), proposal: proposal && proposalOut(proposal) };
         return json(proposal ? 202 : 200, out);
       }
       if ((action === "confirm" || action === "reject") && m === "POST") {
@@ -742,7 +758,7 @@ export async function routeBaseline(
           .filter((p) => !status || p.status === status)
           .filter((p) => run == null || (run === "none" ? p.run_id == null : p.run_id === run))
           .sort((a, b) => b.created_at.localeCompare(a.created_at))
-          .map(withRun),
+          .map(proposalOut),
       );
     }
     if (head === "proposals" && id && (action === "accept" || action === "reject") && m === "POST") {
@@ -756,14 +772,16 @@ export async function routeBaseline(
         }
         const target = p.entity_id ? findEntity(p.entity_id) : undefined;
         if (!target) return fail(404, "Entity not found");
+        p.payload = { ...p.payload, summary: describe(p, s.entities, s.edges) };
         updateEntity(s, target, payload.fields ?? {}, { origin: "user", userId: caller.userId });
       }
+      if (action === "reject") p.payload = { ...p.payload, summary: describe(p, s.entities, s.edges) };
       Object.assign(p, {
         status: action === "accept" ? "accepted" : "rejected",
         decided_by: caller.userId,
         decided_at: now(),
       });
-      return json(200, withRun(p));
+      return json(200, proposalOut(p));
     }
 
     if (head === "conflicts" && !id && m === "GET") {
@@ -836,4 +854,10 @@ export function enlargeBaseline(s: BaselineState, uuid: () => string, extra: num
       });
     });
   }
+}
+
+/** Makes the seeded commenter proposal the given member's (the mock's members get their ids after the seed). */
+export function attributeCommenterProposal(s: BaselineState, userId: string) {
+  const p = s.proposals.find((x) => x.id === COMMENTER_PROPOSAL);
+  if (p) p.actor = `user:${userId}`;
 }

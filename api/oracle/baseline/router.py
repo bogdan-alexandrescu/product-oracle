@@ -15,7 +15,16 @@ from sqlalchemy import inspect
 from oracle import autonomy
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import recheck_caller, require_role, require_role_now
-from oracle.baseline import conflicts, evidence, public_links, scoring, service, trace, yaml_io
+from oracle.baseline import (
+    conflicts,
+    describe,
+    evidence,
+    public_links,
+    scoring,
+    service,
+    trace,
+    yaml_io,
+)
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.baseline.schemas import (
     ConflictCreate,
@@ -93,11 +102,26 @@ def _writer(principal: Principal, body: OriginIn | EntityCreate | EdgeCreate) ->
     )
 
 
+_PROPOSAL_COLUMNS = (
+    "id", "entity_id", "edge_id", "payload", "run_id", "actor", "status", "decided_by",
+    "decided_at", "created_at",
+)  # fmt: skip
+
+
 async def _proposals_out(db, rows: list[Proposal]) -> list[ProposalOut]:
-    """ProposalOut with the summary of the run that made each (one query for them all)."""
+    """ProposalOut with the run that made each, its sentence and who made it (B4), built
+    in one pass for the whole list."""
     runs = await service.proposal_runs(db, (p.run_id for p in rows))
+    sentences = await describe.summaries(db, rows)
+    who = await describe.proposers(db, rows, runs)
     return [
-        ProposalOut.model_validate(p).model_copy(update={"run": runs.get(p.run_id)}) for p in rows
+        ProposalOut(
+            **{c: getattr(p, c) for c in _PROPOSAL_COLUMNS},
+            run=runs.get(p.run_id),
+            summary=sentences[p.id],
+            proposer=who[p.id],
+        )
+        for p in rows
     ]
 
 

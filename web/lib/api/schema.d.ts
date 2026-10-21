@@ -17939,6 +17939,9 @@ export interface components {
             /** Run Id */
             run_id?: string | null;
             run?: components["schemas"]["ProposalRun"] | null;
+            /** Summary */
+            summary: string;
+            proposer: components["schemas"]["ProposalProposer"];
             /** Actor */
             actor?: string | null;
             /**
@@ -17955,6 +17958,26 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * ProposalProposer
+         * @description Who made a proposal, in words (B4): a run, an intake answer (never the person, S6),
+         *     a member, an API token, or Oracle itself.
+         */
+        ProposalProposer: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "run" | "intake" | "person" | "token" | "oracle";
+            /** Label */
+            label: string;
+            /** Run Id */
+            run_id?: string | null;
+            /** User Id */
+            user_id?: string | null;
+            /** Email */
+            email?: string | null;
         };
         /**
          * ProposalRun
