@@ -123,7 +123,7 @@ test("Home for a new company: one line per block with what to do next", async ({
   // A1: the Set up checklist comes first, the owner's steps with what is already done.
   const setup = page.getByTestId("home-setup");
   await expect(setup.getByRole("heading", { name: "Set up" })).toBeVisible();
-  await expect(setup.getByTestId("panel-count")).toHaveText("2 of 5");
+  await expect(setup.getByTestId("panel-count")).toHaveText("2 of 6");
   const goals = page.getByTestId("home-goals-empty");
   await expect(goals).toContainText("No goals yet");
   await expect(goals.getByRole("link", { name: "Import your baseline" })).toHaveAttribute("href", "/baseline");

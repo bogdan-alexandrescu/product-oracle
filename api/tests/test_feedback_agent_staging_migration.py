@@ -66,7 +66,9 @@ def _columns() -> list[str]:
 
 def test_the_chain_ends_here_after_feedback_authors():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == [REVISION]
+    # 0022_engineering_lead (A3) chains on it; one head.
+    assert script.get_heads() == ["0022_engineering_lead"]
+    assert script.get_revision("0022_engineering_lead").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == "0020_prd_scopes"
 
 

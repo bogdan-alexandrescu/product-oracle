@@ -23,7 +23,7 @@ from oracle.tenancy import tenant_session
 from tests.conftest import make_tenant
 from tests.connection_helpers import add_connection, make_person
 
-OWNER_KEYS = ["connect", "sources", "invite", "domains", "horizons"]
+OWNER_KEYS = ["connect", "sources", "invite", "domains", "eng_lead", "horizons"]
 DEFAULT_HORIZONS = {
     "short_quarters": 1,
     "medium_quarters": 2,
@@ -59,12 +59,12 @@ def _step(body: dict, key: str) -> dict:
 
 async def test_a_new_companys_owner_has_every_step_open(client, owner):
     # protects=the owner's checklist for a new company; fails_when=a step reads done
-    # without its rows, or the order differs; no_claim=the web draws it (A3's eng_lead
-    # is not merged, so five owner steps).
+    # without its rows, or the order differs; no_claim=the web draws it (six owner
+    # steps, A3's eng_lead among them).
     body = await _setup(client, owner)
     assert [s["key"] for s in body["steps"]] == OWNER_KEYS
-    assert [s["done"] for s in body["steps"]] == [False] * 5
-    assert body["done"] == 0 and body["total"] == 5 and body["hidden"] is False
+    assert [s["done"] for s in body["steps"]] == [False] * 6
+    assert body["done"] == 0 and body["total"] == 6 and body["hidden"] is False
     assert _step(body, "connect")["count"] == 0
     assert _step(body, "sources")["count"] == 0
     assert _step(body, "invite")["count"] == 1
@@ -233,7 +233,7 @@ async def test_a_second_company_sees_only_its_own_counts(client, tenant_id, owne
     other = await make_person(await make_tenant("Second Co"), "second-owner@example.com")
     body = await _setup(client, other)
     assert [s["key"] for s in body["steps"]] == OWNER_KEYS
-    assert [s["done"] for s in body["steps"]] == [False] * 5
+    assert [s["done"] for s in body["steps"]] == [False] * 6
     assert _step(body, "connect")["count"] == 0
     assert _step(body, "sources")["count"] == 0
     assert _step(body, "invite")["count"] == 1
