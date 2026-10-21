@@ -69,10 +69,7 @@ async def list_members(db: TenantDB) -> list[MemberOut]:
 @router.patch(
     "/members/{user_id}",
     response_model=MemberOut,
-    responses={
-        409: {"description": "Would demote the last owner"},
-        422: {"description": "Neither field sent, or a viewer named engineering lead"},
-    },
+    responses={409: {"description": "Would demote the last owner"}},
 )
 async def update_member(
     user_id: uuid.UUID, body: MemberPatch, principal: Owner, db: TenantDB

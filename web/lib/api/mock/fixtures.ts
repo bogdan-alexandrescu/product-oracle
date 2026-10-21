@@ -806,22 +806,24 @@ export const MOCK_LOGIN = { email: "admin@example.com", password: MOCK_PASS };
 
 /** Mock members, one per role; each signs in with the mock password. */
 export const MOCK_MEMBERS = [
-  { email: "admin@example.com", role: "owner", created_at: "2026-09-01T09:00:00Z", last_sign_in_at: "2026-10-20T07:30:00Z" },
-  { email: "approver@example.com", role: "approver", created_at: "2026-09-02T09:00:00Z", last_sign_in_at: "2026-10-19T16:00:00Z" },
-  { email: "commenter@example.com", role: "commenter", created_at: "2026-09-03T09:00:00Z", last_sign_in_at: "2026-10-12T10:15:00Z" },
-  { email: "viewer@example.com", role: "viewer", created_at: "2026-09-04T09:00:00Z", last_sign_in_at: null },
+  // A3: nobody is the engineering lead in the default company (the "eng-review" scenario names one).
+  { email: "admin@example.com", role: "owner", engineering_lead: false, created_at: "2026-09-01T09:00:00Z", last_sign_in_at: "2026-10-20T07:30:00Z" },
+  { email: "approver@example.com", role: "approver", engineering_lead: false, created_at: "2026-09-02T09:00:00Z", last_sign_in_at: "2026-10-19T16:00:00Z" },
+  { email: "commenter@example.com", role: "commenter", engineering_lead: false, created_at: "2026-09-03T09:00:00Z", last_sign_in_at: "2026-10-12T10:15:00Z" },
+  { email: "viewer@example.com", role: "viewer", engineering_lead: false, created_at: "2026-09-04T09:00:00Z", last_sign_in_at: null },
 ] as const;
 
 /** A member an owner removed (disabled, C2); their tokens were revoked with it. */
 export const REMOVED_MEMBER = {
   email: "former.pm@example.com",
   role: "approver",
+  engineering_lead: false,
   created_at: "2026-09-05T09:00:00Z",
   last_sign_in_at: "2026-10-17T21:50:00Z",
   disabled_at: "2026-10-18T09:00:00Z",
 } as const;
 
-export const MOCK_INVITES = [{ email: "new.hire@example.com", role: "commenter", created_at: "2026-10-15T09:00:00Z" }] as const;
+export const MOCK_INVITES = [{ email: "new.hire@example.com", role: "commenter", engineering_lead: false, created_at: "2026-10-15T09:00:00Z" }] as const;
 
 /*
  * The "suggestions" scenario (MOCK_SCENARIO_KEY): a PRD whose open feedback is three Oracle

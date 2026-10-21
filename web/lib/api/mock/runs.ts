@@ -39,6 +39,12 @@ export interface RunsContext {
   /** The signed-in member's role: who decided, as the run's agents read it (D11). */
   userRole?: Schemas["Me"]["role"] | null;
   /**
+   * A3: whether the signed-in member may decide a checkpoint of a run of `flow`, as the API's
+   * oracle.members.leads.may_decide (the engineering stops go to the leads and owners once
+   * one is named). Absent: anyone may, as the mock had it.
+   */
+  mayDecide?: (c: Pick<CheckpointOut, "kind" | "approver_role">, flow: RunOut["flow"]) => boolean;
+  /**
    * The "undelivered" scenario: SwarmCloud does not take a checkpoint decision until the
    * next tick. The decision is recorded (and final) but the decide call answers 503, as the
    * API does when SwarmCloud did not confirm it; the tick delivers it.
@@ -65,6 +71,10 @@ export interface RunsContext {
   uuid: () => string;
   now: () => string;
 }
+
+/** A3: the engineering stops (the check and the dates), as oracle.members.leads.ENGINEERING_KINDS. */
+export const ENGINEERING_KINDS: readonly string[] = ["eng_review", "eng_dates"];
+const LEAD_ONLY = "Only an engineering lead or an owner decides the engineering stops";
 
 const ROLES: Schemas["AgentRoleOut"][] = [
   { key: "researcher", title: "Researcher", description: "Gathers and weighs evidence", base_usd: 4 },
@@ -616,9 +626,10 @@ function launch(ctx: RunsContext, r: RunOut) {
 }
 
 function inbox(ctx: RunsContext): Schemas["InboxOut"] {
+  const mine = (c: CheckpointOut, r: RunOut) => !ctx.mayDecide || ctx.mayDecide(c, r.flow);
   const checkpoints = ctx.db.runs.flatMap((r) =>
     r.checkpoints
-      .filter((c) => c.status === "pending")
+      .filter((c) => c.status === "pending" && mine(c, r))
       .map((c) => ({
         ...c,
         can_decide: true,
@@ -631,7 +642,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   // Decided, not delivered to the run yet: shown, nothing to decide, not in the total.
   const deliveries = ctx.db.runs.flatMap((r) =>
     r.checkpoints
-      .filter((c) => c.delivery && !r.segments.some((s) => sentBack(r, s)))
+      .filter((c) => c.delivery && !r.segments.some((s) => sentBack(r, s)) && mine(c, r))
       .map((c) => ({
         ...c,
         can_decide: false,
@@ -841,7 +852,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (!r) return fail(404, `run ${p[2]} not found`);
   const done = (status = 200) => {
     refresh(r);
-    return json(status, { ...r, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
+    const checkpoints = r.checkpoints.map((c) => (c.can_decide && ctx.mayDecide && !ctx.mayDecide(c, r.flow) ? { ...c, can_decide: false } : c));
+    return json(status, { ...r, checkpoints, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
   };
 
   if (p.length === 3 && m === "GET") return done();
@@ -981,6 +993,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       return fail(409, `already decided: this checkpoint is ${cp.status.replace("_", " ")}; a recorded decision is final`);
     }
     if (cp.status !== "pending" || r.status !== "awaiting_checkpoint") return fail(409, `checkpoint is ${cp.status}`);
+    if (ctx.mayDecide && !ctx.mayDecide(cp, r.flow)) return fail(403, ENGINEERING_KINDS.includes(cp.kind) ? LEAD_ONLY : `Requires the ${cp.approver_role} role`);
     const { decision, note } = await body<Schemas["CheckpointDecision"]>();
     const blocked = cannotApprove(cp);
     if (decision === "approved" && blocked) return fail(409, blocked);
@@ -1356,6 +1369,30 @@ export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">): Run
   proposeScope(full, r, featureSet.seq, 1, SAVED_ADDRESSES, check);
   const cp = r.checkpoints.find((c) => c.kind === "feature_set")!;
   cp.payload = { ...cp.payload, feature_set_check: check };
+  refresh(r);
+  db.runs.push(r);
+  return r;
+}
+
+/** The run the "eng-review" scenario seeds (A3). */
+export const ENG_REVIEW_RUN = "7a11c0de-0000-4000-8000-0000000000e3";
+
+/**
+ * The "eng-review" scenario (A3): a Baseline to PRD run for a new PRD (offline-sync) waiting
+ * at an Engineering review stop. No flow creates one yet (F4 Engineering review stop adds the
+ * check and the dates to Baseline to PRD): its first stop is made one, as the API tests do.
+ */
+export function seedEngReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut {
+  const { from, now } = seedClock();
+  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}) };
+  const full = { ...ctx, db: own, now };
+  const r = seedRun(ctx, own, "baseline_to_prd", "offline-sync", {}, "2026-10-17T10:00:00Z");
+  r.id = ENG_REVIEW_RUN;
+  from(r.created_at);
+  launch(full, r);
+  tick(full);
+  const cp = r.checkpoints.find((c) => c.status === "pending")!;
+  Object.assign(cp, { kind: "eng_review", approver_role: "approver" });
   refresh(r);
   db.runs.push(r);
   return r;

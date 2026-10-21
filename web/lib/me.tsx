@@ -19,6 +19,8 @@ type MeState = {
   /** The signed-in principal, or null when signed out (or not loaded yet). */
   me: Me | null;
   role: Role | null;
+  /** A3: the signed-in principal acts for an engineering lead. */
+  engineeringLead: boolean;
   /** True until the first GET /v1/me has answered. */
   loading: boolean;
   /** Re-reads GET /v1/me. */
@@ -51,7 +53,14 @@ export function MeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<MeState>(
-    () => ({ me: state.me, role: state.me?.role ?? null, loading: state.loading, refresh, clear }),
+    () => ({
+      me: state.me,
+      role: state.me?.role ?? null,
+      engineeringLead: state.me?.engineering_lead ?? false,
+      loading: state.loading,
+      refresh,
+      clear,
+    }),
     [state, refresh, clear],
   );
   return <MeContext.Provider value={value}>{children}</MeContext.Provider>;

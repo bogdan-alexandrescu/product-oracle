@@ -34,6 +34,11 @@ const ROLES: { role: Role; label: string; can: string }[] = [
 ];
 export const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.role, r.label])) as Record<Role, string>;
 const INVITE_FORM = "invite-form";
+/** A3: the engineering lead is a flag any commenter or above carries, not a fifth role. */
+const LEAD_TIP =
+  "Engineering lead: decides both engineering stops (the check after the feature set and the dates after the PRD draft) and verifies dates. Any commenter or above can carry it.";
+const VIEWER_NOT_LEAD = "Viewers can't be the engineering lead";
+const CHECKBOX = "size-4 accent-[var(--accent)] disabled:opacity-50";
 
 function RoleSelect({
   value,
@@ -68,7 +73,7 @@ const pageTip = (
 
 /** Settings > Members: the people of this company's Oracle, their roles and status, and invites. */
 export function MembersSettings() {
-  const { me, role, loading } = useMe();
+  const { me, role, engineeringLead, loading } = useMe();
   const isOwner = hasRole(role, "owner");
 
   if (!loading && isOwner) return <OwnerView selfId={me?.user_id ?? null} />;
@@ -86,6 +91,7 @@ export function MembersSettings() {
               Your role is <b>{role ? ROLE_LABEL[role].toLowerCase() : "unknown"}</b>.
             </span>
             <span>Only owners manage members.</span>
+            {engineeringLead && <span>You are an engineering lead.</span>}
           </p>
         </Split>
       )}
@@ -93,8 +99,9 @@ export function MembersSettings() {
   );
 }
 
-/** The four roles, what each can do behind an (i), and how many active people hold each. */
+/** The four roles and the engineering lead flag, what each can do behind an (i), and how many active people hold each. */
 function RolesSection({ members }: { members?: Member[] }) {
+  const leads = members?.filter((m) => m.engineering_lead && m.status !== "disabled").length;
   return (
     <InspectorSection label="Roles">
       {ROLES.map((r) => (
@@ -114,6 +121,16 @@ function RolesSection({ members }: { members?: Member[] }) {
           </span>
         </InspectorRow>
       ))}
+      <div data-testid="roles-engineering-lead">
+        <InspectorRow value={leads != null ? <span className="tnum">{leads}</span> : undefined}>
+          <span className="inline-flex items-center gap-1.5">
+            Engineering lead
+            <InfoTip label="the engineering lead" align="start">
+              {LEAD_TIP}
+            </InfoTip>
+          </span>
+        </InspectorRow>
+      </div>
     </InspectorSection>
   );
 }
@@ -161,6 +178,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
   const emailRef = useRef<HTMLInputElement>(null);
   const [email, setEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("commenter");
+  const [inviteLead, setInviteLead] = useState(false);
   const [pending, setPending] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -174,6 +192,18 @@ function OwnerView({ selfId }: { selfId: string | null }) {
     setError(null);
     try {
       replace(await unwrap(api.PATCH("/v1/members/{user_id}", { params: { path: { user_id: m.id } }, body: { role } })));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function setLead(m: Member, engineering_lead: boolean) {
+    setSaving(m.id);
+    setError(null);
+    try {
+      replace(await unwrap(api.PATCH("/v1/members/{user_id}", { params: { path: { user_id: m.id } }, body: { engineering_lead } })));
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -220,7 +250,9 @@ function OwnerView({ selfId }: { selfId: string | null }) {
           key: invite.id,
           outcome: "Revoked",
           undo: async () => {
-            const again = await unwrap(api.POST("/v1/invites", { body: { email: invite.email, role: invite.role } })).catch((e) => {
+            const again = await unwrap(
+              api.POST("/v1/invites", { body: { email: invite.email, role: invite.role, engineering_lead: invite.engineering_lead } }),
+            ).catch((e) => {
               setError(errorMessage(e));
               return null;
             });
@@ -248,9 +280,12 @@ function OwnerView({ selfId }: { selfId: string | null }) {
     setPending(true);
     setInviteError(null);
     try {
-      const created = await unwrap(api.POST("/v1/invites", { body: { email: email.trim(), role: inviteRole } }));
+      const created = await unwrap(
+        api.POST("/v1/invites", { body: { email: email.trim(), role: inviteRole, engineering_lead: inviteLead && inviteRole !== "viewer" } }),
+      );
       invitesQ.setData((prev) => [created, ...(prev ?? [])]);
       setEmail("");
+      setInviteLead(false);
     } catch (err) {
       setInviteError(errorMessage(err));
     } finally {
@@ -263,16 +298,48 @@ function OwnerView({ selfId }: { selfId: string | null }) {
     const lastOwner = m.role === "owner" && activeOwners <= 1;
     if (m.id === selfId && lastOwner) {
       return (
-        <Unavailable reason="You are the only owner. Make someone else owner first." testId="role-unavailable">
-          {(props) => (
-            <button type="button" {...props} aria-label={`Role for ${m.email}`} className={`${SELECT} inline-flex items-center opacity-70`}>
-              {ROLE_LABEL[m.role]}
-            </button>
-          )}
-        </Unavailable>
+        <span className="flex flex-col gap-1">
+          <Unavailable reason="You are the only owner. Make someone else owner first." testId="role-unavailable">
+            {(props) => (
+              <button type="button" {...props} aria-label={`Role for ${m.email}`} className={`${SELECT} inline-flex items-center opacity-70`}>
+                {ROLE_LABEL[m.role]}
+              </button>
+            )}
+          </Unavailable>
+          {phoneLead(m)}
+        </span>
       );
     }
-    return <RoleSelect value={m.role} label={`Role for ${m.email}`} disabled={saving === m.id} onChange={(role) => changeRole(m, role)} />;
+    return (
+      <span className="flex flex-col gap-1">
+        <RoleSelect value={m.role} label={`Role for ${m.email}`} disabled={saving === m.id} onChange={(role) => changeRole(m, role)} />
+        {phoneLead(m)}
+      </span>
+    );
+  };
+
+  /** On a phone the Eng lead column hides: its box moves into the role cell, under the select. */
+  const phoneLead = (m: Member) => (
+    <label className="hidden items-center gap-2 text-sm max-[600px]:inline-flex">
+      {leadBox(m)}
+      Engineering lead
+    </label>
+  );
+
+  /** A3: the member's engineering lead box; a viewer's is disabled and says why. */
+  const leadBox = (m: Member) => {
+    const viewer = m.role === "viewer";
+    return (
+      <input
+        type="checkbox"
+        aria-label={`Engineering lead: ${m.email}`}
+        checked={m.engineering_lead}
+        disabled={viewer || removed(m) || saving === m.id}
+        title={viewer ? VIEWER_NOT_LEAD : undefined}
+        onChange={(e) => setLead(m, e.target.checked)}
+        className={CHECKBOX}
+      />
+    );
   };
 
   const actionCell = (m: Member) => {
@@ -325,10 +392,24 @@ function OwnerView({ selfId }: { selfId: string | null }) {
               <span className="sr-only">(</span>you<span className="sr-only">)</span>
             </Chip>
           )}
+          {/* On a phone the Eng lead column hides; this chip says it instead. */}
+          {m.engineering_lead && (
+            <Chip kind="acc" className="hidden max-[600px]:inline-flex">
+              Eng lead
+            </Chip>
+          )}
         </span>
       ),
     },
     { key: "role", header: "Role", width: "128px", wrap: true, cell: roleCell },
+    {
+      key: "lead",
+      // The anchor of A1's Engineering lead step (Set up on Home).
+      header: <span id="engineering-lead">Eng lead</span>,
+      width: "110px",
+      hideOnPhone: true,
+      cell: (m) => (removed(m) ? <span className="text-text2">{m.engineering_lead ? "Yes" : "—"}</span> : leadBox(m)),
+    },
     { key: "status", header: "Status", width: "146px", cell: (m) => <StatusChip m={m} /> },
     {
       key: "signin",
@@ -401,8 +482,25 @@ function OwnerView({ selfId }: { selfId: string | null }) {
             />
           </Field>
           <Field label="Role">
-            <RoleSelect value={inviteRole} label="Role" onChange={setInviteRole} />
+            <RoleSelect
+              value={inviteRole}
+              label="Role"
+              onChange={(r) => {
+                setInviteRole(r);
+                if (r === "viewer") setInviteLead(false);
+              }}
+            />
           </Field>
+          <label className="inline-flex items-center gap-2 text-[15px]" title={inviteRole === "viewer" ? VIEWER_NOT_LEAD : undefined}>
+            <input
+              type="checkbox"
+              checked={inviteLead && inviteRole !== "viewer"}
+              disabled={inviteRole === "viewer"}
+              onChange={(e) => setInviteLead(e.target.checked)}
+              className={CHECKBOX}
+            />
+            Engineering lead
+          </label>
           {inviteError && <Notice tone="error">{inviteError}</Notice>}
           <div>
             <Button type="submit" variant="solid" icon="plus" disabled={pending || !email.trim()}>
@@ -432,6 +530,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
                 ) : (
                   <>
                     <Chip kind="acc">{ROLE_LABEL[i.role]}</Chip>
+                    {i.engineering_lead && <Chip kind="acc">Eng lead</Chip>}
                     <Button variant="ghost" icon="link" aria-label={`Copy sign-in link for ${i.email}`} onClick={() => copyLink(i)}>
                       {copied === i.id ? "Copied" : <span className="sr-only">Copy link</span>}
                     </Button>

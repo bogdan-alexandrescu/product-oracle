@@ -4626,6 +4626,7 @@
           "members"
         ],
         "summary": "Update Member",
+        "description": "Change a member's role, name them engineering lead or clear it (A3), or both in\none change, role first. A viewer is never the engineering lead: naming one is a 422,\nand a demotion to viewer clears the flag. Clearing it returns the engineering-stop\ndecisions they gave that are not delivered yet to the Inbox.",
         "operationId": "update_member",
         "security": [
           {
@@ -5116,7 +5117,7 @@
           "members"
         ],
         "summary": "Create Invite",
-        "description": "Pre-assign a role to an email: its first Google sign-in lands with that role.",
+        "description": "Pre-assign a role to an email: its first Google sign-in lands with that role, and as\nan engineering lead when ``engineering_lead`` (never with role viewer: 422).",
         "operationId": "create_invite",
         "security": [
           {
@@ -23856,7 +23857,7 @@
           "roadmaps"
         ],
         "summary": "Create Schedule Basis",
-        "description": "Record a verified estimate, capacity figure or commitment supporting a date for\none PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a\ntracker issue is matched to (``tracker_key``). The approver recording it verifies it.\nFrom a tracker record, the record's own target date must be that date, and the record\nmust be this PRD's.",
+        "description": "Record a verified estimate, capacity figure or commitment supporting a date for\none PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a\ntracker issue is matched to (``tracker_key``). The approver or engineering lead\nrecording it verifies it.\nFrom a tracker record, the record's own target date must be that date, and the record\nmust be this PRD's.",
         "operationId": "create_schedule_basis",
         "security": [
           {
@@ -47473,6 +47474,11 @@
               "owner"
             ],
             "title": "Role"
+          },
+          "engineering_lead": {
+            "type": "boolean",
+            "title": "Engineering Lead",
+            "default": false
           }
         },
         "type": "object",
@@ -47502,6 +47508,11 @@
               "owner"
             ],
             "title": "Role"
+          },
+          "engineering_lead": {
+            "type": "boolean",
+            "title": "Engineering Lead",
+            "default": false
           },
           "status": {
             "type": "string",
@@ -50617,6 +50628,11 @@
             ],
             "title": "Email"
           },
+          "engineering_lead": {
+            "type": "boolean",
+            "title": "Engineering Lead",
+            "default": false
+          },
           "token_id": {
             "anyOf": [
               {
@@ -50669,6 +50685,11 @@
               "owner"
             ],
             "title": "Role"
+          },
+          "engineering_lead": {
+            "type": "boolean",
+            "title": "Engineering Lead",
+            "default": false
           },
           "created_at": {
             "type": "string",
@@ -50739,21 +50760,37 @@
       "MemberPatch": {
         "properties": {
           "role": {
-            "type": "string",
-            "enum": [
-              "viewer",
-              "commenter",
-              "approver",
-              "owner"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "viewer",
+                  "commenter",
+                  "approver",
+                  "owner"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
             "title": "Role"
+          },
+          "engineering_lead": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engineering Lead"
           }
         },
         "type": "object",
-        "required": [
-          "role"
-        ],
-        "title": "MemberPatch"
+        "title": "MemberPatch",
+        "description": "A role, the engineering lead flag, or both (applied in one change, role first)."
       },
       "MergeIn": {
         "properties": {
