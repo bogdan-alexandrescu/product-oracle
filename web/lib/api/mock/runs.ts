@@ -122,6 +122,21 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
         { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver" },
       ],
     },
+    {
+      // H8: an owner drafts a board or investor update from Company › Updates (New update).
+      key: "update_draft",
+      title: "Update draft",
+      description: "Draft a board or investor update for its period: metrics first, verified dates only, Asks left to the owner.",
+      requires_document: true,
+      target_kind: null,
+      source_kind: null,
+      in_new_run_dialog: false,
+      // Started from New update on Company › Updates only (owners); the New run dialog does not point at it.
+      starts_from: null,
+      segments: [
+        { name: "update_draft", title: "Update draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["update.md"], checkpoint: "update_review", approver_role: "owner" },
+      ],
+    },
   ],
   roles: ROLES,
   depths: { quick: 0.5, standard: 1, deep: 2 },
@@ -138,6 +153,7 @@ const KIND_NAME: Record<Kind, string> = {
   spec: "engineering spec",
   vision: "vision",
   strategy: "product strategy",
+  update: "update",
 };
 // O4: a roadmap starts from Now / Next / Later on the roadmap board unless a run names others.
 const ROADMAP_DEFAULTS = { template: "now-next-later", theme: "roadmap-board" };
@@ -522,7 +538,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     s.feature_set_check = checkOf(LOCAL_FEATURE_SET);
     proposeScope(ctx, r, s.seq, attempt, LOCAL_FEATURE_SET, s.feature_set_check);
   }
-  if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md")) && r.document_slug) {
+  if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md") || def.outputs.includes("update.md")) && r.document_slug) {
     const imp = ctx.importDraft(r.document_slug, r);
     s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], summary: null };
     r.document_id = imp.document_id ?? null;
@@ -544,7 +560,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     // As the API: the feedback loop on a roadmap is a roadmap review.
     kind: def.checkpoint === "prd_review" && r.document_kind === "roadmap" ? "roadmap_review" : def.checkpoint,
     status: on ? "pending" : "skipped",
-    approver_role: "approver",
+    approver_role: def.approver_role,
     segment_seq: s.seq,
     decided_by: null,
     decided_at: on ? null : ctx.now(),
@@ -587,26 +603,33 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
   for (const r of ctx.db.runs) {
     if (r.status !== "running" || delivered.has(r.id)) continue;
     out.runs_checked += 1;
-    const s = r.segments.find((x) => x.status === "running");
-    if (!s) continue;
-    const a = s.attempts[s.attempts.length - 1];
-    a.cost_usd = round2((s.estimate_usd ?? 0) * 0.9);
-    a.state = "succeeded";
-    s.cost_usd = round2(s.attempts.reduce((sum, x) => sum + x.cost_usd, 0));
-    s.status = "succeeded";
-    s.finished_at = ctx.now();
+    const done = finishRunning(ctx, r);
+    if (done === "none") continue;
     out.segments_finished += 1;
-    refresh(r);
-    if (r.overrun_ceiling_usd != null && r.spent_usd > r.overrun_ceiling_usd) {
-      r.status = "paused_overrun";
-      out.runs_paused += 1;
-      continue;
-    }
-    advance(ctx, r, s);
-    out.runs_advanced += 1;
-    refresh(r);
+    if (done === "paused") out.runs_paused += 1;
+    else out.runs_advanced += 1;
   }
   return out;
+}
+
+/** The agents finish the run's running segment (at 90% of its estimate), and the run goes on. */
+function finishRunning(ctx: RunsContext, r: RunOut): "none" | "paused" | "advanced" {
+  const s = r.segments.find((x) => x.status === "running");
+  if (!s) return "none";
+  const a = s.attempts[s.attempts.length - 1];
+  a.cost_usd = round2((s.estimate_usd ?? 0) * 0.9);
+  a.state = "succeeded";
+  s.cost_usd = round2(s.attempts.reduce((sum, x) => sum + x.cost_usd, 0));
+  s.status = "succeeded";
+  s.finished_at = ctx.now();
+  refresh(r);
+  if (r.overrun_ceiling_usd != null && r.spent_usd > r.overrun_ceiling_usd) {
+    r.status = "paused_overrun";
+    return "paused";
+  }
+  advance(ctx, r, s);
+  refresh(r);
+  return "advanced";
 }
 
 function launch(ctx: RunsContext, r: RunOut) {
@@ -762,6 +785,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (p.length === 2 && m === "POST") {
     const input = await body<Schemas["RunCreate"]>();
     const flow = flowOf(input.flow);
+    // H8: only an owner drafts an update.
+    if (input.flow === "update_draft" && ctx.userRole !== "owner") return fail(403, "Only an owner can draft an update");
     const knobs = resolveKnobs(input.flow, input.knobs);
     if (typeof knobs === "string") return fail(422, knobs);
     const find = (ref: string) => ctx.documents.find((d) => d.slug === ref || d.id === ref);
@@ -900,6 +925,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     r.snapshot_as_of = ctx.now();
     if (r.estimate_usd > THRESHOLD) r.status = "awaiting_approval";
     else launch(ctx, r);
+    // H8: the local runtime writes an update draft at once, so the new update opens on it.
+    if (r.flow === "update_draft" && (r.status as RunOut["status"]) === "running") finishRunning(ctx, r);
     return done();
   }
   if (action === "approve" && m === "POST") {
@@ -981,6 +1008,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       return fail(409, `already decided: this checkpoint is ${cp.status.replace("_", " ")}; a recorded decision is final`);
     }
     if (cp.status !== "pending" || r.status !== "awaiting_checkpoint") return fail(409, `checkpoint is ${cp.status}`);
+    // H8: an update's review stop is an owner's to decide.
+    if (cp.approver_role === "owner" && ctx.userRole !== "owner") return fail(403, "Only an owner can decide this stop");
     const { decision, note } = await body<Schemas["CheckpointDecision"]>();
     const blocked = cannotApprove(cp);
     if (decision === "approved" && blocked) return fail(409, blocked);
@@ -1114,6 +1143,7 @@ const CHECKPOINT_TITLES: Record<CheckpointOut["kind"], string> = {
   roadmap_review: "Roadmap review",
   strategy_review: "Vision or strategy review",
   launch_review: "Launch kit review",
+  update_review: "Update review",
 };
 
 function decisionSummary(d: Omit<RunDecision, "summary">): string {

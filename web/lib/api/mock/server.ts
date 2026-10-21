@@ -17,7 +17,7 @@ import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeEngineering } from "./engineering";
-import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
@@ -37,10 +37,16 @@ import { dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type Roa
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
+import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
-/** latest_version, approved_version and source are read off the versions. */
-export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source">;
+/**
+ * latest_version, approved_version, source and an update's period are read off the versions;
+ * visibility is "company" unless the row says otherwise (H8: updates are "approvers").
+ */
+export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source" | "visibility" | "period"> & {
+  visibility?: Schemas["DocumentSummary"]["visibility"];
+};
 export type VersionRow = Omit<Schemas["VersionOut"], "sections" | "date_marks"> & {
   sections: (Omit<Schemas["SectionOut"], "verdict" | "spec_states"> & Partial<Pick<Schemas["SectionOut"], "spec_states">>)[];
 };
@@ -930,7 +936,37 @@ function seed(): Db {
   docs.get("usage-alerts-roadmap")!.status = "in_review";
   db.runs = seeded("runs", () => seedRuns(runsContext(db)));
   db.llm = seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
+  seeded("updates", () => seedUpdates(db));
   return db;
+}
+
+/**
+ * H8: the synthetic investor and board updates (./fixtures.ts), seen by owners and approvers
+ * only. Seeded last, under their own ids, so every other seeded id stays as it was.
+ */
+function seedUpdates(db: Db) {
+  for (const d of UPDATE_DOCUMENTS) {
+    const doc: DocumentRow = {
+      id: uuid(),
+      slug: d.slug,
+      title: d.title,
+      status: d.status,
+      kind: "update",
+      template: d.template,
+      template_version: d.template_version ?? "1",
+      theme: d.theme ?? null,
+      visibility: "approvers",
+      created_at: d.versions[0].created_at,
+      updated_at: d.approved_at ?? d.versions.at(-1)!.created_at,
+    };
+    db.documents.push(doc);
+    for (const seedV of d.versions) {
+      const v = buildVersion(doc, seedV);
+      v.front_matter = updateFrontMatter(d.template, doc.slug, doc.title, d.period);
+      if (d.approved_at && seedV.number === d.versions.at(-1)!.number) v.approved_at = d.approved_at;
+      db.versions.push(v);
+    }
+  }
 }
 
 function llmContext(db: Db, userId: string, role: Role): LlmContext {
@@ -1142,6 +1178,22 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       const latest = docVersions(db, doc).pop();
       const seed = (DOCUMENTS as DocumentSeed[])[0].versions[0];
       const number = (latest?.number ?? 0) + 1;
+      // H8: an update_draft run writes the update for the period in its front matter.
+      const period = latest?.front_matter.period as UpdatePeriod | undefined;
+      if (doc.kind === "update" && isUpdateTemplate(doc.template) && period) {
+        const v = buildVersion(doc, {
+          number,
+          created_at: now(),
+          sections: draftSections(doc.template, doc.title, period),
+          citations: UPDATE_SEED_CITATIONS,
+          brief: updateFrontMatter(doc.template, doc.slug, doc.title, period).brief as string[],
+        });
+        v.front_matter = updateFrontMatter(doc.template, doc.slug, doc.title, period);
+        v.imported_by = "agent-track";
+        db.versions.push(v);
+        touch(db, doc.id);
+        return { document_id: doc.id, slug: doc.slug, kind: doc.kind, version: v.number, source: null, prd_links: null };
+      }
       const base = fromPrd
         ? { number, created_at: now(), sections: fromPrd.sections, citations: [], brief: fromPrd.brief }
         : latest
@@ -1291,9 +1343,12 @@ function sectionLayer(db: Db, versionId: string, key: string): Schemas["SectionO
 function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
   const vs = docVersions(db, d);
   const latest = vs[vs.length - 1];
+  const period = d.kind === "update" ? ((latest?.front_matter.period as UpdatePeriod | undefined) ?? null) : null;
   return {
     ...d,
     kind: d.kind ?? "prd",
+    visibility: d.visibility ?? "company",
+    period,
     latest_version: latest?.number ?? null,
     approved_version: vs.filter((v) => v.approved_at).pop()?.number ?? null,
     source: latest?.source ?? null,
@@ -1472,7 +1527,9 @@ function versionMarkdown(doc: DocumentRow, v: VersionRow): string {
         (c.low_confidence ? "\n    low_confidence: true" : ""),
     )
     .join("\n");
-  const head = `---\ndocument: ${doc.slug}\ntitle: ${doc.title}\n${v.snapshot ? `snapshot: ${v.snapshot}\n` : ""}citations:\n${cites || "  []"}\n---\n`;
+  const period = v.front_matter.period as UpdatePeriod | undefined;
+  const update = doc.kind === "update" ? `kind: update\ntemplate: ${doc.template}\n${period ? `period: {from: ${period.from}, to: ${period.to}}\n` : ""}` : "";
+  const head = `---\ndocument: ${doc.slug}\ntitle: ${doc.title}\n${update}${v.snapshot ? `snapshot: ${v.snapshot}\n` : ""}citations:\n${cites || "  []"}\n---\n`;
   const body = v.sections
     .map((s) => `${"#".repeat(s.level)} ${s.heading} {#${s.section_key}}\n\n${s.body_md}\n`)
     .join("\n");
@@ -1842,6 +1899,74 @@ function ensureBlockers(db: Db): BlockersDb {
   return db.blockers;
 }
 
+function slugOf(text: string): string {
+  const s = text
+    .normalize("NFKD")
+    .replace(/[^\x00-\x7f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return s.slice(0, 60).replace(/-+$/, "") || "update";
+}
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * H8: POST /v1/drafts {kind: "update"}: owners only. The update starts from its template
+ * (Asks placeholder kept) for the period (default: the first of this month through today),
+ * seen by owners and approvers.
+ */
+function startUpdate(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Response {
+  if (me.role !== "owner") return json(403, { detail: "Only an owner can start an update" });
+  if (!isUpdateTemplate(input.template)) {
+    return json(422, {
+      detail: `template '${input.template}' is not an update template`,
+      problems: [{ code: "kind_mismatch", message: "an update uses board-product or investor-update" }],
+    });
+  }
+  const today = now().slice(0, 10);
+  const period: UpdatePeriod = input.period ?? { from: `${today.slice(0, 8)}01`, to: today };
+  if (!ISO_DAY.test(period.from) || !ISO_DAY.test(period.to) || period.from > period.to) {
+    return json(422, { detail: "period: from and to are dates, from on or before to" });
+  }
+  const label = input.template === "board-product" ? "Board update" : "Investor update";
+  const title = input.title?.trim() || `${label} · ${periodMonth(period)}`;
+  const base = slugOf(input.slug || title);
+  if (input.slug && db.documents.some((d) => d.slug === base)) return json(409, { detail: `slug '${base}' is taken` });
+  let slug = base;
+  for (let n = 2; db.documents.some((d) => d.slug === slug); n++) slug = `${base}-${n}`;
+  const created = now();
+  const doc: DocumentRow = {
+    id: uuid(),
+    slug,
+    title,
+    status: "draft",
+    kind: "update",
+    template: input.template,
+    template_version: "1",
+    theme: input.theme ?? (input.template === "board-product" ? "roadmap-board" : "one-page-brief"),
+    visibility: "approvers",
+    created_at: created,
+    updated_at: created,
+  };
+  const fm = updateFrontMatter(input.template, slug, title, period);
+  const v = buildVersion(doc, { number: 1, created_at: created, sections: templateSections(input.template, title), citations: [], brief: fm.brief as string[] });
+  v.front_matter = fm;
+  v.imported_by = "draft-picker";
+  db.documents.push(doc);
+  db.versions.push(v);
+  return json(201, {
+    document_id: doc.id,
+    slug,
+    title,
+    kind: "update",
+    template: input.template,
+    template_version: 1,
+    theme: doc.theme ?? null,
+    version: 1,
+  } satisfies Schemas["StartDraftOut"]);
+}
+
 async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -1870,6 +1995,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   const member = db.members.find((x) => x.email === db.session);
   if (!member || member.status === "disabled") return json(401, { detail: "Not authenticated" });
   const me = withMockRole(member);
+  // H8: an "approvers" document (an update) is absent for commenters and viewers, on every
+  // documents path (its versions, markdown, exports, deck, feedback, comments, scope, ...).
+  if (p[1] === "documents" && p[2]) {
+    const hidden = findDocument(db, p[2]);
+    if (hidden && !canSee(me.role, hidden.visibility)) return notFound("Document");
+  }
   // v2 review routes (./review-v2.ts) check roles themselves.
   if (!db.review_v2) {
     const prd = db.documents.find((d) => d.kind === "prd");
@@ -2135,6 +2266,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     return (await routeRuns({ ...runsContext(db), db: db.runs }, forwarded, ["v1", "runs"]))!;
   }
 
+  // H8: an update starts from its template with its period (owners only); other kinds as before.
+  if (p[1] === "drafts" && p.length === 2 && m === "POST") {
+    const input = (await req.clone().json()) as Schemas["StartDraftIn"] | null;
+    if (input?.kind === "update") return startUpdate(db, me, input);
+  }
   const handled = await laneF(db, req, p, m);
   if (handled) return handled;
 
@@ -2193,12 +2329,28 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] !== "documents") return notFound("Route");
   if (p.length === 2) {
     const kind = q.get("kind");
-    return json(200, db.documents.map((d) => documentSummary(db, d)).filter((d) => !kind || d.kind === kind));
+    return json(
+      200,
+      db.documents
+        .filter((d) => canSee(me.role, d.visibility))
+        .map((d) => documentSummary(db, d))
+        .filter((d) => !kind || d.kind === kind),
+    );
   }
 
   const doc = findDocument(db, p[2]);
   if (!doc) return notFound("Document");
   if (p.length === 3) {
+    return json(200, { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary) });
+  }
+  // H8: who sees the document (owners only, with a reason; the API audits it).
+  if (p[3] === "visibility" && p.length === 4 && m === "PATCH") {
+    if (me.role !== "owner") return json(403, { detail: "Only an owner can change who sees a document" });
+    const input = await body<Partial<Schemas["VisibilityIn"]>>();
+    if (!input?.reason?.trim()) return json(422, { detail: "Give a reason for the change" });
+    if (input.visibility !== "company" && input.visibility !== "approvers") return json(422, { detail: "visibility is company or approvers" });
+    doc.visibility = input.visibility;
+    doc.updated_at = now();
     return json(200, { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary) });
   }
 
@@ -2240,7 +2392,12 @@ async function route(db: Db, req: Request): Promise<Response> {
 
   if (!sub) {
     // O4 'document dates': a roadmap's dates against its PRD's schedule bases now.
-    const marks = doc.kind === "roadmap" && db.roadmap ? dateMarks(db.roadmap, v.source?.document_id, v.sections) : [];
+    const marks =
+      doc.kind === "roadmap" && db.roadmap
+        ? dateMarks(db.roadmap, v.source?.document_id, v.sections)
+        : doc.kind === "update"
+          ? updateDateMarks(db.roadmap, v.sections)
+          : [];
     return json(200, { ...versionOut(db, v), date_marks: marks });
   }
   if (sub === "markdown") {
@@ -2295,6 +2452,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   if (sub === "sections" && p[7] === "review" && m === "PUT") {
     if (!v.sections.some((s) => s.section_key === p[6])) return notFound("Section");
+    // H8: approvers comment and suggest on an update; owners set its verdicts.
+    if (doc.kind === "update" && me.role !== "owner") return json(403, { detail: "Only an owner can review a section of an update" });
     const r = addReview(db, v, p[6], await body<Schemas["SectionReviewIn"]>(), { reviewer_id: me.id });
     touch(db, doc.id);
     if (r.feedback_item_id) onFeedback(llm, doc.id, v.number);
@@ -2324,7 +2483,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   if (sub === "approve" && m === "POST") {
     // H4: a vision or a product strategy is an owner's to approve.
-    const words = doc.kind === "vision" ? "a vision" : doc.kind === "strategy" ? "a product strategy" : null;
+    const words = doc.kind === "vision" ? "a vision" : doc.kind === "strategy" ? "a product strategy" : doc.kind === "update" ? "an update" : null;
     if (words && me.role !== "owner") return json(403, { detail: `Only an owner can approve ${words}` });
     // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
     if (doc.kind === "prd") {
@@ -2337,6 +2496,19 @@ async function route(db: Db, req: Request): Promise<Response> {
     // O4 'document dates' (owner, 2026-10-20): not while a date of the roadmap is marked.
     if (doc.kind === "roadmap" && db.roadmap && !v.approved_at) {
       const marked = dateMarks(db.roadmap, v.source?.document_id, v.sections).filter((d) => d.label);
+      if (marked.length) {
+        return json(409, {
+          detail: `${marked.length} date${marked.length === 1 ? " rests" : "s rest"} on no verified basis: ${marked
+            .map((d) => `${d.text} (${d.section_key}: ${d.label})`)
+            .join(", ")}`,
+          blocking: marked.map((d) => ({ key: "unverified_date", id: `${d.section_key}:${d.text}`, title: d.text, rationale: `${d.text} is marked ${d.label}` })),
+          dates: marked,
+        });
+      }
+    }
+    // H8: an update's dates follow the same rule, against every PRD with an active track.
+    if (doc.kind === "update" && !v.approved_at) {
+      const marked = updateDateMarks(db.roadmap, v.sections).filter((d) => d.label);
       if (marked.length) {
         return json(409, {
           detail: `${marked.length} date${marked.length === 1 ? " rests" : "s rest"} on no verified basis: ${marked
@@ -2372,6 +2544,8 @@ async function route(db: Db, req: Request): Promise<Response> {
         source: v.source ?? null,
         sections: v.sections,
         citations: v.citations,
+        // H8: a board update groups its brief sections into slides (front matter `slides`).
+        slides: Array.isArray(v.front_matter.slides) ? (v.front_matter.slides as string[][]) : undefined,
       }),
     );
   }

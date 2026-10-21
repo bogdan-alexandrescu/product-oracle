@@ -9,8 +9,8 @@ import { login } from "./helpers";
 
 test("the rail places Company after Inbox, just above Settings; it lands on Decisions with both highlighted", async ({ page }) => {
   // protects=the rail order Home, Requests, Baseline, PRDs, Priorities, Plan, Runs, Inbox,
-  // Company, then Settings (owner, 2026-10-21, "Rail order"); clicking Company lands on /company/decisions (its only tab before H4) with
-  // Company current and the Decisions tab selected; fails_when=Company is missing, out of
+  // Company, then Settings (owner, 2026-10-21, "Rail order"); clicking Company lands on /company/decisions (its first tab before H4) with
+  // Company current and the Decisions tab selected, H8's Updates tab after it for an owner; fails_when=Company is missing, out of
   // order, or not highlighted on its pages; no_claim=none beyond protects (F1 renamed Roadmap to Plan).
   await login(page);
   const nav = page.getByTestId("app-nav");
@@ -34,7 +34,7 @@ test("the rail places Company after Inbox, just above Settings; it lands on Deci
   await expect(nav.getByTestId("nav-company")).toHaveAttribute("aria-current", "page");
   const tabs = page.getByRole("navigation", { name: "Company" });
   await expect(tabs.getByTestId("company-tab-decisions")).toHaveAttribute("aria-current", "page");
-  await expect(tabs.getByRole("link")).toHaveText(["Decisions"]);
+  await expect(tabs.getByRole("link")).toHaveText(["Decisions", "Updates"]);
 });
 
 test("phone: Company is in the More sheet and the page never scrolls sideways", async ({ page }) => {
