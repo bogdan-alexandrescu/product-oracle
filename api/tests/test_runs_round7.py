@@ -304,20 +304,24 @@ async def test_cancel_re_checks_the_caller_after_its_runtime_calls(
 # released (nothing is held across a call), so the caller may lose standing during the
 # call. One that writes on what the call returned takes the gate again and re-reads the
 # caller before it writes: 403, nothing written (DURING, with the call to lose standing
-# in). One whose only call submits what its write queued, after the write committed, needs
-# no re-read: the write was the caller's while they had standing, and a disable cancels
-# or voids what it started (oracle.members.service.disable_member; AFTER_COMMIT). Every
-# other write route makes no runtime call (NO_CALL). A new route must be put in one.
+# in). An Inbox decision is recorded before its post: the post's follow-through re-reads
+# the decider, and one who lost standing has the decision voided (403), its answer never
+# followed on its own. One whose only call submits what its write queued, after the write
+# committed, needs no re-read: the write was the caller's while they had standing, and a
+# disable cancels or voids what it started (oracle.members.service.disable_member;
+# AFTER_COMMIT). Every other write route makes no runtime call (NO_CALL). A new route must
+# be put in one.
+DECIDE = ("post", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide")
 DURING = {
     ("post", "/v1/runs/{run_id}/retry"): "find_by_label",
     ("post", "/v1/runs/{run_id}/retry-lookup"): "status",
     ("post", "/v1/runs/{run_id}/cancel"): "cancel",
+    DECIDE: "answer",
 }
 AFTER_COMMIT = {
     ("post", "/v1/runs/{run_id}/start"),
     ("post", "/v1/runs/{run_id}/approve"),
     ("post", "/v1/runs/{run_id}/resume"),
-    ("post", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide"),
 }
 NO_CALL = {
     ("post", "/v1/runs"),
@@ -423,19 +427,30 @@ async def test_a_caller_who_lost_standing_during_the_runtime_call_is_refused(
     author = await person(tenant_id, "approver", "author")
     caller = author if who == "creator" else await person(tenant_id, "owner", "owner")
     creator = author.headers if who == "creator" else auth
+    body, checkpoint_id = None, "unused"
     if template.endswith("/retry"):
         run = await _stuck_lookup(client, auth, creator, swarm, tenant_id, monkeypatch)
     elif template.endswith("/retry-lookup"):
         run = await _cost_unknown(client, creator, tenant_id)
+    elif route == DECIDE:
+        await feedback_doc(client, auth, tenant_id)
+        run = await started(client, creator, flow="feedback_loop", document="checkout-redesign")
+        await tick(client, auth)
+        run = await get(client, auth, run["id"])
+        assert run["status"] == "awaiting_checkpoint"
+        checkpoint_id = next(c["id"] for c in run["checkpoints"] if c["status"] == "pending")
+        body = {"decision": "approved", "note": None}
     else:
         run = await started(client, creator)
     before = await _knobs(tenant_id, run["id"])
     submitted = len(swarm.submissions())
     lose.arm(DURING[route], how, caller.user_id)
-    resp = await client.request(
-        method.upper(), template.format(run_id=run["id"]), headers=caller.headers
-    )
+    path = template.format(run_id=run["id"], checkpoint_id=checkpoint_id)
+    resp = await client.request(method.upper(), path, json=body, headers=caller.headers)
     assert lose.fired == [DURING[route]], f"{template} did not call {DURING[route]}"
+    if route == DECIDE:
+        await _decision_during_the_post(client, auth, tenant_id, swarm, run, resp, how, who)
+        return
     assert resp.status_code == 403, resp.text
     assert (await get(client, auth, run["id"]))["status"] == "running"
     assert len(swarm.submissions()) == submitted
@@ -448,3 +463,29 @@ async def test_a_caller_who_lost_standing_during_the_runtime_call_is_refused(
         assert await _audits(tenant_id, "run.lookup_retried") == 0
     else:
         assert await _audits(tenant_id, "run.cancelled") == 0
+
+
+async def _decision_during_the_post(client, auth, tenant_id, swarm, run, resp, how, who):
+    """The decider lost standing while SwarmCloud took Oracle's post (it landed): the
+    decision is voided (403), the checkpoint waits for an approver again, nothing more is
+    submitted, and the tick never follows the posted answer on its own: it waits in the
+    Inbox for an approver to confirm it. An owner demoted to approver still holds the
+    checkpoint's role: the decision stands."""
+    assert len(swarm.answers) == 1  # the post landed while the caller lost standing
+    if who == "owner" and how == "demoted":
+        assert resp.status_code == 200, resp.text
+        assert [c["status"] for c in resp.json()["checkpoints"]][:1] == ["approved"]
+        return
+    assert resp.status_code == 403, resp.text
+    after = await get(client, auth, run["id"])
+    assert after["status"] == "awaiting_checkpoint"
+    cp = next(c for c in after["checkpoints"] if c["status"] == "pending")
+    assert cp["decided_by"] is None
+    assert await _audits(tenant_id, "checkpoint.decision_voided") == 1
+    submitted = len(swarm.submissions())
+    await tick(client, auth)
+    after = await get(client, auth, run["id"])
+    assert after["status"] == "awaiting_checkpoint"
+    cp = next(c for c in after["checkpoints"] if c["id"] == cp["id"])
+    assert cp["status"] == "pending" and cp["console"]["needs"] == "confirm", cp
+    assert len(swarm.submissions()) == submitted and len(swarm.answers) == 1
