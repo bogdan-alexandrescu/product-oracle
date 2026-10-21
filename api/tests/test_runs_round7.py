@@ -4,7 +4,9 @@ and every approver/owner write under /v1/runs re-checks the caller under the gat
 Synthetic placeholders only."""
 
 import inspect
+import uuid
 from datetime import timedelta
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -12,6 +14,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 
 from oracle.main import app
+from oracle.models import AuditEvent
 from oracle.review import publish
 from oracle.runs import service
 from oracle.runs.models import Run
@@ -293,3 +296,155 @@ async def test_cancel_re_checks_the_caller_after_its_runtime_calls(
     assert len(takes) >= 2, "the write after the runtime calls did not take the gate again"
     assert resp.status_code == 403, resp.text
     assert (await _read(client, ctx, run["id"]))["status"] == "running"
+
+
+# --- CR-06 after a runtime call: standing lost WHILE SwarmCloud answers ----------------
+#
+# A write route that calls SwarmCloud while it handles the request does so with the gate
+# released (nothing is held across a call), so the caller may lose standing during the
+# call. One that writes on what the call returned takes the gate again and re-reads the
+# caller before it writes: 403, nothing written (DURING, with the call to lose standing
+# in). One whose only call submits what its write queued, after the write committed, needs
+# no re-read: the write was the caller's while they had standing, and a disable cancels
+# or voids what it started (oracle.members.service.disable_member; AFTER_COMMIT). Every
+# other write route makes no runtime call (NO_CALL). A new route must be put in one.
+DURING = {
+    ("post", "/v1/runs/{run_id}/retry"): "find_by_label",
+    ("post", "/v1/runs/{run_id}/retry-lookup"): "status",
+    ("post", "/v1/runs/{run_id}/cancel"): "cancel",
+}
+AFTER_COMMIT = {
+    ("post", "/v1/runs/{run_id}/start"),
+    ("post", "/v1/runs/{run_id}/approve"),
+    ("post", "/v1/runs/{run_id}/resume"),
+    ("post", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide"),
+}
+NO_CALL = {
+    ("post", "/v1/runs"),
+    ("patch", "/v1/runs/{run_id}"),
+    ("post", "/v1/runs/{run_id}/estimate"),
+    ("post", "/v1/runs/{run_id}/stop-cancelling"),
+    ("post", "/v1/runs/{run_id}/retry-import"),
+    ("post", "/v1/runs/{run_id}/segments/{seq}/retry-draft-import"),
+    ("post", "/v1/runs/{run_id}/cancel-again"),
+    ("post", "/v1/runs/{run_id}/dismiss-overrun"),
+}
+
+
+def test_every_run_write_route_says_whether_it_calls_swarmcloud():
+    kinds = [set(DURING), AFTER_COMMIT, NO_CALL]
+    assert sum(len(k) for k in kinds) == len(set().union(*kinds)), "a route is in two lists"
+    assert set().union(*kinds) == set(WRITE_ROUTES), (
+        "a write route under /v1/runs is not in DURING, AFTER_COMMIT or NO_CALL: say whether "
+        "it calls SwarmCloud, and if it writes on what the call returned, re-check the caller "
+        "under the gate after the call (CR-06)"
+    )
+
+
+class LoseDuring:
+    """The runtime, except that its first call to the armed method makes the caller lose
+    standing (a disable or a demotion committed while SwarmCloud answers) before it is
+    forwarded."""
+
+    def __init__(self, inner, tenant_id) -> None:
+        self.inner, self.tenant_id = inner, tenant_id
+        self.armed: tuple | None = None
+        self.fired: list[str] = []
+
+    def arm(self, method: str, how: str, user_id) -> None:
+        self.armed = (method, how, user_id)
+
+    def __getattr__(self, name):
+        attr = getattr(self.inner, name)
+        if not inspect.iscoroutinefunction(attr):
+            return attr
+
+        async def call(*args, **kwargs):
+            if self.armed is not None and self.armed[0] == name:
+                _, how, user_id = self.armed
+                self.armed = None
+                await _lose(SimpleNamespace(tenant_id=self.tenant_id), how, user_id)
+                self.fired.append(name)
+            return await attr(*args, **kwargs)
+
+        return call
+
+
+async def _knobs(tenant_id, run_id) -> dict:
+    async with tenant_session(tenant_id) as s:
+        return dict((await s.get(Run, uuid.UUID(run_id))).knobs or {})
+
+
+async def _audits(tenant_id, action: str) -> int:
+    async with tenant_session(tenant_id) as s:
+        return len(list(await s.scalars(select(AuditEvent).where(AuditEvent.action == action))))
+
+
+async def _stuck_lookup(client, auth, headers, swarm, tenant_id, monkeypatch) -> dict:
+    """A run whose lost submission is past the lookup cap (Inbox: Retry)."""
+    swarm.other_tasks = 1100  # the lost submission is behind newer tasks
+    swarm.lose_next_submit = True
+    run = await started(client, headers)
+    real_now = service._now
+    monkeypatch.setattr(
+        service, "_now", lambda: real_now() + timedelta(seconds=service.LOST_LOOKUP_SECONDS + 60)
+    )
+    await tick(client, auth)
+    assert (await _knobs(tenant_id, run["id"])).get("stuck_lookup")
+    return run
+
+
+async def _cost_unknown(client, headers, tenant_id) -> dict:
+    """A run with a searched workflow whose cost is unknown (Inbox: Retry lookup), one
+    Oracle no longer cancels: Retry lookup reads its status."""
+    run = await started(client, headers)
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Run, uuid.UUID(run["id"]))
+        entry = {"id": "wf_1", "seq": 1, "label": "oracle-r-baseline-1", "cost_unknown": True}
+        row.knobs = {**(row.knobs or {}), "searches": [{**entry, "cancel": False}]}
+        await s.commit()
+    return run
+
+
+@pytest.mark.parametrize("route", sorted(DURING), ids=lambda r: f"{r[0]} {r[1]}")
+@pytest.mark.parametrize("how", ["demoted", "disabled"])
+@pytest.mark.parametrize("who", ["creator", "owner"])
+async def test_a_caller_who_lost_standing_during_the_runtime_call_is_refused(
+    client, monkeypatch, route, how, who
+):
+    """``creator``: the approver who created the run; ``owner``: an owner who did not.
+    Either loses standing while SwarmCloud answers the route's call: 403, and what the
+    route writes after the call is not written."""
+    method, template = route
+    tenant_id, auth = await seed_auth()
+    swarm = on()
+    lose = LoseDuring(swarm.runtime(), tenant_id)
+    set_runtime(lose)
+    author = await person(tenant_id, "approver", "author")
+    caller = author if who == "creator" else await person(tenant_id, "owner", "owner")
+    creator = author.headers if who == "creator" else auth
+    if template.endswith("/retry"):
+        run = await _stuck_lookup(client, auth, creator, swarm, tenant_id, monkeypatch)
+    elif template.endswith("/retry-lookup"):
+        run = await _cost_unknown(client, creator, tenant_id)
+    else:
+        run = await started(client, creator)
+    before = await _knobs(tenant_id, run["id"])
+    submitted = len(swarm.submissions())
+    lose.arm(DURING[route], how, caller.user_id)
+    resp = await client.request(
+        method.upper(), template.format(run_id=run["id"]), headers=caller.headers
+    )
+    assert lose.fired == [DURING[route]], f"{template} did not call {DURING[route]}"
+    assert resp.status_code == 403, resp.text
+    assert (await get(client, auth, run["id"]))["status"] == "running"
+    assert len(swarm.submissions()) == submitted
+    knobs = await _knobs(tenant_id, run["id"])
+    if template.endswith("/retry"):
+        assert knobs.get("stuck_lookup") == before["stuck_lookup"]
+        assert await _audits(tenant_id, "run.retried") == 0
+    elif template.endswith("/retry-lookup"):
+        assert knobs["searches"] == before["searches"]
+        assert await _audits(tenant_id, "run.lookup_retried") == 0
+    else:
+        assert await _audits(tenant_id, "run.cancelled") == 0
