@@ -66,7 +66,8 @@ def test_upgrade_fills_the_author_and_downgrade_drops_it(scratch_db):
     doc, version, comment, review = uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Company')", t=tenant)
     _run(
-        "INSERT INTO documents (id, tenant_id, slug, title, status) VALUES (:d, :t, 'prd', 'PRD', 'draft')",
+        "INSERT INTO documents (id, tenant_id, slug, title, status) "
+        "VALUES (:d, :t, 'prd', 'PRD', 'draft')",
         d=doc,
         t=tenant,
     )
