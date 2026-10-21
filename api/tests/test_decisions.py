@@ -612,3 +612,27 @@ async def test_review_at_after_365_days_is_refused_on_reaffirm(client, ctx):
     async with tenant_session(ctx.tenant_id) as s:
         row = await s.scalar(select(Decision))
         assert row.review_at == TODAY + timedelta(days=90)
+
+
+async def test_people_lists_active_members_for_the_pickers(client, ctx):
+    """protects=any member reads the active members (id, email, role) the pickers offer,
+    disabled ones left out; fails_when=a disabled member is offered or a viewer is refused;
+    no_claim=none beyond protects."""
+    from datetime import UTC, datetime
+
+    from oracle.auth.models import User
+
+    async with tenant_session(ctx.tenant_id) as s:
+        gone = User(email="former@example.com", password_hash="x", role="approver")
+        gone.disabled_at = datetime.now(UTC)
+        s.add(gone)
+        await s.commit()
+    resp = await client.get("/v1/decisions/people", headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    listed = {p["email"]: p["role"] for p in resp.json()}
+    assert listed == {
+        "approver@example.com": "approver",
+        "commenter@example.com": "commenter",
+        "owner@example.com": "owner",
+        "viewer@example.com": "viewer",
+    }

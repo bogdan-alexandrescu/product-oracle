@@ -19,6 +19,7 @@ from oracle.decisions.schemas import (
     DecisionCreate,
     DecisionOut,
     DecisionPatch,
+    DecisionPerson,
     DecisionSummary,
     Origin,
     ReassignIn,
@@ -98,6 +99,15 @@ async def list_decisions(
         return await service.list_decisions(db, principal, filters)
     except service.DecisionError as e:
         raise _raise(e) from e
+
+
+@router.get("/decisions/people", response_model=list[DecisionPerson])
+async def list_decision_people(db: TenantDB, principal: Viewer) -> list[DecisionPerson]:
+    """Active members (id, email, role): the approver is one with the approver role or
+    above; contributors and informed are any member."""
+    if principal.is_run:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "People are listed for people, not runs")
+    return [DecisionPerson(id=u.id, email=u.email, role=u.role) for u in await service.people(db)]
 
 
 @router.post(

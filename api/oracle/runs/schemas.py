@@ -554,6 +554,8 @@ class InboxDecision(BaseModel):
     title: str
     reason: Literal["needs_decision", "review_due", "oracle_decided", "informed"]
     review_at: date | None = None
+    # When it reached me (proposed, came due, decided): what "new" is measured against.
+    since: datetime
     state: Literal["new", "open", "done"]
     # False for "informed" and done rows: they add to neither needs_me nor total.
     counts: bool

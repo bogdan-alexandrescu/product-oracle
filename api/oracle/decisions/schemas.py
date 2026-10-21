@@ -243,4 +243,12 @@ class DecisionOut(DecisionSummary):
     can_reassign: bool = False
 
 
+class DecisionPerson(BaseModel):
+    """An active member, for the approver, contributor and informed pickers."""
+
+    id: uuid.UUID
+    email: str
+    role: Literal["viewer", "commenter", "approver", "owner"]
+
+
 InboxDecisionReason = Literal["needs_decision", "review_due", "oracle_decided", "informed"]

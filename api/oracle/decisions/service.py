@@ -304,6 +304,13 @@ async def list_decisions(
     return [summary(d, emails) for d in rows]
 
 
+async def people(db: AsyncSession) -> list[User]:
+    """Active members, by email: who can be named on a decision."""
+    return list(
+        await db.scalars(select(User).where(User.disabled_at.is_(None)).order_by(User.email))
+    )
+
+
 # --- validation ----------------------------------------------------------------------------
 
 
@@ -758,7 +765,9 @@ async def inbox_rows(
     )
     rows: list[InboxDecision] = []
 
-    def row(d: Decision, reason: str, state: str, counts: bool) -> InboxDecision:
+    def row(
+        d: Decision, reason: str, state: str, counts: bool, since: datetime | None = None
+    ) -> InboxDecision:
         return InboxDecision(
             id=d.id,
             number=d.number,
@@ -766,6 +775,7 @@ async def inbox_rows(
             title=d.title,
             reason=reason,  # type: ignore[arg-type]
             review_at=d.review_at,
+            since=since or d.decided_at or d.created_at,
             state=state,  # type: ignore[arg-type]
             counts=counts,
         )
@@ -778,7 +788,7 @@ async def inbox_rows(
         .where(judgement, Decision.approver_id == who, Decision.status == "proposed")
         .order_by(Decision.created_at, Decision.number)
     )
-    rows += [row(d, "needs_decision", fresh(d.created_at), True) for d in proposed]
+    rows += [row(d, "needs_decision", fresh(d.created_at), True, d.created_at) for d in proposed]
     due = await db.scalars(
         select(Decision)
         .where(
@@ -792,7 +802,7 @@ async def inbox_rows(
     )
     for d in due:
         came = datetime.combine(d.review_at, datetime.min.time(), UTC) if d.review_at else None
-        rows.append(row(d, "review_due", fresh(came), True))
+        rows.append(row(d, "review_due", fresh(came), True, came))
     shown = {r.id for r in rows}
     # Done: what I decided or reviewed in the last week.
     reviewed = (
@@ -803,10 +813,10 @@ async def inbox_rows(
             .order_by(DecisionReview.created_at.desc())
         )
     ).all()
-    for d, _at in reviewed:
+    for d, at in reviewed:
         if d.id not in shown:
             shown.add(d.id)
-            rows.append(row(d, "review_due", "done", False))
+            rows.append(row(d, "review_due", "done", False, at))
     decided = await db.scalars(
         select(Decision)
         .where(judgement, Decision.decided_by == who, Decision.decided_at >= since)
