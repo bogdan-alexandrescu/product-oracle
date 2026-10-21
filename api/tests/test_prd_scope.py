@@ -13,6 +13,11 @@ Test cards (protects / fails_when / no_claim):
 - test_approve_refused_with_blocking: protects=call c3 Blocking problems disable Approve
   on every approval path (REST, MCP decide_checkpoint); fails_when=any path approves while
   a blocking problem is open; no_claim=waivers (pick C7 Scope review).
+- test_a_problem_only_the_file_shows_stays_when_the_rows_are_rechecked: protects=a
+  duplicate key, a feature without goals or without a key (lost when the rows are
+  stored) still block every approve after the approve-time re-check, counted once;
+  fails_when=the re-check drops the problem or counts it twice; no_claim=C7 edits to the
+  rows.
 - test_console_approval_with_blocking_is_recorded_not_followed: protects=D3 "Console
   gate": a counted console approval is held (needs confirm), nothing is posted, the token
   stays read-only, confirm is refused; fails_when=the checkpoint is approved or the token
@@ -37,6 +42,7 @@ Test cards (protects / fails_when / no_claim):
 import threading
 import uuid
 
+import pytest
 from sqlalchemy import select
 
 from oracle import safe_yaml
@@ -95,6 +101,42 @@ excluded:
     reason: Serves no confirmed goal
 """
 BLOCKING = CLEAN.replace("depends_on: [address-lookup]", "depends_on: [address-sharing]")
+BULK = """\
+  - key: bulk-edit
+    title: Bulk edit
+    goals: []
+    confidence: 0.8
+    requirements: []
+"""
+# Files whose one blocking problem the stored rows cannot show (write_scope keeps the first
+# of a duplicate key, drops a keyless feature and stores missing goals as []), and one the
+# rows show again (a requirement without text): code and message of the problem.
+ONLY_IN_THE_FILE = {
+    "duplicate_key": (
+        CLEAN.replace(BULK, BULK + BULK),
+        "duplicate_key",
+        "feature key bulk-edit appears 2 times",
+    ),
+    "no_goals": (
+        CLEAN.replace(BULK, BULK.replace("    goals: []\n", "")),
+        "missing_field",
+        "feature bulk-edit lacks goals",
+    ),
+    "keyless": (
+        CLEAN.replace(BULK, BULK + "  - title: Nameless\n    goals: []\n"),
+        "missing_field",
+        "feature #4 lacks key",
+    ),
+    "requirement_without_text": (
+        CLEAN.replace(
+            "      - key: saved-addresses-default\n"
+            "        text: The last used address is preselected\n",
+            "      - key: saved-addresses-default\n",
+        ),
+        "missing_field",
+        "requirement saved-addresses-default of feature saved-addresses lacks text",
+    ),
+}
 REQS = ("saved-addresses-pick", "saved-addresses-default", "address-lookup-postcode")
 
 
@@ -302,6 +344,46 @@ async def test_a_file_level_problem_stays_when_the_rows_are_rechecked(client, ow
     )
     assert resp.status_code == 409, resp.text
     assert resp.json()["detail"].startswith("The feature set has 1 blocking problem")
+
+
+@pytest.mark.parametrize("case", list(ONLY_IN_THE_FILE))
+async def test_a_problem_only_the_file_shows_stays_when_the_rows_are_rechecked(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+    case,
+):
+    """A duplicate key, a feature without goals or without a key: the stored rows lost
+    what was wrong (C6 rule 3), so the re-check keeps the file's problem, once, and every
+    approve (REST, MCP) is refused until the file is sent back."""
+    tenant_id, auth = owner
+    text, code, message = ONLY_IN_THE_FILE[case]
+    assert text != CLEAN
+    run = await at_feature_set(client, owner, runtime, text)
+    cp = pending(run)
+    reason = "The feature set has 1 blocking problem; send it back with Request changes"
+    assert cp["cannot_approve"] == reason
+    (p,) = cp["payload"]["feature_set_check"]["problems"]
+    assert (p["code"], p["message"]) == (code, message)
+    url = f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide"
+    for _ in range(2):  # a second re-check reads the first one's result
+        resp = await client.post(url, json={"decision": "approved"}, headers=auth)
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["detail"] == reason
+    async with mcp_client(await api_token(tenant_id)) as c:
+        out = await c.call_tool(
+            "decide_checkpoint",
+            {"run_id": run["id"], "checkpoint_id": cp["id"], "body": {"decision": "approved"}},
+        )
+        assert out.is_error and reason in text_of(out)
+    run = await get(client, auth, run["id"])
+    cp = pending(run)
+    assert run["status"] == "awaiting_checkpoint" and cp["cannot_approve"] == reason
+    (p,) = cp["payload"]["feature_set_check"]["problems"]
+    assert (p["code"], p["message"]) == (code, message)
+    (scope,) = await scopes(tenant_id, run["id"])
+    assert scope.status == "proposed"
+    assert [q["message"] for q in scope.check_result["problems"]] == [message]
 
 
 async def test_a_rerun_attempt_supersedes_the_proposed_scope(client, owner):  # noqa: F811

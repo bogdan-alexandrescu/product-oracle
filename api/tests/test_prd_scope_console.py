@@ -11,23 +11,41 @@ no_claim=what SwarmCloud's workflow does with its own console answer.
 import uuid
 from datetime import timedelta
 
+import pytest
+
 from oracle.runs import service
 from oracle.runs.models import Checkpoint
 from oracle.swarm import set_runtime
 from oracle.tenancy import tenant_session
 from tests.swarmcloud_fake import FakeSwarmCloud
 from tests.test_adapter_v2 import _member, owner, settings  # noqa: F401 - fixtures
-from tests.test_prd_scope import BLOCKING, DOC, propose_feature, scopes, seed_baseline
+from tests.test_prd_scope import (
+    BLOCKING,
+    DOC,
+    ONLY_IN_THE_FILE,
+    propose_feature,
+    scopes,
+    seed_baseline,
+)
 from tests.test_runs import decide, get, pending, started, tick
 
 
-async def test_console_approval_with_blocking_is_recorded_not_followed(client, owner, monkeypatch):  # noqa: F811, E501
+@pytest.mark.parametrize("case", ["depends_on_excluded", "duplicate_key", "no_goals", "keyless"])
+async def test_console_approval_with_blocking_is_recorded_not_followed(
+    client,
+    owner,  # noqa: F811
+    monkeypatch,
+    case,
+):
+    """Also when the problem is one only the file shows (a duplicate key, a feature without
+    goals or without a key): the re-check before the console approval keeps it."""
     tenant_id, auth = owner
+    text = BLOCKING if case == "depends_on_excluded" else ONLY_IN_THE_FILE[case][0]
     await seed_baseline(tenant_id)
     swarm = FakeSwarmCloud(mcp=True, await_input=True, service_answer=True)
     set_runtime(swarm.runtime())
     try:
-        swarm.step_files["feature_set-2-architect"] = {"feature_set.yaml": BLOCKING}
+        swarm.step_files["feature_set-2-architect"] = {"feature_set.yaml": text}
         await _member(tenant_id, "lead@example.com")
         run = await started(client, auth, document=DOC)
         await propose_feature(tenant_id, run["id"])
