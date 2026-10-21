@@ -733,13 +733,9 @@ def horizon_lines(h: dict[str, int]) -> tuple[tuple[str, str, str], ...]:
     if not h or h == DEFAULT_HORIZONS:
         return HORIZONS
     n = h["medium_quarters"]
-    if h["short_quarters"] == 1:
-        short = "the current quarter"
-        medium = "the next quarter" if n == 1 else f"the next {n} quarters"
-    else:
-        # Now holds the next quarter too, so Next never says "next": it starts after Now.
-        short = "the current and next quarter"
-        medium = "the quarter after those two" if n == 1 else f"the {n} quarters after those two"
+    short = "the current quarter" if h["short_quarters"] == 1 else "the current and next quarter"
+    # Next reads the same whatever Now covers (spec criterion 9, owner 2026-10-21).
+    medium = "the next quarter" if n == 1 else f"the next {n} quarters"
     later = f"{h['long_from_months']} to {h['long_to_months']} months"
     return (("now", "short", short), ("next", "medium", medium), ("later", "long", later))
 

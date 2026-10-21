@@ -141,6 +141,29 @@ test("setup: a change shows Save, a bad span shows the error, Reset reopens the 
   await expect(row(page, "horizons")).toHaveAttribute("data-done", "false");
 });
 
+test("setup: with Now on two quarters, Next still reads as the next quarters", async ({ page }) => {
+  // protects=criterion 9's wording on screen (owner, 2026-10-21): Next reads "Next N
+  // quarters" whatever Now covers, as the roadmap prompt does; fails_when=the saved choice
+  // is lost or Next is worded from Now; no_claim=the prompt text (api/tests/test_roadmap.py).
+  await newCompany(page);
+  await login(page);
+  await row(page, "horizons").getByRole("link", { name: "Open" }).click();
+  const horizons = page.locator("#horizons");
+  await horizons.getByLabel("Now").selectOption({ label: "Current and next quarter" });
+  await horizons.getByLabel("Next").selectOption({ label: "Next 2 quarters" });
+  await horizons.getByLabel("From").fill("18");
+  await horizons.getByLabel("To").fill("30");
+  await horizons.getByRole("button", { name: "Save" }).click();
+  await expect(horizons.getByRole("button", { name: "Reset" })).toBeVisible();
+  await page.reload();
+  await expect(horizons.getByLabel("Now").locator("option:checked")).toHaveText("Current and next quarter");
+  await expect(horizons.getByLabel("Next").locator("option:checked")).toHaveText("Next 2 quarters");
+  await expect(horizons.getByLabel("From")).toHaveValue("18");
+  await expect(horizons.getByLabel("To")).toHaveValue("30");
+  await backToHome(page);
+  await expect(row(page, "horizons")).toHaveAttribute("data-done", "true");
+});
+
 test("setup: Hide puts the checklist behind a header chip, and a reload keeps the choice", async ({ page }) => {
   // protects=hiding and showing the checklist again; fails_when=Hide does not stick, the
   // chip is missing or miscounts, or a reload forgets; no_claim=other people's choice.

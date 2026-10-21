@@ -388,7 +388,7 @@ def test_segment_prompts_carry_the_prd_version_priorities_and_edges():
             (2, 1, 9, 12),
             (
                 ("now", "short", "the current and next quarter"),
-                ("next", "medium", "the quarter after those two"),
+                ("next", "medium", "the next quarter"),
                 ("later", "long", "9 to 12 months"),
             ),
         ),
@@ -396,7 +396,7 @@ def test_segment_prompts_carry_the_prd_version_priorities_and_edges():
             (2, 4, 18, 60),
             (
                 ("now", "short", "the current and next quarter"),
-                ("next", "medium", "the 4 quarters after those two"),
+                ("next", "medium", "the next 4 quarters"),
                 ("later", "long", "18 to 60 months"),
             ),
         ),
@@ -411,9 +411,10 @@ def test_horizon_lines(h, lines):
 
 @pytest.mark.parametrize("short", [1, 2])
 @pytest.mark.parametrize("medium", [1, 2, 3, 4])
-def test_horizon_windows_never_overlap_in_words(short, medium):
-    # protects=Now and Next never name the same quarter; fails_when=with Now = 2 quarters
-    # Next reads "the next quarter(s)", which Now already holds; no_claim=agents read it so.
+def test_next_reads_the_next_quarters_whatever_now_covers(short, medium):
+    # protects=acceptance criterion 9 (owner, 2026-10-21): Next reads "the next N quarters"
+    # ("the next quarter" for 1) whether Now is one quarter or two; fails_when=Next is worded
+    # relative to Now (e.g. "after those two"); no_claim=agents read it so.
     h = {
         "short_quarters": short,
         "medium_quarters": medium,
@@ -421,11 +422,8 @@ def test_horizon_windows_never_overlap_in_words(short, medium):
         "long_to_months": 60,
     }
     spans = {col: span for col, _, span in flows.horizon_lines(h)}
-    if short == 2:
-        assert "next" in spans["now"] and "next" not in spans["next"], spans
-        assert "after those two" in spans["next"], spans
-    else:
-        assert spans["now"] == "the current quarter" and spans["next"].startswith("the next")
+    assert spans["now"] == ("the current quarter" if short == 1 else "the current and next quarter")
+    assert spans["next"] == ("the next quarter" if medium == 1 else f"the next {medium} quarters")
 
 
 def test_feedback_loop_prompt_names_the_roadmap():
@@ -724,8 +722,8 @@ async def test_the_prompt_reads_the_companys_horizons(client, owner, runtime):
     await start(client, auth, await create(client, auth, source=PRD))
     prompt = runtime.submitted[0].steps[-1].prompt
     assert (
-        "now = short term, the current and next quarter; next = medium term, the 2 quarters "
-        "after those two; later = long term, 18 to 30 months"
+        "now = short term, the current and next quarter; next = medium term, the next 2 "
+        "quarters; later = long term, 18 to 30 months"
     ) in prompt
     assert "the current quarter;" not in prompt
 
