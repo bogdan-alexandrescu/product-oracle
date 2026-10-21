@@ -7,7 +7,9 @@ Oracle for options), with a decision as a job's third possible subject.
 
 Backfill: one ``decided`` record per existing ``assumption_decisions`` row that accepted a
 risk or an assumption (origin ``assumption``), numbered per company in decision order, its
-review date kept (or the decision date plus 90 days), so due reviews start surfacing.
+review date kept (or the decision date plus 90 days), so due reviews start surfacing,
+each with its locked baseline ``decision`` entity ``d-<number>`` and the gap, document and
+entity it is about as subjects, as live capture records them.
 Version approvals and checkpoint decisions made before this revision are not backfilled.
 
 Downgrade: deletes the baseline entities synced from decisions (``attrs ? 'decision_id'``),
@@ -109,10 +111,16 @@ SELECT
     'decided',
     a.decided_by,
     'oracle',
-    CASE WHEN a.gap_id IS NULL THEN '[]'::jsonb
+    (CASE WHEN a.gap_id IS NULL THEN '[]'::jsonb
         ELSE jsonb_build_array(jsonb_build_object(
-            'kind', 'gap', 'id', a.gap_id::text, 'ref', 'gap:' || a.gap_id::text)) END,
-    CASE WHEN a.entity_id IS NULL THEN '{}'::uuid[] ELSE ARRAY[a.entity_id] END,
+            'kind', 'gap', 'id', a.gap_id::text, 'ref', 'gap:' || a.gap_id::text)) END)
+    || (CASE WHEN a.document_id IS NULL THEN '[]'::jsonb
+        ELSE jsonb_build_array(jsonb_build_object('kind', 'document', 'id', a.document_id::text))
+        END)
+    || (CASE WHEN a.entity_id IS NULL THEN '[]'::jsonb
+        ELSE jsonb_build_array(jsonb_build_object('kind', 'entity', 'id', a.entity_id::text))
+        END),
+    '{}'::uuid[],
     COALESCE((a.review_at AT TIME ZONE 'UTC')::date,
              (a.decided_at AT TIME ZONE 'UTC')::date + 90),
     'assumption',
@@ -125,6 +133,51 @@ SELECT
 FROM assumption_decisions a
 WHERE a.decision IN ('accept_risk', 'accept_assumption') AND a.decided_by IS NOT NULL
 """
+
+# Each backfilled record is in the Baseline graph as live capture leaves it
+# (oracle.decisions.service.sync_entity): one locked, confirmed ``decision`` entity keyed
+# ``d-<number>`` (an existing one with that key is taken over, as live sync does), its
+# creation revision, and the record's ``entity_id``. Reversing or superseding it then
+# rejects that entity and marks what depends on it stale.
+BACKFILL_ENTITIES = """
+INSERT INTO entities (
+    id, tenant_id, created_at, updated_at, type, key, title, body, attrs, status, origin,
+    locked, locked_by, locked_at
+)
+SELECT
+    gen_random_uuid(), d.tenant_id, now(), now(), 'decision', 'd-' || d.number, d.title,
+    d.rationale,
+    jsonb_build_object(
+        'decision_id', d.id::text, 'chosen_option', d.chosen_option,
+        'reversibility', d.reversibility
+    ),
+    'confirmed', 'user', true, d.decided_by, now()
+FROM decisions d
+WHERE d.source_kind = 'assumption_decision'
+ON CONFLICT (tenant_id, type, key) DO UPDATE SET
+    title = EXCLUDED.title, body = EXCLUDED.body,
+    attrs = entities.attrs || EXCLUDED.attrs, status = 'confirmed', updated_at = now()
+"""
+BACKFILL_LINK = """
+UPDATE decisions d SET entity_id = e.id
+FROM entities e
+WHERE d.source_kind = 'assumption_decision' AND e.tenant_id = d.tenant_id
+    AND e.type = 'decision' AND e.key = 'd-' || d.number
+"""
+BACKFILL_REVISIONS = """
+INSERT INTO entity_revisions (id, tenant_id, created_at, entity_id, before, after, actor, reason)
+SELECT
+    gen_random_uuid(), e.tenant_id, now(), e.id, NULL,
+    jsonb_build_object(
+        'type', e.type, 'key', e.key, 'title', e.title, 'body', e.body, 'attrs', e.attrs,
+        'status', e.status
+    ),
+    'user:' || d.decided_by::text,
+    'Synced from the decision log: D-' || d.number || ' decided'
+FROM decisions d JOIN entities e ON e.id = d.entity_id
+WHERE d.source_kind = 'assumption_decision'
+"""
+BACKFILLS = (BACKFILL, BACKFILL_ENTITIES, BACKFILL_LINK, BACKFILL_REVISIONS)
 
 
 def upgrade() -> None:
@@ -338,7 +391,8 @@ def upgrade() -> None:
     add_check_values(*KIND_CHECK, KINDS)
     op.drop_constraint(op.f("ck_llm_jobs_subject"), "llm_jobs", type_="check")
     op.create_check_constraint(op.f("ck_llm_jobs_subject"), "llm_jobs", SUBJECT_AFTER)
-    op.execute(BACKFILL)
+    for statement in BACKFILLS:
+        op.execute(statement)
 
 
 def downgrade() -> None:

@@ -193,10 +193,10 @@ export function seedDecisions(ctx: DecisionsContext): DecisionsDb {
     created_by: commenter,
     approver_id: approver,
     status: "decided",
-    question: "Per seat or per workspace?",
+    question: "Per seat or per company?",
     options: [
       option("per-seat", "Per seat", { pros: ["Grows with the team"], cons: ["Harder to forecast"], cost_if_wrong: "A quarter of churned small teams" }),
-      option("per-workspace", "Per workspace", { pros: ["One number"], cons: ["Large teams underpay"], cost_if_wrong: "Revenue left on the table" }),
+      option("per-company", "Per company", { pros: ["One number"], cons: ["Large teams underpay"], cost_if_wrong: "Revenue left on the table" }),
     ],
     chosen_option: "per-seat",
     rationale: "Matches how buyers budget and how competitors price.",

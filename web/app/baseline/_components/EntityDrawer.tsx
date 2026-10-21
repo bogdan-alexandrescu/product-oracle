@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
@@ -541,12 +542,12 @@ function RecordDecision({ entity }: { entity: EntityOut }) {
   return (
     <InspectorSection label="Decisions">
       <p className="flex flex-wrap gap-3 text-sm">
-        <a href={href} className="font-medium text-accent-ink hover:underline">
+        <Link href={href} className="font-medium text-accent-ink hover:underline">
           Record a decision
-        </a>
-        <a href={`/company/decisions?subject=${encodeURIComponent(`blocker:${entity.id}`)}&class=all`} className="font-medium text-accent-ink hover:underline">
+        </Link>
+        <Link href={`/company/decisions?subject=${encodeURIComponent(`blocker:${entity.id}`)}&class=all`} className="font-medium text-accent-ink hover:underline">
           Decisions about this blocker
-        </a>
+        </Link>
       </p>
     </InspectorSection>
   );

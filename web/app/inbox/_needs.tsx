@@ -5,7 +5,7 @@ import { useId, type ReactNode } from "react";
 
 import { Button, Chip, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { BUILD_PARAM } from "@/components/NextDraft";
 import { sectionHref } from "@/lib/section-link";
 
@@ -802,7 +802,7 @@ export function decisionNeeds(inbox: InboxOut, busy: string | null, act: Act, se
           {d.reason === "informed" ? `${DECISION_KIND[d.reason]} · ${d.ref} ${d.title}` : label}
         </span>
       ),
-      context: <span className="block truncate">{d.review_at && d.reason === "review_due" ? `Review was due ${d.review_at}` : "Decision log"}</span>,
+      context: <span className="block truncate">{d.review_at && d.reason === "review_due" ? `Review was due ${formatDate(`${d.review_at}T12:00:00`)}` : "Decision log"}</span>,
       at: d.since,
       action: (
         <>

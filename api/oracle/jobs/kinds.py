@@ -899,7 +899,9 @@ async def decision_options(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
     if decision.lock_version != read_version or decision.status != "proposed":
         raise JobInputError(f"D-{decision.number} changed while Oracle prepared options: ask again")
     kept = [{**o, "recommended": False} for o in decision.options or []]
-    decision.options = (kept + options)[-6:] if len(kept) + len(options) > 6 else kept + options
+    # People's options are taken as written: only Oracle's are cut to fit six.
+    options = options[: max(0, 6 - len(kept))]
+    decision.options = kept + options
     await s.flush()
     return {
         "decision_id": str(decision.id),
