@@ -33,12 +33,12 @@ Test cards (protects / fails_when / no_claim):
 
 import uuid
 
-from oracle.runs.scope_models import PrdScope, PrdScopeItem
 from sqlalchemy import select
 
 from oracle.baseline.models import Entity, Proposal
 from oracle.models import AuditEvent
 from oracle.runs import feature_set as fs
+from oracle.runs.scope_models import PrdScope, PrdScopeItem
 from oracle.runtokens import mint_run_token
 from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
@@ -262,7 +262,11 @@ async def test_approve_refused_with_blocking(client, owner, runtime):  # noqa: F
     (scope,) = await scopes(tenant_id, run["id"])
     assert scope.status == "proposed"
     async with tenant_session(tenant_id) as s:
-        actions = set(await s.scalars(select(AuditEvent.action)))
+        actions = set(
+            await s.scalars(
+                select(AuditEvent.action).where(AuditEvent.entity_id == uuid.UUID(cp["id"]))
+            )
+        )
     assert "checkpoint.approved" not in actions
 
     # Request changes stays: the proposed scope is superseded, the re-run writes attempt 2.

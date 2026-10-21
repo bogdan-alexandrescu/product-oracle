@@ -21,6 +21,7 @@ from decimal import Decimal
 from typing import Any
 
 from oracle.docs.schemas import citation_contract
+from oracle.runs.feature_set import FORMAT as FEATURE_SET_FORMAT
 
 # Runs whose estimate is above this wait for an owner's approval (P3).
 APPROVAL_THRESHOLD_USD = Decimal(50)
@@ -49,6 +50,8 @@ MCP_TOOLS = {
     "propose_change": "propose a baseline change (locked items become proposals)",
     "push_draft": "hand back a draft for import as the document's next version",
     "get_run_output": "a file an earlier segment of this run wrote (seq and name)",
+    "get_prd_scope": "the approved PRD scope: the features and requirements this PRD includes, "
+    "and those it excludes or defers, with reasons",
 }
 
 
@@ -180,8 +183,15 @@ FLOWS: dict[str, FlowDef] = {
                     checkpoint="feature_set",
                     task="From the confirmed baseline, propose the feature set for the next "
                     "version: each feature traces to a confirmed goal or is flagged as "
-                    "serving none; list depends_on and blocks edges. Write the set to "
-                    "feature_set.yaml and a high-level design to design.md.",
+                    "serving none; list depends_on and blocks edges. Every included feature "
+                    "lists at least one confirmed goal or `goals: []`; Oracle flags the "
+                    "second kind. Use baseline feature and requirement keys, or propose new "
+                    "ones with propose_change first. List what you considered and left out "
+                    "under excluded, with the reason. Oracle checks the file when the "
+                    "segment ends; what the approver approves becomes this PRD's scope. "
+                    "Write the set to feature_set.yaml in this format (YAML, version 1):\n"
+                    + FEATURE_SET_FORMAT
+                    + "Write a high-level design to design.md.",
                     tools=(
                         "get_baseline",
                         "trace_feature",
@@ -197,9 +207,10 @@ FLOWS: dict[str, FlowDef] = {
                     scopes=("read:baseline", "write:proposals"),
                     outputs=("priority.yaml",),
                     checkpoint="priority_order",
-                    task="Order the approved feature set by goal-weighted priority, respecting "
-                    "dependencies. Explain every number. Write the order to priority.yaml.",
-                    tools=("get_baseline", "trace_feature", "propose_change"),
+                    task="Order only the features included in the approved PRD scope "
+                    "(get_prd_scope) by goal-weighted priority, respecting dependencies. "
+                    "Explain every number. Write the order to priority.yaml.",
+                    tools=("get_prd_scope", "get_baseline", "trace_feature", "propose_change"),
                 ),
                 SegmentDef(
                     name="prd_draft",
@@ -209,11 +220,14 @@ FLOWS: dict[str, FlowDef] = {
                     outputs=("prd.md",),
                     checkpoint="prd_review",
                     imports_draft=True,
-                    task="Write the PRD draft for the approved, ordered feature set as prd.md: "
+                    task="Write the PRD for the features and requirements the approved PRD "
+                    "scope includes (get_prd_scope), and nothing it excludes or defers, in "
+                    "the approved priority order, as prd.md: "
                     "markdown with YAML front matter (title, template, citations) and a "
                     "{#id} on every heading. Every claim cites; no evidence in the body, a "
                     "final Sources and data points section. " + CITATION_CONTRACT,
                     tools=(
+                        "get_prd_scope",
                         "get_baseline",
                         "get_document",
                         "search",
@@ -244,8 +258,10 @@ FLOWS: dict[str, FlowDef] = {
                     "template, template_version, brief) and its section ids. Write the "
                     "draft as {draft} with a resolutions list in its front matter "
                     "(feedback_id, status addressed | declined, note) for every item. "
-                    + CITATION_CONTRACT,
+                    "Stay within the document's approved scope (get_prd_scope) unless a "
+                    "feedback item asks to change it. " + CITATION_CONTRACT,
                     tools=(
+                        "get_prd_scope",
                         "get_document",
                         "get_document_markdown",
                         "get_feedback_package",
@@ -472,6 +488,9 @@ class PromptContext:
     # tools, never pasted here) and, for research, the gaps to look into.
     intake_id: str | None = None
     intake_gap_ids: list[str] = field(default_factory=list)
+    # The approved PRD scope as YAML (oracle.runs.feature_set.scope_yaml): pasted, within
+    # the earlier outputs' budget, when MCP is not attached.
+    scope_yaml: str | None = None
 
 
 MAX_PRIOR_CHARS = 20_000
@@ -562,9 +581,31 @@ def step_prompt(
             ]
             for seq, title, names in ctx.prior_files:
                 lines.append(f"- seq {seq} ({title}): {', '.join(names)}")
-    elif ctx.prior_outputs:
+    else:
+        lines += _pasted_outputs(ctx)
+    return "\n".join(lines)
+
+
+def _pasted_outputs(ctx: PromptContext) -> list[str]:
+    """Earlier outputs and the approved PRD scope, pasted (MCP not attached), together at
+    most ``MAX_PRIOR_CHARS``: the scope first."""
+    lines: list[str] = []
+    budget = MAX_PRIOR_CHARS
+    if ctx.scope_yaml:
+        part = ctx.scope_yaml[:budget]
+        budget -= len(part)
+        lines += [
+            "",
+            "Approved PRD scope (what get_prd_scope returns): write only for the included "
+            "features and their requirements; the excluded and deferred ones stay out.",
+            "--- PRD scope ---",
+            part,
+        ]
+        if budget <= 0:
+            lines.append("(truncated)")
+            return lines
+    if ctx.prior_outputs:
         lines += ["", "Outputs of earlier segments:"]
-        budget = MAX_PRIOR_CHARS
         for name, content in ctx.prior_outputs.items():
             part = content[:budget]
             budget -= len(part)
@@ -572,7 +613,7 @@ def step_prompt(
             if budget <= 0:
                 lines.append("(truncated)")
                 break
-    return "\n".join(lines)
+    return lines
 
 
 def basis_line(b: dict[str, Any]) -> str:

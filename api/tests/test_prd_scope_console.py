@@ -9,6 +9,7 @@ no_claim=what SwarmCloud's workflow does with its own console answer.
 """
 
 import uuid
+from datetime import timedelta
 
 from oracle.runs import service
 from oracle.runs.models import Checkpoint
@@ -20,7 +21,7 @@ from tests.test_prd_scope import BLOCKING, DOC, propose_feature, scopes, seed_ba
 from tests.test_runs import decide, get, pending, started, tick
 
 
-async def test_console_approval_with_blocking_is_recorded_not_followed(client, owner):  # noqa: F811
+async def test_console_approval_with_blocking_is_recorded_not_followed(client, owner, monkeypatch):  # noqa: F811, E501
     tenant_id, auth = owner
     await seed_baseline(tenant_id)
     swarm = FakeSwarmCloud(mcp=True, await_input=True, service_answer=True)
@@ -41,6 +42,9 @@ async def test_console_approval_with_blocking_is_recorded_not_followed(client, o
         wf = cp["payload"]["wait"]["workflow_id"]
         posted = len(swarm.answers)
         swarm.console_answer(wf, "feature_set-review1", "MERGE", by="lead@example.com")
+        # The tick reads a waiting step at most once a minute: a minute later.
+        real_now = service._now
+        monkeypatch.setattr(service, "_now", lambda: real_now() + timedelta(seconds=61))
         await tick(client, auth)
         run = await get(client, auth, run["id"])
         cp = next(c for c in run["checkpoints"] if c["id"] == cp["id"])

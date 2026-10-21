@@ -88,8 +88,8 @@ def test_upgrade_and_downgrade_on_a_seeded_database(scratch_db):
         r=run,
     )
     _run(
-        "INSERT INTO documents (id, tenant_id, slug, title, kind) "
-        "VALUES (:d, :t, 'saved-addresses', 'Saved addresses', 'prd')",
+        "INSERT INTO documents (id, tenant_id, slug, title, kind, status) "
+        "VALUES (:d, :t, 'saved-addresses', 'Saved addresses', 'prd', 'draft')",
         d=doc,
         t=t,
     )

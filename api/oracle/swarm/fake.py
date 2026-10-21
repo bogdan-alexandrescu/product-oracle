@@ -67,7 +67,20 @@ class _Record:
     cancelled: bool = False
 
 
-def _default_files(segment: str, attempt: int, outputs: tuple[str, ...] = ()) -> dict[str, str]:
+# The PRD a step's prompt names ("PRD document '<slug>'", oracle.runs.flows.step_prompt).
+_DOCUMENT = re.compile(r"document '([^']+)'")
+
+
+def document_of(prompt: str) -> str | None:
+    """The document slug a step's prompt names, if any: the default feature_set.yaml
+    names it, as the run's agents are told to."""
+    m = _DOCUMENT.search(prompt or "")
+    return m[1] if m else None
+
+
+def _default_files(
+    segment: str, attempt: int, outputs: tuple[str, ...] = (), document: str | None = None
+) -> dict[str, str]:
     files = {}
     names = SEGMENT_FILES.get(segment, ("summary.md",))
     # A segment whose draft file depends on the document's kind (the feedback loop on a
@@ -75,11 +88,11 @@ def _default_files(segment: str, attempt: int, outputs: tuple[str, ...] = ()) ->
     if "roadmap.md" in outputs:
         names = tuple("roadmap.md" if n == "prd.md" else n for n in names)
     for name in names:
-        files[name] = _default_content(name, segment, attempt)
+        files[name] = _default_content(name, segment, attempt, document)
     return files
 
 
-def _default_content(name: str, segment: str, attempt: int) -> str:
+def _default_content(name: str, segment: str, attempt: int, document: str | None = None) -> str:
     if name == "prd.md":
         return (
             "---\n"
@@ -137,10 +150,29 @@ def _default_content(name: str, segment: str, attempt: int) -> str:
             "    prd_section: features\n"
         )
     if name == "baseline.yaml":
-        # The baseline YAML format (oracle.baseline.yaml_io); nothing to propose.
+        # The baseline YAML format (oracle.baseline.yaml_io): the one feature the default
+        # feature_set.yaml includes.
         return (
             f"# {segment} (local agent runtime, attempt {attempt})\n"
-            "version: 1\nentities: []\nedges: []\n"
+            "version: 1\n"
+            "entities:\n"
+            "  - {type: feature, key: price-early, title: Show the price early}\n"
+            "edges: []\n"
+        )
+    if name == "feature_set.yaml":
+        # The C6 format (oracle.runs.feature_set): the baseline's one feature, serving no
+        # confirmed goal yet (flagged, not blocking).
+        return (
+            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            "version: 1\n" + (f"document: {document}\n" if document else "") + "features:\n"
+            "  - key: price-early\n"
+            "    title: Show the price early\n"
+            "    summary: Buyers see the full price before checkout\n"
+            "    goals: []\n"
+            "    depends_on: []\n"
+            "    confidence: 0.8\n"
+            "    requirements: []\n"
+            "excluded: []\n"
         )
     if name.endswith(".yaml"):
         return f"# {segment} (local agent runtime, attempt {attempt})\nitems: []\n"
@@ -261,7 +293,8 @@ class FakeRuntime:
         if record.outcome.artifacts is not None:
             return dict(record.outcome.artifacts)
         outputs = tuple(record.spec.outputs) if record.spec is not None else ()
-        return _default_files(record.segment, record.attempt, outputs)
+        prompt = record.spec.steps[-1].prompt if record.spec and record.spec.steps else ""
+        return _default_files(record.segment, record.attempt, outputs, document_of(prompt))
 
     async def cancel(self, workflow_id: str) -> None:
         self._record(workflow_id).cancelled = True
