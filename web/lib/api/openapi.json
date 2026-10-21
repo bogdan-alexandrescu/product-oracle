@@ -46076,6 +46076,26 @@
             ],
             "title": "Draft Rejected"
           },
+          "delivering": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "baseline_confirm",
+                  "feature_set",
+                  "priority_order",
+                  "prd_review",
+                  "eng_review",
+                  "roadmap_items",
+                  "roadmap_review"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivering"
+          },
           "progress": {
             "anyOf": [
               {
@@ -46577,6 +46597,26 @@
               }
             ],
             "title": "Draft Rejected"
+          },
+          "delivering": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "baseline_confirm",
+                  "feature_set",
+                  "priority_order",
+                  "prd_review",
+                  "eng_review",
+                  "roadmap_items",
+                  "roadmap_review"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivering"
           },
           "progress": {
             "anyOf": [

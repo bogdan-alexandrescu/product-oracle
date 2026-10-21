@@ -447,6 +447,9 @@ test("a run delivering a decision reads Delivering decision: header, side panel 
   await expect(row.getByTestId("run-status")).toHaveText("Delivering decision");
   await expect(amber(row).locator("svg")).toHaveCount(1);
   await expect(row).not.toContainText("Waiting for review");
+  // Nothing to decide on it: no Decide, and the list's waiting counts leave it out.
+  await expect(row.getByRole("button", { name: "Decide" })).toHaveCount(0);
+  await expect(page.getByText("1 checkpoint")).toHaveCount(0);
 
   // Delivered: the run reads Running again.
   await row.getByRole("link").first().click();

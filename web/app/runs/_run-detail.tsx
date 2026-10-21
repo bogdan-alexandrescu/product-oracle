@@ -33,7 +33,7 @@ import {
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   RETRY_CONFIRM,
-  RUN_STATUS_LABEL,
+  runStatusLabel,
   RunStatusBadge,
   STOP_CANCELLING_CONFIRM,
   RunsWhere,
@@ -159,7 +159,7 @@ export function RunDetail({ id }: { id: string }) {
         title={run.flow_title}
         status={
           <>
-            <RunStatusBadge status={run.status} />
+            <RunStatusBadge run={run} />
             {run.document_slug &&
               (run.document_id ? (
                 <Link href={`/documents/${run.document_slug}`} className="font-mono text-sm text-accent-ink hover:underline">
@@ -372,7 +372,7 @@ function RunInspector({ run }: { run: RunOut }) {
   return (
     <Inspector
       label="Run"
-      eyebrow={waiting ? "Checkpoint · waiting" : `Run · ${RUN_STATUS_LABEL[run.status].toLowerCase()}`}
+      eyebrow={waiting ? "Checkpoint · waiting" : `Run · ${runStatusLabel(run).toLowerCase()}`}
       title={waiting ? CHECKPOINT_LABEL[waiting] : (run.document_slug ?? run.flow_title)}
       chips={
         <>

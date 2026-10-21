@@ -350,6 +350,10 @@ class RunSummary(BaseModel):
     # A draft one of its segments left that Oracle refused to import: its summary
     # (``segments[].draft_import.summary``, else the error). Set where ``progress`` is.
     draft_rejected: str | None = None
+    # Waiting on its checkpoint, the run delivers a decision recorded there that SwarmCloud
+    # has not taken yet (owner, 2026-10-20: shown as "Delivering decision"; the status
+    # stays awaiting_checkpoint): that checkpoint's kind. Set where ``progress`` is.
+    delivering: CheckpointKind | None = None
     # Set by GET /v1/runs and GET /v1/runs/{id}; None where a summary is embedded (inbox).
     progress: RunProgress | None = None
 

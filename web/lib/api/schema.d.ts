@@ -14923,6 +14923,8 @@ export interface components {
             can_retry_import: boolean;
             /** Draft Rejected */
             draft_rejected?: string | null;
+            /** Delivering */
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
             progress?: components["schemas"]["RunProgress"] | null;
             knobs: components["schemas"]["KnobsOut"];
             /** Snapshot Id */
@@ -15064,6 +15066,8 @@ export interface components {
             can_retry_import: boolean;
             /** Draft Rejected */
             draft_rejected?: string | null;
+            /** Delivering */
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
             progress?: components["schemas"]["RunProgress"] | null;
         };
         /**

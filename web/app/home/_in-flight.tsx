@@ -23,8 +23,8 @@ import { useQuery } from "@/lib/use-query";
 
 import {
   CHECKPOINT_LABEL,
-  RUN_STATUS_KIND,
-  RUN_STATUS_LABEL,
+  runStatusKind,
+  runStatusLabel,
   RunCost,
   SEGMENT_STATUS_KIND,
   SEGMENT_STATUS_LABEL,
@@ -97,8 +97,8 @@ export function flightColumns(phoneHeader: ReactNode): Column<Flight>[] {
         f.kind === "prd" ? (
           <DocStatusChip status={f.doc.status} dot />
         ) : (
-          <Chip kind={RUN_STATUS_KIND[f.run.status]} dot>
-            {RUN_STATUS_LABEL[f.run.status]}
+          <Chip kind={runStatusKind(f.run)} dot>
+            {runStatusLabel(f.run)}
           </Chip>
         ),
     },
@@ -296,8 +296,8 @@ function RunInspector({ f, docs, goalIndex }: { f: Extract<Flight, { kind: "run"
       title={run.document_slug ?? run.flow_title}
       chips={
         <>
-          <Chip hero kind={RUN_STATUS_KIND[run.status]}>
-            {RUN_STATUS_LABEL[run.status]}
+          <Chip hero kind={runStatusKind(run)}>
+            {runStatusLabel(run)}
           </Chip>
           <Chip hero>{run.flow_title}</Chip>
         </>

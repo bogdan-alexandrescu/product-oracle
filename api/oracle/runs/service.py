@@ -426,7 +426,10 @@ def _summary(
     refs: _Refs,
     waiting: Checkpoint | None,
     segments: list[RunSegment] | None = None,
+    owed: Checkpoint | None = None,
 ) -> RunSummary:
+    """``owed``: the run's checkpoint whose recorded decision is not delivered yet
+    (:func:`_owes`), where the checkpoints were read."""
     flow = _flow(run)
     source_id = _source_id(run)
     return RunSummary(
@@ -462,6 +465,10 @@ def _summary(
         can_retry_import=_import_failed(run) is not None,
         progress=_progress(run, segments) if segments is not None else None,
         draft_rejected=_draft_rejected(segments) if segments is not None else None,
+        # Paused on overrun, it delivers nothing until resumed: it reads paused.
+        delivering=owed.kind  # type: ignore[arg-type]
+        if owed is not None and run.status == "awaiting_checkpoint"
+        else None,
     )
 
 
@@ -768,7 +775,9 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         await load_learned(runtime)
         notes += [n for n in runtime.notes() if n not in notes]
     return RunOut(
-        **_summary(run, refs, waiting, segments).model_dump(),
+        **_summary(
+            run, refs, waiting, segments, next((c for c in checkpoints if _owes(c)), None)
+        ).model_dump(),
         knobs=KnobsOut(
             depth=knobs.depth,  # type: ignore[arg-type]
             roles=knobs.roles,
@@ -1066,7 +1075,9 @@ async def list_runs(db: AsyncSession, status: str | None = None) -> list[RunSumm
     runs = list(await db.scalars(stmt))
     refs = await _refs(db, runs)
     ids = [r.id for r in runs]
-    pending = {c.run_id: c for c in await _checkpoints(db, ids) if c.status == "pending"}
+    checkpoints = await _checkpoints(db, ids)
+    pending = {c.run_id: c for c in checkpoints if c.status == "pending"}
+    owed = {c.run_id: c for c in checkpoints if _owes(c)}
     # Every run's segments in one query, so a list never costs a call per run.
     segments: dict[uuid.UUID, list[RunSegment]] = {i: [] for i in ids}
     if ids:
@@ -1075,7 +1086,7 @@ async def list_runs(db: AsyncSession, status: str | None = None) -> list[RunSumm
         )
         for seg in rows:
             segments[seg.run_id].append(seg)
-    return [_summary(r, refs, pending.get(r.id), segments[r.id]) for r in runs]
+    return [_summary(r, refs, pending.get(r.id), segments[r.id], owed.get(r.id)) for r in runs]
 
 
 async def read_artifact(db: AsyncSession, run_id: uuid.UUID, seq: int, name: str) -> str:

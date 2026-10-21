@@ -1,4 +1,4 @@
-import { Chip, CostFigure, InfoTip, type ChipKind } from "@/components/ds";
+import { Chip, CostFigure, Icon, InfoTip, type ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
 
 export type RunOut = Schemas["RunOut"];
@@ -35,11 +35,24 @@ export const RUN_STATUS_KIND: Record<RunStatus, ChipKind> = {
   cancelled: "na",
 };
 
+/** A run's state as shown, from its status and `delivering`. */
+type RunState = Pick<RunSummary, "status"> & { delivering?: RunSummary["delivering"] };
+
+/**
+ * Owner decision 2026-10-20: waiting on its checkpoint while the decision recorded there is
+ * delivered to SwarmCloud, a run reads "Delivering decision", amber with a clock, as other
+ * in-progress states (its status stays awaiting_checkpoint).
+ */
+export const isDelivering = (run: RunState) => run.status === "awaiting_checkpoint" && !!run.delivering;
+export const runStatusLabel = (run: RunState) => (isDelivering(run) ? "Delivering decision" : RUN_STATUS_LABEL[run.status]);
+export const runStatusKind = (run: RunState): ChipKind => (isDelivering(run) ? "warn" : RUN_STATUS_KIND[run.status]);
+
 /** The run's state chip; the label carries data-testid="run-status". */
-export function RunStatusBadge({ status }: { status: RunStatus }) {
+export function RunStatusBadge({ run }: { run: RunState }) {
   return (
-    <Chip kind={RUN_STATUS_KIND[status]}>
-      <span data-testid="run-status">{RUN_STATUS_LABEL[status]}</span>
+    <Chip kind={runStatusKind(run)}>
+      {isDelivering(run) && <Icon name="clock" size={16} />}
+      <span data-testid="run-status">{runStatusLabel(run)}</span>
     </Chip>
   );
 }

@@ -162,6 +162,7 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     can_retry_import: r.can_retry_import,
     draft_rejected: draftRejected(r),
     progress: progressOf(r),
+    delivering: r.delivering ?? null,
   };
 }
 
@@ -245,6 +246,8 @@ function refresh(r: RunOut) {
   r.draft_rejected = draftRejected(r);
   r.spent_usd = round2(r.segments.reduce((sum, s) => sum + s.cost_usd, 0));
   r.waiting_on = r.checkpoints.find((c) => c.status === "pending")?.kind ?? null;
+  // As the API: waiting on its checkpoint, a decision recorded there and not delivered yet.
+  r.delivering = r.status === "awaiting_checkpoint" ? (r.checkpoints.find((c) => c.delivery)?.kind ?? null) : null;
   for (const c of r.checkpoints) Object.assign(c, { can_decide: c.status === "pending", cannot_approve: cannotApprove(c) });
   // As the API: a refused draft whose file is kept, while the run waits at its review.
   const file = r.document_kind === "roadmap" ? "roadmap.md" : "prd.md";
@@ -410,7 +413,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
       })),
   );
   // The inbox embeds summaries without their progress, as the API does.
-  const bare = (r: RunOut) => ({ ...summary(r), progress: null });
+  const bare = (r: RunOut) => ({ ...summary(r), progress: null, delivering: null });
   const approvals = ctx.db.runs.filter((r) => r.status === "awaiting_approval").map(bare);
   const overruns = ctx.db.runs.filter((r) => r.status === "paused_overrun").map(bare);
   const byDoc = new Map<string, FeedbackRow[]>();
