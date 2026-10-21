@@ -26862,6 +26862,64 @@
         ],
         "title": "CheckpointDecision"
       },
+      "CheckpointDelivery": {
+        "properties": {
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "tries": {
+            "type": "integer",
+            "title": "Tries",
+            "default": 0
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_tried_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Tried At"
+          }
+        },
+        "type": "object",
+        "title": "CheckpointDelivery",
+        "description": "A decision recorded in Oracle that has not reached the run's workflow yet (owner,\n2026-10-20: a recorded decision is final; Oracle sends it again on every tick until\nSwarmCloud takes it). The decision is the checkpoint's ``status``, ``decided_by`` and\n``decided_at``. None once delivered: the checkpoint then shows its decided state."
+      },
       "CheckpointOut": {
         "properties": {
           "id": {
@@ -26983,6 +27041,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ConsoleAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckpointDelivery"
               },
               {
                 "type": "null"
@@ -35161,6 +35229,16 @@
               }
             ]
           },
+          "delivery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckpointDelivery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "flow": {
             "type": "string",
             "enum": [
@@ -35526,6 +35604,14 @@
             },
             "type": "array",
             "title": "Checkpoints"
+          },
+          "deliveries": {
+            "items": {
+              "$ref": "#/components/schemas/InboxCheckpoint"
+            },
+            "type": "array",
+            "title": "Deliveries",
+            "default": []
           },
           "approvals": {
             "items": {

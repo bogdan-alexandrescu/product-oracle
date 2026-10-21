@@ -389,7 +389,10 @@ async def test_the_inbox_shows_an_undelivered_decision_to_its_approvers(client, 
     assert item["delivery"]["last_error"] == "SwarmCloud HTTP 503 unavailable", item
     assert item["delivery"]["decided_by_name"] == "admin@example.com", item
     assert not {"user_id", "token_id", "grant_id"} & set(item["payload"]["wait"]["posting"])
-    assert box["checkpoints"] == [] and box["total"] == 0, box
+    counted = {k: box[k] for k in ("checkpoints", "approvals", "overruns", "lookups", "imports")}
+    assert counted == dict.fromkeys(counted, []), counted
+    # Every counted list is empty: what is left of the total is feedback (the draft's).
+    assert box["total"] == box["counts"]["new"] + box["counts"]["open"], box["counts"]
     mine = (await client.get("/v1/inbox", headers=approver.headers)).json()
     assert len(mine["deliveries"]) == 1, mine
     theirs = (await client.get("/v1/inbox", headers=commenter.headers)).json()

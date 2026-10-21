@@ -144,6 +144,7 @@ from oracle.runs import flows, rejection, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
+    CheckpointDelivery,
     CheckpointOut,
     ConsoleAnswer,
     DraftImport,
@@ -635,8 +636,59 @@ def _winding(run: Run) -> dict[str, Any] | None:
     )
 
 
-def _checkpoint_out(cp: Checkpoint, principal: Principal | None) -> CheckpointOut:
+# Who decided an owed decision, as they authenticated (wait.posting): Oracle's own, re-read
+# before each try, never returned.
+_DECIDER_KEYS = ("user_id", "token_id", "grant_id")
+
+
+async def _decider_names(db: AsyncSession, checkpoints: list[Checkpoint]) -> dict[uuid.UUID, str]:
+    """Who decided each checkpoint whose decision is owed (:func:`_owes`): the member's
+    email, or the API token's name."""
+    ids = {c.decided_by for c in checkpoints if c.decided_by is not None and _owes(c)}
+    if not ids:
+        return {}
+    out: dict[uuid.UUID, str] = dict(
+        (await db.execute(select(User.id, User.email).where(User.id.in_(ids)))).all()
+    )
+    if rest := ids - set(out):
+        out.update(
+            (
+                await db.execute(select(ApiToken.id, ApiToken.name).where(ApiToken.id.in_(rest)))
+            ).all()
+        )
+    return out
+
+
+def _delivery(
+    cp: Checkpoint, names: dict[uuid.UUID, str]
+) -> tuple[dict[str, Any], CheckpointDelivery | None]:
+    """The checkpoint's payload as returned (the decider's ids dropped from an owed
+    decision's marker), and the owed decision's delivery (owner, 2026-10-20: shown on the
+    run page and in the Inbox until SwarmCloud takes it)."""
+    payload = cp.payload or {}
+    wait = payload.get("wait") or {}
+    posting = wait.get("posting")
+    if not isinstance(posting, dict):
+        return payload, None
+    shown = {k: v for k, v in posting.items() if k not in _DECIDER_KEYS}
+    payload = {**payload, "wait": {**wait, "posting": shown}}
+    if not _owes(cp):
+        return payload, None
+    return payload, CheckpointDelivery(
+        decided_by_name=names.get(cp.decided_by) if cp.decided_by else None,
+        since=_parse_at(posting.get("at")),
+        tries=int(posting.get("tries") or 0),
+        last_error=posting.get("error"),
+        last_tried_at=_parse_at(posting.get("tried_at")),
+    )
+
+
+def _checkpoint_out(
+    cp: Checkpoint, principal: Principal | None, names: dict[uuid.UUID, str] | None = None
+) -> CheckpointOut:
+    """``names``: :func:`_decider_names` of the checkpoints read."""
     console = ((cp.payload or {}).get("wait") or {}).get("console")
+    payload, delivery = _delivery(cp, names or {})
     return CheckpointOut(
         id=cp.id,
         run_id=cp.run_id,
@@ -647,7 +699,7 @@ def _checkpoint_out(cp: Checkpoint, principal: Principal | None) -> CheckpointOu
         decided_by=cp.decided_by,
         decided_at=cp.decided_at,
         note=cp.note,
-        payload=cp.payload or {},
+        payload=payload,
         created_at=cp.created_at,
         console=ConsoleAnswer.model_validate({**console, "can_redo": _can_redo(console)})
         if isinstance(console, dict) and cp.status == "pending"
@@ -656,6 +708,7 @@ def _checkpoint_out(cp: Checkpoint, principal: Principal | None) -> CheckpointOu
         and principal is not None
         and has_role(principal.role, cp.approver_role),  # type: ignore[arg-type]
         cannot_approve=_cannot_approve(cp),
+        delivery=delivery,
     )
 
 
@@ -698,6 +751,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     run = await _get_run(db, run_id)
     segments = await _segments(db, run.id)
     checkpoints = await _checkpoints(db, [run.id])
+    names = await _decider_names(db, checkpoints)
     refs = await _refs(db, [run])
     knobs = _knobs(run)
     kind = await _target_kind(db, run)
@@ -731,7 +785,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         runtime=runtime.name,
         notes=notes,
         segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
-        checkpoints=[_checkpoint_out(c, principal) for c in checkpoints],
+        checkpoints=[_checkpoint_out(c, principal, names) for c in checkpoints],
         token_read_only=await token_hold(db, run.id, live=False) is not None,
     )
 
@@ -6989,7 +7043,18 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         )
     )
     mine = [c for c in pending if has_role(principal.role, c.approver_role)]  # type: ignore[arg-type]
-    run_ids = {c.run_id for c in mine}
+    # Decisions recorded and not delivered to the run yet (shown, nothing to decide).
+    owed = [
+        c
+        for c in await db.scalars(
+            select(Checkpoint)
+            .where(Checkpoint.status.in_(DECIDED), Checkpoint.payload["wait"].has_key("posting"))
+            .order_by(Checkpoint.decided_at, Checkpoint.id)
+        )
+        if _owes(c) and has_role(principal.role, c.approver_role)  # type: ignore[arg-type]
+    ]
+    names = await _decider_names(db, owed)
+    run_ids = {c.run_id for c in [*mine, *owed]}
     owner = principal.role == "owner"
     waiting_runs: list[Run] = []
     if owner:
@@ -7005,20 +7070,20 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         runs = {r.id: r for r in await db.scalars(select(Run).where(Run.id.in_(run_ids)))}
     refs = await _refs(db, [*runs.values(), *waiting_runs])
 
-    checkpoints = []
-    for c in mine:
+    def item(c: Checkpoint) -> InboxCheckpoint:
         run = runs[c.run_id]
         seq = (c.payload or {}).get("segment_seq")
         sdef = _flow(run).segments[seq - 1] if seq else None
-        checkpoints.append(
-            InboxCheckpoint(
-                **_checkpoint_out(c, principal).model_dump(),
-                flow=run.flow,  # type: ignore[arg-type]
-                flow_title=_flow(run).title,
-                document_slug=refs.get(run.document_id),
-                segment_title=sdef.title if sdef else None,
-            )
+        return InboxCheckpoint(
+            **_checkpoint_out(c, principal, names).model_dump(),
+            flow=run.flow,  # type: ignore[arg-type]
+            flow_title=_flow(run).title,
+            document_slug=refs.get(run.document_id),
+            segment_title=sdef.title if sdef else None,
         )
+
+    checkpoints = [item(c) for c in mine]
+    deliveries = [item(c) for c in owed]
 
     feedback: list[InboxDocument] = []
     states: list[InboxFeedbackItem] = []
@@ -7135,6 +7200,8 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         await db.commit()
     return InboxOut(
         checkpoints=checkpoints,
+        # Not in ``total``: nothing to decide, Oracle delivers them on every tick.
+        deliveries=deliveries,
         approvals=approvals,
         overruns=overruns,
         lookups=lookups,

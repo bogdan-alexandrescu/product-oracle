@@ -7836,6 +7836,28 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /**
+         * CheckpointDelivery
+         * @description A decision recorded in Oracle that has not reached the run's workflow yet (owner,
+         *     2026-10-20: a recorded decision is final; Oracle sends it again on every tick until
+         *     SwarmCloud takes it). The decision is the checkpoint's ``status``, ``decided_by`` and
+         *     ``decided_at``. None once delivered: the checkpoint then shows its decided state.
+         */
+        CheckpointDelivery: {
+            /** Decided By Name */
+            decided_by_name?: string | null;
+            /** Since */
+            since?: string | null;
+            /**
+             * Tries
+             * @default 0
+             */
+            tries: number;
+            /** Last Error */
+            last_error?: string | null;
+            /** Last Tried At */
+            last_tried_at?: string | null;
+        };
         /** CheckpointOut */
         CheckpointOut: {
             /**
@@ -7888,6 +7910,7 @@ export interface components {
             /** Cannot Approve */
             cannot_approve?: string | null;
             console?: components["schemas"]["ConsoleAnswer"] | null;
+            delivery?: components["schemas"]["CheckpointDelivery"] | null;
         };
         /** Choice */
         Choice: {
@@ -10847,6 +10870,7 @@ export interface components {
             /** Cannot Approve */
             cannot_approve?: string | null;
             console?: components["schemas"]["ConsoleAnswer"] | null;
+            delivery?: components["schemas"]["CheckpointDelivery"] | null;
             /**
              * Flow
              * @enum {string}
@@ -10993,6 +11017,11 @@ export interface components {
         InboxOut: {
             /** Checkpoints */
             checkpoints: components["schemas"]["InboxCheckpoint"][];
+            /**
+             * Deliveries
+             * @default []
+             */
+            deliveries: components["schemas"]["InboxCheckpoint"][];
             /** Approvals */
             approvals: components["schemas"]["RunSummary"][];
             /** Overruns */
