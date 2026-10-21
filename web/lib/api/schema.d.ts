@@ -2829,6 +2829,174 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Decisions
+         * @description Decisions, newest D-number first. ``class`` defaults to ``all`` (both judgement calls
+         *     and checkpoint records); agents pass ``class=judgement`` to read the company's decided
+         *     calls, ``class=checkpoint`` for a run's stops approved and sent back.
+         */
+        get: operations["list_decisions"];
+        put?: never;
+        /**
+         * Create Decision
+         * @description Propose a decision (commenter and above). A run token's proposal is Oracle's
+         *     (driver and origin ``oracle``); only the named approver decides it.
+         */
+        post: operations["create_decision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/decisions/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Decision People
+         * @description Active members (id, email, role): the approver is one with the approver role or
+         *     above; contributors and informed are any member.
+         */
+        get: operations["list_decision_people"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/decisions/{decision}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Decision */
+        get: operations["get_decision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Decision
+         * @description Edit a proposed decision (its creator, its approver, an owner; lock_version).
+         */
+        patch: operations["update_decision"];
+        trace?: never;
+    };
+    "/v1/decisions/{decision}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Decision
+         * @description Decide: only the named approver. Picks an option with a rationale, confirms
+         *     reversibility, sets the review date (default plus 90 days) and the expected outcome;
+         *     a prediction creates its outcome record.
+         */
+        post: operations["decide_decision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/decisions/{decision}/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reassign Decision */
+        post: operations["reassign_decision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/decisions/{decision}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Withdraw Decision */
+        post: operations["withdraw_decision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/decisions/{decision}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Review Decision
+         * @description Review a decided decision (its approver): reaffirm it with the next review date,
+         *     revisit it (a new proposal that supersedes it once decided, ``revisit_id``), or
+         *     reverse it.
+         */
+        post: operations["review_decision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/decisions/{decision}/options-job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recommend Decision Options
+         * @description Ask Oracle for options (approver and above): a built-in job on Oracle's own model
+         *     fills the options with evidence and marks the one it recommends.
+         */
+        post: operations["recommend_decision_options"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/templates": {
         parameters: {
             query?: never;
@@ -9025,6 +9193,72 @@ export interface components {
              */
             where: "title" | "heading" | "body";
         };
+        /** DecideIn */
+        DecideIn: {
+            /** Option Key */
+            option_key: string;
+            /** Rationale */
+            rationale: string;
+            /** Reversibility */
+            reversibility?: ("reversible" | "irreversible") | null;
+            /** Review At */
+            review_at?: string | null;
+            /** Expected Outcome */
+            expected_outcome: string;
+            prediction?: components["schemas"]["PredictionIn"] | null;
+            /** Lock Version */
+            lock_version?: number | null;
+        };
+        /** DecisionCreate */
+        DecisionCreate: {
+            /** Title */
+            title: string;
+            /** Question */
+            question?: string | null;
+            /** Context */
+            context?: string | null;
+            /**
+             * Options
+             * @default []
+             */
+            options: components["schemas"]["DecisionOption"][];
+            /**
+             * Approver Id
+             * Format: uuid
+             */
+            approver_id: string;
+            /**
+             * Reversibility
+             * @default reversible
+             * @enum {string}
+             */
+            reversibility: "reversible" | "irreversible";
+            /**
+             * Contributor Ids
+             * @default []
+             */
+            contributor_ids: string[];
+            /**
+             * Informed Ids
+             * @default []
+             */
+            informed_ids: string[];
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /**
+             * Entity Ids
+             * @default []
+             */
+            entity_ids: string[];
+            /**
+             * Subjects
+             * @default []
+             */
+            subjects: components["schemas"]["Subject"][];
+        };
         /** DecisionIn */
         DecisionIn: {
             /**
@@ -9037,10 +9271,366 @@ export interface components {
             /** Review At */
             review_at?: string | null;
         };
+        /** DecisionOption */
+        DecisionOption: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Summary */
+            summary?: string | null;
+            /**
+             * Pros
+             * @default []
+             */
+            pros: string[];
+            /**
+             * Cons
+             * @default []
+             */
+            cons: string[];
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Cost If Wrong */
+            cost_if_wrong?: string | null;
+            /**
+             * Recommended
+             * @default false
+             */
+            recommended: boolean;
+        };
+        /** DecisionOut */
+        DecisionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Ref */
+            ref: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "decided" | "superseded" | "reversed" | "withdrawn";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "proposed" | "decided" | "review_due" | "superseded" | "reversed" | "withdrawn";
+            /**
+             * Class
+             * @enum {string}
+             */
+            class: "judgement" | "checkpoint";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint";
+            /**
+             * Reversibility
+             * @enum {string}
+             */
+            reversibility: "reversible" | "irreversible";
+            /**
+             * Approver Id
+             * Format: uuid
+             */
+            approver_id: string;
+            /** Approver Email */
+            approver_email?: string | null;
+            /** Chosen Option */
+            chosen_option?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Review At */
+            review_at?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            source?: components["schemas"]["DecisionSource"] | null;
+            /** Question */
+            question?: string | null;
+            /** Context */
+            context?: string | null;
+            /**
+             * Options
+             * @default []
+             */
+            options: components["schemas"]["DecisionOption"][];
+            /** Rationale */
+            rationale?: string | null;
+            /** Driver */
+            driver: string;
+            /**
+             * Contributor Ids
+             * @default []
+             */
+            contributor_ids: string[];
+            /**
+             * Informed Ids
+             * @default []
+             */
+            informed_ids: string[];
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /**
+             * Entity Ids
+             * @default []
+             */
+            entity_ids: string[];
+            /**
+             * Subjects
+             * @default []
+             */
+            subjects: {
+                [key: string]: unknown;
+            }[];
+            /** Expected Outcome */
+            expected_outcome?: string | null;
+            /** Prediction */
+            prediction?: {
+                [key: string]: unknown;
+            } | null;
+            /** Outcome Id */
+            outcome_id?: string | null;
+            /** Supersedes Id */
+            supersedes_id?: string | null;
+            /** Revisit Id */
+            revisit_id?: string | null;
+            /** Superseded By Id */
+            superseded_by_id?: string | null;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Decided Via */
+            decided_via?: string | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided By Email */
+            decided_by_email?: string | null;
+            /** Decided Actor */
+            decided_actor?: string | null;
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Reviews
+             * @default []
+             */
+            reviews: components["schemas"]["DecisionReviewOut"][];
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+            /**
+             * Can Withdraw
+             * @default false
+             */
+            can_withdraw: boolean;
+            /**
+             * Can Review
+             * @default false
+             */
+            can_review: boolean;
+            /**
+             * Can Reassign
+             * @default false
+             */
+            can_reassign: boolean;
+        };
+        /**
+         * DecisionPatch
+         * @description Edit a proposed decision (lock_version required). On a decided captured call its
+         *     approver may change only review_at, expected_outcome and prediction.
+         */
+        DecisionPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Title */
+            title?: string | null;
+            /** Question */
+            question?: string | null;
+            /** Context */
+            context?: string | null;
+            /** Options */
+            options?: components["schemas"]["DecisionOption"][] | null;
+            /** Reversibility */
+            reversibility?: ("reversible" | "irreversible") | null;
+            /** Contributor Ids */
+            contributor_ids?: string[] | null;
+            /** Informed Ids */
+            informed_ids?: string[] | null;
+            /** Evidence Ids */
+            evidence_ids?: string[] | null;
+            /** Entity Ids */
+            entity_ids?: string[] | null;
+            /** Subjects */
+            subjects?: components["schemas"]["Subject"][] | null;
+            /** Review At */
+            review_at?: string | null;
+            /** Expected Outcome */
+            expected_outcome?: string | null;
+            prediction?: components["schemas"]["PredictionIn"] | null;
+        };
+        /**
+         * DecisionPerson
+         * @description An active member, for the approver, contributor and informed pickers.
+         */
+        DecisionPerson: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+        };
         /** DecisionResult */
         DecisionResult: {
             decision: components["schemas"]["AssumptionDecisionOut"];
             gap: components["schemas"]["KnowledgeGapOut"];
+        };
+        /** DecisionReviewOut */
+        DecisionReviewOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "reaffirmed" | "revisit" | "reversed";
+            /** Note */
+            note: string;
+            /** Outcome Status */
+            outcome_status?: string | null;
+            /** Next Review At */
+            next_review_at?: string | null;
+            /** Revisit Id */
+            revisit_id?: string | null;
+            /**
+             * Reviewed By
+             * Format: uuid
+             */
+            reviewed_by: string;
+            /** Reviewed By Email */
+            reviewed_by_email?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * DecisionSource
+         * @description What a captured record came from; for a checkpoint record, the stop.
+         */
+        DecisionSource: {
+            /** Kind */
+            kind: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Checkpoint Kind */
+            checkpoint_kind?: string | null;
+            /** Segment */
+            segment?: string | null;
+        };
+        /** DecisionSummary */
+        DecisionSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Ref */
+            ref: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "decided" | "superseded" | "reversed" | "withdrawn";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "proposed" | "decided" | "review_due" | "superseded" | "reversed" | "withdrawn";
+            /**
+             * Class
+             * @enum {string}
+             */
+            class: "judgement" | "checkpoint";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint";
+            /**
+             * Reversibility
+             * @enum {string}
+             */
+            reversibility: "reversible" | "irreversible";
+            /**
+             * Approver Id
+             * Format: uuid
+             */
+            approver_id: string;
+            /** Approver Email */
+            approver_email?: string | null;
+            /** Chosen Option */
+            chosen_option?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Review At */
+            review_at?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            source?: components["schemas"]["DecisionSource"] | null;
         };
         /**
          * DeckOut
@@ -11183,6 +11773,43 @@ export interface components {
              */
             done: number;
         };
+        /**
+         * InboxDecision
+         * @description A decision row (H1): a proposal I decide, a review that came due (both counted),
+         *     a decision made that I am informed of, or one I just handled (shown only).
+         */
+        InboxDecision: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Ref */
+            ref: string;
+            /** Title */
+            title: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "needs_decision" | "review_due" | "oracle_decided" | "informed";
+            /** Review At */
+            review_at?: string | null;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open" | "done";
+            /** Counts */
+            counts: boolean;
+        };
         /** InboxDocument */
         InboxDocument: {
             /**
@@ -11347,6 +11974,11 @@ export interface components {
              * @default []
              */
             staged: components["schemas"]["InboxStaged"][];
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["InboxDecision"][];
             /**
              * Needs Me
              * @default 0
@@ -12481,11 +13113,13 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis" | "decision_options";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
             intake_id?: string | null;
+            /** Decision Id */
+            decision_id?: string | null;
             /** Version Number */
             version_number?: number | null;
             /** Section Key */
@@ -13594,6 +14228,27 @@ export interface components {
             by?: string | null;
         };
         /**
+         * PredictionIn
+         * @description A measurable version of the expected outcome: deciding creates its outcome record.
+         */
+        PredictionIn: {
+            /** Metric */
+            metric: string;
+            /** Baseline */
+            baseline?: string | null;
+            /** Predicted */
+            predicted: string;
+            /** Threshold */
+            threshold?: string | null;
+            /** By */
+            by?: string | null;
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+        };
+        /**
          * Preferences
          * @description What the signed-in user (or API token) chose. ``document_view``: the layer
          *     documents open on; brief unless they switched to the full document.
@@ -14383,6 +15038,16 @@ export interface components {
             /** Error */
             error?: string | null;
         };
+        /** ReassignIn */
+        ReassignIn: {
+            /**
+             * Approver Id
+             * Format: uuid
+             */
+            approver_id: string;
+            /** Reason */
+            reason: string;
+        };
         /** RecommendIn */
         RecommendIn: {
             /**
@@ -14682,6 +15347,18 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+        };
+        /** ReviewIn */
+        ReviewIn: {
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "reaffirmed" | "revisit" | "reversed";
+            /** Note */
+            note: string;
+            /** Next Review At */
+            next_review_at?: string | null;
         };
         /** ReviewPolicyIn */
         ReviewPolicyIn: {
@@ -16840,6 +17517,21 @@ export interface components {
             /** Moving */
             moving: number;
         };
+        /** Subject */
+        Subject: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ref */
+            ref?: string | null;
+        };
         /** SuggestionAccept */
         SuggestionAccept: {
             /** Text */
@@ -18586,6 +19278,11 @@ export interface components {
             resets_at: string;
             /** Reset */
             reset: boolean;
+        };
+        /** WithdrawIn */
+        WithdrawIn: {
+            /** Reason */
+            reason: string;
         };
         /** WithdrawOut */
         WithdrawOut: {
@@ -24499,6 +25196,491 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_decisions: {
+        parameters: {
+            query?: {
+                class?: "judgement" | "checkpoint" | "all";
+                status?: ("proposed" | "decided" | "review_due" | "superseded" | "reversed" | "withdrawn") | null;
+                /** @description me or a member id */
+                approver?: string | null;
+                due?: boolean | null;
+                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, comma-separated */
+                origin?: string | null;
+                run_id?: string | null;
+                subject_kind?: ("document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion") | null;
+                subject_id?: string | null;
+                q?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_decision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionOut"];
+                };
+            };
+            /** @description Role, or not the named approver */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such decision in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a decided decision, or a checkpoint record */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid options, rationale, expected outcome or review date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_decision_people: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionPerson"][];
+                };
+            };
+        };
+    };
+    get_decision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                decision: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionOut"];
+                };
+            };
+            /** @description Role, or not the named approver */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such decision in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a decided decision, or a checkpoint record */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid options, rationale, expected outcome or review date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_decision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                decision: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionOut"];
+                };
+            };
+            /** @description Role, or not the named approver */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such decision in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a decided decision, or a checkpoint record */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid options, rationale, expected outcome or review date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    decide_decision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                decision: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionOut"];
+                };
+            };
+            /** @description Role, or not the named approver */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such decision in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a decided decision, or a checkpoint record */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid options, rationale, expected outcome or review date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reassign_decision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                decision: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionOut"];
+                };
+            };
+            /** @description Role, or not the named approver */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such decision in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a decided decision, or a checkpoint record */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid options, rationale, expected outcome or review date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    withdraw_decision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                decision: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WithdrawIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionOut"];
+                };
+            };
+            /** @description Role, or not the named approver */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such decision in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a decided decision, or a checkpoint record */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid options, rationale, expected outcome or review date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    review_decision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                decision: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionOut"];
+                };
+            };
+            /** @description Role, or not the named approver */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such decision in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a decided decision, or a checkpoint record */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid options, rationale, expected outcome or review date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    recommend_decision_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                decision: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description Role, or not the named approver */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such decision in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a decided decision, or a checkpoint record */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid options, rationale, expected outcome or review date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

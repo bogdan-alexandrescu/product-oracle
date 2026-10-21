@@ -63,6 +63,7 @@ export const JOB_KIND_LABEL: Record<LlmJobKind, string> = {
   intake_analysis: "Intake analysis",
   quality_review: "Quality review",
   refinement_batch: "Next draft",
+  decision_options: "Decision options",
 };
 
 export const JOB_STATUS_LABEL: Record<LlmJob["status"], string> = {

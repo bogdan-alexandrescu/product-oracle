@@ -17,7 +17,10 @@ import { Icon, type IconName } from "./Icon";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string; match?: string };
 
-/** The nine destinations (I3), in rail order. */
+/**
+ * The destinations (I3), in rail order. Company (H1, owner 2026-10-21 "New pages") groups
+ * Strategy, Decisions, Rituals and Updates; it sits after Plan (Roadmap) and before Runs.
+ */
 export const DESTINATIONS: Dest[] = [
   { label: "Home", href: "/home", icon: "home", testId: "nav-home" },
   { label: "Requests", href: "/requests", icon: "requests", testId: "nav-requests" },
@@ -25,6 +28,7 @@ export const DESTINATIONS: Dest[] = [
   { label: "PRDs", href: "/documents", icon: "prds", testId: "nav-prds" },
   { label: "Priorities", href: "/priorities", icon: "priorities", testId: "nav-priorities" },
   { label: "Roadmap", href: "/roadmap", icon: "roadmap", testId: "nav-roadmap" },
+  { label: "Company", href: "/company", icon: "company", testId: "nav-company" },
   { label: "Runs", href: "/runs", icon: "runs", testId: "nav-runs" },
   { label: "Inbox", href: "/inbox", icon: "inbox", testId: "nav-inbox" },
 ];
@@ -447,7 +451,7 @@ function PhoneHeader() {
 }
 
 /**
- * The app shell (I3): SwarmCloud's navy rail with the nine destinations on desktop, a tab bar
+ * The app shell (I3): SwarmCloud's navy rail with its destinations on desktop, a tab bar
  * (Home, PRDs, Roadmap, Inbox, More) and the phone header on a phone. No rail on /login, /oauth and when
  * signed out: its grid column then collapses to nothing.
  */

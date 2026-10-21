@@ -490,6 +490,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     checkpoints,
     deliveries,
     approvals,
+    // The decision log's rows are added by the server (./decisions.ts).
+    decisions: [],
     overruns,
     lookups,
     searches,

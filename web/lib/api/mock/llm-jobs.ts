@@ -67,6 +67,7 @@ const LABEL: Record<Job["kind"], string> = {
   intake_analysis: "Intake analysis",
   quality_review: "Quality review",
   refinement_batch: "Refinement",
+  decision_options: "Decision options",
 };
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
