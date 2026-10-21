@@ -109,7 +109,7 @@ test("the Plan header's Alignment report opens the latest report", async ({ page
 
 test("Settings › Notifications: connect Slack, pick a channel, send a test message, disconnect", async ({ page }) => {
   // protects=AC15, the company Slack install (§4); fails_when=Connect does not come back
-  // connected, the channel is not kept, the test message does not say Sent, or Disconnect
+  // connected, a private channel the bot was invited to is not offered, the channel is not kept, the test message does not say Sent, or Disconnect
   // clears without a confirmation; no_claim=Slack's OAuth screen (mocked return).
   await login(page);
   await page.goto("/settings");
@@ -124,6 +124,13 @@ test("Settings › Notifications: connect Slack, pick a channel, send a test mes
   await slack.getByLabel("Channel").selectOption({ label: "#plan" });
   await slack.getByRole("button", { name: "Save channel" }).click();
   await expect(slack.getByText("Reports post to #plan.")).toBeVisible();
+  await slack.getByRole("button", { name: "Send test message" }).click();
+  await expect(slack.getByText("Sent")).toBeVisible();
+
+  // A private channel the bot was invited to is in the picker too (groups:read).
+  await slack.getByLabel("Channel").selectOption({ label: "#leads (private)" });
+  await slack.getByRole("button", { name: "Save channel" }).click();
+  await expect(slack.getByText("Reports post to #leads.")).toBeVisible();
   await slack.getByRole("button", { name: "Send test message" }).click();
   await expect(slack.getByText("Sent")).toBeVisible();
 

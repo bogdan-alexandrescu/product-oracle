@@ -74,17 +74,20 @@ class FakeSlack:
         if method == "oauth.v2.access":
             return httpx.Response(200, json={
                 "ok": True, "access_token": TOKEN, "token_type": "bot",
-                "scope": "chat:write,chat:write.public,channels:read", "bot_user_id": "U0BOT",
+                "scope": "chat:write,chat:write.public,channels:read,groups:read",
+                "bot_user_id": "U0BOT",
                 "app_id": "A0ORACLE", "team": {"id": "T0EXAMPLE", "name": "Example Co"},
             })  # fmt: skip
         if method == "conversations.list":
+            # Slack lists the private channels the bot was invited to only when asked.
+            found = [
+                {"id": "C0PLAN", "name": "plan", "is_private": False},
+                {"id": "C0ENG", "name": "eng", "is_private": False},
+            ]
+            if "private_channel" in str(body.get("types")).split(","):
+                found.append({"id": "G0LEADS", "name": "leads", "is_private": True})
             return httpx.Response(200, json={
-                "ok": True,
-                "channels": [
-                    {"id": "C0PLAN", "name": "plan", "is_private": False},
-                    {"id": "C0ENG", "name": "eng", "is_private": False},
-                ],
-                "response_metadata": {"next_cursor": ""},
+                "ok": True, "channels": found, "response_metadata": {"next_cursor": ""},
             })  # fmt: skip
         if method == "chat.postMessage":
             return httpx.Response(
@@ -294,6 +297,34 @@ def test_slack_text_has_the_summary_at_most_five_item_lines_and_the_link(slack):
     # Three tracks: every one listed, no "+N more".
     short = report_slack.message(_content(3), rid)
     assert "more in Oracle" not in short and short.count("\n• ") == 3
+
+
+def test_slack_text_neutralises_slack_formatting_in_titles(slack):
+    """protects=the Slack message reads as written; fails_when=a *, _, ~ or ` in a track,
+    milestone or item title turns into Slack bold, italics, strike or code; no_claim=the
+    stored Markdown."""
+    content = _content(2)
+    content["tracks"][0]["prd"]["title"] = "*Bold* _it_ ~gone~ `code`"
+    content["tracks"][0]["needs_attention"][0]["detail"] = "Item *B* is _late_"
+    content["tracks"][1]["next_milestone"]["name"] = "`Beta`_~*"
+    text = report_slack.message(content, uuid.uuid4())
+    items = [line for line in text.splitlines() if line.startswith("• ")]
+    assert items[0] == (
+        "• \uff0aBold\uff0a \uff3fit\uff3f \uff5egone\uff5e \uff40code\uff40 · At risk · "
+        "Item \uff0aB\uff0a is \uff3flate\uff3f"
+    )
+    assert items[1] == "• PRD 1 · On track · next: \uff40Beta\uff40\uff3f\uff5e\uff0a, Nov 30 ✓"
+    # The message's own formatting stays: the bold title and the link.
+    assert text.startswith("*Weekly alignment · week of Oct 19*\n")
+
+
+def test_markdown_escapes_brackets_in_item_links():
+    """protects=the stored Markdown's links; fails_when=a ] (or [ or \\) in an item title
+    ends its link text early and breaks the link; no_claim=the web page."""
+    content = _content(1)
+    content["tracks"][0]["needs_attention"][0]["title"] = "Item [B] \\ done]"
+    md = alignment.markdown(content)
+    assert "- [Item \\[B\\] \\\\ done\\]](/plan?item=prd-0:item-b) (now): " in md
 
 
 def test_markdown_carries_the_headline_and_one_part_per_track():
@@ -536,7 +567,7 @@ async def test_install_channel_and_weekly_post(client, owner, runtime, at, slack
     url = urlparse(resp.json()["url"])
     assert f"{url.scheme}://{url.netloc}{url.path}" == "https://slack.com/oauth/v2/authorize"
     query = parse_qs(url.query)
-    assert query["scope"] == ["chat:write,chat:write.public,channels:read"]
+    assert query["scope"] == ["chat:write,chat:write.public,channels:read,groups:read"]
     assert query["client_id"] == ["slack-client"]
     assert query["redirect_uri"] == [
         "https://oracle.example.com/v1/company-integrations/slack/callback"
@@ -547,12 +578,19 @@ async def test_install_channel_and_weekly_post(client, owner, runtime, at, slack
         "notifications",
         "Example Co",
     )
-    assert row["status"] == "active" and "chat:write" in row["scopes"]
+    assert row["status"] == "active" and {"chat:write", "groups:read"} <= set(row["scopes"])
     (exchange,) = slack.of("oauth.v2.access")
     assert exchange["code"] == "code-1" and exchange["client_secret"] == "slack-secret"
 
     channels = (await client.get("/v1/company-integrations/slack/channels", headers=auth)).json()
-    assert [c["name"] for c in channels] == ["eng", "plan"]
+    # A private channel the bot was invited to is listed too (groups:read).
+    assert [(c["name"], c["is_private"]) for c in channels] == [
+        ("eng", False),
+        ("leads", True),
+        ("plan", False),
+    ]
+    (listed,) = slack.of("conversations.list")
+    assert listed["types"] == "public_channel,private_channel"
     resp = await client.post(
         "/v1/company-integrations/slack/test", json={"channel_id": "C0PLAN"}, headers=auth
     )
@@ -584,6 +622,25 @@ async def test_install_channel_and_weekly_post(client, owner, runtime, at, slack
             select(AuditEvent).where(AuditEvent.action == "alignment_report.posted")
         )
         assert posted is not None and posted.data["channel_id"] == "C0PLAN"
+
+
+async def test_the_test_message_needs_a_slack_channel_id(client, owner, slack):
+    """protects=the test message posts to a channel only, like the saved setting;
+    fails_when=a person's id, a channel name or junk reaches chat.postMessage;
+    no_claim=Slack's own checks."""
+    tenant_id, auth = owner
+    await install(client, auth)
+    for bad in ("U0SOMEONE", "#plan", "plan", "C0", "c0plan", "C0PLAN\n"):
+        resp = await client.post(
+            "/v1/company-integrations/slack/test", json={"channel_id": bad}, headers=auth
+        )
+        assert resp.status_code == 422, (bad, resp.text)
+    assert slack.of("chat.postMessage") == []
+    resp = await client.post(
+        "/v1/company-integrations/slack/test", json={"channel_id": "G0LEADS"}, headers=auth
+    )
+    assert resp.status_code == 200, resp.text
+    assert [p["channel"] for p in slack.of("chat.postMessage")] == ["G0LEADS"]
 
 
 async def test_a_second_install_is_refused(client, owner, slack):
@@ -708,6 +765,39 @@ async def test_a_failure_can_be_dismissed(client, owner, runtime, at, slack):
     assert (await client.post(path, headers=viewer)).status_code == 403
     assert (await client.post(path, headers=auth)).status_code == 200
     assert (await client.get("/v1/inbox", headers=auth)).json()["report_failures"] == []
+
+
+async def test_retry_after_disconnect_says_slack_is_not_connected(
+    client, owner, runtime, at, slack
+):
+    """protects=an honest Retry; fails_when=retrying a failed post after Disconnect quietly
+    turns it into 'not configured' (out of the Inbox) instead of saying Slack is not
+    connected; no_claim=the ticker's own attempts."""
+    tenant_id, auth = owner
+    await a_track(client, auth, runtime)
+    row = await install(client, auth)
+    await set_report(client, auth, slack_channel=CHANNEL)
+    built = at(la(2026, 10, 26, 8))
+    slack.answers["chat.postMessage"] = [
+        httpx.Response(200, json={"ok": False, "error": "not_in_channel"})
+    ] * 40
+    await due(tenant_id)
+    at(built + timedelta(hours=25))
+    (report,) = await due(tenant_id)
+    assert report.slack_status == "failed"
+    assert (
+        await client.delete(f"/v1/company-integrations/{row['id']}", headers=auth)
+    ).status_code == 204
+    resp = await client.post(f"/v1/alignment-reports/{report.id}/slack/retry", headers=auth)
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"] == (
+        "Slack is not connected for notifications: connect it in Settings › Notifications, "
+        "then retry"
+    )
+    (report,) = await reports_of(tenant_id)
+    assert report.slack_status == "failed" and report.slack_error == "not_in_channel"
+    (failure,) = (await client.get("/v1/inbox", headers=auth)).json()["report_failures"]
+    assert failure["id"] == str(report.id)
 
 
 async def test_the_bot_token_never_leaves_oracle(
