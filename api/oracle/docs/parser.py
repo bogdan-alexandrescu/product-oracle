@@ -28,7 +28,7 @@ from oracle.review.schemas import Resolution
 # Levels 1-3 start a section; deeper headings are part of the section body.
 SECTION_LEVELS = (1, 2, 3)
 SECTION_ID_RE = re.compile(r"(?<!\s)\s*\{#([A-Za-z0-9][A-Za-z0-9_.:-]*)\}\s*$")
-CITATION_RE = re.compile(r"\[c:([^\]\s]+)\]")
+CITATION_RE = re.compile(r"\[c:([^\[\]\s]+)\]")
 # A citation marker plus the horizontal space before it, removed from body_text.
 CITATION_STRIP_RE = re.compile(r"(?<![ \t])[ \t]*\[c:[^\[\]\s]+\]")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")

@@ -28,7 +28,8 @@ ROLES: dict[str, re.Pattern[str]] = {
 # A "non-goals" or "out of scope" heading is not scope; a "success metrics" one is not goals.
 EXCLUDES: dict[str, set[str]] = {"scope": {"non_goals"}, "goals": {"metrics", "non_goals"}}
 
-_BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*\S)", re.M)
+# Possessive and within one line: linear on blank lines and space runs.
+_BULLET = re.compile(r"^[ \t]*+(?:[-*+]|\d+[.)])[ \t]++(.*\S)", re.M)
 _NUMBER = re.compile(r"\d")
 _WORD = re.compile(r"[A-Za-z0-9][A-Za-z0-9'%$.-]*")
 

@@ -337,10 +337,12 @@ _EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="safe-yaml")
 
 async def run_parse[T](fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
     """``fn(*args, **kwargs)`` on the parse pool (4 threads), so a slow parse of untrusted
-    text never stalls other requests. Exceptions propagate unchanged."""
+    text never stalls other requests. Exceptions propagate unchanged. Under the queue policy
+    (:func:`_queued`): :class:`ParseBusy` when this person has :data:`MAX_PER_OWNER` parses
+    or no worker frees within :data:`QUEUE_SECONDS`. No CPU cap of its own (see
+    :func:`run_parse_within`)."""
     ctx = contextvars.copy_context()
-    call = functools.partial(ctx.run, fn, *args, **kwargs)
-    return await asyncio.get_running_loop().run_in_executor(_EXECUTOR, call)
+    return await _queued(functools.partial(ctx.run, fn, *args, **kwargs), wall=None)
 
 
 # Who the parses of this request/tick count against (set by oracle.auth.deps.get_principal and
@@ -423,6 +425,28 @@ async def run_parse_within[T](
     or queued (:class:`ParseBusy` 429 beyond), and a wait of more than :data:`QUEUE_SECONDS`
     for a free worker is :class:`ParseBusy` 503."""
     limit = PARSE_SECONDS if seconds is None else seconds
+    ctx = contextvars.copy_context()
+
+    def job() -> T:
+        with parse_budget.limit(limit):
+            return ctx.run(fn, *args, **kwargs)
+
+    try:
+        return await _queued(job, wall=limit * WALL_FACTOR)
+    except (TimeoutError, parse_budget.Exceeded):
+        raise ParseTimeout(name, limit) from None
+
+
+async def _queued[T](call: Callable[[], T], *, wall: float | None) -> T:
+    """The queue policy (owner, 2026-10-20) around one pool call, for every parse of
+    untrusted text: at most :data:`MAX_PER_OWNER` per person (:data:`PARSE_OWNER`) running or
+    queued, else :class:`ParseBusy` 429; a wait of more than :data:`QUEUE_SECONDS` for a free
+    worker is :class:`ParseBusy` 503, and the queued call is cancelled. ``wall``: the caller
+    stops waiting this long after the call started (the worker keeps running it).
+
+    HOOK: a parse that does not go through :func:`run_parse` or :func:`run_parse_within`
+    (roadmap ``_render_body`` and export rendering, moved into the pool by
+    fix/roadmap-render-budget) must call one of them so it is counted here."""
     owner = PARSE_OWNER.get()
     if owner is not None:
         if _active.get(owner, 0) >= MAX_PER_OWNER:
@@ -440,8 +464,7 @@ async def run_parse_within[T](
         if abandoned.is_set():  # its caller gave up while it was queued
             raise ParseBusy("parse_busy")
         loop.call_soon_threadsafe(mark_started)
-        with parse_budget.limit(limit):
-            return fn(*args, **kwargs)
+        return call()
 
     def release(_: object) -> None:
         # The slot is free when the parse is over (or never began), not when its caller
@@ -453,21 +476,15 @@ async def run_parse_within[T](
             else:
                 _active.pop(owner, None)
 
-    parse = asyncio.ensure_future(run_parse(job))
+    parse = asyncio.ensure_future(loop.run_in_executor(_EXECUTOR, job))
     parse.add_done_callback(release)
     # An abandoned parse's outcome is read, never reported as unretrieved.
     parse.add_done_callback(lambda f: f.cancelled() or f.exception())
-    try:
-        # QUEUE-WAIT POLICY (owner, 2026-10-20): a parse that waits more than QUEUE_SECONDS
-        # for a free worker is refused (503); the wait for a worker is otherwise not
-        # counted against the parse's own CPU cap.
-        await asyncio.wait(
-            {started, parse}, timeout=QUEUE_SECONDS, return_when=asyncio.FIRST_COMPLETED
-        )
-        if not started.done() and not parse.done():
-            abandoned.set()
-            parse.cancel()
-            raise ParseBusy("parse_busy")
-        return await asyncio.wait_for(asyncio.shield(parse), timeout=limit * WALL_FACTOR)
-    except (TimeoutError, parse_budget.Exceeded):
-        raise ParseTimeout(name, limit) from None
+    await asyncio.wait({started, parse}, timeout=QUEUE_SECONDS, return_when=asyncio.FIRST_COMPLETED)
+    if not started.done() and not parse.done():
+        abandoned.set()
+        parse.cancel()
+        raise ParseBusy("parse_busy")
+    if wall is None:
+        return await parse
+    return await asyncio.wait_for(asyncio.shield(parse), timeout=wall)

@@ -140,5 +140,5 @@ def test_template_title_line_is_linear():
         "# " + "{#" * 10_000,
     ):
         _fast(lambda body=body: skeleton(body))
-    assert "# My title {#goals}" in skeleton("# Old   {#goals}\n\ntext\n")
-    assert "# My title {#goals}" in skeleton("# {#goals}\n")
+    assert "# My title   {#goals}" in skeleton("# Old   {#goals}\n\ntext\n")
+    assert "# My title{#goals}" in skeleton("# {#goals}\n")
