@@ -24,6 +24,7 @@ import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake } from "./intake";
+import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { dateMarks, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
@@ -78,6 +79,8 @@ export interface Db {
   inbox_seen?: Record<string, string>;
   /** Roadmap items, product tracks, schedule bases and tracker records (./roadmap.ts, CR-11). */
   roadmap?: RoadmapDb;
+  /** Requests, their themes and the found items of the seed owner (./requests.ts, C1). */
+  requests?: RequestsDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
@@ -1312,6 +1315,42 @@ function ensureV2(db: Db): V2Db {
   return db.v2;
 }
 
+function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
+  return {
+    userId,
+    role,
+    goals: () => db.baseline.entities.filter((e) => e.type === "goal"),
+    features: () => db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
+    documents: () =>
+      db.documents
+        .filter((d) => d.kind === "prd")
+        .map((d) => {
+          const latest = docVersions(db, d).at(-1);
+          const sections = latest?.sections.length ?? 0;
+          return {
+            id: d.id,
+            slug: d.slug,
+            title: d.title,
+            latest_version: latest?.number ?? null,
+            sections,
+            reviewed_sections: latest?.approved_at ? sections : 0,
+          };
+        }),
+  };
+}
+
+/** The requests rows, seeded on first use against the baseline's confirmed goals. */
+function ensureRequests(db: Db): RequestsDb {
+  db.requests ??= seeded("requests", () =>
+    seedRequests({
+      ownerId: db.user_id,
+      goals: db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed"),
+      features: db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
+    }),
+  );
+  return db.requests;
+}
+
 function ensureBlockers(db: Db): BlockersDb {
   if (!db.blockers) {
     const v2 = ensureV2(db);
@@ -1461,6 +1500,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun }, req, p, q);
     if (intake) return intake;
+  }
+  // Requests and their themes (C1) check roles themselves: commenters add, approvers decide.
+  if (["requests", "request-themes", "request-candidates"].includes(p[1])) {
+    const requests = await routeRequests(ensureRequests(db), requestsContext(db, me.id, me.role), req, p, q);
+    if (requests) return requests;
   }
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
