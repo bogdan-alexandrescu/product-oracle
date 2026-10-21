@@ -11,6 +11,7 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from oracle.auth.service import create_api_token
 from oracle.models import AuditEvent
 from oracle.runs import service
 from oracle.runs.models import Checkpoint
@@ -322,3 +323,76 @@ async def test_a_runtime_failure_after_the_decision_is_recorded_is_a_503(
     monkeypatch.setattr(service, "REPLAY_LIMIT", 64)
     await tick(client, auth)
     assert len(swarm.answers) == 1 and await _owed(tenant_id, run["id"]) is None
+
+
+# --- the delivering state is visible (owner decision 2026-10-20) ------------------------
+
+
+def _cp(run: dict, cp_id: str) -> dict:
+    return next(c for c in run["checkpoints"] if c["id"] == cp_id)
+
+
+async def test_an_undelivered_decision_shows_who_decided_and_why_it_waits(client, owner):
+    """The run page reads ``delivery``: who decided, since when, the tries that did not
+    deliver it and SwarmCloud's last answer in a few words. The payload keeps no decider
+    ids. Delivered, ``delivery`` is gone."""
+    tenant_id, auth = owner
+    swarm = on()
+    run, cp = await _refused_decision(client, auth, tenant_id, swarm)
+    got = _cp(await get(client, auth, run["id"]), cp["id"])
+    assert got["status"] == "changes_requested"
+    delivery = got["delivery"]
+    assert delivery["decided_by_name"] == "admin@example.com", delivery
+    assert delivery["tries"] == 1, delivery
+    assert delivery["last_error"] == "SwarmCloud HTTP 503 unavailable", delivery
+    assert delivery["since"] and delivery["last_tried_at"], delivery
+    posting = got["payload"]["wait"]["posting"]
+    assert not {"user_id", "token_id", "grant_id"} & set(posting), posting
+    swarm.fail_next_answer = httpx.Response(429, json={"code": "rate_limited"})
+    await _tick_raw(client, auth)
+    delivery = _cp(await get(client, auth, run["id"]), cp["id"])["delivery"]
+    assert delivery["tries"] == 2, delivery
+    assert delivery["last_error"] == "SwarmCloud HTTP 429 rate_limited", delivery
+    await tick(client, auth)
+    got = _cp(await get(client, auth, run["id"]), cp["id"])
+    assert got["delivery"] is None and got["status"] == "changes_requested"
+
+
+async def test_a_decision_made_with_an_api_token_names_the_token(client, owner):
+    """An API token that acts for no member decided: ``decided_by_name`` is its name."""
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _waiting(client, auth, tenant_id, swarm)
+    cp = pending(run)
+    async with tenant_session(tenant_id) as s:
+        _, raw = await create_api_token(s, "release-bot")
+        await s.commit()
+    swarm.fail_next_answer = httpx.Response(503, json=_UNAVAILABLE)
+    resp = await _decide_raw(client, {"Authorization": f"Bearer {raw}"}, run, "approved")
+    assert resp.status_code == 503 and "recorded" in resp.text, resp.text
+    delivery = _cp(await get(client, auth, run["id"]), cp["id"])["delivery"]
+    assert delivery["decided_by_name"] == "release-bot", delivery
+
+
+async def test_the_inbox_shows_an_undelivered_decision_to_its_approvers(client, owner):
+    """``deliveries``: shown to the checkpoint's approver role and above, not counted in
+    ``total`` (nothing to decide), and gone once the tick delivers the decision."""
+    tenant_id, auth = owner
+    swarm = on()
+    run, cp = await _refused_decision(client, auth, tenant_id, swarm)
+    approver = await person(tenant_id, "approver", "approver")
+    commenter = await person(tenant_id, "commenter", "commenter")
+    box = (await client.get("/v1/inbox", headers=auth)).json()
+    [item] = box["deliveries"]
+    assert item["id"] == cp["id"] and item["run_id"] == run["id"], item
+    assert item["status"] == "changes_requested" and item["segment_title"], item
+    assert item["delivery"]["last_error"] == "SwarmCloud HTTP 503 unavailable", item
+    assert item["delivery"]["decided_by_name"] == "admin@example.com", item
+    assert not {"user_id", "token_id", "grant_id"} & set(item["payload"]["wait"]["posting"])
+    assert box["checkpoints"] == [] and box["total"] == 0, box
+    mine = (await client.get("/v1/inbox", headers=approver.headers)).json()
+    assert len(mine["deliveries"]) == 1, mine
+    theirs = (await client.get("/v1/inbox", headers=commenter.headers)).json()
+    assert theirs["deliveries"] == [], theirs
+    await tick(client, auth)
+    assert (await client.get("/v1/inbox", headers=auth)).json()["deliveries"] == []
