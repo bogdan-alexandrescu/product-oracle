@@ -269,7 +269,7 @@ async def test_an_invalid_map_is_stored_failed_with_its_problems(client, bad_map
     # protects=AC5 an invalid map stores failed with the problems; fails_when=it is
     # stored ready or the run succeeds.
     tenant_id = await make_tenant()
-    owner = await make_person(tenant_id, "dev@example.com", "viewer")
+    owner = await make_person(tenant_id, "dev@example.com", "commenter")
     source_id = await github_source(tenant_id, owner)
     out = (await request_map(client, owner, source_id)).json()
     await tick(client, tenant_id)
@@ -284,12 +284,16 @@ async def test_only_the_sources_owner_maps_its_repos(client, map_runtime):
     # protects=start_code_map is the source's owner's, for a repo of a GitHub source;
     # fails_when=another member maps someone's source or an unlisted repo is mapped.
     tenant_id = await make_tenant()
-    owner = await make_person(tenant_id, "dev@example.com", "viewer")
+    owner = await make_person(tenant_id, "dev@example.com", "commenter")
     other = await make_person(tenant_id, "pm@example.com", "owner")
     source_id = await github_source(tenant_id, owner)
     assert (await request_map(client, other, source_id)).status_code == 404
     assert (await request_map(client, owner, source_id, "example-org/other")).status_code == 422
     assert (await request_map(client, owner, uuid.uuid4())).status_code == 404
+    # Mapping is one of the source's writes: a viewer's own source is refused.
+    viewer = await make_person(tenant_id, "viewer@example.com", "viewer")
+    viewers = await github_source(tenant_id, viewer, name="Viewer repo")
+    assert (await request_map(client, viewer, viewers)).status_code == 403
     async with tenant_session(tenant_id) as s:
         slack = Source(owner_user_id=owner.user.id, kind="slack", name="Chat",
                        config={"channels": ["C1"]}, status="active")  # fmt: skip
@@ -303,7 +307,7 @@ async def test_a_run_over_the_threshold_waits_for_an_owner(client, map_runtime, 
     # stays building; fails_when=it starts without approval.
     monkeypatch.setattr(flows, "APPROVAL_THRESHOLD_USD", flows.ROLES["indexer"].base_usd / 4)
     tenant_id = await make_tenant()
-    owner = await make_person(tenant_id, "dev@example.com", "viewer")
+    owner = await make_person(tenant_id, "dev@example.com", "commenter")
     out = (await request_map(client, owner, await github_source(tenant_id, owner))).json()
     assert out["status"] == "building" and out["run_status"] == "awaiting_approval"
 
@@ -334,7 +338,7 @@ async def test_a_private_map_is_the_owners_until_shared_in_full(client, map_runt
     # it back stops new uses; audited; fails_when=a private map leaks to anyone but the
     # source's owner, or a shared one stays hidden.
     tenant_id = await make_tenant()
-    owner = await make_person(tenant_id, "dev@example.com", "viewer")
+    owner = await make_person(tenant_id, "dev@example.com", "commenter")
     other = await make_person(tenant_id, "pm@example.com", "owner")
     got = await built_map(client, tenant_id, owner)
     map_id = got["id"]
@@ -387,7 +391,7 @@ async def test_a_private_map_is_the_owners_until_shared_in_full(client, map_runt
 
 async def test_list_filters_by_repo_and_status(client, map_runtime):
     tenant_id = await make_tenant()
-    owner = await make_person(tenant_id, "dev@example.com", "viewer")
+    owner = await make_person(tenant_id, "dev@example.com", "commenter")
     got = await built_map(client, tenant_id, owner)
     h = owner.headers
     ready = (await client.get("/v1/code-maps?status=ready", headers=h)).json()
@@ -402,7 +406,7 @@ async def test_another_companys_maps_are_404(client, map_runtime):
     # protects=AC9 every route is company-scoped; fails_when=an id of another company
     # reads or shares.
     tenant_id = await make_tenant()
-    owner = await make_person(tenant_id, "dev@example.com", "viewer")
+    owner = await make_person(tenant_id, "dev@example.com", "commenter")
     got = await built_map(client, tenant_id, owner)
     await client.post(f"/v1/code-maps/{got['id']}/sharing", json={"sharing": "full"},
                       headers=owner.headers)  # fmt: skip
@@ -563,7 +567,7 @@ async def test_a_refresh_keeps_the_maps_sharing(client, map_runtime, monkeypatch
 
 
 async def shared_map(tenant_id, content: dict, *, repo: str = REPO) -> uuid.UUID:
-    owner = await make_person(tenant_id, f"dev-{uuid.uuid4().hex[:6]}@example.com", "viewer")
+    owner = await make_person(tenant_id, f"dev-{uuid.uuid4().hex[:6]}@example.com", "commenter")
     source_id = await github_source(tenant_id, owner, repos=(repo,))
     async with tenant_session(tenant_id) as s:
         row = CodeMap(
@@ -663,7 +667,7 @@ async def test_the_code_map_prompt_names_the_repo_and_the_docs_only_fallback(cli
     set_runtime(fake)
     try:
         tenant_id = await make_tenant()
-        owner = await make_person(tenant_id, "dev@example.com", "viewer")
+        owner = await make_person(tenant_id, "dev@example.com", "commenter")
         await request_map(client, owner, await github_source(tenant_id, owner))
         prompts = [step.prompt for wf in fake.submitted for step in wf.steps]
     finally:

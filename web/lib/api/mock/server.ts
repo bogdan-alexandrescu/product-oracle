@@ -1913,7 +1913,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const briefs = await routeEngineering(req, p, q, {
     documents: db.documents,
     maps: () => (db.code_maps ??= []),
-    me: { id: me.id, email: me.email },
+    me: { id: me.id, email: me.email, canWrite: atLeast(me.role, "commenter") },
     now,
     uuid,
   });

@@ -5,9 +5,10 @@
   registers them); its content is its ``brief.json`` output.
 - ``GET /v1/code-maps`` and ``/v1/code-maps/{id}`` (viewer+): shared maps, and private
   ones to their source's owner only (404 for anyone else; a run reads shared maps only,
-  S6). ``POST /v1/code-maps`` (the source's owner) maps one repo of a GitHub source: a
-  ``code_map`` run, estimated and started. ``POST /v1/code-maps/{id}/sharing`` (the
-  source's owner) shares the repo's maps in full or makes them private.
+  S6). ``POST /v1/code-maps`` (the source's owner, commenter+ as for the source's other
+  writes) maps one repo of a GitHub source: a ``code_map`` run, estimated and started.
+  ``POST /v1/code-maps/{id}/sharing`` (the same) shares the repo's maps in full or makes
+  them private.
 
 The tenant-scoped session keeps each company to its own rows (another company's id is
 a 404)."""
@@ -52,6 +53,8 @@ from oracle.v2.models import ArtifactDependency, ArtifactOutput, ArtifactRequest
 router = APIRouter(prefix="/v1", tags=["engineering"])
 
 Reader = Annotated[Principal, Depends(require_role("viewer"))]
+# A source's own writes (sync, edit) are a commenter's: so are mapping and sharing its code.
+SourceWriter = Annotated[Principal, Depends(require_role("commenter"))]
 
 extensions.register_importer("code_map", codemaps.import_map)
 extensions.register_prompt_lines(codemaps.FLOW, codemaps.prompt_lines)
@@ -248,7 +251,7 @@ async def get_code_map(code_map_id: uuid.UUID, principal: Reader, db: TenantDB) 
 
 
 @router.post("/code-maps", response_model=CodeMapOut, status_code=status.HTTP_201_CREATED)
-async def start_code_map(body: CodeMapCreate, principal: Reader, db: TenantDB) -> CodeMapOut:
+async def start_code_map(body: CodeMapCreate, principal: SourceWriter, db: TenantDB) -> CodeMapOut:
     """Map the code of one repository of your GitHub source: a code_map run, estimated
     and started (over the approval threshold it waits for an owner). The map is private
     until you share it. 409 while one of that repository is being built."""
@@ -268,7 +271,7 @@ async def start_code_map(body: CodeMapCreate, principal: Reader, db: TenantDB) -
 
 @router.post("/code-maps/{code_map_id}/sharing", response_model=CodeMapOut)
 async def share_code_map(
-    code_map_id: uuid.UUID, body: CodeMapSharingIn, principal: Reader, db: TenantDB
+    code_map_id: uuid.UUID, body: CodeMapSharingIn, principal: SourceWriter, db: TenantDB
 ) -> CodeMapOut:
     """Share the code map with the company (full: everyone reads it and runs use it) or
     make it private again (new runs stop using it; briefs already written keep their

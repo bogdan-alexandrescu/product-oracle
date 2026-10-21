@@ -25,7 +25,8 @@ export interface EngineeringContext {
   documents: { id: string; slug: string }[];
   /** The mock's code maps, kept in the db (created on first use). */
   maps: () => CodeMapRow[];
-  me: { id: string; email: string };
+  /** canWrite: commenter and up (mapping and sharing are the source's writes, as in the API). */
+  me: { id: string; email: string; canWrite: boolean };
   now: () => string;
   uuid: () => string;
 }
@@ -153,7 +154,9 @@ async function routeCodeMaps(req: Request, p: string[], q: URLSearchParams, ctx:
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
     return json(200, out.map((m) => mapOut(m, ctx.me, false)));
   }
+  const refused = () => json(403, { detail: "Requires the commenter role" });
   if (!p[2] && req.method === "POST") {
+    if (!ctx.me.canWrite) return refused();
     const body = (await req.json()) as { source_id?: string; repo?: string };
     const source = body.source_id ? sourceRepos(body.source_id) : null;
     if (!source) return json(404, { detail: "Source not found" });
@@ -196,6 +199,7 @@ async function routeCodeMaps(req: Request, p: string[], q: URLSearchParams, ctx:
     return json(200, mapOut(row, ctx.me, true));
   }
   if (p[3] === "sharing" && req.method === "POST") {
+    if (!ctx.me.canWrite) return refused();
     if (row.owner_email !== ctx.me.email) return json(404, { detail: "Code map not found" });
     const { sharing } = (await req.json()) as { sharing: CodeMap["sharing"] };
     if (sharing !== "full" && sharing !== "private") return json(422, { detail: "sharing must be private or full" });

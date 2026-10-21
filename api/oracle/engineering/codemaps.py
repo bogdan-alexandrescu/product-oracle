@@ -359,7 +359,8 @@ async def refresh_due(db: AsyncSession) -> int:
     ).all()
     started = 0
     for row, source, owner in due:
-        if owner.disabled_at is not None or source.status == "paused":
+        # As Map the code: a disabled owner, or one who is a viewer now, refreshes nothing.
+        if owner.disabled_at is not None or owner.role == "viewer" or source.status == "paused":
             continue
         principal = Principal(
             tenant_id=source.tenant_id, kind="user", role=owner.role, user_id=owner.id
