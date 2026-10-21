@@ -493,11 +493,17 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
   if (p[1] === "people" && p.length === 2 && m === "GET") {
     const needle = (q.get("q") ?? "").trim().toLowerCase();
     const limit = Number(q.get("limit") ?? 20);
+    // ids: the named people, a disabled one too (it keeps its name); q and limit do not apply.
+    const ids = new Set(q.getAll("ids"));
+    if (ids.size > 100) return fail(422, "At most 100 ids");
     const people: Schemas["PersonOut"][] = (ctx.people ?? [])
-      .filter((x) => x.status !== "disabled" && x.email.includes(needle))
+      .filter((x) => (ids.size ? ids.has(x.id) : x.status !== "disabled" && x.email.includes(needle)))
       .sort((a, b) => a.email.localeCompare(b.email))
-      .slice(0, limit)
-      .map((x) => ({ user_id: x.id, name: displayName(x.email), email: x.email, role: x.role, can_write: atLeast(x.role, "commenter") }));
+      .slice(0, ids.size ? undefined : limit)
+      .map((x) => ({
+        user_id: x.id, name: displayName(x.email), email: x.email, role: x.role,
+        can_write: x.status !== "disabled" && atLeast(x.role, "commenter"),
+      }));
     return json(200, people);
   }
 
@@ -538,6 +544,12 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (!canAnswer(ctx, input.asked_to!)) return fail(422, CANNOT_ANSWER);
       if (privateGap(db, db.gaps.find((g) => g.id === question.gap_id)) && input.asked_to !== intake?.author_id) return fail(409, PRIVATE);
       question.asked_to = input.asked_to!;
+      // A deferred question reassigned is asked again, of the new person (its gap open again).
+      if (question.status === "deferred") {
+        question.status = "asked";
+        const gap = db.gaps.find((g) => g.id === question.gap_id);
+        if (gap?.status === "deferred") gap.status = "asked";
+      }
     }
     question.updated_at = now();
     return json(200, question);

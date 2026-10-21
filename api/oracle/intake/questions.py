@@ -8,9 +8,11 @@ from the Inbox.
   anyone else is 409 "Share this finding first to ask someone else".
 - **Ask a teammate** (:func:`create`): a commenter or above asks a named person about an
   intake, a document section, a run checkpoint item or a baseline entity. These are
-  ``general`` questions with no gap ("<name> asks"); the engine's are "Oracle asks".
+  ``general`` questions with no gap ("<name> asks"); the engine's are "Oracle asks". A
+  company API token asks as no person: "<token name> asks", read from the audit trail.
 - **Reassign or withdraw** (:func:`patch`): the asker, the intake's author (an intake's
-  question) or an approver; an answered or withdrawn question stays as it is (409).
+  question) or an approver; an answered or withdrawn question stays as it is (409). A
+  deferred question reassigned is asked again, of the new person.
 - **The Inbox** (:func:`inbox`): what is asked of me (``asked`` or ``delegated``), oldest
   first, each as the reader may see it (``oracle.intake.views``), with its asker, its
   subject and the answer paths it offers.
@@ -26,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal
-from oracle.auth.models import User
+from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion, Section
@@ -43,9 +45,11 @@ from oracle.intake.schemas import (
     PersonAsker,
     QuestionCreate,
     QuestionPatch,
+    TokenAsker,
 )
 from oracle.intake.service import IntakeError
 from oracle.members.names import display_name
+from oracle.models import AuditEvent
 from oracle.runs.models import Checkpoint
 from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderQuestion
 from oracle.v2.schemas import KnowledgeGapOut, StakeholderQuestionOut
@@ -57,6 +61,8 @@ PRIVATE = "Share this finding first to ask someone else"
 OPEN = ("asked", "delegated")
 # Final: never moved again.
 SETTLED = ("answered", "withdrawn")
+# What a token asks reads as once the token is gone.
+UNNAMED_CLIENT = "An API token"
 # The checkpoint kinds, as the Inbox names them.
 CHECKPOINT_LABEL = {
     "baseline_confirm": "Confirm the baseline",
@@ -135,7 +141,8 @@ async def create(
         priority=100,
         batch=None,
         asked_to=body.asked_to,
-        asked_by=principal.id,
+        # A person, never a company API token's id (who asked reads from the audit trail).
+        asked_by=principal.user_id if principal.kind == "user" else None,
         status="asked",
         **columns,
     )
@@ -182,6 +189,11 @@ async def patch(
     await check_assignee(db, intake, gap, body.asked_to)
     before = question.asked_to
     question.asked_to = body.asked_to
+    if question.status == "deferred":
+        # Deferred by the person asked before: the new person is asked it now.
+        question.status = "asked"
+        if gap is not None and gap.status == "deferred":
+            gap.status = "asked"
     await db.flush()
     await audit.record(
         db, principal, "question.reassigned", "stakeholder_question", question.id,
@@ -248,6 +260,30 @@ async def subject_of(
     )  # fmt: skip
 
 
+async def _token_asker(db: AsyncSession, q: StakeholderQuestion) -> OracleAsker | TokenAsker:
+    """Who asked a question with no gap and no person: the company API token that asked
+    it (its ``question.asked`` audit event), by name; else Oracle."""
+    actor = await db.scalar(
+        select(AuditEvent.actor)
+        .where(
+            AuditEvent.entity == "stakeholder_question",
+            AuditEvent.entity_id == q.id,
+            AuditEvent.action == "question.asked",
+        )
+        .limit(1)
+    )
+    # The actor reads "<kind>:<id>" (Principal.actor).
+    kind, _, ident = (actor or "").partition(":")
+    if kind != "token":
+        return OracleAsker()
+    try:
+        asker_id = uuid.UUID(ident)
+    except ValueError:
+        return TokenAsker(name=UNNAMED_CLIENT)
+    name = await db.scalar(select(ApiToken.name).where(ApiToken.id == asker_id))
+    return TokenAsker(name=name or UNNAMED_CLIENT)
+
+
 async def inbox(db: AsyncSession, principal: Principal) -> list[InboxQuestion]:
     """The questions asked of the caller and still open, oldest first, as they may see
     them (a hidden one never appears)."""
@@ -271,8 +307,10 @@ async def inbox(db: AsyncSession, principal: Principal) -> list[InboxQuestion]:
         _, gap = await readers.gap_by_id(q.gap_id)
         if q.gap_id is not None and gap is None:
             continue
-        if q.gap_id is not None or q.asked_by is None:
-            asked_by: OracleAsker | PersonAsker = OracleAsker()
+        if q.gap_id is None and q.asked_by is None:
+            asked_by: OracleAsker | PersonAsker | TokenAsker = await _token_asker(db, q)
+        elif q.gap_id is not None:
+            asked_by = OracleAsker()
         else:
             if q.asked_by not in names:
                 email = await db.scalar(select(User.email).where(User.id == q.asked_by))

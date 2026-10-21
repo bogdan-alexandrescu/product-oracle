@@ -224,19 +224,28 @@ async def list_people(
     db: TenantDB,
     q: Annotated[str | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    ids: Annotated[list[uuid.UUID] | None, Query(max_length=100)] = None,
 ) -> list[PersonOut]:
     """The company's active members for a person picker, matched on email (``q``):
     each one's name (from their email), email, role and whether they can write
     (commenter or above: answer, comment, be asked). Disabled members are not listed;
-    the full member list (``GET /v1/members``) stays the owner's."""
-    stmt = select(User).where(User.disabled_at.is_(None))
-    if q and q.strip():
-        stmt = stmt.where(func.lower(User.email).contains(q.strip().lower(), autoescape=True))
-    rows = (await db.scalars(stmt.order_by(User.email).limit(limit))).all()
+    the full member list (``GET /v1/members``) stays the owner's.
+
+    ``ids`` names people instead ("Waiting on <name>", "Answered by <name>"): the
+    company's members with those ids, however many the company has, a disabled one too
+    (it keeps its name and cannot write); ``q`` and ``limit`` do not apply."""
+    if ids:
+        stmt = select(User).where(User.id.in_(ids))
+    else:
+        stmt = select(User).where(User.disabled_at.is_(None))
+        if q and q.strip():
+            stmt = stmt.where(func.lower(User.email).contains(q.strip().lower(), autoescape=True))
+        stmt = stmt.limit(limit)
+    rows = (await db.scalars(stmt.order_by(User.email))).all()
     return [
         PersonOut(
             user_id=u.id, name=display_name(u.email), email=u.email, role=u.role,  # type: ignore[arg-type]
-            can_write=has_role(u.role, "commenter"),
+            can_write=u.disabled_at is None and has_role(u.role, "commenter"),
         )
         for u in rows
     ]  # fmt: skip

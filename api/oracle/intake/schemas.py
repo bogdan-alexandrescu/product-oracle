@@ -544,6 +544,14 @@ class PersonAsker(BaseModel):
     name: str
 
 
+class TokenAsker(BaseModel):
+    """A company API token's question: "<token name> asks" (no person asked it)."""
+
+    kind: Literal["api_client"] = "api_client"
+    # The token's name, or "An API token" once the token is gone.
+    name: str
+
+
 class InboxSubject(BaseModel):
     kind: SubjectKind
     # "Before drafting · <intake>", "<PRD> · <section heading>", "Roadmap items · <item>",
@@ -555,7 +563,7 @@ class InboxSubject(BaseModel):
 
 class InboxQuestion(BaseModel):
     question: StakeholderQuestionOut
-    asked_by: Annotated[OracleAsker | PersonAsker, Field(discriminator="kind")]
+    asked_by: Annotated[OracleAsker | PersonAsker | TokenAsker, Field(discriminator="kind")]
     subject: InboxSubject
     # The gap as the reader may see it (S6); None for a question with no gap.
     gap: KnowledgeGapOut | None

@@ -13,6 +13,15 @@ export function findPeople(q: string): Promise<Person[]> {
   return unwrap(api.GET("/v1/people", { params: { query: { q: q.trim() || undefined, limit: 20 } } }));
 }
 
+/** The named people (GET /v1/people?ids=), by id, however many the company has: who a
+ * question waits on or who answered it. */
+export async function peopleByIds(ids: readonly (string | null | undefined)[]): Promise<Map<string, Person>> {
+  const unique = [...new Set(ids.filter((id): id is string => !!id))];
+  if (unique.length === 0) return new Map();
+  const people = await unwrap(api.GET("/v1/people", { params: { query: { ids: unique } } }));
+  return new Map(people.map((p) => [p.user_id, p]));
+}
+
 /**
  * The member picker every non-owner uses (C2): a search box over GET /v1/people and the
  * people it finds, by name and email. `writersOnly` lists only those who can answer or

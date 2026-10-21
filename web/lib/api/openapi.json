@@ -4924,7 +4924,7 @@
           "members"
         ],
         "summary": "List People",
-        "description": "The company's active members for a person picker, matched on email (``q``):\neach one's name (from their email), email, role and whether they can write\n(commenter or above: answer, comment, be asked). Disabled members are not listed;\nthe full member list (``GET /v1/members``) stays the owner's.",
+        "description": "The company's active members for a person picker, matched on email (``q``):\neach one's name (from their email), email, role and whether they can write\n(commenter or above: answer, comment, be asked). Disabled members are not listed;\nthe full member list (``GET /v1/members``) stays the owner's.\n\n``ids`` names people instead (\"Waiting on <name>\", \"Answered by <name>\"): the\ncompany's members with those ids, however many the company has, a disabled one too\n(it keeps its name and cannot write); ``q`` and ``limit`` do not apply.",
         "operationId": "list_people",
         "security": [
           {
@@ -4962,6 +4962,27 @@
               "minimum": 1,
               "default": 20,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "maxItems": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           }
         ],
@@ -37157,12 +37178,16 @@
               },
               {
                 "$ref": "#/components/schemas/PersonAsker"
+              },
+              {
+                "$ref": "#/components/schemas/TokenAsker"
               }
             ],
             "title": "Asked By",
             "discriminator": {
               "propertyName": "kind",
               "mapping": {
+                "api_client": "#/components/schemas/TokenAsker",
                 "oracle": "#/components/schemas/OracleAsker",
                 "person": "#/components/schemas/PersonAsker"
               }
@@ -54765,6 +54790,26 @@
         ],
         "title": "TokenApprovalOut",
         "description": "An approval given through an API token: a section verdict or a version approval."
+      },
+      "TokenAsker": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "api_client",
+            "title": "Kind",
+            "default": "api_client"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "TokenAsker",
+        "description": "A company API token's question: \"<token name> asks\" (no person asked it)."
       },
       "TokenIn": {
         "properties": {

@@ -1456,6 +1456,10 @@ export interface paths {
          *     each one's name (from their email), email, role and whether they can write
          *     (commenter or above: answer, comment, be asked). Disabled members are not listed;
          *     the full member list (``GET /v1/members``) stays the owner's.
+         *
+         *     ``ids`` names people instead ("Waiting on <name>", "Answered by <name>"): the
+         *     company's members with those ids, however many the company has, a disabled one too
+         *     (it keeps its name and cannot write); ``q`` and ``limit`` do not apply.
          */
         get: operations["list_people"];
         put?: never;
@@ -11503,7 +11507,7 @@ export interface components {
         InboxQuestion: {
             question: components["schemas"]["StakeholderQuestionOut"];
             /** Asked By */
-            asked_by: components["schemas"]["OracleAsker"] | components["schemas"]["PersonAsker"];
+            asked_by: components["schemas"]["OracleAsker"] | components["schemas"]["PersonAsker"] | components["schemas"]["TokenAsker"];
             subject: components["schemas"]["InboxSubject"];
             gap: components["schemas"]["KnowledgeGapOut"] | null;
             /** Answer Paths */
@@ -17896,6 +17900,19 @@ export interface components {
             /** Lapse Reason */
             lapse_reason?: string | null;
         };
+        /**
+         * TokenAsker
+         * @description A company API token's question: "<token name> asks" (no person asked it).
+         */
+        TokenAsker: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "api_client";
+            /** Name */
+            name: string;
+        };
         /** TokenIn */
         TokenIn: {
             /** Token */
@@ -21893,6 +21910,7 @@ export interface operations {
             query?: {
                 q?: string | null;
                 limit?: number;
+                ids?: string[] | null;
             };
             header?: never;
             path?: never;

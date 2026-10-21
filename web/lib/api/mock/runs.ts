@@ -1104,6 +1104,7 @@ function roadmapReviewRun(): RunOut {
     template: ROADMAP_DEFAULTS.template,
     theme: ROADMAP_DEFAULTS.theme,
     estimate_usd: estimate,
+    open_proposals: 0,
     spent_usd: 4.9,
     created_by: "mock-user",
     created_at: at,

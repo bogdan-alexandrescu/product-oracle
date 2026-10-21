@@ -166,7 +166,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * company plus an "Oracle asks" question on an intake with no PRD and an "Approver asks"
  * question on a PRD section, both asked of the signed-in owner, and one delegated to
  * approver@example.com (C2); "private-finding" as "questions" plus a private finding (S6) on
- * the clinic waitlist, its question asked of the signed-in owner, its author;
+ * the clinic waitlist, its question asked of the signed-in owner, its author; "many-people" as
+ * "questions" in a company of 25 members (zoe.zimmer@example.com last by email);
  * "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json).
@@ -350,6 +351,19 @@ function seedPrivateFinding(): Db {
     category: "release_rollout", prompt: "Is the pilot limited to two clinics?", rationale: null, priority: 20, batch: 1,
     asked_to: db.user_id, asked_by: db.user_id, module_key: null, section_key: null, status: "asked", ...at,
   });
+  return db;
+}
+
+/** "questions" in a company of 25 members: zoe.zimmer@example.com sorts last, past the
+ * people picker's first page of 20. */
+function seedManyPeople(): Db {
+  const db = seedQuestions();
+  const join = (email: string, i: number) => ({
+    email, role: "commenter" as const, created_at: `2026-09-${String(5 + i).padStart(2, "0")}T09:00:00Z`,
+    id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const,
+  });
+  for (let i = 0; i < 20; i++) db.members.push(join(`member.${String(i).padStart(2, "0")}@example.com`, i));
+  db.members.push(join("zoe.zimmer@example.com", 20));
   return db;
 }
 
@@ -892,7 +906,9 @@ function load(): Db {
             ? seedQuestions
             : scenario === "private-finding"
               ? seedPrivateFinding
-              : seed,
+              : scenario === "many-people"
+                ? seedManyPeople
+                : seed,
   );
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];

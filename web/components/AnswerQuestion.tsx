@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { Button, InfoTip } from "@/components/ds";
-import { PersonPicker, findPeople, type Person } from "@/components/PersonPicker";
+import { PersonPicker, peopleByIds, type Person } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
@@ -14,9 +14,10 @@ type Kind = Schemas["AnswerIn"]["kind"];
 /** The longest answer the API takes. */
 const MAX_ANSWER = 4000;
 
-/** Who asks, as the Inbox names them: "Oracle asks" or "<name> asks". */
+/** Who asks, as the Inbox names them: "Oracle asks", "<name> asks" or, for a company API
+ * token, "<token name> asks" ("An API token asks" once it is gone). */
 export function askerName(q: InboxQuestion): string {
-  return q.asked_by.kind === "person" ? q.asked_by.name : "Oracle";
+  return q.asked_by.kind === "oracle" ? "Oracle" : q.asked_by.name;
 }
 
 /** What a settled question shows in place of its actions. */
@@ -32,8 +33,7 @@ export function settledLabel(kind: Kind, delegate?: Person | null): string {
 async function askedOfMessage(questionId: string): Promise<string> {
   try {
     const q = await unwrap(api.GET("/v1/questions/{item_id}", { params: { path: { item_id: questionId } } }));
-    const people = await findPeople("");
-    const name = people.find((p) => p.user_id === q.asked_to)?.name;
+    const name = (await peopleByIds([q.asked_to])).get(q.asked_to ?? "")?.name;
     return name ? `This was asked of ${name}` : "This was asked of someone else";
   } catch {
     return "This was asked of someone else";

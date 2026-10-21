@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 
 import { QUESTIONS_CHANGED } from "@/components/AskTeammate";
-import { findPeople } from "@/components/PersonPicker";
+import { peopleByIds } from "@/components/PersonPicker";
 
 import { SuggestionActions, SuggestionCard, SuggestionForm, useSuggestionDecision } from "@/components/SuggestionCard";
 import { FeedbackStateChip } from "@/components/review/FeedbackState";
@@ -291,17 +291,15 @@ export function SectionQuestions({ documentId, sectionKeys }: { documentId: stri
   const q = useQuery(`section-questions|${documentId}|${keys}|${tick}`, async () => {
     const rows = await unwrap(api.GET("/v1/questions", { params: { query: { document_id: documentId, limit: 500 } } }));
     const mine = rows.filter((x) => !!x.section_key && sectionKeys.has(x.section_key) && x.status !== "draft" && x.status !== "withdrawn");
-    const [people, answers] = await Promise.all([
-      mine.length ? findPeople("") : Promise.resolve([]),
-      Promise.all(
+    const answers = await Promise.all(
         mine.map((x) =>
           x.status === "asked" || x.status === "delegated"
             ? Promise.resolve([])
             : unwrap(api.GET("/v1/answers", { params: { query: { question_id: x.id, limit: 20 } } })),
         ),
-      ),
-    ]);
-    const names = new Map(people.map((p) => [p.user_id, p.name]));
+    );
+    const people = await peopleByIds([...mine.map((x) => x.asked_to), ...answers.flat().map((a) => a.answered_by)]);
+    const names = new Map([...people].map(([id, p]) => [id, p.name]));
     return {
       names,
       rows: mine.map((x, i): SectionQuestion => ({ q: x, answer: answers[i].find((a) => a.kind !== "delegate") ?? answers[i][0] ?? null })),
