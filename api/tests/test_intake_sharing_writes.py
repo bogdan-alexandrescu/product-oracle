@@ -25,6 +25,7 @@ from oracle.tenancy import tenant_session
 from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderQuestion
 from tests.intake_helpers import (
     answer,
+    ask_of,
     batch,
     company,
     create_intake,
@@ -221,6 +222,7 @@ async def test_a_viewers_pages_never_shift_because_of_private_rows(client, fake,
     # Public rows first, the author's private ones last (newest: the first page).
     shown = await batch(client, ctx, intake_id)
     for card in shown["questions"][:2]:
+        await ask_of(client, ctx, card["question"]["id"], "commenter", by="author")
         await answer(client, ctx, card["question"]["id"], kind="dont_know")
     resp = await client.post(
         f"/v1/gaps/{shown['questions'][2]['gap']['id']}/decisions",
@@ -278,6 +280,7 @@ async def test_an_answer_in_another_intake_never_clears_a_critical_gap(client, w
     first = await create_intake(client, ctx, who="approver", document=doc)
     a_gap = gaps_by_category(first)["blockers"]
     q = await _question_of(ctx, a_gap["id"])
+    await ask_of(client, ctx, q, who)
     done = await answer(client, ctx, q, who=who, body="The partner limit is fine.",
                         knowledge_state="hypothesis")  # fmt: skip
     assert done["gap"]["status"] in ("answered", "answered_pending_review")
@@ -329,6 +332,7 @@ async def test_a_later_answer_elsewhere_never_closes_an_open_critical_gap(client
         await s.commit()
     first = await create_intake(client, ctx, who="approver", document=doc)
     q = await _question_of(ctx, gaps_by_category(first)["blockers"]["id"])
+    await ask_of(client, ctx, q, "commenter")
     await answer(client, ctx, q, body="The partner limit is fine.")
     resp = await client.post(
         f"/v1/intakes/{second['intake']['id']}/analyze", headers=ctx.as_("approver")

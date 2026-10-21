@@ -39,9 +39,11 @@ export function waitingCount(inbox: Inbox, questions: readonly unknown[]): numbe
 /** Records this Inbox visit as my last one (C1e: what "new" is measured from next time). */
 export const markInboxSeen = () => unwrap(api.GET("/v1/inbox", { params: { query: { mark_seen: true } } }));
 
-/** Questions still open and asked of me; the API filters, so none is cut off by its page size. */
-export const loadMyQuestions = () =>
-  shared("my-questions", () => unwrap(api.GET("/v1/questions", { params: { query: { asked_to: "me", status: "asked", limit: 500 } } })));
+/**
+ * Questions still open and asked of me (asked, or delegated to me: C2), each with who asks,
+ * its subject and its answer paths; the API filters, so none is cut off by a page size.
+ */
+export const loadMyQuestions = () => shared("my-questions", () => unwrap(api.GET("/v1/inbox/questions")));
 
 const EVENT = "po:waiting-changed";
 

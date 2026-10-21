@@ -1,4 +1,5 @@
-"""Members, invites and API tokens. Owners only.
+"""Members, invites and API tokens. Owners only; the member directory
+(``GET /v1/people``, :data:`people_router`) is every member's.
 
 Logic lives in :mod:`oracle.members.service`; each handler commits once.
 """
@@ -7,12 +8,15 @@ import uuid
 from collections.abc import Awaitable
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import require_role
+from oracle.auth.models import User
+from oracle.authz import has_role, require_role
 from oracle.connections.router import ProviderHttp
 from oracle.members import service
+from oracle.members.names import display_name
 from oracle.members.schemas import (
     ApiTokenOut,
     FollowUpOut,
@@ -21,11 +25,15 @@ from oracle.members.schemas import (
     InviteStatus,
     MemberOut,
     MemberPatch,
+    PersonOut,
     TokenApprovalOut,
 )
 
 router = APIRouter(prefix="/v1", tags=["members"], dependencies=[Depends(require_role("owner"))])
 Owner = Annotated[Principal, Depends(require_role("owner"))]
+# The member directory: every person picker a non-owner uses reads it (C2).
+people_router = APIRouter(prefix="/v1", tags=["members"])
+Viewer = Annotated[Principal, Depends(require_role("viewer"))]
 
 _STATUS = {
     "not_found": status.HTTP_404_NOT_FOUND,
@@ -208,3 +216,36 @@ async def dismiss_member_follow_up(
     row = await _call(service.dismiss_follow_up(db, principal, follow_up_id))
     await db.commit()
     return FollowUpOut.model_validate(row)
+
+
+@people_router.get("/people", response_model=list[PersonOut])
+async def list_people(
+    principal: Viewer,
+    db: TenantDB,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    ids: Annotated[list[uuid.UUID] | None, Query(max_length=100)] = None,
+) -> list[PersonOut]:
+    """The company's active members for a person picker, matched on email (``q``):
+    each one's name (from their email), email, role and whether they can write
+    (commenter or above: answer, comment, be asked). Disabled members are not listed;
+    the full member list (``GET /v1/members``) stays the owner's.
+
+    ``ids`` names people instead ("Waiting on <name>", "Answered by <name>"): the
+    company's members with those ids, however many the company has, a disabled one too
+    (it keeps its name and cannot write); ``q`` and ``limit`` do not apply."""
+    if ids:
+        stmt = select(User).where(User.id.in_(ids))
+    else:
+        stmt = select(User).where(User.disabled_at.is_(None))
+        if q and q.strip():
+            stmt = stmt.where(func.lower(User.email).contains(q.strip().lower(), autoescape=True))
+        stmt = stmt.limit(limit)
+    rows = (await db.scalars(stmt.order_by(User.email))).all()
+    return [
+        PersonOut(
+            user_id=u.id, name=display_name(u.email), email=u.email, role=u.role,  # type: ignore[arg-type]
+            can_write=u.disabled_at is None and has_role(u.role, "commenter"),
+        )
+        for u in rows
+    ]  # fmt: skip

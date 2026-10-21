@@ -13,6 +13,7 @@ from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_item
 from tests.intake_helpers import (
     answer,
+    ask_of,
     batch,
     company,
     create_intake,
@@ -60,6 +61,7 @@ async def test_a_commenters_answer_never_clears_a_critical_blocker(client):
     document_id = out["intake"]["document_id"]
     assert await _blocking(ctx, document_id, q["gap_id"])
 
+    await ask_of(client, ctx, q["id"], "commenter")
     result = await answer(client, ctx, q["id"], body="The limit is generous enough.")
     assert result["gap"]["status"] == "answered_pending_review"
     assert [a["kind"] for a in result["next_actions"]] == ["validate"]

@@ -32,6 +32,8 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle.auth.models import User
+from oracle.authz import has_role
 from oracle.baseline.models import Edge, Entity
 from oracle.intake import categories as cats
 from oracle.intake import evidence as ev
@@ -785,15 +787,39 @@ async def sync_questions(
     await db.flush()
 
 
+def can_answer(user: User | None) -> bool:
+    """Someone a question may be asked of (C2): an active member, commenter or above."""
+    return user is not None and user.disabled_at is None and has_role(user.role, "commenter")  # type: ignore[arg-type]
+
+
+async def an_approver(db: AsyncSession) -> uuid.UUID | None:
+    """The longest-standing active approver or owner: who is asked when nobody nearer
+    the question can answer it."""
+    return await db.scalar(
+        select(User.id)
+        .where(User.disabled_at.is_(None), User.role.in_(("approver", "owner")))
+        .order_by(User.created_at, User.id)
+        .limit(1)
+    )
+
+
 async def ask_batch(
     db: AsyncSession,
     intake: ProductIntake,
     asked_by: uuid.UUID | None,
     size: int,
     skip: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
+    assign: dict[uuid.UUID, uuid.UUID] | None = None,
 ) -> list[StakeholderQuestion]:
     """Ask the next short batch: the highest-priority drafts, at most ``size``.
     ``skip``: gaps the asker may not see; their questions stay drafts.
+
+    Every question asked has a person who can answer it (C2, :func:`can_answer`): the
+    person ``assign`` names (checked by the caller) or the draft's own, else the gap's
+    owner, else the intake's author, else the person asking the batch (the author or an
+    approver, :func:`oracle.intake.service.ask_next`), else the longest-standing active
+    approver; someone disabled or now a viewer is passed over. A question of a gap
+    hidden from everyone but the author is asked of the author (S6).
 
     Sizes and numbers are counted in what everyone may see (S6): a batch holds ``size``
     questions everyone sees, and the author's hidden questions ranked among them ride
@@ -809,6 +835,10 @@ async def ask_batch(
         return gap is None or sharing.gap_changes(gap, reg, sharing.EVERYONE) is not None
 
     waiting = [q for q in questions if q.status == "draft" and q.gap_id not in skip]
+    # Chosen before asking (the batch's preview), whether this batch asks it or a later one.
+    for q in waiting:
+        if assign and q.id in assign:
+            q.asked_to = assign[q.id]
     public = [q for q in waiting if shown(q)]
     chosen = public[:size]
     if len(public) > size:
@@ -822,11 +852,31 @@ async def ask_batch(
         return []
     latest = max((q.batch or 0 for q in questions if shown(q)), default=0)
     number = latest + 1 if chosen else max(latest, 1)
+    able: dict[uuid.UUID, bool] = {}
+
+    async def first_able(*ids: uuid.UUID | None) -> uuid.UUID | None:
+        for user_id in ids:
+            if user_id is not None and user_id not in able:
+                able[user_id] = can_answer(await db.get(User, user_id))
+            if user_id is not None and able[user_id]:
+                return user_id
+        return None
+
     for q in drafts:
+        gap = by_id.get(q.gap_id) if q.gap_id else None
         q.status = "asked"
         q.batch = number
         q.asked_by = asked_by
-        gap = by_id.get(q.gap_id) if q.gap_id else None
+        if not shown(q):
+            q.asked_to = intake.author_id
+        else:
+            q.asked_to = (
+                await first_able(
+                    q.asked_to, gap.owner_id if gap else None, intake.author_id, asked_by
+                )
+                or await an_approver(db)
+                or intake.author_id
+            )
         if gap is not None and gap.status == "unknown":
             gap.status = "asked"
     await db.flush()

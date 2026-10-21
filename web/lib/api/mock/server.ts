@@ -24,7 +24,7 @@ import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from 
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
-import { routeIntake } from "./intake";
+import { routeIntake, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
@@ -175,7 +175,13 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * "alignment-report" as the default company plus two weekly alignment reports and Oracle's
  * Slack install (./reports.ts, F6);
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
- * next tick (recorded, the decide call answers 503; ./runs.ts); "roadmap-items" as the default
+ * next tick (recorded, the decide call answers 503; ./runs.ts); "questions" as the default
+ * company plus an "Oracle asks" question on an intake with no PRD and an "Approver asks"
+ * question on a PRD section, both asked of the signed-in owner, and one delegated to
+ * approver@example.com (C2); "private-finding" as "questions" plus a private finding (S6) on
+ * the clinic waitlist, its question asked of the signed-in owner, its author; "many-people" as
+ * "questions" in a company of 25 members (zoe.zimmer@example.com last by email);
+ * "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json).
  */
@@ -298,6 +304,83 @@ function seedLarge(): Db {
   // Asked of someone else: not the signed-in member's to answer.
   const other = db.members.find((m) => m.id !== db.user_id)!;
   v2.questions.push({ ...model, id: uuid(), prompt: "Who owns the pricing page?", asked_to: other.id, created_at: model.created_at, updated_at: model.created_at });
+  return db;
+}
+
+/** The default company plus questions to people (C2): see MOCK_SCENARIO_KEY. */
+function seedQuestions(): Db {
+  const db = seed();
+  const v2 = ensureV2(db);
+  const approver = db.members.find((m) => m.email === "approver@example.com")!;
+  const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
+  const at = (iso: string) => ({ created_at: iso, updated_at: iso });
+  const intake = uuid();
+  const gap = uuid();
+  v2.intakes.push({
+    id: intake, title: "Clinic waitlist", brief: "Patients wait by phone for a cancelled slot. Let them join a waitlist instead.",
+    author_id: db.user_id, source_snapshot_ids: [], status: "awaiting_answers", document_id: null, lock_version: 1,
+    analysis: { users: [], problem: null, outcomes: [], goal_ids: [], scope: ["A waitlist for cancelled slots"], non_goals: [], dependencies: [], blockers: [], category: "feature", conflicts: [] },
+    ...at("2026-10-01T09:00:00Z"),
+  });
+  v2.gaps.push({
+    id: gap, intake_id: intake, document_id: null, category: "customer_user", statement: "Customer and user: not known yet.",
+    impact: ["goals", "scope", "module_selection"], importance: "high", evidence_ids: [], confidence: null, knowledge_state: "unknown",
+    status: "asked", owner_id: null, related_modules: ["context.users"], stop_condition: null, entity_ids: [], section_keys: [],
+    created_by: null, lock_version: 1, ...at("2026-10-01T09:00:00Z"),
+  });
+  const base = { checkpoint_id: null, item_ref: null, entity_id: null, module_key: null, batch: null, priority: 100 };
+  v2.questions.push(
+    {
+      ...base, id: uuid(), gap_id: gap, intake_id: intake, document_id: null, category: "customer_user",
+      prompt: "Which clinics join the waitlist first?", rationale: "Decides who the first release is for, and its scope.",
+      batch: 1, priority: 10, asked_to: db.user_id, asked_by: db.user_id, section_key: null, status: "asked", ...at("2026-10-01T09:00:00Z"),
+    },
+    {
+      ...base, id: uuid(), gap_id: null, intake_id: null, document_id: prd.id, category: "general",
+      prompt: "Which plan tiers get hard caps?", rationale: "The scope review needs it before approving.",
+      asked_to: db.user_id, asked_by: approver.id, section_key: "metrics", status: "asked", ...at("2026-10-18T09:00:00Z"),
+    },
+    {
+      ...base, id: uuid(), gap_id: null, intake_id: null, document_id: prd.id, category: "general",
+      prompt: "Who signs off the refund rule?", rationale: null,
+      asked_to: approver.id, asked_by: db.user_id, section_key: "metrics", status: "delegated", ...at("2026-10-18T10:00:00Z"),
+    },
+  );
+  return db;
+}
+
+/** "questions" plus a private finding (S6): only its author, the signed-in owner, is asked. */
+function seedPrivateFinding(): Db {
+  const db = seedQuestions();
+  const v2 = ensureV2(db);
+  const intake = v2.intakes.find((i) => i.title === "Clinic waitlist")!;
+  const gap = uuid();
+  const at = { created_at: "2026-10-02T09:00:00Z", updated_at: "2026-10-02T09:00:00Z" };
+  v2.gaps.push({
+    id: gap, intake_id: intake.id, document_id: null, category: "release_rollout", statement: "Is the pilot limited to two clinics?",
+    impact: ["risks", "scope"], importance: "high", evidence_ids: [], confidence: null, knowledge_state: "ai_inference",
+    status: "asked", owner_id: null, related_modules: ["launch.rollout"], stop_condition: null, entity_ids: [], section_keys: [],
+    created_by: null, lock_version: 1, ...at,
+  });
+  v2.private_gap_ids = [gap];
+  v2.questions.push({
+    id: uuid(), gap_id: gap, intake_id: intake.id, document_id: null, checkpoint_id: null, item_ref: null, entity_id: null,
+    category: "release_rollout", prompt: "Is the pilot limited to two clinics?", rationale: null, priority: 20, batch: 1,
+    asked_to: db.user_id, asked_by: db.user_id, module_key: null, section_key: null, status: "asked", ...at,
+  });
+  return db;
+}
+
+/** "questions" in a company of 25 members: zoe.zimmer@example.com sorts last, past the
+ * people picker's first page of 20. */
+function seedManyPeople(): Db {
+  const db = seedQuestions();
+  const join = (email: string, i: number) => ({
+    email, role: "commenter" as const, created_at: `2026-09-${String(5 + i).padStart(2, "0")}T09:00:00Z`,
+    id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const,
+  });
+  for (let i = 0; i < 20; i++) db.members.push(join(`member.${String(i).padStart(2, "0")}@example.com`, i));
+  db.members.push(join("zoe.zimmer@example.com", 20));
   return db;
 }
 
@@ -887,7 +970,13 @@ function load(): Db {
         ? seedSuggestions
         : scenario === "big-prd"
           ? seedBigPrd
-          : seed,
+          : scenario === "questions"
+            ? seedQuestions
+            : scenario === "private-finding"
+              ? seedPrivateFinding
+              : scenario === "many-people"
+                ? seedManyPeople
+                : seed,
   );
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
@@ -1669,13 +1758,36 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (modules) return modules;
   // Intake, gaps, questions and answers (CR-03) check roles themselves: commenters
   // answer and propose, approvers decide, owners accept a critical risk.
-  if (["intakes", "gaps", "questions", "intake-proposals"].includes(p[1])) {
+  // Questions to people (C2): Ask a teammate, reassign or withdraw, the Inbox's questions
+  // and the member directory, with the API's rules.
+  if (["intakes", "gaps", "questions", "intake-proposals", "people"].includes(p[1]) || (p[1] === "inbox" && p[2] === "questions")) {
     const createRun = (input: Schemas["RunCreate"]) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
       const run = new Request(new URL("/v1/runs", req.url), { method: "POST", body: JSON.stringify(input) });
       return routeRuns({ ...runsContext(db), db: db.runs }, run, ["v1", "runs"]).then((r) => r ?? notFound("Route"));
     };
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun }, req, p, q);
+    const subjects: SubjectLookup = {
+      document: (id) => {
+        const doc = db.documents.find((d) => d.id === id);
+        const latest = doc ? docVersions(db, doc).pop() : undefined;
+        if (!doc || !latest) return null;
+        return {
+          slug: doc.slug,
+          title: doc.title,
+          latest: latest.number,
+          heading: (key) => latest.sections.find((x) => x.section_key === key)?.heading ?? null,
+        };
+      },
+      entity: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? null,
+      checkpoint: (id) => {
+        for (const run of db.runs?.runs ?? []) {
+          const cp = run.checkpoints.find((c) => c.id === id);
+          if (cp) return { run_id: run.id, kind: cp.kind };
+        }
+        return null;
+      },
+    };
+    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, people: db.members, subjects }, req, p, q);
     if (intake) return intake;
   }
   // Requests and their themes (C1) check roles themselves: commenters add, approvers decide.
