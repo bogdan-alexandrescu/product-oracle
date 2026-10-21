@@ -10,7 +10,7 @@ import uuid
 from datetime import timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from oracle.baseline.models import Edge, Entity
 from oracle.decisions import capture as capture_lines
@@ -505,6 +505,85 @@ async def test_decided_call_syncs_a_locked_decision_entity_and_reversal_marks_st
         assert await s.scalar(select(Entity.id).where(Entity.type == "decision").limit(2)) == ent.id
 
 
+def _migration():
+    """The H1 migration module, for its backfill statements."""
+    import importlib.util
+
+    from tests.conftest import API_DIR
+
+    path = API_DIR / "migrations" / "versions" / "0020_decisions.py"
+    spec = importlib.util.spec_from_file_location("migration_0020_decisions", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+async def test_a_backfilled_decision_is_in_the_graph_and_reversing_it_marks_stale(client, ctx):
+    """protects=a gap's accepted assumption backfilled by the migration is in the Baseline
+    graph as live capture leaves it: one locked decision entity d-<n> on the record, the
+    gap's entity among its subjects (not its entity_ids); reversing it rejects that entity
+    and marks a version that depends on it potentially stale (criterion 10);
+    fails_when=the backfill leaves no entity, so reversing marks nothing stale;
+    no_claim=the migration's backfill statements run on the test database (already at
+    head) rather than through Alembic, and the dependency row is inserted directly."""
+    from oracle.v2.models import AssumptionDecision
+
+    feature = await make_entity(ctx, "feature", "usage-caps")
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(
+            AssumptionDecision(
+                entity_id=feature,
+                statement="Buyers keep one billing address",
+                decision="accept_assumption",
+                rationale="Measured in the pilot",
+                decided_by=ctx.users["approver"].id,
+            )
+        )
+        await s.commit()
+    module = _migration()
+    async with tenant_session(ctx.tenant_id) as s:
+        for statement in getattr(module, "BACKFILLS", (module.BACKFILL,)):
+            await s.execute(text(statement))
+        await s.commit()
+    got = (await client.get("/v1/decisions/1", headers=ctx.as_("viewer"))).json()
+    assert got["status"] == "decided" and got["origin"] == "assumption"
+    assert got["entity_ids"] == []
+    assert {"kind": "entity", "id": str(feature)} in got["subjects"]
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(Decision).where(Decision.number == 1))
+        assert d.entity_id is not None
+        ent = await s.get(Entity, d.entity_id)
+        assert ent.type == "decision" and ent.key == "d-1"
+        assert ent.locked and ent.status == "confirmed"
+        assert ent.attrs == {
+            "decision_id": str(d.id),
+            "chosen_option": "accept_assumption",
+            "reversibility": "reversible",
+        }
+        doc = Document(slug="billing", title="Billing PRD")
+        s.add(doc)
+        await s.flush()
+        version = DocumentVersion(document_id=doc.id, number=1, markdown="x", content_hash="h")
+        s.add(version)
+        await s.flush()
+        s.add(ArtifactDependency(document_version_id=version.id, upstream_entity_id=ent.id))
+        await s.commit()
+        entity_id, version_id = ent.id, version.id
+
+    resp = await client.post(
+        "/v1/decisions/1/reviews",
+        json={"verdict": "reversed", "note": "Buyers asked for several addresses"},
+        headers=ctx.as_("approver"),
+    )
+    assert resp.status_code == 200, resp.text
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.get(Entity, entity_id)).status == "rejected"
+        dep = await s.scalar(
+            select(ArtifactDependency).where(ArtifactDependency.document_version_id == version_id)
+        )
+        assert dep.freshness == "potentially_stale"
+
+
 # --- Ask Oracle for options -----------------------------------------------------------------
 
 
@@ -626,6 +705,56 @@ async def test_options_job_does_not_hold_the_decision_while_the_model_thinks(cli
         row = await s.get(LlmJob, uuid.UUID(job["id"]))
         assert row.status == "failed"
         assert "changed" in (row.error or "")
+
+
+async def test_options_job_never_drops_options_people_wrote(client, ctx):
+    """protects=with 4 options written by people and 4 from Oracle, the record keeps all
+    4 of the people's, as written, and only as many of Oracle's as fit in 6;
+    fails_when=a person's option is dropped to make room for Oracle's, or a seventh is
+    stored; no_claim=a scripted fake stands in for the model."""
+    written = two_options() + [
+        {**two_options()[0], "key": "pilot", "label": "Pilot with two teams"},
+        {**two_options()[1], "key": "defer", "label": "Defer a quarter"},
+    ]
+    d = await propose(client, ctx, options=written)
+    resp = await client.post(
+        f"/v1/decisions/{d['number']}/options-job", headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 201, resp.text
+    job = resp.json()
+    fake = FakeClaude()
+    from oracle.llm import gateway
+
+    previous = gateway.set_transports(gateway.Transports(plan=fake, api_key=fake))
+    try:
+        await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
+        fake.script["decision_options"].append(
+            {
+                "options": [
+                    {"key": "oracle-a", "label": "Oracle A", "recommended": True},
+                    {"key": "oracle-b", "label": "Oracle B"},
+                    {"key": "oracle-c", "label": "Oracle C"},
+                    {"key": "oracle-d", "label": "Oracle D"},
+                ]
+            }
+        )
+        await worker.run_pending(ctx.tenant_id)
+    finally:
+        gateway.set_transports(previous)
+    got = (await client.get(f"/v1/decisions/{d['number']}", headers=ctx.as_("viewer"))).json()
+    assert [o["key"] for o in got["options"]] == [
+        "caps-first",
+        "together",
+        "pilot",
+        "defer",
+        "oracle-a",
+        "oracle-b",
+    ]
+    assert [o["label"] for o in got["options"][:4]] == [o["label"] for o in written]
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(LlmJob, uuid.UUID(job["id"]))
+        assert row.status == "succeeded"
+        assert row.output["options"] == ["oracle-a", "oracle-b"]
 
 
 async def test_list_filters(client, ctx):

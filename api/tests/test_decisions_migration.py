@@ -98,9 +98,10 @@ def test_chains_on_the_single_head():
 
 def test_upgrade_backfills_accepted_assumptions_and_downgrade_removes_it_all(scratch_db):
     """protects=upgrade adds one decided record per accepted risk or assumption (with its
-    review date), none for validate/reject; downgrade drops the tables, the synced decision
-    entities and the setting key, leaving the source rows; fails_when=a backfill is missing
-    or doubled, or anything survives the downgrade; no_claim=none beyond protects."""
+    review date and its locked decision entity d-<n>), none for validate/reject; downgrade
+    drops the tables, the synced decision entities and the setting key, leaving the source
+    rows; fails_when=a backfill or its entity is missing or doubled, or anything survives
+    the downgrade; no_claim=none beyond protects."""
     command.upgrade(_cfg(), PREVIOUS)
     t, u = _company()
     risk = _assumption(
@@ -125,15 +126,19 @@ def test_upgrade_backfills_accepted_assumptions_and_downgrade_removes_it_all(scr
     assert str(by_source[risk][6]) == "2026-12-01"
     assert by_source[assumed][6] is not None  # decided date + 90 days
     assert {r[7] for r in got} == {u}
-
-    # A synced decision entity and the setting, as the app would leave them.
-    _run(
-        "INSERT INTO entities (id, tenant_id, type, key, title, status, origin, attrs, locked) "
-        "VALUES (gen_random_uuid(), :t, 'decision', 'd-1', 'x', 'confirmed', 'user', "
-        "CAST(:a AS jsonb), true)",
-        t=t,
-        a=f'{{"decision_id": "{uuid.uuid4()}"}}',
+    # Each in the Baseline graph as live capture leaves it: its locked decision entity.
+    synced = _run(
+        "SELECT e.key, e.status, e.locked, e.attrs->>'decision_id', d.id, d.entity_ids, "
+        "(SELECT count(*) FROM entity_revisions r WHERE r.entity_id = e.id) "
+        "FROM decisions d JOIN entities e ON e.id = d.entity_id ORDER BY d.number"
     )
+    assert [(r[0], r[1], r[2]) for r in synced] == [
+        ("d-1", "confirmed", True),
+        ("d-2", "confirmed", True),
+    ]
+    assert all(r[3] == str(r[4]) and r[5] == [] and r[6] == 1 for r in synced)
+
+    # The setting, as the app would leave it.
     _run(
         "INSERT INTO entities (id, tenant_id, type, key, title, status, origin, attrs, locked) "
         "VALUES (gen_random_uuid(), :t, 'decision', 'non-goal', 'kept', 'confirmed', 'user', "

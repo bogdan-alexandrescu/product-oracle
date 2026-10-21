@@ -37,6 +37,12 @@ test("an approver decides a proposal from Needs me; the chip reads Decided and t
   await expect(row(page, "Ship usage caps before anomaly detection")).toBeVisible();
   await expect(row(page, "Price the team plan per seat")).toContainText("Review due");
   const before = await badgeCount(page);
+  // Oracle's words on screen: a company, never a workspace.
+  await row(page, "Price the team plan per seat").click();
+  const priced = page.getByTestId("decision-inspector").filter({ visible: true });
+  await expect(priced).toContainText("Per seat or per company?");
+  await expect(priced.getByTestId("decision-option").filter({ hasText: "Per company" })).toBeVisible();
+  await expect(priced).not.toContainText(/workspace/i);
 
   await row(page, "Ship usage caps before anomaly detection").click();
   const inspector = page.getByTestId("decision-inspector").filter({ visible: true });
@@ -92,6 +98,12 @@ test("a Review due row is reaffirmed in place in the Inbox: it moves to Done and
   const decisions = page.getByTestId("inbox-decisions");
   const due = decisions.locator("tr[data-row]").filter({ hasText: "Review due · D-4 Price the team plan per seat" });
   await expect(due).toBeVisible();
+  // The review date reads like the Inbox's other dates, never a raw ISO date.
+  const was = new Date();
+  was.setDate(was.getDate() - 2);
+  const shown = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(was);
+  await expect(due).toContainText(`Review was due ${shown}`);
+  await expect(due).not.toContainText(/\d{4}-\d{2}-\d{2}/);
   const before = await badgeCount(page);
   await due.getByRole("button", { name: /^Reaffirm/ }).click();
   await expect(page.getByTestId("inbox-decisions").locator("tr[data-row]").filter({ hasText: "D-4 Price the team plan per seat" })).toHaveCount(0);

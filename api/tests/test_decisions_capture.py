@@ -8,7 +8,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from oracle.auth.models import User
 from oracle.baseline.models import Entity
@@ -349,6 +349,65 @@ async def test_skipped_and_held_stops_are_not_recorded_until_confirmed(client, r
     [d] = await rows(tenant_id)
     assert d.decided_via == "swarmcloud_console" and d.chosen_option == "approve"
     assert str(d.source_id) == cp["id"]
+
+
+class _DecisionLockProbe:
+    """A runtime that checks, before each call it forwards to SwarmCloud, that the
+    company's D-number lock (oracle.decisions.service.next_number) is free: tried from
+    another connection, as tests/test_runs_round7.py's Probe tries the gate."""
+
+    def __init__(self, inner, tenant_id) -> None:
+        self.inner, self.tenant_id, self.held, self.calls = inner, tenant_id, [], []
+
+    def __getattr__(self, name):
+        import inspect
+
+        attr = getattr(self.inner, name)
+        if not inspect.iscoroutinefunction(attr):
+            return attr
+
+        async def call(*args, **kwargs):
+            self.calls.append(name)
+            async with tenant_session(self.tenant_id) as s:
+                free = await s.scalar(
+                    text("SELECT pg_try_advisory_xact_lock(hashtext('decisions:' || :t))"),
+                    {"t": str(self.tenant_id)},
+                )
+                if not free:
+                    self.held.append(name)
+                await s.rollback()
+            return await attr(*args, **kwargs)
+
+        return call
+
+
+async def test_a_console_answer_cancels_with_the_decision_lock_free(client):
+    """protects=a counted console approval taken by the tick records the checkpoint's
+    decision, and the cancel of the workflow's rest (and every other SwarmCloud call)
+    is made while the company's D-number lock is free, so a slow SwarmCloud never holds
+    up creating or deciding decisions in that company; fails_when=the lock is held across
+    a call; no_claim=the SwarmCloud fake stands in for SwarmCloud, a second connection's
+    try-lock stands in for a concurrent create."""
+    from tests.fixtures import seed_auth
+    from tests.test_adapter_v2 import _waiting, on
+
+    tenant_id, auth = await seed_auth()
+    swarm = on()
+    await as_user(tenant_id, "approver", "lead@example.com")  # an Oracle approver (W5)
+    run = await _waiting(client, auth, tenant_id, swarm)
+    cp = pending(run)
+    probe = _DecisionLockProbe(swarm.runtime(), tenant_id)
+    set_runtime(probe)
+    try:
+        swarm.console_answer("wf_1", "next_draft-review1", "MERGE", by="lead@example.com")
+        await tick(client, auth)
+    finally:
+        set_runtime(None)
+    assert swarm.workflows["wf_1"].state == "CANCELLED" and "cancel" in probe.calls
+    assert probe.held == []
+    [record] = await _source(tenant_id, "checkpoint")
+    assert str(record.source_id) == cp["id"]
+    assert record.decided_via == "swarmcloud_console" and record.chosen_option == "approve"
 
 
 async def test_checkpoint_records_raise_nothing_and_are_read_only(client, run_ctx):
