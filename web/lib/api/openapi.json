@@ -457,6 +457,57 @@
         }
       }
     },
+    "/v1/documents/{doc}/scope": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Document Scope",
+        "description": "The document's approved PRD scope (C6): the features and requirements its last\napproved feature set includes, excludes or defers. 404 when none is approved yet.",
+        "operationId": "get_document_scope",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrdScopeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/documents/{doc}/versions/{n}": {
       "get": {
         "tags": [
@@ -13287,6 +13338,58 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/scope": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Run Scope",
+        "description": "The run's latest PRD scope, any status (C6): what its feature set includes, excludes\nor defers, with the check. Proposed until the feature-set stop approves it. 404 while\nthe run has none.",
+        "operationId": "get_run_scope",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrdScopeOut"
                 }
               }
             }
@@ -38937,6 +39040,95 @@
         ],
         "title": "FeasibilityScopeIn"
       },
+      "FeatureSetCheck": {
+        "properties": {
+          "features": {
+            "type": "integer",
+            "title": "Features"
+          },
+          "requirements": {
+            "type": "integer",
+            "title": "Requirements"
+          },
+          "excluded": {
+            "type": "integer",
+            "title": "Excluded"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureSetProblem"
+            },
+            "type": "array",
+            "title": "Problems"
+          },
+          "flags": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Flags",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "features",
+          "requirements",
+          "excluded",
+          "problems"
+        ],
+        "title": "FeatureSetCheck",
+        "description": "The check of feature_set.yaml (C6): counts, every problem, and the advisory flags\nper feature key (serves_no_goal, low_confidence, linked_blocker, new_feature,\nduplicate_of_existing)."
+      },
+      "FeatureSetProblem": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "blocking": {
+            "type": "boolean",
+            "title": "Blocking",
+            "default": true
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature"
+          },
+          "requirement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "FeatureSetProblem",
+        "description": "One problem of feature_set.yaml or of the stored scope (oracle.runs.feature_set). A\nblocking one refuses Approve until it is fixed (call c3)."
+      },
       "FeatureTrace": {
         "properties": {
           "title": {
@@ -48126,6 +48318,100 @@
         "title": "PrdLinks",
         "description": "Cross-document links from a roadmap draft to its PRD version's sections."
       },
+      "PrdScopeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "segment_seq": {
+            "type": "integer",
+            "title": "Segment Seq"
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "approved",
+              "superseded"
+            ],
+            "title": "Status"
+          },
+          "check": {
+            "$ref": "#/components/schemas/FeatureSetCheck"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeFeatureOut"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "segment_seq",
+          "attempt",
+          "status",
+          "check",
+          "features",
+          "lock_version"
+        ],
+        "title": "PrdScopeOut",
+        "description": "A PRD scope (C6): the features and requirements a feature-set stop approves for one\nPRD, in file order. Later segments and the document's next drafts read the approved\none."
+      },
       "Prediction": {
         "properties": {
           "metric": {
@@ -55699,6 +55985,171 @@
         ],
         "title": "ScheduleBasisWithdraw"
       },
+      "ScopeFeatureOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "include",
+              "exclude",
+              "defer"
+            ],
+            "title": "Decision"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "person"
+            ],
+            "title": "Origin"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeGoal"
+            },
+            "type": "array",
+            "title": "Goals",
+            "default": []
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On",
+            "default": []
+          },
+          "blocker_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blocker Keys",
+            "default": []
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags",
+            "default": []
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeRequirementOut"
+            },
+            "type": "array",
+            "title": "Requirements",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title",
+          "decision",
+          "origin"
+        ],
+        "title": "ScopeFeatureOut"
+      },
+      "ScopeGoal": {
+        "properties": {
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "contribution": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contribution"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "title": "ScopeGoal"
+      },
       "ScopeOut": {
         "properties": {
           "name": {
@@ -55716,6 +56167,102 @@
           "description"
         ],
         "title": "ScopeOut"
+      },
+      "ScopeRequirementOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "acceptance": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Acceptance",
+            "default": []
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "cut"
+            ],
+            "title": "Decision"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "person"
+            ],
+            "title": "Origin"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title",
+          "decision",
+          "origin"
+        ],
+        "title": "ScopeRequirementOut"
       },
       "SearchHit": {
         "properties": {
@@ -57894,6 +58441,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/PreviousAttempt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feature_set_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureSetCheck"
               },
               {
                 "type": "null"

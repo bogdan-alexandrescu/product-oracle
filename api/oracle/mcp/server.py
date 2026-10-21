@@ -154,7 +154,7 @@ class Catalog:
             if name in self.curated:
                 c, ops = self.curated[name]
                 if c.offered_to(self.caller) is False:
-                    raise ToolError(f"Unknown tool: {name}")
+                    raise ToolError(f"{name} is for a run's own agents (a run token).")
                 return await c.run(self.app, self.caller, ops, args)
             op = self.generated.get(name)
             if op is None:

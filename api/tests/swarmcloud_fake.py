@@ -29,7 +29,7 @@ from typing import Any
 import httpx
 
 from oracle.swarm import SwarmCloudRuntime
-from oracle.swarm.fake import _default_content
+from oracle.swarm.fake import _default_content, document_of
 from oracle.swarm.swarmcloud import StaticBearer
 
 EGRESS = ("203.0.113.7", "203.0.113.8")
@@ -687,7 +687,7 @@ class FakeSwarmCloud:
             names = [n.strip() for n in m2[1].split(",")]
         elif m3 := _NOTES.search(prompt):
             names = [m3[1]]
-        s.files = {n: _default_content(n, segment, attempt) for n in names}
+        s.files = {n: _default_content(n, segment, attempt, document_of(prompt)) for n in names}
         s.files.update(self.step_files.get(s.step_id, {}))
         s.cost = AGENT_COST
         s.state = "SUCCEEDED"

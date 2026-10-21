@@ -301,6 +301,29 @@ async def _run_output(app, caller, ops, args) -> types.CallToolResult:
     return to_result(await call_operation(app, caller, ops["op"], call, check_scopes=False))
 
 
+async def _prd_scope(app, caller, ops, args) -> types.CallToolResult:
+    """The PRD scope the caller's run works within (C6): the run's own latest scope, else
+    (a feedback loop on a PRD) the document's approved one."""
+    if caller.kind != "run" or caller.run_id is None:
+        raise ToolError("get_prd_scope is for a run's own agents (a run token).")
+    resp = await call_operation(
+        app, caller, ops["run"], {"run_id": str(caller.run_id)}, check_scopes=False
+    )
+    if resp.status_code != 404:
+        return to_result(resp)
+    from oracle.runs.models import Run
+
+    async with tenant_session(caller.tenant_id) as s:
+        document_id = await s.scalar(select(Run.document_id).where(Run.id == caller.run_id))
+    if document_id is None:
+        return to_result(resp)
+    return to_result(
+        await call_operation(
+            app, caller, ops["document"], {"doc": str(document_id)}, check_scopes=False
+        )
+    )
+
+
 def _plain_file_name(name: object) -> bool:
     """A file name, not a path: no separators, no '..', no control characters, and not
     blank, '.' or '..' (however padded)."""
@@ -451,6 +474,24 @@ CURATED: tuple[Curated, ...] = (
         needs={"op": _by("GET", ("get_run_artifact",))},
         schema=lambda ops: copy.deepcopy(_RUN_OUTPUT_SCHEMA),
         run=_run_output,
+        own_run=True,
+    ),
+    Curated(
+        name="get_prd_scope",
+        description=(
+            "Read this run's latest PRD scope, in any status (proposed, approved or "
+            "superseded: see its status): the features and requirements the PRD includes "
+            "(with goals, dependencies and acceptance criteria), and those it excludes or "
+            "defers, with reasons, plus the check of the feature set. Write only for what an "
+            "approved scope includes. Falls back to the document's approved scope when the "
+            "run has none. No arguments."
+        ),
+        needs={
+            "run": _by("GET", ("get_run_scope",)),
+            "document": _by("GET", ("get_document_scope",)),
+        },
+        schema=lambda ops: {"type": "object", "properties": {}},
+        run=_prd_scope,
         own_run=True,
     ),
 )

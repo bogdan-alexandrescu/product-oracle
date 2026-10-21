@@ -11,6 +11,8 @@ import { AGENT_RUN } from "./baseline";
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
 type CheckpointOut = Schemas["CheckpointOut"];
+type FeatureSetCheck = Schemas["FeatureSetCheck"];
+type PrdScopeOut = Schemas["PrdScopeOut"];
 type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version">;
 type DocumentRow = Pick<Schemas["DocumentSummary"], "id" | "slug" | "title" | "kind" | "template" | "theme">;
 type VersionSource = Schemas["VersionSource"];
@@ -20,6 +22,8 @@ export interface RunsDb {
   runs: RunOut[];
   /** `${runId}|${seq}|${name}` -> content; a send-back's previous attempt: `${runId}|${seq}|${name}|${attempt}` */
   artifacts: Record<string, string>;
+  /** C6: run id -> its PRD scopes, oldest first (a mock db saved before C6 has none). */
+  scopes?: Record<string, PrdScopeOut[]>;
 }
 
 export interface RunsContext {
@@ -208,6 +212,7 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     can_retry_draft_import: false,
     items_check: null,
     previous_attempt: null,
+    feature_set_check: null,
     started_at: null,
     finished_at: null,
     error: null,
@@ -252,9 +257,14 @@ function reviewOf(r: RunOut, s: SegmentOut): CheckpointOut | undefined {
 
 /** As the API: approving is refused while the draft its segment left is not imported. */
 const NOT_IMPORTED = "the draft was not imported: retry import, or request changes";
+/** As the API (oracle.runs.feature_set.blocking_message): approving is refused while the feature set has blocking problems. */
+const blockingMessage = (n: number) => `The feature set has ${n} blocking problem${n === 1 ? "" : "s"}; send it back with Request changes`;
 function cannotApprove(c: CheckpointOut): string | null {
-  const imp = (c.payload as { import?: { error?: string | null } } | undefined)?.import;
-  return c.status === "pending" && imp?.error ? NOT_IMPORTED : null;
+  if (c.status !== "pending") return null;
+  const payload = c.payload as { import?: { error?: string | null }; feature_set_check?: FeatureSetCheck | null } | undefined;
+  if (payload?.import?.error) return NOT_IMPORTED;
+  const blocking = (payload?.feature_set_check?.problems ?? []).filter((p) => p.blocking !== false).length;
+  return blocking > 0 ? blockingMessage(blocking) : null;
 }
 
 /** The decided review of a finished run's segment whose draft was refused (owners retry it). */
@@ -311,7 +321,163 @@ function next(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   else finish(ctx, r, "succeeded");
 }
 
-function fileContent(name: string, segment: string, attempt: number): string {
+/** A feature set as feature_set.yaml lists it (C6, oracle.runs.feature_set). */
+interface FeatureSetSpec {
+  features: {
+    key: string;
+    title: string;
+    summary: string;
+    goals: { key: string; contribution: number }[];
+    depends_on: string[];
+    confidence: number;
+    requirements: { key: string; text: string; acceptance: string[] }[];
+  }[];
+  excluded: { key: string; reason: string }[];
+}
+
+/** The local runtime's feature set: clean, as the API's FakeRuntime leaves it. */
+const LOCAL_FEATURE_SET: FeatureSetSpec = {
+  features: [
+    {
+      key: "price-early",
+      title: "Show the price early",
+      summary: "Buyers see the full price before checkout",
+      goals: [{ key: "g1", contribution: 2 }],
+      depends_on: [],
+      confidence: 0.8,
+      requirements: [{ key: "price-early-total", text: "The cart shows the total with delivery before checkout", acceptance: ["Delivery cost is included"] }],
+    },
+    {
+      key: "guest-checkout",
+      title: "Guest checkout",
+      summary: "First-time buyers pay without an account",
+      goals: [{ key: "g1", contribution: 3 }],
+      depends_on: ["price-early"],
+      confidence: 0.7,
+      requirements: [{ key: "guest-checkout-email", text: "A guest gives an email address only", acceptance: ["No password is asked for"] }],
+    },
+    {
+      key: "order-tracking",
+      title: "Order tracking",
+      summary: "Buyers follow their order after paying",
+      goals: [{ key: "g1", contribution: 1 }],
+      depends_on: [],
+      confidence: 0.6,
+      requirements: [{ key: "order-tracking-link", text: "The confirmation email links to the order's status", acceptance: ["The link works without signing in"] }],
+    },
+  ],
+  excluded: [{ key: "gift-wrapping", reason: "Serves no confirmed goal" }],
+};
+
+const flow = (items: string[]) => `[${items.map((x) => JSON.stringify(x)).join(", ")}]`;
+
+/** feature_set.yaml (version 1) for a set. */
+function featureSetYaml(spec: FeatureSetSpec, document: string | null | undefined,segment: string, attempt: number): string {
+  const lines = [`# ${segment} (attempt ${attempt})`, "version: 1", `document: ${document ?? "example-prd"}`, "features:"];
+  for (const f of spec.features) {
+    lines.push(
+      `  - key: ${f.key}`,
+      `    title: ${f.title}`,
+      `    summary: ${f.summary}`,
+      `    goals: [${f.goals.map((g) => `{key: ${g.key}, contribution: ${g.contribution}}`).join(", ")}]`,
+      `    depends_on: ${flow(f.depends_on)}`,
+      `    confidence: ${f.confidence}`,
+      "    requirements:",
+    );
+    for (const r of f.requirements) lines.push(`      - key: ${r.key}`, `        text: ${r.text}`, `        acceptance: ${flow(r.acceptance)}`);
+  }
+  lines.push("excluded:");
+  for (const e of spec.excluded) lines.push(`  - key: ${e.key}`, `    reason: ${e.reason}`);
+  return `${lines.join("\n")}\n`;
+}
+
+/** The counts of a set's check, with the problems and flags given. */
+function checkOf(spec: FeatureSetSpec, problems: FeatureSetCheck["problems"] = [], flags: FeatureSetCheck["flags"] = {}): FeatureSetCheck {
+  return {
+    features: spec.features.length,
+    requirements: spec.features.reduce((n, f) => n + f.requirements.length, 0),
+    excluded: spec.excluded.length,
+    problems,
+    flags,
+  };
+}
+
+/** The proposed scope a feature-set segment's attempt writes (oracle.runs.feature_set.write_scope). */
+function proposeScope(ctx: Pick<RunsContext, "db" | "uuid">, r: RunOut, seq: number, attempt: number, spec: FeatureSetSpec, check: FeatureSetCheck) {
+  const scopes = ((ctx.db.scopes ??= {})[r.id] ??= []);
+  // Any other proposed scope of the run is superseded.
+  for (const x of scopes) if (x.status === "proposed") Object.assign(x, { status: "superseded", lock_version: x.lock_version + 1 });
+  const feature = (key: string): PrdScopeOut["features"][number] => ({
+    id: ctx.uuid(),
+    key,
+    title: key,
+    decision: "include",
+    decision_reason: null,
+    origin: "agent",
+    goals: [],
+    depends_on: [],
+    blocker_keys: [],
+    confidence: null,
+    flags: [],
+    entity_id: null,
+    proposal_id: null,
+    requirements: [],
+  });
+  scopes.push({
+    id: ctx.uuid(),
+    run_id: r.id,
+    document_id: r.document_id,
+    segment_seq: seq,
+    attempt,
+    status: "proposed",
+    check,
+    features: [
+      ...spec.features.map((f) => ({
+        ...feature(f.key),
+        title: f.title,
+        goals: f.goals.map((g) => ({ goal_id: null, key: g.key, contribution: g.contribution })),
+        depends_on: f.depends_on,
+        confidence: f.confidence,
+        flags: check.flags[f.key] ?? [],
+        requirements: f.requirements.map((q) => ({
+          id: ctx.uuid(),
+          key: q.key,
+          title: q.text,
+          text: q.text,
+          acceptance: q.acceptance,
+          decision: "keep" as const,
+          decision_reason: null,
+          origin: "agent" as const,
+          entity_id: null,
+          proposal_id: null,
+        })),
+      })),
+      ...spec.excluded.map((e) => ({ ...feature(e.key), decision: "exclude" as const, decision_reason: e.reason })),
+    ],
+    approved_by: null,
+    approved_at: null,
+    lock_version: 1,
+  });
+}
+
+/** As the API at the feature-set stop: approving approves the run's proposed scope (`by` null: the stop was off), requesting changes supersedes it. */
+function decideScope(ctx: Pick<RunsContext, "db" | "now">, r: RunOut, decision: "approved" | "changes_requested", by: string | null) {
+  const scope = (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === "proposed").pop();
+  if (!scope) return;
+  if (decision === "changes_requested") {
+    Object.assign(scope, { status: "superseded", lock_version: scope.lock_version + 1 });
+    return;
+  }
+  Object.assign(scope, { status: "approved", approved_by: by, approved_at: ctx.now(), lock_version: scope.lock_version + 1 });
+  // A document has one approved scope.
+  if (!scope.document_id) return;
+  for (const x of Object.values(ctx.db.scopes ?? {}).flat()) {
+    if (x !== scope && x.status === "approved" && x.document_id === scope.document_id) Object.assign(x, { status: "superseded", lock_version: x.lock_version + 1 });
+  }
+}
+
+function fileContent(name: string, segment: string, attempt: number, document?: string | null): string {
+  if (name === "feature_set.yaml") return featureSetYaml(LOCAL_FEATURE_SET, document, segment, attempt);
   if (name === "prd.md") return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nDraft ${attempt} from the local agent runtime.\n`;
   if (name === "roadmap.md") return `---\ntitle: Example product roadmap\nkind: roadmap\n---\n\n# Example product roadmap {#roadmap}\n\nDraft ${attempt} from the local agent runtime.\n`;
   if (name === "roadmap_items.yaml") {
@@ -324,20 +490,34 @@ function fileContent(name: string, segment: string, attempt: number): string {
 function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   const def = flowOf(r.flow).segments.find((x) => x.name === s.name)!;
   const attempt = s.attempts.length;
-  for (const name of def.outputs) ctx.db.artifacts[`${r.id}|${s.seq}|${name}`] = fileContent(name, s.name, attempt);
+  for (const name of def.outputs) ctx.db.artifacts[`${r.id}|${s.seq}|${name}`] = fileContent(name, s.name, attempt, r.document_slug);
   s.artifacts = [...def.outputs].sort();
   // The local runtime's one item cites PRD section "features", as the API's FakeRuntime does.
   if (def.outputs.includes("roadmap_items.yaml")) {
     const known = r.source ? ctx.sectionKeys(r.source.version_id) : [];
     s.items_check = localItemsCheck(known.includes("features"), r.source ?? null);
   }
+  // C6: the local runtime's feature set checks clean, and its attempt writes a proposed scope.
+  if (def.outputs.includes("feature_set.yaml")) {
+    s.feature_set_check = checkOf(LOCAL_FEATURE_SET);
+    proposeScope(ctx, r, s.seq, attempt, LOCAL_FEATURE_SET, s.feature_set_check);
+  }
   if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md")) && r.document_slug) {
     const imp = ctx.importDraft(r.document_slug, r);
     s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], summary: null };
     r.document_id = imp.document_id ?? null;
+    // As the API (fill_document): once the draft imports, the run's scopes name the document.
+    for (const x of ctx.db.scopes?.[r.id] ?? []) x.document_id ??= r.document_id;
   }
-  const payload = { segment_seq: s.seq, segment: s.name, attempt, artifacts: s.artifacts };
+  const payload = {
+    segment_seq: s.seq,
+    segment: s.name,
+    attempt,
+    artifacts: s.artifacts,
+    ...(s.feature_set_check ? { feature_set_check: s.feature_set_check } : {}),
+  };
   const on = r.knobs.checkpoints[def.checkpoint] ?? true;
+  if (!on && s.feature_set_check) decideScope(ctx, r, "approved", null);
   const cp: CheckpointOut = {
     id: ctx.uuid(),
     run_id: r.id,
@@ -530,6 +710,19 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (p[1] === "flows" && m === "GET") return json(200, FLOW_CATALOG);
   if (p[1] === "inbox" && m === "GET") return json(200, inbox(ctx));
   if (p[1] === "internal" && p[2] === "tick" && m === "POST") return json(200, tick(ctx));
+  // C6: the document's approved PRD scope, by id or slug (a new PRD's run names it by slug).
+  if (p[1] === "documents" && p.length === 4 && p[3] === "scope" && m === "GET") {
+    const doc = ctx.documents.find((d) => d.id === p[2] || d.slug === p[2]);
+    const ofDoc = (x: PrdScopeOut) => {
+      const run = ctx.db.runs.find((y) => y.id === x.run_id);
+      return (!!doc && (x.document_id === doc.id || run?.document_id === doc.id)) || run?.document_slug === p[2] || x.document_id === p[2];
+    };
+    const found = Object.values(ctx.db.scopes ?? {})
+      .flat()
+      .filter((x) => x.status === "approved" && ofDoc(x))
+      .sort((a, b) => (b.approved_at ?? "").localeCompare(a.approved_at ?? ""))[0];
+    return found ? json(200, found) : fail(404, `document ${p[2]} has no approved PRD scope`);
+  }
   if (p[1] !== "runs") return null;
 
   if (p.length === 2 && m === "GET") {
@@ -628,6 +821,11 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   };
 
   if (p.length === 3 && m === "GET") return done();
+  if (p.length === 4 && p[3] === "scope" && m === "GET") {
+    // C6: the run's latest scope, any status.
+    const latest = [...(ctx.db.scopes?.[r.id] ?? [])].sort((a, b) => a.segment_seq - b.segment_seq || a.attempt - b.attempt).pop();
+    return latest ? json(200, latest) : fail(404, `run ${r.id} has no PRD scope`);
+  }
   if (p.length === 3 && m === "PATCH") {
     if (r.status !== "draft") return fail(409, "only a draft run can be changed");
     const patch = await body<Schemas["RunPatch"]>();
@@ -765,6 +963,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const text = note?.trim() || null;
     if (decision === "changes_requested" && !text) return fail(422, "say what to change: a note is required to request changes");
     Object.assign(cp, { status: decision, note: text, decided_by: ctx.userId, decided_at: ctx.now() });
+    if (cp.kind === "feature_set" && (decision === "approved" || decision === "changes_requested")) decideScope(ctx, r, decision, ctx.userId);
     if (ctx.undelivered) {
       // Recorded, and final; SwarmCloud did not take it: the tick delivers it.
       const at = ctx.now();
@@ -816,63 +1015,74 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   return fail(404, "Route not found");
 }
 
+/**
+ * Seeded runs take fixed times, as they take stable ids: each step a minute after the
+ * last, from the run's own creation, so "Started" reads the same on every page load.
+ */
+function seedClock() {
+  let clock = 0;
+  return {
+    from: (iso: string) => void (clock = Date.parse(iso)),
+    now: () => new Date((clock += 60_000)).toISOString(),
+  };
+}
+
+/** A seeded draft run, estimated, added to `db`. */
+function seedRun(ctx: Omit<RunsContext, "db">, db: RunsDb, flow: RunOut["flow"], document: string, knobs: KnobsIn, created_at: string): RunOut {
+  const doc = ctx.documents.find((d) => d.slug === document);
+  const k = resolveKnobs(flow, knobs) as RunOut["knobs"];
+  const segments = segmentsFor(flow, k, ctx.uuid);
+  for (const s of segments) s.estimate_usd = segEstimate(s.roles, k.depth);
+  const estimate = round2(segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
+  const run: RunOut = {
+    id: ctx.uuid(),
+    flow,
+    flow_title: flowOf(flow).title,
+    status: "draft",
+    document_id: doc?.id ?? null,
+    document_slug: doc?.slug ?? document,
+    document_kind: doc?.kind ?? "prd",
+    source: null,
+    template: null,
+    theme: null,
+    estimate_usd: estimate,
+    spent_usd: 0,
+    created_by: ctx.userId,
+    created_at,
+    started_at: null,
+    finished_at: null,
+    waiting_on: null,
+    error: null,
+    can_retry: false,
+    can_stop_cancelling: false,
+    can_retry_lookup: false,
+    cancel_again: [],
+    can_dismiss_overrun: false,
+    can_retry_import: false,
+    knobs: k,
+    snapshot_id: ctx.uuid(),
+    snapshot_as_of: created_at,
+    approved_by: null,
+    approved_at: null,
+    needs_approval: estimate > THRESHOLD,
+    overrun_ceiling_usd: null,
+    runtime: "fake",
+    notes: FLOW_CATALOG.runtime_notes,
+    segments,
+    checkpoints: [],
+    token_read_only: false,
+    open_proposals: 0,
+  };
+  db.runs.push(run);
+  return run;
+}
+
 /** Seeded runs: one waiting at a checkpoint, one over the approval threshold, one paused on overrun, one done. */
 export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
-  const db: RunsDb = { runs: [], artifacts: {} };
-  // Seeded runs take fixed times, as they take stable ids: each step a minute after the
-  // last, from the run's own creation, so "Started" reads the same on every page load.
-  let clock = 0;
-  const from = (iso: string) => void (clock = Date.parse(iso));
-  const now = () => new Date((clock += 60_000)).toISOString();
+  const db: RunsDb = { runs: [], artifacts: {}, scopes: {} };
+  const { from, now } = seedClock();
   const full = { ...ctx, db, now };
-  const make = (flow: RunOut["flow"], document: string, knobs: KnobsIn, created_at: string): RunOut => {
-    const doc = ctx.documents.find((d) => d.slug === document);
-    const k = resolveKnobs(flow, knobs) as RunOut["knobs"];
-    const segments = segmentsFor(flow, k, ctx.uuid);
-    for (const s of segments) s.estimate_usd = segEstimate(s.roles, k.depth);
-    const estimate = round2(segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
-    const run: RunOut = {
-      id: ctx.uuid(),
-      flow,
-      flow_title: flowOf(flow).title,
-      status: "draft",
-      document_id: doc?.id ?? null,
-      document_slug: doc?.slug ?? document,
-      document_kind: doc?.kind ?? "prd",
-      source: null,
-      template: null,
-      theme: null,
-      estimate_usd: estimate,
-      spent_usd: 0,
-      created_by: ctx.userId,
-      created_at,
-      started_at: null,
-      finished_at: null,
-      waiting_on: null,
-      error: null,
-      can_retry: false,
-      can_stop_cancelling: false,
-      can_retry_lookup: false,
-      cancel_again: [],
-      can_dismiss_overrun: false,
-      can_retry_import: false,
-      knobs: k,
-      snapshot_id: ctx.uuid(),
-      snapshot_as_of: created_at,
-      approved_by: null,
-      approved_at: null,
-      needs_approval: estimate > THRESHOLD,
-      overrun_ceiling_usd: null,
-      runtime: "fake",
-      notes: FLOW_CATALOG.runtime_notes,
-      segments,
-      checkpoints: [],
-      token_read_only: false,
-      open_proposals: 0,
-    };
-    db.runs.push(run);
-    return run;
-  };
+  const make = (flow: RunOut["flow"], document: string, knobs: KnobsIn, created_at: string) => seedRun(ctx, db, flow, document, knobs, created_at);
 
   // Waiting for the baseline to be confirmed.
   const waiting = make("baseline_to_prd", "team-onboarding", {}, "2026-10-17T08:00:00Z");
@@ -924,6 +1134,154 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
 
   for (const r of db.runs) refresh(r);
   return db;
+}
+
+/** The run the "feature-set" scenario seeds (C6). */
+export const FEATURE_SET_RUN = "7a11c0de-0000-4000-8000-0000000000f5";
+
+/** Saved addresses at checkout: 6 features, 14 requirements, 2 left out; bulk edit depends on one left out. */
+const SAVED_ADDRESSES: FeatureSetSpec = {
+  features: [
+    {
+      key: "saved-addresses",
+      title: "Saved addresses",
+      summary: "Returning buyers pick a saved address at checkout",
+      goals: [{ key: "repeat-checkout", contribution: 3 }],
+      depends_on: ["address-lookup"],
+      confidence: 0.8,
+      requirements: [
+        { key: "saved-addresses-pick", text: "The buyer picks one of up to five saved addresses", acceptance: ["Five addresses at most", "The last used one is preselected"] },
+        { key: "saved-addresses-save", text: "A new address can be saved while paying", acceptance: ["Saving is opt-in"] },
+        { key: "saved-addresses-remove", text: "The buyer removes a saved address from their account", acceptance: ["Removed addresses are gone at the next checkout"] },
+      ],
+    },
+    {
+      key: "address-lookup",
+      title: "Address lookup",
+      summary: "The buyer finds their address from a postcode",
+      goals: [{ key: "repeat-checkout", contribution: 1 }, { key: "fewer-failed-deliveries", contribution: 2 }],
+      depends_on: [],
+      confidence: 0.75,
+      requirements: [
+        { key: "address-lookup-postcode", text: "A postcode lists the matching addresses", acceptance: ["Results show within a second"] },
+        { key: "address-lookup-manual", text: "The buyer can type the address by hand", acceptance: ["Manual entry is one tap away"] },
+        { key: "address-lookup-validate", text: "An address that cannot be delivered to is flagged before paying", acceptance: ["The flag says why"] },
+      ],
+    },
+    {
+      key: "checkout-address-step",
+      title: "One-step address at checkout",
+      summary: "Address and delivery choice on one screen",
+      goals: [{ key: "repeat-checkout", contribution: 2 }],
+      depends_on: ["saved-addresses"],
+      confidence: 0.6,
+      requirements: [
+        { key: "checkout-address-one-screen", text: "Address and delivery option are chosen on one screen", acceptance: ["No extra page load"] },
+        { key: "checkout-address-summary", text: "The chosen address shows in the order summary", acceptance: ["It can be changed from the summary"] },
+      ],
+    },
+    {
+      key: "address-edit",
+      title: "Edit a saved address",
+      summary: "Buyers correct a saved address without retyping it",
+      goals: [{ key: "fewer-failed-deliveries", contribution: 2 }],
+      depends_on: ["saved-addresses"],
+      confidence: 0.7,
+      requirements: [
+        { key: "address-edit-inline", text: "A saved address is edited in place at checkout", acceptance: ["Changes apply to this order"] },
+        { key: "address-edit-history", text: "Orders already placed keep the address they were sent to", acceptance: ["Past orders do not change"] },
+      ],
+    },
+    {
+      key: "bulk-address-edit",
+      title: "Bulk address edit",
+      summary: "Business buyers update many saved addresses at once",
+      goals: [],
+      depends_on: ["saved-addresses", "shared-address-book-export"],
+      confidence: 0.3,
+      requirements: [
+        { key: "bulk-address-edit-import", text: "A buyer uploads a file of address changes", acceptance: ["Up to 200 rows"] },
+        { key: "bulk-address-edit-review", text: "The buyer reviews each change before it is saved", acceptance: ["Rejected rows are listed"] },
+      ],
+    },
+    {
+      key: "address-labels",
+      title: "Address labels",
+      summary: "Buyers name saved addresses (Home, Work)",
+      goals: [{ key: "repeat-checkout", contribution: 1 }],
+      depends_on: ["saved-addresses"],
+      confidence: 0.65,
+      requirements: [
+        { key: "address-labels-name", text: "A saved address takes a short label", acceptance: ["Labels are 20 characters at most"] },
+        { key: "address-labels-show", text: "Labels show first in the address picker", acceptance: ["Unlabelled addresses show the street"] },
+      ],
+    },
+  ],
+  excluded: [
+    { key: "shared-address-book-export", reason: "Serves no confirmed goal; business accounts come later" },
+    { key: "address-sharing", reason: "Sharing addresses between buyers needs a privacy review first" },
+  ],
+};
+
+const SAVED_ADDRESSES_DESIGN = `# Saved addresses: design
+
+Returning buyers pick a saved address at checkout instead of typing it again.
+
+## Dependencies
+
+- Saved addresses read the postcode lookup for new entries.
+- The one-step address screen, editing and labels build on saved addresses.
+- Bulk address edit reads the shared address book export, which this set leaves out.
+
+## Open questions
+
+- How many saved addresses a buyer keeps (five proposed).
+`;
+
+/**
+ * The "feature-set" scenario (C6): a Baseline to PRD run for a new PRD (saved-addresses)
+ * waiting at its feature set, whose check found one blocking problem (bulk-address-edit
+ * depends on a feature left out) and two flags, so Approve is refused until it is sent back.
+ */
+export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut {
+  const { from, now } = seedClock();
+  // Its own runs list, so the ticks below move this run only.
+  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}) };
+  const full = { ...ctx, db: own, now };
+  const r = seedRun(ctx, own, "baseline_to_prd", "saved-addresses", {}, "2026-10-17T09:00:00Z");
+  r.id = FEATURE_SET_RUN;
+  from(r.created_at);
+  launch(full, r);
+  tick(full);
+  // The baseline was confirmed; the feature set ran once.
+  const [baseline, featureSet] = r.segments;
+  Object.assign(r.checkpoints[0], { status: "approved", decided_by: ctx.userId, decided_at: now() });
+  next(full, r, baseline);
+  tick(full);
+  const check = checkOf(
+    SAVED_ADDRESSES,
+    [
+      {
+        code: "depends_on_excluded",
+        blocking: true,
+        feature: "bulk-address-edit",
+        requirement: null,
+        message: "bulk-address-edit depends on shared-address-book-export, which is excluded",
+      },
+    ],
+    { "bulk-address-edit": ["serves_no_goal", "low_confidence"], "saved-addresses": ["new_feature"] },
+  );
+  featureSet.feature_set_check = check;
+  featureSet.artifacts = ["design.md", "feature_set.yaml"];
+  db.artifacts[`${r.id}|${featureSet.seq}|feature_set.yaml`] = featureSetYaml(SAVED_ADDRESSES, r.document_slug, featureSet.name, 1);
+  db.artifacts[`${r.id}|${featureSet.seq}|design.md`] = SAVED_ADDRESSES_DESIGN;
+  own.scopes![r.id] = [];
+  proposeScope(full, r, featureSet.seq, 1, SAVED_ADDRESSES, check);
+  const cp = r.checkpoints.find((c) => c.kind === "feature_set")!;
+  cp.payload = { ...cp.payload, feature_set_check: check };
+  refresh(r);
+  db.runs.push(r);
+  return r;
 }
 
 /**

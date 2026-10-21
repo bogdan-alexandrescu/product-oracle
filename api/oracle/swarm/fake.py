@@ -87,6 +87,17 @@ class _Record:
     cancelled: bool = False
 
 
+# The PRD a step's prompt names ("PRD document '<slug>'", oracle.runs.flows.step_prompt).
+_DOCUMENT = re.compile(r"document '([^']+)'")
+
+
+def document_of(prompt: str) -> str | None:
+    """The document slug a step's prompt names, if any: the default feature_set.yaml
+    names it, as the run's agents are told to."""
+    m = _DOCUMENT.search(prompt or "")
+    return m[1] if m else None
+
+
 def _spec_inputs(prompt: str) -> dict:
     m = _SPEC_INPUTS.search(prompt)
     if m is None:
@@ -159,12 +170,13 @@ def _default_files(
     # roadmap writes roadmap.md): the spec's outputs say which.
     if "roadmap.md" in outputs:
         names = tuple("roadmap.md" if n == "prd.md" else n for n in names)
+    document = document_of(prompt)
     for name in names:
-        files[name] = _default_content(name, segment, attempt)
+        files[name] = _default_content(name, segment, attempt, document)
     return files
 
 
-def _default_content(name: str, segment: str, attempt: int) -> str:
+def _default_content(name: str, segment: str, attempt: int, document: str | None = None) -> str:
     if name == "prd.md":
         return (
             "---\n"
@@ -222,10 +234,29 @@ def _default_content(name: str, segment: str, attempt: int) -> str:
             "    prd_section: features\n"
         )
     if name == "baseline.yaml":
-        # The baseline YAML format (oracle.baseline.yaml_io); nothing to propose.
+        # The baseline YAML format (oracle.baseline.yaml_io): the one feature the default
+        # feature_set.yaml includes.
         return (
             f"# {segment} (local agent runtime, attempt {attempt})\n"
-            "version: 1\nentities: []\nedges: []\n"
+            "version: 1\n"
+            "entities:\n"
+            "  - {type: feature, key: price-early, title: Show the price early}\n"
+            "edges: []\n"
+        )
+    if name == "feature_set.yaml":
+        # The C6 format (oracle.runs.feature_set): the baseline's one feature, serving no
+        # confirmed goal yet (flagged, not blocking).
+        return (
+            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            "version: 1\n" + (f"document: {document}\n" if document else "") + "features:\n"
+            "  - key: price-early\n"
+            "    title: Show the price early\n"
+            "    summary: Buyers see the full price before checkout\n"
+            "    goals: []\n"
+            "    depends_on: []\n"
+            "    confidence: 0.8\n"
+            "    requirements: []\n"
+            "excluded: []\n"
         )
     if name.endswith(".yaml"):
         return f"# {segment} (local agent runtime, attempt {attempt})\nitems: []\n"

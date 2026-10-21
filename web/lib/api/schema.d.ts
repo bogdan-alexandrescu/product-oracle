@@ -158,6 +158,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{doc}/scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Document Scope
+         * @description The document's approved PRD scope (C6): the features and requirements its last
+         *     approved feature set includes, excludes or defers. 404 when none is approved yet.
+         */
+        get: operations["get_document_scope"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{doc}/versions/{n}": {
         parameters: {
             query?: never;
@@ -3777,6 +3798,28 @@ export interface paths {
         };
         /** Get Run Artifact */
         get: operations["get_run_artifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Run Scope
+         * @description The run's latest PRD scope, any status (C6): what its feature set includes, excludes
+         *     or defers, with the check. Proposed until the feature-set stop approves it. 404 while
+         *     the run has none.
+         */
+        get: operations["get_run_scope"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11969,6 +12012,49 @@ export interface components {
             reason: string;
         };
         /**
+         * FeatureSetCheck
+         * @description The check of feature_set.yaml (C6): counts, every problem, and the advisory flags
+         *     per feature key (serves_no_goal, low_confidence, linked_blocker, new_feature,
+         *     duplicate_of_existing).
+         */
+        FeatureSetCheck: {
+            /** Features */
+            features: number;
+            /** Requirements */
+            requirements: number;
+            /** Excluded */
+            excluded: number;
+            /** Problems */
+            problems: components["schemas"]["FeatureSetProblem"][];
+            /**
+             * Flags
+             * @default {}
+             */
+            flags: {
+                [key: string]: string[];
+            };
+        };
+        /**
+         * FeatureSetProblem
+         * @description One problem of feature_set.yaml or of the stored scope (oracle.runs.feature_set). A
+         *     blocking one refuses Approve until it is fixed (call c3).
+         */
+        FeatureSetProblem: {
+            /** Code */
+            code: string;
+            /**
+             * Blocking
+             * @default true
+             */
+            blocking: boolean;
+            /** Feature */
+            feature?: string | null;
+            /** Requirement */
+            requirement?: string | null;
+            /** Message */
+            message: string;
+        };
+        /**
          * FeatureTrace
          * @description A feature the intake touches: from the baseline (``key``) or the brief.
          */
@@ -15437,6 +15523,44 @@ export interface components {
             unresolved: string[];
         };
         /**
+         * PrdScopeOut
+         * @description A PRD scope (C6): the features and requirements a feature-set stop approves for one
+         *     PRD, in file order. Later segments and the document's next drafts read the approved
+         *     one.
+         */
+        PrdScopeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Document Id */
+            document_id?: string | null;
+            /** Segment Seq */
+            segment_seq: number;
+            /** Attempt */
+            attempt: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "approved" | "superseded";
+            check: components["schemas"]["FeatureSetCheck"];
+            /** Features */
+            features: components["schemas"]["ScopeFeatureOut"][];
+            /** Approved By */
+            approved_by?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /**
          * Prediction
          * @description What the PRD predicted for the goal, in its own words and numbers.
          */
@@ -18070,12 +18194,111 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** ScopeFeatureOut */
+        ScopeFeatureOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "include" | "exclude" | "defer";
+            /** Decision Reason */
+            decision_reason?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "agent" | "person";
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["ScopeGoal"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Blocker Keys
+             * @default []
+             */
+            blocker_keys: string[];
+            /** Confidence */
+            confidence?: number | null;
+            /**
+             * Flags
+             * @default []
+             */
+            flags: string[];
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Proposal Id */
+            proposal_id?: string | null;
+            /**
+             * Requirements
+             * @default []
+             */
+            requirements: components["schemas"]["ScopeRequirementOut"][];
+        };
+        /** ScopeGoal */
+        ScopeGoal: {
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Key */
+            key: string;
+            /** Contribution */
+            contribution?: number | null;
+        };
         /** ScopeOut */
         ScopeOut: {
             /** Name */
             name: string;
             /** Description */
             description: string;
+        };
+        /** ScopeRequirementOut */
+        ScopeRequirementOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Text */
+            text?: string | null;
+            /**
+             * Acceptance
+             * @default []
+             */
+            acceptance: string[];
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "keep" | "cut";
+            /** Decision Reason */
+            decision_reason?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "agent" | "person";
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Proposal Id */
+            proposal_id?: string | null;
         };
         /** SearchHit */
         SearchHit: {
@@ -18843,6 +19066,7 @@ export interface components {
             can_retry_draft_import: boolean;
             items_check?: components["schemas"]["ItemsCheck"] | null;
             previous_attempt?: components["schemas"]["PreviousAttempt"] | null;
+            feature_set_check?: components["schemas"]["FeatureSetCheck"] | null;
             /** Started At */
             started_at?: string | null;
             /** Finished At */
@@ -21994,6 +22218,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportErrorResponse"];
+                };
+            };
+        };
+    };
+    get_document_scope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrdScopeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -29450,6 +29705,37 @@ export interface operations {
                 };
                 content: {
                     "text/plain": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_scope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrdScopeOut"];
                 };
             };
             /** @description Validation Error */

@@ -20,7 +20,7 @@ import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
-import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { enlargeRuns, routeRuns, seedFeatureSetRun, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
@@ -179,7 +179,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
  * next tick (recorded, the decide call answers 503; ./runs.ts); "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
- * ./roadmap-items.json).
+ * ./roadmap-items.json);
+ * "feature-set" as the default company plus a run waiting at a feature set with a blocking
+ * problem (C6, saved-addresses).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -429,6 +431,13 @@ function seedSuggestions(): Db {
       updated_at: created_at,
     });
   });
+  return db;
+}
+
+/** The default seed plus a run waiting at its feature set with a blocking problem (C6, ./runs.ts). */
+function seedFeatureSet(): Db {
+  const db = seed();
+  seeded("feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db)));
   return db;
 }
 
@@ -899,7 +908,9 @@ function load(): Db {
         ? seedSuggestions
         : scenario === "big-prd"
           ? seedBigPrd
-          : seed,
+          : scenario === "feature-set"
+            ? seedFeatureSet
+            : seed,
   );
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
