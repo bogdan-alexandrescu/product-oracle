@@ -26,8 +26,9 @@ FULL_SCOPES = ["oracle:read", "oracle:write"]
 
 
 def scopes_of(scope: str | None) -> list[str]:
-    """A personal token's or grant's scopes, sorted; no scope: every one."""
-    return sorted(set(scope.split())) if scope else list(FULL_SCOPES)
+    """A personal token's or grant's scopes, sorted. ``None`` (a token made before
+    scopes existed): every one; an empty scope: none (fail closed)."""
+    return list(FULL_SCOPES) if scope is None else sorted(set(scope.split()))
 
 
 def api_token_out(token: ApiToken, user: User | None) -> ApiTokenOut:

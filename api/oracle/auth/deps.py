@@ -44,8 +44,9 @@ class Principal:
     # The MCP OAuth grant (its refresh-token family) the call came through: approvals
     # record it, and revoking the grant voids them, as for API tokens (C2).
     grant_id: uuid.UUID | None = None
-    # An MCP client approved with oracle:read only: it reads as the user and changes
-    # nothing of theirs, including what the role check would allow (their own sources).
+    # An MCP client approved, or a personal API token created, without oracle:write: it
+    # reads as the user and changes nothing of theirs, including what the role check
+    # would allow (their own sources, preferences).
     read_only: bool = False
     # The run token of a call made for a run (below): re-read under the review gate.
     run_token_id: uuid.UUID | None = None
@@ -72,7 +73,8 @@ class Principal:
 _READ_METHODS = frozenset({"GET", "HEAD"})
 READ_ONLY = (
     "This credential can only read (oracle:read): it cannot add, change or delete anything. "
-    "Approve the MCP client with oracle:write to make changes"
+    "Approve the MCP client, or create the personal API token, with oracle:write to make "
+    "changes"
 )
 
 
@@ -131,12 +133,21 @@ async def _bearer_principal(raw: str) -> Principal:
         return Principal(
             tenant_id=token.tenant_id,
             kind="user",
-            # A personal token's scope caps the user's role (oracle:read alone: viewer).
+            # A personal token's scope caps the user's role (oracle:read alone: viewer)
+            # and, without oracle:write (an empty or unknown scope too), it changes
+            # nothing, as a read-only MCP client (AC1).
             role=service.token_role(user.role, token.scope),
             user_id=user.id,
             token_id=token.id,
+            read_only=service.token_read_only(token.scope),
         )
-    return Principal(tenant_id=token.tenant_id, kind="token", role=token.role, token_id=token.id)
+    return Principal(
+        tenant_id=token.tenant_id,
+        kind="token",
+        role=token.role,
+        token_id=token.id,
+        read_only=service.token_read_only(token.scope),
+    )
 
 
 # The MCP server's in-process REST call for a run token carries the run creator's session

@@ -1,5 +1,6 @@
 """Passwords (argon2), API tokens (sha256 of a random secret) and session cookies."""
 
+import asyncio
 import hashlib
 import secrets
 import uuid
@@ -87,6 +88,16 @@ def verify_password(password_hash: str, password: str) -> bool:
         return False
 
 
+# argon2 is slow and CPU-bound by design: off the event loop, every other request waits
+# on none of it.
+async def hash_password_async(password: str) -> str:
+    return await asyncio.to_thread(hash_password, password)
+
+
+async def verify_password_async(password_hash: str, password: str) -> bool:
+    return await asyncio.to_thread(verify_password, password_hash, password)
+
+
 def hash_token(raw: str) -> str:
     # Tokens are 256-bit random secrets, so a fast hash is enough (no brute force).
     return hashlib.sha256(raw.encode()).hexdigest()
@@ -94,7 +105,8 @@ def hash_token(raw: str) -> str:
 
 async def create_user(session: AsyncSession, email: str, password: str) -> User:
     check_email_allowed(email)
-    user = User(email=email.strip().lower(), password_hash=hash_password(password), role="owner")
+    password_hash = await hash_password_async(password)
+    user = User(email=email.strip().lower(), password_hash=password_hash, role="owner")
     session.add(user)
     await session.flush()
     return user
@@ -123,12 +135,17 @@ async def create_api_token(
     return token, raw
 
 
+def token_read_only(scope: str | None) -> bool:
+    """Whether a token with this scope may only read: anything but ``oracle:write``
+    present, an empty or unknown scope included (fail closed). ``None`` (a service token,
+    or a personal token made before scopes existed) is not capped."""
+    return scope is not None and "oracle:write" not in scope.split()
+
+
 def token_role(user_role: str, scope: str | None) -> Role:
     """The role a token for a user acts with: the user's role, capped by the token's
     scope as for MCP clients (no ``oracle:write``: viewer). No scope: the user's role."""
-    if scope is None or "oracle:write" in scope.split():
-        return user_role  # type: ignore[return-value]
-    return "viewer"
+    return "viewer" if token_read_only(scope) else user_role  # type: ignore[return-value]
 
 
 def token_expired(expires_at: datetime | None, now: datetime | None = None) -> bool:
@@ -149,11 +166,11 @@ async def authenticate_user(email: str, password: str) -> User | None:
     for user in active:
         # A disabled member's password no longer signs in; the same email may be an
         # active member of another company, so a disabled row never ends the search.
-        if verify_password(user.password_hash, password):
+        if await verify_password_async(user.password_hash, password):
             return user
     # Equalise timing when the email is unknown or only disabled.
     if not active:
-        verify_password(_DUMMY_HASH, password)
+        await verify_password_async(_DUMMY_HASH, password)
     return None
 
 
@@ -178,7 +195,7 @@ async def sign_in(email: str, password: str) -> tuple[User, str] | None:
         )
         if not may_sign_in(user) or (
             user.password_hash != found.password_hash
-            and not verify_password(user.password_hash, password)
+            and not await verify_password_async(user.password_hash, password)
         ):
             return None
         cookie = make_session_cookie(user)

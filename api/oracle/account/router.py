@@ -89,9 +89,12 @@ async def get_my_account(principal: Member, db: TenantDB) -> MyAccountOut:
 @router.post(
     "/password",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(same_origin)],
     responses={
         400: {"description": "The current password is not correct, or the new one is it"},
-        403: {"description": "Not from the signed-in browser (a token or an MCP client)"},
+        403: {
+            "description": "Not from the signed-in browser (a token, an MCP client or another site)"
+        },
         409: {"description": "You sign in with Google only: no password to change"},
         429: {"description": "Too many wrong attempts; see Retry-After"},
     },
@@ -102,9 +105,10 @@ async def change_password(
     """Change your password (the current one, then a new, different one of at least
     ``password_min_length`` characters), from the signed-in browser only (a token or an
     MCP client is refused). Every other session ends and this browser gets a fresh one;
-    your personal API tokens, the MCP clients you authorized and the run tokens of your
-    runs still going are revoked. Five wrong current passwords in 15 minutes lock changes
-    for the rest of the window."""
+    your personal API tokens, the MCP clients you authorized (and their unexchanged
+    authorization codes) and the current run tokens of your runs still going are revoked
+    (those runs keep running; their next segment is given a new run token). Five wrong
+    current passwords in 15 minutes lock changes for the rest of the window."""
     user, _ = await _call(
         service.change_password(db, principal, body.current_password, body.new_password)
     )
@@ -133,9 +137,11 @@ async def sign_out_everywhere(
 ) -> SignedOutEverywhere:
     """Sign out of every device, from the signed-in browser only: every session you
     signed in with ends, this one too; your personal API tokens, every MCP client you
-    authorized (access and refresh tokens) and the run tokens of the runs you started
-    that are still going are revoked (the runs go on, their agents can no longer call
-    Oracle). With Google sign-in, Google signs the browser in again on its next visit."""
+    authorized (access and refresh tokens, and authorization codes not yet exchanged)
+    and the current run tokens of the runs you started that are still going are
+    revoked. Sign-out ends today's tokens and grants, not the runs: a run started
+    earlier keeps running, and its next segment is given a new run token. With Google
+    sign-in, Google signs the browser in again on its next visit."""
     at, revoked = await _call(service.sign_out_everywhere(db, principal))
     await db.commit()
     response.delete_cookie(get_settings().session_cookie_name, path="/")
@@ -157,7 +163,12 @@ async def list_my_tokens(principal: Member, db: TenantDB) -> list[ApiTokenOut]:
     "/tokens",
     response_model=PersonalTokenCreated,
     status_code=status.HTTP_201_CREATED,
-    responses={403: {"description": "Not from the signed-in browser (a token or an MCP client)"}},
+    dependencies=[Depends(same_origin)],
+    responses={
+        403: {
+            "description": "Not from the signed-in browser (a token, an MCP client or another site)"
+        }
+    },
 )
 async def create_personal_token(
     body: PersonalTokenCreate, principal: Member, db: TenantDB

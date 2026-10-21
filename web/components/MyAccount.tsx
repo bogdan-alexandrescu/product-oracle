@@ -42,7 +42,7 @@ const LIFETIMES: { value: Lifetime; label: string }[] = [
 ];
 const lifetimeDays = (l: Lifetime) => (l === "never" ? null : (Number(l) as 30 | 90 | 365));
 /** What a password change and Sign out everywhere also revoke (AC1). */
-const REVOKES_TOO = "your personal API tokens, every MCP client you authorized and the tokens of runs you started that are still going (the runs go on)";
+const REVOKES_TOO = "your personal API tokens, every MCP client you authorized and the current tokens of runs you started that are still going (those runs keep running; their next segment gets a new token)";
 
 /** My account: every signed-in member's own sign-in, password, personal tokens, MCP clients. */
 export function MyAccount() {
@@ -148,7 +148,10 @@ export function MyAccount() {
                 ? "Your MCP client loses its access and refresh tokens."
                 : `Your ${liveClients ?? 0} MCP clients lose their access and refresh tokens.`,
           },
-          { icon: "runs", text: "Runs you started that are still going lose their tokens; the runs go on." },
+          {
+            icon: "runs",
+            text: "Runs you started that are still going lose their current tokens; they keep running, and their next segment gets a new token.",
+          },
           ...(account?.sign_in_methods.includes("google")
             ? [{ icon: "user" as const, text: "Google sign-in can sign a browser in again on its next visit." }]
             : []),

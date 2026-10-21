@@ -8,12 +8,12 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.models import ApiToken, User
-from oracle.auth.service import create_api_token, hash_password, verify_password
+from oracle.auth.service import create_api_token, hash_password_async, verify_password_async
 from oracle.members import tokens
 from oracle.members.service import MemberError, _gate, revoke_api_token
 from oracle.models import AuditEvent
@@ -37,6 +37,17 @@ async def _user(session: AsyncSession, principal: "Principal", *, lock: bool = F
     if user is None:  # the dependency resolved them a moment ago
         raise MemberError("not_found", "Your account was not found")
     return user
+
+
+async def _attempt_lock(session: AsyncSession, user: User) -> None:
+    """A per-member, transaction-scoped advisory lock over a password change: the
+    failures are counted and a failure recorded under it, so attempts racing each other
+    never all see the same empty window. Taken before the review gate (never after), and
+    released when the attempt commits or rolls back."""
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"),
+        {"k": f"oracle-password-change:{user.id}"},
+    )
 
 
 async def _failures(session: AsyncSession, user: User, now: datetime) -> list[datetime]:
@@ -99,8 +110,11 @@ async def _end_credentials(
 ) -> dict[str, list[str]]:
     """Revoke every credential that acts for ``user`` besides a browser session (AC1):
     their personal API tokens (approvals given through them lapse), every MCP client they
-    authorized (the whole family, refresh tokens included) and the run tokens of the runs
-    they started that are still going. The caller holds the gate."""
+    authorized (the whole family, refresh tokens included, and codes not yet exchanged)
+    and the current run tokens of the runs they started that are still going (the runs
+    keep running; their next segment is given a new run token). The caller holds the
+    gate."""
+    from oracle.mcp.oauth.models import OAuthCode
     from oracle.runs.models import Run
     from oracle.runs.service import FINAL
     from oracle.runtokens import RunToken, revoke_run_tokens
@@ -129,6 +143,18 @@ async def _end_credentials(
     )
     for run_id in runs:
         await revoke_run_tokens(session, run_id)
+    # Authorization codes not yet exchanged would start a new grant: void them (the
+    # exchange also refuses a code older than ``sessions_valid_after``).
+    now = datetime.now(UTC)
+    await session.execute(
+        update(OAuthCode)
+        .where(
+            OAuthCode.user_id == user.id,
+            OAuthCode.used_at.is_(None),
+            OAuthCode.expires_at > now,
+        )
+        .values(expires_at=now)
+    )
     await session.flush()
     return {
         "api_tokens": [str(i) for i in api_tokens],
@@ -147,21 +173,23 @@ async def change_password(
     every other credential of theirs is revoked (:func:`_end_credentials`, AC1); the
     caller gives this browser a fresh session.
 
-    The (slow) password check runs before the gate; under it the row is locked and must
-    still hold the hash that was checked, so two changes cannot both win."""
+    The (slow) password check runs in a worker thread, under the member's attempt lock
+    (:func:`_attempt_lock`) and before the gate; under the gate the row is locked and
+    must still hold the hash that was checked, so two changes cannot both win."""
     browser_only(principal, "Changing your password")
     user = await _user(session, principal)
     if not user.password_sign_in:
         raise MemberError(
             "conflict", "You sign in with Google; there is no Oracle password to change"
         )
+    await _attempt_lock(session, user)
     now = datetime.now(UTC)
     failures = await _failures(session, user, now)
     if len(failures) >= PASSWORD_ATTEMPTS:
         wait = failures[-PASSWORD_ATTEMPTS] + PASSWORD_WINDOW - now
         raise RateLimited(max(1, int(wait.total_seconds()) + 1))
     checked = user.password_hash
-    if not verify_password(checked, current):
+    if not await verify_password_async(checked, current):
         await audit.record(session, principal, "password.change_failed", "user", user.id)
         # Kept although the request fails: it counts against the limit.
         await session.commit()
@@ -177,7 +205,7 @@ async def change_password(
     )
     if user is None or user.password_hash != checked:
         raise MemberError("conflict", "Your password was changed meanwhile; sign in again")
-    user.password_hash = hash_password(new)
+    user.password_hash = await hash_password_async(new)
     # Read after the row lock: a sign-in holding it stamped its cookie before this.
     user.sessions_valid_after = datetime.now(UTC)
     await session.flush()

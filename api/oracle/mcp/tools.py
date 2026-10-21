@@ -18,6 +18,7 @@ import httpx
 import mcp_types as types
 from fastapi import FastAPI
 
+from oracle.auth.deps import READ_ONLY
 from oracle.mcp import scopes
 from oracle.mcp.auth import McpCaller
 
@@ -321,6 +322,8 @@ async def call_operation(
     if check_scopes and not scopes.allowed(caller.scopes, op.method, op.path):
         reason = f"needs the {needed} scope" if needed else "is not available to run tokens"
         raise ToolError(f"Refused: {op.method} {op.path} {reason}.")
+    if caller.read_only and op.method.upper() not in ("GET", "HEAD"):
+        raise ToolError(f"Refused (HTTP 403): {op.method} {op.path}: {READ_ONLY}.")
     if caller.kind == "run" and caller.run_id is not None and _writes(op.method, needed):
         # W5: decided now, just before the write, not when the request started: the
         # run's token is read-only while a checkpoint wait is open in SwarmCloud.

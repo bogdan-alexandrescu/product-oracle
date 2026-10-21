@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle.audit import record
 from oracle.auth.jwks import KeyCache
 from oracle.auth.models import User
-from oracle.auth.service import hash_password, reserved_email
+from oracle.auth.service import hash_password_async, reserved_email
 from oracle.config import get_settings
 from oracle.members import service as members
 from oracle.models import Tenant
@@ -133,7 +133,7 @@ async def user_for_claims(claims: dict[str, Any]) -> User | None:
         # No password sign-in for these users: the hash is of a secret nobody keeps.
         user = User(
             email=email,
-            password_hash=hash_password(secrets.token_urlsafe(32)),
+            password_hash=await hash_password_async(secrets.token_urlsafe(32)),
             role=role,
             password_sign_in=False,
             last_sign_in_at=datetime.now(UTC),
