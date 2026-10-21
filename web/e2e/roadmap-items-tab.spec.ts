@@ -26,9 +26,11 @@ const row = (page: Page, key: string) => page.locator(`[data-testid="roadmap-ite
 const inspector = (page: Page) => visible(page, "roadmap-item-inspector");
 const attention = (page: Page) => visible(page, "items-filter").getByRole("button", { name: /^Needs attention/ });
 
-/** The cell of `row` under the column headed `header`. */
+/** The cell of `row` under the column headed `header` (read with innerText: a phone-only label is hidden). */
 async function cell(page: Page, r: Locator, header: string): Promise<Locator> {
-  const headers = await visible(page, "roadmap-items-table").locator("thead th").allInnerTexts();
+  const table = visible(page, "roadmap-items-table");
+  await expect(table.locator("thead th").first()).toBeAttached();
+  const headers = await table.locator("thead th").allInnerTexts();
   const i = headers.findIndex((h) => h.trim() === header);
   expect(i, `column ${header}`).toBeGreaterThanOrEqual(0);
   return r.locator("td").nth(i);
@@ -100,17 +102,17 @@ test("Items lists the version's items grouped by horizon, one line each", async 
   await expect(await cell(page, behaviour, "Milestone")).toContainText("Beta");
   await expect(await cell(page, behaviour, "Milestone")).toContainText("2026-11-30");
   await expect((await cell(page, behaviour, "Milestone")).locator("s")).toHaveCount(0);
-  await expect(await cell(page, behaviour, "Conf.")).toHaveText("High");
-  await expect(await cell(page, behaviour, "Depends on")).toHaveText("—");
+  await expect(await cell(page, behaviour, "Conf.")).toHaveText("High", { useInnerText: true });
+  await expect(await cell(page, behaviour, "Depends on")).toHaveText("—", { useInnerText: true });
   await expect((await cell(page, behaviour, "PRD")).getByRole("link")).toHaveAttribute("href", "/documents/usage-alerts/v/1#behaviour");
   await expect((await cell(page, behaviour, "PRD")).getByRole("link")).toHaveText("§ 1. Behaviour");
   await expect(await cell(page, behaviour, "State")).toHaveText("");
 
   const metrics = row(page, "item-metrics");
   await expect(await cell(page, metrics, "Horizon")).toHaveText("Next");
-  await expect(await cell(page, metrics, "Conf.")).toHaveText("Low");
+  await expect(await cell(page, metrics, "Conf.")).toHaveText("Low", { useInnerText: true });
   const deps = await cell(page, metrics, "Depends on");
-  await expect(deps).toHaveText("1");
+  await expect(deps).toHaveText("1", { useInnerText: true });
   await expect(deps.locator("[title]")).toHaveAttribute("title", "Behaviour");
   await expect(await cell(page, metrics, "State")).toHaveText("May be stale");
 

@@ -25,6 +25,8 @@ import { RoleNote } from "@/components/RoleNote";
 import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { SectionView } from "@/components/SectionView";
 import { BuildDraftButton } from "@/components/NextDraft";
+import { RoadmapItemsPane } from "@/components/roadmap/RoadmapItemsPane";
+import { VersionTabs } from "@/components/roadmap/VersionTabs";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -89,9 +91,14 @@ function readSelection(): Selection | null {
  * switcher above it below that, a Sections / Review bar with sheets on a phone, and a
  * three-tab review panel (Feedback, Sources, History). The open section is kept in the URL
  * hash (#key; the older #s-key also opens it).
+ *
+ * A roadmap version has two page tabs under its header (E2): Document (this view) and Items
+ * (`pane="items"`, its items as rows). The header, toolbar, warnings and Approve are the same
+ * on both, so approval and date marks never differ between tabs.
  */
-export function VersionView({ doc, n }: { doc: string; n: number }) {
+export function VersionView({ doc, n, pane = "document" }: { doc: string; n: number; pane?: "document" | "items" | "roadmap" }) {
   const router = useRouter();
+  const onDocument = pane === "document";
   const { me, role } = useMe();
   // Viewers read; commenters also comment; approvers also set verdicts and approve.
   const canComment = hasRole(role, "commenter");
@@ -197,6 +204,24 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
 
   const version = verQ.data;
   const document_ = docQ.data;
+  const isRoadmap = document_?.kind === "roadmap";
+  // The Items tab's count (E2): the version's items, brief view.
+  const itemCountQ = useQuery(`roadmap-item-count|${doc}|${n}|${isRoadmap}`, () =>
+    isRoadmap
+      ? unwrap(api.GET("/v1/roadmaps/{doc}/items", { params: { path: { doc }, query: { version: n, view: "brief" } } }))
+          .then((r) => r.items.length)
+          .catch(() => null)
+      : Promise.resolve(null),
+  );
+  // The pane's own URL for another version: the switcher keeps the tab.
+  const paneHref = useCallback(
+    (v: number) => (pane === "items" && isRoadmap ? `/documents/${doc}/v/${v}/items` : `/documents/${doc}/v/${v}`),
+    [pane, isRoadmap, doc],
+  );
+  // Only a roadmap has an Items tab: a PRD's /items opens the version.
+  useEffect(() => {
+    if (pane === "items" && document_ && document_.kind !== "roadmap") router.replace(`/documents/${doc}/v/${n}`);
+  }, [pane, document_, doc, n, router]);
   const versions = useMemo(() => document_?.versions ?? [], [document_]);
   const readOnly = !!version?.approved_at;
   const latest = versions.at(-1)?.number;
@@ -478,6 +503,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
       // Not inside a dialog (the sheets, the build sheet, the switcher): its keys are its own.
       if ((e.target as HTMLElement | null)?.closest?.("[role=dialog]")) return;
+      // The Items tab: only { } (versions, keeping the tab).
+      if (!onDocument && e.key !== "{" && e.key !== "}") return;
       if (e.key === "/") {
         e.preventDefault();
         focusFilter();
@@ -497,7 +524,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       } else if ((e.key === "{" || e.key === "}") && versions.length) {
         const i = versions.findIndex((v) => v.number === n);
         const target = versions[i + (e.key === "}" ? 1 : -1)];
-        if (target) router.push(`/documents/${doc}/v/${target.number}`);
+        if (target) router.push(paneHref(target.number));
       } else if (e.key === "Escape") {
         setSelection(null);
         setActiveId(null);
@@ -505,7 +532,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selection, openComposer, versions, n, doc, router, hasBrief, view, switchView, shownSections, openIdx, select, focusFilter]);
+  }, [selection, openComposer, versions, n, router, hasBrief, view, switchView, shownSections, openIdx, select, focusFilter, onDocument, paneHref]);
 
   // Every in-page link to a section of this version (feedback, reports, banners, the
   // document's own #links) opens it here: one handler for both #key and #s-key.
@@ -759,7 +786,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   );
 
   return (
-    <div ref={rootRef} onClickCapture={onLinkCapture} className="max-[639px]:pb-16">
+    <div ref={rootRef} onClickCapture={onLinkCapture} className={onDocument ? "max-[639px]:pb-16" : undefined}>
       <Page>
         <PageHeader
           testId="doc-header"
@@ -826,10 +853,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             </>
           }
         />
+        <VersionTabs doc={doc} n={n} kind={document_?.kind} active={pane} count={itemCountQ.data ?? undefined} />
 
         <div className="mb-3 flex flex-wrap items-center gap-2 max-[600px]:gap-y-2.5">
-          {versions.length > 0 && <VersionSwitcher doc={doc} versions={versions} current={n} variant="segments" />}
-          {hasBrief && (
+          {versions.length > 0 && <VersionSwitcher doc={doc} versions={versions} current={n} variant="segments" hrefFor={paneHref} />}
+          {onDocument && hasBrief && (
             <SegmentedControl<DocumentView>
               label="Document view"
               value={view}
@@ -865,7 +893,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
           {document_?.kind === "prd" && <BuildRoadmapButton prd={document_} size="sm" />}
         </div>
 
-        {hasBrief && (
+        {onDocument && hasBrief && (
           <p
             data-testid="view-note"
             className="mb-3 flex flex-wrap items-center gap-1.5 text-sm text-text2"
@@ -903,7 +931,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             {latest != null && n !== latest && (
               <p role="status" className="flex flex-wrap items-center gap-x-2 rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink">
                 You are viewing an earlier version.
-                <Link href={`/documents/${doc}/v/${latest}`} className="font-semibold underline underline-offset-2">
+                <Link href={paneHref(latest)} className="font-semibold underline underline-offset-2">
                   Go to v{latest} (latest)
                 </Link>
               </p>
@@ -918,7 +946,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                     href={sectionHref(doc, n, k)}
                     data-own-nav
                     onClick={(e) => {
-                      if (!plainClick(e)) return;
+                      // On the Items tab the link opens the section on the Document tab.
+                      if (!plainClick(e) || !onDocument) return;
                       e.preventDefault();
                       if (!shownSections.some((s) => s.section_key === k)) setViewOverride("full");
                       select(k);
@@ -938,8 +967,15 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
           </div>
         )}
 
+        {pane === "items" && isRoadmap && (
+          <RoadmapItemsPane doc={doc} n={n} sections={sections} canDecide={canDecide} />
+        )}
+        {pane === "items" && !document_ && !error && <Loading label="Loading version…" />}
+        {pane === "items" && error && <ErrorNote>{error}</ErrorNote>}
+
         {/* The outline rail (>= 1280 px), the section with the switcher above it below that,
             and the review panel; each column sticks and scrolls inside itself. */}
+        {onDocument && (
         <div
           data-testid="prd-layout"
           className={`grid items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3 ${
@@ -1034,10 +1070,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             </div>
           </div>
         </div>
+        )}
       </Page>
 
       {/* Phone: Sections and Review, each opening a sheet. */}
-      {version && (
+      {onDocument && version && (
         <div
           data-testid="phone-bar"
           className="fixed inset-x-0 bottom-0 z-30 hidden grid-cols-2 gap-2 border-t border-line bg-surface px-3 pt-1.5 pb-[calc(6px+env(safe-area-inset-bottom))] shadow-tip max-[639px]:grid max-[600px]:bottom-[68px] max-[600px]:pb-1.5"
