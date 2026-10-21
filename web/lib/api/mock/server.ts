@@ -989,6 +989,7 @@ function addComment(
     comment_id: c.id,
     section_key: body.section_key,
     summary: truncate(body.body),
+    author_id: c.author_id,
     anchor: body.anchor,
     verdict: null,
     status: "open",
@@ -1047,6 +1048,7 @@ function addReview(
       summary: truncate(
         body.note?.trim() || `${body.verdict === "rejected" ? "Rejected" : "Changes requested on"} ${heading}`,
       ),
+      author_id: r.reviewer_id,
       anchor: null,
       verdict: body.verdict,
       status: "open",
@@ -1466,7 +1468,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const need: Role | null =
     m === "GET"
       ? null
-      : p[1] === "comments" || (p[5] === "comments" && m === "POST")
+      : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST")
         ? "commenter"
         : "approver";
   if (need && !atLeast(me.role, need)) return forbidden(need);
@@ -1627,6 +1629,36 @@ async function route(db: Db, req: Request): Promise<Response> {
         .sort((a, b) => a.created_at.localeCompare(b.created_at))
         .map((c) => commentOut(db, c)),
     );
+  }
+  // D13: feedback on the whole draft, a "general" item with no section.
+  if (sub === "feedback" && m === "POST") {
+    const input = await body<Schemas["GeneralFeedbackCreate"]>();
+    const text = (input.body ?? "").trim();
+    if (!text || input.body.length > 4000) return json(422, { detail: "Feedback needs 1 to 4,000 characters" });
+    const at = now();
+    const f: FeedbackRow = {
+      id: uuid(),
+      document_id: doc.id,
+      raised_on_version: v.number,
+      kind: "general",
+      comment_id: null,
+      section_review_id: null,
+      section_key: null,
+      summary: input.body,
+      author_id: me.id,
+      anchor: null,
+      verdict: null,
+      status: "open",
+      addressed_in_version: null,
+      resolution_note: null,
+      severity: input.severity ?? null,
+      created_at: at,
+      updated_at: at,
+    };
+    db.feedback.push(f);
+    touch(db, doc.id);
+    onFeedback(llm, doc.id, v.number);
+    return json(201, withSuggestion(db.llm, f));
   }
   if (sub === "sections" && p[7] === "review" && m === "PUT") {
     if (!v.sections.some((s) => s.section_key === p[6])) return notFound("Section");

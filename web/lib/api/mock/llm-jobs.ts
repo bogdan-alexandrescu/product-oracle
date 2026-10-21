@@ -175,6 +175,18 @@ function runReview(ctx: LlmContext, job: Job, doc: Doc, v: Version) {
     const section = v.sections.find((s) => s.section_key === f.section_key);
     const question = f.summary.trim().endsWith("?");
     const twin = f.section_key ? firstBySection.get(f.section_key) : undefined;
+    // D13: a remark on the whole draft gets an answer, not one section's new text.
+    if (!f.section_key) {
+      ctx.db.suggestions.push(
+        suggestion(ctx, f, job, {
+          classification: question ? "question" : "change_request",
+          kind: "answer",
+          text: "This is about the whole draft: the next version will work it into the sections it touches.",
+          rationale: "Feedback on the whole draft, not one section.",
+        }),
+      );
+      continue;
+    }
     if (twin && !question) {
       ctx.db.suggestions.push(
         suggestion(ctx, f, job, {
