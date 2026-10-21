@@ -64,11 +64,15 @@ snapshot: 2026-10-16T14:00Z          # optional source snapshot label
 brief: [summary, goal-trace]         # optional: the brief layer's section ids (O1f)
 citations:
   - id: c1
-    source: slack                    # slack | notion | gdocs | github | fireflies | upload | web
+    source: slack                    # slack | notion | gdocs | github | fireflies | upload | web | oracle
     ref: https://example.slack.com/archives/C123/p1700000000
     title: "#product thread on drop-off"
     excerpt: "Most users abandon at the shipping step"
     retrieved_at: 2026-10-16T13:10Z
+    item: 3f1c2a4e-...               # optional: the source item read
+    confidence: 0.75                 # optional: a number from 0 to 1, or null
+    confidence_note: "two sources agree; fresh"   # optional: how it was reached, or why none
+    low_confidence: false            # optional: under the company's low threshold
 resolutions:                         # optional: how this version handled earlier feedback
   - feedback_id: 0b8c...             # id from the feedback package
     status: addressed                # addressed | declined
@@ -89,6 +93,12 @@ Rules:
   version and stable across versions (that is what makes diffs and locks work).
 - Inline citations are `[c:<id>]`; every id used must exist in `citations`, and
   unknown ids fail the import with a 422 listing them.
+- The citation contract agents read (`oracle.docs.schemas.citation_contract`, in the draft
+  prompts and `push_draft`): `source` is one of the kinds above (`oracle` for Oracle's own
+  baseline, its `ref` the item's kind and key, e.g. `baseline decision <key>`), and
+  `confidence` is a number from 0 to 1 or null (migration `0019_citation_confidence`
+  stores it under the same check). Any other source or confidence fails the import:
+  "citation #1 (c1) is invalid: confidence must be a number from 0 to 1".
 - Same content hash as an existing version: return that version (200), no duplicate.
 - `resolutions` are applied on import: each referenced feedback item gets its status,
   note and `addressed_in_version`.

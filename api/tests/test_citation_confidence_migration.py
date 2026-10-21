@@ -121,7 +121,7 @@ def _cite(t, v, key: str, **cols) -> None:
 def test_chains_on_the_citation_source_oracle_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    # The intake lane's 0014_intake chains on it and v2-specs 0015_specs on that; one head.
+    # The intake lane's 0014_intake chains on it; one head.
     assert script.get_heads() == ["0015_specs"]
     assert script.get_revision("0014_intake").down_revision == REVISION
 

@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from sqlalchemy import select
 
 from oracle import confidence
+from oracle.docs.schemas import citation_contract
 from oracle.mcp.auth import McpCaller
 from oracle.mcp.tools import Operation, ToolError, call_operation, to_result
 from oracle.tenancy import tenant_session
@@ -382,7 +383,7 @@ CURATED: tuple[Curated, ...] = (
             "Import a draft as the next version of a document (markdown with YAML front "
             "matter); creates the document on first import. Keep the template's final "
             "Sources and data points section, with each data point's confidence, and flag "
-            "claims that rest only on low-confidence evidence."
+            "claims that rest only on low-confidence evidence. " + citation_contract()
         ),
         needs={"op": _by("POST", ("import_version",))},
         schema=lambda ops: copy.deepcopy(_PUSH_DRAFT_SCHEMA),

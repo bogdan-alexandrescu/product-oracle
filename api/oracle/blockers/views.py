@@ -25,6 +25,7 @@ from oracle.blockers.schemas import (
 )
 from oracle.docs.models import Document
 from oracle.sources.models import Source, SourceItem
+from oracle.trace.evidence import SOURCE_REMOVED
 from oracle.v2.models import (
     BlockerOption,
     BlockerResolutionEvent,
@@ -282,14 +283,14 @@ async def _evidence_refs(
         return {}
     rows = (
         await db.execute(
-            select(Evidence, Source)
+            select(Evidence, Source, SourceItem)
             .outerjoin(SourceItem, SourceItem.id == Evidence.source_item_id)
             .outerjoin(Source, Source.id == SourceItem.source_id)
             .where(Evidence.id.in_(ids))
         )
     ).all()
     out = {}
-    for ev, source in rows:
+    for ev, source, item in rows:
         kind = ev.kind or (source.kind if source is not None else None)
         if kind is None and ev.url:
             kind = "web"
@@ -301,8 +302,9 @@ async def _evidence_refs(
             # never reaches readers (S6, links).
             ref=ev.url or ev.ref,
             # The appendix shows what any user may see of evidence: never a private
-            # item's title (AUD-9), only the excerpt, url and ref.
-            title=None,
+            # item's title (AUD-9), only the excerpt, url and ref; 'source removed' when
+            # the item was narrowed out or deleted upstream (S5).
+            title=SOURCE_REMOVED if item is not None and item.deleted_at is not None else None,
             excerpt=ev.excerpt,
             retrieved_at=ev.retrieved_at,
         )

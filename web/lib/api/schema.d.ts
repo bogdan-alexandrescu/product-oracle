@@ -996,6 +996,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections/{connection_id}/slack/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Slack Channels
+         * @description Public channels and the private channels you are in, by name; never DMs.
+         *
+         *     Answers are cached for a minute per connection, and a connection may search Slack
+         *     a limited number of times a minute.
+         */
+        get: operations["list_slack_channels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{connection_id}/github/repos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Github Repos
+         * @description Repos your GitHub sign-in can read, matched on owner/name and description.
+         *
+         *     Answers are cached for a minute per connection, and a connection may search GitHub
+         *     a limited number of times a minute.
+         */
+        get: operations["list_github_repos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connections/{connection_id}/notion/pages": {
         parameters: {
             query?: never;
@@ -1331,7 +1377,10 @@ export interface paths {
         delete: operations["delete_source"];
         options?: never;
         head?: never;
-        /** Update Source */
+        /**
+         * Update Source
+         * @description Read the source first (get_source) and pass its `config_version` as `base_version`: it is required whenever `config` or `connection_id` changes, and a source saved since you read it is refused (409 source_changed). Without it a change of those is refused with 422 {"code": "base_version_required"}. A rename or a pause needs none, but if given it is checked.
+         */
         patch: operations["update_source"];
         trace?: never;
     };
@@ -1526,6 +1575,48 @@ export interface paths {
          *     sharing released only, whatever ``as_of`` says (S6, freeze at sharing).
          */
         get: operations["search_sources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{connection_id}/fireflies/meetings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Fireflies Meetings
+         * @description Your meetings in Fireflies, newest first, a page at a time (search: in titles;
+         *     from/to: whole days in UTC).
+         */
+        get: operations["list_fireflies_meetings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{connection_id}/fireflies/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Fireflies Series
+         * @description Your meetings grouped into their calendar series, with counts and the last date
+         *     (from/to: whole days in UTC). Meetings on no calendar are in no series.
+         */
+        get: operations["list_fireflies_series"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9359,6 +9450,11 @@ export interface components {
              * @default false
              */
             source_item_private: boolean;
+            /**
+             * Source Removed
+             * @default false
+             */
+            source_removed: boolean;
             /** Confidence */
             confidence?: number | null;
             /**
@@ -9441,6 +9537,11 @@ export interface components {
             confidence: number | null;
             /** Ref */
             ref: string | null;
+            /**
+             * Source Removed
+             * @default false
+             */
+            source_removed: boolean;
         };
         /** ExchangeIn */
         ExchangeIn: {
@@ -9852,6 +9953,52 @@ export interface components {
             /** Text */
             text?: string | null;
         };
+        /** FirefliesMeetingOut */
+        FirefliesMeetingOut: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Date */
+            date: string | null;
+            /** Duration */
+            duration: number | null;
+            /** Organizer */
+            organizer: string | null;
+            /** Attendee Count */
+            attendee_count: number;
+            /** Series Key */
+            series_key: string | null;
+            /** Series Title */
+            series_title: string;
+        };
+        /** FirefliesMeetingPage */
+        FirefliesMeetingPage: {
+            /** Meetings */
+            meetings: components["schemas"]["FirefliesMeetingOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** FirefliesSeriesList */
+        FirefliesSeriesList: {
+            /** Series */
+            series: components["schemas"]["FirefliesSeriesOut"][];
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** FirefliesSeriesOut */
+        FirefliesSeriesOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Meeting Count */
+            meeting_count: number;
+            /** Last Date */
+            last_date: string | null;
+            /** Organizer */
+            organizer: string | null;
+        };
         /** FlowCatalog */
         FlowCatalog: {
             /** Flows */
@@ -9979,6 +10126,32 @@ export interface components {
              * @default []
              */
             private_blocking_gap_ids: string[];
+        };
+        /** GithubRepoOut */
+        GithubRepoOut: {
+            /** Full Name */
+            full_name: string;
+            /** Owner */
+            owner: string;
+            /** Name */
+            name: string;
+            /** Is Private */
+            is_private: boolean;
+            /** Is Archived */
+            is_archived: boolean;
+            /** Description */
+            description: string | null;
+            /** Pushed At */
+            pushed_at: string | null;
+        };
+        /** GithubRepoPage */
+        GithubRepoPage: {
+            /** Repos */
+            repos: components["schemas"]["GithubRepoOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Sso Hint */
+            sso_hint?: string | null;
         };
         /** GoalLink */
         GoalLink: {
@@ -10426,6 +10599,11 @@ export interface components {
              * @default []
              */
             searches: components["schemas"]["RunSummary"][];
+            /**
+             * Revising
+             * @default []
+             */
+            revising: components["schemas"]["RunSummary"][];
             /**
              * Imports
              * @default []
@@ -13946,6 +14124,8 @@ export interface components {
             can_retry_import: boolean;
             /** Draft Rejected */
             draft_rejected?: string | null;
+            /** Sent Back */
+            sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
             knobs: components["schemas"]["KnobsOut"];
             /** Snapshot Id */
@@ -14087,6 +14267,8 @@ export interface components {
             can_retry_import: boolean;
             /** Draft Rejected */
             draft_rejected?: string | null;
+            /** Sent Back */
+            sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
         };
         /**
@@ -14379,6 +14561,11 @@ export interface components {
              * @default false
              */
             restricted: boolean;
+            /**
+             * Source Removed
+             * @default false
+             */
+            source_removed: boolean;
         };
         /** SectionLinkView */
         SectionLinkView: {
@@ -14623,6 +14810,11 @@ export interface components {
             attempts: components["schemas"]["SegmentAttempt"][];
             draft_import?: components["schemas"]["DraftImport"] | null;
             /**
+             * Sent Back
+             * @default false
+             */
+            sent_back: boolean;
+            /**
              * Can Retry Draft Import
              * @default false
              */
@@ -14690,6 +14882,28 @@ export interface components {
             suggestion_ids: string[];
             /** Reason */
             reason: string;
+        };
+        /** SlackChannelOut */
+        SlackChannelOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Is Private */
+            is_private: boolean;
+            /** Is Archived */
+            is_archived: boolean;
+            /** Num Members */
+            num_members: number | null;
+            /** Topic */
+            topic: string | null;
+        };
+        /** SlackChannelPage */
+        SlackChannelPage: {
+            /** Channels */
+            channels: components["schemas"]["SlackChannelOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /** SlideOut */
         SlideOut: {
@@ -14823,7 +15037,12 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "active" | "paused" | "error";
+            status: "active" | "paused" | "error" | "needs_attention";
+            /**
+             * Config Version
+             * @default 1
+             */
+            config_version: number;
             /** Last Error */
             last_error: string | null;
             /** Last Synced At */
@@ -14859,6 +15078,8 @@ export interface components {
             config?: {
                 [key: string]: unknown;
             } | null;
+            /** Base Version */
+            base_version?: number | null;
         };
         /** SpanOut */
         SpanOut: {
@@ -15447,7 +15668,7 @@ export interface components {
              * Outcome
              * @enum {string}
              */
-            outcome: "completed" | "rate_limited" | "error";
+            outcome: "completed" | "rate_limited" | "error" | "superseded" | "needs_attention";
             /**
              * Upserted
              * @default 0
@@ -18836,14 +19057,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description A token Oracle will not use (a Slack bot token) */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -18979,6 +19198,60 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description A token Oracle will not use (a Slack bot token) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_slack_channels: {
+        parameters: {
+            query?: {
+                search?: string;
+                cursor?: string | null;
+                include_archived?: boolean;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackChannelPage"];
+                };
+            };
+            /** @description Slack refused the request (the connection stays usable) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not one of your Slack connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection needs reconnecting, or holds a bot token */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -18987,6 +19260,75 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Slack is rate limiting, or this connection searched too often; retry after Retry-After seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_github_repos: {
+        parameters: {
+            query?: {
+                search?: string;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GithubRepoPage"];
+                };
+            };
+            /** @description GitHub refused the request (the connection stays usable) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not one of your GitHub connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection needs reconnecting */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description GitHub is rate limiting, or this connection searched too often; retry after Retry-After seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -19555,6 +19897,13 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The provider is rate limiting; retry after Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     list_source_kinds: {
@@ -19661,6 +20010,13 @@ export interface operations {
                     "application/json": components["schemas"]["SourceOut"];
                 };
             };
+            /** @description base_version is not the source's config_version, or the name is taken: {"code": "source_changed", "message": ...} for the first */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -19669,6 +20025,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description The provider is rate limiting; retry after Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -20021,6 +20384,132 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_fireflies_meetings: {
+        parameters: {
+            query?: {
+                search?: string;
+                from?: string | null;
+                to?: string | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirefliesMeetingPage"];
+                };
+            };
+            /** @description Not one of your Fireflies connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection cannot be used (reconnect it), or Fireflies refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Fireflies limit reached, try later: Fireflies is rate limiting the API key, or this connection has browsed its daily share; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fireflies did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_fireflies_series: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirefliesSeriesList"];
+                };
+            };
+            /** @description Not one of your Fireflies connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection cannot be used (reconnect it), or Fireflies refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Fireflies limit reached, try later: Fireflies is rate limiting the API key, or this connection has browsed its daily share; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fireflies did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

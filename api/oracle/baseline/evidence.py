@@ -535,6 +535,7 @@ async def present(
                 if shown
                 else None,
                 source_item_private=item is not None and not shown,
+                source_removed=item is not None and item.deleted_at is not None,
                 confidence=score,
                 confidence_factors=factors,
                 scored_at=pin.as_of if pin is not None and r.id in pinned else r.scored_at,

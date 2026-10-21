@@ -152,7 +152,8 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     searching: r.searching,
     import_failed: r.import_failed,
     can_retry_import: r.can_retry_import,
-    draft_rejected: draftRejected(r),
+    draft_rejected: refused(r, false),
+    sent_back: refused(r, true),
     progress: progressOf(r),
   };
 }
@@ -190,6 +191,7 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     artifacts: [],
     attempts: [],
     draft_import: null,
+    sent_back: false,
     can_retry_draft_import: false,
     items_check: null,
     started_at: null,
@@ -204,12 +206,27 @@ function progressOf(r: RunOut): Schemas["RunProgress"] {
   return { done: r.segments.filter((s) => s.status === "succeeded").length, total: r.segments.length, now: now?.title ?? null };
 }
 
+/** Whose answer the revision applies when Oracle sent a refused draft back itself (the API's SENT_BACK_BY). */
+const SENT_BACK_BY = "Oracle";
+
+/**
+ * As the API: Oracle sent the segment's refused draft back to the writer itself (its own
+ * NOT_YET) and the revision is not imported yet, on a run that has not ended. The run page
+ * and the Inbox read "Revising: sent back by Oracle", not "Draft rejected". The mock knows
+ * the revision by its running attempt, started with Oracle's findings.
+ */
+function sentBack(r: RunOut, s: SegmentOut): boolean {
+  const a = s.attempts[s.attempts.length - 1];
+  return !FINAL.includes(r.status) && !!s.draft_import?.error && a?.note_by === SENT_BACK_BY && a.state === "running";
+}
+
 /**
  * As the API: the summary of a draft a segment left that Oracle refused (stored with its
- * problems at the import, oracle.runs.rejection), else its error; the runs list's "Draft rejected".
+ * problems at the import, oracle.runs.rejection), else its error: one Oracle sent back and is
+ * being revised (`revising`, the runs list's "Revising"), or one that is not ("Draft rejected").
  */
-function draftRejected(r: RunOut): string | null {
-  const imp = r.segments.find((s) => s.draft_import?.error)?.draft_import;
+function refused(r: RunOut, revising: boolean): string | null {
+  const imp = r.segments.find((s) => s.draft_import?.error && sentBack(r, s) === revising)?.draft_import;
   return imp ? (imp.summary ?? imp.error ?? null) : null;
 }
 
@@ -234,7 +251,9 @@ function finishedReview(r: RunOut, s: SegmentOut): CheckpointOut | undefined {
 
 function refresh(r: RunOut) {
   r.progress = progressOf(r);
-  r.draft_rejected = draftRejected(r);
+  r.draft_rejected = refused(r, false);
+  r.sent_back = refused(r, true);
+  for (const s of r.segments) s.sent_back = sentBack(r, s);
   r.spent_usd = round2(r.segments.reduce((sum, s) => sum + s.cost_usd, 0));
   r.waiting_on = r.checkpoints.find((c) => c.status === "pending")?.kind ?? null;
   for (const c of r.checkpoints) Object.assign(c, { can_decide: c.status === "pending", cannot_approve: cannotApprove(c) });
@@ -416,12 +435,16 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   // Dismiss), and work given up on that is still looked for (shown only, not in the total).
   const lookups = ctx.db.runs.filter((r) => r.stuck).map(summary);
   const searches = ctx.db.runs.filter((r) => r.searching).map(summary);
+  // Refused drafts Oracle sent back to the writer itself, being revised: the review's state,
+  // shown only (nothing to decide, not in the total).
+  const revising = ctx.db.runs.filter((r) => r.segments.some((s) => sentBack(r, s))).map(bare);
   return {
     checkpoints,
     approvals,
     overruns,
     lookups,
     searches,
+    revising,
     imports,
     feedback,
     // Every new or open item (C1e, 2026-10-20): the server adds the feedback items' New + Open (./next-draft.ts).

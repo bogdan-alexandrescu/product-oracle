@@ -326,6 +326,9 @@ async def test_rest_role_checks_apply_to_api_tokens(tenant_id, guarded_app, role
         ("POST", "/v1/documents/{doc}/versions/{n}/approve", None),
         ("POST", "/v1/documents/{doc}/versions/{n}/comments", None),
         ("GET", "/v1/me", None),
+        # Browsing a person's connection spends their provider quota: never a run's.
+        ("GET", "/v1/connections/{connection_id}/fireflies/meetings", None),
+        ("GET", "/v1/connections/{connection_id}/fireflies/series", None),
         ("GET", "/v1/runs", None),
         ("GET", "/healthz", None),
     ],
@@ -533,3 +536,39 @@ async def test_rest_client_fixture_still_works(client):
     # The mount does not shadow REST routes.
     assert (await client.get("/v1/documents")).status_code == 401
     assert isinstance(client, httpx.AsyncClient)
+
+
+async def test_update_source_over_mcp_requires_the_version_that_was_read(tenant_id):
+    """Owner 2026-10-20: base_version is required wherever config or connection change,
+    MCP included; the tool says to read the source first."""
+    pm = await user_with_role(tenant_id, "commenter")
+    token = await user_token(tenant_id, pm)
+    async with await _rest(token) as rest:
+        src = (await rest.post("/v1/sources", json={"kind": "upload", "name": "Notes"})).json()
+    path = {"source_id": src["id"]}
+    async with mcp_client(token) as c:
+        tools = {t.name: t for t in (await c.list_tools()).tools}
+        said = tools["update_source"].description
+        assert "get_source" in said and "config_version" in said and "base_version" in said
+
+        refused = await c.call_tool("update_source", {**path, "body": {"config": {}}})
+        assert refused.is_error
+        assert "HTTP 422" in text_of(refused) and "base_version_required" in text_of(refused)
+
+        # A rename needs none, and bumps the version.
+        renamed = await c.call_tool("update_source", {**path, "body": {"name": "Renamed"}})
+        assert not renamed.is_error, text_of(renamed)
+        version = renamed.structured_content["config_version"]
+        assert version == src["config_version"] + 1
+
+        stale = await c.call_tool(
+            "update_source", {**path, "body": {"name": "Again", "base_version": 1}}
+        )
+        assert stale.is_error and "source_changed" in text_of(stale)
+
+        read = await c.call_tool("get_source", path)
+        base = read.structured_content["config_version"]
+        saved = await c.call_tool(
+            "update_source", {**path, "body": {"config": {}, "base_version": base}}
+        )
+        assert not saved.is_error, text_of(saved)

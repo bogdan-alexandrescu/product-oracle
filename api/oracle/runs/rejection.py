@@ -12,6 +12,9 @@ from collections.abc import Sequence
 
 from oracle.docs.schemas import ImportProblem
 
+# The problem a segment that left no draft file has (oracle.runs.service._advance).
+MISSING_DRAFT = "missing_draft"
+
 # What :func:`oracle.docs.parser._parse_citations` says of an invalid citation.
 _INVALID = re.compile(r" is invalid: (?P<what>.+)$")
 _SOURCE = re.compile(r"^source '(?P<source>.*)' isn't accepted$")
@@ -80,7 +83,11 @@ class _Group:
 def summary(name: str, problems: Sequence[ImportProblem]) -> str:
     """One plain line for a refused draft ``name`` (e.g. ``prd.md``), grouped by cause:
     "Oracle refused prd.md: 24 citations use source 'x', which isn't accepted; 102
-    references fail because of them."."""
+    references fail because of them.". A draft the segment did not leave
+    (:data:`MISSING_DRAFT`) never reached the import: "Oracle could not import prd.md:
+    the run's agents did not write it."."""
+    if problems and all(p.code == MISSING_DRAFT for p in problems):
+        return f"Oracle could not import {name}: the run's agents did not write it."
     groups: dict[tuple[str, str | None], _Group] = {}
     rejected: dict[str, _Group] = {}
     knock_on: list[ImportProblem] = []

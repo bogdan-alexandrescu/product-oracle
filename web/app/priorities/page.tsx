@@ -257,7 +257,15 @@ function FeatureInspector({ f, id }: { f: RankedFeature; id: string }) {
                   <li key={ev.id} className="flex min-w-0 items-center gap-2">
                     <span className="flex-none font-mono">{ev.id}</span>
                     <span className="tnum flex-none text-text2">{pct(ev.confidence) ?? "—"}</span>
-                    {ev.ref && (
+                    {ev.ref && ev.source_removed && (
+                      <span className="min-w-0 truncate text-text2">{ev.ref}</span>
+                    )}
+                    {ev.source_removed && (
+                      <Chip kind="na" data-testid="source-removed">
+                        source removed
+                      </Chip>
+                    )}
+                    {ev.ref && !ev.source_removed && (
                       <a
                         href={ev.ref}
                         target="_blank"

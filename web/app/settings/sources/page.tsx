@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ComponentType, type FormEvent, type ReactNode, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 
 import { KIND_LABEL } from "@/app/sources/_components/confidence";
 import {
@@ -20,11 +20,23 @@ import {
   Split,
   type ChipKind,
 } from "@/components/ds";
-import { api, type Schemas, unwrap } from "@/lib/api/client";
+import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD, TEXTAREA } from "../_components/fields";
+import type { PickerProps } from "./_browse-list";
+import { GithubPicker } from "./_github-picker";
+import { SlackPicker } from "./_slack-picker";
+import {
+  type FirefliesConfig,
+  FirefliesPicker,
+  firefliesConfigToSave,
+  firefliesReady,
+  firefliesSummary,
+  firefliesRange,
+  readFirefliesConfig,
+} from "./FirefliesPicker";
 import { NotionPicker, notionRoots } from "./NotionPicker";
 
 type Source = Schemas["SourceOut"];
@@ -32,17 +44,39 @@ type Kind = Source["kind"];
 type KindOption = Schemas["SourceKindOut"];
 
 // The config key holding each kind's allowlist (as its connector reads it), and what one
-// entry looks like. Notion's roots are ticked in the page picker, not typed.
-const ALLOWLIST: Record<Exclude<Kind, "upload">, { key: string; label: string; example: string }> = {
+// entry looks like. Notion's roots are ticked in the page picker, not typed; Fireflies
+// sources are picked in a browse panel instead (FirefliesPicker).
+type ListKind = Exclude<Kind, "upload" | "fireflies">;
+const ALLOWLIST: Record<ListKind, { key: string; label: string; example: string }> = {
   github: { key: "repos", label: "Repositories", example: "example-org/example-app" },
   slack: { key: "channels", label: "Channel ids", example: "C0123PRODUCT" },
   notion: { key: "roots", label: "Pages", example: "" },
   google_docs: { key: "folders", label: "Folder ids", example: "1AbC…" },
-  fireflies: { key: "meetings", label: "Meeting title filters", example: "Weekly product review" },
 };
 
-const STATUS_KIND: Record<Source["status"], ChipKind> = { active: "pass", paused: "na", error: "crit" };
-const STATUS_LABEL: Record<Source["status"], string> = { active: "Active", paused: "Paused", error: "Error" };
+// Kinds chosen in a picker (browse, search, tick) rather than typed ids (S5).
+const PICKER: Partial<Record<Kind, ComponentType<PickerProps>>> = {
+  slack: SlackPicker,
+  github: GithubPicker,
+  notion: NotionSourcePicker,
+};
+
+const STATUS_KIND: Record<Source["status"], ChipKind> = {
+  active: "pass",
+  paused: "na",
+  error: "crit",
+  needs_attention: "warn",
+};
+const STATUS_LABEL: Record<Source["status"], string> = {
+  active: "Active",
+  paused: "Paused",
+  error: "Error",
+  needs_attention: "Needs attention",
+};
+
+const NEW_FIREFLIES: FirefliesConfig = { mode: "all", series: [], meetings: [], labels: {} };
+
+type RowNotice = { tone: "pass" | "warn"; text: string };
 
 /**
  * A row's rarely used actions (Edit allowlist, Delete) behind one "More" button, so the
@@ -123,19 +157,58 @@ function useAction() {
   const onAuth = useAuthRedirect();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The save loaded an older version of the source (409 source_changed).
+  const [stale, setStale] = useState(false);
   async function act<T>(fn: () => Promise<T>): Promise<T | undefined> {
     setBusy(true);
     setError(null);
+    setStale(false);
     try {
       return await fn();
     } catch (e) {
-      if (!onAuth(e)) setError(errorMessage(e));
+      if (!onAuth(e)) {
+        setError(errorMessage(e));
+        setStale(e instanceof ApiError && e.code === "source_changed");
+      }
       return undefined;
     } finally {
       setBusy(false);
     }
   }
-  return { act, error, setError, busy };
+  return { act, error, setError, busy, stale };
+}
+
+/** A save's error. A stale one (the source changed since the form opened) offers Reload,
+ * which refetches the source and reopens the form on its current picks. */
+function SaveError({
+  error,
+  stale,
+  busy,
+  onReload,
+}: {
+  error: string;
+  stale: boolean;
+  busy: boolean;
+  onReload: () => void;
+}) {
+  if (!stale) return <Notice tone="error">{error}</Notice>;
+  return (
+    <Notice
+      tone="error"
+      action={
+        <Button onClick={onReload} disabled={busy}>
+          Reload
+        </Button>
+      }
+    >
+      {error} Nothing was saved. Reloading discards the picks you changed here.
+    </Notice>
+  );
+}
+
+/** Refetches a source (the Reload of a stale save). */
+function fetchSource(id: string) {
+  return unwrap(api.GET("/v1/sources/{source_id}", { params: { path: { source_id: id } } }));
 }
 
 /** A one-line warning (warn tokens): a connector that is not there yet. */
@@ -143,36 +216,55 @@ function Warn({ children }: { children: ReactNode }) {
   return <p className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn">{children}</p>;
 }
 
-function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Source) => void }) {
+function AllowlistEditor({
+  source,
+  onSaved,
+  onReload,
+}: {
+  source: Source;
+  onSaved: (s: Source) => void;
+  onReload: (s: Source) => void;
+}) {
   const id = useId();
-  const spec = ALLOWLIST[source.kind as Exclude<Kind, "upload">];
+  const spec = ALLOWLIST[source.kind as ListKind];
   const [text, setText] = useState(entries(source.config, spec.key).join("\n"));
-  const [roots, setRoots] = useState(() => notionRoots(source.config));
-  const { act, error, busy } = useAction();
+  const Picker = PICKER[source.kind];
+  const [picked, setPicked] = useState(source.config);
+  const { act, error, busy, stale } = useAction();
   const notion = source.kind === "notion";
 
   async function save(e: FormEvent) {
     e.preventDefault();
-    const config: Record<string, unknown> = { ...source.config, [spec.key]: notion ? roots : parseLines(text) };
+    const config = Picker ? picked : { ...source.config, [spec.key]: parseLines(text) };
+    // base_version: the version this form loaded; a source saved since refuses the save.
     const saved = await act(() =>
-      unwrap(api.PATCH("/v1/sources/{source_id}", { params: { path: { source_id: source.id } }, body: { config } })),
+      unwrap(
+        api.PATCH("/v1/sources/{source_id}", {
+          params: { path: { source_id: source.id } },
+          body: { config, base_version: source.config_version },
+        }),
+      ),
     );
     if (saved) onSaved(saved);
   }
+  async function reload() {
+    const fresh = await act(() => fetchSource(source.id));
+    if (fresh) onReload(fresh);
+  }
 
-  if (notion && !source.connection_id) return <ReconnectNotion picked={roots.length} />;
+  if (notion && !source.connection_id) return <ReconnectNotion picked={notionRoots(source.config).length} />;
 
   return (
     <form onSubmit={save} className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3">
-      {notion && source.connection_id ? (
-        <ChoosePages connectionId={source.connection_id} value={roots} onChange={setRoots} />
+      {Picker ? (
+        <Picker connectionId={source.connection_id} config={picked} onChange={setPicked} />
       ) : (
         <Field
           label={`${spec.label} (one per line)`}
           htmlFor={id}
           tip={
             <InfoTip label="saving the allowlist" align="start">
-              Saving a new allowlist syncs this source again from the start.
+              Saving a narrower allowlist removes what it no longer covers (a removed channel or repo, messages outside a narrower date range) at once. The next sync reads only what remains, and anything new.
             </InfoTip>
           }
         >
@@ -186,11 +278,71 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
           />
         </Field>
       )}
-      {error && <Notice tone="error">{error}</Notice>}
-      <div>
-        <Button type="submit" variant="solid" disabled={busy || (notion && roots.length === 0)}>
+      {error && <SaveError error={error} stale={stale} busy={busy} onReload={reload} />}
+      <div className="flex items-center gap-1.5">
+        <Button type="submit" variant="solid" disabled={busy || (notion && notionRoots(picked).length === 0)}>
           Save allowlist
         </Button>
+        {Picker && !notion && (
+          <InfoTip label="saving the allowlist" align="start">
+            Saving a narrower allowlist removes what it no longer covers (a removed channel or repo, messages outside a narrower date range) at once. The next sync reads only what remains, and anything new.
+          </InfoTip>
+        )}
+      </div>
+    </form>
+  );
+}
+
+function FirefliesEditor({
+  source,
+  onSaved,
+  onReload,
+}: {
+  source: Source;
+  onSaved: (s: Source) => void;
+  onReload: (s: Source) => void;
+}) {
+  const initial = readFirefliesConfig(source.config);
+  const [value, setValue] = useState<FirefliesConfig>(initial.value);
+  const { act, error, busy, stale } = useAction();
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const config = firefliesConfigToSave(value);
+    const saved = await act(() =>
+      unwrap(
+        api.PATCH("/v1/sources/{source_id}", {
+          params: { path: { source_id: source.id } },
+          body: { config, base_version: source.config_version },
+        }),
+      ),
+    );
+    if (saved) onSaved(saved);
+  }
+  async function reload() {
+    const fresh = await act(() => fetchSource(source.id));
+    if (fresh) onReload(fresh);
+  }
+
+  return (
+    <form
+      onSubmit={save}
+      aria-label={`Meetings of ${source.name}`}
+      className="mt-2.5 flex flex-col gap-3 rounded-button border border-line bg-surface2/40 p-3 max-[600px]:p-2.5"
+    >
+      {source.connection_id ? (
+        <FirefliesPicker connectionId={source.connection_id} value={value} onChange={setValue} titleRule={initial.titleRule} />
+      ) : (
+        <Warn>This source has no connection: reconnect Fireflies first.</Warn>
+      )}
+      {error && <SaveError error={error} stale={stale} busy={busy} onReload={reload} />}
+      <div className="flex items-center gap-2.5">
+        <Button type="submit" variant="solid" disabled={busy || !firefliesReady(value) || !source.connection_id}>
+          Save meetings
+        </Button>
+        <InfoTip label="saving meetings" align="start">
+          Saving a narrower date range, or dropping a meeting or series, removes the meetings outside your picks at once. What is already stored and still included is kept.
+        </InfoTip>
       </div>
     </form>
   );
@@ -217,13 +369,30 @@ function ReconnectNotion({ picked }: { picked: number }) {
   );
 }
 
-function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (s: Source) => void; onDelete: () => void }) {
-  const [editing, setEditing] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+function SourceRow({
+  source,
+  onChange,
+  onDelete,
+  targeted = false,
+}: {
+  source: Source;
+  onChange: (s: Source) => void;
+  onDelete: () => void;
+  /** The page's #source-<id> (the Inbox's Edit): scrolled to, its editor open if it needs attention. */
+  targeted?: boolean;
+}) {
+  // Rows mount once the list has loaded, after the hash is read: open from the start.
+  const [editing, setEditing] = useState(targeted && source.status === "needs_attention");
+  const rowRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (targeted) rowRef.current?.scrollIntoView({ block: "center" });
+  }, [targeted]);
+  const [notice, setNotice] = useState<RowNotice | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { act, error, busy } = useAction();
   const path = { params: { path: { source_id: source.id } } };
-  const allowlist = source.kind === "upload" ? null : ALLOWLIST[source.kind];
+  const fireflies = source.kind === "fireflies" ? readFirefliesConfig(source.config) : null;
+  const allowlist = source.kind === "upload" || source.kind === "fireflies" ? null : ALLOWLIST[source.kind];
 
   async function syncNow() {
     setNotice(null);
@@ -231,10 +400,16 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
     if (!r) return;
     onChange(r.source);
     if (r.outcome === "completed") {
-      setNotice(`Synced: ${r.upserted} item(s) seen, ${r.versions_written} new version(s), ${r.deleted} deleted.`);
+      setNotice({
+        tone: "pass",
+        text: `Synced: ${r.upserted} item(s) seen, ${r.versions_written} new version(s), ${r.deleted} deleted.`,
+      });
     } else if (r.outcome === "rate_limited") {
-      setNotice("Rate limited: the next sync resumes where this one stopped.");
+      setNotice({ tone: "pass", text: "Rate limited: the next sync resumes where this one stopped." });
+    } else if (r.outcome === "superseded") {
+      setNotice({ tone: "warn", text: "Not synced: this source was edited while it synced. Sync again to use the new selection." });
     }
+    // error and needs_attention: the returned source carries the status and last_error shown below.
   }
 
   async function togglePause() {
@@ -267,25 +442,28 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
     if (fileRef.current) fileRef.current.value = "";
     if (!r) return;
     const added = r.items.length - r.unchanged.length;
-    setNotice(`Uploaded ${added} file(s)${r.unchanged.length ? `, ${r.unchanged.length} unchanged` : ""}.`);
+    setNotice({ tone: "pass", text: `Uploaded ${added} file(s)${r.unchanged.length ? `, ${r.unchanged.length} unchanged` : ""}.` });
     const fresh = await act(() => unwrap(api.GET("/v1/sources/{source_id}", path)));
     if (fresh) onChange(fresh);
   }
 
   const items = allowlist ? entries(source.config, allowlist.key) : [];
+  const attention = source.status === "needs_attention";
   const synced = source.last_synced_at
     ? `last ${source.kind === "upload" ? "upload" : "sync"} ${formatDateTime(source.last_synced_at)}`
     : "never synced";
 
   return (
     <li
+      ref={rowRef}
       className="border-t border-line px-4 py-2.5 first:border-t-0 max-[600px]:px-3"
+      id={`source-${source.id}`}
       data-testid="source-card"
       aria-label={source.name}
     >
       <div className="flex min-h-9 flex-wrap items-center gap-x-2.5 gap-y-2">
-        <span className="flex min-w-0 flex-1 basis-56 items-center gap-2">
-          <span className="min-w-0 truncate font-semibold" title={source.name}>
+        <span className="flex min-w-0 flex-1 basis-56 flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="min-w-0 max-w-full truncate font-semibold" title={source.name}>
             {source.name}
           </span>
           <Chip kind="acc">{KIND_LABEL[source.kind]}</Chip>
@@ -334,6 +512,9 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
               ...(allowlist
                 ? [{ label: editing ? "Close allowlist" : "Edit allowlist", onSelect: () => setEditing((v) => !v) }]
                 : []),
+              ...(fireflies
+                ? [{ label: editing ? "Close meetings" : "Edit meetings", onSelect: () => setEditing((v) => !v) }]
+                : []),
               { label: "Delete", onSelect: () => void remove(), danger: true },
             ]}
           />
@@ -342,6 +523,16 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
       <div className="tnum mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-text2">
         <span>{source.item_count} item(s)</span>
         <span>{synced}</span>
+        {fireflies && (
+          <span className="flex min-w-0 max-w-full items-center gap-1.5" data-testid="fireflies-included">
+            <Label className="flex-none">{fireflies.titleRule ? "Title rule" : "Meetings"}</Label>
+            <span className="min-w-0 truncate text-text">
+              {fireflies.titleRule
+                ? [fireflies.titleRule.join(", "), firefliesRange(fireflies.value)].filter(Boolean).join(", ")
+                : firefliesSummary(fireflies.value)}
+            </span>
+          </span>
+        )}
         {allowlist && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">{allowlist.label}</Label>
@@ -353,26 +544,67 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
       </div>
       {(source.last_error || notice || error) && (
         <div className="mt-2 flex flex-col gap-2">
-          {source.last_error && (
+          {source.last_error && attention && (
+            // Saved before a newer rule it breaks: not synced until edited back within the rules.
+            <div
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn"
+              data-testid="needs-attention"
+            >
+              <span className="flex min-w-0 flex-1 basis-60 items-start gap-2">
+                <Icon name="alert" size={16} className="mt-0.5 flex-none" />
+                <span className="min-w-0 break-words" data-testid="last-error">
+                  {source.last_error}
+                </span>
+              </span>
+              {allowlist && !editing && (
+                <Button onClick={() => setEditing(true)} aria-label={`Edit ${source.name}`}>
+                  Edit
+                </Button>
+              )}
+            </div>
+          )}
+          {source.last_error && !attention && (
             <p className="rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit" data-testid="last-error">
               {source.last_error}
             </p>
           )}
-          {notice && <Notice tone="pass">{notice}</Notice>}
+          {notice && <Notice tone={notice.tone}>{notice.text}</Notice>}
           {error && <Notice tone="error">{error}</Notice>}
         </div>
       )}
-      {editing && allowlist && (
-        <AllowlistEditor
+      {editing && fireflies && (
+        <FirefliesEditor
+          key={source.config_version}
           source={source}
+          onReload={onChange}
           onSaved={(s) => {
             onChange(s);
             setEditing(false);
-            setNotice("Allowlist saved.");
+            setNotice({ tone: "pass", text: "Meetings saved." });
+          }}
+        />
+      )}
+      {editing && allowlist && (
+        <AllowlistEditor
+          key={source.config_version}
+          source={source}
+          onReload={onChange}
+          onSaved={(s) => {
+            onChange(s);
+            setEditing(false);
+            setNotice({ tone: "pass", text: "Allowlist saved." });
           }}
         />
       )}
     </li>
+  );
+}
+
+/** Notion in the PICKER registry: its roots, ticked in the page picker once there is a connection. */
+function NotionSourcePicker({ connectionId, config, onChange }: PickerProps) {
+  if (!connectionId) return null;
+  return (
+    <ChoosePages connectionId={connectionId} value={notionRoots(config)} onChange={(roots) => onChange({ ...config, roots })} />
   );
 }
 
@@ -383,8 +615,8 @@ function ChoosePages(props: { connectionId: string; value: string[]; onChange: (
       <span className="flex items-center gap-1.5">
         <Label>Choose pages</Label>
         <InfoTip label="choosing pages" align="start">
-          Tick the pages and databases to pull in; their sub-pages and databases come with them. Saving new picks syncs
-          the source again from the start.
+          Tick the pages and databases to pull in; their sub-pages and databases come with them. Pages no longer under
+          your picks are removed as soon as you save.
         </InfoTip>
       </span>
       <NotionPicker {...props} />
@@ -397,11 +629,14 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
   const [name, setName] = useState("");
   const [connection, setConnection] = useState("");
   const [allow, setAllow] = useState("");
-  const [roots, setRoots] = useState<string[]>([]);
+  const [picked, setPicked] = useState<Record<string, unknown>>({});
+  const [meetings, setMeetings] = useState<FirefliesConfig>(NEW_FIREFLIES);
   const { act, error, busy } = useAction();
+  const Picker = PICKER[kind];
   const option = kinds.find((k) => k.kind === kind);
   const usable = (option?.connections ?? []).filter((c) => c.status === "active");
-  const spec = kind === "upload" ? null : ALLOWLIST[kind];
+  const needsConnection = kind !== "upload";
+  const spec = kind === "upload" || kind === "fireflies" ? null : ALLOWLIST[kind];
   const connectionId = connection || usable[0]?.id || "";
 
   async function submit(e: FormEvent) {
@@ -409,20 +644,31 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
     const body: Schemas["SourceCreate"] = {
       kind,
       name: name.trim(),
-      connection_id: spec ? connectionId : null,
-      config: kind === "notion" ? { roots } : spec ? { [spec.key]: parseLines(allow) } : {},
+      connection_id: needsConnection ? connectionId : null,
+      config:
+        kind === "fireflies"
+          ? firefliesConfigToSave(meetings)
+          : Picker
+            ? picked
+            : spec
+              ? { [spec.key]: parseLines(allow) }
+              : {},
     };
     const s = await act(() => unwrap(api.POST("/v1/sources", { body })));
     if (s) {
       onAdded(s);
       setName("");
       setAllow("");
-      setRoots([]);
+      setPicked({});
+      setMeetings(NEW_FIREFLIES);
     }
   }
 
   const blocked =
-    !option?.connector_available || (spec !== null && usable.length === 0) || (kind === "notion" && roots.length === 0);
+    !option?.connector_available ||
+    (needsConnection && usable.length === 0) ||
+    (kind === "fireflies" && !firefliesReady(meetings)) ||
+    (kind === "notion" && notionRoots(picked).length === 0);
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3" aria-label="Add a source">
@@ -433,7 +679,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
             onChange={(e) => {
               setKind(e.target.value as Kind);
               setConnection("");
-              setRoots([]);
+              setPicked({});
             }}
             className={SELECT_FIELD}
           >
@@ -455,13 +701,14 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
           />
         </Field>
       </div>
-      {spec && usable.length > 0 && (
+      {needsConnection && usable.length > 0 && (
         <Field label="Connection">
           <select
             value={connectionId}
             onChange={(e) => {
               setConnection(e.target.value);
-              setRoots([]);
+              // Picks belong to the account they were listed from; the date range stays.
+              setPicked((p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== spec?.key)));
             }}
             className={SELECT_FIELD}
           >
@@ -474,7 +721,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
         </Field>
       )}
       {!option?.connector_available && <Warn>The {KIND_LABEL[kind]} connector is not available yet.</Warn>}
-      {option?.connector_available && spec && usable.length === 0 && (
+      {option?.connector_available && needsConnection && usable.length === 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <Chip kind="warn">No {KIND_LABEL[kind]} account</Chip>
           <LinkButton href="/settings/connections" icon="link">
@@ -482,10 +729,11 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
           </LinkButton>
         </div>
       )}
-      {kind === "notion" && usable.length > 0 && (
-        <ChoosePages key={connectionId} connectionId={connectionId} value={roots} onChange={setRoots} />
+      {kind === "fireflies" && option?.connector_available && usable.length > 0 && connectionId && (
+        <FirefliesPicker key={connectionId} connectionId={connectionId} value={meetings} onChange={setMeetings} />
       )}
-      {spec && kind !== "notion" && usable.length > 0 && (
+      {Picker && usable.length > 0 && <Picker key={`${kind}:${connectionId}`} connectionId={connectionId} config={picked} onChange={setPicked} />}
+      {!Picker && spec && usable.length > 0 && (
         <Field label={`${spec.label} to pull in (one per line)`}>
           <textarea
             value={allow}
@@ -506,13 +754,27 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
   );
 }
 
+function subscribeHash(onChange: () => void) {
+  window.addEventListener("hashchange", onChange);
+  return () => window.removeEventListener("hashchange", onChange);
+}
+
+/** The source named by the URL's #source-<id> (the Inbox's Edit links there), or null. */
+function useTargetedSource(): string | null {
+  const hash = useSyncExternalStore(subscribeHash, () => window.location.hash, () => "");
+  const m = /^#source-(.+)$/.exec(hash);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 export default function SourceSettingsPage() {
   const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
   const kinds = useQuery("source-kinds", () => unwrap(api.GET("/v1/sources/kinds")));
   const list = sources.data ?? [];
   const errors = list.filter((s) => s.status === "error").length;
+  const attention = list.filter((s) => s.status === "needs_attention").length;
   const items = list.reduce((n, s) => n + s.item_count, 0);
 
+  const target = useTargetedSource();
   const replace = (s: Source) => sources.setData((prev) => (prev ?? []).map((x) => (x.id === s.id ? s : x)));
 
   const inspector = (
@@ -557,6 +819,11 @@ export default function SourceSettingsPage() {
                 {errors} in error
               </Chip>
             )}
+            {attention > 0 && (
+              <Chip kind="warn" dot data-testid="sources-attention">
+                {attention} need{attention === 1 ? "s" : ""} attention
+              </Chip>
+            )}
           </>
         }
         action={
@@ -585,6 +852,7 @@ export default function SourceSettingsPage() {
                   key={s.id}
                   source={s}
                   onChange={replace}
+                  targeted={s.id === target}
                   onDelete={() => sources.setData((prev) => (prev ?? []).filter((x) => x.id !== s.id))}
                 />
               ))}

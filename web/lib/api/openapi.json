@@ -3138,14 +3138,7 @@
             "description": "The provider rejected the token"
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "A token Oracle will not use (a Slack bot token)"
           }
         }
       }
@@ -3408,6 +3401,193 @@
           },
           "400": {
             "description": "The provider rejected the token"
+          },
+          "422": {
+            "description": "A token Oracle will not use (a Slack bot token)"
+          }
+        }
+      }
+    },
+    "/v1/connections/{connection_id}/slack/channels": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "List Slack Channels",
+        "description": "Public channels and the private channels you are in, by name; never DMs.\n\nAnswers are cached for a minute per connection, and a connection may search Slack\na limited number of times a minute.",
+        "operationId": "list_slack_channels",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": "",
+              "title": "Search"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Archived"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackChannelPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Slack refused the request (the connection stays usable)"
+          },
+          "404": {
+            "description": "Not one of your Slack connections"
+          },
+          "409": {
+            "description": "The connection needs reconnecting, or holds a bot token"
+          },
+          "429": {
+            "description": "Slack is rate limiting, or this connection searched too often; retry after Retry-After seconds"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/connections/{connection_id}/github/repos": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "List Github Repos",
+        "description": "Repos your GitHub sign-in can read, matched on owner/name and description.\n\nAnswers are cached for a minute per connection, and a connection may search GitHub\na limited number of times a minute.",
+        "operationId": "list_github_repos",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": "",
+              "title": "Search"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 10
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GithubRepoPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "GitHub refused the request (the connection stays usable)"
+          },
+          "404": {
+            "description": "Not one of your GitHub connections"
+          },
+          "409": {
+            "description": "The connection needs reconnecting"
+          },
+          "429": {
+            "description": "GitHub is rate limiting, or this connection searched too often; retry after Retry-After seconds"
           },
           "422": {
             "description": "Validation Error",
@@ -4317,6 +4497,9 @@
               }
             }
           },
+          "429": {
+            "description": "The provider is rate limiting; retry after Retry-After"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -4427,6 +4610,7 @@
           "sources"
         ],
         "summary": "Update Source",
+        "description": "Read the source first (get_source) and pass its `config_version` as `base_version`: it is required whenever `config` or `connection_id` changes, and a source saved since you read it is refused (409 source_changed). Without it a change of those is refused with 422 {\"code\": \"base_version_required\"}. A rename or a pause needs none, but if given it is checked.",
         "operationId": "update_source",
         "security": [
           {
@@ -4468,6 +4652,12 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "base_version is not the source's config_version, or the name is taken: {\"code\": \"source_changed\", \"message\": ...} for the first"
+          },
+          "429": {
+            "description": "The provider is rate limiting; retry after Retry-After"
           },
           "422": {
             "description": "Validation Error",
@@ -5192,6 +5382,230 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/connections/{connection_id}/fireflies/meetings": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "List Fireflies Meetings",
+        "description": "Your meetings in Fireflies, newest first, a page at a time (search: in titles;\nfrom/to: whole days in UTC).",
+        "operationId": "list_fireflies_meetings",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 255,
+              "default": "",
+              "title": "Search"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{1,6}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirefliesMeetingPage"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of your Fireflies connections"
+          },
+          "409": {
+            "description": "The connection cannot be used (reconnect it), or Fireflies refused"
+          },
+          "429": {
+            "description": "Fireflies limit reached, try later: Fireflies is rate limiting the API key, or this connection has browsed its daily share; see Retry-After"
+          },
+          "502": {
+            "description": "Fireflies did not answer as expected"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/connections/{connection_id}/fireflies/series": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "List Fireflies Series",
+        "description": "Your meetings grouped into their calendar series, with counts and the last date\n(from/to: whole days in UTC). Meetings on no calendar are in no series.",
+        "operationId": "list_fireflies_series",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirefliesSeriesList"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of your Fireflies connections"
+          },
+          "409": {
+            "description": "The connection cannot be used (reconnect it), or Fireflies refused"
+          },
+          "429": {
+            "description": "Fireflies limit reached, try later: Fireflies is rate limiting the API key, or this connection has browsed its daily share; see Retry-After"
+          },
+          "502": {
+            "description": "Fireflies did not answer as expected"
           },
           "422": {
             "description": "Validation Error",
@@ -30608,6 +31022,11 @@
             "title": "Source Item Private",
             "default": false
           },
+          "source_removed": {
+            "type": "boolean",
+            "title": "Source Removed",
+            "default": false
+          },
           "confidence": {
             "anyOf": [
               {
@@ -30858,6 +31277,11 @@
               }
             ],
             "title": "Ref"
+          },
+          "source_removed": {
+            "type": "boolean",
+            "title": "Source Removed",
+            "default": false
           }
         },
         "type": "object",
@@ -32045,6 +32469,180 @@
         "title": "FindingSummaryIn",
         "description": "The line others see at the summary level: omit ``text`` to confirm Oracle's draft\nas it stands."
       },
+      "FirefliesMeetingOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          },
+          "organizer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organizer"
+          },
+          "attendee_count": {
+            "type": "integer",
+            "title": "Attendee Count"
+          },
+          "series_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Key"
+          },
+          "series_title": {
+            "type": "string",
+            "title": "Series Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "date",
+          "duration",
+          "organizer",
+          "attendee_count",
+          "series_key",
+          "series_title"
+        ],
+        "title": "FirefliesMeetingOut"
+      },
+      "FirefliesMeetingPage": {
+        "properties": {
+          "meetings": {
+            "items": {
+              "$ref": "#/components/schemas/FirefliesMeetingOut"
+            },
+            "type": "array",
+            "title": "Meetings"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meetings",
+          "next_cursor"
+        ],
+        "title": "FirefliesMeetingPage"
+      },
+      "FirefliesSeriesList": {
+        "properties": {
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/FirefliesSeriesOut"
+            },
+            "type": "array",
+            "title": "Series"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series",
+          "truncated"
+        ],
+        "title": "FirefliesSeriesList"
+      },
+      "FirefliesSeriesOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "meeting_count": {
+            "type": "integer",
+            "title": "Meeting Count"
+          },
+          "last_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Date"
+          },
+          "organizer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organizer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "meeting_count",
+          "last_date",
+          "organizer"
+        ],
+        "title": "FirefliesSeriesOut"
+      },
       "FlowCatalog": {
         "properties": {
           "flows": {
@@ -32453,6 +33051,103 @@
         ],
         "title": "GateView",
         "description": "The review gate as everyone sees it. ``private_blocking_gap_ids``: for the author\nonly, their private critical blockers, which gate nothing until shared at counts or\nabove (S6)."
+      },
+      "GithubRepoOut": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "owner": {
+            "type": "string",
+            "title": "Owner"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_private": {
+            "type": "boolean",
+            "title": "Is Private"
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "pushed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pushed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name",
+          "owner",
+          "name",
+          "is_private",
+          "is_archived",
+          "description",
+          "pushed_at"
+        ],
+        "title": "GithubRepoOut"
+      },
+      "GithubRepoPage": {
+        "properties": {
+          "repos": {
+            "items": {
+              "$ref": "#/components/schemas/GithubRepoOut"
+            },
+            "type": "array",
+            "title": "Repos"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "sso_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sso Hint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repos",
+          "next_cursor"
+        ],
+        "title": "GithubRepoPage"
       },
       "GoalLink": {
         "properties": {
@@ -33660,6 +34355,14 @@
             },
             "type": "array",
             "title": "Searches",
+            "default": []
+          },
+          "revising": {
+            "items": {
+              "$ref": "#/components/schemas/RunSummary"
+            },
+            "type": "array",
+            "title": "Revising",
             "default": []
           },
           "imports": {
@@ -43258,6 +43961,17 @@
             ],
             "title": "Draft Rejected"
           },
+          "sent_back": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent Back"
+          },
           "progress": {
             "anyOf": [
               {
@@ -43761,6 +44475,17 @@
               }
             ],
             "title": "Draft Rejected"
+          },
+          "sent_back": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent Back"
           },
           "progress": {
             "anyOf": [
@@ -44630,6 +45355,11 @@
             "type": "boolean",
             "title": "Restricted",
             "default": false
+          },
+          "source_removed": {
+            "type": "boolean",
+            "title": "Source Removed",
+            "default": false
           }
         },
         "type": "object",
@@ -45314,6 +46044,11 @@
               }
             ]
           },
+          "sent_back": {
+            "type": "boolean",
+            "title": "Sent Back",
+            "default": false
+          },
           "can_retry_draft_import": {
             "type": "boolean",
             "title": "Can Retry Draft Import",
@@ -45523,6 +46258,86 @@
           "reason"
         ],
         "title": "SkippedSection"
+      },
+      "SlackChannelOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_private": {
+            "type": "boolean",
+            "title": "Is Private"
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived"
+          },
+          "num_members": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Members"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "is_private",
+          "is_archived",
+          "num_members",
+          "topic"
+        ],
+        "title": "SlackChannelOut"
+      },
+      "SlackChannelPage": {
+        "properties": {
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/SlackChannelOut"
+            },
+            "type": "array",
+            "title": "Channels"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channels",
+          "next_cursor"
+        ],
+        "title": "SlackChannelPage"
       },
       "SlideOut": {
         "properties": {
@@ -45868,9 +46683,15 @@
             "enum": [
               "active",
               "paused",
-              "error"
+              "error",
+              "needs_attention"
             ],
             "title": "Status"
+          },
+          "config_version": {
+            "type": "integer",
+            "title": "Config Version",
+            "default": 1
           },
           "last_error": {
             "anyOf": [
@@ -45969,6 +46790,18 @@
               }
             ],
             "title": "Config"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
           }
         },
         "type": "object",
@@ -47769,7 +48602,9 @@
             "enum": [
               "completed",
               "rate_limited",
-              "error"
+              "error",
+              "superseded",
+              "needs_attention"
             ],
             "title": "Outcome"
           },

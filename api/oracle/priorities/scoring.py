@@ -53,6 +53,8 @@ class EvidenceRef:
     id: str
     confidence: float | None
     ref: str | None
+    # From a source item since removed (S5): shown as 'source removed'.
+    source_removed: bool = False
 
 
 @dataclass
@@ -110,7 +112,13 @@ def confidence_of(f: FeatureInput) -> tuple[float, dict[str, Any]]:
             "source": "evidence",
             "explain": f"mean confidence of {len(scored)} scored evidence item(s)",
             "evidence": [
-                {"id": e.id, "confidence": _round(e.confidence), "ref": e.ref} for e in scored
+                {
+                    "id": e.id,
+                    "confidence": _round(e.confidence),
+                    "ref": e.ref,
+                    "source_removed": e.source_removed,
+                }
+                for e in scored
             ],
         }
     if f.stored_confidence is not None:

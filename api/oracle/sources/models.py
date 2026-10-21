@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Text,
     UniqueConstraint,
     Uuid,
@@ -22,7 +23,7 @@ from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
 SOURCE_KINDS = ("upload", "github", "slack", "notion", "fireflies", "google_docs")
-SOURCE_STATUSES = ("active", "paused", "error")
+SOURCE_STATUSES = ("active", "paused", "error", "needs_attention")
 ITEM_KINDS = (
     "file",
     "page",
@@ -69,6 +70,11 @@ class Source(TenantScoped, Base):
     # The owner's allowlist: repos, channel ids, root pages. Never secrets.
     config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     status: Mapped[str] = mapped_column(Text, nullable=False, default="active")
+    # Bumped by a save that changes the config, the connection or the name (never by a
+    # sync or a status update): a save that loaded an older version is refused (409).
+    config_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
     last_error: Mapped[str | None] = mapped_column(Text)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Connector-defined incremental sync position (oracle.sources.base.CursorCheckpoint).
@@ -95,6 +101,9 @@ class SourceItem(TenantScoped, Base):
     author: Mapped[str | None] = mapped_column(Text)
     # Visibility in the source (S3), e.g. {"visibility": "private", "members": [...]}.
     acl: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # Where in the selection the item came from (a Fireflies meeting id and series key, a
+    # Notion root), so narrowing can delete it on save without asking the provider.
+    provenance: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -159,3 +168,17 @@ class Snapshot(TenantScoped, Base):
     # its transaction commits, so a sync that began before the pin and commits after it
     # would otherwise join the pinned set (oracle.sources.items.pinned_at).
     txn_snapshot: Mapped[str | None] = mapped_column(Text, server_default=text(TXN_SNAPSHOT))
+
+
+class BrowseCall(TenantScoped, Base):
+    """Provider calls made while browsing a connection for a source picker (S5): what a
+    connection may still spend is counted here, so every API process sees the same
+    budget (oracle.sources.fireflies_browse)."""
+
+    __tablename__ = "browse_calls"
+
+    connection_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("connections.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    calls: Mapped[int] = mapped_column(Integer, nullable=False)

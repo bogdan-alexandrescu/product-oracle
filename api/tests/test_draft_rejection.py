@@ -11,6 +11,7 @@ same summary (``draft_rejected``), and so does the Inbox (the review's payload).
 import pytest
 
 from oracle.docs.parser import DraftError, parse_draft
+from oracle.docs.schemas import ImportProblem
 from oracle.runs.rejection import summary
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from tests.fixtures import seed_auth
@@ -100,6 +101,18 @@ def test_a_single_unknown_problem_reads_as_its_message():
     )
 
 
+MISSING_SUMMARY = "Oracle could not import prd.md: the run's agents did not write it."
+
+
+def test_a_missing_draft_reads_as_a_sentence():
+    """No file reached the import: a sentence of its own, not "Oracle refused"."""
+    missing = [ImportProblem(code="missing_draft", message="the segment left no prd.md")]
+    assert summary("prd.md", missing) == MISSING_SUMMARY
+    assert summary("roadmap.md", [ImportProblem(code="missing_draft", message="m")]) == (
+        "Oracle could not import roadmap.md: the run's agents did not write it."
+    )
+
+
 @pytest.fixture
 def runtime():
     fake = FakeRuntime()
@@ -158,3 +171,29 @@ async def test_an_imported_draft_has_no_problems(runtime, client):
     assert imp["error"] is None and imp["version"] == 1
     assert imp["problems"] == [] and imp["summary"] is None
     assert run["draft_rejected"] is None
+
+
+async def test_a_segment_that_left_no_draft_carries_the_same_shape(runtime, client):
+    """The missing file is a problem like the parser's, with its own summary, on the
+    segment, in the review's payload and on the runs list."""
+    _, auth = await seed_auth()
+    runtime.script["prd_draft"] = [Outcome(artifacts={"notes.md": "No draft today.\n"})]
+    run = await started(client, auth, document="example-prd", checkpoints=OFF)
+    for _ in range(4):
+        await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "prd_review"
+    imp = run["segments"][3]["draft_import"]
+    assert imp["error"] == "the segment left no prd.md"
+    assert imp["problems"] == [
+        {
+            "code": "missing_draft",
+            "message": "the segment left no prd.md",
+            "section_key": None,
+            "cite_key": None,
+            "line": None,
+        }
+    ]
+    assert imp["summary"] == MISSING_SUMMARY
+    assert pending(run)["payload"]["import"]["summary"] == MISSING_SUMMARY
+    assert run["draft_rejected"] == MISSING_SUMMARY
