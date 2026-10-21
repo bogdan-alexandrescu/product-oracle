@@ -179,6 +179,7 @@ MATRIX: list[tuple[str, str, str, dict]] = [
         "approver",
         {"json": {"verdict": "approved", "note": None}},
     ),
+    ("POST", V2 + "/feedback", "commenter", {"json": {"body": "Add a rollout section."}}),
     ("GET", "/v1/documents/{doc}/feedback", "viewer", {}),
     ("PATCH", "/v1/feedback/{feedback_id}", "approver", {"json": {"status": "declined"}}),
     ("GET", V2 + "/feedback-package", "viewer", {}),
