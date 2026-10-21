@@ -72,7 +72,7 @@ export function ProposalsTab({
                   data-testid="suggested-blocker-row"
                   className="flex items-center gap-4 border-t border-line px-4 py-3 first:border-t-0 max-[600px]:flex-col max-[600px]:items-start max-[600px]:gap-2.5 max-[600px]:px-3"
                 >
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1 max-[600px]:w-full">
                     <div className="flex min-w-0 items-center gap-2">
                       <Chip kind="warn">Suggested blocker</Chip>
                       <button
@@ -207,7 +207,7 @@ function ProposalList({
                 data-testid="proposal"
                 className="flex items-start gap-4 border-t border-line px-4 py-3 first:border-t-0 max-[600px]:flex-col max-[600px]:gap-2.5 max-[600px]:px-3"
               >
-                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5 max-[600px]:w-full">
                   <div className="flex min-w-0 items-center gap-2">
                     <Chip kind="acc">{payload.op ?? "change"}</Chip>
                     <Chip kind="na">{payload.kind ?? "entity"}</Chip>
