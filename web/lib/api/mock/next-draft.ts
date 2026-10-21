@@ -12,6 +12,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { wordDiff } from "@/lib/diff";
+import { turnedOff } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 
 import type { LlmContext } from "./llm-jobs";
@@ -262,7 +263,7 @@ export async function nextDraftRoute(
   if (!p[4] && m === "POST") {
     const latest = latestOf(ctx, doc.id);
     if (!latest) return fail(409, `'${doc.slug}' has no version yet`);
-    if (!enabled(doc)) return fail(409, "Refinement is turned off for this document");
+    if (!enabled(doc)) return fail(409, turnedOff("refinement"));
     const pending = currentJob(ctx, doc.id);
     if (pending && ["queued", "running"].includes(pending.status)) {
       return fail(409, "the next draft is already being built; wait for it or discard it");

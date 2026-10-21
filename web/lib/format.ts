@@ -1,4 +1,4 @@
-import type { CitationOut, FeedbackStatus, LlmJob, LlmJobKind, Suggestion, Verdict } from "@/lib/api/client";
+import type { CitationOut, FeedbackStatus, JobSettings, LlmJob, LlmJobKind, Suggestion, Verdict } from "@/lib/api/client";
 
 const dateFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" });
 const dateTimeFmt = new Intl.DateTimeFormat("en", {
@@ -65,6 +65,19 @@ export const JOB_KIND_LABEL: Record<LlmJobKind, string> = {
   quality_review: "Quality review",
   refinement_batch: "Next draft",
 };
+
+/** Each per-document switch in plain words (History > Oracle's work); the keys stay the API's JobSettings. */
+export const JOB_SETTING_LABEL: Record<keyof JobSettings, string> = {
+  review_comments: "Suggest changes from feedback",
+  reporting: "Write reports",
+  refinement: "Rewrite sections and build drafts",
+  quality_review: "Quality review",
+};
+
+/** Why a job is refused while its switch is off; the API's words (oracle.jobs.service.turned_off). */
+export function turnedOff(setting: keyof JobSettings): string {
+  return `"${JOB_SETTING_LABEL[setting]}" is turned off for this document`;
+}
 
 export const JOB_STATUS_LABEL: Record<LlmJob["status"], string> = {
   queued: "Queued",

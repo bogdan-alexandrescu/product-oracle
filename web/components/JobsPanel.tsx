@@ -6,7 +6,7 @@ import { Button, Empty, InfoTip } from "@/components/ds";
 import { InlineError, JobStatusChip } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type JobSettings, type LlmJob, type LlmJobKind } from "@/lib/api/client";
-import { formatDateTime, formatUsd, JOB_KIND_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
+import { formatDateTime, formatUsd, JOB_KIND_LABEL, JOB_SETTING_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
@@ -150,14 +150,6 @@ function JobRow({ job, canAct, onChanged }: { job: LlmJob; canAct: boolean; onCh
   );
 }
 
-/** Each switch in plain words; the keys stay the API's JobSettings. */
-const SETTING_LABEL: Record<keyof JobSettings, string> = {
-  review_comments: "Suggest changes from feedback",
-  reporting: "Write reports",
-  refinement: "Rewrite sections and build drafts",
-  quality_review: "Quality review",
-};
-
 function SettingsForm({ doc, canEdit }: { doc: string; canEdit: boolean }) {
   const q = useQuery(`llm-settings|${doc}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/llm-jobs/settings", { params: { path: { doc } } })),
@@ -197,7 +189,7 @@ function SettingsForm({ doc, canEdit }: { doc: string; canEdit: boolean }) {
               disabled={!canEdit}
               onChange={(e) => toggle(k, e.target.checked)}
             />
-            {SETTING_LABEL[k] ?? k}
+            {JOB_SETTING_LABEL[k] ?? k}
           </label>
         ))}
       </div>

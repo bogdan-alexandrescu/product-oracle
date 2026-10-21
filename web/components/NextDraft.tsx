@@ -8,7 +8,7 @@ import { onJobSettingsChanged, usePolling } from "@/components/JobsPanel";
 import { Button, Chip, CostFigure, Icon, InfoTip, Notice } from "@/components/ds";
 import { JobStatusChip } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime, NO_ACCOUNT_REASON } from "@/lib/format";
+import { formatDateTime, NO_ACCOUNT_REASON, turnedOff } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, onWaitingChanged, waitingChanged } from "@/lib/waiting";
@@ -71,8 +71,8 @@ export function BuildDraftButton({ doc }: { doc: string }) {
         variant="secondary"
         icon="doc"
         disabled
-        title="Refinement jobs are switched off"
-        aria-label={`${label}: Refinement jobs are switched off`}
+        title={turnedOff("refinement")}
+        aria-label={`${label}: ${turnedOff("refinement")}`}
         data-testid="build-draft"
       >
         {label}
