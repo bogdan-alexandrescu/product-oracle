@@ -9329,6 +9329,24 @@
               ],
               "title": "Status"
             }
+          },
+          {
+            "name": "run_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A run's id for that run's proposals, or `none` for those of no run",
+              "title": "Run Id"
+            },
+            "description": "A run's id for that run's proposals, or `none` for those of no run"
           }
         ],
         "responses": {
@@ -9363,7 +9381,7 @@
           "baseline"
         ],
         "summary": "Create Proposal",
-        "description": "Suggest a change; an approver accepts or rejects it.",
+        "description": "Suggest a change; an approver accepts or rejects it. A run's proposal records\nthe run.",
         "operationId": "create_proposal",
         "security": [
           {
@@ -43286,6 +43304,16 @@
             ],
             "title": "Run Id"
           },
+          "run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProposalRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "actor": {
             "anyOf": [
               {
@@ -43344,6 +43372,42 @@
           "created_at"
         ],
         "title": "ProposalOut"
+      },
+      "ProposalRun": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "flow": {
+            "type": "string",
+            "title": "Flow"
+          },
+          "flow_title": {
+            "type": "string",
+            "title": "Flow Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "flow",
+          "flow_title",
+          "status",
+          "created_at"
+        ],
+        "title": "ProposalRun",
+        "description": "The run that made a proposal, enough to name it and link to it."
       },
       "ProtectedResourceMetadata": {
         "properties": {
@@ -47273,6 +47337,11 @@
             "type": "boolean",
             "title": "Token Read Only",
             "default": false
+          },
+          "open_proposals": {
+            "type": "integer",
+            "title": "Open Proposals",
+            "default": 0
           }
         },
         "type": "object",

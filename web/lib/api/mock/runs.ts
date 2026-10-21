@@ -6,6 +6,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { AGENT_RUN } from "./baseline";
+
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
 type CheckpointOut = Schemas["CheckpointOut"];
@@ -47,6 +49,8 @@ export interface RunsContext {
     slug: string,
     run: Pick<RunOut, "document_kind" | "source" | "template" | "theme">,
   ) => Omit<NonNullable<SegmentOut["draft_import"]>, "warnings" | "problems">;
+  /** The run's open baseline proposals (RunOut.open_proposals). */
+  openProposals?: (runId: string) => number;
   uuid: () => string;
   now: () => string;
 }
@@ -600,6 +604,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       segments: segmentsFor(input.flow, knobs, ctx.uuid),
       checkpoints: [],
       token_read_only: false,
+      open_proposals: 0,
     };
     ctx.db.runs.push(run);
     return json(201, run);
@@ -609,7 +614,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (!r) return fail(404, `run ${p[2]} not found`);
   const done = (status = 200) => {
     refresh(r);
-    return json(status, r);
+    return json(status, { ...r, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
   };
 
   if (p.length === 3 && m === "GET") return done();
@@ -843,6 +848,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
       segments,
       checkpoints: [],
       token_read_only: false,
+      open_proposals: 0,
     };
     db.runs.push(run);
     return run;
@@ -883,6 +889,18 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
     decided_by: null, decided_at: "2026-10-16T09:20:00Z", note: "Turned off when the run started.", payload: {}, created_at: "2026-10-16T09:20:00Z", can_decide: false, cannot_approve: null,
   });
   Object.assign(done, { status: "succeeded", started_at: "2026-10-16T09:00:00Z", finished_at: "2026-10-16T09:20:00Z", overrun_ceiling_usd: 13.5 });
+
+  // A finished Baseline to PRD run whose agents proposed baseline changes (./baseline.ts).
+  const off = { baseline_confirm: false, feature_set: false, priority_order: false, prd_review: false };
+  const proposer = make("baseline_to_prd", "saved-carts", { checkpoints: off }, "2026-10-16T08:00:00Z");
+  proposer.id = AGENT_RUN;
+  from(proposer.created_at);
+  for (const seg of proposer.segments) {
+    const at = now();
+    seg.attempts.push({ attempt: 1, workflow_id: `mock-wf-b3-${seg.seq}`, submitted_at: at, cost_usd: seg.estimate_usd ?? 0, note: null, state: "succeeded" });
+    Object.assign(seg, { status: "succeeded", cost_usd: seg.estimate_usd ?? 0, started_at: at, finished_at: now() });
+  }
+  Object.assign(proposer, { status: "succeeded", started_at: proposer.created_at, finished_at: now() });
 
   for (const r of db.runs) refresh(r);
   return db;

@@ -6,9 +6,23 @@ import { Button, Empty, InfoTip } from "@/components/ds";
 import { InlineError, JobStatusChip } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type JobSettings, type LlmJob, type LlmJobKind } from "@/lib/api/client";
-import { formatDateTime, formatUsd, JOB_KIND_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
+import { formatDateTime, formatUsd, JOB_KIND_LABEL, JOB_SETTING_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
+
+/** The #hash of History's fold of Oracle's work, which the overview's version inspector links to. */
+export const ORACLE_WORK = "oracle-work";
+
+const SETTINGS_EVENT = "po:llm-settings-changed";
+
+/** Calls `fn` after an owner saves a document's switches on this page; returns the unsubscribe. */
+export function onJobSettingsChanged(doc: string, fn: () => void): () => void {
+  const listener = (e: Event) => {
+    if ((e as CustomEvent<{ doc: string }>).detail.doc === doc) fn();
+  };
+  window.addEventListener(SETTINGS_EVENT, listener);
+  return () => window.removeEventListener(SETTINGS_EVENT, listener);
+}
 
 /** Polls while any job is queued or running, so the panel shows the worker's progress. */
 export function usePolling(active: boolean, reload: () => Promise<void>, ms = 1500) {
@@ -69,7 +83,9 @@ function JobRow({ job, canAct, onChanged }: { job: LlmJob; canAct: boolean; onCh
     <li className="border-b border-line py-3 last:border-b-0" data-testid="llm-job" data-status={job.status}>
       <div className="flex flex-wrap items-center gap-2">
         <JobStatusChip status={job.status} />
-        <span className="font-semibold text-text">{JOB_KIND_LABEL[job.kind]}</span>
+        <span className="font-semibold text-text" data-testid="job-kind">
+          {JOB_KIND_LABEL[job.kind]}
+        </span>
         {job.version_number != null && <span className="font-mono text-[13px] text-text2">v{job.version_number}</span>}
         {job.section_key && <span className="truncate font-mono text-[13px] text-text2">#{job.section_key}</span>}
         <span className="tnum ml-auto text-[13px] text-text2">{formatDateTime(job.created_at)}</span>
@@ -83,35 +99,38 @@ function JobRow({ job, canAct, onChanged }: { job: LlmJob; canAct: boolean; onCh
         </div>
       )}
       {job.status === "queued" && job.error && <p className="mt-1 text-sm font-medium text-warn">{job.error}</p>}
-      <dl className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-text2">
-        <div className="flex items-center gap-1.5">
-          <dt className="font-semibold">Account</dt>
-          <dd className="text-text" data-testid="job-account">
-            {accountName(job)}
-          </dd>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <dt className="font-semibold">Cost</dt>
-          {/* CostFigure's look; formatUsd keeps sub-cent costs readable ($0.0034). */}
-          <dd data-testid="job-cost" data-cost="small" className="tnum font-mono font-medium text-text2">
-            {formatUsd(job.cost_usd)}
-          </dd>
-        </div>
-        {job.input_tokens != null && (
+      {job.attempts > 1 && (
+        <p className="tnum mt-1 text-[13px] text-text2">
+          <span className="font-semibold">Attempts</span> <span className="text-text">{job.attempts}</span>
+        </p>
+      )}
+      {/* P3d Cost prominence: the account, tokens and cost sit behind Details. */}
+      <details className="mt-1.5 text-[13px] text-text2">
+        <summary className="w-fit cursor-pointer font-semibold text-text2 hover:text-text">Details</summary>
+        <dl className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
           <div className="flex items-center gap-1.5">
-            <dt className="font-semibold">Tokens</dt>
-            <dd className="tnum text-text">
-              {job.input_tokens.toLocaleString("en")} in · {(job.output_tokens ?? 0).toLocaleString("en")} out
+            <dt className="font-semibold">Account</dt>
+            <dd className="text-text" data-testid="job-account">
+              {accountName(job)}
             </dd>
           </div>
-        )}
-        {job.attempts > 1 && (
+          {job.input_tokens != null && (
+            <div className="flex items-center gap-1.5">
+              <dt className="font-semibold">Tokens</dt>
+              <dd className="tnum text-text" data-testid="job-tokens">
+                {job.input_tokens.toLocaleString("en")} in · {(job.output_tokens ?? 0).toLocaleString("en")} out
+              </dd>
+            </div>
+          )}
           <div className="flex items-center gap-1.5">
-            <dt className="font-semibold">Attempts</dt>
-            <dd className="tnum text-text">{job.attempts}</dd>
+            <dt className="font-semibold">Cost</dt>
+            {/* CostFigure's look; formatUsd keeps sub-cent costs readable ($0.0034). */}
+            <dd data-testid="job-cost" data-cost="small" className="tnum font-mono font-medium text-text2">
+              {formatUsd(job.cost_usd)}
+            </dd>
           </div>
-        )}
-      </dl>
+        </dl>
+      </details>
       {canAct && (job.status === "failed" || job.status === "cancelled" || job.status === "queued" || job.status === "running") && (
         <div className="mt-2 flex gap-2">
           {(job.status === "failed" || job.status === "cancelled") && (
@@ -145,6 +164,7 @@ function SettingsForm({ doc, canEdit }: { doc: string; canEdit: boolean }) {
     try {
       const next = await unwrap(api.PUT("/v1/documents/{doc}/llm-jobs/settings", { params: { path: { doc } }, body }));
       q.setData(() => next);
+      window.dispatchEvent(new CustomEvent(SETTINGS_EVENT, { detail: { doc } }));
     } catch (e) {
       q.setData(() => before);
       setError(e instanceof Error ? e.message : "Could not save.");
@@ -154,10 +174,9 @@ function SettingsForm({ doc, canEdit }: { doc: string; canEdit: boolean }) {
   return (
     <fieldset className="rounded-button border border-line px-3 pt-1 pb-2.5" data-testid="llm-job-settings">
       <legend className="flex items-center gap-1.5 px-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
-        Built-in jobs
-        <InfoTip label="built-in jobs" align="start">
-          The model jobs Oracle runs on this document on its own: it handles new comments and writes each version&apos;s
-          reports.{!canEdit && " Only an owner turns these on or off."}
+        Oracle does on its own
+        <InfoTip label="Oracle does on its own" align="start">
+          Oracle reads new feedback and writes reports by itself. Owners turn each off.
         </InfoTip>
       </legend>
       <div className="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -170,7 +189,7 @@ function SettingsForm({ doc, canEdit }: { doc: string; canEdit: boolean }) {
               disabled={!canEdit}
               onChange={(e) => toggle(k, e.target.checked)}
             />
-            {JOB_KIND_LABEL[k]}
+            {JOB_SETTING_LABEL[k] ?? k}
           </label>
         ))}
       </div>
@@ -179,7 +198,7 @@ function SettingsForm({ doc, canEdit }: { doc: string; canEdit: boolean }) {
   );
 }
 
-/** The document's built-in model jobs: status, the account each ran on, cost, retry and cancel. */
+/** Oracle's work on a document (History): its switches, run-now buttons, and each job with retry and cancel. */
 export function JobsPanel({ doc, version, refreshKey = 0 }: { doc: string; version?: number; refreshKey?: number }) {
   const { role } = useMe();
   const canAct = hasRole(role, "approver");
@@ -207,22 +226,18 @@ export function JobsPanel({ doc, version, refreshKey = 0 }: { doc: string; versi
       <SettingsForm doc={doc} canEdit={hasRole(role, "owner")} />
       {canAct && (
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => queue("review_comments")}>
-            Handle new feedback
-          </Button>
-          <Button onClick={() => queue("reporting")}>
-            Write reports
-          </Button>
+          <Button onClick={() => queue("review_comments")}>Suggest changes now</Button>
+          <Button onClick={() => queue("reporting")}>Write reports now</Button>
         </div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {!q.data && !q.error && <Loading />}
       {q.data && q.data.length === 0 && (
-        <Empty>No jobs yet</Empty>
+        <Empty>Oracle hasn&apos;t worked on this version yet.</Empty>
       )}
       {q.data && q.data.length > 0 && (
-        <ol className="flex flex-col" aria-label="Jobs">
+        <ol className="flex flex-col" aria-label="Oracle's work">
           {q.data.map((j) => (
             <JobRow key={j.id} job={j} canAct={canAct} onChanged={() => void q.reload()} />
           ))}

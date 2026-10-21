@@ -33,10 +33,14 @@ from oracle.review.schemas import Resolution
 
 # Levels 1-3 start a section; deeper headings are part of the section body.
 SECTION_LEVELS = (1, 2, 3)
-SECTION_ID_RE = re.compile(r"\s*\{#([A-Za-z0-9][A-Za-z0-9_.:-]*)\}\s*$")
+# The lookbehind starts a match only at the head of a whitespace run, so a long run that
+# is not followed by an id is scanned once (linear), not once per space.
+SECTION_ID_RE = re.compile(r"(?<!\s)\s*\{#([A-Za-z0-9][A-Za-z0-9_.:-]*)\}\s*$")
 CITATION_RE = re.compile(r"\[c:([^\]\s]+)\]")
-# A citation marker plus the horizontal space before it, removed from body_text.
-CITATION_STRIP_RE = re.compile(r"[ \t]*\[c:[^\]\s]+\]")
+# A citation marker plus the horizontal space before it, removed from body_text. Linear:
+# a match starts only at the head of a space run, and a marker's id stops at the next
+# "[c:", so neither a long run nor a flood of "[c:" is rescanned from every position.
+CITATION_STRIP_RE = re.compile(r"(?<![ \t])[ \t]*\[c:(?:[^\]\s\[]|\[(?!c:))++\]")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 # The markers an export writes after a roadmap date that rests on no verified basis

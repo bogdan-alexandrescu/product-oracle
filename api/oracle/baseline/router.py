@@ -6,7 +6,7 @@ Commenters may only propose (POST /v1/baseline/proposals).
 """
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -15,7 +15,7 @@ from sqlalchemy import inspect
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import recheck_caller, require_role, require_role_now
 from oracle.baseline import conflicts, evidence, public_links, scoring, service, trace, yaml_io
-from oracle.baseline.models import Edge, Entity
+from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.baseline.schemas import (
     ConflictCreate,
     ConflictOut,
@@ -74,8 +74,32 @@ def _fail(exc: service.BaselineError) -> HTTPException:
     return HTTPException(exc.status_code, str(exc))
 
 
+def _run_of(principal: Principal, run_id: uuid.UUID | None) -> uuid.UUID | None:
+    """The run a write records: a run token's own (it may not name another run); a
+    person or an API token names any run, or none."""
+    if principal.run_id is None:
+        return run_id
+    if run_id is not None and run_id != principal.run_id:
+        raise HTTPException(422, "a run can only propose for itself")
+    return principal.run_id
+
+
 def _writer(principal: Principal, body: OriginIn | EntityCreate | EdgeCreate) -> service.Writer:
-    return service.Writer(principal, body.origin, run_id=body.run_id, reason=body.reason)
+    return service.Writer(
+        principal, body.origin, run_id=_run_of(principal, body.run_id), reason=body.reason
+    )
+
+
+async def _proposals_out(db, rows: list[Proposal]) -> list[ProposalOut]:
+    """ProposalOut with the summary of the run that made each (one query for them all)."""
+    runs = await service.proposal_runs(db, (p.run_id for p in rows))
+    return [
+        ProposalOut.model_validate(p).model_copy(update={"run": runs.get(p.run_id)}) for p in rows
+    ]
+
+
+async def _proposal_out(db, row: Proposal | None) -> ProposalOut | None:
+    return (await _proposals_out(db, [row]))[0] if row is not None else None
 
 
 async def _entities_out(
@@ -112,7 +136,7 @@ async def _entity_write(db, result: service.WriteResult, created: bool = False) 
     body = EntityWriteOut(
         applied=result.applied,
         entity=(await _entities_out(db, [result.entity]))[0] if result.entity else None,
-        proposal=ProposalOut.model_validate(result.proposal) if result.proposal else None,
+        proposal=await _proposal_out(db, result.proposal),
     )
     code = status.HTTP_202_ACCEPTED if result.proposal else (201 if created else 200)
     return JSONResponse(body.model_dump(mode="json"), code)
@@ -124,7 +148,7 @@ async def _edge_write(db, result: service.WriteResult, created: bool = False) ->
     body = EdgeWriteOut(
         applied=result.applied,
         edge=(await _edges_out(db, [result.edge]))[0] if result.edge else None,
-        proposal=ProposalOut.model_validate(result.proposal) if result.proposal else None,
+        proposal=await _proposal_out(db, result.proposal),
     )
     code = status.HTTP_202_ACCEPTED if result.proposal else (201 if created else 200)
     return JSONResponse(body.model_dump(mode="json"), code)
@@ -229,16 +253,14 @@ async def delete_entity(
     try:
         entity = await service.get_entity(db, entity_id)
         result = await service.delete_entity(
-            db, service.Writer(principal, origin, run_id=run_id), entity
+            db, service.Writer(principal, origin, run_id=_run_of(principal, run_id)), entity
         )
     except service.BaselineError as exc:
         raise _fail(exc) from exc
     await db.commit()
     await _fresh(db, result.proposal)
     if result.proposal:
-        return JSONResponse(
-            ProposalOut.model_validate(result.proposal).model_dump(mode="json"), 202
-        )
+        return JSONResponse((await _proposal_out(db, result.proposal)).model_dump(mode="json"), 202)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -369,16 +391,14 @@ async def delete_edge(
     try:
         edge = await service.get_edge(db, edge_id)
         result = await service.delete_edge(
-            db, service.Writer(principal, origin, run_id=run_id), edge
+            db, service.Writer(principal, origin, run_id=_run_of(principal, run_id)), edge
         )
     except service.BaselineError as exc:
         raise _fail(exc) from exc
     await db.commit()
     await _fresh(db, result.proposal)
     if result.proposal:
-        return JSONResponse(
-            ProposalOut.model_validate(result.proposal).model_dump(mode="json"), 202
-        )
+        return JSONResponse((await _proposal_out(db, result.proposal)).model_dump(mode="json"), 202)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -541,15 +561,29 @@ async def rescore(principal: ApproverNow, db: TenantDB) -> RescoreResult:
 
 @router.get("/proposals", response_model=list[ProposalOut])
 async def list_proposals(
-    principal: Reader, db: TenantDB, status: ProposalStatus | None = None
+    principal: Reader,
+    db: TenantDB,
+    status: ProposalStatus | None = None,
+    run_id: Annotated[
+        str | None,
+        Query(description="A run's id for that run's proposals, or `none` for those of no run"),
+    ] = None,
 ) -> list[ProposalOut]:
-    return [ProposalOut.model_validate(p) for p in await service.list_proposals(db, status)]
+    run: uuid.UUID | Literal["none"] | None = None
+    if run_id is not None:
+        try:
+            run = "none" if run_id == "none" else uuid.UUID(run_id)
+        except ValueError:
+            raise HTTPException(422, "run_id must be a run's id or none") from None
+    return await _proposals_out(db, await service.list_proposals(db, status, run))
 
 
 @router.post("/proposals", response_model=ProposalOut, status_code=status.HTTP_201_CREATED)
 async def create_proposal(body: ProposalCreate, principal: Commenter, db: TenantDB) -> ProposalOut:
-    """Suggest a change; an approver accepts or rejects it."""
-    writer = service.Writer(principal, "agent", run_id=body.run_id, reason=body.reason)
+    """Suggest a change; an approver accepts or rejects it. A run's proposal records
+    the run."""
+    run_id = _run_of(principal, body.run_id)
+    writer = service.Writer(principal, "agent", run_id=run_id, reason=body.reason)
     try:
         proposal = await service.submit_proposal(
             db,
@@ -564,7 +598,7 @@ async def create_proposal(body: ProposalCreate, principal: Commenter, db: Tenant
         raise _fail(exc) from exc
     await db.commit()
     await _fresh(db, proposal)
-    return ProposalOut.model_validate(proposal)
+    return await _proposal_out(db, proposal)
 
 
 @router.post("/proposals/{proposal_id}/accept", response_model=ProposalOut)
@@ -598,7 +632,7 @@ async def _decide(db, principal, proposal_id, accept, body) -> ProposalOut:
         raise _fail(exc) from exc
     await db.commit()
     await _fresh(db, proposal)
-    return ProposalOut.model_validate(proposal)
+    return await _proposal_out(db, proposal)
 
 
 # --- conflicts ------------------------------------------------------------------------------

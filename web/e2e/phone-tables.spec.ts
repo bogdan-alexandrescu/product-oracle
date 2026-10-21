@@ -76,7 +76,7 @@ test("phone runs: run names are whole, costs show on approvals and overruns, the
   await login(page);
   await page.goto("/runs");
   const rows = page.getByTestId("run-row");
-  await expect(rows).toHaveCount(4);
+  await expect(rows).toHaveCount(5);
   for (const row of await rows.all()) {
     expect(await clippedTexts(row)).toEqual([]);
     await expectInViewport(page, row.locator('td[data-phone="title"]'));

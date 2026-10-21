@@ -20,10 +20,11 @@ import {
   Split,
   type Column,
 } from "@/components/ds";
-import { JobsPanel } from "@/components/JobsPanel";
+import { ORACLE_WORK } from "@/components/JobsPanel";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type VersionSummary } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
 
@@ -99,6 +100,7 @@ function VersionInspector({
   v: VersionSummary;
   latest: number | null | undefined;
 }) {
+  const { role } = useMe();
   return (
     <Inspector
       testId="version-inspector"
@@ -141,6 +143,13 @@ function VersionInspector({
               </li>
             ))}
           </ul>
+        </InspectorSection>
+      )}
+      {hasRole(role, "approver") && (
+        <InspectorSection>
+          <Link href={`/documents/${doc}/v/${v.number}?tab=history#${ORACLE_WORK}`} className="text-sm font-medium text-accent-ink hover:underline">
+            Oracle&apos;s work on v{v.number}
+          </Link>
         </InspectorSection>
       )}
     </Inspector>
@@ -208,9 +217,6 @@ export function DocumentOverview({ doc }: { doc: string }) {
                   onActivate={(k) => router.push(versionHref(doc, d.kind, k))}
                   empty="No versions yet"
                 />
-              </Panel>
-              <Panel title="Jobs" bodyClassName="p-4">
-                <JobsPanel doc={doc} />
               </Panel>
             </Split>
           </>

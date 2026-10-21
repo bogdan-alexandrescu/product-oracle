@@ -728,6 +728,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     documents: db.documents,
     suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
     staged: (id) => isStaged(withSuggestion(db.llm, { id } as FeedbackRow).suggestion),
+    openProposals: (runId) => db.baseline.proposals.filter((p) => p.run_id === runId && p.status === "open").length,
     latestVersion: (id) => {
       const doc = db.documents.find((d) => d.id === id);
       const vs = doc ? docVersions(db, doc) : [];
@@ -1394,7 +1395,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // The baseline mock checks roles itself (commenters propose, approvers decide).
   if (p[1] === "baseline") {
-    return routeBaseline(db.baseline, { userId: me.id, role: me.role }, req, p.slice(2), q);
+    const runOf = (runId: string): Schemas["ProposalRun"] | null => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const r = db.runs.runs.find((x) => x.id === runId);
+      return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
+    };
+    return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf }, req, p.slice(2), q);
   }
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);

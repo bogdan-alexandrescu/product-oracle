@@ -40,7 +40,7 @@ import {
   SEGMENT_STATUS_KIND,
   SEGMENT_STATUS_LABEL,
   SENT_BACK_STATE,
-  SpendBar,
+  RunCost,
   deliveryText,
   shortId,
   usd,
@@ -359,7 +359,10 @@ export function RunDetail({ id }: { id: string }) {
   );
 }
 
-/** The run in the inspector: what it waits on, its cost (P3d: small unless approval or overrun), details. */
+/**
+ * The run in the inspector: what it waits on, then its details. P3d Cost prominence: the cost is
+ * one small Details line; a Cost section comes forward only on a cost approval or an overrun.
+ */
 function RunInspector({ run }: { run: RunOut }) {
   const current =
     run.segments.find((s) => s.status === "running") ??
@@ -369,7 +372,6 @@ function RunInspector({ run }: { run: RunOut }) {
   const waiting = run.waiting_on;
   const approval = run.status === "awaiting_approval";
   const overrun = run.status === "paused_overrun";
-  const prominent = approval ? "bg-warn-bg text-warn" : overrun ? "bg-crit-bg text-crit" : "";
   return (
     <Inspector
       label="Run"
@@ -390,41 +392,40 @@ function RunInspector({ run }: { run: RunOut }) {
         </>
       }
     >
-      <InspectorSection
-        label={approval ? "Cost approval" : overrun ? "Overrun" : "Cost"}
-        tools={
-          <InfoTip label="cost" side="bottom">
-            {approval && <span className="block">The estimate is over $50, so an owner approves the cost before any agent starts.</span>}
-            {overrun && (
-              <span className="block">
-                Spend passed {usd(run.overrun_ceiling_usd)} (1.5× the estimate). An owner resumes the run or cancels it.
-              </span>
-            )}
-            {run.overrun_ceiling_usd != null && <span className="block">Pauses above {usd(run.overrun_ceiling_usd)}.</span>}
-            {run.knobs.budget_usd != null && <span className="block">Budget {usd(run.knobs.budget_usd)}.</span>}
-            {run.segments.map((s) => (
-              <span key={s.id} className="block">
-                {s.seq}. {s.title}: {usd(s.cost_usd)} / {usd(s.estimate_usd)}
-              </span>
-            ))}
-          </InfoTip>
-        }
-      >
-        <div className="mb-2.5 flex items-center">
-          <span
-            className={`tnum inline-flex items-center gap-1 font-mono font-medium whitespace-nowrap ${
-              prominent ? `h-7 rounded-lg px-2 text-[15px] ${prominent}` : "text-[13px] text-text2"
-            }`}
-          >
-            <span data-testid="run-spent">{usd(run.spent_usd)}</span>
-            <span>/ {usd(run.estimate_usd)} est.</span>
-          </span>
-        </div>
-        <SpendBar spent={run.spent_usd} estimate={run.estimate_usd ?? null} ceiling={run.overrun_ceiling_usd ?? null} />
-      </InspectorSection>
-      <InspectorSection label="Details">
+      {(approval || overrun) && (
+        <InspectorSection
+          testId="run-cost-section"
+          label={approval ? "Cost approval" : "Overrun"}
+          tools={
+            <InfoTip label="cost" side="bottom">
+              {approval && <span className="block">The estimate is over $50, so an owner approves the cost before any agent starts.</span>}
+              {overrun && (
+                <span className="block">
+                  Spend passed {usd(run.overrun_ceiling_usd)} (1.5× the estimate). An owner resumes the run or cancels it.
+                </span>
+              )}
+              {run.overrun_ceiling_usd != null && <span className="block">Pauses above {usd(run.overrun_ceiling_usd)}.</span>}
+              {run.knobs.budget_usd != null && <span className="block">Budget {usd(run.knobs.budget_usd)}.</span>}
+            </InfoTip>
+          }
+        >
+          <RunCost run={run} />
+        </InspectorSection>
+      )}
+      <InspectorSection label="Details" testId="run-details">
+        <InspectorRow
+          value={
+            // CostFigure's small look, with the spent value marked.
+            <span data-testid="run-cost" data-cost="small" className="tnum font-mono text-[13px] leading-none font-medium whitespace-nowrap text-text2">
+              <span data-testid="run-spent">{usd(run.spent_usd)}</span> of {usd(run.estimate_usd)} est.
+            </span>
+          }
+        >
+          Cost
+        </InspectorRow>
         <InspectorRow value={<span className="capitalize">{run.knobs.depth}</span>}>Depth</InspectorRow>
         <InspectorRow value={formatDateTime(run.created_at)}>Created</InspectorRow>
+        <ProposalsRow run={run} />
         {run.snapshot_as_of && <InspectorRow value={formatDateTime(run.snapshot_as_of)}>Sources as of</InspectorRow>}
         <InspectorRow
           value={
@@ -447,6 +448,35 @@ function RunInspector({ run }: { run: RunOut }) {
         </InspectorRow>
       </InspectorSection>
     </Inspector>
+  );
+}
+
+/** "Baseline proposals: 2 open · Review": what the run proposed that still waits for a person. */
+function ProposalsRow({ run }: { run: RunOut }) {
+  const open = run.open_proposals ?? 0;
+  // RunOut counts open proposals only: a run that has started says "none open" once all were decided.
+  if (open === 0 && !run.started_at) return null;
+  return (
+    <div data-testid="run-proposals-row">
+      <InspectorRow
+        value={
+          <span data-testid="run-proposals">
+            {open > 0 ? (
+              <>
+                {open} open ·{" "}
+                <Link href={`/baseline?tab=proposals&run=${run.id}`} className="text-accent-ink hover:underline">
+                  Review
+                </Link>
+              </>
+            ) : (
+              "none open"
+            )}
+          </span>
+        }
+      >
+        Baseline proposals
+      </InspectorRow>
+    </div>
   );
 }
 
