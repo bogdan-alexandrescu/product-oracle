@@ -15,7 +15,6 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
-from starlette.concurrency import run_in_threadpool
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
@@ -24,6 +23,7 @@ from oracle.docs import service as docs_service
 from oracle.docs.edit import EditForbidden, EditRefused, edit_section
 from oracle.docs.parser import DraftError
 from oracle.docs.schemas import ImportErrorResponse, VersionOut
+from oracle.export import offload
 from oracle.jobs import service as jobs_service
 from oracle.review import collab, patches, publish, state
 from oracle.review.models import DocumentPublication, SectionReviewState
@@ -432,13 +432,18 @@ async def publish_version(
     doc: str, n: int, body: VersionPublishIn, principal: ApproverNow, db: TenantDB
 ) -> PublicationOut | JSONResponse:
     """Publish an approved version, immutably. Refused (409, nothing written) while
-    the publish check lists a blocker."""
+    the publish check lists a blocker, or when the version changed during two renders.
+    Rendered on the export pool in an export place, like an export: refused 429
+    ``export_busy_you`` or 503 ``export_busy``, with a Retry-After."""
     version = await _call(get_version(db, doc, n))
     document = await get_document(db, doc)
     try:
         row = await publish.publish(
             db, principal, document, version, content_hash=body.content_hash, note=body.note
         )
+    except offload.Refused as e:
+        await db.rollback()
+        return e.response()
     except publish.PublishRefusedError as e:
         await db.rollback()
         refused = PublishRefused(detail=str(e), check=e.check)
@@ -500,12 +505,14 @@ async def export_publication(
     doc: str,
     p: int,
     db: TenantDB,
+    principal: Viewer,
     fmt: Literal["html", "pdf", "md"] = Query("html", alias="format"),
     layer: Literal["full", "brief", "deck"] = Query("full"),
 ) -> Response:
     """The published HTML (full, brief or deck), its PDF, or the full markdown. Served
     from what was stored at publish time, so later edits, theme changes and source
-    updates never change it."""
+    updates never change it. A PDF renders on the export pool in an export place, like an
+    export (refused: 429 ``export_busy_you`` or 503 ``export_busy``)."""
     from oracle.export.pdf import PdfUnavailable, html_to_pdf
 
     row = await _publication(db, doc, p)
@@ -518,8 +525,13 @@ async def export_publication(
     if fmt == "md":
         content = publish.published_markdown(row)
     elif fmt == "pdf":
+        # On the export pool in an export place, like an export (oracle.export.offload).
+        await db.commit()  # no connection held while it waits for the pool
         try:
-            content = await run_in_threadpool(html_to_pdf, html)
+            with offload.place(principal) as held:
+                content = await offload.run(held, html_to_pdf, html)
+        except offload.Refused as e:
+            return e.response()
         except PdfUnavailable as e:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from None
     else:
