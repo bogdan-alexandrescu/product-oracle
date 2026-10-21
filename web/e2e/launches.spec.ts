@@ -44,16 +44,27 @@ async function setTier1(page: Page) {
   await expect(inspector(page).getByTestId("launch-tier")).toHaveText("Tier 1");
 }
 
-/** The text of the Inbox's "Notes to send" row, whichever state tab it is under. */
+/** The text of the Inbox's "Notes to send" row, whichever state tab (New or Open) it is under. */
 async function notesToSend(page: Page): Promise<string> {
   await page.getByTestId("nav-inbox").first().click();
-  await expect(page.getByTestId("inbox-state-tabs")).toBeVisible();
-  for (const name of ["New", "Open"]) {
-    await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: new RegExp(`^${name}`) }).click();
-    const row = page.getByTestId("launch-need").filter({ hasText: "Notes to send" });
-    if (await row.count()) return (await row.first().innerText()).trim();
-  }
-  throw new Error("no Notes to send row in the Inbox");
+  await expect(page).toHaveURL(/\/inbox$/);
+  let text = "";
+  await expect
+    .poll(async () => {
+      for (const name of ["New", "Open"]) {
+        await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: new RegExp(`^${name}`) }).click();
+        const panel = page.getByTestId(`inbox-tab-${name.toLowerCase()}`);
+        await expect(panel).toBeVisible();
+        const row = panel.getByTestId("launch-need").filter({ hasText: "Notes to send" });
+        if (await row.count()) {
+          text = (await row.first().innerText()).trim();
+          return true;
+        }
+      }
+      return false;
+    })
+    .toBe(true);
+  return text;
 }
 
 test("12a: an approver filters Ready, sees Oracle's suggested tier and sets Tier 1: 12 tasks", async ({ page }) => {
@@ -90,9 +101,11 @@ test("12b: the approver edits Oracle's support notes and marks the task done: 1 
   await support.getByRole("button", { name: "Done" }).click();
   await expect(support).toHaveAttribute("data-status", "done");
   await expect(page.getByTestId("launch-row").filter({ hasText: "Hard budget caps" }).getByTestId("launch-tasks-count")).toHaveText("1 of 12");
-  // The edit stuck.
-  await support.getByRole("button", { name: "Open draft" }).click();
-  await expect(support.getByRole("textbox")).toHaveValue(/each project can have a hard monthly cap/);
+  // The edit stuck: after a reload, the draft holds the edited text.
+  await page.reload();
+  await page.getByTestId("launch-row").filter({ hasText: "Hard budget caps" }).click();
+  await task(page, "support_notes").getByRole("button", { name: "Open draft" }).click();
+  await expect(task(page, "support_notes").getByRole("textbox")).toHaveValue(/each project can have a hard monthly cap/);
 });
 
 test("12c: Mark launched lists the open tasks; confirming sets Launched and the notes list two people", async ({ page }) => {
