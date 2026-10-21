@@ -195,6 +195,7 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
 
     Disabling a disabled member is a no-op. The last active owner cannot be disabled.
     :func:`restore_member` re-enables sign-in only."""
+    from oracle.discussions.service import hand_over as hand_over_discussions
     from oracle.mcp.oauth.models import OAuthToken
     from oracle.review.publish import record_source_revocation
     from oracle.review.state import lapse_approvals
@@ -281,6 +282,9 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
     lapsed = await lapse_approvals(
         session, principal, reviewer_id=user.id, reason="member was removed (disabled)"
     )
+
+    # G1: their discussions pass to an approver in each (audited).
+    await hand_over_discussions(session, principal, user.id)
 
     user.disabled_at = at
     user.disabled_by = principal.id

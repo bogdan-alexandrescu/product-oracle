@@ -21,6 +21,7 @@ from tests.conftest import seed_company
 from tests.coverage_helpers import read_only_mcp
 from tests.fixtures import draft, import_draft
 from tests.test_mcp import mcp_client, run_token, text_of
+from tests.test_runs import runtime  # noqa: F401
 
 SLUG = "checkout-redesign"
 SECRET = "Can this ship without the detection item?"
@@ -95,7 +96,7 @@ async def events(ctx, action: str) -> list[AuditEvent]:
     async with tenant_session(ctx.tenant_id) as s:
         return list(
             await s.scalars(
-                select(AuditEvent).where(AuditEvent.action == action).order_by(AuditEvent.id)
+                select(AuditEvent).where(AuditEvent.action == action).order_by(AuditEvent.created_at)
             )
         )
 
@@ -486,7 +487,7 @@ async def test_a_section_discussion_follows_the_section_to_the_next_version(clie
 # protects=criterion 11: run tokens never reach discussions and read-only credentials change
 # nothing (AC1); fails_when=a run token lists discussions or an oracle:read client posts;
 # no_claim=G5's own-run tool.
-async def test_run_tokens_and_read_only_clients_are_refused(client):
+async def test_run_tokens_and_read_only_clients_are_refused(client, runtime):  # noqa: F811
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     token = await run_token(
@@ -568,8 +569,8 @@ async def test_every_write_is_audited_without_message_text(client):
         for e in found:
             assert e.entity == "discussion" and e.entity_id == uuid.UUID(d["id"])
             assert "Can this ship" not in str(e.data), action
-    [posted, *_] = await events(ctx, "discussion.message_post")
-    assert posted.data["length"] == len(SECRET)
+    posted = await events(ctx, "discussion.message_post")
+    assert {e.data["length"] for e in posted} == {len(SECRET), len(SECRET + " Yes.")}
     [vis] = await events(ctx, "discussion.visibility")
     assert vis.data["from"] == "open" and vis.data["to"] == "private"
 
