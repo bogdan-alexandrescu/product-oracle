@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Mono, Inter_Tight } from "next/font/google";
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { AppShell } from "@/components/ds/AppShell";
 import { MeProvider, MeSync } from "@/lib/me";
@@ -22,7 +22,7 @@ export const viewport: Viewport = {
   colorScheme: "light dark",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"

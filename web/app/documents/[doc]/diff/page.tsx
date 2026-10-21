@@ -2,8 +2,9 @@ import { Suspense } from "react";
 
 import { DiffView } from "@/components/DiffView";
 import { Loading } from "@/components/ui";
+import type { RouteProps } from "@/lib/route-props";
 
-type Props = PageProps<"/documents/[doc]/diff">;
+type Props = RouteProps<{ doc: string }>;
 
 function num(v: string | string[] | undefined): number | undefined {
   const n = Number(Array.isArray(v) ? v[0] : v);
