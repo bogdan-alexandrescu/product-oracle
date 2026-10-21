@@ -109,6 +109,12 @@ export const SEGMENT_STATUS_LABEL: Record<SegmentOut["status"], string> = {
  */
 export const SENT_BACK_STATE = "Revising: sent back by Oracle";
 
+/** C8: the Priorities screen in run mode for a priority stop's proposed order, if it has one. */
+export function orderHref(cp: { kind: CheckpointKind; payload?: Record<string, unknown> | null }): string | null {
+  const id = cp.kind === "priority_order" ? cp.payload?.priority_snapshot_id : null;
+  return typeof id === "string" ? `/priorities?snapshot=${id}` : null;
+}
+
 export const FINAL_STATUSES: RunStatus[] = ["succeeded", "failed", "cancelled"];
 
 /** Asked before Retry on a lost submission: if the lost one landed, both run (and are paid for) until Oracle finds and cancels it. */

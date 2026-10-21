@@ -7,12 +7,16 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { AGENT_RUN } from "./baseline";
+import { ranking } from "./lane-f";
 
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
 type CheckpointOut = Schemas["CheckpointOut"];
 type FeatureSetCheck = Schemas["FeatureSetCheck"];
 type PrdScopeOut = Schemas["PrdScopeOut"];
+type PriorityCheck = Schemas["PriorityCheck"];
+type SnapshotRow = Schemas["PrioritySnapshotOut"];
+type Method = Schemas["PriorityRanking"]["method"];
 type RunDecision = Schemas["RunDecision"];
 type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version" | "staged_for_agents"> & {
   /** D12: staged for the agents (when, by whom); open items only count. */
@@ -29,6 +33,8 @@ export interface RunsDb {
   artifacts: Record<string, string>;
   /** C6: run id -> its PRD scopes, oldest first (a mock db saved before C6 has none). */
   scopes?: Record<string, PrdScopeOut[]>;
+  /** C8: the runs' priority orders as snapshots (proposed, saved or discarded), oldest first. */
+  priority_snapshots?: SnapshotRow[];
 }
 
 export interface RunsContext {
@@ -233,6 +239,7 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     items_check: null,
     previous_attempt: null,
     feature_set_check: null,
+    priority_check: null,
     started_at: null,
     finished_at: null,
     error: null,
@@ -279,12 +286,18 @@ function reviewOf(r: RunOut, s: SegmentOut): CheckpointOut | undefined {
 const NOT_IMPORTED = "the draft was not imported: retry import, or request changes";
 /** As the API (oracle.runs.feature_set.blocking_message): approving is refused while the feature set has blocking problems. */
 const blockingMessage = (n: number) => `The feature set has ${n} blocking problem${n === 1 ? "" : "s"}; send it back with Request changes`;
+/** As the API (oracle.priorities.run_order.blocking_message): the same for the priority order (C8). */
+const orderBlockingMessage = (n: number) => `The priority order has ${n} blocking problem${n === 1 ? "" : "s"}; send it back with Request changes`;
 function cannotApprove(c: CheckpointOut): string | null {
   if (c.status !== "pending") return null;
-  const payload = c.payload as { import?: { error?: string | null }; feature_set_check?: FeatureSetCheck | null } | undefined;
+  const payload = c.payload as
+    | { import?: { error?: string | null }; feature_set_check?: FeatureSetCheck | null; priority_check?: PriorityCheck | null }
+    | undefined;
   if (payload?.import?.error) return NOT_IMPORTED;
   const blocking = (payload?.feature_set_check?.problems ?? []).filter((p) => p.blocking !== false).length;
-  return blocking > 0 ? blockingMessage(blocking) : null;
+  if (blocking > 0) return blockingMessage(blocking);
+  const order = (payload?.priority_check?.problems ?? []).filter((p) => p.blocking !== false).length;
+  return order > 0 ? orderBlockingMessage(order) : null;
 }
 
 /** The decided review of a finished run's segment whose draft was refused (owners retry it). */
@@ -496,8 +509,129 @@ function decideScope(ctx: Pick<RunsContext, "db" | "now">, r: RunOut, decision: 
   }
 }
 
+/** A priority order as priority.yaml lists it (C8, oracle.priorities.run_order): ranks follow the list. */
+interface OrderSpec {
+  method: Method;
+  order: { key: string; score: number; explanation: string }[];
+}
+
+/** The local runtime's order of its feature set: clean. */
+const LOCAL_ORDER: OrderSpec = {
+  method: "goal_weighted",
+  order: [
+    { key: "price-early", score: 4.8, explanation: "G1 weight 3 x contribution 2 x confidence 0.8 / effort 1" },
+    { key: "guest-checkout", score: 6.3, explanation: "Needs price-early first; G1 weight 3 x contribution 3 x 0.7 / 1" },
+    { key: "order-tracking", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 1" },
+  ],
+};
+
+/** priority.yaml (version 1) for an order. */
+function priorityYaml(spec: OrderSpec, segment: string, attempt: number): string {
+  const lines = [`# ${segment} (attempt ${attempt})`, "version: 1", `method: ${spec.method}`, "order:"];
+  spec.order.forEach((o, i) => lines.push(`  - key: ${o.key}`, `    rank: ${i + 1}`, `    score: ${o.score}`, `    explanation: ${JSON.stringify(o.explanation)}`));
+  return `${lines.join("\n")}\n`;
+}
+
+/** The approved PRD scope a run's order must rank (C6), else null. */
+function scopeOf(ctx: Pick<RunsContext, "db">, r: RunOut): PrdScopeOut["features"] | null {
+  const scope = (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === "approved").pop();
+  return scope ? scope.features.filter((f) => f.decision === "include") : null;
+}
+
+/**
+ * As the API's check (oracle.priorities.run_order.check_order), for the codes the mock's
+ * orders can show: unknown_feature, not_in_scope, missing_feature, before_prerequisite
+ * (blocking); differs_from_live, no_goal (advisory). The live ranking is the mock's
+ * (./lane-f.ts), restricted to the ranked features.
+ */
+function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): PriorityCheck {
+  const live = ranking(spec.method).features;
+  const keys = spec.order.map((o) => o.key);
+  const restricted = live.filter((f) => keys.includes(f.key)).map((f) => f.key);
+  const rank = Object.fromEntries(keys.map((k, i) => [k, i + 1]));
+  const deps: Record<string, string[]> = Object.fromEntries(live.map((f) => [f.key, [...f.depends_on]]));
+  for (const f of scope ?? []) deps[f.key] = [...(deps[f.key] ?? []), ...f.depends_on];
+  const problems: PriorityCheck["problems"] = [];
+  const add = (code: string, feature: string, message: string, blocking = true) => problems.push({ code, blocking, feature, message });
+  const inScope = new Set((scope ?? []).map((f) => f.key));
+  for (const k of keys) {
+    if (!live.some((f) => f.key === k) && !inScope.has(k)) add("unknown_feature", k, `${k} is not a feature of the baseline or the scope`);
+    else if (scope && !inScope.has(k)) add("not_in_scope", k, `${k} is not included in the approved PRD scope`);
+  }
+  for (const f of scope ?? []) if (!(f.key in rank)) add("missing_feature", f.key, `${f.key} is in the approved PRD scope and not ranked`);
+  for (const k of keys) {
+    for (const d of [...new Set(deps[k] ?? [])].sort()) {
+      if (d in rank && rank[d] > rank[k]) add("before_prerequisite", k, `${k} is ranked ${rank[k]}, above ${d} (rank ${rank[d]}), which it depends on`);
+    }
+  }
+  const order = spec.order.map((o, i) => {
+    const at = restricted.indexOf(o.key);
+    return { key: o.key, rank: i + 1, score: o.score, explanation: o.explanation, live_rank: at < 0 ? null : at + 1 };
+  });
+  for (const o of order) {
+    if (o.live_rank != null && Math.abs(o.live_rank - o.rank) > 2) {
+      add("differs_from_live", o.key, `${o.key} is ranked ${o.rank} here and ${o.live_rank} in the live ranking`, false);
+    }
+    if (live.find((f) => f.key === o.key)?.flags.includes("no_confirmed_goal")) {
+      add("no_goal", o.key, `${o.key} serves no confirmed goal in the live ranking`, false);
+    }
+  }
+  return { method: spec.method, features: order.length, problems, order };
+}
+
+/** The PRD a run's order is for: its document, else the slug the run writes. */
+function orderDocument(ctx: Pick<RunsContext, "documents">, r: RunOut): SnapshotRow["document"] {
+  const doc = r.document_id ? ctx.documents.find((d) => d.id === r.document_id) : undefined;
+  if (doc) return { id: doc.id, slug: doc.slug, title: doc.title };
+  return r.document_slug ? { id: null, slug: r.document_slug, title: null } : null;
+}
+
+/**
+ * As the API at the priority segment's end (oracle.priorities.run_order.propose): the order
+ * becomes the run's proposed snapshot; the run's other proposed one is discarded, one for
+ * the same attempt is replaced.
+ */
+function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents">, r: RunOut, seq: number, attempt: number, spec: OrderSpec, check: PriorityCheck): SnapshotRow {
+  const all = (ctx.db.priority_snapshots ??= []);
+  const same = all.find((x) => x.run_id === r.id && x.status === "proposed" && x.params.segment_seq === seq && x.params.attempt === attempt);
+  for (const x of all) if (x !== same && x.run_id === r.id && x.status === "proposed") Object.assign(x, { status: "discarded", decided_at: ctx.now() });
+  const live = Object.fromEntries(ranking(spec.method).features.map((f) => [f.key, f]));
+  const rows = check.order!.filter((o) => live[o.key]).map((o) => ({ ...live[o.key], rank: o.rank, live_rank: o.live_rank, run_explanation: o.explanation }));
+  const snap: SnapshotRow = {
+    id: same?.id ?? ctx.uuid(),
+    method: spec.method,
+    created_by: null,
+    created_at: same?.created_at ?? ctx.now(),
+    note: null,
+    feature_count: rows.length,
+    top: rows.slice(0, 5).map((f) => f.key),
+    status: "proposed",
+    run_id: r.id,
+    document: orderDocument(ctx, r),
+    decided_by: null,
+    decided_at: null,
+    params: { segment_seq: seq, attempt },
+    ranking: rows,
+    checkpoint_id: null,
+    scope_id: null,
+    check_result: check,
+  };
+  if (same) Object.assign(same, snap);
+  else all.push(snap);
+  return same ?? snap;
+}
+
+/** As the API (rules 3-5): approving saves the order for the PRD (`by` null: Oracle, the stop was off); requesting changes discards it. */
+function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents">, r: RunOut, cp: CheckpointOut, decision: "approved" | "changes_requested", by: string | null) {
+  const snap = (ctx.db.priority_snapshots ?? []).find((x) => x.id === cp.payload.priority_snapshot_id && x.status === "proposed");
+  if (!snap) return;
+  Object.assign(snap, { status: decision === "approved" ? "saved" : "discarded", decided_by: by, decided_at: ctx.now() });
+  if (decision === "approved") snap.document = orderDocument(ctx, r) ?? snap.document;
+}
+
 function fileContent(name: string, segment: string, attempt: number, document?: string | null): string {
   if (name === "feature_set.yaml") return featureSetYaml(LOCAL_FEATURE_SET, document, segment, attempt);
+  if (name === "priority.yaml") return priorityYaml(LOCAL_ORDER, segment, attempt);
   if (name === "prd.md") return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nDraft ${attempt} from the local agent runtime.\n`;
   if (name === "roadmap.md") return `---\ntitle: Example product roadmap\nkind: roadmap\n---\n\n# Example product roadmap {#roadmap}\n\nDraft ${attempt} from the local agent runtime.\n`;
   if (name === "roadmap_items.yaml") {
@@ -522,12 +656,19 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     s.feature_set_check = checkOf(LOCAL_FEATURE_SET);
     proposeScope(ctx, r, s.seq, attempt, LOCAL_FEATURE_SET, s.feature_set_check);
   }
+  // C8: the local runtime's order checks against the approved scope, and becomes a proposed snapshot.
+  let snapshot: SnapshotRow | null = null;
+  if (def.outputs.includes("priority.yaml")) {
+    s.priority_check = checkOrder(LOCAL_ORDER, scopeOf(ctx, r));
+    snapshot = proposeOrder(ctx, r, s.seq, attempt, LOCAL_ORDER, s.priority_check);
+  }
   if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md")) && r.document_slug) {
     const imp = ctx.importDraft(r.document_slug, r);
     s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], summary: null };
     r.document_id = imp.document_id ?? null;
-    // As the API (fill_document): once the draft imports, the run's scopes name the document.
+    // As the API (fill_document): once the draft imports, the run's scopes and orders name the document.
     for (const x of ctx.db.scopes?.[r.id] ?? []) x.document_id ??= r.document_id;
+    for (const x of ctx.db.priority_snapshots ?? []) if (x.run_id === r.id && !x.document?.id) x.document = orderDocument(ctx, r);
   }
   const payload = {
     segment_seq: s.seq,
@@ -535,6 +676,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     attempt,
     artifacts: s.artifacts,
     ...(s.feature_set_check ? { feature_set_check: s.feature_set_check } : {}),
+    ...(snapshot ? { priority_check: s.priority_check, priority_snapshot_id: snapshot.id } : {}),
   };
   const on = r.knobs.checkpoints[def.checkpoint] ?? true;
   if (!on && s.feature_set_check) decideScope(ctx, r, "approved", null);
@@ -555,6 +697,16 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     cannot_approve: null,
   };
   r.checkpoints.push(cp);
+  if (snapshot) snapshot.checkpoint_id = cp.id;
+  if (!on && snapshot) {
+    // Rule 5: a clean order is saved by Oracle; a blocking one fails the run.
+    const blocking = (s.priority_check?.problems ?? []).filter((p) => p.blocking);
+    if (blocking.length) {
+      r.error = `priority.yaml was rejected: ${blocking.slice(0, 5).map((p) => `[${p.code}] ${p.message}`).join("; ")}`;
+      return finish(ctx, r, "failed");
+    }
+    decideOrder(ctx, r, cp, "approved", null);
+  }
   if (on) r.status = "awaiting_checkpoint";
   else next(ctx, r, s);
 }
@@ -988,6 +1140,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (decision === "changes_requested" && !text) return fail(422, "say what to change: a note is required to request changes");
     Object.assign(cp, { status: decision, note: text, decided_by: ctx.userId, decided_at: ctx.now() });
     if (cp.kind === "feature_set" && (decision === "approved" || decision === "changes_requested")) decideScope(ctx, r, decision, ctx.userId);
+    if (cp.kind === "priority_order" && (decision === "approved" || decision === "changes_requested")) decideOrder(ctx, r, cp, decision, ctx.userId);
     cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: "oracle" } };
     if (ctx.undelivered) {
       // Recorded, and final; SwarmCloud did not take it: the tick delivers it.
@@ -1359,6 +1512,87 @@ export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">): Run
   refresh(r);
   db.runs.push(r);
   return r;
+}
+
+/** The runs the "priority-order" scenario seeds (C8). */
+export const PRIORITY_RUN = "7a11c0de-0000-4000-8000-0000000000c8";
+export const PRIORITY_BLOCKED_RUN = "7a11c0de-0000-4000-8000-0000000000c9";
+
+/** Saved addresses: one feature ranked well above the live ranking (differs_from_live, advisory). */
+const SAVED_ADDRESSES_ORDER: OrderSpec = {
+  method: "goal_weighted",
+  order: [
+    { key: "F-5", score: 1.8, explanation: "Saved addresses read the lookup first; G1 weight 3 x contribution 1 x 0.6 / 3" },
+    { key: "F-4", score: 0.6, explanation: "Alerts keep teams active; ranked early on purpose: G2 weight 2 x contribution 1 x 0.3 / 1" },
+    { key: "F-2", score: 8.1, explanation: "Needs F-5 first; G1 weight 3 x contribution 3 x 0.9 / 1" },
+    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "F-7", score: 1, explanation: "G2 weight 2 x contribution 2 x 0.5 / 2" },
+  ],
+};
+
+/** Usage alerts: F-2 ranked above F-5, which it depends on (before_prerequisite, blocking). */
+const USAGE_ALERTS_ORDER: OrderSpec = {
+  method: "goal_weighted",
+  order: [
+    { key: "F-2", score: 8.1, explanation: "G1 weight 3 x contribution 3 x 0.9 / 1" },
+    { key: "F-5", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 3" },
+    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+  ],
+};
+
+/** A Baseline to PRD run for `document`, its baseline and feature set approved, waiting at the priority stop with `spec`. */
+function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, document: string, created_at: string, spec: OrderSpec): RunOut {
+  const { from, now } = seedClock();
+  // Its own runs list, so the ticks below move this run only.
+  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), priority_snapshots: (db.priority_snapshots ??= []) };
+  const full = { ...ctx, db: own, now };
+  const r = seedRun(ctx, own, "baseline_to_prd", document, {}, created_at);
+  r.id = id;
+  from(r.created_at);
+  launch(full, r);
+  for (const seq of [1, 2]) {
+    tick(full);
+    const cp = r.checkpoints.find((c) => c.segment_seq === seq)!;
+    Object.assign(cp, { status: "approved", decided_by: ctx.userId, decided_at: now() });
+    next(full, r, r.segments[seq - 1]);
+  }
+  // Its feature set came from an earlier scope: the order is not checked against one here.
+  own.scopes![r.id] = [];
+  tick(full);
+  const priority = r.segments.find((s) => s.name === "priority")!;
+  const check = checkOrder(spec, null);
+  priority.priority_check = check;
+  db.artifacts[`${r.id}|${priority.seq}|priority.yaml`] = priorityYaml(spec, priority.name, 1);
+  const snap = proposeOrder(full, r, priority.seq, 1, spec, check);
+  const cp = r.checkpoints.find((c) => c.kind === "priority_order")!;
+  cp.payload = { ...cp.payload, priority_check: check, priority_snapshot_id: snap.id };
+  snap.checkpoint_id = cp.id;
+  refresh(r);
+  db.runs.push(r);
+  return r;
+}
+
+/**
+ * The "priority-order" scenario (C8): two Baseline to PRD runs waiting at the priority stop,
+ * one whose order has an advisory differs_from_live row (Saved addresses PRD) and one with a
+ * blocking before_prerequisite (Usage alerts), and a run order saved earlier for the
+ * Checkout redesign PRD.
+ */
+export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
+  seedAtPriority(db, ctx, PRIORITY_RUN, "saved-addresses", "2026-10-18T09:00:00Z", SAVED_ADDRESSES_ORDER);
+  seedAtPriority(db, ctx, PRIORITY_BLOCKED_RUN, "usage-alerts", "2026-10-18T10:00:00Z", USAGE_ALERTS_ORDER);
+  const checkout = ctx.documents.find((d) => d.slug === "checkout-redesign");
+  const earlier = db.runs.find((r) => r.document_slug === "checkout-redesign") ?? db.runs[0];
+  const spec: OrderSpec = { method: "goal_weighted", order: ranking("goal_weighted").features.slice(0, 4).map((f) => ({ key: f.key, score: f.score ?? 0, explanation: "As the live ranking" })) };
+  const check = checkOrder(spec, null);
+  const snap = proposeOrder({ ...ctx, db }, earlier, 0, 1, spec, check);
+  Object.assign(snap, {
+    status: "saved",
+    created_at: "2026-10-12T09:00:00Z",
+    decided_by: ctx.userId,
+    decided_at: "2026-10-12T10:00:00Z",
+    document: checkout ? { id: checkout.id, slug: checkout.slug, title: checkout.title } : null,
+  });
 }
 
 /**

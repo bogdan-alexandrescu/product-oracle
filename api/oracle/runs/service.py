@@ -1975,7 +1975,7 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
     )
     if stored is not None:
         at = stored.decided_at or stored.created_at
-        method = f"{stored.method}, this PRD's approved order of {at:%-d %b}"
+        method = f"{stored.method}, this PRD's approved order of {at.day} {at:%b}"
         ranking = list(stored.ranking or [])
     elif (
         stored := await db.scalar(
@@ -7430,11 +7430,11 @@ async def _hold_console_approval(
     revise: bool,
     member: User | None,
 ) -> None:
-    """A counted console approval of a feature set or priority order with blocking
-    problems open: recorded,
-    not followed. The checkpoint stays pending with ``needs = "confirm"`` (so the run's
-    token stays read-only, :func:`_holds_token`), nothing is posted to the workflow, and
-    Confirm is refused like Approve until the problems are fixed or waived."""
+    """A counted console approval of a feature set or a priority order with blocking
+    problems open: recorded, not followed. The checkpoint stays pending with ``needs =
+    "confirm"`` (so the run's token stays read-only, :func:`_holds_token`), nothing is
+    posted to the workflow, and Confirm is refused like Approve until the problems are
+    fixed or waived."""
     console = _console_record(run, segment, record, at, revise)
     console.update(
         counted=True,

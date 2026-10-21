@@ -1409,6 +1409,47 @@ function seedState(): LaneFState {
   return { templates, themes, snapshots: [], defaults: {} };
 }
 
+/**
+ * As the API (GET /v1/priorities/snapshots/{id}/compare): the snapshot's order next to the
+ * live ranking of its method, restricted to the features it ranks, with the check's
+ * problems per row, and the run and checkpoint that decide it.
+ */
+function compare(db: Db, snap: SnapshotRow): Schemas["CompareOut"] {
+  const live = ranking(snap.method);
+  const order = [...(snap.check_result?.order ?? snap.ranking.map((f) => ({ key: f.key, rank: f.rank, explanation: f.run_explanation ?? null })))].sort(
+    (a, b) => a.rank - b.rank,
+  );
+  const keys = order.map((o) => o.key);
+  const restricted = live.features.filter((f) => keys.includes(f.key)).map((f) => f.key);
+  const problems = snap.check_result?.problems ?? [];
+  const rows = order.map((o) => {
+    const f = live.features.find((x) => x.key === o.key);
+    const at = restricted.indexOf(o.key);
+    const liveRank = at < 0 ? null : at + 1;
+    return {
+      key: o.key,
+      title: f?.title ?? snap.ranking.find((x) => x.key === o.key)?.title ?? o.key,
+      run_rank: o.rank,
+      live_rank: liveRank,
+      delta: liveRank == null ? null : liveRank - o.rank,
+      run_explanation: o.explanation ?? null,
+      live_explanation: f ? [f.explanation.formula, ...f.explanation.steps.slice(0, 3)].join(" ") : null,
+      problems: problems.filter((p) => p.feature === o.key),
+    };
+  });
+  const run = snap.run_id ? db.runs?.runs.find((r) => r.id === snap.run_id) : undefined;
+  const cp = run?.checkpoints.find((c) => c.id === snap.checkpoint_id);
+  return {
+    snapshot: snap,
+    rows,
+    live_generated_at: live.generated_at,
+    run: run ? { id: run.id, flow_title: run.flow_title, status: run.status, document_slug: run.document_slug ?? null } : null,
+    checkpoint: cp
+      ? { id: cp.id, status: cp.status, approver_role: cp.approver_role, cannot_approve: cp.cannot_approve ?? null, can_decide: cp.status === "pending" }
+      : null,
+  };
+}
+
 function state(db: Db): LaneFState {
   db.lane_f ??= seeded("lane-f", seedState);
   return db.lane_f;
@@ -1435,12 +1476,18 @@ export async function laneF(db: Db, req: Request, p: string[], m: string): Promi
       return json(200, ranking(method));
     }
     if (p[2] === "snapshots") {
+      // C8: people's snapshots and the runs' orders; readers see saved ones unless they ask.
+      const all = () => [...st.snapshots, ...(db.runs?.priority_snapshots ?? [])];
+      const status = q.get("status") ?? "saved";
+      if (!["saved", "proposed", "discarded", "all"].includes(status)) return json(422, { detail: `unknown status '${status}'` });
+      const shown = (s: SnapshotRow) => status === "all" || (s.status ?? "saved") === status;
       if (p.length === 3 && m === "GET") {
         return json(
           200,
-          [...st.snapshots]
+          all()
+            .filter(shown)
             .sort((a, b) => b.created_at.localeCompare(a.created_at))
-            .map(({ params, ranking, ...s }) => (void params, void ranking, s)),
+            .map(({ params, ranking, checkpoint_id, scope_id, check_result, ...s }) => (void params, void ranking, void checkpoint_id, void scope_id, void check_result, s)),
         );
       }
       if (p.length === 3 && m === "POST") {
@@ -1456,6 +1503,9 @@ export async function laneF(db: Db, req: Request, p: string[], m: string): Promi
           note: input.note ?? null,
           feature_count: r.features.length,
           top: r.features.slice(0, 5).map((f) => f.key),
+          status: "saved",
+          run_id: null,
+          document: null,
           params: {},
           ranking: r.features,
         };
@@ -1463,8 +1513,12 @@ export async function laneF(db: Db, req: Request, p: string[], m: string): Promi
         return json(201, snap);
       }
       if (p.length === 4 && m === "GET") {
-        const snap = st.snapshots.find((s) => s.id === p[3]);
+        const snap = all().find((s) => s.id === p[3] && shown(s));
         return snap ? json(200, snap) : notFound("Snapshot");
+      }
+      if (p.length === 5 && p[4] === "compare" && m === "GET") {
+        const snap = all().find((s) => s.id === p[3]);
+        return snap ? json(200, compare(db, snap)) : notFound("priority snapshot");
       }
     }
     return notFound("Route");

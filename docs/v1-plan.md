@@ -106,7 +106,9 @@ Every table is `TenantScoped` unless noted.
   body (markdown skeleton with section ids and guidance), required_sections
   (text[]), created_by. Seed `oracle-default` v1.
 - `priority_snapshots`: method (`goal_weighted | rice | moscow | wsjf`), params
-  (jsonb), ranking (jsonb), created_by.
+  (jsonb), ranking (jsonb), created_by; a run's order (C8) adds status (`saved |
+  proposed | discarded`), run_id, checkpoint_id, document_id, scope_id, check_result,
+  decided_by/at.
 - `runs`: flow (`baseline_to_prd | feedback_loop`), status (`draft | awaiting_approval
   | running | awaiting_checkpoint | paused_overrun | succeeded | failed |
   cancelled`), knobs (jsonb: depth, roles, checkpoints, budget_usd), snapshot_id,

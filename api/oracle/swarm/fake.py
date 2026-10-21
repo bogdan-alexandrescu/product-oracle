@@ -98,6 +98,44 @@ def document_of(prompt: str) -> str | None:
     return m[1] if m else None
 
 
+# The approved PRD scope a prompt pastes (oracle.runs.flows: "--- PRD scope ---").
+_SCOPE = re.compile(r"^--- PRD scope ---\n(.*?)(?:\n\n|\Z)", re.M | re.S)
+
+
+def scope_order_of(prompt: str) -> list[str] | None:
+    """The included feature keys of the approved PRD scope a prompt pastes, each after the
+    features it depends on (as the run's prioritizer is told), or None when none is pasted:
+    the default priority.yaml ranks them."""
+    m = _SCOPE.search(prompt or "")
+    if m is None:
+        return None
+    from oracle import safe_yaml
+
+    try:
+        data = safe_yaml.load(m[1])
+    except Exception:  # noqa: BLE001 - a pasted scope the fake cannot read: the default order
+        return None
+    features = [
+        f for f in (data or {}).get("features") or [] if isinstance(f, dict) and f.get("key")
+    ]
+    keys = [str(f["key"]) for f in features]
+    deps = {
+        str(f["key"]): [str(d) for d in f.get("depends_on") or [] if d in keys] for f in features
+    }
+    order: list[str] = []
+
+    def place(key: str, seen: frozenset[str] = frozenset()) -> None:
+        if key in order or key in seen:
+            return
+        for dep in deps.get(key, []):
+            place(dep, seen | {key})
+        order.append(key)
+
+    for key in keys:
+        place(key)
+    return order
+
+
 def _spec_inputs(prompt: str) -> dict:
     m = _SPEC_INPUTS.search(prompt)
     if m is None:
@@ -172,11 +210,17 @@ def _default_files(
         names = tuple("roadmap.md" if n == "prd.md" else n for n in names)
     document = document_of(prompt)
     for name in names:
-        files[name] = _default_content(name, segment, attempt, document)
+        files[name] = _default_content(name, segment, attempt, document, scope_order_of(prompt))
     return files
 
 
-def _default_content(name: str, segment: str, attempt: int, document: str | None = None) -> str:
+def _default_content(
+    name: str,
+    segment: str,
+    attempt: int,
+    document: str | None = None,
+    scope: list[str] | None = None,
+) -> str:
     if name == "prd.md":
         return (
             "---\n"
@@ -259,16 +303,16 @@ def _default_content(name: str, segment: str, attempt: int, document: str | None
             "excluded: []\n"
         )
     if name == "priority.yaml":
-        # The C8 format (oracle.priorities.run_order): the default feature set's one feature.
+        # The C8 format (oracle.priorities.run_order): the approved scope the prompt pastes,
+        # in dependency order, else the default feature set's one feature.
+        rows = "".join(
+            f"  - key: {key}\n    rank: {n}\n    score: 0\n"
+            "    explanation: Ranked by the local agent runtime\n"
+            for n, key in enumerate(scope or ["price-early"], start=1)
+        )
         return (
             f"# {segment} (local agent runtime, attempt {attempt})\n"
-            "version: 1\n"
-            "method: goal_weighted\n"
-            "order:\n"
-            "  - key: price-early\n"
-            "    rank: 1\n"
-            "    score: 0\n"
-            "    explanation: The one feature of the feature set\n"
+            "version: 1\nmethod: goal_weighted\norder:\n" + rows
         )
     if name.endswith(".yaml"):
         return f"# {segment} (local agent runtime, attempt {attempt})\nitems: []\n"

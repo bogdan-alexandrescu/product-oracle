@@ -9,6 +9,7 @@ import {
   Button,
   Chip,
   confirmInPage,
+  LinkButton,
   Icon,
   InfoTip,
   Inspector,
@@ -32,6 +33,7 @@ import {
   CANCEL_AGAIN_CONFIRM,
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
+  orderHref,
   RETRY_CONFIRM,
   runStatusLabel,
   RunStatusBadge,
@@ -1138,6 +1140,14 @@ function CheckpointRow({
       {approveBlocked && (
         <p className="mt-2 text-sm text-warn" data-testid="cannot-approve">
           {approveBlocked}
+        </p>
+      )}
+      {orderHref(cp) && (
+        // C8: the run's order next to Oracle's live ranking, where it can also be decided.
+        <p className="mt-2">
+          <LinkButton href={orderHref(cp)!} icon="priorities">
+            Review the order
+          </LinkButton>
         </p>
       )}
       <textarea

@@ -649,7 +649,8 @@ async def test_roadmap_reads_this_prds_approved_order(client, owner, runtime):  
     assert "this-prd-order" in prompt
     assert "company-order" not in prompt and "other-prd-order" not in prompt
     today = datetime.now(UTC)
-    assert f"Priority order (goal_weighted, this PRD's approved order of {today:%-d %b}" in prompt
+    line = f"Priority order (goal_weighted, this PRD's approved order of {today.day} {today:%b}"
+    assert line in prompt
 
 
 async def test_existing_checkpoints_of_other_kinds_are_not_gated(client, owner):  # noqa: F811
