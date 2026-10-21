@@ -24,6 +24,9 @@ Optional hooks a connector may define:
 - ``normalize_config(config)`` returns the config in one canonical form (ids stripped,
   without repeats, sorted), so the same selection saved in another order is the same
   selection; the service stores it normalised and the engine fingerprints it so;
+- ``labels`` in a config (Slack, Notion, Fireflies) only names the picks, for people to
+  read; :func:`selection` is the config without them, which is what the engine compares
+  and fingerprints, so a change of names alone is not a change of selection;
 - ``rescope_cursor(old_cursor, new_config)`` returns the cursor to resume from after the
   selection changed (``None``: from the start). Keep what upstream deletes are compared
   against; drop what would skip re-reading.
@@ -50,7 +53,7 @@ item in the source.
     register(GithubConnector())
 """
 
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
@@ -162,6 +165,42 @@ SyncEvent = ItemUpsert | ItemDelete | ItemUnavailable | CursorCheckpoint | Atten
 
 # The key of the saved cursor holding the engine's fingerprint of the selection.
 SCOPE_KEY = "_scope"
+
+# How long a stored display name of a pick may be; longer ones are cut on save.
+LABEL_LENGTH = 200
+
+
+def selection(config: dict[str, Any]) -> dict[str, Any]:
+    """What a config selects: everything but ``labels``, which only name things."""
+    return {k: v for k, v in config.items() if k != "labels"}
+
+
+def _maps_strings(labels: Any) -> bool:
+    return isinstance(labels, dict) and all(
+        isinstance(k, str) and isinstance(v, str) for k, v in labels.items()
+    )
+
+
+def check_labels(config: dict[str, Any], limit: int, message: str) -> None:
+    """Raise :class:`ConnectorConfigError` unless ``labels``, when given, maps strings to
+    strings (else ``message``), with at most ``limit`` entries."""
+    labels = config.get("labels")
+    if labels is None:
+        return
+    if not _maps_strings(labels):
+        raise ConnectorConfigError(message)
+    if len(labels) > limit:
+        raise ConnectorConfigError(f"labels takes at most {limit} entries")
+
+
+def normalize_labels(config: dict[str, Any], picked: Iterable[str], limit: int) -> dict[str, Any]:
+    """``config`` with only the labels of ``picked`` ids, each cut to :data:`LABEL_LENGTH`;
+    unchanged when its labels break :func:`check_labels` (saving says why)."""
+    labels = config.get("labels")
+    if not _maps_strings(labels) or len(labels) > limit:
+        return config
+    keep = set(picked)
+    return {**config, "labels": {k: v[:LABEL_LENGTH] for k, v in labels.items() if k in keep}}
 
 
 @dataclass(frozen=True)

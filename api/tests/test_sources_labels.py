@@ -264,7 +264,8 @@ async def test_notion_labels_follow_the_same_rules(a, tenant_id, alice, notion):
     }
     assert out["config_version"] == before["config_version"] + 1
     assert out["item_count"] == before["item_count"]
-    assert out["unavailable_items"] == before["unavailable_items"] == UNAVAILABLE
+    assert out["unavailable_items"] == before["unavailable_items"]
+    assert [u["external_id"] for u in out["unavailable_items"]] == ["C0ROADMAP:1"]
     assert out["status"] == before["status"]
     assert (await _row(tenant_id, source["id"])).cursor == before_row.cursor
     assert notion.requests == []
