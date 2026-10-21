@@ -1,0 +1,90 @@
+{
+  "description": "E2 Items tab: the items of usage-alerts-roadmap v1 in the mock's roadmap-items scenario, in the API's RoadmapItemOut shape (view=full). The mock serves them (lib/api/mock/roadmap.ts); api/tests/test_roadmap_items_contract.py validates them against RoadmapItemOut and the real GET /v1/roadmaps/{doc}/items response. Ids are placeholders the mock replaces with its own. Synthetic placeholder text only.",
+  "roadmap": "usage-alerts-roadmap",
+  "version": 1,
+  "items": [
+    {
+      "id": "00000000-0000-4000-8000-000000000101",
+      "item_key": "item-behaviour",
+      "position": 0,
+      "title": "Behaviour",
+      "outcome": "Admins hear about a limit before they reach it",
+      "horizon": "now",
+      "milestone": {
+        "name": "Beta",
+        "date": "2026-11-30",
+        "date_source": "ENG-412",
+        "basis_ids": ["00000000-0000-4000-8000-000000000201"]
+      },
+      "freshness": "fresh",
+      "stale_reasons": [],
+      "stale_since": null,
+      "caused_by_change_id": null,
+      "prd": {
+        "document": {
+          "id": "00000000-0000-4000-8000-000000000301",
+          "slug": "usage-alerts",
+          "title": "Usage alerts PRD",
+          "version": 1,
+          "approved": true
+        },
+        "section_key": "behaviour",
+        "section_hash": "placeholder-hash-behaviour",
+        "link": "/documents/usage-alerts/v/1#behaviour",
+        "reconciled_version": null,
+        "reconciled_section_hash": null
+      },
+      "track_id": "00000000-0000-4000-8000-000000000401",
+      "feature": null,
+      "requirements": [],
+      "blockers": [],
+      "trace": [],
+      "depends_on": [],
+      "validation_gates": [],
+      "economics": { "priority_score": 4.2 },
+      "priority": { "rank": 1, "score": 4.2, "explanation": "activation weight 3 x contribution 2" },
+      "confidence": "high",
+      "engineering": [],
+      "note": null
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000102",
+      "item_key": "item-metrics",
+      "position": 1,
+      "title": "Success metrics",
+      "outcome": "Fewer support requests about unexpected limits",
+      "horizon": "next",
+      "milestone": null,
+      "freshness": "potentially_stale",
+      "stale_reasons": ["The PRD section this item came from changed after the roadmap was built"],
+      "stale_since": "2026-10-18T09:00:00Z",
+      "caused_by_change_id": null,
+      "prd": {
+        "document": {
+          "id": "00000000-0000-4000-8000-000000000301",
+          "slug": "usage-alerts",
+          "title": "Usage alerts PRD",
+          "version": 1,
+          "approved": true
+        },
+        "section_key": "metrics",
+        "section_hash": "placeholder-hash-metrics",
+        "link": "/documents/usage-alerts/v/1#metrics",
+        "reconciled_version": null,
+        "reconciled_section_hash": null
+      },
+      "track_id": "00000000-0000-4000-8000-000000000401",
+      "feature": null,
+      "requirements": [],
+      "blockers": [],
+      "trace": [],
+      "depends_on": ["item-behaviour"],
+      "validation_gates": [],
+      "economics": { "priority_score": 2.1 },
+      "priority": { "rank": 2, "score": 2.1, "explanation": "activation weight 3 x contribution 0.7" },
+      "confidence": "low",
+      "engineering": [],
+      "note": null
+    }
+  ]
+}

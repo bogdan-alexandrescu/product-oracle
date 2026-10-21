@@ -24,6 +24,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { DOC_STATUS_LABEL, formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
+import { versionHref } from "@/lib/version-href";
 
 type Doc = Schemas["DocumentSummary"];
 /** One table: the roadmaps, then the approved PRDs that can each build one (B1's "In flight" group). */
@@ -177,7 +178,7 @@ export default function RoadmapPage() {
             <StatusChip status={r.d.status} />
             {r.d.latest_version != null && (
               <Link
-                href={`/documents/${r.d.slug}/v/${r.d.latest_version}`}
+                href={versionHref(r.d.slug, "roadmap", r.d.latest_version)}
                 className="tnum font-medium text-accent-ink hover:underline"
               >
                 v{r.d.latest_version}

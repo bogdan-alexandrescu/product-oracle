@@ -162,7 +162,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts); "revoke-failures" as the
  * default company plus two provider revokes a removed member's disable could not make (C2);
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
- * next tick (recorded, the decide call answers 503; ./runs.ts).
+ * next tick (recorded, the decide call answers 503; ./runs.ts); "roadmap-items" as the default
+ * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
+ * ./roadmap-items.json).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -1529,7 +1531,7 @@ async function route(db: Db, req: Request): Promise<Response> {
 
   // Roadmap alignment and product tracks (CR-11).
   const roadmapCtx: RoadmapContext = { userId: me.id, role: me.role, documents: db.documents, versions: db.versions };
-  db.roadmap ??= seedRoadmap(roadmapCtx);
+  db.roadmap ??= seedRoadmap(roadmapCtx, localStorage.getItem(MOCK_SCENARIO_KEY));
   const roadmapRes = await routeRoadmap(roadmapCtx, db.roadmap, req, p, q);
   if (roadmapRes) return roadmapRes;
   if (p[1] === "tracks" && p[3] === "roadmap-run" && m === "POST") {

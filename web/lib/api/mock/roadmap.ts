@@ -12,6 +12,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { mockUuid, seeded } from "./ids";
+import itemsFixture from "./roadmap-items.json";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Item = Schemas["RoadmapItemOut"];
@@ -57,6 +58,12 @@ const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner
 const AT = "2026-10-19T09:00:00Z";
 const OFF_REASON = "Two-way tracker sync is off: Oracle makes no tracker writes. Use the read-only alignment report.";
 const UNVERIFIED = "a dated milestone needs a verified estimate, capacity or commitment (basis_ids); Oracle never invents dates";
+// The API's texts for an item's refused date (api/oracle/roadmap/schedule.py).
+const DATE_UNVERIFIED =
+  "a date needs a verified estimate, capacity or commitment recorded for this PRD (and item) that supports it (record one with POST /v1/schedule-bases); Oracle never invents dates";
+const OUTSIDE_NOW = "dated milestones belong only in now; the date was dropped";
+/** The mock scenario (MOCK_SCENARIO_KEY) whose roadmap items carry every field the Items tab shows (E2). */
+export const ITEMS_SCENARIO = "roadmap-items";
 
 const now = () => new Date().toISOString();
 const today = () => now().slice(0, 10);
@@ -124,8 +131,15 @@ function itemsFor(ctx: RoadmapContext, roadmap: Version, trackId: string | null)
   return out;
 }
 
-export function seedRoadmap(ctx: RoadmapContext): RoadmapDb {
-  return seeded("roadmap", () => {
+/**
+ * The roadmap data. In the "roadmap-items" scenario (E2), usage-alerts-roadmap v1's items are
+ * those of ./roadmap-items.json, the fixture api/tests/test_roadmap_items_contract.py checks
+ * against the API, with the mock's own ids; the default seed has no dates and nothing stale
+ * (roadmap-tracks-mock.spec.ts expects the track on track).
+ */
+export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): RoadmapDb {
+  const withItems = scenario === ITEMS_SCENARIO;
+  return seeded(withItems ? `roadmap:${ITEMS_SCENARIO}` : "roadmap", () => {
     const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [] };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = ctx.documents.find((d) => d.slug === "usage-alerts-roadmap");
@@ -153,8 +167,41 @@ export function seedRoadmap(ctx: RoadmapContext): RoadmapDb {
       item_keys: (rv ? db.items[rv.id] : []).filter((i) => i.horizon === "now").map((i) => i.item_key),
       status: "planned", lock_version: 1, created_at: AT, updated_at: AT,
     });
+    if (withItems && rv) db.items[rv.id] = db.items[rv.id].map((i) => fromFixture(db, i));
     return db;
   });
+}
+
+/** The fixture's item in place of `seed`, keeping the mock's ids; its basis named by reference. */
+function fromFixture(db: RoadmapDb, seed: Item): Item {
+  const f = (itemsFixture.items as unknown as Item[]).find((x) => x.item_key === seed.item_key);
+  if (!f) return seed;
+  const item = structuredClone(f);
+  const ms = item.milestone as { date_source?: string | null; basis_ids?: string[] } | null;
+  if (ms?.basis_ids) ms.basis_ids = db.bases.filter((b) => b.reference === ms.date_source).map((b) => b.id);
+  return {
+    ...item,
+    id: seed.id,
+    track_id: seed.track_id,
+    prd: { ...item.prd, document: seed.prd.document, section_hash: seed.prd.section_hash },
+  };
+}
+
+/**
+ * An item's milestone as it stands now, as the API's live_milestones re-check: a date stays
+ * only while a verified basis it rests on (basis_ids, or the date_source reference) supports
+ * it; one whose basis was withdrawn comes back refused. An item that names no basis the mock
+ * knows keeps its date (the default seed has no item dates).
+ */
+function liveItem(db: RoadmapDb, item: Item): Item {
+  const ms = item.milestone as { date?: string | null; date_source?: string | null; basis_ids?: string[] } | null;
+  if (!ms?.date) return item;
+  const named = db.bases.filter((b) => ms.basis_ids?.includes(b.id) || (!!ms.date_source && b.reference === ms.date_source));
+  if (!named.length || (item.horizon === "now" && named.some((b) => b.status === "verified" && b.supports_date === ms.date))) return item;
+  return {
+    ...item,
+    milestone: { ...ms, date: null, basis_ids: [], refused_date: ms.date, refused: item.horizon === "now" ? DATE_UNVERIFIED : OUTSIDE_NOW },
+  };
 }
 
 function itemsVersion(ctx: RoadmapContext, db: RoadmapDb, doc: Doc, n: number | null, approvedFirst = false): Version | undefined {
@@ -295,7 +342,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
         source: src ? { id: src.document_id, slug: src.slug, title: src.title, version: src.version, approved: !!src.approved_at } : null,
         track_id: db.tracks.find((t) => t.roadmap_id === doc.id)?.id ?? null,
         view,
-        items: (v ? db.items[v.id] ?? [] : []).map((i) => withEngineering(db, i, view)),
+        items: (v ? db.items[v.id] ?? [] : []).map((i) => withEngineering(db, liveItem(db, i), view)),
       };
       return json(200, out);
     }
@@ -331,7 +378,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
         if (b.reason) i.note = b.reason;
         return entry;
       });
-      return json(200, { changed, items: v ? db.items[v.id] : [] });
+      return json(200, { changed, items: (v ? db.items[v.id] ?? [] : []).map((i) => withEngineering(db, liveItem(db, i), "full")) });
     }
     if (p[3] === "versions" && p[5] === "items" && m === "PUT") {
       if (!can("approver")) return forbidden();
