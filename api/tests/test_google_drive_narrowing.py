@@ -64,6 +64,8 @@ class Drive:
         self.export_slow: set[str] = set()
         self.calls: list[str] = []
         self.hold: tuple[asyncio.Event, asyncio.Event] | None = None
+        # File id -> (started, release): holds that file's next metadata call (the listing).
+        self.hold_meta: dict[str, tuple[asyncio.Event, asyncio.Event]] = {}
         # After a held export is released: answer it 429 (Drive rate limiting).
         self.limit_after_hold = False
 
@@ -127,6 +129,10 @@ class Drive:
             return httpx.Response(status, json={"error": error})
         if file_id not in self.files or file_id in self.gone:
             return httpx.Response(404, json={"error": {"message": "File not found"}})
+        if not path.endswith("/export") and file_id in self.hold_meta:
+            started, release = self.hold_meta.pop(file_id)
+            started.set()
+            await release.wait()
         if path.endswith("/export"):
             if file_id in self.export_slow:
                 self.calls.append(f"export-timeout:{file_id}")
@@ -226,6 +232,47 @@ async def _held_sync(drive, pat, source):
     finally:
         release.set()
         result.update(await asyncio.wait_for(running, 10))
+
+
+@asynccontextmanager
+async def _held_after_write(monkeypatch, pat, source, external_id):
+    """A sync held right after it wrote ``external_id``'s item, before the per-file
+    checkpoint commits it: the row is changed and locked, uncommitted. Yields its result,
+    filled in once the block ends; released even when the block fails."""
+    from oracle.sources import sync as sync_module
+
+    started, release = asyncio.Event(), asyncio.Event()
+    real = sync_module.store.upsert_item
+
+    async def upsert(db, src, event):
+        out = await real(db, src, event)
+        if event.external_id == external_id and not started.is_set():
+            started.set()
+            await release.wait()
+        return out
+
+    monkeypatch.setattr(sync_module.store, "upsert_item", upsert)
+    running = asyncio.create_task(_sync(pat, source))
+    result: dict = {}
+    try:
+        await asyncio.wait_for(started.wait(), 10)
+        yield result
+    finally:
+        release.set()
+        result.update(await asyncio.wait_for(running, 10))
+
+
+async def _legacy_acl(tenant_id, source_id, ids) -> None:
+    """Items stored by main: a shared-drive doc has no shared_drive and no owner email."""
+    async with tenant_session(tenant_id) as s:
+        rows = await s.scalars(
+            select(SourceItem).where(
+                SourceItem.source_id == source_id, SourceItem.external_id.in_(sorted(ids))
+            )
+        )
+        for row in rows:
+            row.acl = {"owners": []}
+        await s.commit()
 
 
 async def _narrow(tenant_id, drive, pat, source, config) -> dict:
@@ -453,22 +500,133 @@ async def test_a_sync_running_across_the_edit_saves_nothing_over_it(tenant_id, d
     assert await _live(tenant_id, source["id"]) == {DOC_A}
 
 
-async def test_a_sync_holding_a_removed_docs_row_does_not_block_the_save(tenant_id, drive):
-    """The sync has written (not yet committed) the row of the doc being removed and is
-    held exporting another: the save does not wait on that row, and once the sync stops
-    (superseded, its writes rolled back) the doc is deleted all the same."""
+async def test_a_sync_holding_a_removed_docs_row_does_not_block_the_save(
+    tenant_id, drive, monkeypatch
+):
+    """The sync has written (not yet committed) the row of the doc being removed: the
+    save does not wait on that row (SKIP LOCKED leaves the doc live for now), and once the
+    sync stops (superseded, its writes rolled back) tidy deletes it all the same."""
     drive.doc(DOC_A, "A")
     drive.doc(SENSITIVE, "SENSITIVE")
     pat, source = await _setup(tenant_id, drive, {"docs": [SENSITIVE, DOC_A]})
     await _reset_cursor(tenant_id, source["id"])
-    # Trashed in Drive: the sync deletes SENSITIVE's row first, then exports A (held).
-    drive.files[SENSITIVE]["trashed"] = True
-    async with _held_sync(drive, pat, source) as first:
-        patch = _patch(pat, source, {"config": {"docs": [DOC_A]}})
-        edited = await asyncio.wait_for(patch, 10)
+    # A new title, so the sync's write changes (and locks) the row.
+    drive.files[SENSITIVE]["name"] = "SENSITIVE renamed"
+    async with _held_after_write(monkeypatch, pat, source, SENSITIVE) as first:
+        edited = await asyncio.wait_for(_patch(pat, source, {"config": {"docs": [DOC_A]}}), 10)
         assert edited["config"]["docs"] == [DOC_A]
+        # The save skipped the locked row: still live while the sync holds it.
+        assert await _live(tenant_id, source["id"]) == {DOC_A, SENSITIVE}
     assert first["outcome"] == "superseded", first
     assert await _live(tenant_id, source["id"]) == {DOC_A}
+    assert SENSITIVE not in ((await _row(tenant_id, source["id"])).cursor or {}).get("files", {})
+
+
+async def test_an_edit_landing_before_the_early_checkpoint_stops_the_sync_before_any_export(
+    tenant_id, drive
+):
+    """The edit lands while the sync is still listing (before its early checkpoint):
+    nothing the edit removed is exported or kept, and the removed doc stays deleted."""
+    drive.doc(DOC_A, "A")
+    drive.doc(SENSITIVE, "SENSITIVE")
+    pat, source = await _setup(tenant_id, drive, {"docs": [SENSITIVE, DOC_A]})
+    await _reset_cursor(tenant_id, source["id"])
+    started, release = asyncio.Event(), asyncio.Event()
+    drive.hold_meta[DOC_A] = (started, release)
+    drive.calls.clear()
+    running = asyncio.create_task(_sync(pat, source))
+    try:
+        await asyncio.wait_for(started.wait(), 10)
+        await _patch(pat, source, {"config": {"docs": [DOC_A]}})
+        assert await _live(tenant_id, source["id"]) == {DOC_A}
+    finally:
+        release.set()
+        first = await asyncio.wait_for(running, 10)
+    assert first["outcome"] == "superseded", first
+    assert not [c for c in drive.calls if c.endswith("/export")]
+    row = await _row(tenant_id, source["id"])
+    assert SENSITIVE not in (row.cursor or {}).get("files", {})
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
+
+
+async def test_a_persons_edit_stopping_a_sync_hides_only_what_they_removed(tenant_id, drive):
+    """Owner 2026-10-20: legacy items (no shared drive, no owner email) are hidden only
+    after a company narrowing, not when a person's own edit stops a sync."""
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Legacy", folder=FOLDER)
+    drive.doc(IN_SUB, "Normal", folder=FOLDER)
+    drive.doc(DOC_A, "A")
+    config = {"folders": [FOLDER], "docs": [DOC_A]}
+    pat, source = await _setup(tenant_id, drive, config)
+    assert await _live(tenant_id, source["id"]) == {DOC_A, IN_FOLDER, IN_SUB}
+    await _legacy_acl(tenant_id, source["id"], {IN_FOLDER})
+    await _reset_cursor(tenant_id, source["id"])
+
+    async with _held_sync(drive, pat, source) as first:
+        await _patch(pat, source, {"config": {"folders": [FOLDER]}})
+    assert first["outcome"] == "superseded", first
+    assert await _live(tenant_id, source["id"]) == {IN_FOLDER, IN_SUB}
+
+
+async def test_a_company_narrowing_stopping_a_sync_hides_unknown_items(tenant_id, drive):
+    from oracle.tenant_settings import TenantSetting
+
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Legacy", folder=FOLDER)
+    drive.doc(IN_SUB, "Normal", folder=FOLDER)
+    pat, source = await _setup(tenant_id, drive, {"folders": [FOLDER]})
+    assert await _live(tenant_id, source["id"]) == {IN_FOLDER, IN_SUB}
+    async with tenant_session(tenant_id) as s:
+        s.add(TenantSetting(key="company_email_domains", value=["example.com", "other.org"]))
+        await s.commit()
+    await _legacy_acl(tenant_id, source["id"], {IN_FOLDER})
+    await _reset_cursor(tenant_id, source["id"])
+
+    async with _held_sync(drive, pat, source) as first:
+        async with tenant_session(tenant_id) as s:
+            setting = await s.scalar(
+                select(TenantSetting).where(TenantSetting.key == "company_email_domains")
+            )
+            setting.value = ["example.com"]
+            await s.commit()
+    assert first["outcome"] == "superseded", first
+    assert await _live(tenant_id, source["id"]) == {IN_SUB}
+
+
+async def test_a_failed_export_after_a_per_file_checkpoint_keeps_the_listing_undone(
+    tenant_id, drive
+):
+    drive.doc(DOC_A, "A")
+    drive.doc(DOC_B, "B")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, DOC_B]})
+    for doc in (DOC_A, DOC_B):
+        drive.files[doc]["modifiedTime"] = LATER
+        drive._change(doc)
+    drive.export_slow.add(DOC_B)
+    result = await _sync(pat, source)
+    assert result["outcome"] == "error", result
+    # A was exported and checkpointed, B failed: the listing is not marked done.
+    assert not ((await _row(tenant_id, source["id"])).cursor or {}).get("listing")
+    drive.export_slow.clear()
+    result = await _sync(pat, source)
+    assert result["outcome"] == "completed", result
+    assert (await _row(tenant_id, source["id"])).last_error is None
+    assert (await _row(tenant_id, source["id"])).cursor["files"][DOC_B] == LATER
+
+
+async def test_the_early_checkpoint_writes_the_lost_access_report(tenant_id, drive):
+    drive.doc(DOC_A, "A")
+    drive.doc("1DocMissing", "Unshared later")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, "1DocMissing"]})
+    drive.unshare("1DocMissing")
+    drive.files[DOC_A]["modifiedTime"] = LATER
+    drive.export_slow.add(DOC_A)
+    drive._change(DOC_A)
+    await _reset_cursor(tenant_id, source["id"])
+    result = await _sync(pat, source)
+    assert result["outcome"] == "error", result
+    notes = (await _row(tenant_id, source["id"])).unavailable_items
+    assert [n["external_id"] for n in notes] == ["1DocMissing"]
 
 
 async def test_a_rate_limited_sync_across_the_edit_writes_no_error_over_it(tenant_id, drive):
