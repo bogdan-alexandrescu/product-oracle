@@ -240,6 +240,7 @@ function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; m
   return (
     <Panel title="Next questions" testId="next-questions" tools={<SegmentedControl label="Batch size" size="sm" items={SIZES.map((v) => ({ value: v, label: v }))} value={size} onChange={setSize} />}>
       <div className="flex flex-col gap-3 p-4 max-[600px]:p-3">
+        {!preview && !error && <p className="text-sm text-text2">Reading Oracle&apos;s next questions…</p>}
         {preview && (
           <p className="text-[15px] font-semibold text-text">
             {n === 0 ? "Oracle has no more questions." : `Oracle has ${n} more question${n === 1 ? "" : "s"}`}
