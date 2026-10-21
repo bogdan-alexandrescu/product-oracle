@@ -8,6 +8,7 @@ route refuses inputs that need the agents. Approvers stage feedback without sect
 for the agents; the run's draft closes those items and applies the text it was sent.
 """
 
+import threading
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -15,12 +16,14 @@ from types import SimpleNamespace
 
 from sqlalchemy import select
 
+from oracle.docs import parser
 from oracle.docs.models import Document
 from oracle.jobs.models import LlmJob, LlmSuggestion
 from oracle.jobs.next_draft import choose_engine
 from oracle.jobs.schemas import AgentItem, StagedChange
 from oracle.review.models import FeedbackItem
 from oracle.runs import flows
+from oracle.runs import service as runs_service
 from oracle.swarm.fake import Outcome
 from oracle.tenancy import tenant_session
 from tests.fixtures import draft, import_draft, seed_auth
@@ -422,6 +425,45 @@ async def test_the_runs_draft_closes_the_items_and_applies_the_text_it_was_sent(
     staged = (await client.get(f"{DOC}/staged-changes", headers=auth)).json()
     assert (staged["items"], staged["agent_items"]) == ([], [])
     assert (await client.get("/v1/inbox", headers=auth)).json()["staged"] == []
+
+
+async def test_the_runs_draft_is_parsed_once_and_off_the_event_loop(
+    client,
+    runtime,  # noqa: F811
+    monkeypatch,
+):
+    ids = await setup(client)
+    auth = ids["auth"]
+    assert (await stage(client, auth, ids["general"])).status_code == 200
+    markdown = draft("prd_v1.md").replace(
+        "---\n",
+        f"---\nresolutions:\n  - feedback_id: {ids['general']}\n    status: addressed\n",
+        1,
+    )
+    runtime.script["next_draft"] = [Outcome(artifacts={"prd.md": markdown})]
+    threads: list[str] = []
+    real = parser.parse_draft
+
+    def counting(text: str):
+        if text == markdown:
+            threads.append(threading.current_thread().name)
+        return real(text)
+
+    # The import's parse (parse_draft_async) and any direct call from the run's import.
+    monkeypatch.setattr(parser, "parse_draft", counting)
+    monkeypatch.setattr(runs_service, "parse_draft", counting, raising=False)
+
+    run = (await client.post(f"{DOC}/next-draft/run", json={}, headers=auth)).json()
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+
+    assert run["segments"][0]["draft_import"]["version"] == 2
+    assert len(threads) == 1, threads
+    assert threads[0].startswith("safe-yaml"), threads
+    # The resolutions the import read still settle the item it was sent.
+    async with tenant_session(ids["tenant_id"]) as s:
+        item = await s.get(FeedbackItem, uuid.UUID(ids["general"]))
+        assert item.staged_for_agents_at is None
 
 
 async def test_the_new_run_dialog_offers_only_its_flows_and_points_at_the_others(
