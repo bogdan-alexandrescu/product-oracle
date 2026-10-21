@@ -195,6 +195,23 @@ def test_nested_citation_markers_are_stripped_to_nothing():
     assert strip_citations("plain [c:x]") == "plain"
 
 
+def test_deeply_nested_citation_markers_leave_nothing_citation_re_reads():
+    import time
+
+    from oracle.docs.parser import CITATION_RE, strip_citations
+
+    for text in (
+        "[c:a[c:a[c:a[c:a]]]]",
+        "see " + "[c:a" * 10 + "]" * 10 + " end",
+        "[[c:c:x]",
+        "[c:" * 50_000 + "x" + "]" * 50_000,
+    ):
+        started = time.perf_counter()
+        out = strip_citations(text)
+        assert time.perf_counter() - started < 0.5
+        assert CITATION_RE.search(out) is None, out[:80]
+
+
 def test_blocker_lines_strip_nested_citation_markers():
     from oracle.blockers.render import _inline
 
