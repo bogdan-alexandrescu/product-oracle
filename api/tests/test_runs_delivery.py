@@ -216,8 +216,11 @@ async def test_the_tick_still_reads_the_run_while_its_decision_post_keeps_failin
         assert got["spent_usd"] == pytest.approx(_wf_cost(swarm, "wf_1"))
     assert swarm.answers == [] and (await _owed(tenant_id, run["id"]))["tries"] == 3
     await tick(client, auth)
-    assert len(swarm.answers) == 1
-    assert (await get(client, auth, run["id"]))["status"] == "running"
+    assert len(swarm.answers) == 1 and await _owed(tenant_id, run["id"]) is None
+    # Delivered, and the same tick's pass followed the workflow on (its revision, then the
+    # next round's wait).
+    got = await get(client, auth, run["id"])
+    assert [c["status"] for c in got["checkpoints"]][:1] == ["changes_requested"]
 
 
 async def test_an_owed_decision_survives_a_pause_on_overrun_and_resume(client, owner):

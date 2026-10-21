@@ -183,7 +183,9 @@ async def test_a_refused_post_leaves_the_decision_recorded_for_the_tick(client, 
     await tick(client, auth)
     run = await get(client, auth, run["id"])
     assert len(swarm.answers) == 1 and len(swarm.submissions()) == 1
-    assert run["status"] == "running"
+    # Delivered; the same tick's pass follows the workflow on (into round 2's wait).
+    assert run["checkpoints"][0]["status"] == "changes_requested"
+    assert "posting" not in run["checkpoints"][0]["payload"]["wait"]
     await tick(client, auth)
     assert len(swarm.answers) == 1  # never answered twice
 
@@ -199,7 +201,8 @@ async def test_a_lost_answer_is_replayed_by_the_tick_never_doubled(client, owner
     await tick(client, auth)
     run = await get(client, auth, run["id"])
     assert len(swarm.answers) == 1 and len(swarm.submissions()) == 1
-    assert run["status"] == "running"
+    assert run["checkpoints"][0]["status"] == "changes_requested"
+    assert "posting" not in run["checkpoints"][0]["payload"]["wait"]
 
 
 # --- CR-06: every approver/owner write under /v1/runs re-checks the caller -------------

@@ -243,6 +243,9 @@ class Unavailable(RunError):
     """The agent runtime did not confirm a call; repeating it is safe."""
 
     status = 503
+    # An Inbox decision's delivery that stopped on a cancel SwarmCloud did not confirm:
+    # the run's workflow id and its cancel_pending marker, kept when the rest rolls back.
+    held: dict[str, Any] | None = None
 
 
 def _now() -> datetime:
@@ -4875,25 +4878,32 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
             stats.errors[:] = saved.errors
 
         try:
-            if (owed := await _owed_decision(db, run_id)) is not None:
-                # An Inbox decision recorded, its post to SwarmCloud not finished.
-                stats.checked += 1
-                await _complete_decision(db, run_id, owed, deadline)
-            else:
-                await _replay(
-                    db,
-                    deadline,
-                    lambda run_id=run_id: _tick_searches(db, run_id, stats),
-                    reset=reset,
-                )
-                ran = await _replay(
-                    db,
-                    deadline,
-                    lambda run_id=run_id, deadline=deadline: _tick_one(db, run_id, stats, deadline),
-                    reset=reset,
-                )
-                if not ran:
+            owed = await _owed_decision(db, run_id)
+            if owed is not None:
+                # An Inbox decision recorded, its post to SwarmCloud not finished: tried
+                # first. Whether or not SwarmCloud takes it, the run's pass still runs
+                # (its cost, the ceiling, its workflow's end): a post that keeps failing
+                # must not stop Oracle from watching the run.
+                try:
+                    await _complete_decision(db, run_id, owed, deadline)
+                except Unavailable as exc:
+                    errors.append(f"run {run_id}: {exc}")
+            await _replay(
+                db,
+                deadline,
+                lambda run_id=run_id: _tick_searches(db, run_id, stats),
+                reset=reset,
+            )
+            ran = await _replay(
+                db,
+                deadline,
+                lambda run_id=run_id, deadline=deadline: _tick_one(db, run_id, stats, deadline),
+                reset=reset,
+            )
+            if not ran:
+                if owed is None:
                     continue
+                stats.checked += 1  # counted once: by its pass when that ran
             if await _has_waiting(db, run_id):
                 await submit_queued(db, run_id, deadline=deadline)
         except RuntimeUnavailable as exc:
@@ -5092,18 +5102,18 @@ async def _continue_decided(
     await _submit(db, run, target, segments, change_request=note)
 
 
-async def _owed_decision(db: AsyncSession, run_id: uuid.UUID) -> uuid.UUID | None:
-    """The run's checkpoint decided and recorded whose post to SwarmCloud (or the cancel it
-    needs) is not finished (:func:`_finish_decision`), read without a lock."""
-    owed = next(
-        (
-            c.id
-            for c in await _checkpoints(db, [run_id])
-            if c.status in DECIDED
-            and isinstance(((c.payload or {}).get("wait") or {}).get("posting"), dict)
-        ),
-        None,
+def _owes(cp: Checkpoint) -> bool:
+    """A decision recorded on ``cp`` whose post to SwarmCloud (or the cancel it needs) is
+    not finished (:func:`_finish_decision`)."""
+    return cp.status in DECIDED and isinstance(
+        ((cp.payload or {}).get("wait") or {}).get("posting"), dict
     )
+
+
+async def _owed_decision(db: AsyncSession, run_id: uuid.UUID) -> uuid.UUID | None:
+    """The run's checkpoint whose recorded decision is owed (:func:`_owes`), read without
+    a lock."""
+    owed = next((c.id for c in await _checkpoints(db, [run_id]) if _owes(c)), None)
     await db.rollback()
     return owed
 
@@ -5142,6 +5152,11 @@ async def _finish_decision(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: u
         )
         wait = dict(((cp.payload or {}).get("wait") or {}) if cp is not None else {})
         posting = wait.get("posting")
+        now_wf = _live(run)
+        if exc.held is not None and now_wf is not None and now_wf.get("id") == exc.held["id"]:
+            # The cancel's marker (its tries, a 404 count), as the failed pass left it.
+            _set_knob(run, "workflow", {**now_wf, "cancel_pending": exc.held["cancel_pending"]})
+            await revoke_run_tokens(db, run.id)
         if cp is not None and cp.status in DECIDED and isinstance(posting, dict):
             first = not posting.get("error")
             wait["posting"] = {
@@ -5160,9 +5175,7 @@ async def _finish_decision(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: u
                     f"The decision at {cp.kind} is recorded; SwarmCloud did not take it yet "
                     f"({_shown(exc)}). Oracle tries again on every tick.",
                 )
-            await db.commit()
-        else:
-            await db.rollback()
+        await db.commit()
         raise
 
 
@@ -5185,17 +5198,36 @@ async def _finish_decision_now(
     if cp is None or not isinstance(posting, dict):
         await db.rollback()
         return
-    if cp.status not in DECIDED or run.status != "awaiting_checkpoint":
+    if cp.status not in DECIDED or run.status not in ("awaiting_checkpoint", "paused_overrun"):
         # Voided, or the run ended meanwhile (cancelled, failed): nothing is owed.
         wait.pop("posting")
         _set_wait(cp, wait)
         await db.commit()
+        return
+    if run.status == "paused_overrun":
+        # Paused on overrun (its workflow cancelled): the decision stays owed, and is
+        # delivered once an owner resumes the run (resume: awaiting_checkpoint again).
+        await db.rollback()
         return
     refusal = await _decider_refusal(db, posting, cp.approver_role)
     if refusal is not None:
         await _void_owed(db, None, run, cp, refusal, {"via": "decision.recheck"})
         await db.commit()
         return
+    try:
+        await _deliver_decision(db, run, cp, wait, posting)
+    except Unavailable as exc:
+        held = _live(run)
+        if held is not None and held.get("cancel_pending"):
+            # A cancel SwarmCloud did not confirm: its marker outlives the rollback, so
+            # its tries are counted and a cancel stuck on 404s reaches the Inbox.
+            exc.held = {"id": held.get("id"), "cancel_pending": held["cancel_pending"]}
+        raise
+
+
+async def _deliver_decision(
+    db: AsyncSession, run: Run, cp: Checkpoint, wait: dict[str, Any], posting: dict[str, Any]
+) -> None:
     segments = await _segments(db, run.id)
     seq = (cp.payload or {}).get("segment_seq")
     segment = next((x for x in segments if x.seq == seq), None)
@@ -6823,8 +6855,10 @@ async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     run.status = "running"
     await audit.record(db, principal, "run.resumed", "run", run.id, {"ceiling_usd": str(ceiling)})
     segments = await _segments(db, run.id)
-    if any(c.status == "pending" for c in await _checkpoints(db, [run.id])):
-        # Paused while it waited on a checkpoint: it waits on it again, in the Inbox.
+    checkpoints = await _checkpoints(db, [run.id])
+    if any(c.status == "pending" or _owes(c) for c in checkpoints):
+        # Paused while it waited on a checkpoint: it waits on it again, in the Inbox; or
+        # on a decision recorded and not delivered yet, which the tick delivers now.
         run.status = "awaiting_checkpoint"
     elif not any(s.status == "running" for s in segments):
         done = [s for s in segments if s.status == "succeeded"]

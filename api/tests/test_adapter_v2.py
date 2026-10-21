@@ -700,7 +700,8 @@ async def test_already_answered_by_oracles_lost_post_with_the_same_verdict(clien
     assert swarm.workflows["wf_1"].step("next_draft-revise1").state == "SUCCEEDED"
     await tick(client, auth)
     run = await get(client, auth, run["id"])
-    assert run["status"] == "running" and len(swarm.answers) == 1
+    # Delivered (replayed); the same tick's pass follows the workflow into round 2's wait.
+    assert run["status"] == "awaiting_checkpoint" and len(swarm.answers) == 1
     assert len(swarm.submissions()) == 1 and _live_with(swarm, "next_draft") == ["wf_1"]
     assert not any("decided outside Oracle" in n for n in run["notes"])
     decided = next(c for c in run["checkpoints"] if c["id"] == cp["id"])
@@ -872,7 +873,9 @@ async def test_503_is_retried(client, owner, reason):
     await tick(client, auth)  # the recorded decision is posted
     run = await get(client, auth, run["id"])
     assert len(swarm.answers) == 1 and len(swarm.submissions()) == 1
-    assert run["status"] == "running"
+    # Delivered; the same tick's pass then follows the workflow into round 2's wait.
+    assert run["status"] == "awaiting_checkpoint"
+    assert pending(run)["payload"]["wait"]["step_id"] == "next_draft-review2"
 
 
 # --------------------------------------------------------------------------- labels
@@ -1489,7 +1492,10 @@ async def test_a_failed_cancel_on_a_decision_is_finished_by_the_tick(
     run = await get(client, auth, run["id"])
     assert run["status"] == "awaiting_checkpoint"
     assert next(c for c in run["checkpoints"] if c["id"] == cp["id"])["status"] == decision
-    assert await verify_run_token(token) is not None
+    # The cancel's marker is kept (its tries counted): nothing Oracle drives runs in the
+    # workflow any more, so its token is dead now, not when SwarmCloud confirms.
+    assert (await _knobs_of(tenant_id, run["id"]))["workflow"]["cancel_pending"]["tries"] == 1
+    assert await verify_run_token(token) is None
     # The tick makes the decision's calls again: the cancel is confirmed first, then the
     # run goes on.
     if path == "closed":
