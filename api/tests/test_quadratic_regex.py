@@ -1,0 +1,86 @@
+"""Regexes that run on untrusted draft text outside markdown-it must be linear.
+
+A run of spaces between two words made ``CITATION_STRIP_RE`` and ``SECTION_ID_RE`` quadratic
+(0.75 s and 1.0 s per 20,000-character line): the CPU budget never fired, the regex engine
+held the GIL, and four ~1 MB posts starved the event loop and the 4-thread parse pool.
+"""
+
+import asyncio
+import time
+
+import pytest
+
+from oracle.docs.parser import CITATION_STRIP_RE, SECTION_ID_RE, DraftError, parse_draft
+from tests.fixtures import draft, import_draft, seed_auth
+
+PRD = draft("prd_v1.md")
+CPU_LIMIT = 2.0
+SPACES = 19_990
+
+
+def _line(prefix: str = "") -> str:
+    return f"{prefix}a" + " " * SPACES + "b"
+
+
+def _body(lines: int = 12) -> str:
+    return PRD + "\n" + "\n".join(_line() for _ in range(lines)) + "\n"
+
+
+def _headings(lines: int = 12) -> str:
+    return PRD + "\n" + "\n".join(_line("# ") for _ in range(lines)) + "\n"
+
+
+SHAPES = {"body": _body, "headings": _headings}
+
+
+@pytest.mark.parametrize("shape", sorted(SHAPES))
+def test_parse_draft_is_linear_on_a_space_run(shape):
+    text = SHAPES[shape]()
+    start = time.process_time()
+    try:
+        parse_draft(text)
+    except DraftError:
+        pass
+    took = time.process_time() - start
+    assert took < CPU_LIMIT, f"{shape} took {took:.2f}s of CPU"
+
+
+@pytest.mark.parametrize("shape", sorted(SHAPES))
+async def test_import_is_linear_on_a_space_run(client, shape):
+    _, auth = await seed_auth()
+    text = SHAPES[shape]()
+    start = time.process_time()
+    resp = await import_draft(client, auth, text)
+    took = time.process_time() - start
+    assert resp.status_code in (201, 413, 422), resp.text
+    assert took < CPU_LIMIT, f"{shape} import took {took:.2f}s of CPU"
+
+
+@pytest.mark.parametrize("shape", sorted(SHAPES))
+async def test_honest_import_after_four_big_posts(client, shape):
+    _, auth = await seed_auth()
+    big = SHAPES[shape](50)  # ~1 MB
+    assert len(big.encode()) < 1024 * 1024
+    await import_draft(client, auth, PRD, doc="warm-up")
+    start = time.perf_counter()
+    posts = [
+        asyncio.create_task(import_draft(client, auth, big, doc=f"big-{i}")) for i in range(4)
+    ]
+    await asyncio.sleep(0)
+    honest = await import_draft(client, auth, PRD, doc="honest")
+    took = time.perf_counter() - start
+    assert honest.status_code == 201, honest.text
+    assert took < 10, f"the honest import took {took:.1f}s behind four big posts"
+    await asyncio.gather(*posts)
+
+
+def test_regexes_keep_their_behaviour_on_normal_text():
+    strip = CITATION_STRIP_RE.sub
+    assert strip("", "Users drop off [c:c1] at shipping.") == "Users drop off at shipping."
+    assert strip("", "[c:c1] first\t[c:c2]") == " first"
+    assert strip("", "a[c:x]b") == "ab"
+    assert strip("", "no cite [c: x] here") == "no cite [c: x] here"
+    text = "Goals  {#goals}  "
+    m = SECTION_ID_RE.search(text)
+    assert m and m.group(1) == "goals" and text[: m.start()] == "Goals"
+    assert SECTION_ID_RE.search("{#a}") and SECTION_ID_RE.search("x {#a} y") is None
