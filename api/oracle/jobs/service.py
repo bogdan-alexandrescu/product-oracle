@@ -43,6 +43,7 @@ JOB_LABELS = {
     "refinement": "Refinement",
     "intake_analysis": "Intake analysis",
     "quality_review": "Quality review",
+    "decision_options": "Decision options",
     "refinement_batch": "Refinement",
 }
 #: Kinds that share another kind's per-document switch: the next-draft batch is
@@ -449,6 +450,10 @@ async def accept_suggestion(
             row.id,
             {"reason": reason, "pushback": row.pushback.get("reason")},
         )
+        # H1: the override is a judgement call in the decision log, reviewed in 90 days.
+        from oracle.decisions import capture
+
+        await capture.pushback_overridden(db, principal, row, reason or "")
     return row
 
 

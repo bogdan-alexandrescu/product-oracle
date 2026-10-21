@@ -41,7 +41,9 @@ JOB_KINDS = ("review_comments", "reporting", "refinement", "quality_review", "re
 # Jobs on a product intake (CR-03, migration 0014_intake): light extraction from a brief
 # and its pinned sources. They have no document; ``intake_id`` says whose they are.
 INTAKE_JOB_KINDS = ("intake_analysis",)
-ALL_JOB_KINDS = JOB_KINDS + INTAKE_JOB_KINDS
+# A decision's options (H1, migration 0020_decisions): no document, ``decision_id`` instead.
+DECISION_JOB_KINDS = ("decision_options",)
+ALL_JOB_KINDS = JOB_KINDS + INTAKE_JOB_KINDS + DECISION_JOB_KINDS
 JOB_STATUSES = ("queued", "running", "succeeded", "failed", "cancelled")
 CLASSIFICATIONS = ("question", "change_request", "factual_correction", "approval", "other")
 SUGGESTION_KINDS = ("section_text", "answer", "none", "duplicate")
@@ -53,18 +55,24 @@ class LlmJob(TenantScoped, Base):
     __table_args__ = (
         CheckConstraint(_in("kind", ALL_JOB_KINDS), name="kind"),
         CheckConstraint(_in("status", JOB_STATUSES), name="status"),
-        CheckConstraint("document_id IS NOT NULL OR intake_id IS NOT NULL", name="subject"),
+        CheckConstraint(
+            "document_id IS NOT NULL OR intake_id IS NOT NULL OR decision_id IS NOT NULL",
+            name="subject",
+        ),
         Index("ix_llm_jobs_document_status", "document_id", "status"),
         Index("ix_llm_jobs_status_created", "status", "created_at"),
     )
 
     kind: Mapped[str] = mapped_column(Text, nullable=False)
-    # Null for intake jobs, which carry intake_id instead.
+    # Null for intake and decision jobs, which carry intake_id or decision_id instead.
     document_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("documents.id", ondelete="CASCADE")
     )
     intake_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("product_intakes.id", ondelete="CASCADE"), index=True
+    )
+    decision_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("decisions.id", ondelete="CASCADE"), index=True
     )
     version_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("document_versions.id", ondelete="CASCADE"), index=True

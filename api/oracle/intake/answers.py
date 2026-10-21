@@ -698,6 +698,11 @@ async def decide(
         review_at=review_at,
     )
     db.add(decision)
+    await db.flush()
+    # H1: an accepted risk or assumption is a judgement call in the decision log.
+    from oracle.decisions import capture
+
+    await capture.gap_decided(db, principal, decision)
     before = gap.status
     if body.decision == "accept_risk":
         gap.status = "accepted_risk"

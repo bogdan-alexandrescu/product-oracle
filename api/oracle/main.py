@@ -20,6 +20,7 @@ from oracle.connections.browse_slack import router as slack_browse_router
 from oracle.connections.notion_pages import router as notion_pages_router
 from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
+from oracle.decisions.router import router as decisions_router
 from oracle.docs.router import router as docs_router
 from oracle.export.router import router as export_router
 from oracle.intake.router import router as intake_router
@@ -154,6 +155,7 @@ def create_app() -> FastAPI:
     app.include_router(fireflies_browse_router)
     app.include_router(baseline_router)
     app.include_router(priorities_router)
+    app.include_router(decisions_router)
     app.include_router(templates_router)
     app.include_router(runs_router)
     # Product Oracle v2: thin read routes over the shared tables; lanes add writes.

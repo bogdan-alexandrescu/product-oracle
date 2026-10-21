@@ -10,11 +10,11 @@ import uuid
 from datetime import timedelta
 
 import pytest
-from oracle.decisions.models import Decision, DecisionReview
 from sqlalchemy import select
 
 from oracle.baseline.models import Edge, Entity
 from oracle.decisions import capture as capture_lines
+from oracle.decisions.models import Decision, DecisionReview
 from oracle.docs.models import Document, DocumentVersion
 from oracle.jobs import worker
 from oracle.jobs.models import LlmJob
@@ -496,7 +496,7 @@ async def test_decided_call_syncs_a_locked_decision_entity_and_reversal_marks_st
     async with tenant_session(ctx.tenant_id) as s:
         ent = await s.get(Entity, entity_id)
         assert ent.status == "rejected"
-        kinds = list(await s.scalars(select(ChangeEvent.kind)))
+        kinds = list(await s.scalars(select(ChangeEvent.subject_kind)))
         assert "decision" in kinds
         dep = await s.scalar(
             select(ArtifactDependency).where(ArtifactDependency.document_version_id == version_id)

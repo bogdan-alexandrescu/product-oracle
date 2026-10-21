@@ -8,11 +8,12 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from oracle.decisions.models import Decision
 from sqlalchemy import select
 
+from oracle.auth.models import User
 from oracle.baseline.models import Entity
 from oracle.decisions import capture
+from oracle.decisions.models import Decision
 from oracle.docs.models import Document
 from oracle.jobs.models import LlmSuggestion
 from oracle.runs.models import Checkpoint
@@ -66,7 +67,9 @@ async def test_first_version_approval_is_captured_once(client):
     assert d.title == "Publish Checkout redesign PRD v1"
     assert [o["key"] for o in d.options] == ["publish", "keep_in_review"]
     assert d.chosen_option == "publish"
-    assert d.approver_id == r.user_id
+    async with tenant_session(r.tenant_id) as s:
+        admin = await s.scalar(select(User.id).where(User.email == "admin@example.com"))
+    assert d.approver_id == admin
     assert d.expected_outcome == "See the document's success metrics"
     assert d.review_at == TODAY + timedelta(days=90)
     assert {"kind": "document_version", "id": str(version_id)}.items() <= d.subjects[0].items()
@@ -140,7 +143,14 @@ async def test_pushback_override_is_captured_with_its_reason(client):
             status="open",
             pushback={
                 "reason": "Evidence says the shipping step is where buyers drop.",
-                "sources": [{"ref": "ev:1", "kind": "evidence", "url": "https://example.com"}],
+                "sources": [
+                    {
+                        "ref": "ev:1",
+                        "kind": "evidence",
+                        "title": "Checkout funnel study",
+                        "url": "https://example.com/study",
+                    }
+                ],
             },
         )
         s.add(row)

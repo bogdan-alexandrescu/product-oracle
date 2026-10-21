@@ -7,6 +7,7 @@ states its card (protects / fails_when / no_claim)."""
 
 import asyncio
 import uuid
+from datetime import UTC, date, datetime
 
 import pytest
 from alembic import command
@@ -72,12 +73,11 @@ def _company() -> tuple[uuid.UUID, uuid.UUID]:
     return t, u
 
 
-def _assumption(t, u, decision: str, statement: str, review: str | None) -> uuid.UUID:
+def _assumption(t, u, decision: str, statement: str, review: datetime | None) -> uuid.UUID:
     a = uuid.uuid4()
     _run(
         "INSERT INTO assumption_decisions (id, tenant_id, statement, decision, rationale, "
-        "decided_by, review_at) VALUES (:a, :t, :s, :d, 'Measured in the pilot', :u, "
-        "CAST(:r AS timestamptz))",
+        "decided_by, review_at) VALUES (:a, :t, :s, :d, 'Measured in the pilot', :u, :r)",
         a=a,
         t=t,
         s=statement,
@@ -103,7 +103,9 @@ def test_upgrade_backfills_accepted_assumptions_and_downgrade_removes_it_all(scr
     or doubled, or anything survives the downgrade; no_claim=none beyond protects."""
     command.upgrade(_cfg(), PREVIOUS)
     t, u = _company()
-    risk = _assumption(t, u, "accept_risk", "Partner quota holds", "2026-12-01T00:00:00Z")
+    risk = _assumption(
+        t, u, "accept_risk", "Partner quota holds", datetime(2026, 12, 1, tzinfo=UTC)
+    )
     assumed = _assumption(t, u, "accept_assumption", "Buyers keep one address", None)
     _assumption(t, u, "validate", "Measured", None)
     _assumption(t, u, "reject", "Rejected", None)
@@ -158,12 +160,12 @@ def test_decided_check_allows_a_null_review_date_only_for_checkpoints(scratch_db
     command.upgrade(_cfg(), REVISION)
     t, u = _company()
 
-    def insert(origin: str, number: int, review: str | None, source: uuid.UUID | None = None):
+    def insert(origin: str, number: int, review: date | None, source: uuid.UUID | None = None):
         _run(
             "INSERT INTO decisions (id, tenant_id, number, title, status, approver_id, driver, "
             "origin, chosen_option, rationale, decided_at, review_at, source_kind, source_id) "
             "VALUES (gen_random_uuid(), :t, :n, 'x', 'decided', :u, 'oracle', :o, 'approve', "
-            "'ok', now(), CAST(:r AS date), :sk, :s)",
+            "'ok', now(), :r, :sk, :s)",
             t=t,
             n=number,
             u=u,
@@ -176,9 +178,9 @@ def test_decided_check_allows_a_null_review_date_only_for_checkpoints(scratch_db
     insert("checkpoint", 1, None, uuid.uuid4())
     with pytest.raises(IntegrityError):
         insert("manual", 2, None)
-    insert("manual", 2, "2027-01-01")
+    insert("manual", 2, date(2027, 1, 1))
     with pytest.raises(IntegrityError):
-        insert("manual", 2, "2027-01-01")
+        insert("manual", 2, date(2027, 1, 1))
     cp = uuid.uuid4()
     insert("checkpoint", 3, None, cp)
     with pytest.raises(IntegrityError):

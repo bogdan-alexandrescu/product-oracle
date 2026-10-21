@@ -45,7 +45,11 @@ from oracle.v2.models import DocumentSectionLink
 
 ENTITY_FIELDS = ("title", "body", "attrs", "status")
 # attrs keys a module owns, and the routes that change them.
-MANAGED_ATTRS = {"blocker": "the blocker routes (/v1/blockers)"}
+MANAGED_ATTRS = {
+    "blocker": "the blocker routes (/v1/blockers)",
+    # A decided judgement call's entity (H1): the decision log keeps it in step.
+    "decision_id": "the decision log (/v1/decisions)",
+}
 EDGE_FIELDS = ("attrs", "status")
 
 

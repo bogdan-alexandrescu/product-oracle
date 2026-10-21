@@ -617,6 +617,24 @@ async def _transition(
     return event
 
 
+async def _capture(
+    db: AsyncSession,
+    principal: Principal,
+    entity: Entity,
+    event: BlockerResolutionEvent,
+    chosen: str,
+    reason: str | None,
+    review_at: datetime | None = None,
+) -> None:
+    """H1: a blocker's risk, option or feasibility scope is a judgement call in the
+    decision log, one record per resolution event."""
+    from oracle.decisions import capture
+
+    await capture.blocker_decided(
+        db, principal, entity, event, chosen=chosen, rationale=reason, review_at=review_at
+    )
+
+
 # --- blockers -------------------------------------------------------------------------------
 
 
@@ -969,7 +987,7 @@ async def accept_risk(
         "severity": spec.severity,
         "by_decider": await is_decider(db, principal),
     }
-    await _transition(
+    event = await _transition(
         db,
         principal,
         entity,
@@ -980,6 +998,7 @@ async def accept_risk(
         data=data,
         audit_action="blocker.risk_accepted",
     )
+    await _capture(db, principal, entity, event, "accept_risk", body.reason, review_at)
     return entity
 
 
@@ -1012,7 +1031,7 @@ async def approve_feasibility_scope(
         "decision_gate_at": exp.decision_gate_at.isoformat(),
         "by_decider": await is_decider(db, principal),
     }
-    await _transition(
+    event = await _transition(
         db,
         principal,
         entity,
@@ -1024,6 +1043,7 @@ async def approve_feasibility_scope(
         data=data,
         audit_action="blocker.feasibility_scope_approved",
     )
+    await _capture(db, principal, entity, event, "feasibility_scope", body.reason)
     return entity
 
 
@@ -1207,7 +1227,7 @@ async def select_option(
         "previous_option_id": str(previous) if previous else None,
         "reason": body.reason,
     }
-    await _event(
+    event = await _event(
         db,
         principal,
         entity,
@@ -1220,6 +1240,7 @@ async def select_option(
         spec=spec,
     )
     await _record(db, principal, entity, spec, "option_selected", data)
+    await _capture(db, principal, entity, event, str(option.id), body.reason)
     await audit.record(db, principal, "blocker_option.selected", "blocker_option", option.id, data)
     return entity
 

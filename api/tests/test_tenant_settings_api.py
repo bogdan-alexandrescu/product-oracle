@@ -42,6 +42,8 @@ async def test_defaults_and_unknown_keys(client, owner):
         "publish_latest_only": True,
         "blocker_risk_acceptance_role": "owner",
         "blocker_risk_review_max_days": 90,
+        # H1: hard-to-reverse decisions are an owner's call by default.
+        "decision_irreversible_role": "owner",
         "company_email_domains": [],
         "company_shared_drives": [],
     }

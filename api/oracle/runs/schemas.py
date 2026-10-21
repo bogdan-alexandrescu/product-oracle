@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -543,6 +543,22 @@ class InboxCounts(BaseModel):
     done: int = 0
 
 
+class InboxDecision(BaseModel):
+    """A decision row (H1): a proposal I decide, a review that came due (both counted),
+    a decision made that I am informed of, or one I just handled (shown only)."""
+
+    id: uuid.UUID
+    number: int
+    # "D-12"
+    ref: str
+    title: str
+    reason: Literal["needs_decision", "review_due", "oracle_decided", "informed"]
+    review_at: date | None = None
+    state: Literal["new", "open", "done"]
+    # False for "informed" and done rows: they add to neither needs_me nor total.
+    counts: bool
+
+
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
     # Those with the checkpoint's approver role: decisions recorded and not delivered to
@@ -575,7 +591,9 @@ class InboxOut(BaseModel):
     items: list[InboxFeedbackItem] = []
     counts: InboxCounts = InboxCounts()
     staged: list[InboxStaged] = []
-    # Feedback that needs me: new + open (staged, declined and done do not).
+    # H1: decision rows (proposals I decide, reviews due, informed, just handled).
+    decisions: list[InboxDecision] = []
+    # Feedback and decisions that need me: new + open (staged, declined and done do not).
     needs_me: int = 0
     # My previous Inbox visit (what 'new' is measured from); None before the first.
     last_seen_at: datetime | None = None

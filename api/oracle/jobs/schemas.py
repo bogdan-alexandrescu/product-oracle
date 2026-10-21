@@ -18,6 +18,7 @@ AnyJobKind = Literal[
     "quality_review",
     "refinement_batch",
     "intake_analysis",
+    "decision_options",
 ]
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 Classification = Literal["question", "change_request", "factual_correction", "approval", "other"]
@@ -37,6 +38,8 @@ class LlmJobOut(ORM):
     # Null for an intake job, which has intake_id instead.
     document_id: uuid.UUID | None = None
     intake_id: uuid.UUID | None = None
+    # A decision's options job (H1) has decision_id instead.
+    decision_id: uuid.UUID | None = None
     version_number: int | None = None
     section_key: str | None = None
     status: JobStatus

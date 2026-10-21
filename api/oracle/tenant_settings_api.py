@@ -14,6 +14,8 @@ The known keys and how each value is checked:
   may accept a critical hard blocker's risk or approve its feasibility scope.
 - ``blocker_risk_review_max_days`` (B4): an integer, 1-365, the latest review date of an
   accepted risk, in days from its acceptance.
+- ``decision_irreversible_role`` (H1): ``approver`` or ``owner``, the lowest role whose
+  approver may decide a hard-to-reverse decision.
 - ``company_email_domains`` (S5): the company's email domains, e.g. ``["example.com"]``.
   A doc in a picked Drive folder whose owner is outside them is skipped; with none set
   (here or in ORACLE_IAP_ALLOWED_DOMAINS) every doc in a picked folder is. Public mail
@@ -61,6 +63,8 @@ DEFAULTS: dict[str, Any] = {
     # B4 (owner, 2026-10-19): owners only, reviewed within at most 90 days.
     "blocker_risk_acceptance_role": "owner",
     "blocker_risk_review_max_days": 90,
+    # H1: hard-to-reverse decisions are an owner's call unless an owner lowers it.
+    "decision_irreversible_role": "owner",
     # S5 (owner, 2026-10-20): explicit, never inferred in production.
     "company_email_domains": [],
     "company_shared_drives": [],
@@ -177,6 +181,12 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         if value not in RISK_ACCEPTANCE_ROLES:
             raise InvalidSetting(
                 f"blocker_risk_acceptance_role must be one of {', '.join(RISK_ACCEPTANCE_ROLES)}"
+            )
+        return value
+    if key == "decision_irreversible_role":
+        if value not in RISK_ACCEPTANCE_ROLES:
+            raise InvalidSetting(
+                f"decision_irreversible_role must be one of {', '.join(RISK_ACCEPTANCE_ROLES)}"
             )
         return value
     if key == "blocker_risk_review_max_days":

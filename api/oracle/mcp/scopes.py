@@ -22,6 +22,8 @@ READ_AREAS = {
         "blocker-options",
         "feasibility-experiments",
         "blocker-events",
+        # H1: the company's decisions (judgement calls and the run stops' records).
+        "decisions",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }
@@ -60,6 +62,10 @@ def required_scope(method: str, path: str) -> str | None:
     if method != "POST":
         return None
     if area == "baseline" and parts[-1] in PROPOSAL_WRITES:
+        return "write:proposals"
+    # POST /v1/decisions: propose a decision (as Oracle). Deciding, reviewing,
+    # reassigning and withdrawing stay with people.
+    if parts == ["decisions"]:
         return "write:proposals"
     # POST /v1/documents/{doc}/versions: import a draft version.
     if len(parts) == 3 and parts[0] == "documents" and parts[2] == "versions":

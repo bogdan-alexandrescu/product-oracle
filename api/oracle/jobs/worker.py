@@ -44,6 +44,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle.decisions.models import Decision
 from oracle.docs.models import Document
 from oracle.jobs import kinds, prompting
 from oracle.jobs.models import LlmJob
@@ -161,20 +162,22 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
         await reclaim_stale(s)
         candidates = (
             await s.execute(
-                select(LlmJob.id, LlmJob.document_id, LlmJob.intake_id)
+                select(LlmJob.id, LlmJob.document_id, LlmJob.intake_id, LlmJob.decision_id)
                 .where(LlmJob.status == "queued")
                 .order_by(LlmJob.created_at, LlmJob.id)
                 .limit(50)
             )
         ).all()
         busy: set[uuid.UUID] = set()
-        for job_id, document_id, intake_id in candidates:
-            # A document's jobs run one at a time; so do an intake's (it has no document).
-            owner, model, column = (
-                (document_id, Document, LlmJob.document_id)
-                if document_id is not None
-                else (intake_id, ProductIntake, LlmJob.intake_id)
-            )
+        for job_id, document_id, intake_id, decision_id in candidates:
+            # A document's jobs run one at a time; so do an intake's and a decision's
+            # (they have no document).
+            if document_id is not None:
+                owner, model, column = document_id, Document, LlmJob.document_id
+            elif intake_id is not None:
+                owner, model, column = intake_id, ProductIntake, LlmJob.intake_id
+            else:
+                owner, model, column = decision_id, Decision, LlmJob.decision_id
             if owner in busy:
                 continue
             # The owner's row lock serialises claims of its jobs across workers.
