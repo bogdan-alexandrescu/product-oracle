@@ -22,6 +22,7 @@ from typing import Any
 
 from oracle.docs.schemas import citation_contract
 from oracle.engineering import briefs
+from oracle.priorities.run_order import FORMAT as PRIORITY_FORMAT
 from oracle.runs.feature_set import FORMAT as FEATURE_SET_FORMAT
 
 # Runs whose estimate is above this wait for an owner's approval (P3).
@@ -317,7 +318,11 @@ FLOWS: dict[str, FlowDef] = {
                     checkpoint="priority_order",
                     task="Order only the features included in the approved PRD scope "
                     "(get_prd_scope) by goal-weighted priority, respecting dependencies. "
-                    "Explain every number. Write the order to priority.yaml.",
+                    "Explain every number. Rank every included feature once, 1..N, each "
+                    "after the features it depends on. Oracle checks the file when the "
+                    "segment ends and compares it with its live ranking; what the approver "
+                    "approves becomes this PRD's priority order. Write the order to "
+                    "priority.yaml in this format (YAML, version 1):\n" + PRIORITY_FORMAT,
                     tools=(
                         "get_prd_scope",
                         "get_baseline",

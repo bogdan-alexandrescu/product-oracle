@@ -29,7 +29,7 @@ async def test_console_approval_with_blocking_is_held(client, owner, monkeypatch
     set_runtime(swarm.runtime())
     try:
         swarm.step_files["feature_set-2-architect"] = {"feature_set.yaml": CLEAN}
-        swarm.step_files["priority-3-prioritizer"] = {"priority.yaml": BLOCKING}
+        swarm.step_files["priority-1-prioritizer"] = {"priority.yaml": BLOCKING}
         await _member(tenant_id, "lead@example.com")
         run = await started(client, auth, document=DOC)
         await propose_feature(tenant_id, run["id"])

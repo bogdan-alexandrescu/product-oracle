@@ -167,8 +167,14 @@ async def snapshots(tenant_id, run_id=None) -> list[PrioritySnapshot]:
 
 
 def live_row(key: str, rank: int, flags=()) -> dict:
-    return {"key": key, "rank": rank, "title": key.title(), "flags": list(flags),
-            "depends_on": [], "explanation": {"formula": "f", "steps": []}}  # fmt: skip
+    return {
+        "key": key,
+        "rank": rank,
+        "title": key.title(),
+        "flags": list(flags),
+        "depends_on": [],
+        "explanation": {"formula": "f", "steps": []},
+    }
 
 
 def known(
@@ -186,8 +192,12 @@ def known(
 def order(*rows: tuple[str, int], method: str = "goal_weighted", version: int = 1) -> str:
     lines = [f"version: {version}", f"method: {method}", "order:"]
     for key, rank in rows:
-        lines += [f"  - key: {key}", f"    rank: {rank}", "    score: 1",
-                  f"    explanation: {key} explained"]  # fmt: skip
+        lines += [
+            f"  - key: {key}",
+            f"    rank: {rank}",
+            "    score: 1",
+            f"    explanation: {key} explained",
+        ]
     return "\n".join(lines) + "\n"
 
 
@@ -203,13 +213,20 @@ def test_check_a_clean_order_has_no_problem():
     assert out.problems == [] and out.blocking == 0
     assert out.method == "goal_weighted"
     assert [(r["key"], r["rank"], r["live_rank"]) for r in out.order] == [
-        ("a", 1, 1), ("b", 2, 2), ("c", 3, 3), ("d", 4, 4)
-    ]  # fmt: skip
+        ("a", 1, 1),
+        ("b", 2, 2),
+        ("c", 3, 3),
+        ("d", 4, 4),
+    ]
 
 
 @pytest.mark.parametrize(
     "text",
-    ["version: 1\nmethod: goal_weighted\norder: [unclosed\n", "- just a list\n", "order: 3\n"],
+    [
+        "version: 1\nmethod: goal_weighted\norder: [unclosed\n",
+        "- just a list\n",
+        "version: 1\nmethod: goal_weighted\norder: 3\n",
+    ],
 )
 def test_check_unreadable_yaml(text):
     out = run_order.check_order(text, known=known())
@@ -218,8 +235,9 @@ def test_check_unreadable_yaml(text):
 
 
 def test_check_wrong_version():
-    out = run_order.check_order(order(("a", 1), ("b", 2), ("c", 3), ("d", 4), version=2),
-                                known=known())  # fmt: skip
+    out = run_order.check_order(
+        order(("a", 1), ("b", 2), ("c", 3), ("d", 4), version=2), known=known()
+    )
     assert codes(out) == [("wrong_version", True, None)]
 
 
@@ -229,8 +247,9 @@ def test_check_unknown_method():
 
 
 def test_check_duplicate_key():
-    out = run_order.check_order(order(("a", 1), ("b", 2), ("c", 3), ("d", 4), ("a", 5)),
-                                known=known())  # fmt: skip
+    out = run_order.check_order(
+        order(("a", 1), ("b", 2), ("c", 3), ("d", 4), ("a", 5)), known=known()
+    )
     assert codes(out) == [("duplicate_key", True, "a")]
 
 
@@ -299,8 +318,13 @@ def test_check_differs_from_live_and_no_goal_are_advisory():
 def test_live_rank_is_restricted_to_the_ranked_features():
     """The live ranking of the same method, restricted to the same features: x, ranked
     live between a and b and left out of the run's order, shifts nothing."""
-    live = [live_row("a", 1), live_row("x", 2), live_row("x2", 3), live_row("x3", 4),
-            live_row("b", 5)]  # fmt: skip
+    live = [
+        live_row("a", 1),
+        live_row("x", 2),
+        live_row("x2", 3),
+        live_row("x3", 4),
+        live_row("b", 5),
+    ]
     k = known(("a", "b", "x", "x2", "x3"), live=live)
     out = run_order.check_order(order(("b", 1), ("a", 2)), known=k)
     assert [(r["key"], r["live_rank"]) for r in out.order] == [("b", 2), ("a", 1)]
@@ -407,13 +431,16 @@ async def test_a_rerun_proposal_discards_the_earlier_one(client, owner):  # noqa
         await s.flush()
         k, scope_id = await run_order.known_for_run(s, run)
         check = run_order.check_order(ORDER, known=k)
-        a = await run_order.propose(s, run, segment_seq=3, attempt=1, check=check, known=k,
-                                    scope_id=scope_id)  # fmt: skip
-        b = await run_order.propose(s, run, segment_seq=3, attempt=2, check=check, known=k,
-                                    scope_id=scope_id)  # fmt: skip
+        a = await run_order.propose(
+            s, run, segment_seq=3, attempt=1, check=check, known=k, scope_id=scope_id
+        )
+        b = await run_order.propose(
+            s, run, segment_seq=3, attempt=2, check=check, known=k, scope_id=scope_id
+        )
         # Written again for the same attempt (a resumed segment end): replaced, not doubled.
-        c = await run_order.propose(s, run, segment_seq=3, attempt=2, check=check, known=k,
-                                    scope_id=scope_id)  # fmt: skip
+        c = await run_order.propose(
+            s, run, segment_seq=3, attempt=2, check=check, known=k, scope_id=scope_id
+        )
         await s.commit()
         rows = list(
             await s.scalars(select(PrioritySnapshot).where(PrioritySnapshot.run_id == run.id))
@@ -462,23 +489,42 @@ async def test_the_draft_import_fills_the_document(client, owner, runtime):  # n
 # --------------------------------------------------------------------------- readers
 
 
-async def add_snapshot(tenant_id, status, *, run_id=None, document_id=None, minutes=0,
-                       key="address-lookup") -> uuid.UUID:  # fmt: skip
+def ranked(key: str, formula: str) -> dict:
+    """A RankedFeature as JSON, as a snapshot stores it."""
+    confidence = {"value": 0.5, "source": "default", "explain": "assumed", "evidence": []}
+    explanation = {
+        "method": "goal_weighted",
+        "formula": formula,
+        "inputs": {},
+        "confidence": confidence,
+        "goals": [],
+        "missing": [],
+        "steps": [],
+    }
+    return {
+        "rank": 1,
+        "score_rank": 1,
+        "entity_id": str(uuid.uuid4()),
+        "key": key,
+        "title": key,
+        "status": "confirmed",
+        "score": 1.0,
+        "serves_goal": True,
+        "flags": [],
+        "depends_on": [],
+        "dependents": [],
+        "explanation": explanation,
+    }
+
+
+async def add_snapshot(
+    tenant_id, status, *, run_id=None, document_id=None, minutes=0, key="address-lookup"
+) -> uuid.UUID:
     async with tenant_session(tenant_id) as s:
         snap = PrioritySnapshot(
             method="goal_weighted",
             params={},
-            ranking=[
-                {
-                    "rank": 1,
-                    "key": key,
-                    "title": key,
-                    "score": 1.0,
-                    "flags": [],
-                    "depends_on": [],
-                    "explanation": {"formula": f"{status} order"},
-                }
-            ],  # fmt: skip
+            ranking=[ranked(key, f"{status} order")],
             status=status,
             run_id=run_id,
             document_id=document_id,
@@ -596,8 +642,9 @@ async def test_roadmap_reads_this_prds_approved_order(client, owner, runtime):  
     await add_snapshot(tenant_id, "saved", run_id=run.id, document_id=doc.id, key="this-prd-order")
     # Newer: a person's company-wide snapshot and another PRD's approved order.
     await add_snapshot(tenant_id, "saved", minutes=3, key="company-order")
-    await add_snapshot(tenant_id, "saved", run_id=run.id, document_id=other.id, minutes=4,
-                       key="other-prd-order")  # fmt: skip
+    await add_snapshot(
+        tenant_id, "saved", run_id=run.id, document_id=other.id, minutes=4, key="other-prd-order"
+    )
     prompt = await roadmap_prompt(client, auth, runtime)
     assert "this-prd-order" in prompt
     assert "company-order" not in prompt and "other-prd-order" not in prompt

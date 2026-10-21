@@ -258,6 +258,18 @@ def _default_content(name: str, segment: str, attempt: int, document: str | None
             "    requirements: []\n"
             "excluded: []\n"
         )
+    if name == "priority.yaml":
+        # The C8 format (oracle.priorities.run_order): the default feature set's one feature.
+        return (
+            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            "version: 1\n"
+            "method: goal_weighted\n"
+            "order:\n"
+            "  - key: price-early\n"
+            "    rank: 1\n"
+            "    score: 0\n"
+            "    explanation: The one feature of the feature set\n"
+        )
     if name.endswith(".yaml"):
         return f"# {segment} (local agent runtime, attempt {attempt})\nitems: []\n"
     return f"# {segment}\n\nWritten by the local agent runtime (attempt {attempt}).\n"
