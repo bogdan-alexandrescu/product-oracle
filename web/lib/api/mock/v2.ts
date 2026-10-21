@@ -31,6 +31,9 @@ export interface V2Db {
   artifact_review_events: Schemas["ArtifactReviewEventOut"][];
   /** What intakes proposed (./intake.ts); absent in data saved before the intake lane. */
   intake_proposals?: Schemas["IntakeProposalOut"][];
+  /** Gaps hidden from everyone but their intake's author (S6): the mock's only private
+   * findings (the "private-finding" scenario); absent elsewhere. */
+  private_gap_ids?: string[];
 }
 
 /** URL segment after /v1 -> the table it lists. */

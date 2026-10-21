@@ -99,6 +99,8 @@ def test_0013_follows_0012_and_the_0014_lanes_chain_on_it():
     assert script.get_revision("0014_member_disable").down_revision == "0014_review"
     assert script.get_revision("0014_member_follow_up_retry").down_revision == "0014_member_disable"
     assert script.get_revision("0015_specs").down_revision == "0020_feedback_author"
+    assert script.get_revision("0014_account_management").down_revision == "0020_autonomy"
+    assert script.get_revision("0014_account_fixes").down_revision == "0014_account_management"
 
 
 def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):

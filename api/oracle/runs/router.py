@@ -17,7 +17,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
 
-from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
+from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB, same_origin
 from oracle.authz import require_role, require_role_now
 from oracle.claude_accounts.sweep import summarise_sweep
 from oracle.connections.router import ProviderHttp
@@ -32,6 +32,7 @@ from oracle.runs.schemas import (
     McpServerRegistration,
     PrdScopeOut,
     RunCreate,
+    RunDecision,
     RunOut,
     RunPatch,
     RunStatus,
@@ -134,6 +135,17 @@ async def get_run(run_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB) 
     return await _call(service.read_run(db, run_id, principal))
 
 
+@router.get("/runs/{run_id}/decisions", response_model=list[RunDecision])
+async def list_run_decisions(
+    run_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
+) -> list[RunDecision]:
+    """What people decided at the run's checkpoints, by segment then decided time: role
+    (never a name), when, the decision, the note, the edits applied and the review sent
+    back. Pending checkpoints are not listed. A run's agents read their own run's with
+    the get_checkpoint_review tool."""
+    return await _call(service.list_decisions(db, run_id, principal))
+
+
 @router.patch("/runs/{run_id}", response_model=RunOut)
 async def update_run(
     run_id: uuid.UUID, body: RunPatch, principal: ApproverNow, db: TenantDB
@@ -158,7 +170,7 @@ async def start_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> 
     return await service.read_run(db, run_id, principal)
 
 
-@router.post("/runs/{run_id}/approve", response_model=RunOut)
+@router.post("/runs/{run_id}/approve", response_model=RunOut, dependencies=[Depends(same_origin)])
 async def approve_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> RunOut:
     """Approve the cost of a run awaiting approval and start it."""
     await _call(service.approve(db, principal, run_id))
@@ -166,7 +178,7 @@ async def approve_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> R
     return await service.read_run(db, run_id, principal)
 
 
-@router.post("/runs/{run_id}/resume", response_model=RunOut)
+@router.post("/runs/{run_id}/resume", response_model=RunOut, dependencies=[Depends(same_origin)])
 async def resume_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> RunOut:
     """Resume a run paused on overrun; it may spend another half of its estimate."""
     await _call(service.resume(db, principal, run_id))

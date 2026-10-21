@@ -155,6 +155,18 @@ async def test_read_only_credentials_are_refused(client, drive, scope, allowed):
         assert drive == []
 
 
+async def test_a_read_only_personal_token_is_refused(tenant_id, drive, client):
+    """A personal API token without oracle:write is read-only too: no Drive browse."""
+    pat, conn = await _pat(tenant_id)
+    async with tenant_session(tenant_id) as s:
+        _, raw = await create_api_token(s, "pat-ro", user_id=pat.id, scope="oracle:read")
+        await s.commit()
+    resp = await client.get(PATH.format(conn.id), headers={"Authorization": f"Bearer {raw}"})
+    assert resp.status_code == 403, resp.text
+    assert "oracle:read" in resp.json()["detail"]
+    assert drive == []
+
+
 async def test_service_tokens_are_refused(tenant_id, drive):
     _, conn = await _pat(tenant_id)
     async with tenant_session(tenant_id) as s:

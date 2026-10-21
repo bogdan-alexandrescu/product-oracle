@@ -10,7 +10,8 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingChanged } from "@/lib/waiting";
 
 import { useActed } from "./_actions";
-import { allNeeds, NeedTable, questionNeeds, sourceNeeds, STATE_TABS, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
+import { allNeeds, NeedTable, sourceNeeds, STATE_TABS, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
+import { useQuestionRows } from "./_questions";
 
 type Source = Schemas["SourceOut"];
 
@@ -18,7 +19,6 @@ export default function InboxPage() {
   const q = useQuery("inbox", loadInbox);
   // Questions asked of me (I3): their own group, counted with the rest as the rail badge counts.
   const questionsQ = useQuery("inbox|questions", loadMyQuestions);
-  const docsQ = useQuery("inbox|documents", () => unwrap(api.GET("/v1/documents")));
   // My sources needing an edit before they sync again (a failure here only hides the group).
   const sourcesQ = useQuery("inbox|sources", () => unwrap(api.GET("/v1/sources")));
   const [busy, setBusy] = useState<string | null>(null);
@@ -31,7 +31,8 @@ export default function InboxPage() {
     if (arrived) void markInboxSeen().catch(() => undefined);
   }, [arrived]);
   const inbox = q.data;
-  const questions = questionsQ.data ?? [];
+  // Answered in place (C2): the row shows its outcome until the tab changes, then Done.
+  const asked = useQuestionRows(questionsQ.data ?? [], questionsQ.reload);
 
   async function act(key: string, call: () => Promise<unknown>) {
     setBusy(key);
@@ -53,7 +54,7 @@ export default function InboxPage() {
   const { onActed, notice } = useActed(() => Promise.all([q.reload(), questionsQ.reload()]));
 
   const seenBefore = arrived ? arrivalQ.data : inbox?.last_seen_at;
-  const rows = inbox ? allNeeds(inbox, questionNeeds(questions, docsQ.data ?? []), busy, act, seenBefore, onActed) : null;
+  const rows = inbox ? allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed) : null;
   const waiting = rows ? waitingNeeds(rows).length : undefined;
 
   return (
@@ -66,7 +67,10 @@ export default function InboxPage() {
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
-      {inbox && rows && <InboxTabs rows={rows} waiting={waiting ?? 0} questionsError={questionsQ.error} notice={notice} />}
+      {inbox && rows && (
+        <InboxTabs rows={rows} waiting={waiting ?? 0} questionsError={questionsQ.error} notice={notice} onTabChange={asked.moveSettled} />
+      )}
+      {asked.sheet}
       {sourcesQ.data && <SourcesNeedingAttention sources={sourcesQ.data} />}
     </Page>
   );
@@ -114,11 +118,15 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "revoke-failures", title: "Couldn't revoke access" },
   { id: "report-failures", title: "Report not posted to Slack" },
   { id: "reports", title: "Reports" },
+  { id: "strategy", title: "Strategy drift" },
+  { id: "launches", title: "Launches" },
+  { id: "oracle-actions", title: "Oracle did" },
   { id: "feedback", title: "Feedback" },
   { id: "decisions", title: "Decisions" },
   { id: "questions", title: "Questions" },
   { id: "revising", title: "Sent back by Oracle" },
   { id: "searches", title: "Looking for earlier submissions" },
+  { id: "shipped", title: "Shipped", heading: "Shipped: what you asked for" },
 ];
 
 /**
@@ -131,11 +139,14 @@ function InboxTabs({
   waiting,
   questionsError,
   notice,
+  onTabChange,
 }: {
   rows: ReturnType<typeof allNeeds>;
   waiting: number;
   questionsError: string | null;
   notice: ReactNode;
+  /** The tab changed: what was settled in place moves on. */
+  onTabChange: () => void;
 }) {
   const [tab, setTab] = useState<InboxState>("new");
   const count = (st: InboxState) => rows.filter((r) => r.counted && r.state === st).length;
@@ -148,7 +159,10 @@ function InboxTabs({
           label="Inbox by state"
           tabs={STATE_TABS.map((t) => ({ id: t.id, label: t.label, count: count(t.id) }))}
           value={tab}
-          onChange={setTab}
+          onChange={(t) => {
+            setTab(t);
+            onTabChange();
+          }}
         />
       </div>
       {questionsError && (

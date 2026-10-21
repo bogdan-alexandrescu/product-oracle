@@ -479,8 +479,8 @@ async def test_the_new_run_dialog_offers_only_its_flows_and_points_at_the_others
         "href": None,
     }
     assert flows_out["prd_to_roadmap"]["starts_from"] == {
-        "label": "PRD to roadmap · Plan",
-        "href": "/roadmap",
+        "label": "PRD to roadmap · Plan › Roadmap documents",
+        "href": "/plan/documents",
     }
     assert flows_out["baseline_to_prd"]["starts_from"] is None
 

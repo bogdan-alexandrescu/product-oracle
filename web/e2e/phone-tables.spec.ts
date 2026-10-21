@@ -149,7 +149,7 @@ test("phone design kit: every DataTable sample keeps its titles whole", async ({
 test("phone row actions: every row action a table has on desktop stays on the phone", async ({ page }) => {
   await login(page);
   for (const path of [
-    "/roadmap",
+    "/plan/documents",
     "/runs",
     "/inbox",
     "/documents",
@@ -175,8 +175,8 @@ test("phone row actions: every row action a table has on desktop stays on the ph
     await expectNoSideScroll(page);
   }
 
-  // Roadmap: the approved PRD keeps Build roadmap beside its title.
-  await page.goto("/roadmap");
+  // Plan's Roadmap documents: the approved PRD keeps Build roadmap beside its title.
+  await page.goto("/plan/documents");
   const prd = page.getByTestId("approved-prd");
   const build = prd.getByRole("button", { name: "Build roadmap" });
   await expect(build).toBeVisible();

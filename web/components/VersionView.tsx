@@ -9,7 +9,7 @@ import { CommentPopover, SelectionButton, type PageRect } from "@/components/Com
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { DocCrumb } from "@/components/DocToolbar";
 import { Button, Chip, Empty, Icon, InfoTip, LinkButton, Page, PageHeader, SegmentedControl, Sheet } from "@/components/ds";
-import type { GoTo } from "@/components/FeedbackPanel";
+import { SectionQuestions, type GoTo } from "@/components/FeedbackPanel";
 import { DEFAULT_FILTERS, type FeedbackFilters, type PlacedComment } from "@/components/review/FeedbackList";
 import {
   OutlineRail,
@@ -84,6 +84,9 @@ function readSelection(): Selection | null {
     rect: { top: r.top + window.scrollY, bottom: r.bottom + window.scrollY, left: r.left + window.scrollX },
   };
 }
+
+/** Document kinds only an owner approves (H4), in the words the page uses. */
+const OWNER_APPROVES: Partial<Record<string, string>> = { vision: "a vision", strategy: "a product strategy" };
 
 /**
  * A version under review, ONE SECTION AT A TIME (I3, 2026-10-19), with the navigation the
@@ -602,6 +605,10 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           .map((m) => `${m.text} (${m.label})`)
           .join(", ")}. Record a basis or import a draft without ${flaggedDates.length === 1 ? "it" : "them"}.`
       : undefined;
+  // H4: a vision or a product strategy is an owner's to approve; approvers still set
+  // section verdicts and comment.
+  const ownerApproves = document_ ? OWNER_APPROVES[document_.kind] : undefined;
+  const canApprove = canDecide && (!ownerApproves || hasRole(role, "owner"));
   const sectionProps = (s: SectionOut) => ({
     section: s,
     blocks: parsed.get(s.section_key)!.blocks,
@@ -612,6 +619,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     changedLock: changedLocks.has(s.section_key),
     evidenceTargets: canComment ? graphQ.data?.entities : undefined,
     refine: canDecide && !readOnly && n === latest ? refine : undefined,
+    ask: canComment && !readOnly && n === latest && document_ ? { documentId: document_.id } : undefined,
     onHighlightClick,
     onVerdict,
     showLayer: hasBrief,
@@ -765,6 +773,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       goTo={goTo}
       refreshKey={refreshKey}
       shortcuts={variant === "side" ? shortcuts : undefined}
+      questions={document_ && scopeKeys ? <SectionQuestions documentId={document_.id} sectionKeys={scopeKeys} /> : undefined}
       feedback={{
         entries,
         error: feedbackQ.error || commentsQ.error,
@@ -841,8 +850,13 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             <>
               {/* C1e: accepted changes staged for the next draft, built in one job. */}
               {document_?.kind === "prd" && <BuildDraftButton doc={doc} />}
+              {version && canDecide && !canApprove && !version.approved_at && (
+                <span className="text-sm font-medium text-text2" data-testid="owner-approves-note">
+                  Only an owner approves {ownerApproves}
+                </span>
+              )}
               {version &&
-                (version.approved_at || canDecide) &&
+                (version.approved_at || canApprove) &&
                 (document_?.kind === "prd" && !version.approved_at ? (
                   // T2 publish gate: a PRD is published from the Publish screen, latest version only.
                   <LinkButton

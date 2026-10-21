@@ -4,8 +4,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-TemplateKind = Literal["prd", "roadmap"]
-ThemeKind = Literal["prd", "roadmap", "any"]
+TemplateKind = Literal["prd", "roadmap", "vision", "strategy"]
+ThemeKind = Literal["prd", "roadmap", "vision", "strategy", "any"]
+# The new-draft picker's kinds: a vision or strategy starts on Company › Strategy (H4).
+PickerKind = Literal["prd", "roadmap"]
 KEY_PATTERN = r"^[a-z0-9][a-z0-9-]{0,62}$"
 
 
@@ -193,7 +195,8 @@ class ThemeValidateOut(BaseModel):
 
 
 class ThemePreviewIn(ThemeValidateIn):
-    kind: TemplateKind = "prd"
+    # The sample previewed: a PRD or a roadmap.
+    kind: PickerKind = "prd"
     # "slides": the sample as Present mode slides (16:9), with ``slide_css`` applied
     # after the shared slide layout.
     view: Literal["document", "slides"] = "document"
@@ -234,7 +237,7 @@ class RoadmapAnswers(BaseModel):
 
 
 class RecommendIn(BaseModel):
-    kind: TemplateKind
+    kind: PickerKind
     prd: PrdAnswers | None = None
     roadmap: RoadmapAnswers | None = None
 

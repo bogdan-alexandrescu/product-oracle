@@ -81,6 +81,7 @@ export function GoalsPanel({
   error,
   loading,
   canImport,
+  testId = "home-goals",
 }: {
   goals: GoalView[] | undefined;
   history: Map<string, Point[]>;
@@ -88,6 +89,8 @@ export function GoalsPanel({
   loading: boolean;
   /** Approvers and owners import a baseline; a viewer sees no action they cannot take. */
   canImport: boolean;
+  /** Home's band by default; Plan shows the same band under its own id. */
+  testId?: string;
 }) {
   const confirmed = goals?.filter((g) => !g.proposed) ?? [];
   const proposed = goals?.filter((g) => g.proposed) ?? [];
@@ -98,7 +101,7 @@ export function GoalsPanel({
   return (
     <Panel
       title="Goals"
-      testId="home-goals"
+      testId={testId}
       tools={
         goals &&
         goals.length > 0 && (

@@ -24,8 +24,20 @@ import { useQuery } from "@/lib/use-query";
 
 type Theme = Schemas["ThemeOut"];
 
-const KIND_LABEL: Record<Theme["kind"], string> = { prd: "PRD", roadmap: "Roadmap", any: "Any document" };
-const GROUP_LABEL: Record<Theme["kind"], string> = { prd: "PRD themes", roadmap: "Roadmap themes", any: "Any document" };
+const KIND_LABEL: Record<Theme["kind"], string> = {
+  prd: "PRD",
+  roadmap: "Roadmap",
+  vision: "Vision",
+  strategy: "Product strategy",
+  any: "Any document",
+};
+const GROUP_LABEL: Record<Theme["kind"], string> = {
+  prd: "PRD themes",
+  roadmap: "Roadmap themes",
+  vision: "Vision themes",
+  strategy: "Product strategy themes",
+  any: "Any document",
+};
 const SWATCHES = ["background", "text", "heading", "muted", "accent", "rule", "surface"];
 
 /** The theme's own colours (theme data, so inline styles), overlapping dots. */

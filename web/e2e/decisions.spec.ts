@@ -177,7 +177,7 @@ test("the run page's Decisions in this run opens the log on Checkpoints with tha
   await login(page);
   const id = await seedDecidedRun(page);
   await page.goto(`/runs/${id}`);
-  await page.getByTestId("run-decisions").click();
+  await page.getByTestId("run-decision-log").click();
   await expect(page).toHaveURL(new RegExp(`/company/decisions\\?run=${id}`));
   await expect(chip(page, "Class", "Checkpoints")).toHaveAttribute("aria-pressed", "true");
   await expect(rows(page)).toHaveCount(5);

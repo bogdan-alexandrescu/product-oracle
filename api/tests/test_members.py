@@ -344,6 +344,8 @@ async def test_list_members(client, world):
         "disabled_at",
         "disabled_by",
         "status",
+        "last_sign_in_at",
+        "open_tokens",
     }
     assert resp.json()[0]["status"] == "active"
 

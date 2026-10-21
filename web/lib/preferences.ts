@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 import { api, unwrap } from "@/lib/api/client";
 
@@ -44,4 +44,64 @@ export function useDocumentView(): [DocumentView, (v: DocumentView) => void, boo
   }, []);
 
   return [view, setView, loaded];
+}
+
+/** F1: the Plan shows approved items and drafts ("all"), or approved items only. */
+export type PlanScope = "all" | "approved";
+
+const PLAN_SCOPE_KEY = "oracle-plan-scope";
+/** The choice made this visit, when the browser would not store it (private mode, storage full). */
+const unsaved = new Map<string, PlanScope>();
+const scopeListeners = new Set<() => void>();
+
+function readPlanScope(userId: string): PlanScope {
+  const held = unsaved.get(userId);
+  if (held) return held;
+  try {
+    const v = localStorage.getItem(`${PLAN_SCOPE_KEY}:${userId}`);
+    return v === "approved" ? "approved" : "all";
+  } catch {
+    return "all";
+  }
+}
+
+function subscribePlanScope(listener: () => void) {
+  scopeListeners.add(listener);
+  return () => {
+    scopeListeners.delete(listener);
+  };
+}
+
+const noSubscribe = () => () => {};
+
+/**
+ * The Plan's scope, remembered per viewer in this browser (Approved + drafts by default).
+ * `ready` turns true once the saved choice can be read (in the browser, signed in), so the
+ * Plan loads once.
+ */
+export function usePlanScope(userId: string | null | undefined): [PlanScope, (s: PlanScope) => void, boolean] {
+  const scope = useSyncExternalStore(
+    subscribePlanScope,
+    () => (userId ? readPlanScope(userId) : "all"),
+    () => "all" as PlanScope,
+  );
+  const browser = useSyncExternalStore(
+    noSubscribe,
+    () => true,
+    () => false,
+  );
+  const set = useCallback(
+    (next: PlanScope) => {
+      if (!userId) return;
+      unsaved.delete(userId);
+      try {
+        localStorage.setItem(`${PLAN_SCOPE_KEY}:${userId}`, next);
+      } catch {
+        unsaved.set(userId, next);
+      }
+      scopeListeners.forEach((l) => l());
+    },
+    [userId],
+  );
+  return [scope, set, browser && !!userId];
 }

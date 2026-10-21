@@ -227,9 +227,10 @@ test("approvers mark a stale item under review, then still valid; viewers and co
 // API's carry-forward of items into an imported version (api/tests/test_roadmap_items.py).
 test("the version switcher keeps the Items tab; a version with no items says so", async ({ page }) => {
   test.setTimeout(90_000);
-  // A second roadmap version, built the way a person builds one: from the Roadmap screen.
+  // A second roadmap version, built the way a person builds one: from Plan's Roadmap documents.
   await login(page);
-  await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Roadmap" }).click();
+  await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Plan", exact: true }).click();
+  await page.getByTestId("plan-tabs").filter({ visible: true }).getByRole("link", { name: "Roadmap documents" }).click();
   await page.getByTestId("approved-prd").filter({ hasText: "Usage alerts PRD" }).getByRole("button", { name: "Build roadmap" }).click();
   const dialog = page.getByRole("dialog", { name: "Build roadmap" });
   await dialog.getByRole("button", { name: "Estimate" }).click();
@@ -298,8 +299,9 @@ test("Oracle's links open a roadmap version on Items; typed links and PRDs are u
   await expect(page).toHaveURL(/\/documents\/usage-alerts\/v\/1$/);
   await expect(visible(page, "document-sections")).toBeVisible();
 
-  await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Roadmap" }).click();
-  await expect(page).toHaveURL(/\/roadmap$/);
+  await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Plan", exact: true }).click();
+  await page.getByTestId("plan-tabs").filter({ visible: true }).getByRole("link", { name: "Roadmap documents" }).click();
+  await expect(page).toHaveURL(/\/plan\/documents$/);
   const roadmapRow = page.getByTestId("roadmap-row").filter({ hasText: "Usage alerts roadmap" });
   await expect(roadmapRow.getByRole("link", { name: "v1", exact: true })).toHaveAttribute("href", ITEMS);
   // A PRD's links are unchanged.

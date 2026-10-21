@@ -4,11 +4,18 @@
  * decisions and proposals. It works on the v2 mock tables (./v2.ts) and keeps the API's
  * shapes and role rules; its analysis is a fixed, simplified stand-in for the engine
  * (one gap per category, ranked by importance and impact). It has no source items, so it
- * has no S6 findings: GET .../findings is empty and only the author may set a level.
+ * has no S6 findings of its own: GET .../findings is empty and only the author may set a level;
+ * a scenario may mark gaps private (V2Db.private_gap_ids), and their questions are then asked
+ * of, reassigned or delegated to the intake's author only, as in the API.
  * B4 (owners clear critical gaps) and the author-only repin and re-analysis hold here too.
+ * C2 Questions to people: every asked question has a person (the intake's author unless
+ * someone is named), POST /v1/questions asks a teammate, PATCH /v1/questions/{id}
+ * reassigns or withdraws, GET /v1/inbox/questions is what is asked of me, and GET
+ * /v1/people is the member directory, with the API's rules.
  * Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
+import { displayName } from "@/lib/names";
 import type { V2Db } from "./v2";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -20,11 +27,29 @@ type Category = Gap["category"];
 type Impact = Gap["impact"][number];
 type Importance = Gap["importance"];
 
+/** A member as the mock knows them (GET /v1/people, who can be asked). */
+export interface MockPerson {
+  id: string;
+  email: string;
+  role: Role;
+  status?: string;
+}
+
+/** What a question's subject is, for its Inbox line and its Open link. */
+export interface SubjectLookup {
+  document: (id: string) => { slug: string; title: string; latest: number; heading: (key: string) => string | null } | null;
+  entity: (id: string) => string | null;
+  checkpoint: (id: string) => { run_id: string; kind: string } | null;
+}
+
 export interface IntakeContext {
   userId: string;
   role: Role;
   /** Creates a draft run through the runs mock (POST /v1/runs). */
   createRun: (body: Schemas["RunCreate"]) => Promise<Response>;
+  /** The company's members (C2); without them nobody can be asked a teammate's question. */
+  people?: MockPerson[];
+  subjects?: SubjectLookup;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -225,13 +250,26 @@ function syncQuestions(db: V2Db, intake: Intake) {
   });
 }
 
-function askBatch(db: V2Db, intake: Intake, userId: string, size: number): Question[] {
+/** Every asked question has a person (C2): `assign`, else the gap's owner, else the intake's author. */
+/**
+ * Ask the next batch. Each question goes to someone who can answer it, as in the API: its own
+ * person, else its gap's owner, else the intake's author, else the asker, else the first
+ * approver; a private finding's question goes to the author.
+ */
+function askBatch(db: V2Db, ctx: IntakeContext, intake: Intake, size: number, assign: Record<string, string> = {}): Question[] {
   const questions = db.questions.filter((q) => q.intake_id === intake.id);
+  for (const q of questions) if (q.status === "draft" && assign[q.id]) q.asked_to = assign[q.id];
   const drafts = questions.filter((q) => q.status === "draft").sort((a, b) => a.priority - b.priority).slice(0, size);
   const n = Math.max(0, ...questions.map((q) => q.batch ?? 0)) + 1;
+  // Without a member list, the mock cannot tell who can answer: anyone named may be asked.
+  const able = (id: string | null | undefined): id is string => !!id && (!ctx.people || canAnswer(ctx, id));
+  const approver = (ctx.people ?? []).find((x) => x.status !== "disabled" && atLeast(x.role, "approver"))?.id;
   for (const q of drafts) {
-    Object.assign(q, { status: "asked", batch: n, asked_by: userId, updated_at: now() });
     const g = db.gaps.find((x) => x.id === q.gap_id);
+    const to = privateGap(db, g)
+      ? intake.author_id
+      : ([q.asked_to, g?.owner_id, intake.author_id, ctx.userId].find(able) ?? approver ?? intake.author_id);
+    Object.assign(q, { status: "asked", batch: n, asked_by: ctx.userId, asked_to: to, updated_at: now() });
     if (g && g.status === "unknown") g.status = "asked";
   }
   return drafts;
@@ -283,7 +321,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       });
     }
     syncQuestions(db, intake);
-    askBatch(db, intake, ctx.userId, input.batch_size ?? 5);
+    askBatch(db, ctx, intake, input.batch_size ?? 5);
     return json(201, summary(db, intake, ctx.userId));
   }
 
@@ -342,7 +380,15 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     }
     if (leaf === "question-batches" && m === "POST") {
       if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver asks the next batch");
-      const asked = askBatch(db, intake, ctx.userId, Number(q.get("size") ?? 5));
+      const input = await body<Schemas["QuestionBatchAsk"] | null>();
+      const assign = input?.assign ?? {};
+      for (const [qid, person] of Object.entries(assign)) {
+        const draft = db.questions.find((x) => x.id === qid && x.intake_id === intake.id && x.status === "draft");
+        if (!draft) return fail(422, `Question ${qid} is not waiting to be asked here`);
+        if (!canAnswer(ctx, person)) return fail(422, CANNOT_ANSWER);
+        if (privateGap(db, db.gaps.find((g) => g.id === draft.gap_id)) && person !== intake.author_id) return fail(409, PRIVATE);
+      }
+      const asked = askBatch(db, ctx, intake, Number(input?.size ?? q.get("size") ?? 5), assign);
       if (!asked.length) return fail(409, "No questions left to ask");
       return json(200, batchView(db, intake, asked[0].batch ?? null));
     }
@@ -444,6 +490,71 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     return null;
   }
 
+  if (p[1] === "people" && p.length === 2 && m === "GET") {
+    const needle = (q.get("q") ?? "").trim().toLowerCase();
+    const limit = Number(q.get("limit") ?? 20);
+    // ids: the named people, a disabled one too (it keeps its name); q and limit do not apply.
+    const ids = new Set(q.getAll("ids"));
+    if (ids.size > 100) return fail(422, "At most 100 ids");
+    const people: Schemas["PersonOut"][] = (ctx.people ?? [])
+      .filter((x) => (ids.size ? ids.has(x.id) : x.status !== "disabled" && x.email.includes(needle)))
+      .sort((a, b) => a.email.localeCompare(b.email))
+      .slice(0, ids.size ? undefined : limit)
+      .map((x) => ({
+        user_id: x.id, name: displayName(x.email), email: x.email, role: x.role,
+        can_write: x.status !== "disabled" && atLeast(x.role, "commenter"),
+      }));
+    return json(200, people);
+  }
+
+  if (p[1] === "inbox" && p[2] === "questions" && p.length === 3 && m === "GET") {
+    return json(200, inboxQuestions(db, ctx));
+  }
+
+  if (p[1] === "questions" && p.length === 2 && m === "POST") {
+    if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
+    const input = await body<Schemas["QuestionCreate"]>();
+    const prompt = input?.prompt?.trim() ?? "";
+    if (!prompt || prompt.length > 1000 || (input.rationale ?? "").length > 500) return fail(422, "A question needs some words (at most 1000), and a why of at most 500");
+    const columns = subjectColumns(db, ctx, input.subject);
+    if (!columns) return fail(422, "No such subject");
+    if (!canAnswer(ctx, input.asked_to)) return fail(422, CANNOT_ANSWER);
+    const question: Question = {
+      id: uuid(), gap_id: null, intake_id: null, document_id: null, checkpoint_id: null, item_ref: null, entity_id: null,
+      category: "general", prompt, rationale: input.rationale?.trim() || null, priority: 100, batch: null,
+      asked_to: input.asked_to, asked_by: ctx.userId, module_key: null, section_key: null, status: "asked",
+      created_at: now(), updated_at: now(), ...columns,
+    };
+    db.questions.push(question);
+    return json(201, question);
+  }
+
+  if (p[1] === "questions" && p[2] && p.length === 3 && m === "PATCH") {
+    if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
+    const question = db.questions.find((x) => x.id === p[2]);
+    if (!question) return fail(404, "Question not found");
+    const input = await body<Schemas["QuestionPatch"]>();
+    if (!input || (input.asked_to == null) === (input.status == null)) return fail(422, "Give either asked_to (reassign) or status: withdrawn");
+    const intake = question.intake_id ? findIntake(question.intake_id) : undefined;
+    const allowed = question.asked_by === ctx.userId || intake?.author_id === ctx.userId || atLeast(ctx.role, "approver");
+    if (!allowed) return fail(403, "Only the person who asked, the intake's author or an approver can do this");
+    if (question.status === "answered" || question.status === "withdrawn") return fail(409, `This question is ${question.status}; it stays as it is`);
+    if (input.status === "withdrawn") question.status = "withdrawn";
+    else {
+      if (!canAnswer(ctx, input.asked_to!)) return fail(422, CANNOT_ANSWER);
+      if (privateGap(db, db.gaps.find((g) => g.id === question.gap_id)) && input.asked_to !== intake?.author_id) return fail(409, PRIVATE);
+      question.asked_to = input.asked_to!;
+      // A deferred question reassigned is asked again, of the new person (its gap open again).
+      if (question.status === "deferred") {
+        question.status = "asked";
+        const gap = db.gaps.find((g) => g.id === question.gap_id);
+        if (gap?.status === "deferred") gap.status = "asked";
+      }
+    }
+    question.updated_at = now();
+    return json(200, question);
+  }
+
   if (p[1] === "questions" && p[2] && p[3] === "answers" && m === "POST") {
     if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
     const question = db.questions.find((x) => x.id === p[2]);
@@ -452,7 +563,12 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     if (question.status === "answered") return fail(409, "This question is answered; it is not asked again");
     if (question.asked_to && question.asked_to !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "This question was asked of someone else");
     if (input.kind === "answer" && !input.body?.trim()) return fail(422, "An answer needs a body");
-    if (input.kind === "delegate" && !input.delegated_to) return fail(422, "Delegate to a person of this company who can answer");
+    if (input.kind === "research" && !(question.intake_id && question.gap_id)) return fail(422, "Only a question about an intake's gap can be researched");
+    if (input.kind === "delegate" && (!input.delegated_to || (ctx.people && !canAnswer(ctx, input.delegated_to)))) return fail(422, "Delegate to a person of this company who can answer");
+    if (input.kind === "delegate" && privateGap(db, db.gaps.find((g) => g.id === question.gap_id))) {
+      const author = question.intake_id ? findIntake(question.intake_id)?.author_id : undefined;
+      if (input.delegated_to !== author) return fail(409, PRIVATE);
+    }
     const answer: Schemas["StakeholderAnswerOut"] = {
       id: uuid(), question_id: question.id, kind: input.kind, body: input.body ?? null, answered_by: ctx.userId,
       delegated_to: input.kind === "delegate" ? input.delegated_to ?? null : null, evidence_ids: input.evidence_ids ?? [],
@@ -487,4 +603,74 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     } satisfies Schemas["AnswerResult"]);
   }
   return null;
+}
+
+// --- questions to people (C2) -------------------------------------------------------------
+
+const CANNOT_ANSWER = "Ask someone who can answer";
+const PRIVATE = "Share this finding first to ask someone else";
+
+/** A gap hidden from everyone but its intake's author (S6). */
+function privateGap(db: V2Db, gap: Gap | null | undefined): boolean {
+  return !!gap && (db.private_gap_ids ?? []).includes(gap.id);
+}
+const CHECKPOINT_LABEL: Record<string, string> = {
+  baseline_confirm: "Confirm the baseline", feature_set: "Feature set and dependencies", priority_order: "Priority order",
+  prd_review: "PRD review", eng_review: "Engineering review", roadmap_items: "Roadmap items", roadmap_review: "Roadmap review",
+};
+
+/** An active member who can answer: commenter or above. */
+function canAnswer(ctx: IntakeContext, id: string): boolean {
+  const person = (ctx.people ?? []).find((x) => x.id === id);
+  return !!person && person.status !== "disabled" && atLeast(person.role, "commenter");
+}
+
+function subjectColumns(db: V2Db, ctx: IntakeContext, subject: Schemas["QuestionCreate"]["subject"]): Partial<Question> | null {
+  if (subject.kind === "intake") {
+    const intake = db.intakes.find((i) => i.id === subject.intake_id);
+    return intake ? { intake_id: intake.id, document_id: intake.document_id } : null;
+  }
+  if (subject.kind === "document_section") {
+    const doc = ctx.subjects?.document(subject.document_id);
+    return doc && doc.heading(subject.section_key) != null ? { document_id: subject.document_id, section_key: subject.section_key } : null;
+  }
+  if (subject.kind === "checkpoint_item") {
+    return ctx.subjects?.checkpoint(subject.checkpoint_id) ? { checkpoint_id: subject.checkpoint_id, item_ref: subject.item_ref } : null;
+  }
+  return ctx.subjects?.entity(subject.entity_id) != null ? { entity_id: subject.entity_id } : null;
+}
+
+function subjectOf(db: V2Db, ctx: IntakeContext, q: Question): Schemas["InboxSubject"] {
+  if (q.checkpoint_id) {
+    const cp = ctx.subjects?.checkpoint(q.checkpoint_id);
+    return { kind: "checkpoint_item", title: `${CHECKPOINT_LABEL[cp?.kind ?? ""] ?? "Checkpoint"} · ${q.item_ref}`, href: cp ? `/runs/${cp.run_id}#decide` : null };
+  }
+  if (q.entity_id) return { kind: "entity", title: `Baseline · ${ctx.subjects?.entity(q.entity_id) ?? "an entity"}`, href: `/baseline?entity=${q.entity_id}` };
+  const doc = q.document_id ? ctx.subjects?.document(q.document_id) : null;
+  const intake = q.intake_id ? db.intakes.find((i) => i.id === q.intake_id) : undefined;
+  if (intake) return { kind: "intake", title: `Before drafting · ${intake.title}`, href: doc ? `/documents/${doc.slug}` : null };
+  if (!doc) return { kind: "document_section", title: "A document", href: null };
+  const heading = q.section_key ? doc.heading(q.section_key) : null;
+  return {
+    kind: "document_section",
+    title: heading ? `${doc.title} · ${heading}` : doc.title,
+    href: `/documents/${doc.slug}/v/${doc.latest}${q.section_key ? `#${q.section_key}` : ""}`,
+  };
+}
+
+/** GET /v1/inbox/questions: asked of me and still open (asked, or delegated to me), oldest first. */
+function inboxQuestions(db: V2Db, ctx: IntakeContext): Schemas["InboxQuestion"][] {
+  return db.questions
+    .filter((q) => q.asked_to === ctx.userId && (q.status === "asked" || q.status === "delegated"))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map((q) => {
+      const asker = (ctx.people ?? []).find((x) => x.id === q.asked_by);
+      return {
+        question: q,
+        asked_by: q.gap_id || !q.asked_by ? { kind: "oracle" as const } : { kind: "person" as const, id: q.asked_by, name: asker ? displayName(asker.email) : "Someone" },
+        subject: subjectOf(db, ctx, q),
+        gap: db.gaps.find((g) => g.id === q.gap_id) ?? null,
+        answer_paths: PATHS.filter((x) => x !== "research" || (q.intake_id && q.gap_id)),
+      };
+    });
 }

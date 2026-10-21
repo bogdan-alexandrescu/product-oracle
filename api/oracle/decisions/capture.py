@@ -45,6 +45,8 @@ STOP_LABELS = {
     "eng_dates": "Engineering dates",
     "roadmap_items": "Roadmap items",
     "roadmap_review": "Roadmap review",
+    "strategy_review": "Vision or strategy review",
+    "launch_review": "Launch kit review",
 }
 CHECKPOINT_OPTIONS = (("approve", "Approve"), ("request_changes", "Send back"))
 NO_OUTCOME = "See the document's success metrics"

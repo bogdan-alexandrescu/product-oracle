@@ -130,7 +130,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, confidence, safe_yaml
+from oracle import audit, autonomy, confidence, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -148,7 +148,7 @@ from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.schemas import Resolution
 from oracle.review.service import locked_section_keys
-from oracle.roadmap import schedule
+from oracle.roadmap import doc_dates, schedule
 from oracle.runs import extensions, feature_set, flows, reasons, rejection, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
@@ -171,12 +171,14 @@ from oracle.runs.schemas import (
     InboxOut,
     InboxRevokeFailure,
     InboxStaged,
+    InboxStrategy,
     ItemsCheck,
     KnobsIn,
     KnobsOut,
     PrdScopeOut,
     PreviousAttempt,
     RunCreate,
+    RunDecision,
     RunOut,
     RunPatch,
     RunProgress,
@@ -241,6 +243,8 @@ ORACLE_KNOBS = (
     # it, the agent-staged feedback and the accepted section-text suggestions.
     "feedback_ids",
     "suggestion_ids",
+    # A launch_kit run (oracle.launches): the launch it drafts for.
+    "launch_id",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -777,6 +781,7 @@ def _segment_out(
     art = segment.artifacts or {}
     imp = art.get("import")
     check = art.get("items_check")
+    merged = art.get("baseline_import") or {}
     return SegmentOut(
         id=segment.id,
         seq=segment.seq,
@@ -802,10 +807,117 @@ def _segment_out(
         if isinstance(previous := art.get("previous"), dict)
         else None,
         feature_set_check=FeatureSetCheck(**fs) if (fs := art.get("feature_set_check")) else None,
+        autonomy_note=(merged.get("autonomy") or {}).get("note"),
         started_at=segment.started_at,
         finished_at=segment.finished_at,
         error=segment.error,
     )
+
+
+# D11: how a decision reads for the run's agents and on the run page.
+CHECKPOINT_TITLES = {
+    "baseline_confirm": "Baseline",
+    "feature_set": "Feature set",
+    "priority_order": "Priority order",
+    "prd_review": "PRD review",
+    "eng_review": "Engineering review",
+    "roadmap_items": "Roadmap items",
+    "roadmap_review": "Roadmap review",
+    "strategy_review": "Vision or strategy review",
+    "launch_review": "Launch kit review",
+}
+_LISTED = ("approved", "changes_requested", "skipped")
+
+
+def _record_decider(cp: Checkpoint, role: str | None, via: str) -> None:
+    """Who decided ``cp``, by role, and where (:func:`list_decisions`); kept on the
+    checkpoint as it is decided, so a later change of the member's role does not alter
+    what the run's agents read."""
+    cp.payload = {**copy.deepcopy(cp.payload or {}), "decided": {"role": role, "via": via}}
+
+
+def decision_summary(
+    kind: str, status: str, role: str | None, via: str, note: str | None, delivered: bool
+) -> str:
+    """One line: "Feature set · approved by an approver · note: Keep bulk import out"."""
+    what = status.replace("_", " ")
+    if role:
+        what += f" by {'an' if role[0] in 'aeiou' else 'a'} {role}"
+    if via == "swarmcloud_console":
+        what += " in SwarmCloud's console"
+    parts = [CHECKPOINT_TITLES.get(kind, kind), what]
+    if note:
+        parts.append(f"note: {note}")
+    if not delivered:
+        parts.append("not delivered to the run yet")
+    return " · ".join(parts)
+
+
+async def list_decisions(
+    db: AsyncSession, run_id: uuid.UUID, principal: Principal
+) -> list[RunDecision]:
+    """Every decided checkpoint of the run, by segment then decided time (pending ones,
+    a console answer held for an approver included, are not decisions yet). A run's own
+    call reads its own run only."""
+    if principal.run_id is not None and principal.run_id != run_id:
+        raise NotFound(f"run {run_id} not found")
+    run = await _get_run(db, run_id)
+    flow = _flow(run)
+    decided = [c for c in await _checkpoints(db, [run.id]) if c.status in _LISTED]
+    # Decisions recorded before the decider was kept on the checkpoint: their role now.
+    ids = {
+        c.decided_by
+        for c in decided
+        if c.decided_by is not None and "decided" not in (c.payload or {})
+    }
+    roles: dict[uuid.UUID, str] = {}
+    if ids:
+        roles = dict((await db.execute(select(User.id, User.role).where(User.id.in_(ids)))).all())
+        if rest := ids - set(roles):
+            roles.update(
+                (
+                    await db.execute(
+                        select(ApiToken.id, ApiToken.role).where(ApiToken.id.in_(rest))
+                    )
+                ).all()
+            )
+    out: list[RunDecision] = []
+    for cp in decided:
+        payload = cp.payload or {}
+        mark = payload.get("decided")
+        if isinstance(mark, dict):
+            role, via = mark.get("role"), mark.get("via") or "oracle"
+        else:
+            role = roles.get(cp.decided_by) if cp.decided_by else None
+            via = "oracle"
+        seq = payload.get("segment_seq")
+        name = payload.get("segment")
+        title = None
+        if name and any(s.name == name for s in flow.segments):
+            title = flow.segment(name).title
+        extra = payload.get("review") if isinstance(payload.get("review"), dict) else {}
+        delivered = not _owes(cp)
+        out.append(
+            RunDecision(
+                checkpoint_id=cp.id,
+                kind=cp.kind,  # type: ignore[arg-type]
+                segment_seq=seq,
+                segment_title=title,
+                attempt=payload.get("attempt"),
+                status=cp.status,  # type: ignore[arg-type]
+                decided_at=cp.decided_at,
+                decided_by_role=role,
+                via=via,
+                note=cp.note,
+                edits=extra.get("edits"),
+                review=extra.get("review"),
+                delivered=delivered,
+                summary=decision_summary(cp.kind, cp.status, role, via, cp.note, delivered),
+            )
+        )
+    far = datetime.max.replace(tzinfo=UTC)
+    out.sort(key=lambda d: (d.segment_seq or 0, d.decided_at or far))
+    return out
 
 
 async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | None) -> RunOut:
@@ -1241,6 +1353,12 @@ async def _resolve_document(
             f"document '{ref}' is a {flows.KIND_NAMES.get(document.kind, document.kind)}, "
             f"not a {flows.KIND_NAMES[flow.target_kind]}"
         )
+    if flow.document_kinds and document.kind not in flow.document_kinds:
+        raise Invalid(
+            f"document '{ref}' is a {flows.KIND_NAMES.get(document.kind, document.kind)}; "
+            f"the {flow.title} flow drafts a "
+            + " or a ".join(flows.KIND_NAMES[k] for k in flow.document_kinds)
+        )
     if flow.requires_document:
         latest = await db.scalar(
             select(func.max(DocumentVersion.number)).where(
@@ -1386,6 +1504,10 @@ async def _resolve_inputs(
     template choices."""
     if flow.target_kind != "roadmap" and (inputs.template or inputs.theme):
         raise Invalid(f"the {flow.title} flow takes no template or theme")
+    if not flow.writes_document:
+        if inputs.document or inputs.source:
+            raise Invalid(f"the {flow.title} flow writes no document and reads none")
+        return None, {}
     source = await _resolve_source(db, flow, inputs.source, inputs.source_version)
     default_slug = None
     if source is not None and inputs.document is None:
@@ -1442,6 +1564,11 @@ async def create_run(
     flow = flows.FLOWS[body.flow]
     if flow.entry and entry_knobs is None:
         raise Invalid(f"start a {flow.title} run from {flow.entry}")
+    if flow.key == "launch_kit" and not (oracle_knobs or {}).get("launch_id"):
+        raise Invalid(
+            "the Launch kit flow starts from a launch: Draft on the launch "
+            "(POST /v1/launches/{id}/draft)"
+        )
     knobs = _resolve_knobs(flow, body.knobs)
     document_id, oracle = await _resolve_inputs(
         db,
@@ -1783,6 +1910,7 @@ async def _prompt_context(
         intake_id=run.knobs.get("intake_id"),
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
         scope_yaml=scope_yaml,
+        launch_id=run.knobs.get("launch_id"),
     )
 
 
@@ -2728,6 +2856,10 @@ def _keep_previous(art: dict[str, Any]) -> None:
     }
 
 
+# Set on a segment a voided overrun Resume had queued: the next Resume queues it again.
+RESUME_VOIDED = "resume_voided"
+
+
 def unqueue(segment: RunSegment) -> None:
     """Take a pending segment off the queue (its run no longer waits on the runtime): a
     submission under way finds its claim gone and cancels what it started."""
@@ -3219,7 +3351,9 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
             if row is not None and row.source_version_id is None:
                 row.source_version_id = source_id
                 await s.commit()
-                result.version = await docs_service.read_version(s, row)
+                # Without its date markers (the import checked its dates; none of the
+                # markers is read here): never a wait for dates in the middle of a tick.
+                result.version = await docs_service.read_version(s, row, require_dates=False)
         if run.flow == "feedback_loop" and (
             knobs.get("suggestion_ids") or knobs.get("feedback_ids")
         ):
@@ -3308,9 +3442,20 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
     except LookupError as exc:
         return {"error": str(exc)}
     async with tenant_session(tenant_id) as s:
+        # H11: how far Oracle may go with the baseline, read now (a change applies to the
+        # next merge). Below Act every write is a proposal; at Observe nothing is merged.
+        level = await autonomy.level(s, "baseline")
+        if level == "observe":
+            return {"skipped": True, "autonomy": _baseline_autonomy(level)}
         try:
             result = await yaml_io.import_yaml(
-                s, principal, text, run_id=run.id, origin="agent", reason="Run baseline.yaml"
+                s,
+                principal,
+                text,
+                run_id=run.id,
+                origin="agent",
+                reason="Run baseline.yaml",
+                proposals_only=level != "act",
             )
         except yaml_io.YamlInvalid as exc:
             problems = "; ".join(
@@ -3319,7 +3464,19 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
             )
             return {"error": f"baseline.yaml was rejected: {problems}"}
         await s.commit()
-    return result.model_dump(mode="json")
+    out = result.model_dump(mode="json")
+    if level != "act":
+        out["autonomy"] = _baseline_autonomy(level)
+    return out
+
+
+def _baseline_autonomy(level: str) -> dict[str, str]:
+    """What the run page says when the baseline's level changed the merge (H11)."""
+    if level == "observe":
+        note = "Baseline merge skipped: Oracle is set to observe the baseline"
+    else:
+        note = f"Baseline changes became proposals: Oracle is set to {level} for the baseline"
+    return {"level": level, "note": note}
 
 
 def _current_attempt(art: dict[str, Any], segment: RunSegment) -> dict[str, Any]:
@@ -3466,6 +3623,21 @@ async def _advance(
             )
             fs_check = failed.as_json()
         art["feature_set_check"] = fs_check
+    launch_import: dict[str, Any] | None = None
+    if flows.LAUNCH_FILE in sdef.outputs:
+        from oracle.launches import service as launches_service
+
+        try:
+            # In a savepoint, as the items check: a bad file never fails the tick.
+            async with db.begin_nested():
+                launch_import = await launches_service.import_kit_run(
+                    db, run, art["files"].get(flows.LAUNCH_FILE)
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.exception("importing %s of run %s failed", flows.LAUNCH_FILE, run.id)
+            launch_import = {"error": f"{flows.LAUNCH_FILE} could not be imported "
+                             f"({type(exc).__name__})"}  # fmt: skip
+        art["launch_import"] = launch_import
     if sdef.imports_draft:
         kind = await _target_kind(db, run)
         name = flows.draft_file(kind)
@@ -3533,6 +3705,8 @@ async def _advance(
         payload["feature_set_check"] = fs_check
         if scope_id is not None:
             payload["scope_id"] = str(scope_id)
+    if launch_import is not None:
+        payload["launch_import"] = launch_import
     if wait is not None:
         payload["wait"] = wait
         _set_knob(run, "opening_wait", None)
@@ -3575,7 +3749,7 @@ async def _advance(
         )
     )
     await _link_scope(db, scope_id, checkpoint_id)
-    for result in (baseline_import, imported):
+    for result in (baseline_import, imported, launch_import):
         if result is not None and result.get("error"):
             await _finish(db, run, "failed", result["error"])
             return True
@@ -3927,6 +4101,13 @@ class _TickStats:
     pass_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 
+def _dates_pending(exc: BaseException) -> bool:
+    """A roadmap's dates still being found, or its company's date jobs busy
+    (oracle.roadmap.doc_dates: 503, try again): a tick retries, never a failed try or run.
+    Dates given up on (422) are a failure like any other."""
+    return isinstance(exc, doc_dates.DatesUnavailable) and exc.pending
+
+
 def _resetter(stats: _TickStats) -> Callable[[], None]:
     """``reset`` for one :func:`_replay`: puts ``stats`` back as they are now, before it."""
     saved = replace(stats, errors=list(stats.errors))
@@ -3986,6 +4167,10 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
                 # records parse_busy and the next tick resumes the advance again.
                 raise
             except Exception as exc:  # counted; the workflow is still read below
+                if _dates_pending(exc):
+                    # Not a failed try (RESUME_TRIES): the tick gives up on this run and
+                    # the next tick resumes the advance again.
+                    raise
                 run, segments = await _resume_failed(db, run.id, resuming.seq, exc, stats)
         wf = _live(run)
         if wf is not None and not wf.get("cancel_pending") and run.status not in FINAL:
@@ -5219,6 +5404,8 @@ async def _take_answer(
     cp.status = "approved" if approved else "changes_requested"
     cp.decided_at = record.answered_at or _now()
     cp.note = applied
+    if not ours:
+        _record_decider(cp, member.role if member is not None else None, "swarmcloud_console")
     if member is not None:
         cp.decided_by = member.id
     elif ours and record.on_behalf_of:
@@ -5603,6 +5790,12 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
             await db.rollback()
             errors.append(f"run {run_id}: {exc}")
         except Exception as exc:  # one broken run must not stop the others
+            if _dates_pending(exc):
+                # The run stays as it was and the next tick tries again: never a failed
+                # run. Its row lock and transaction end here.
+                await db.rollback()
+                errors.append(f"run {run_id}: dates_pending")
+                continue
             log.exception("tick failed for run %s", run_id)
             await db.rollback()
             errors.append(f"run {run_id}: {type(exc).__name__}")
@@ -5661,7 +5854,12 @@ async def decide_checkpoint(
     redo = False
     # A choice about an answer SwarmCloud's console recorded is decided through it (H1).
     via = "swarmcloud_console" if decision in ("confirm", "redo", "continue") else "oracle"
+    # Who decided, as the run's agents read it (list_decisions): the Inbox's decider, or
+    # for a confirmed console answer its author, by role.
+    decider: tuple[str | None, str] = (principal.role, "oracle")
     if decision in ("confirm", "redo", "continue"):
+        if decision == "confirm":
+            decider = ((wait.get("console") or {}).get("role"), "swarmcloud_console")
         decision, note, redo = _console_choice(cp, wait, decision, note)
         if decision == "confirm":
             # A console change request where the workflow has no revision step: now
@@ -5709,6 +5907,7 @@ async def decide_checkpoint(
     cp.decided_by = principal.id
     cp.decided_at = _now()
     cp.note = note
+    _record_decider(cp, *decider)
     await audit.record(
         db,
         principal,
@@ -5720,6 +5919,12 @@ async def decide_checkpoint(
     # H1: the stop's decision is a checkpoint record, in this transaction.
     await decisions_capture.checkpoint(db, principal, run, cp, decided_via=via)
     await _scope_decided(db, principal, run, cp)
+    if decision == "approved":
+        # F5-1: an approved Engineering check registers its tech briefs when the run's
+        # PRD exists (else the prd_draft import does), in this transaction.
+        from oracle.engineering import store as brief_store
+
+        await brief_store.on_checkpoint_approved(db, principal, run, cp, segment)
     wf = _drivable(run)
     live = (
         (redo and wf is not None)
@@ -7754,9 +7959,14 @@ async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     run = await _get_run(db, run_id, lock=True)
     if run.status != "paused_overrun":
         raise RunError(f"run is {run.status}, not paused on overrun")
-    # The owner accepts the spend so far plus another half of the estimate.
+    # The owner accepts the spend so far plus another half of the estimate. A Resume is
+    # a spend approval (C2): who gave it and the ceiling it replaced are kept, so a
+    # demotion or disable can void it (oracle.members.service._void_spend_approvals).
     allowance = (run.estimate_usd or Decimal(0)) * (flows.OVERRUN_FACTOR - 1)
     ceiling = ((run.spent_usd or Decimal(0)) + allowance).quantize(Decimal("0.0001"))
+    run.resumed_from_ceiling_usd = _ceiling(run)
+    run.resumed_by = principal.id
+    run.resumed_at = _now()
     _set_knob(run, "spend_ceiling_usd", str(ceiling))
     run.status = "running"
     await audit.record(db, principal, "run.resumed", "run", run.id, {"ceiling_usd": str(ceiling)})
@@ -7767,9 +7977,18 @@ async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
         # on a decision recorded and not delivered yet, which the tick delivers now.
         run.status = "awaiting_checkpoint"
     elif not any(s.status == "running" for s in segments):
-        done = [s for s in segments if s.status == "succeeded"]
-        if done:
-            await _advance(db, run, done[-1], segments, gate=True)
+        # A Resume voided before its segment was submitted left that segment unqueued
+        # (marked): queue it again; otherwise advance past the last segment that ran.
+        voided = [s for s in segments if s.status == "pending" and _art(s).get(RESUME_VOIDED)]
+        if voided:
+            art = _art(voided[0])
+            art.pop(RESUME_VOIDED, None)
+            _set_art(voided[0], art)
+            await _submit(db, run, voided[0], segments)
+        else:
+            done = [s for s in segments if s.status == "succeeded"]
+            if done:
+                await _advance(db, run, done[-1], segments, gate=True)
     await db.commit()  # the router submits what it queued (submit_queued), outside the gate
 
 
@@ -7942,6 +8161,12 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     approvals = [_summary(r, refs, None) for r in waiting_runs if r.status == "awaiting_approval"]
     overruns = [_summary(r, refs, None) for r in waiting_runs if r.status == "paused_overrun"]
     revoke_failures = await _revoke_failures(db) if owner else []
+    strategy = None
+    if owner:
+        from oracle.strategy import drift
+
+        row = await drift.inbox_row(db)
+        strategy = InboxStrategy.model_validate(row) if row else None
     # Lost submissions past the lookup cap (Retry or Cancel), cancels past NOT_FOUND_TRIES
     # 404s (Stop cancelling), answer posts past them (Cancel), and searched workflows past
     # them (shown), by those who manage the run.
@@ -7991,6 +8216,13 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     reports, report_failures = await inbox_rows(db, principal)
     decisions = await decision_rows(db, principal, seen)
     counted = sum(1 for d in decisions if d.counts)
+    from oracle.launches import service as launches_service
+
+    launch_rows = await launches_service.inbox_rows(db, principal)
+    # H11: what Oracle did on its own, for those it notified (open ones count).
+    from oracle.autonomy_router import inbox_actions
+
+    oracle_actions = await inbox_actions(db, principal)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -8008,6 +8240,8 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         revoke_failures=revoke_failures,
         reports=reports,
         report_failures=report_failures,
+        strategy=strategy,
+        oracle_actions=oracle_actions,
         # Every new or open item (C1e, owner 2026-10-20): the rail badge, = New + Open.
         total=len(checkpoints)
         + len(approvals)
@@ -8019,7 +8253,12 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + len(revoke_failures)
         + sum(1 for r in reports if not r.read)
         + len(report_failures)
+        # Strategy drift: one row, however many findings.
+        + (1 if strategy else 0)
+        + sum(1 for r in launch_rows if r.counted)
+        + sum(a.counts for a in oracle_actions)
         + counted,
+        launches=launch_rows,
         items=states,
         counts=counts,
         staged=staged,

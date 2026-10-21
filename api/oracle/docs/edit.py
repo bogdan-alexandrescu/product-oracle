@@ -141,7 +141,11 @@ async def edit_section(
     else:
         unchanged = (new_heading, body) == (current.heading, current.body_md.strip("\n"))
         if unchanged and not resolutions:
-            return ImportResult(version=await read_version(db, latest), created=False)
+            # An import's result: a roadmap's date markers are not waited for under the
+            # document's row lock (oracle.docs.service.read_version).
+            return ImportResult(
+                version=await read_version(db, latest, require_dates=False), created=False
+            )
         kept = sections
         markdown = compose_markdown(
             latest.front_matter, sections, {key: (new_heading, body)}, resolutions or []

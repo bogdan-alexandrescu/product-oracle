@@ -51,9 +51,11 @@ from oracle.config import get_settings
 from oracle.connections import service as connections_service
 from oracle.db import get_engine
 from oracle.jobs import worker as llm_jobs
+from oracle.launches import service as launches_service
 from oracle.models import Tenant
 from oracle.reports import alignment as alignment_reports
 from oracle.roadmap import views as track_views
+from oracle.strategy import drift as strategy_drift
 from oracle.tenancy import tenant_session, unscoped_session
 from oracle.ticker import body, idtoken
 
@@ -170,8 +172,8 @@ def _count_sweep(result: dict[str, Any] | None, out: TickerOut) -> None:
 
 async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failures) -> None:
     """One company's runs and account sweep (``oracle.ticker.body``), its product
-    tracks' monitoring and then its weekly alignment report (oracle.reports), each on
-    its own."""
+    tracks' monitoring, then its weekly alignment report (oracle.reports) and its launches'
+    Ready detection, each on its own."""
     async with tenant_session(tenant_id) as db:
         company = await body.tick_company(db, tenant_id)
     if company.runs is not None:
@@ -204,6 +206,22 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
             await db.commit()
     except Exception:
         log.exception("run ticker: the alignment report failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
+        # Strategy drift (H4): a daily deterministic check, no model call.
+        async with tenant_session(tenant_id) as db:
+            if await strategy_drift.check_due(db):
+                await db.commit()
+    except Exception:
+        log.exception("run ticker: strategy drift check failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
+        # Launches (H6): a planned launch whose items all shipped becomes Ready, and its
+        # launch kit run starts (deterministic; the run itself is SwarmCloud's).
+        async with tenant_session(tenant_id) as db:
+            await launches_service.detect_ready(db, tenant_id)
+    except Exception:
+        log.exception("run ticker: launch Ready detection failed for company %s", tenant_id)
         failures.add(tenant_id)
 
 

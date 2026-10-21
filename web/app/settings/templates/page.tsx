@@ -28,7 +28,12 @@ const KINDS = [
   { kind: "roadmap", title: "Roadmap templates" },
 ] as const;
 
-const KIND_LABEL: Record<TemplateSummary["kind"], string> = { prd: "PRD", roadmap: "Roadmap" };
+const KIND_LABEL: Record<TemplateSummary["kind"], string> = {
+  prd: "PRD",
+  roadmap: "Roadmap",
+  vision: "Vision",
+  strategy: "Product strategy",
+};
 
 const COLUMNS: Column<TemplateSummary>[] = [
   {

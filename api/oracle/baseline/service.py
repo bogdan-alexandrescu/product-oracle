@@ -82,6 +82,9 @@ class Writer:
     reason: str | None = None
     # MANAGED_ATTRS keys this writer may change (the owning module's writes only).
     manages: tuple[str, ...] = ()
+    # Every write becomes a proposal, as if the item were locked (H11: a run's
+    # baseline.yaml while the baseline is below Act).
+    proposals_only: bool = False
 
     @property
     def actor(self) -> str:
@@ -92,6 +95,12 @@ class Writer:
     @property
     def locks(self) -> bool:
         return self.origin == "user"
+
+    def must_propose(self, item: "Entity | Edge | None") -> bool:
+        """Whether a write to ``item`` (None: a new one) becomes a proposal."""
+        if self.locks:
+            return False
+        return self.proposals_only or (item is not None and item.locked)
 
 
 @dataclass
@@ -803,6 +812,11 @@ async def create_entity(
     if await find_entity(db, type_, key) is not None:
         raise ConflictError(f"{type_}:{key} already exists")
     check_managed_attrs(writer, {}, attrs)
+    if writer.must_propose(None):
+        fields = {"type": type_, "key": key, "title": title, "body": body,
+                  "attrs": dict(attrs or {}), "status": status}  # fmt: skip
+        proposal = await propose(db, writer, op="create", kind="entity", fields=fields)
+        return WriteResult(proposal=proposal)
     entity = Entity(
         type=type_,
         key=key,
@@ -850,7 +864,7 @@ async def update_entity(
         check_managed_attrs(writer, entity.attrs, diff["attrs"])
     if entity.type == "goal" and diff.get("status") == "confirmed":
         raise InvalidError("confirm a goal with POST .../confirm")
-    if entity.locked and not writer.locks:
+    if writer.must_propose(entity):
         fields = {k: changes[k] for k in changes if k in diff}
         proposal = await propose(
             db, writer, op="update", kind="entity", fields=fields, entity=entity
@@ -891,7 +905,7 @@ async def set_entity_status(
 
 
 async def delete_entity(db: AsyncSession, writer: Writer, entity: Entity) -> WriteResult:
-    if entity.locked and not writer.locks:
+    if writer.must_propose(entity):
         proposal = await propose(db, writer, op="delete", kind="entity", fields={}, entity=entity)
         return WriteResult(entity=entity, proposal=proposal)
     await _check_archivable(db, writer.principal, entity, "delete")
@@ -1005,6 +1019,11 @@ async def create_edge(
     _check_status(status)
     if await find_edge(db, src_id, dst_id, type_) is not None:
         raise ConflictError(f"a {type_} edge between these entities already exists")
+    if writer.must_propose(None):
+        fields = {"src_id": src_id, "dst_id": dst_id, "type": type_, "attrs": attrs,
+                  "status": status}  # fmt: skip
+        proposal = await propose(db, writer, op="create", kind="edge", fields=fields)
+        return WriteResult(proposal=proposal)
     edge = Edge(
         src_id=src_id,
         dst_id=dst_id,
@@ -1043,7 +1062,7 @@ async def update_edge(
         diff["status"] = changes["status"]
     if not diff:
         return WriteResult(edge=edge)
-    if edge.locked and not writer.locks:
+    if writer.must_propose(edge):
         fields = {k: changes[k] for k in changes if k in diff}
         proposal = await propose(db, writer, op="update", kind="edge", fields=fields, edge=edge)
         return WriteResult(edge=edge, proposal=proposal)
@@ -1061,7 +1080,7 @@ async def update_edge(
 
 
 async def delete_edge(db: AsyncSession, writer: Writer, edge: Edge) -> WriteResult:
-    if edge.locked and not writer.locks:
+    if writer.must_propose(edge):
         proposal = await propose(db, writer, op="delete", kind="edge", fields={}, edge=edge)
         return WriteResult(edge=edge, proposal=proposal)
     src_id, type_ = edge.src_id, edge.type

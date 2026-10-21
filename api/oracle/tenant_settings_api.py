@@ -27,6 +27,9 @@ The known keys and how each value is checked:
   maybe the next), ``medium_quarters`` (Next: the quarters after it) and
   ``long_from_months`` to ``long_to_months`` (Later). Read with :func:`company_horizons`;
   dated with :func:`horizon_windows`. A stored row is the Set up step being done.
+- ``autonomy`` (H11): how far Oracle goes on its own, per responsibility
+  (``oracle.autonomy``); ``{}`` is every default. Written only through
+  ``PUT /v1/autonomy/{key}`` (each change carries a reason); here it can only be reset.
 
 Removing a domain or a shared drive (or resetting either) takes effect on save (S5, owner
 2026-10-20): the docs in picked folders that now fall outside are deleted (soft delete)
@@ -95,6 +98,8 @@ DEFAULTS: dict[str, Any] = {
         "timezone": "America/Los_Angeles",
         "slack_channel": None,
     },
+    # H11: every responsibility at its default (oracle.autonomy.REGISTRY).
+    "autonomy": {},
 }
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
@@ -270,6 +275,11 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
             return validate_setting(value)
         except ValueError as e:
             raise InvalidSetting(str(e)) from None
+    if key == "autonomy":
+        raise InvalidSetting(
+            "autonomy changes one responsibility at a time, with a reason: use "
+            "PUT /v1/autonomy/{key} (a null value here resets every default)"
+        )
     raise KeyError(key)
 
 

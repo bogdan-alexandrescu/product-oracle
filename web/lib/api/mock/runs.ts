@@ -13,6 +13,7 @@ type SegmentOut = Schemas["SegmentOut"];
 type CheckpointOut = Schemas["CheckpointOut"];
 type FeatureSetCheck = Schemas["FeatureSetCheck"];
 type PrdScopeOut = Schemas["PrdScopeOut"];
+type RunDecision = Schemas["RunDecision"];
 type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version" | "staged_for_agents"> & {
   /** D12: staged for the agents (when, by whom); open items only count. */
   staged_for_agents_at?: string | null;
@@ -35,6 +36,8 @@ export interface RunsContext {
   userId: string;
   /** The signed-in member's email: who decided, on a decision not delivered yet. */
   userName?: string | null;
+  /** The signed-in member's role: who decided, as the run's agents read it (D11). */
+  userRole?: Schemas["Me"]["role"] | null;
   /**
    * The "undelivered" scenario: SwarmCloud does not take a checkpoint decision until the
    * next tick. The decision is recorded (and final) but the decide call answers 503, as the
@@ -113,7 +116,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       target_kind: "roadmap",
       source_kind: "prd",
       in_new_run_dialog: false,
-      starts_from: { label: "PRD to roadmap · Plan", href: "/roadmap" },
+      starts_from: { label: "PRD to roadmap · Plan › Roadmap documents", href: "/plan/documents" },
       segments: [
         { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver" },
         { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver" },
@@ -129,7 +132,13 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
 };
 
 const THRESHOLD = 50;
-const KIND_NAME: Record<Kind, string> = { prd: "PRD", roadmap: "roadmap", spec: "engineering spec" };
+const KIND_NAME: Record<Kind, string> = {
+  prd: "PRD",
+  roadmap: "roadmap",
+  spec: "engineering spec",
+  vision: "vision",
+  strategy: "product strategy",
+};
 // O4: a roadmap starts from Now / Next / Later on the roadmap board unless a run names others.
 const ROADMAP_DEFAULTS = { template: "now-next-later", theme: "roadmap-board" };
 const FACTOR = 1.5;
@@ -688,6 +697,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   // shown only (nothing to decide, not in the total).
   const revising = ctx.db.runs.filter((r) => r.segments.some((s) => sentBack(r, s))).map(bare);
   return {
+    // Launch rows (H6) are added by the server (./launches.ts).
+    launches: [],
     checkpoints,
     deliveries,
     approvals,
@@ -703,6 +714,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     // The weekly alignment reports and their failed posts: the server adds them (./reports.ts).
     reports: [],
     report_failures: [],
+    oracle_actions: [],
     // Every new or open item (C1e, 2026-10-20): the server adds the feedback items' New + Open (./next-draft.ts).
     total: checkpoints.length + approvals.length + overruns.length + lookups.length + imports.length,
     // Feedback states (C1e) are added by the server, which holds the suggestions (./next-draft.ts).
@@ -976,6 +988,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (decision === "changes_requested" && !text) return fail(422, "say what to change: a note is required to request changes");
     Object.assign(cp, { status: decision, note: text, decided_by: ctx.userId, decided_at: ctx.now() });
     if (cp.kind === "feature_set" && (decision === "approved" || decision === "changes_requested")) decideScope(ctx, r, decision, ctx.userId);
+    cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: "oracle" } };
     if (ctx.undelivered) {
       // Recorded, and final; SwarmCloud did not take it: the tick delivers it.
       const at = ctx.now();
@@ -1009,6 +1022,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     review.payload = { ...review.payload, import: s.draft_import };
     return done();
   }
+  if (action === "decisions" && m === "GET") return json(200, decisionsOf(r));
   if (action === "segments" && p[5] === "artifacts" && m === "GET") {
     const s = r.segments.find((x) => x.seq === Number(p[4]));
     const raw = new URL(req.url).searchParams.get("attempt");
@@ -1087,6 +1101,57 @@ function seedRun(ctx: Omit<RunsContext, "db">, db: RunsDb, flow: RunOut["flow"],
   };
   db.runs.push(run);
   return run;
+}
+
+/** D11: how a decision reads for the run's agents (as api/oracle/runs/service.py). */
+const CHECKPOINT_TITLES: Record<CheckpointOut["kind"], string> = {
+  baseline_confirm: "Baseline",
+  feature_set: "Feature set",
+  priority_order: "Priority order",
+  prd_review: "PRD review",
+  eng_review: "Engineering review",
+  roadmap_items: "Roadmap items",
+  roadmap_review: "Roadmap review",
+  strategy_review: "Vision or strategy review",
+  launch_review: "Launch kit review",
+};
+
+function decisionSummary(d: Omit<RunDecision, "summary">): string {
+  let what = d.status.replace("_", " ");
+  if (d.decided_by_role) what += ` by ${/^[aeiou]/.test(d.decided_by_role) ? "an" : "a"} ${d.decided_by_role}`;
+  if (d.via === "swarmcloud_console") what += " in SwarmCloud's console";
+  const parts = [CHECKPOINT_TITLES[d.kind] ?? d.kind, what];
+  if (d.note) parts.push(`note: ${d.note}`);
+  if (d.delivered === false) parts.push("not delivered to the run yet");
+  return parts.join(" · ");
+}
+
+/** The run's decided checkpoints, by segment then decided time; pending ones are not listed. */
+function decisionsOf(r: RunOut): RunDecision[] {
+  const flow = FLOW_CATALOG.flows.find((f) => f.key === r.flow);
+  const out = r.checkpoints
+    .filter((c) => c.status !== "pending")
+    .map((c) => {
+      const decided = c.payload.decided as { role?: RunDecision["decided_by_role"]; via?: RunDecision["via"] } | undefined;
+      const extra = (c.payload.review ?? {}) as { edits?: RunDecision["edits"]; review?: RunDecision["review"] };
+      const d: Omit<RunDecision, "summary"> = {
+        checkpoint_id: c.id,
+        kind: c.kind,
+        segment_seq: c.segment_seq ?? null,
+        segment_title: flow?.segments.find((s) => s.name === c.payload.segment)?.title ?? null,
+        attempt: (c.payload.attempt as number | undefined) ?? null,
+        status: c.status as RunDecision["status"],
+        decided_at: c.decided_at ?? null,
+        decided_by_role: decided?.role ?? null,
+        via: decided?.via ?? "oracle",
+        note: c.note ?? null,
+        edits: extra.edits ?? null,
+        review: extra.review ?? null,
+        delivered: !c.delivery,
+      };
+      return { ...d, summary: decisionSummary(d) };
+    });
+  return out.sort((a, b) => (a.segment_seq ?? 0) - (b.segment_seq ?? 0) || (a.decided_at ?? "~").localeCompare(b.decided_at ?? "~"));
 }
 
 /** Seeded runs: one waiting at a checkpoint, one over the approval threshold, one paused on overrun, one done. */

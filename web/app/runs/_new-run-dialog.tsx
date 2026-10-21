@@ -32,7 +32,8 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
 
   // D12: the catalog's one rule says which flows this dialog offers; a flow with its own
-  // door elsewhere (Build next draft, the Plan screen) is a pointer line instead.
+  // door elsewhere (Build next draft, Plan › Roadmap documents, a launch) is a pointer line
+  // instead.
   const flows = useMemo(() => catalog.data?.flows.filter((f) => f.in_new_run_dialog) ?? [], [catalog.data]);
   const pointers = useMemo(() => catalog.data?.flows.filter((f) => f.starts_from) ?? [], [catalog.data]);
   const flow = flows.find((f) => f.key === flowKey) ?? flows[0];

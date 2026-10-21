@@ -9,7 +9,14 @@ from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
 from oracle.reports.schemas import InboxReport, InboxReportFailure
 from oracle.review.schemas import FeedbackKind
 
-Flow = Literal["baseline_to_prd", "feedback_loop", "prd_to_roadmap", "prd_to_spec"]
+Flow = Literal[
+    "baseline_to_prd",
+    "feedback_loop",
+    "prd_to_roadmap",
+    "prd_to_spec",
+    "strategy_draft",
+    "launch_kit",
+]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
     "draft",
@@ -30,6 +37,8 @@ CheckpointKind = Literal[
     "eng_review",
     "roadmap_items",
     "roadmap_review",
+    "strategy_review",
+    "launch_review",
 ]
 CheckpointStatus = Literal["pending", "approved", "changes_requested", "skipped"]
 Role = Literal["viewer", "commenter", "approver", "owner"]
@@ -368,6 +377,9 @@ class SegmentOut(BaseModel):
     previous_attempt: PreviousAttempt | None = None
     # The feature-set segment's check of feature_set.yaml (C6).
     feature_set_check: FeatureSetCheck | None = None
+    # H11: the baseline's level changed this segment's merge (skipped at observe, or
+    # every change a proposal): one line saying so, else None.
+    autonomy_note: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error: str | None = None
@@ -443,6 +455,34 @@ class CheckpointOut(BaseModel):
     console: ConsoleAnswer | None = None
     # A decided checkpoint whose decision Oracle has not delivered to the run yet.
     delivery: CheckpointDelivery | None = None
+
+
+class RunDecision(BaseModel):
+    """A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):
+    who decided by role only (no names reach the agents), when, and what. A console
+    answer is a decision once it is followed: one held for an approver is still pending
+    and not listed."""
+
+    checkpoint_id: uuid.UUID
+    kind: CheckpointKind
+    segment_seq: int | None = None
+    segment_title: str | None = None
+    attempt: int | None = None
+    status: Literal["approved", "changes_requested", "skipped"]
+    decided_at: datetime | None = None
+    decided_by_role: Role | None = None
+    # oracle: the Inbox, the web app or MCP; swarmcloud_console: SwarmCloud's console.
+    via: Literal["oracle", "swarmcloud_console"] = "oracle"
+    note: str | None = None
+    # The edits Oracle applied with an approval (D7) and the structured review sent back
+    # (D4); None until those are recorded.
+    edits: dict[str, Any] | None = None
+    review: dict[str, Any] | None = None
+    # False while the decision is recorded in Oracle and not delivered to the run yet.
+    delivered: bool = True
+    # The decision in one line, as the run page shows it:
+    # "Feature set · approved by an approver · note: Keep bulk import out of v1".
+    summary: str
 
 
 class RunProgress(BaseModel):
@@ -699,6 +739,24 @@ class InboxStaged(BaseModel):
     draft_job_status: str | None = None
 
 
+class InboxOracleAction(BaseModel):
+    """ "Oracle did": what Oracle did on its own account (H11, ``oracle.autonomy.acted``),
+    for one of the people it notified. Counted until that person opens it."""
+
+    id: uuid.UUID
+    responsibility: str
+    responsibility_title: str
+    summary: str
+    subject: dict[str, Any] = {}
+    # {method, path, body} of the route that reverses it, when the behaviour gave one.
+    undo: dict[str, Any] | None = None
+    # open: not opened by me yet; done: opened (or undone).
+    state: Literal["open", "done"]
+    counts: bool
+    created_at: datetime
+    undone_at: datetime | None = None
+
+
 class InboxCounts(BaseModel):
     new: int = 0
     open: int = 0
@@ -723,6 +781,20 @@ class InboxDecision(BaseModel):
     state: Literal["new", "open", "done"]
     # False for "informed" and done rows: they add to neither needs_me nor total.
     counts: bool
+
+
+class InboxStrategy(BaseModel):
+    """Owners: open strategy drift findings (H4), one Inbox row however many."""
+
+    new_findings: int
+    high: int
+    # Where the findings are read and waived (Company › Strategy).
+    href: str
+    # When the newest open finding was first seen.
+    since: datetime
+
+
+from oracle.launches.schemas import InboxLaunch  # noqa: E402
 
 
 class InboxOut(BaseModel):
@@ -755,6 +827,10 @@ class InboxOut(BaseModel):
     # the reports Slack refused for 24 hours (Retry, Dismiss), in ``total`` too.
     reports: list[InboxReport] = []
     report_failures: list[InboxReportFailure] = []
+    # Owners only: open strategy drift findings (H4); null when none or not an owner.
+    strategy: InboxStrategy | None = None
+    # Those it notified: what Oracle did on its own (H11), newest first; open ones count.
+    oracle_actions: list[InboxOracleAction] = []
     total: int
     # Approvers and owners: feedback in every state, newest first (declined and done
     # capped to the most recent), the counts per state, and the staged rows.
@@ -765,6 +841,9 @@ class InboxOut(BaseModel):
     decisions: list[InboxDecision] = []
     # Feedback and decisions that need me: new + open (staged, declined and done do not).
     needs_me: int = 0
+    # Launch rows (H6): Ready to launch and Notes to send (the launch's owner), Set tier
+    # (approvers), counted in ``total``; Shipped (a member's personal note), shown only.
+    launches: list[InboxLaunch] = []
     # My previous Inbox visit (what 'new' is measured from); None before the first.
     last_seen_at: datetime | None = None
 

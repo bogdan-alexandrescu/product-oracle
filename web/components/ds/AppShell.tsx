@@ -28,20 +28,20 @@ export const DESTINATIONS: Dest[] = [
   { label: "Baseline", href: "/baseline", icon: "baseline", testId: "nav-baseline" },
   { label: "PRDs", href: "/documents", icon: "prds", testId: "nav-prds" },
   { label: "Priorities", href: "/priorities", icon: "priorities", testId: "nav-priorities" },
-  { label: "Roadmap", href: "/roadmap", icon: "roadmap", testId: "nav-roadmap" },
+  { label: "Plan", href: "/plan", icon: "roadmap", testId: "nav-plan" },
   { label: "Runs", href: "/runs", icon: "runs", testId: "nav-runs" },
   { label: "Inbox", href: "/inbox", icon: "inbox", testId: "nav-inbox" },
   { label: "Company", href: "/company", icon: "company", testId: "nav-company" },
 ];
 const SETTINGS: Dest = { label: "Settings", href: "/settings/members", icon: "settings", testId: "nav-settings", match: "/settings" };
 
-/** Phone tab bar: Home, PRDs, Roadmap, Inbox, More. */
-const TABS = ["Home", "PRDs", "Roadmap", "Inbox"];
+/** Phone tab bar: Home, PRDs, Plan, Inbox, More. */
+const TABS = ["Home", "PRDs", "Plan", "Inbox"];
 
 /*
  * The destination a document belongs to (UI test finding E2): every kind's pages are
  * /documents/<slug>/…, so the URL alone says PRDs. A document page names its list once it
- * knows the document's kind (Roadmap for a roadmap), per slug; a slug's kind never changes,
+ * knows the document's kind (Plan for a roadmap), per slug; a slug's kind never changes,
  * so later pages of the same document highlight the right item from their first paint.
  */
 const documentHomes = new Map<string, string>();
@@ -55,7 +55,7 @@ function subscribeDocumentHomes(listener: () => void) {
   };
 }
 
-/** A document page says which destination it belongs to (`href`, e.g. "/roadmap"). */
+/** A document page says which destination it belongs to (`href`, e.g. "/plan"). */
 export function useDocumentDestination(slug: string | undefined, href: string | undefined) {
   useLayoutEffect(() => {
     if (!slug || !href || documentHomes.get(slug) === href) return;
@@ -128,7 +128,7 @@ const THEMES: { value: ThemeChoice; label: string; icon: IconName }[] = [
   { value: "dark", label: "Dark", icon: "moon" },
 ];
 
-/** The user menu: who is signed in, the theme switch, mock reset, sign out. */
+/** The user menu: who is signed in, the theme switch, My account, mock reset, sign out. */
 function UserMenu({ placement }: { placement: "rail" | "header" | "sheet" }) {
   const router = useRouter();
   const { me, clear } = useMe();
@@ -199,6 +199,18 @@ function UserMenu({ placement }: { placement: "rail" | "header" | "sheet" }) {
           </button>
         ))}
       </div>
+      {me?.kind === "user" && (
+        // A person's own account; a service token has none.
+        <Link
+          href="/account"
+          data-testid={placement === "sheet" ? "nav-my-account-sheet" : "nav-my-account"}
+          onClick={() => setOpen(placement === "sheet")}
+          className="mb-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2"
+        >
+          <Icon name="user" size={16} />
+          My account
+        </Link>
+      )}
       {MOCK_MODE && (
         <button
           type="button"

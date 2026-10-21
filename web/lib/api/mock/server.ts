@@ -11,26 +11,31 @@ import { mockUuid, seeded } from "./ids";
 import { enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
+import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
-import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { routeEngineering } from "./engineering";
+import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
+import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { enlargeRuns, routeRuns, seedFeatureSetRun, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
-import { routeIntake } from "./intake";
+import { routeIntake, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
+import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
-import { dateMarks, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
+import { inboxStrategy, routeStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
@@ -94,6 +99,8 @@ export interface Db {
   requests?: RequestsDb;
   /** The decision log (./decisions.ts, H1); absent in data saved before it. */
   decisions?: DecisionsDb;
+  /** Launches, their checklist and notes, and the changelog (./launches.ts, H6). */
+  launches?: LaunchesDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
@@ -102,6 +109,12 @@ export interface Db {
   /** Alignment reports, their reads and Oracle's Slack install (./reports.ts, F6); seeded in
    * the "alignment-report" scenario only. */
   reports?: ReportsDb;
+  /** H4: drift findings and the strategy stack (./strategy.ts); the "strategy" scenario only. */
+  strategy?: StrategyDb;
+  /** H11: the owner's autonomy levels and the "Oracle did" rows (./autonomy.ts); absent in older saved data. */
+  autonomy?: AutonomyDb;
+  /** Every credential by kind, changed passwords (./account.ts); seeded on first use. */
+  account?: AccountDb;
 }
 
 type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
@@ -170,6 +183,21 @@ function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Respo
   return notFound("Route");
 }
 
+/** The launches' context: the signed-in member, the commenter who asked, the first track. */
+function launchesContext(db: Db, me: MemberRow): LaunchesContext {
+  return {
+    userId: me.id,
+    role: me.role,
+    askerId: db.members.find((x) => x.role === "commenter")?.id ?? null,
+    trackId: db.roadmap?.tracks[0]?.id ?? null,
+  };
+}
+
+function ensureLaunches(db: Db): LaunchesDb {
+  db.launches ??= { launches: [], tasks: [], notes: [], changelog: [] };
+  return db.launches;
+}
+
 const STORAGE_KEY = "po-mock-db-v2";
 /** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
 export const MOCK_ROLE_KEY = "po-mock-role";
@@ -183,7 +211,17 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * "alignment-report" as the default company plus two weekly alignment reports and Oracle's
  * Slack install (./reports.ts, F6);
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
- * next tick (recorded, the decide call answers 503; ./runs.ts); "roadmap-items" as the default
+ * next tick (recorded, the decide call answers 503; ./runs.ts); "questions" as the default
+ * company plus an "Oracle asks" question on an intake with no PRD and an "Approver asks"
+ * question on a PRD section, both asked of the signed-in owner, and one delegated to
+ * approver@example.com (C2); "private-finding" as "questions" plus a private finding (S6) on
+ * the clinic waitlist, its question asked of the signed-in owner, its author; "many-people" as
+ * "questions" in a company of 25 members (zoe.zimmer@example.com last by email);
+ * "launches" as the default company plus three launches (Ready, Planned, Launched) with their
+ * checklists, notes and changelog entries (./launches.ts);
+ * "oracle-did" as the default company plus one thing Oracle did on its own, told to the
+ * signed-in owner (./autonomy.ts);
+ * "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
@@ -289,6 +327,7 @@ function seedEmpty(): Db {
     disabled_at: null,
     disabled_by: null,
     status: "active" as const,
+    open_tokens: 0,
   }));
   return db;
 }
@@ -308,6 +347,113 @@ function seedLarge(): Db {
   // Asked of someone else: not the signed-in member's to answer.
   const other = db.members.find((m) => m.id !== db.user_id)!;
   v2.questions.push({ ...model, id: uuid(), prompt: "Who owns the pricing page?", asked_to: other.id, created_at: model.created_at, updated_at: model.created_at });
+  return db;
+}
+
+/** The default company plus questions to people (C2): see MOCK_SCENARIO_KEY. */
+function seedQuestions(): Db {
+  const db = seed();
+  const v2 = ensureV2(db);
+  const approver = db.members.find((m) => m.email === "approver@example.com")!;
+  const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
+  const at = (iso: string) => ({ created_at: iso, updated_at: iso });
+  const intake = uuid();
+  const gap = uuid();
+  v2.intakes.push({
+    id: intake, title: "Clinic waitlist", brief: "Patients wait by phone for a cancelled slot. Let them join a waitlist instead.",
+    author_id: db.user_id, source_snapshot_ids: [], status: "awaiting_answers", document_id: null, lock_version: 1,
+    analysis: { users: [], problem: null, outcomes: [], goal_ids: [], scope: ["A waitlist for cancelled slots"], non_goals: [], dependencies: [], blockers: [], category: "feature", conflicts: [] },
+    ...at("2026-10-01T09:00:00Z"),
+  });
+  v2.gaps.push({
+    id: gap, intake_id: intake, document_id: null, category: "customer_user", statement: "Customer and user: not known yet.",
+    impact: ["goals", "scope", "module_selection"], importance: "high", evidence_ids: [], confidence: null, knowledge_state: "unknown",
+    status: "asked", owner_id: null, related_modules: ["context.users"], stop_condition: null, entity_ids: [], section_keys: [],
+    created_by: null, lock_version: 1, ...at("2026-10-01T09:00:00Z"),
+  });
+  const base = { checkpoint_id: null, item_ref: null, entity_id: null, module_key: null, batch: null, priority: 100 };
+  v2.questions.push(
+    {
+      ...base, id: uuid(), gap_id: gap, intake_id: intake, document_id: null, category: "customer_user",
+      prompt: "Which clinics join the waitlist first?", rationale: "Decides who the first release is for, and its scope.",
+      batch: 1, priority: 10, asked_to: db.user_id, asked_by: db.user_id, section_key: null, status: "asked", ...at("2026-10-01T09:00:00Z"),
+    },
+    {
+      ...base, id: uuid(), gap_id: null, intake_id: null, document_id: prd.id, category: "general",
+      prompt: "Which plan tiers get hard caps?", rationale: "The scope review needs it before approving.",
+      asked_to: db.user_id, asked_by: approver.id, section_key: "metrics", status: "asked", ...at("2026-10-18T09:00:00Z"),
+    },
+    {
+      ...base, id: uuid(), gap_id: null, intake_id: null, document_id: prd.id, category: "general",
+      prompt: "Who signs off the refund rule?", rationale: null,
+      asked_to: approver.id, asked_by: db.user_id, section_key: "metrics", status: "delegated", ...at("2026-10-18T10:00:00Z"),
+    },
+  );
+  return db;
+}
+
+/** "questions" plus a private finding (S6): only its author, the signed-in owner, is asked. */
+function seedPrivateFinding(): Db {
+  const db = seedQuestions();
+  const v2 = ensureV2(db);
+  const intake = v2.intakes.find((i) => i.title === "Clinic waitlist")!;
+  const gap = uuid();
+  const at = { created_at: "2026-10-02T09:00:00Z", updated_at: "2026-10-02T09:00:00Z" };
+  v2.gaps.push({
+    id: gap, intake_id: intake.id, document_id: null, category: "release_rollout", statement: "Is the pilot limited to two clinics?",
+    impact: ["risks", "scope"], importance: "high", evidence_ids: [], confidence: null, knowledge_state: "ai_inference",
+    status: "asked", owner_id: null, related_modules: ["launch.rollout"], stop_condition: null, entity_ids: [], section_keys: [],
+    created_by: null, lock_version: 1, ...at,
+  });
+  v2.private_gap_ids = [gap];
+  v2.questions.push({
+    id: uuid(), gap_id: gap, intake_id: intake.id, document_id: null, checkpoint_id: null, item_ref: null, entity_id: null,
+    category: "release_rollout", prompt: "Is the pilot limited to two clinics?", rationale: null, priority: 20, batch: 1,
+    asked_to: db.user_id, asked_by: db.user_id, module_key: null, section_key: null, status: "asked", ...at,
+  });
+  return db;
+}
+
+/** "questions" in a company of 25 members: zoe.zimmer@example.com sorts last, past the
+ * people picker's first page of 20. */
+function seedManyPeople(): Db {
+  const db = seedQuestions();
+  const join = (email: string, i: number) => ({
+    email, role: "commenter" as const, created_at: `2026-09-${String(5 + i).padStart(2, "0")}T09:00:00Z`,
+    id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0,
+  });
+  for (let i = 0; i < 20; i++) db.members.push(join(`member.${String(i).padStart(2, "0")}@example.com`, i));
+  db.members.push(join("zoe.zimmer@example.com", 20));
+  return db;
+}
+
+/**
+ * The default company plus an approved vision, a product strategy (v1 approved, v2 in
+ * review) and open strategy drift findings (H4).
+ */
+function seedStrategyScenario(): Db {
+  const db = seed();
+  for (const d of STRATEGY_DOCUMENTS) {
+    const doc: DocumentRow = {
+      id: uuid(),
+      slug: d.slug,
+      title: d.title,
+      status: d.versions.length > 1 ? "in_review" : "approved",
+      kind: d.kind ?? "prd",
+      template: d.template ?? null,
+      template_version: d.template_version ?? null,
+      theme: d.theme ?? null,
+      created_at: d.versions[0].created_at,
+      updated_at: d.versions.at(-1)!.created_at,
+    };
+    db.documents.push(doc);
+    for (const v of d.versions) {
+      const row = buildVersion(doc, v);
+      if (v.number === 1) row.approved_at = "2026-10-01T09:00:00Z";
+      db.versions.push(row);
+    }
+  }
+  db.strategy = seedStrategy(uuid);
   return db;
 }
 
@@ -607,7 +753,17 @@ function seed(): Db {
     disabled_at: null,
     disabled_by: null,
     status: "active" as const,
+    last_sign_in_at: m.last_sign_in_at,
+    open_tokens: 0,
   }));
+  // A member removed two days ago (C2): kept, so history keeps the name; an owner can restore.
+  db.members.push({
+    ...REMOVED_MEMBER,
+    id: uuid(),
+    disabled_by: db.user_id,
+    status: "disabled",
+    open_tokens: 0,
+  });
   db.invites = MOCK_INVITES.map((i) => ({
     ...i,
     id: uuid(),
@@ -923,10 +1079,12 @@ function importSections(
 }
 
 function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
+  const member = db.members.find((m) => m.email === db.session) ?? db.members.find((m) => m.id === db.user_id);
   return {
     db: db.runs,
     userId: db.user_id,
     userName: db.session ?? db.members.find((m) => m.id === db.user_id)?.email ?? null,
+    userRole: member ? withMockRole(member).role : null,
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     feedback: db.feedback,
     documents: db.documents,
@@ -1037,10 +1195,23 @@ function load(): Db {
             ? seedFeatureSet
           : scenario === "next-draft" || scenario === "next-draft-costly"
             ? () => seedNextDraft(scenario === "next-draft-costly")
-            : seed,
+          : scenario === "questions"
+            ? seedQuestions
+            : scenario === "private-finding"
+              ? seedPrivateFinding
+              : scenario === "many-people"
+                ? seedManyPeople
+                : scenario === "strategy"
+                  ? seedStrategyScenario
+                  : seed,
   );
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
+  // Launches (H6): three synthetic launches in the "launches" scenario; none otherwise, so
+  // other specs' Inbox counts stay as they were.
+  if (scenario === "launches") db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
+  db.autonomy = emptyAutonomy();
+  if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   save(db);
   return db;
 }
@@ -1421,8 +1592,10 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
   if (!atLeast(me.role, "owner")) return forbidden("owner");
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
+  const account = (db.account ??= seedAccount(db.members, uuid));
+  const out = (x: MemberRow): MemberRow => ({ ...x, open_tokens: openTokens(account, x.id) });
   if (p[1] === "members") {
-    if (!p[2] && m === "GET") return json(200, db.members);
+    if (!p[2] && m === "GET") return json(200, db.members.map(out));
     const target = db.members.find((x) => x.id === p[2]);
     if (!target) return notFound("Member");
     // A disabled owner is not another owner.
@@ -1433,24 +1606,29 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         return json(409, { detail: "Cannot demote the last owner; make someone else owner" });
       }
       target.role = role;
-      return json(200, target);
+      return json(200, out(target));
     }
     // Removing a member disables them (C2): the row stays; an owner can restore them.
     if ((m === "POST" && p[3] === "disable") || (m === "DELETE" && !p[3])) {
       if (target.status !== "disabled") {
+        if (target.id === me.id) {
+          return json(409, { detail: "You cannot remove yourself; another owner can remove you" });
+        }
         if (target.role === "owner" && !otherOwner) {
           return json(409, { detail: "Cannot remove the last owner; make someone else owner" });
         }
         Object.assign(target, { status: "disabled", disabled_at: now(), disabled_by: me.id });
+        // Every credential acting for them is revoked with the disable.
+        revokeMemberTokens(account, target.id, target.disabled_at!);
         for (const i of db.invites) {
           if (i.email === target.email && i.status === "open") Object.assign(i, { status: "revoked", revoked_at: now() });
         }
       }
-      return m === "DELETE" ? json(204, undefined) : json(200, target);
+      return m === "DELETE" ? json(204, undefined) : json(200, out(target));
     }
     if (m === "POST" && p[3] === "restore") {
       Object.assign(target, { status: "active", disabled_at: null, disabled_by: null });
-      return json(200, target);
+      return json(200, out(target));
     }
   }
   if (p[1] === "invites") {
@@ -1677,10 +1855,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "auth" && p[2] === "login" && m === "POST") {
     const { email, password } = await body<Schemas["LoginRequest"]>();
     const member = db.members.find((x) => x.email === email.trim().toLowerCase());
-    if (!member || member.status === "disabled" || password !== MOCK_LOGIN.password) {
+    db.account ??= seedAccount(db.members, uuid);
+    if (!member || member.status === "disabled" || !passwordOk(db.account, member.email, password, MOCK_LOGIN.password)) {
       return json(401, { detail: "Invalid credentials" });
     }
     db.session = member.email;
+    member.last_sign_in_at = now();
     return json(200, meOut(db, withMockRole(member)));
   }
   if (p[1] === "auth" && p[2] === "logout" && m === "POST") {
@@ -1710,8 +1890,26 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, mine);
   }
   if (p[1] === "setup" && !p[2] && m === "GET") return json(200, setupOut(db, me));
+  const accountOut = await accountRoute(
+    {
+      db: (db.account ??= seedAccount(db.members, uuid)),
+      members: db.members,
+      me,
+      defaultPassword: MOCK_LOGIN.password,
+      uuid,
+      now,
+      endSession: () => (db.session = null),
+    },
+    req,
+    p,
+    q,
+  );
+  if (accountOut) return accountOut;
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
+  // Tech briefs (./engineering.ts): every member reads.
+  const briefs = routeEngineering(req, p, q, db.documents);
+  if (briefs) return briefs;
   // Trace, impact, staleness and evidence-inspector routes (./trace.ts), on the v2 rows.
   if (["documents", "section-links", "baseline", "trace"].includes(p[1])) {
     const traced = await routeTrace(
@@ -1752,6 +1950,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   const fireflies = routeFirefliesBrowse(p, q);
   if (fireflies) return fireflies;
+  // How far Oracle goes on its own (H11): everyone reads, owners change; its Inbox rows.
+  db.autonomy ??= emptyAutonomy();
+  const autonomy = await routeAutonomy(db.autonomy, req, p, me);
+  if (autonomy) return autonomy;
   // Company settings are the owner's, as in the API (tenant_settings_api.py).
   if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
   const browse = sourceBrowseRoute(req, p, q);
@@ -1816,13 +2018,36 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (modules) return modules;
   // Intake, gaps, questions and answers (CR-03) check roles themselves: commenters
   // answer and propose, approvers decide, owners accept a critical risk.
-  if (["intakes", "gaps", "questions", "intake-proposals"].includes(p[1])) {
+  // Questions to people (C2): Ask a teammate, reassign or withdraw, the Inbox's questions
+  // and the member directory, with the API's rules.
+  if (["intakes", "gaps", "questions", "intake-proposals", "people"].includes(p[1]) || (p[1] === "inbox" && p[2] === "questions")) {
     const createRun = (input: Schemas["RunCreate"]) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
       const run = new Request(new URL("/v1/runs", req.url), { method: "POST", body: JSON.stringify(input) });
       return routeRuns({ ...runsContext(db), db: db.runs }, run, ["v1", "runs"]).then((r) => r ?? notFound("Route"));
     };
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun }, req, p, q);
+    const subjects: SubjectLookup = {
+      document: (id) => {
+        const doc = db.documents.find((d) => d.id === id);
+        const latest = doc ? docVersions(db, doc).pop() : undefined;
+        if (!doc || !latest) return null;
+        return {
+          slug: doc.slug,
+          title: doc.title,
+          latest: latest.number,
+          heading: (key) => latest.sections.find((x) => x.section_key === key)?.heading ?? null,
+        };
+      },
+      entity: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? null,
+      checkpoint: (id) => {
+        for (const run of db.runs?.runs ?? []) {
+          const cp = run.checkpoints.find((c) => c.id === id);
+          if (cp) return { run_id: run.id, kind: cp.kind };
+        }
+        return null;
+      },
+    };
+    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, people: db.members, subjects }, req, p, q);
     if (intake) return intake;
   }
   // Requests and their themes (C1) check roles themselves: commenters add, approvers decide.
@@ -1830,6 +2055,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     const requests = await routeRequests(ensureRequests(db), requestsContext(db, me.id, me.role), req, p, q);
     if (requests) return requests;
   }
+  // Launches and changelog (H6) check roles themselves: a task's owner edits their task.
+  const launches = await routeLaunches(launchesContext(db, me), ensureLaunches(db), req, p, q);
+  if (launches) return launches;
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
     m === "GET"
@@ -1894,6 +2122,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.roadmap ??= seedRoadmap(roadmapCtx, localStorage.getItem(MOCK_SCENARIO_KEY));
   const roadmapRes = await routeRoadmap(roadmapCtx, db.roadmap, req, p, q);
   if (roadmapRes) return roadmapRes;
+  // The Plan (F1): one read of the PRDs in play and the roadmap rows.
+  const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
+  const planRes = routePlan({ ...roadmapCtx, goals }, db.roadmap, req, p, q);
+  if (planRes) return planRes;
   if (p[1] === "tracks" && p[3] === "roadmap-run" && m === "POST") {
     if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
     const run = trackRunBody(roadmapCtx, db.roadmap, p[2]);
@@ -1928,22 +2160,35 @@ async function route(db: Db, req: Request): Promise<Response> {
     const decisions = decisionInbox(decisionsCtx, db.decisions, seenBefore);
     const counted = decisions.filter((d) => d.counts).length;
     const inbox = { ...withStates, decisions, total: withStates.total + counted, needs_me: (withStates.needs_me ?? 0) + counted };
+    // Launch rows (H6): Ready to launch, Set tier and Notes to send count; Shipped is shown only.
+    const launchRows = launchInboxRows(launchesContext(db, me), ensureLaunches(db));
+    inbox.launches = launchRows;
+    inbox.total += launchRows.filter((r) => r.counted).length;
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")
       ? db.revoke_failures.filter((r) => !r.dismissed).map((r) => ({ ...r, dismissed: undefined }))
       : [];
-    // Owners also get the weekly alignment reports and the posts Slack refused (F6).
+    // Owners also get the weekly alignment reports and the posts Slack refused (F6), and
+    // one strategy drift row however many findings are open (H4). Those Oracle told: what
+    // it did on its own (H11); unopened rows count.
     const reported = inboxReports(ensureReports(db, db.user_id), me);
+    const strategy = inboxStrategy(db.strategy, me.role);
+    const did = inboxActions((db.autonomy ??= emptyAutonomy()), me.id);
+    const open = did.filter((a) => a.counts).length;
     return json(200, {
       ...inbox,
       revoke_failures: failures,
       reports: reported.reports,
       report_failures: reported.report_failures,
-      total: inbox.total + failures.length + reported.unread,
+      strategy,
+      oracle_actions: did,
+      total: inbox.total + failures.length + reported.unread + (strategy ? 1 : 0) + open,
     });
   }
   if (runs) return runs;
+  const strategy = await routeStrategy(db.strategy, req, p, q, me.role);
+  if (strategy) return strategy;
 
   if (p[1] !== "documents") return notFound("Route");
   if (p.length === 2) {
@@ -2078,6 +2323,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, { document_id: doc.id, version: v.number, items, counts });
   }
   if (sub === "approve" && m === "POST") {
+    // H4: a vision or a product strategy is an owner's to approve.
+    const words = doc.kind === "vision" ? "a vision" : doc.kind === "strategy" ? "a product strategy" : null;
+    if (words && me.role !== "owner") return json(403, { detail: `Only an owner can approve ${words}` });
     // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
     if (doc.kind === "prd") {
       const latest = docVersions(db, doc).pop()!.number;

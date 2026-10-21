@@ -5,7 +5,9 @@ segment is only noticed when something ticks. A Cloud Scheduler job, `oracle-tic
 `POST /internal/scheduler/tick` every minute with a Google ID token from the
 `oracle-ticker` service account. One tick, for every company: advances its runs, sweeps its
 Claude account pool and runs its queued built-in model jobs (what `POST /v1/internal/tick`
-does for one company).
+does for one company). It also checks each company's product tracks and marks planned
+launches Ready once their items have shipped, starting their launch kit run
+([launches-and-changelog.md](launches-and-changelog.md)).
 After a company's track monitoring, the tick also builds its weekly alignment report once
 the scheduled moment has passed and makes the Slack posts that are due
 (`docs/ops-slack-notifications.md`).

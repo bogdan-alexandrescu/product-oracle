@@ -18,7 +18,7 @@ The source tables (``assumption_decisions``, ``blocker_resolution_events``,
 ``llm_suggestions``) are never changed.
 
 Revision ID: 0020_decisions
-Revises: 0020_requests
+Revises: 0014_account_fixes
 """
 
 import re
@@ -29,7 +29,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0020_decisions"
-down_revision: str | None = "0020_requests"
+down_revision: str | None = "0014_account_fixes"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

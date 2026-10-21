@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
 REVISION = "0020_decisions"
-PREVIOUS = "0020_requests"
+PREVIOUS = "0014_account_fixes"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_decisions")

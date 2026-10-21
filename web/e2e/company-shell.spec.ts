@@ -8,10 +8,10 @@ import { login } from "./helpers";
  */
 
 test("the rail places Company after Inbox, just above Settings; it lands on Decisions with both highlighted", async ({ page }) => {
-  // protects=the rail order Home, Requests, Baseline, PRDs, Priorities, Roadmap, Runs, Inbox,
+  // protects=the rail order Home, Requests, Baseline, PRDs, Priorities, Plan, Runs, Inbox,
   // Company, then Settings (owner, 2026-10-21, "Rail order"); clicking Company lands on /company/decisions (its only tab before H4) with
   // Company current and the Decisions tab selected; fails_when=Company is missing, out of
-  // order, or not highlighted on its pages; no_claim=Roadmap stands for Plan until F1 renames it.
+  // order, or not highlighted on its pages; no_claim=none beyond protects (F1 renamed Roadmap to Plan).
   await login(page);
   const nav = page.getByTestId("app-nav");
   const ids = await nav.locator("a[data-testid^='nav-']").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
@@ -21,7 +21,7 @@ test("the rail places Company after Inbox, just above Settings; it lands on Deci
     "nav-baseline",
     "nav-prds",
     "nav-priorities",
-    "nav-roadmap",
+    "nav-plan",
     "nav-runs",
     "nav-inbox",
     "nav-company",
@@ -38,7 +38,7 @@ test("the rail places Company after Inbox, just above Settings; it lands on Deci
 });
 
 test("phone: Company is in the More sheet and the page never scrolls sideways", async ({ page }) => {
-  // protects=at 390 px the tab bar keeps Home, PRDs, Roadmap, Inbox, More and Company opens
+  // protects=at 390 px the tab bar keeps Home, PRDs, Plan, Inbox, More and Company opens
   // from the More sheet; the Company page fits the width; fails_when=Company takes a tab or
   // the page overflows; no_claim=Chromium's layout.
   await page.setViewportSize({ width: 390, height: 844 });
