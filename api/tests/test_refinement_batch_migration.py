@@ -63,7 +63,7 @@ def test_chains_on_the_roadmap_head():
     assert script.get_heads() == ["0014_member_follow_up_retry"]
     assert script.get_revision("0017_citation_source_oracle").down_revision == REVISION
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
-    assert script.get_revision("0014_review").down_revision == "0014_intake"
+    assert script.get_revision("0014_review").down_revision == "0017_source_config_version"
 
 
 def test_extends_the_live_check_and_keeps_other_kinds(scratch_db):

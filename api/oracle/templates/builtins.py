@@ -351,8 +351,9 @@ def _md5(text_: str) -> str:
 async def ensure_builtins(session: AsyncSession) -> bool:
     """Seed the built-in themes and templates into the session's company (no commit).
 
-    A packaged skeleton that changed (O1f added the brief layer) becomes the next
-    version of a built-in the company has not edited or archived. Returns True when
+    A packaged skeleton that changed (O1f added the brief layer; the PRD skeletons'
+    source kinds gained ``oracle``, 2026-10-20) becomes the next version of a built-in
+    the company has not edited or archived. Returns True when
     something was added. Concurrent callers are serialised by a transaction-scoped
     advisory lock on the company id.
     """

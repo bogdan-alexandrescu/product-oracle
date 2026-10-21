@@ -21,6 +21,7 @@ from oracle.priorities.schemas import (
     RankingCounts,
 )
 from oracle.priorities.scoring import EvidenceRef, FeatureInput, GoalLink, rank
+from oracle.sources.models import SourceItem
 
 
 class NotFoundError(LookupError):
@@ -99,6 +100,18 @@ async def load_features(
     unscored = {ev.entity_id for ev in evidence if ev.confidence is None}
     if unscored and rescore:
         await baseline_scoring.rescore_targets(db, entity_ids=unscored)
+    from_items = {ev.source_item_id for ev in evidence if ev.source_item_id}
+    removed: set[uuid.UUID] = set()
+    if from_items:
+        removed = set(
+            (
+                await db.scalars(
+                    select(SourceItem.id).where(
+                        SourceItem.id.in_(from_items), SourceItem.deleted_at.is_not(None)
+                    )
+                )
+            ).all()
+        )
     # A run reads every score as of its pin, as the entity detail does (S6).
     view = await baseline_evidence.run_view(db, principal, entity_ids=list(inputs))
     if view is not None:
@@ -114,6 +127,7 @@ async def load_features(
                     else (float(ev.confidence) if ev.confidence is not None else None)
                 ),
                 ref=ev.url or ev.ref,
+                source_removed=ev.source_item_id in removed,
             )
         )
     for f in inputs.values():

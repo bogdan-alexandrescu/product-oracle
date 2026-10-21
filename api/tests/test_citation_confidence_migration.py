@@ -125,7 +125,7 @@ def test_chains_on_the_citation_source_oracle_head():
     # 0014_member_disable, 0014_member_follow_up_retry) on that; one head.
     assert script.get_heads() == ["0014_member_follow_up_retry"]
     assert script.get_revision("0014_intake").down_revision == REVISION
-    assert script.get_revision("0014_review").down_revision == "0014_intake"
+    assert script.get_revision("0014_review").down_revision == "0017_source_config_version"
 
 
 def test_upgrade_adds_the_columns_and_the_downgrade_drops_them(scratch_db):

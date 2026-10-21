@@ -14,6 +14,7 @@ import {
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   RETRY_CONFIRM,
+  SENT_BACK_STATE,
   STOP_CANCELLING_CONFIRM,
   age,
   deliveryText,
@@ -176,7 +177,8 @@ export type NeedGroup =
   | "revoke-failures"
   | "feedback"
   | "questions"
-  | "searches";
+  | "searches"
+  | "revising";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
 
 type FeedbackRow = InboxOut["items"][number];
@@ -617,7 +619,10 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
   // Decided, not delivered to the run yet (owner, 2026-10-20): shown only, nothing to decide
   // (Oracle sends it again on every tick), not counted. The run, the review and SwarmCloud's
   // last answer; Open goes to the run.
-  const deliveries: Need[] = (inbox.deliveries ?? []).map((c) => ({
+  // Revising wins: Oracle's send-back means no human decision is owed, so a run in both
+  // shows once, as Revising.
+  const revisingRuns = new Set((inbox.revising ?? []).map((r) => r.id));
+  const deliveries: Need[] = (inbox.deliveries ?? []).filter((c) => !revisingRuns.has(c.run_id)).map((c) => ({
     key: c.id,
     icon: "clock",
     kind: "Decision",
@@ -661,7 +666,25 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     action: null,
   }));
 
-  return { checkpoints, deliveries, approvals, overruns, lookups, imports, searches };
+  // A refused draft Oracle sent back to the writer itself (owner, 2026-10-20): the review's
+  // state while the revision runs, as the run page shows it, never a decision request. Shown
+  // only, like Looking: not counted in the total, on Home or by the badge.
+  const revising: Need[] = (inbox.revising ?? []).map((r) => ({
+    key: `revising-${r.id}`,
+    icon: "clock",
+    kind: "Revising",
+    item: (
+      <span className="truncate" title={r.sent_back ?? undefined} data-testid="inbox-revising-state">
+        {SENT_BACK_STATE}
+      </span>
+    ),
+    context: runContext(r),
+    run: shortId(r.id),
+    at: r.started_at ?? r.created_at,
+    action: openRun(r),
+  }));
+
+  return { checkpoints, deliveries, approvals, overruns, lookups, imports, searches, revising };
 }
 
 /**
@@ -689,6 +712,33 @@ export function questionNeeds(questions: Schemas["StakeholderQuestionOut"][], do
       ) : null,
     };
   });
+}
+
+/**
+ * My sources that need attention: saved before a newer rule they break (more than 100 Slack
+ * channels, a date out of range), so they are not synced until edited. GET /v1/sources
+ * filtered here; each row opens the source on Settings › Sources, where Edit is.
+ */
+export function sourceNeeds(sources: Schemas["SourceOut"][]): Need[] {
+  return sources
+    .filter((s) => s.status === "needs_attention")
+    .map((s) => ({
+      key: s.id,
+      icon: "sources",
+      kind: "Source",
+      item: (
+        <span className="truncate" title={s.last_error ?? undefined}>
+          {s.last_error ?? "Needs attention: edit this source to sync it again"}
+        </span>
+      ),
+      context: <span className="block truncate">{s.name}</span>,
+      at: s.updated_at,
+      action: (
+        <LinkButton href={`/settings/sources#source-${s.id}`} aria-label={`Edit ${s.name}`}>
+          Edit
+        </LinkButton>
+      ),
+    }));
 }
 
 /**
@@ -720,6 +770,7 @@ export function allNeeds(
     // Shown only, under Open: nothing to decide, not an item.
     ...stated(n.deliveries, "deliveries", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.searches, "searches", false).map((r) => ({ ...r, state: "open" as const })),
+    ...stated(n.revising, "revising", false).map((r) => ({ ...r, state: "open" as const })),
   ];
 }
 

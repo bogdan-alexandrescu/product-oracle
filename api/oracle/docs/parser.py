@@ -22,7 +22,13 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from oracle import safe_yaml
 from oracle.config import get_settings
 from oracle.docs import layers
-from oracle.docs.schemas import CitationSource, ImportProblem
+from oracle.docs.schemas import (
+    CONFIDENCE_MAX,
+    CONFIDENCE_MIN,
+    CONFIDENCE_RANGE,
+    CitationSource,
+    ImportProblem,
+)
 from oracle.review.schemas import Resolution
 
 # Levels 1-3 start a section; deeper headings are part of the section body.
@@ -67,7 +73,7 @@ class CitationIn(BaseModel):
     # kept as written: the import checks it against the company's source items and drops
     # one it does not have with a warning, never a refusal.
     item: str | None = None
-    confidence: float | None = Field(default=None, ge=0, le=1)
+    confidence: float | None = Field(default=None, ge=CONFIDENCE_MIN, le=CONFIDENCE_MAX)
     # Why there is no score, or how it was reached ("owner decision, locked").
     confidence_note: str | None = None
     low_confidence: bool = False
@@ -301,10 +307,13 @@ def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) ->
 
 
 def _citation_field(error: Any) -> str:
-    """What is wrong with one field of a citation: the field, and a source this Oracle does
-    not accept by name (the run page groups refused citations by it)."""
+    """What is wrong with one field of a citation: the field, a source this Oracle does not
+    accept by name, and a confidence that is not a number from 0 to 1 (the run page groups
+    refused citations by it)."""
     if tuple(error["loc"]) == ("source",) and error["type"] == "literal_error":
         return f"source '{error['input']}' isn't accepted"
+    if tuple(error["loc"]) == ("confidence",):
+        return f"confidence must be {CONFIDENCE_RANGE}"
     return ".".join(map(str, error["loc"]))
 
 

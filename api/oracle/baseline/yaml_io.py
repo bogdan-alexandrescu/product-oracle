@@ -24,6 +24,8 @@ same file twice changes nothing. Items not in the file are left alone. Writes ar
 goal never becomes confirmed through an import (it lands proposed; an approver
 confirms it). Evidence is matched by (url, ref, excerpt) on its item; a
 ``source_item`` id is exported and honoured only for the caller's own items.
+Evidence from a source item since removed (S5) carries ``source_removed: true``;
+an import ignores it.
 """
 
 import uuid
@@ -81,7 +83,17 @@ async def _own_item_ids(db: AsyncSession, principal: Principal) -> set[uuid.UUID
     return {i for i in own if not (i in frozen and frozen[i] is None)}
 
 
-def _evidence_out(ev: Evidence, own: set[uuid.UUID]) -> dict[str, Any]:
+async def _removed_item_ids(db: AsyncSession) -> set[uuid.UUID]:
+    """Cited source items narrowed out or deleted upstream (S5)."""
+    rows = await db.scalars(
+        select(SourceItem.id)
+        .join(Evidence, Evidence.source_item_id == SourceItem.id)
+        .where(SourceItem.deleted_at.is_not(None))
+    )
+    return set(rows.all())
+
+
+def _evidence_out(ev: Evidence, own: set[uuid.UUID], removed: set[uuid.UUID]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for f in ("url", "ref", "excerpt"):
         if getattr(ev, f):
@@ -90,6 +102,9 @@ def _evidence_out(ev: Evidence, own: set[uuid.UUID]) -> dict[str, Any]:
         out["retrieved_at"] = ev.retrieved_at.isoformat()
     if ev.source_item_id and ev.source_item_id in own:
         out["source_item"] = str(ev.source_item_id)
+    if ev.source_item_id in removed:
+        # Citations of a removed item say 'source removed' (ignored on import).
+        out["source_removed"] = True
     return out
 
 
@@ -98,9 +113,10 @@ async def export(db: AsyncSession, principal: Principal) -> str:
     edges = (await db.scalars(select(Edge).order_by(Edge.type, Edge.created_at))).all()
     evidence = (await db.scalars(select(Evidence).order_by(Evidence.created_at))).all()
     own = await _own_item_ids(db, principal)
+    removed = await _removed_item_ids(db)
     by_target: dict[uuid.UUID, list[dict]] = {}
     for ev in evidence:
-        by_target.setdefault(ev.entity_id or ev.edge_id, []).append(_evidence_out(ev, own))
+        by_target.setdefault(ev.entity_id or ev.edge_id, []).append(_evidence_out(ev, own, removed))
     refs = {e.id: _ref(e) for e in entities}
 
     def entity_doc(e: Entity) -> dict[str, Any]:

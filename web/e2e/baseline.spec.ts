@@ -142,6 +142,26 @@ test("baseline: the feature drawer shows links, evidence and the lock", async ({
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
+test("baseline: evidence from a removed source item says 'source removed' and no longer links out", async ({ page }) => {
+  await openBaseline(page);
+  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  const d = drawer(page, "Guided setup");
+  const chips = d.getByTestId("evidence-chip");
+  await expect(chips).toHaveCount(3);
+  // The mock's meeting was narrowed out of its source (S5): a muted badge on the chip.
+  await expect(chips.nth(2)).toContainText("Meeting notes");
+  await expect(chips.nth(2).getByTestId("source-removed")).toHaveText("source removed");
+  await expect(chips.nth(2)).toHaveAttribute("aria-label", /source removed/);
+  await expect(chips.nth(0).getByTestId("source-removed")).toHaveCount(0);
+  // The card keeps the stored title and excerpt, says why, and has no link out.
+  await chips.nth(2).click();
+  const card = page.getByRole("tooltip");
+  await expect(card).toContainText("Onboarding review");
+  await expect(card).toContainText("Agreed to ship the checklist");
+  await expect(card.getByTestId("source-removed-note")).toContainText("Source removed");
+  await expect(card.getByRole("link", { name: /Open source/ })).toHaveCount(0);
+});
+
 test("baseline: editing a feature saves and locks it; unlock releases it", async ({ page }) => {
   await openBaseline(page);
   const row = page.getByTestId("feature-f.sample-data");

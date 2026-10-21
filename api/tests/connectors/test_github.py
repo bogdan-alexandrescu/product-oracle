@@ -120,6 +120,9 @@ async def test_validate():
     [
         ({}, CREDENTIAL, "at least one repo"),
         ({"repos": ["widgets"]}, CREDENTIAL, "owner/name"),
+        # Path segments, not repos: /repos/example-org/.. would read /repos.
+        ({"repos": ["example-org/."]}, CREDENTIAL, "owner/name"),
+        ({"repos": ["example-org/.."]}, CREDENTIAL, "owner/name"),
         ({"repos": ["example-org/widgets"], "include": ["wiki"]}, CREDENTIAL, "unknown"),
         ({"repos": ["example-org/widgets"], "include": []}, CREDENTIAL, "include at least"),
         (CONFIG, {}, "token is required"),
@@ -275,6 +278,34 @@ async def test_unchanged_tree_fetches_no_blobs():
     events = await collect(fake.connector(), config, cursor)
     assert not [e for e in events if not isinstance(e, CursorCheckpoint)]
     assert fake.paths() == [REPO, f"{REPO}/git/trees/main"]
+
+
+async def test_a_truncated_tree_clears_the_refetch_flag():
+    """After a selection change every listed file is read again once; a tree GitHub
+    truncates every time must not make every later sync re-read every blob."""
+    config = {**CONFIG, "include": ["readme", "docs"]}
+    routes = full_routes()
+    tree = fixture("tree_widgets.json")
+    routes[f"{REPO}/git/trees/main"] = body({**tree, "truncated": True})
+    first = last_cursor(await collect(FakeGithub(routes).connector(), config))
+    rescoped = GithubConnector().rescope_cursor(first, config)
+    assert rescoped["repos"]["example-org/widgets"]["refetch"] is True
+    fake = FakeGithub(routes)
+    cursor = last_cursor(await collect(fake.connector(), config, rescoped))
+    assert "refetch" not in cursor["repos"]["example-org/widgets"]
+    assert any("/git/blobs/" in p for p in fake.paths())
+    # The next sync reads only blobs it does not know.
+    fake = FakeGithub(routes)
+    await collect(fake.connector(), config, cursor)
+    assert not any("/git/blobs/" in p for p in fake.paths())
+
+
+def test_the_config_is_normalised():
+    config = {"repos": [" b/x", "A/y", "a/Y", "b/x"], "include": ["docs", "readme", "docs"]}
+    assert GithubConnector().normalize_config(config) == {
+        "repos": ["A/y", "b/x"],
+        "include": ["docs", "readme"],
+    }
 
 
 async def test_dropping_kinds_from_include_deletes_them():

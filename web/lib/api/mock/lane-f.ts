@@ -165,7 +165,7 @@ function confidenceOf(f: FeatureSeed): Schemas["ConfidenceUsed"] {
       value,
       source: "evidence",
       explain: `mean confidence of ${f.evidence.length} evidence item(s): ${value}`,
-      evidence: f.evidence,
+      evidence: f.evidence.map((e) => ({ ...e, source_removed: false })),
     };
   }
   const raw = f.attrs.confidence;

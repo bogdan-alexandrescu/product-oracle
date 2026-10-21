@@ -205,6 +205,12 @@ class SegmentOut(BaseModel):
     artifacts: list[str]
     attempts: list[SegmentAttempt]
     draft_import: DraftImport | None = None
+    # The draft's import was refused and Oracle sent it back to the writer itself (its own
+    # NOT_YET, owner 2026-10-20): the revision runs and is not imported yet. The run page
+    # reads "Revising: sent back by Oracle", not "Draft rejected"; nothing waits for a
+    # person. Cleared once the revision is imported, or still refused (then its review
+    # waits in the Inbox), or the run ends.
+    sent_back: bool = False
     # Retry import (owner, 2026-10-20): the draft's import was refused and its file is
     # kept, and either its review is still open and I have the review's approver role or
     # above, or the run finished with no version imported and I am an owner.
@@ -349,11 +355,17 @@ class RunSummary(BaseModel):
     can_retry_import: bool = False
     # A draft one of its segments left that Oracle refused to import: its summary
     # (``segments[].draft_import.summary``, else the error). Set where ``progress`` is.
+    # None while Oracle has that draft back with the writer (``sent_back``).
     draft_rejected: str | None = None
     # Waiting on its checkpoint, the run delivers a decision recorded there that SwarmCloud
     # has not taken yet (owner, 2026-10-20: shown as "Delivering decision"; the status
     # stays awaiting_checkpoint): that checkpoint's kind. Set where ``progress`` is.
     delivering: CheckpointKind | None = None
+    # A refused draft Oracle sent back to the writer itself, being revised
+    # (``segments[].sent_back``): its summary, as ``draft_rejected``. The runs list and
+    # the Inbox read "Revising: sent back by Oracle"; nothing waits for a person. Set
+    # where ``progress`` is, and on the Inbox's ``revising`` rows.
+    sent_back: str | None = None
     # Set by GET /v1/runs and GET /v1/runs/{id}; None where a summary is embedded (inbox).
     progress: RunProgress | None = None
 
@@ -546,6 +558,10 @@ class InboxOut(BaseModel):
     # Owners and the run's creator: runs looking for an earlier submission given up on
     # (RunSummary.searching); shown only, nothing to decide, not in ``total``.
     searches: list[RunSummary] = []
+    # Those with a review's approver role or above: runs whose refused draft Oracle sent
+    # back to the writer itself, being revised (RunSummary.sent_back). Shown only, the
+    # review's state instead of a decision request: not in ``total``.
+    revising: list[RunSummary] = []
     # Owners only: runs whose output Oracle stopped trying to import
     # (RunSummary.import_failed), to Retry.
     imports: list[RunSummary] = []

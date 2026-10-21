@@ -94,6 +94,13 @@ export const SEGMENT_STATUS_LABEL: Record<SegmentOut["status"], string> = {
   cancelled: "Cancelled",
 };
 
+/**
+ * A draft Oracle refused and sent back to the writer itself, while the revision runs (owner,
+ * 2026-10-20): the run page, the runs list and the Inbox name this state, never "Draft rejected",
+ * and nobody is asked to decide until the revision is imported or still refused.
+ */
+export const SENT_BACK_STATE = "Revising: sent back by Oracle";
+
 export const FINAL_STATUSES: RunStatus[] = ["succeeded", "failed", "cancelled"];
 
 /** Asked before Retry on a lost submission: if the lost one landed, both run (and are paid for) until Oracle finds and cancels it. */

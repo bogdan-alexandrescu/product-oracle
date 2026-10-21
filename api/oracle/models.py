@@ -23,7 +23,7 @@ class Tenant(IdMixin, Base):
 class AuditEvent(TenantScoped, Base):
     __tablename__ = "audit_events"
 
-    # "user:<uuid>", "token:<uuid>" or "system".
+    # "user:<uuid>", "token:<uuid>", "oracle" (oracle.audit.ORACLE) or "system".
     actor: Mapped[str] = mapped_column(Text, nullable=False)
     # The API token the actor acted through (also a token acting for a user), C2.
     actor_token_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)

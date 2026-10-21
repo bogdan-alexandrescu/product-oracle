@@ -34,6 +34,7 @@ import {
   RunCost,
   RunStatusBadge,
   RunsWhere,
+  SENT_BACK_STATE,
   WAITING_STATUSES,
   shortId,
   type RunSummary,
@@ -88,6 +89,7 @@ export default function RunsPage() {
           <RunStatusBadge run={r} />
           {r.waiting_on && <span className="sr-only">: {CHECKPOINT_LABEL[r.waiting_on]}</span>}
           {r.draft_rejected && <DraftRejectedChip summary={r.draft_rejected} />}
+          {r.sent_back && <SentBackChip summary={r.sent_back} />}
           <RunCost run={r} />
         </span>
       ),
@@ -197,6 +199,11 @@ function RunInspector({ run }: { run: RunSummary }) {
           <p className="text-[15px] text-crit">{run.draft_rejected}</p>
         </InspectorSection>
       )}
+      {run.sent_back && (
+        <InspectorSection label={SENT_BACK_STATE}>
+          <p className="text-[15px] text-text">{run.sent_back}</p>
+        </InspectorSection>
+      )}
       {run.waiting_on && (
         <InspectorSection label="Waiting on">
           <InspectorRow>{CHECKPOINT_LABEL[run.waiting_on]}</InspectorRow>
@@ -219,6 +226,15 @@ function DraftRejectedChip({ summary }: { summary: string }) {
   return (
     <Chip kind="crit" title={summary} data-testid="run-draft-rejected">
       Draft rejected
+    </Chip>
+  );
+}
+
+/** A refused draft Oracle sent back to the writer itself, being revised: nothing to decide yet. */
+function SentBackChip({ summary }: { summary: string }) {
+  return (
+    <Chip kind="acc" title={`${SENT_BACK_STATE}. ${summary}`} data-testid="run-sent-back">
+      Revising
     </Chip>
   );
 }

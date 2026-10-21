@@ -20,6 +20,10 @@ class CredentialRejected(Exception):
     """The provider says the credential is invalid, expired or revoked."""
 
 
+class CredentialRefused(CredentialRejected):
+    """The credential works, but Oracle will not use it (a Slack bot token)."""
+
+
 class ProviderUnavailable(Exception):
     """The provider could not be reached or answered with an unexpected error."""
 
@@ -111,6 +115,11 @@ async def identify_github(client: httpx.AsyncClient, token: str) -> Identity:
 
 # --- Slack --------------------------------------------------------------------------
 
+SLACK_BOT_TOKEN = (
+    "This is a Slack bot token: it would read the bot's channels, not yours. Reconnect "
+    "Slack with your own sign-in or a user token (xoxp-)"
+)
+
 
 async def identify_slack(client: httpx.AsyncClient, token: str) -> Identity:
     resp = await _get(client, "POST", "https://slack.com/api/auth.test", headers=_bearer(token))
@@ -127,6 +136,9 @@ async def identify_slack(client: httpx.AsyncClient, token: str) -> Identity:
         ):
             raise CredentialRejected(f"Slack rejected the token ({error})")
         raise ProviderUnavailable(f"Slack answered {error}")
+    # Slack sets bot_id for a bot token, whatever its prefix (rotated: xoxe.xoxb-...).
+    if data.get("bot_id"):
+        raise CredentialRefused(SLACK_BOT_TOKEN)
     team = data.get("team") or data.get("team_id")
     user = data.get("user") or data.get("user_id")
     return Identity(
@@ -137,10 +149,21 @@ async def identify_slack(client: httpx.AsyncClient, token: str) -> Identity:
 
 
 def _slack_token_response(data: dict[str, Any]) -> dict[str, Any]:
-    # oauth.v2.access puts a user token under authed_user; DMs are never requested.
+    """The user token out of ``oauth.v2.access``: under ``authed_user`` for a code, at the
+    top level (``token_type: user``) for a refresh. The grant's top-level token is the
+    bot's when there is one; it is never used. DMs are never requested."""
     if not data.get("ok", True):
         raise CredentialRejected(f"Slack refused the code ({data.get('error')})")
-    return data.get("authed_user") or data
+    user = data.get("authed_user")
+    if isinstance(user, dict) and user.get("access_token"):
+        return user
+    if not user and data.get("token_type") == "user" and data.get("access_token"):
+        return data
+    raise CredentialRefused(
+        "Slack returned no user token for this sign-in, only the app's bot token, which "
+        "would read the bot's channels, not yours: sign in again and approve the user "
+        "permissions, or connect with a user token (xoxp-)"
+    )
 
 
 # --- Notion -------------------------------------------------------------------------

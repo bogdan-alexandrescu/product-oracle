@@ -227,9 +227,16 @@ async def _refresh(
 
 
 async def credential_for(
-    session: AsyncSession, conn: Connection, http: httpx.AsyncClient | None = None
+    session: AsyncSession,
+    conn: Connection,
+    http: httpx.AsyncClient | None = None,
+    *,
+    touch: bool = True,
 ) -> Credential:
-    """A usable credential for a connection row already checked by the caller. Commits."""
+    """A usable credential for a connection row already checked by the caller. Commits.
+
+    ``touch`` records the use in ``last_used_at`` (syncs, validation); browsing a
+    picker's list passes ``False`` so typing a search writes nothing."""
     if conn.status != "active":
         raise ConnectionUnavailable(
             f"The {conn.provider} connection is {conn.status}; reconnect it", conn.status
@@ -251,7 +258,8 @@ async def credential_for(
                 bundle = await _refresh(session, conn, bundle, own)
         else:
             bundle = await _refresh(session, conn, bundle, http)
-    conn.last_used_at = _now()
+    if touch:
+        conn.last_used_at = _now()
     await session.commit()
     extra = {k: v for k, v in bundle.items() if k not in ("access_token", "refresh_token")}
     return Credential(

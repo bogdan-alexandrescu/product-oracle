@@ -15,7 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
-from oracle.sources import base
+from oracle.connections.providers import get_provider
+from oracle.sources import base, store
 from oracle.sources.models import SOURCE_KINDS, Source, SourceItem
 from oracle.v2 import links
 
@@ -47,8 +48,27 @@ class ConflictError(Exception):
     pass
 
 
+class StaleError(Exception):
+    """The save loaded an older ``config_version`` than the source has now (answered 409)."""
+
+    code = "source_changed"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This source changed since you opened it. Reload to see the current picks."
+        )
+
+
 class InvalidError(Exception):
     """The request cannot be carried out as asked (answered 422)."""
+
+
+class RateLimitedError(Exception):
+    """The provider asked to slow down while checking a config (answered 429)."""
+
+    def __init__(self, message: str, retry_after: int):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 _loaded = False
@@ -106,16 +126,16 @@ async def _read_credential(db: AsyncSession, conn: Connection) -> dict[str, Any]
         raise InvalidError(f"{e}") from None
 
 
-async def mark_connection_rejected(db: AsyncSession, source: Source, error: str) -> None:
-    """A provider rejected the credential during a sync: mark the user's connection
-    expired with the error, so Settings > Connections offers Reconnect. Commits."""
-    if source.connection_id is None:
+async def mark_connection_rejected(
+    db: AsyncSession, connection_id: uuid.UUID | None, owner_id: uuid.UUID, error: str
+) -> None:
+    """A provider rejected the credential of ``connection_id`` (the one a sync used)
+    during a sync: mark the user's connection expired with the error, so Settings >
+    Connections offers Reconnect. Commits."""
+    if connection_id is None:
         return
     conn = await db.scalar(
-        select(Connection).where(
-            Connection.id == source.connection_id,
-            Connection.user_id == source.owner_user_id,
-        )
+        select(Connection).where(Connection.id == connection_id, Connection.user_id == owner_id)
     )
     if conn is not None:
         await connections.mark_failure(db, conn, "expired", error)
@@ -133,17 +153,17 @@ async def owned_connection(
 
 
 async def credential_for(
-    db: AsyncSession, source: Source
+    db: AsyncSession, source: Source, connection_id: uuid.UUID | None = None
 ) -> tuple[dict[str, Any] | None, Connection | None]:
-    """The decrypted credential of the source's connection (``None`` for uploads)."""
+    """The decrypted credential of the source's connection (``None`` for uploads), or of
+    ``connection_id`` when given (the connection a sync read when it started)."""
     if KIND_PROVIDER[source.kind] is None:
         return None, None
-    if source.connection_id is None:
+    connection_id = connection_id or source.connection_id
+    if connection_id is None:
         raise InvalidError("This source has no connection: pick one of your connections")
     try:
-        credential = await connections.get_credential(
-            db, source.connection_id, source.owner_user_id
-        )
+        credential = await connections.get_credential(db, connection_id, source.owner_user_id)
     except connections.ConnectionUnavailable as e:
         if e.status is None:
             raise NotFoundError("Connection not found") from None
@@ -183,6 +203,13 @@ async def _validate(
     credential = await _read_credential(db, conn) if conn is not None else None
     try:
         await connector.validate(config, credential)
+    except base.ConnectorRateLimited as e:
+        wait = max(1, round(e.retry_after)) if e.retry_after else 60
+        provider = get_provider(KIND_PROVIDER[kind] or "")
+        name = provider.name if provider else kind
+        raise RateLimitedError(
+            f"{name} is busy checking the selection: try again in {wait} seconds", wait
+        ) from None
     except base.ConnectorAuthError as e:
         raise InvalidError(f"The connection was rejected: {redact(str(e), credential)}") from None
     except base.ConnectorError as e:
@@ -259,6 +286,7 @@ async def create_source(
 ) -> Source:
     conn = await _check_connection(db, user_id, kind, connection_id)
     await _validate(db, kind, config, conn)
+    config = normalize_config(kind, config)
     source = Source(
         owner_user_id=user_id,
         connection_id=connection_id,
@@ -273,34 +301,141 @@ async def create_source(
 
 
 async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any]) -> Source:
-    reconnect = "connection_id" in changes and changes["connection_id"] != source.connection_id
-    reconfigure = changes.get("config") is not None and changes["config"] != source.config
+    changes = dict(changes)
+    base_version = changes.pop("base_version", None)
+    if changes.get("config") is not None:
+        changes = {**changes, "config": normalize_config(source.kind, changes["config"])}
+    asks = "connection_id" in changes or changes.get("config") is not None
+    if asks or base_version is not None:
+        # The row was loaded when the request started (sessions do not expire on
+        # commit): a sync, or another save, may have changed it since. Read it again,
+        # locked until the commit below, and compare what is asked with THAT copy (a
+        # request asking for the config it loaded, after another save narrowed it, is a
+        # widening, and is validated as one). A running sync takes the same row lock
+        # before it writes items (sync._hold), so this sweep and its checkpoints never
+        # wait on each other's rows.
+        await db.refresh(source, with_for_update=True)
+        _check_base(source, base_version)
+        reconnect, reconfigure, narrowing = _what_changed(source, changes)
+        if reconnect or (reconfigure and not narrowing):
+            connection_id = changes["connection_id"] if reconnect else source.connection_id
+            config = changes["config"] if reconfigure else source.config
+            # Validating reads the credential, which commits (and so frees the lock):
+            # nothing is changed before it, and the row is read again, locked, after it.
+            # What was validated is the target (connection and config), whatever the row
+            # looked like meanwhile.
+            await db.commit()
+            conn = await _check_connection(db, source.owner_user_id, source.kind, connection_id)
+            await _validate(db, source.kind, config, conn)
+            await db.refresh(source, with_for_update=True)
+            _check_base(source, base_version)  # another save may have landed meanwhile
+            reconnect, reconfigure, narrowing = _what_changed(source, changes)
+        old_config = dict(source.config or {})
+        connection_id = changes.get("connection_id", source.connection_id)
+    else:
+        reconnect = reconfigure = False
     if reconnect or reconfigure:
-        connection_id = changes["connection_id"] if reconnect else source.connection_id
         config = changes["config"] if reconfigure else source.config
-        conn = await _check_connection(db, source.owner_user_id, source.kind, connection_id)
-        # Validating reads the credential, which commits: change nothing before it.
-        await _validate(db, source.kind, config, conn)
+        if reconnect:
+            # Another connection may sign in to another account: its position in the
+            # old one means nothing. Start over (unchanged content writes no new version).
+            source.cursor = None
         source.connection_id = connection_id
         source.config = config
-        # A new allowlist or account: sync from the start. Unchanged content writes no
-        # new versions, so a full pass is cheap in storage. A connector that deletes by
-        # its cursor (items it knew minus items still live) must keep its known ids across
-        # a config change, or narrowing the source could never delete anything (S5).
-        if source.kind == "notion":
-            # Keep the page ids, drop the render cache: every live page is re-rendered
-            # and pages now outside the roots are deleted.
-            pages = (source.cursor or {}).get("pages") or {}
-            source.cursor = {"pages": {page_id: {} for page_id in pages}}
-        else:
-            source.cursor = None
-        if source.status == "error":
+        if reconfigure:
+            # Narrowing takes effect on save (S5, owner 2026-10-20): what the stored items
+            # show to fall outside the new selection is deleted (soft) in this request,
+            # without calling the provider. What only the provider can tell (a Fireflies
+            # series, a Notion sub-page) goes on the next sync's pass.
+            await _sweep(db, source, old_config, config)
+        # A config change keeps the cursor: the next sync sees the selection changed (its
+        # fingerprint, oracle.sources.sync), sweeps again (nothing left by then) and asks
+        # the connector how much of the cursor still holds (rescope_cursor), so it only
+        # re-reads what remains. A sync running now keeps none of what it reads from here
+        # on (its writes are conditional).
+        if source.status in ("error", "needs_attention"):
             source.status = "active"
             source.last_error = None
-    if "name" in changes and changes["name"] is not None:
-        source.name = changes["name"].strip()
+    name = changes.get("name")
+    renamed = name is not None and name.strip() != source.name
+    if renamed:
+        source.name = name.strip()
+    if reconnect or reconfigure or renamed:
+        # In SQL: a rename-only save holds no lock, so the row may have moved on since it
+        # was read at request start; add one to what is stored now.
+        source.config_version = Source.config_version + 1
     await _commit_unique(db)
+    await db.refresh(source)  # config_version was an SQL expression
     return source
+
+
+def _check_base(source: Source, base_version: int | None) -> None:
+    """Refuse (nothing is changed yet) a save that loaded another version than the
+    locked row has. Omitted (the API requires it when config or connection change; a
+    rename or pause may leave it out): not checked."""
+    if base_version is not None and base_version != source.config_version:
+        raise StaleError
+
+
+def _what_changed(source: Source, changes: dict[str, Any]) -> tuple[bool, bool, bool]:
+    """(connection changed, config changed, the config change only narrows), each against
+    ``source`` as it is now. A pure narrowing (no new pick, no wider date, same connection;
+    owner S5 2026-10-20: "no provider call") needs neither the provider nor an active
+    connection."""
+    reconnect = "connection_id" in changes and changes["connection_id"] != source.connection_id
+    reconfigure = changes.get("config") is not None and changes["config"] != source.config
+    narrowing = (
+        reconfigure
+        and not reconnect
+        and _only_narrows(source.kind, source.config, changes["config"])
+    )
+    return reconnect, reconfigure, narrowing
+
+
+def _only_narrows(kind: str, old: dict[str, Any] | None, new: dict[str, Any]) -> bool:
+    connector = connector_for(kind)
+    scope = getattr(connector, "scope", None)
+    if scope is None:
+        return False
+    try:
+        narrows = getattr(connector, "narrows", None)
+        if narrows is not None:
+            return bool(narrows(dict(old or {}), new))
+        return base.scope_narrows(scope(dict(old or {})), scope(new))
+    except base.ConnectorConfigError:
+        return False  # saved before a rule it now breaks, or refused now: validate
+
+
+async def _sweep(
+    db: AsyncSession, source: Source, old_config: dict[str, Any], config: dict[str, Any]
+) -> int:
+    """Soft-delete the source's stored items outside ``config`` (the connector's
+    ``scope``), in the caller's transaction; how many. A selection that keeps the same
+    scope (new labels, say) sweeps nothing: an item of unknown provenance is only swept
+    when the picks change."""
+    scope = getattr(connector_for(source.kind), "scope", None)
+    if scope is None:
+        return 0
+    new_scope = scope(config)
+    try:
+        old_scope = scope(old_config)
+    except base.ConnectorConfigError:
+        old_scope = None  # saved before a rule it now breaks: sweep by the new one
+    if new_scope == old_scope:
+        return 0
+    return await store.delete_out_of_scope(db, source, new_scope)
+
+
+def normalize_config(kind: str, config: dict[str, Any]) -> dict[str, Any]:
+    """``config`` in the connector's canonical form (oracle.sources.base), as it is saved
+    and fingerprinted; unchanged when it does not parse (validating says why)."""
+    normalize = getattr(connector_for(kind), "normalize_config", None)
+    if normalize is None:
+        return config
+    try:
+        return normalize(config)
+    except base.ConnectorConfigError:
+        return config
 
 
 async def set_paused(db: AsyncSession, source: Source, paused: bool) -> Source:

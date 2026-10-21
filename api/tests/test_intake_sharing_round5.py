@@ -13,6 +13,7 @@ Synthetic placeholders only.
 """
 
 import json
+import re
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -323,7 +324,9 @@ async def test_counts_proposes_only_the_categorys_question(client, fake):
     [proposal] = await _baseline_proposals(ctx)
     fields = proposal.payload["fields"]
     dumped = json.dumps(proposal.payload)
-    assert ANSWER not in dumped and "1000" not in dumped and CODENAME not in dumped
+    # \b: random ids in the payload (e.g. "blockers-a5110000") may contain the digits.
+    assert ANSWER not in dumped and not re.search(r"\b1000\b", dumped)
+    assert CODENAME not in dumped
     assert fields["title"] == prompt and fields["body"] == prompt
     assert set(fields["attrs"]) <= {"gap_id", "category"}
     assert "severity" not in dumped and "critical" not in dumped

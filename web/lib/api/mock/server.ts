@@ -20,6 +20,8 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { inboxStates, isStaged } from "./next-draft";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { routeFirefliesBrowse } from "./fireflies";
+import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake } from "./intake";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
@@ -1394,8 +1396,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
+  const fireflies = routeFirefliesBrowse(p, q);
+  if (fireflies) return fireflies;
   // Company settings are the owner's, as in the API (tenant_settings_api.py).
   if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
+  const browse = sourceBrowseRoute(req, p, q);
+  if (browse) return browse;
   const connections = await connectionsRoute(req, p);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.

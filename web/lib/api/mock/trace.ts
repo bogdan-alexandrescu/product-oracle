@@ -215,10 +215,10 @@ function linkViews(ctx: TraceContext, version: TraceVersion, key: string): Schem
     .map((l) => {
       const e = ctx.entities.find((x) => x.id === l.entity_id);
       const target: Schemas["SectionLinkTarget"] = l.source_item_id
-        ? { type: "source_item", id: l.source_item_id, source_kind: "upload", restricted: true }
+        ? { type: "source_item", id: l.source_item_id, source_kind: "upload", restricted: true, source_removed: false }
         : e
-          ? { type: "entity", id: e.id, title: e.title, entity_type: e.type, status: e.status, locked: e.locked, confidence: e.confidence ?? null, ref: `${e.type}:${e.key}`, restricted: false }
-          : { type: "evidence", id: l.evidence_id ?? l.id, title: "Buyer interviews (synthetic)", ref: "buyer-interviews.md", confidence: 0.8, restricted: false };
+          ? { type: "entity", id: e.id, title: e.title, entity_type: e.type, status: e.status, locked: e.locked, confidence: e.confidence ?? null, ref: `${e.type}:${e.key}`, restricted: false, source_removed: false }
+          : { type: "evidence", id: l.evidence_id ?? l.id, title: "Buyer interviews (synthetic)", ref: "buyer-interviews.md", confidence: 0.8, restricted: false, source_removed: false };
       return {
         id: l.id, kind: l.kind, precision: l.precision, claim: l.claim ?? null, module_key: l.module_key ?? null,
         composition_revision: l.composition_revision ?? null, current: !l.section_hash || l.section_hash === hash, target,

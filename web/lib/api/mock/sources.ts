@@ -4,6 +4,7 @@
  * scoring, so the UI's badge and breakdown can be exercised.
  */
 import type { Schemas } from "@/lib/api/client";
+import { FIREFLIES_CONNECTION_ID } from "./fireflies";
 import { mockUuid, seeded } from "./ids";
 import { MOCK_NOTION_CONNECTION_ID } from "./notion";
 
@@ -17,13 +18,16 @@ interface SourcesDb {
   snapshots: Schemas["SnapshotOut"][];
 }
 
-export const SOURCES_STORAGE_KEY = "po-mock-sources-v1";
+export const SOURCES_STORAGE_KEY = "po-mock-sources-v2";
 
 const CONNECTIONS: Record<string, Schemas["ConnectionChoice"][]> = {
-  slack: [{ id: "c0000000-0000-4000-8000-000000000001", account_label: "Example Co chat", status: "active" }],
+  slack: [
+    { id: "c0000000-0000-4000-8000-000000000001", account_label: "Example Co chat", status: "active" },
+    { id: "c0000000-0000-4000-8000-000000000003", account_label: "Partner workspace", status: "active" },
+  ],
   github: [{ id: "c0000000-0000-4000-8000-000000000002", account_label: "example-org", status: "active" }],
   notion: [{ id: MOCK_NOTION_CONNECTION_ID, account_label: "Example Notion", status: "active" }],
-  fireflies: [],
+  fireflies: [{ id: FIREFLIES_CONNECTION_ID, account_label: "pat@example.com", status: "active" }],
   google: [],
 };
 const PROVIDER: Record<Source["kind"], string | null> = {
@@ -39,11 +43,16 @@ const AVAILABLE: Record<Source["kind"], boolean> = {
   github: true,
   slack: true,
   notion: true,
-  fireflies: false,
+  fireflies: true,
   google_docs: false,
 };
 // Source factor per kind, as in oracle.confidence DEFAULTS.
 const SOURCE_FACTOR: Record<string, number> = { github: 0.85, upload: 0.7, notion: 0.7, slack: 0.5 };
+
+// The Slack connector's limits (oracle.sources.connectors.slack).
+const MAX_CHANNELS = 100;
+const FIRST_DAY = "2000-01-01";
+const LAST_DAY = "2100-12-31";
 
 const now = () => new Date().toISOString();
 const uuid = mockUuid;
@@ -72,6 +81,7 @@ function seed(): SourcesDb {
     updated_at: "2026-10-17T08:00:00Z",
     item_count: 2,
     connector_available: true,
+    config_version: 1,
   };
   const repo: Source = {
     id: "50000000-0000-4000-8000-000000000002",
@@ -86,6 +96,40 @@ function seed(): SourcesDb {
     updated_at: "2026-10-16T08:00:00Z",
     item_count: 1,
     connector_available: true,
+    config_version: 1,
+  };
+  // Saved before the 100-channel rule (as the API's 0016 migration leaves such a source):
+  // syncs answer needs_attention until it is edited back within the rules.
+  const legacy: Source = {
+    id: "50000000-0000-4000-8000-000000000003",
+    kind: "slack",
+    name: "Legacy all-hands chat",
+    connection_id: CONNECTIONS.slack[0].id,
+    config: { channels: Array.from({ length: 120 }, (_, i) => `C9${String(i + 1).padStart(3, "0")}LEGACY`) },
+    status: "needs_attention",
+    last_error: `Allowlist at most ${MAX_CHANNELS} channels: edit this source to sync it again`,
+    last_synced_at: "2026-10-01T08:00:00Z",
+    created_at: "2026-03-02T09:00:00Z",
+    updated_at: "2026-10-18T08:00:00Z",
+    item_count: 0,
+    connector_available: true,
+    config_version: 1,
+  };
+  // Saved before the meeting picker: a title rule.
+  const calls: Source = {
+    id: "50000000-0000-4000-8000-000000000004",
+    kind: "fireflies",
+    name: "Customer calls",
+    connection_id: FIREFLIES_CONNECTION_ID,
+    config: { from_date: "2026-09-01", title_contains: ["Customer interview"] },
+    status: "active",
+    last_error: null,
+    last_synced_at: "2026-10-17T08:00:00Z",
+    created_at: "2026-10-10T09:10:00Z",
+    updated_at: "2026-10-17T08:00:00Z",
+    item_count: 0,
+    connector_available: true,
+    config_version: 1,
   };
   const item = (source: Source, external_id: string, kind: string, title: string, content: string, freshness: number): Item => ({
     id: uuid(),
@@ -107,7 +151,7 @@ function seed(): SourcesDb {
     content,
   });
   return {
-    sources: [chat, repo],
+    sources: [chat, repo, legacy, calls],
     items: [
       item(repo, "readme", "readme", "README", "The onboarding checklist guides new accounts through setup in five steps.", 0.95),
       item(chat, "m1", "message", "Customer question", "Customers keep asking whether the onboarding checklist can be skipped.", 0.4),
@@ -143,6 +187,22 @@ function itemOut(i: Item): Schemas["ItemOut"] {
   return out;
 }
 
+/** Narrowing takes effect on save (S5, owner 2026-10-20), as the API's
+ * update_source does: stored items outside the new channels, repos or date range are
+ * soft-deleted at once. */
+function sweep(db: SourcesDb, s: Source) {
+  const config = s.config as Record<string, unknown>;
+  const groups = s.kind === "slack" ? config.channels : s.kind === "github" ? config.repos : null;
+  const allowed = Array.isArray(groups) ? new Set(groups.map((g) => String(g).toLowerCase())) : null;
+  const from = s.kind === "slack" && typeof config.since === "string" ? `${config.since}T00:00:00Z` : null;
+  for (const item of db.items) {
+    if (item.source_id !== s.id || item.deleted_at) continue;
+    const group = item.external_id.includes(":") ? item.external_id.split(":")[0].toLowerCase() : null;
+    const outside = (allowed && group !== null && !allowed.has(group)) || (from && item.occurred_at && item.occurred_at < from);
+    if (outside) item.deleted_at = now();
+  }
+}
+
 function counted(db: SourcesDb, s: Source): Source {
   return { ...s, item_count: db.items.filter((i) => i.source_id === s.id && !i.deleted_at).length };
 }
@@ -167,7 +227,33 @@ function search(db: SourcesDb, q: URLSearchParams): Schemas["SearchResults"] {
   return { query, as_of: q.get("as_of"), hits };
 }
 
+/**
+ * The API's Slack config rules (oracle.sources.connectors.slack check_config), as the
+ * connector words them: at most 100 channels, dates from 2000-01-01 to 2100-12-31, until
+ * not before since; Notion needs a root. Other kinds pass.
+ */
+function badConfig(kind: Source["kind"], config: Record<string, unknown>): string | null {
+  // As the real connector reads a Notion allowlist: "roots" only.
+  if (kind === "notion") {
+    return Array.isArray(config.roots) && config.roots.length ? null : "allowlist at least one root page or database";
+  }
+  if (kind !== "slack") return null;
+  const channels = config.channels;
+  if (Array.isArray(channels) && channels.length > MAX_CHANNELS) return `allowlist at most ${MAX_CHANNELS} channels`;
+  for (const key of ["since", "until"] as const) {
+    const v = config[key];
+    if (v == null) continue;
+    if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v) || v < FIRST_DAY || v > LAST_DAY) {
+      return `${key} must be a date (YYYY-MM-DD) from ${FIRST_DAY} to ${LAST_DAY}`;
+    }
+  }
+  const { since, until } = config;
+  if (typeof since === "string" && typeof until === "string" && until < since) return "until must be on or after since";
+  return null;
+}
+
 /** Handles /v1/sources*, /v1/source-items*, /v1/snapshots* and /v1/search. */
+
 export async function routeSources(req: Request, p: string[], q: URLSearchParams): Promise<Response> {
   const db = load();
   const res = await route(db, req, p, q);
@@ -198,10 +284,8 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     if (m === "GET") return json(200, db.sources.map((s) => counted(db, s)));
     const body = (await req.json()) as Schemas["SourceCreate"];
     if (!AVAILABLE[body.kind]) return json(422, { detail: "connector not available yet" });
-    // As the real connector reads a Notion allowlist: "roots" only.
-    if (body.kind === "notion" && !(Array.isArray(body.config?.roots) && body.config.roots.length)) {
-      return json(422, { detail: "allowlist at least one root page or database" });
-    }
+    const invalid = badConfig(body.kind, body.config ?? {});
+    if (invalid) return json(422, { detail: invalid });
     if (db.sources.some((s) => s.name === body.name.trim())) {
       return json(409, { detail: "You already have a source with this name" });
     }
@@ -218,6 +302,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       updated_at: now(),
       item_count: 0,
       connector_available: true,
+      config_version: 1,
     };
     db.sources.push(s);
     return json(201, s);
@@ -245,8 +330,37 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     }
     if (m === "PATCH") {
       const patch = (await req.json()) as Schemas["SourcePatch"];
+      // A form that loaded an older version is refused, nothing changed (as the API does).
+      if (patch.base_version != null && patch.base_version !== s.config_version) {
+        return json(409, {
+          code: "source_changed",
+          message: "This source changed since you opened it. Reload to see the current picks.",
+        });
+      }
+      // A config or connection change says which version it read (owner 2026-10-20).
+      if ((patch.config != null || "connection_id" in patch) && patch.base_version == null) {
+        return json(422, {
+          code: "base_version_required",
+          message: "Say which version of the source you read (base_version); get it from the source.",
+        });
+      }
+      const invalid = patch.config ? badConfig(s.kind, patch.config) : null;
+      if (invalid) return json(422, { detail: invalid });
+      const renamed = patch.name != null && patch.name.trim() !== s.name;
+      const reconfigured =
+        patch.config != null && JSON.stringify(patch.config) !== JSON.stringify(s.config);
+      // Only a save that changes something bumps the version (as the API does).
+      if (renamed || reconfigured) s.config_version += 1;
       if (patch.name) s.name = patch.name;
-      if (patch.config) s.config = patch.config;
+      if (patch.config) {
+        s.config = patch.config;
+        sweep(db, s);
+        // A changed selection takes a source in error or needing attention back to active.
+        if (s.status === "error" || s.status === "needs_attention") {
+          s.status = "active";
+          s.last_error = null;
+        }
+      }
       s.updated_at = now();
     }
     return json(200, counted(db, s));
@@ -259,6 +373,12 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
   if (sub === "sync") {
     if (s.kind === "upload") return json(409, { detail: "Upload sources have nothing to sync: upload files instead" });
     if (s.status === "paused") return json(409, { detail: "This source is paused: resume it first" });
+    const broken = badConfig(s.kind, s.config);
+    if (broken) {
+      s.status = "needs_attention";
+      s.last_error = `${broken[0].toUpperCase()}${broken.slice(1)}: edit this source to sync it again`;
+      return json(200, { source_id: s.id, outcome: "needs_attention", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
+    }
     if (s.status === "error") {
       return json(200, { source_id: s.id, outcome: "error", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
     }

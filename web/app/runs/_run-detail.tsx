@@ -39,6 +39,7 @@ import {
   RunsWhere,
   SEGMENT_STATUS_KIND,
   SEGMENT_STATUS_LABEL,
+  SENT_BACK_STATE,
   SpendBar,
   deliveryText,
   shortId,
@@ -456,7 +457,7 @@ const CP_KIND: Record<CheckpointOut["status"], ChipKind> = {
   skipped: "na",
 };
 /** A checkpoint name in full: it wraps to a second line rather than truncating. */
-const WRAP_CHIP = "h-auto min-h-[26px] py-1 leading-4 whitespace-normal";
+const WRAP_CHIP = "h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left max-[600px]:max-w-[9.5rem]";
 const CP_LABEL = { pending: "Waiting", approved: "Approved", changes_requested: "Changes requested", skipped: "Skipped" } as const;
 
 function SegmentItem({
@@ -479,7 +480,7 @@ function SegmentItem({
   const compact = checkpoints.filter((c) => !(c.status === "pending" && c.can_decide));
   const waiting = checkpoints.some((c) => c.status === "pending");
   // Decided, not delivered to the run yet: said under the segment, with why it waits.
-  const delivering = checkpoints.filter((c) => c.delivery);
+  const delivering = checkpoints.filter((c) => c.delivery && !s.sent_back);
   const details = s.error || s.items_check || s.draft_import || s.artifacts.length > 0 || deciding.length > 0 || delivering.length > 0;
   const rejected = !!s.draft_import?.error;
   // Each open decision's note, here so Send back to writer can fill it in.
@@ -525,7 +526,13 @@ function SegmentItem({
           ))}
         </span>
         <span>
-          {rejected ? (
+          {s.sent_back ? (
+            // Oracle refused the draft and sent it back to the writer itself: revising, with
+            // nothing for a person to decide yet. Not "Draft rejected".
+            <Chip kind="acc" className={WRAP_CHIP}>
+              <span data-testid="segment-state">{SENT_BACK_STATE}</span>
+            </Chip>
+          ) : rejected ? (
             // The segment ran, but Oracle refused the draft it left: not "Succeeded".
             <Chip kind="crit">
               <span data-testid="segment-state">Draft rejected</span>
@@ -540,12 +547,12 @@ function SegmentItem({
         <span className="flex min-w-0 flex-wrap gap-1.5 max-[600px]:col-span-full max-[600px]:col-start-2">
           {checkpoints.length === 0 &&
             (s.checkpoint_on ? (
-              <Chip kind="line" title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className={WRAP_CHIP}>
+              <Chip kind="line" title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className={WRAP_CHIP} data-testid="segment-checkpoint">
                 <span className="sr-only">Stops for </span>
                 {CHECKPOINT_LABEL[kind]}
               </Chip>
             ) : (
-              <Chip kind="na" title={`${CHECKPOINT_LABEL[kind]}: off`} className={WRAP_CHIP}>
+              <Chip kind="na" title={`${CHECKPOINT_LABEL[kind]}: off`} className={WRAP_CHIP} data-testid="segment-checkpoint">
                 {CHECKPOINT_LABEL[kind]}: off
               </Chip>
             ))}
@@ -599,6 +606,7 @@ function SegmentItem({
             <DraftImportLine
               imp={s.draft_import}
               busy={busy}
+              sentBack={s.sent_back}
               onRetry={s.can_retry_draft_import ? () => onRetryImport(s.seq) : undefined}
               onSendBack={sendBack}
             />
@@ -646,17 +654,20 @@ function DeliveryLine({ cp }: { cp: CheckpointOut }) {
 function DraftImportLine({
   imp,
   busy,
+  sentBack = false,
   onRetry,
   onSendBack,
 }: {
   imp: NonNullable<SegmentOut["draft_import"]>;
   busy: boolean;
+  /** The import was refused and Oracle sent the draft back to the writer itself: revising. */
+  sentBack?: boolean;
   /** The import was refused and its review is open: Retry import (owners and approvers). */
   onRetry?: () => void;
   /** The import was refused and this member decides its review: Send back to writer. */
   onSendBack?: () => void;
 }) {
-  if (imp.error) return <DraftRejected imp={imp} busy={busy} onRetry={onRetry} onSendBack={onSendBack} />;
+  if (imp.error) return <DraftRejected imp={imp} busy={busy} sentBack={sentBack} onRetry={onRetry} onSendBack={onSendBack} />;
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-text">
       <span>
@@ -683,15 +694,21 @@ function DraftImportLine({
   );
 }
 
-/** A draft Oracle refused: one line grouped by cause (the API's summary), every problem behind a disclosure. */
+/**
+ * A draft Oracle refused: one line grouped by cause (the API's summary), every problem behind a
+ * disclosure. `sentBack`: Oracle sent it back to the writer itself and the revision runs, so it
+ * reads as what the writer is fixing, not as a refusal waiting on a person.
+ */
 function DraftRejected({
   imp,
   busy,
+  sentBack = false,
   onRetry,
   onSendBack,
 }: {
   imp: NonNullable<SegmentOut["draft_import"]>;
   busy: boolean;
+  sentBack?: boolean;
   onRetry?: () => void;
   onSendBack?: () => void;
 }) {
@@ -700,11 +717,18 @@ function DraftRejected({
   const problems = imp.problems ?? [];
   const n = problems.length;
   const listId = useId();
+  const testId = sentBack ? "draft-sent-back" : "draft-rejected";
   return (
-    <div className="flex flex-col items-start gap-2" data-testid="draft-rejected">
-      <p className="text-crit" data-testid="draft-rejected-summary">
+    <div className="flex flex-col items-start gap-2" data-testid={testId}>
+      <p className={sentBack ? "text-text" : "text-crit"} data-testid={`${testId}-summary`}>
         {imp.summary ?? `Draft not imported: ${imp.error}`}
       </p>
+      {sentBack && (
+        <p className="text-text2">
+          Oracle sent the draft back to the writer to fix this. Nothing needs you yet: the revision is imported when the writer is done, and only a draft
+          still refused comes to the Inbox.
+        </p>
+      )}
       {n > 0 && (
         <>
           <button
