@@ -103,13 +103,13 @@ export function ItemsTable({
   const columns: Column<ItemRow>[] = [
     { key: "position", header: "#", width: "44px", align: "right", phone: "hide", className: "tnum text-text2", cell: (r) => r.position + 1 },
     { key: "title", header: "Item", phone: "title", cell: (r) => <span className="font-medium">{r.title}</span> },
-    { key: "horizon", header: "Horizon", width: "92px", phone: "action", cell: (r) => <HorizonChip horizon={r.horizon} /> },
-    { key: "milestone", header: "Milestone", width: "236px", phone: "meta", cell: (r) => <MilestoneCell row={r} /> },
-    { key: "confidence", header: "Conf.", width: "84px", phone: "meta", phoneLabel: "Conf.", cell: (r) => <Confidence value={r.confidence} /> },
+    { key: "horizon", header: "Horizon", width: "84px", phone: "action", cell: (r) => <HorizonChip horizon={r.horizon} /> },
+    { key: "milestone", header: "Milestone", width: "172px", phone: "meta", cell: (r) => <MilestoneCell row={r} /> },
+    { key: "confidence", header: "Conf.", width: "76px", phone: "meta", phoneLabel: "Conf.", cell: (r) => <Confidence value={r.confidence} /> },
     {
       key: "depends_on",
       header: "Depends on",
-      width: "96px",
+      width: "92px",
       phone: "meta",
       phoneLabel: "Depends on",
       cell: (r) =>
@@ -124,7 +124,7 @@ export function ItemsTable({
     {
       key: "prd",
       header: "PRD",
-      width: "168px",
+      width: "124px",
       phone: "hide",
       cell: (r) =>
         r.prd ? (
@@ -136,7 +136,7 @@ export function ItemsTable({
         ),
     },
     ...extraColumns,
-    { key: "state", header: "State", width: "128px", phone: "meta", cell: (r) => <StateChip freshness={r.freshness} /> },
+    { key: "state", header: "State", width: "120px", phone: "meta", cell: (r) => <StateChip freshness={r.freshness} /> },
   ];
 
   return (
