@@ -180,12 +180,61 @@ class ItemsProblem(BaseModel):
     item: str | None = None
 
 
+class FixAction(BaseModel):
+    """What a fix does to one item. ``edit`` sets ``field`` (``horizon``,
+    ``milestone_date``, ``milestone_name``, ``depends_on``, ``outcome``, ``title``,
+    ``prd_section``, ``order``, ``clear:<field>``) to ``value``."""
+
+    kind: Literal["accept", "edit", "drop", "restore", "waive"]
+    item: str
+    field: str | None = None
+    value: Any = None
+
+
+class ReasonFix(BaseModel):
+    label: str
+    action: FixAction
+
+
+class ItemReason(BaseModel):
+    """Why a roadmap item needs a person (oracle.runs.reasons): ``blocking`` (a rule
+    problem) or ``confirm`` (advisory), with a chip label, one sentence and its fixes."""
+
+    item: str
+    # The item's title (a dropped item's, from the comparison base).
+    item_title: str | None = None
+    code: str
+    severity: Literal["blocking", "confirm"]
+    label: str
+    text: str
+    data: dict[str, Any] = {}
+    fixes: list[ReasonFix] = []
+
+
+class ReasonBase(BaseModel):
+    """What moved, new and dropped compare with: the previous attempt or roadmap version."""
+
+    kind: Literal["attempt", "roadmap_version"]
+    label: str
+    version: int | None = None
+    attempt: int | None = None
+
+
 class ItemsCheck(BaseModel):
-    """The check of roadmap_items.yaml (oracle.runs.roadmap)."""
+    """The check of roadmap_items.yaml (oracle.runs.roadmap) and every item's reasons
+    (oracle.runs.reasons). Checks stored before reasons existed read with none."""
 
     items: int
     by_horizon: dict[str, int]
     problems: list[ItemsProblem]
+    reasons: list[ItemReason] = []
+    blocking: int = 0
+    to_confirm: int = 0
+    # Problems of the whole file (no item): it needs a send-back.
+    file_problems: int = 0
+    base: ReasonBase | None = None
+    # The advisory reasons could not be loaded: only the blocking ones are listed.
+    reasons_partial: bool = False
 
 
 class SegmentOut(BaseModel):

@@ -120,7 +120,11 @@ test("build roadmap: pick template and theme, see the estimate, start the run an
   await page.getByRole("button", { name: "Check agents now" }).click();
   const items = page.getByTestId("segment-roadmap_items");
   await expect(items.getByTestId("items-check")).toContainText("1 roadmap item: 1 now, 0 next, 0 later");
-  await expect(items.getByTestId("items-check")).toContainText("PRD section 'features' is not in the PRD version");
+  // D2: the item's problem reads as its blocking reason (chip, sentence naming the PRD version, fix).
+  await expect(items.getByTestId("items-check")).toContainText("1 roadmap item: 1 now, 0 next, 0 later · 1 blocking");
+  await expect(items.getByTestId("reason-chip")).toHaveText(["No PRD section"]);
+  await expect(items.getByTestId("reason-text")).toHaveText(/^Section features is not in .+ v\d+\.$/);
+  await expect(items.getByTestId("reason-fixes")).toHaveText("Fix: Link section");
   const cp = items.getByTestId("checkpoint-roadmap_items");
   await expect(cp).toContainText("Roadmap items");
   await cp.getByRole("button", { name: "Approve and continue" }).click();

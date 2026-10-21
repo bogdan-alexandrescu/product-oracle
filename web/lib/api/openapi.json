@@ -34838,6 +34838,46 @@
         ],
         "title": "FirefliesSeriesOut"
       },
+      "FixAction": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "accept",
+              "edit",
+              "drop",
+              "restore",
+              "waive"
+            ],
+            "title": "Kind"
+          },
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "item"
+        ],
+        "title": "FixAction",
+        "description": "What a fix does to one item. ``edit`` sets ``field`` (``horizon``,\n``milestone_date``, ``milestone_name``, ``depends_on``, ``outcome``, ``title``,\n``prd_section``, ``order``, ``clear:<field>``) to ``value``."
+      },
       "FlowCatalog": {
         "properties": {
           "flows": {
@@ -38460,6 +38500,69 @@
         ],
         "title": "ItemProblem"
       },
+      "ItemReason": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "item_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Title"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "confirm"
+            ],
+            "title": "Severity"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "default": {}
+          },
+          "fixes": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonFix"
+            },
+            "type": "array",
+            "title": "Fixes",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "code",
+          "severity",
+          "label",
+          "text"
+        ],
+        "title": "ItemReason",
+        "description": "Why a roadmap item needs a person (oracle.runs.reasons): ``blocking`` (a rule\nproblem) or ``confirm`` (advisory), with a chip label, one sentence and its fixes."
+      },
       "ItemStalenessAction": {
         "properties": {
           "action": {
@@ -38554,6 +38657,44 @@
             },
             "type": "array",
             "title": "Problems"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ItemReason"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          },
+          "blocking": {
+            "type": "integer",
+            "title": "Blocking",
+            "default": 0
+          },
+          "to_confirm": {
+            "type": "integer",
+            "title": "To Confirm",
+            "default": 0
+          },
+          "file_problems": {
+            "type": "integer",
+            "title": "File Problems",
+            "default": 0
+          },
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReasonBase"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reasons_partial": {
+            "type": "boolean",
+            "title": "Reasons Partial",
+            "default": false
           }
         },
         "type": "object",
@@ -38563,7 +38704,7 @@
           "problems"
         ],
         "title": "ItemsCheck",
-        "description": "The check of roadmap_items.yaml (oracle.runs.roadmap)."
+        "description": "The check of roadmap_items.yaml (oracle.runs.roadmap) and every item's reasons\n(oracle.runs.reasons). Checks stored before reasons existed read with none."
       },
       "ItemsImport": {
         "properties": {
@@ -44836,6 +44977,68 @@
           "rationale"
         ],
         "title": "ReadinessResultOut"
+      },
+      "ReasonBase": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "attempt",
+              "roadmap_version"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "ReasonBase",
+        "description": "What moved, new and dropped compare with: the previous attempt or roadmap version."
+      },
+      "ReasonFix": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "action": {
+            "$ref": "#/components/schemas/FixAction"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "action"
+        ],
+        "title": "ReasonFix"
       },
       "RecommendIn": {
         "properties": {

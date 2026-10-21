@@ -10656,6 +10656,25 @@ export interface components {
             /** Organizer */
             organizer: string | null;
         };
+        /**
+         * FixAction
+         * @description What a fix does to one item. ``edit`` sets ``field`` (``horizon``,
+         *     ``milestone_date``, ``milestone_name``, ``depends_on``, ``outcome``, ``title``,
+         *     ``prd_section``, ``order``, ``clear:<field>``) to ``value``.
+         */
+        FixAction: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "accept" | "edit" | "drop" | "restore" | "waive";
+            /** Item */
+            item: string;
+            /** Field */
+            field?: string | null;
+            /** Value */
+            value?: unknown;
+        };
         /** FlowCatalog */
         FlowCatalog: {
             /** Flows */
@@ -12003,6 +12022,40 @@ export interface components {
             /** Item */
             item?: string | null;
         };
+        /**
+         * ItemReason
+         * @description Why a roadmap item needs a person (oracle.runs.reasons): ``blocking`` (a rule
+         *     problem) or ``confirm`` (advisory), with a chip label, one sentence and its fixes.
+         */
+        ItemReason: {
+            /** Item */
+            item: string;
+            /** Item Title */
+            item_title?: string | null;
+            /** Code */
+            code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "blocking" | "confirm";
+            /** Label */
+            label: string;
+            /** Text */
+            text: string;
+            /**
+             * Data
+             * @default {}
+             */
+            data: {
+                [key: string]: unknown;
+            };
+            /**
+             * Fixes
+             * @default []
+             */
+            fixes: components["schemas"]["ReasonFix"][];
+        };
         /** ItemStalenessAction */
         ItemStalenessAction: {
             /**
@@ -12028,7 +12081,8 @@ export interface components {
         };
         /**
          * ItemsCheck
-         * @description The check of roadmap_items.yaml (oracle.runs.roadmap).
+         * @description The check of roadmap_items.yaml (oracle.runs.roadmap) and every item's reasons
+         *     (oracle.runs.reasons). Checks stored before reasons existed read with none.
          */
         ItemsCheck: {
             /** Items */
@@ -12039,6 +12093,32 @@ export interface components {
             };
             /** Problems */
             problems: components["schemas"]["ItemsProblem"][];
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ItemReason"][];
+            /**
+             * Blocking
+             * @default 0
+             */
+            blocking: number;
+            /**
+             * To Confirm
+             * @default 0
+             */
+            to_confirm: number;
+            /**
+             * File Problems
+             * @default 0
+             */
+            file_problems: number;
+            base?: components["schemas"]["ReasonBase"] | null;
+            /**
+             * Reasons Partial
+             * @default false
+             */
+            reasons_partial: boolean;
         };
         /**
          * ItemsImport
@@ -14406,6 +14486,29 @@ export interface components {
             section_keys: string[];
             /** Error */
             error?: string | null;
+        };
+        /**
+         * ReasonBase
+         * @description What moved, new and dropped compare with: the previous attempt or roadmap version.
+         */
+        ReasonBase: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "attempt" | "roadmap_version";
+            /** Label */
+            label: string;
+            /** Version */
+            version?: number | null;
+            /** Attempt */
+            attempt?: number | null;
+        };
+        /** ReasonFix */
+        ReasonFix: {
+            /** Label */
+            label: string;
+            action: components["schemas"]["FixAction"];
         };
         /** RecommendIn */
         RecommendIn: {
