@@ -64,14 +64,15 @@ test("comment on the whole draft: the item shows under General and All sections,
   await expect(review.getByRole("textbox", { name: "Comment on the whole draft" })).toBeFocused();
 });
 
-test("a viewer has no whole-draft entry; the new item reaches the approver's Inbox as General", async ({ page }) => {
-  await login(page, "viewer@example.com");
-  await page.goto(DOC);
-  await expect(panel(page).getByTestId("inspector-scope")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Comment on the whole draft" })).toHaveCount(0);
-  await expect(page.getByTestId("doc-general-feedback")).toHaveCount(0);
+test("a viewer has no whole-draft entry; the new item reaches the approver's Inbox as General", async ({ page: viewer, browser }) => {
+  await login(viewer, "viewer@example.com");
+  await viewer.goto(DOC);
+  await expect(panel(viewer).getByTestId("inspector-scope")).toBeVisible();
+  await expect(viewer.getByRole("button", { name: "Comment on the whole draft" })).toHaveCount(0);
+  await expect(viewer.getByTestId("doc-general-feedback")).toHaveCount(0);
 
-  await page.context().clearCookies();
+  // The owner, in a browser of their own.
+  const page = await (await browser.newContext()).newPage();
   await login(page);
   await page.goto(DOC);
   await panel(page).getByRole("button", { name: "Comment on the whole draft" }).click();
@@ -89,8 +90,15 @@ test("a viewer has no whole-draft entry; the new item reaches the approver's Inb
   await expect(row.getByTestId("inbox-general")).toHaveText("General");
   await expect(row).not.toContainText("#");
 
-  // Its link opens the version's Feedback on the General items.
-  await row.getByRole("link", { name: REMARK }).click();
+  // Oracle's review job answered it (an answer, not one section's new text).
+  await expect(row.getByRole("link", { name: `Review suggestions: ${REMARK}` })).toBeVisible();
+
+  // Its link opens the version's Feedback, where the answer waits on the item.
+  await row.getByRole("link", { name: REMARK, exact: true }).click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\?feedback=open/);
-  await expect(items(page).filter({ hasText: REMARK })).toHaveCount(1);
+  const mine = items(page).filter({ hasText: REMARK });
+  await expect(mine).toHaveCount(1);
+  await expect(mine).toHaveAttribute("data-kind", "suggestion");
+  await expect(mine.getByTestId("feedback-general-chip")).toHaveText("General");
+  await expect(mine).toContainText("This is about the whole draft");
 });

@@ -64,7 +64,7 @@ test("add an anchored comment that survives reload", async ({ page }) => {
   const scope = await openSection(page, "scope");
 
   await selectText(page, "scope", "the order review page");
-  await page.getByRole("button", { name: /^Comment/ }).click();
+  await page.getByRole("button", { name: /^Comment(\s+c)?$/ }).click();
   const dialog = page.getByRole("dialog", { name: "New comment" });
   await expect(dialog).toContainText("the order review page");
   await dialog.getByLabel("Comment").fill("Is the order review page a separate step or a summary panel?");

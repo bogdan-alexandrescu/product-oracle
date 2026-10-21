@@ -242,7 +242,7 @@ test("a new comment queues review comments, and Oracle's suggestion appears on i
       }
     }
   });
-  await page.getByRole("button", { name: /^Comment/ }).click();
+  await page.getByRole("button", { name: /^Comment(\s+c)?$/ }).click();
   const dialog = page.getByRole("dialog", { name: "New comment" });
   await dialog.getByLabel("Comment").fill("Split the invoice by project for agencies.");
   await dialog.getByLabel("Comment").press("Control+Enter");

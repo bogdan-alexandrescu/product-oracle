@@ -131,7 +131,7 @@ test("expand: a feature row and a milestone show their detail in place; comments
 
   // Comment on the expanded detail: anchored there, labelled Detail in the panel.
   await selectText(page, "feature-save-cart", "my cart kept when I leave");
-  await page.getByRole("button", { name: /^Comment/ }).click();
+  await page.getByRole("button", { name: /^Comment(\s+c)?$/ }).click();
   const dialog = page.getByRole("dialog", { name: "New comment" });
   await dialog.getByLabel("Comment").fill("Kept for how long?");
   await dialog.getByLabel("Comment").press("Control+Enter");
@@ -143,7 +143,7 @@ test("expand: a feature row and a milestone show their detail in place; comments
   // And on a brief section: labelled Brief.
   await openSection(page, "problem");
   await selectText(page, "problem", "lose it when they move to a laptop");
-  await page.getByRole("button", { name: /^Comment/ }).click();
+  await page.getByRole("button", { name: /^Comment(\s+c)?$/ }).click();
   await dialog.getByLabel("Comment").fill("How often?");
   await dialog.getByLabel("Comment").press("Control+Enter");
   await expect(page.getByTestId("comment").filter({ hasText: "How often?" }).getByTestId("layer-badge")).toHaveText("Brief");

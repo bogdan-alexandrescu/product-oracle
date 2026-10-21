@@ -116,7 +116,7 @@ test("roles: a viewer reads and exports but has no comment, verdict or approve c
   await openSection(page, "s-5-3");
   await selectText(page, "s-5-3", "Choosing a card fills the form");
   await page.waitForTimeout(200);
-  await expect(page.getByRole("button", { name: /^Comment/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Comment(\s+c)?$/ })).toHaveCount(0);
   const thread = page.locator('[data-testid="feedback-item"][data-kind="comment"]').filter({ visible: true }).first();
   await expect(thread.getByTestId("comment")).toBeVisible();
   await expect(thread.getByRole("button", { name: "Reply" })).toHaveCount(0);
@@ -140,7 +140,7 @@ test("roles: a commenter comments and resolves their own thread, not others'", a
 
   await openSection(page, "scope");
   await selectText(page, "scope", "the order review page");
-  await page.getByRole("button", { name: /^Comment/ }).click();
+  await page.getByRole("button", { name: /^Comment(\s+c)?$/ }).click();
   const dialog = page.getByRole("dialog", { name: "New comment" });
   await dialog.getByLabel("Comment").fill("Which month is this from?");
   await dialog.getByLabel("Comment").press("Control+Enter");
