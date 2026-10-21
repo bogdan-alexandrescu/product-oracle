@@ -481,7 +481,7 @@ function SegmentItem({
   const waiting = checkpoints.some((c) => c.status === "pending");
   // Decided, not delivered to the run yet: said under the segment, with why it waits.
   const delivering = checkpoints.filter((c) => c.delivery && !s.sent_back);
-  const details = s.error || s.items_check || s.draft_import || s.artifacts.length > 0 || deciding.length > 0 || delivering.length > 0;
+  const details = s.error || s.autonomy_note || s.items_check || s.draft_import || s.artifacts.length > 0 || deciding.length > 0 || delivering.length > 0;
   const rejected = !!s.draft_import?.error;
   // Each open decision's note, here so Send back to writer can fill it in.
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -601,6 +601,15 @@ function SegmentItem({
       {details && (
         <div className="space-y-2.5 pr-4 pb-3 pl-[56px] text-[15px] max-[600px]:pr-3 max-[600px]:pl-[44px]">
           {s.error && <p className="text-crit">{s.error}</p>}
+          {s.autonomy_note && (
+            // H11: the baseline's level changed this segment's merge.
+            <p data-testid="autonomy-note" className="text-text2">
+              {s.autonomy_note}.{" "}
+              <Link href="/settings/autonomy" className="font-medium text-accent-ink hover:underline">
+                Settings, Autonomy
+              </Link>
+            </p>
+          )}
           {s.items_check && <ItemsCheckLine check={s.items_check} />}
           {s.draft_import && (
             <DraftImportLine

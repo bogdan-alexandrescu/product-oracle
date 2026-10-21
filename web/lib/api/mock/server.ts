@@ -18,6 +18,7 @@ import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
+import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
@@ -83,6 +84,8 @@ export interface Db {
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
    * "revoke-failures" scenario only. */
   revoke_failures?: RevokeFailureRow[];
+  /** H11: the owner's autonomy levels and the "Oracle did" rows (./autonomy.ts); absent in older saved data. */
+  autonomy?: AutonomyDb;
 }
 
 type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
@@ -162,7 +165,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts); "revoke-failures" as the
  * default company plus two provider revokes a removed member's disable could not make (C2);
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
- * next tick (recorded, the decide call answers 503; ./runs.ts).
+ * next tick (recorded, the decide call answers 503; ./runs.ts); "oracle-did" as the default company
+ * plus one thing Oracle did on its own, told to the signed-in owner (./autonomy.ts).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -820,6 +824,8 @@ function load(): Db {
   );
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
+  db.autonomy = emptyAutonomy();
+  if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   save(db);
   return db;
 }
@@ -1398,6 +1404,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
   const fireflies = routeFirefliesBrowse(p, q);
   if (fireflies) return fireflies;
+  // How far Oracle goes on its own (H11): everyone reads, owners change; its Inbox rows.
+  db.autonomy ??= emptyAutonomy();
+  const autonomy = await routeAutonomy(db.autonomy, req, p, me);
+  if (autonomy) return autonomy;
   // Company settings are the owner's, as in the API (tenant_settings_api.py).
   if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
   const browse = sourceBrowseRoute(req, p, q);
@@ -1551,7 +1561,10 @@ async function route(db: Db, req: Request): Promise<Response> {
     const failures = atLeast(me.role, "owner")
       ? db.revoke_failures.filter((r) => !r.dismissed).map((r) => ({ ...r, dismissed: undefined }))
       : [];
-    return json(200, { ...inbox, revoke_failures: failures, total: inbox.total + failures.length });
+    // Those Oracle told: what it did on its own (H11); unopened rows count.
+    const did = inboxActions((db.autonomy ??= emptyAutonomy()), me.id);
+    const open = did.filter((a) => a.counts).length;
+    return json(200, { ...inbox, revoke_failures: failures, oracle_actions: did, total: inbox.total + failures.length + open });
   }
   if (runs) return runs;
 

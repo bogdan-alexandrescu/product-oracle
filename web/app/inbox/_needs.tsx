@@ -175,6 +175,7 @@ export type NeedGroup =
   | "lookups"
   | "imports"
   | "revoke-failures"
+  | "oracle-actions"
   | "feedback"
   | "questions"
   | "searches"
@@ -387,6 +388,71 @@ export function revokeNeeds(failures: RevokeFailure[], busy: string | null, act:
           >
             Dismiss
           </Button>
+        </>
+      ),
+    };
+  });
+}
+
+type OracleAction = NonNullable<InboxOut["oracle_actions"]>[number];
+
+/**
+ * "Oracle did" (H11): what Oracle did on its own, for each person it told. Counted until I
+ * open it (Done then, for me only); Undo when the behaviour that acted gave an undo route.
+ */
+export function oracleActionNeeds(actions: OracleAction[], busy: string | null, act: Act, seenBefore: string | null | undefined): StatedNeed[] {
+  return actions.map((a) => {
+    const path = { params: { path: { action_id: a.id } } };
+    const href = typeof a.subject?.href === "string" && a.subject.href.startsWith("/") ? a.subject.href : null;
+    const open = a.state === "open";
+    return {
+      key: `oracle-${a.id}`,
+      icon: "check",
+      kind: "Oracle did",
+      state: open ? (isNew(a.created_at, seenBefore) ? "new" : "open") : "done",
+      counted: true,
+      group: "oracle-actions",
+      item: (
+        <>
+          {href ? (
+            <Link href={href} className="min-w-0 truncate hover:underline" title={a.summary}>
+              {a.summary}
+            </Link>
+          ) : (
+            <span className="min-w-0 truncate" title={a.summary}>
+              {a.summary}
+            </span>
+          )}
+          {a.undone_at && <Chip kind="na">Undone</Chip>}
+        </>
+      ),
+      context: (
+        <Link href="/settings/autonomy" className="block truncate text-text2 hover:underline" title={a.responsibility_title}>
+          {a.responsibility_title}
+        </Link>
+      ),
+      at: a.created_at,
+      action: (
+        <>
+          {open && (
+            <Button
+              disabled={busy !== null}
+              aria-label={`Open ${a.summary}`}
+              onClick={() => act(`open-${a.id}`, () => unwrap(api.POST("/v1/oracle-actions/{action_id}/open", path)))}
+            >
+              Open
+            </Button>
+          )}
+          {a.undo && !a.undone_at && (
+            <Button
+              variant="ghost"
+              disabled={busy !== null}
+              aria-label={`Undo ${a.summary}`}
+              onClick={() => act(`undo-${a.id}`, () => unwrap(api.POST("/v1/oracle-actions/{action_id}/undo", path)))}
+            >
+              Undo
+            </Button>
+          )}
         </>
       ),
     };
@@ -765,6 +831,7 @@ export function allNeeds(
     ...stated(n.lookups, "lookups"),
     ...stated(n.imports, "imports"),
     ...stated(revokeNeeds(inbox.revoke_failures ?? [], busy, act), "revoke-failures"),
+    ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore),
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.

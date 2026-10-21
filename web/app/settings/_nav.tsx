@@ -12,6 +12,7 @@ const ITEMS = [
   { label: "Sources", href: "/settings/sources", testId: "nav-sources" },
   { label: "Templates", href: "/settings/templates", testId: "nav-templates" },
   { label: "Themes", href: "/settings/themes", testId: "nav-themes" },
+  { label: "Autonomy", href: "/settings/autonomy", testId: "nav-autonomy" },
 ];
 
 /**

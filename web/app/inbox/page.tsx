@@ -108,6 +108,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "lookups", title: "Stuck runs" },
   { id: "imports", title: "Couldn't import" },
   { id: "revoke-failures", title: "Couldn't revoke access" },
+  { id: "oracle-actions", title: "Oracle did" },
   { id: "feedback", title: "Feedback" },
   { id: "questions", title: "Questions" },
   { id: "revising", title: "Sent back by Oracle" },
