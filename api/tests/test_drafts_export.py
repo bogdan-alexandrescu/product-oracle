@@ -430,8 +430,11 @@ async def test_one_page_theme_checks_the_fit(client, tenant_id):
         )
     ).json()
     md = (await client.get(f"/v1/documents/{out['slug']}/versions/1/markdown", headers=h)).text
+    # Many lines (a draft line may be at most 20,000 characters).
     long = md.replace(
-        "## Problem {#problem}", "## Problem {#problem}\n\n" + "A long paragraph of text. " * 900, 1
+        "## Problem {#problem}",
+        "## Problem {#problem}\n\n" + "A long paragraph of text.\n" * 900,
+        1,
     )
     await _import(client, h, out["slug"], long)
     html = (await client.get(f"/v1/documents/{out['slug']}/versions/2/export", headers=h)).text

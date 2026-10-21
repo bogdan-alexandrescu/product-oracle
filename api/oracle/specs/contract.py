@@ -1009,9 +1009,12 @@ def _html_and_data(text: str) -> tuple[bool, bool, bool]:
     env: dict[str, Any] = {}
     urls: list[str] = []
     html_found = False
+    # Only text that reads as a tag as written ('\<span>' does; Oracle's escaped baseline
+    # text, '\<details\>', does not) can be raw HTML.
+    tag_like = bool(_TAG_LIKE.search(text))
     for tok in _SCAN_MD.parse(text, env):
         for child in tok.children or []:
-            if child.type == "text" and _TAG_LIKE.search(child.content):
+            if child.type == "text" and tag_like and _TAG_LIKE.search(child.content):
                 html_found = True
             elif child.type in ("image", "link_open"):
                 urls.append(str(child.attrGet("src") or child.attrGet("href") or ""))
