@@ -247,15 +247,21 @@ export default function RoadmapDocumentsPage() {
           )
         }
         action={
-          <>
+          <span className="flex flex-wrap items-center gap-2">
             {/* F6: the latest weekly alignment report (the Plan's header button until F1). */}
             <LinkButton href={latestReport.data?.[0] ? `/plan/reports/${latestReport.data[0].id}` : "/plan/reports"}>
               Alignment report
             </LinkButton>
+            <LinkButton href="/roadmap/launches" data-testid="roadmap-launches-link">
+              Launches
+            </LinkButton>
+            <LinkButton href="/roadmap/changelog" data-testid="roadmap-changelog-link">
+              Changelog
+            </LinkButton>
             <LinkButton variant="primary" icon="plus" href="/documents/new?kind=roadmap">
               New roadmap
             </LinkButton>
-          </>
+          </span>
         }
       />
       <div className="flex flex-col gap-3">

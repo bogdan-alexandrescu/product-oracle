@@ -35,7 +35,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
   // where the PRD is picked, and a vision or strategy draft from Company › Strategy; this
   // dialog offers the others.
   const flows = useMemo(
-    () => catalog.data?.flows.filter((f) => !f.source_kind && f.key !== "strategy_draft") ?? [],
+    () => catalog.data?.flows.filter((f) => !f.source_kind && f.key !== "strategy_draft" && f.in_new_run_dialog !== false) ?? [],
     [catalog.data],
   );
   const flow = flows.find((f) => f.key === flowKey);

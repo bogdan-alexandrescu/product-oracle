@@ -27,6 +27,7 @@ import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
+import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
@@ -87,6 +88,8 @@ export interface Db {
   specs?: SpecsDb;
   /** Requests, their themes and the found items of the seed owner (./requests.ts, C1). */
   requests?: RequestsDb;
+  /** Launches, their checklist and notes, and the changelog (./launches.ts, H6). */
+  launches?: LaunchesDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
@@ -165,6 +168,21 @@ function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Respo
   return notFound("Route");
 }
 
+/** The launches' context: the signed-in member, the commenter who asked, the first track. */
+function launchesContext(db: Db, me: MemberRow): LaunchesContext {
+  return {
+    userId: me.id,
+    role: me.role,
+    askerId: db.members.find((x) => x.role === "commenter")?.id ?? null,
+    trackId: db.roadmap?.tracks[0]?.id ?? null,
+  };
+}
+
+function ensureLaunches(db: Db): LaunchesDb {
+  db.launches ??= { launches: [], tasks: [], notes: [], changelog: [] };
+  return db.launches;
+}
+
 const STORAGE_KEY = "po-mock-db-v2";
 /** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
 export const MOCK_ROLE_KEY = "po-mock-role";
@@ -184,6 +202,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * approver@example.com (C2); "private-finding" as "questions" plus a private finding (S6) on
  * the clinic waitlist, its question asked of the signed-in owner, its author; "many-people" as
  * "questions" in a company of 25 members (zoe.zimmer@example.com last by email);
+ * "launches" as the default company plus three launches (Ready, Planned, Launched) with their
+ * checklists, notes and changelog entries (./launches.ts);
  * "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json).
@@ -1015,6 +1035,9 @@ function load(): Db {
   );
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
+  // Launches (H6): three synthetic launches in the "launches" scenario; none otherwise, so
+  // other specs' Inbox counts stay as they were.
+  if (scenario === "launches") db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
   save(db);
   return db;
 }
@@ -1830,6 +1853,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     const requests = await routeRequests(ensureRequests(db), requestsContext(db, me.id, me.role), req, p, q);
     if (requests) return requests;
   }
+  // Launches and changelog (H6) check roles themselves: a task's owner edits their task.
+  const launches = await routeLaunches(launchesContext(db, me), ensureLaunches(db), req, p, q);
+  if (launches) return launches;
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
     m === "GET"
@@ -1918,6 +1944,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (runs && p[1] === "inbox") {
     tick(llm);
     const inbox = withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true");
+    // Launch rows (H6): Ready to launch, Set tier and Notes to send count; Shipped is shown only.
+    const launchRows = launchInboxRows(launchesContext(db, me), ensureLaunches(db));
+    inbox.launches = launchRows;
+    inbox.total += launchRows.filter((r) => r.counted).length;
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")

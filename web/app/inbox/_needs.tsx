@@ -194,7 +194,9 @@ export type NeedGroup =
   | "feedback"
   | "questions"
   | "searches"
-  | "revising";
+  | "revising"
+  | "launches"
+  | "shipped";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
 
 type FeedbackRow = InboxOut["items"][number];
@@ -837,6 +839,37 @@ export function sourceNeeds(sources: Schemas["SourceOut"][]): Need[] {
     }));
 }
 
+/** H6 launch rows: Ready to launch and Notes to send (the launch's owner), Set tier (approvers),
+ * each opening the launch; Shipped (a member's personal note) is shown only, carrying the note. */
+export function launchNeeds(inbox: InboxOut): { counted: Need[]; shipped: Need[] } {
+  const rows = inbox.launches ?? [];
+  const need = (r: (typeof rows)[number]): Need => ({
+    key: `launch-${r.reason}-${r.launch_id}`,
+    icon: r.reason === "shipped_note" ? "check" : "flag",
+    kind: r.reason === "ready" ? "Ready to launch" : r.reason === "set_tier" ? "Set tier" : r.reason === "notes_to_send" ? "Notes to send" : "Shipped",
+    item: (
+      <span className="truncate" title={r.title} data-testid="launch-need">
+        {r.title}
+      </span>
+    ),
+    context:
+      r.reason === "shipped_note" && r.note ? (
+        <span className="block truncate text-text2" title={r.note}>
+          {r.note}
+        </span>
+      ) : (
+        <span className="block truncate text-text2">Launches</span>
+      ),
+    at: r.at,
+    action: (
+      <LinkButton variant="secondary" href={`/roadmap/launches?launch=${r.launch_id}`}>
+        Open
+      </LinkButton>
+    ),
+  });
+  return { counted: rows.filter((r) => r.counted).map(need), shipped: rows.filter((r) => !r.counted).map(need) };
+}
+
 /**
  * Every row of the one Inbox, each in its state (owner, 2026-10-20): checkpoints, cost
  * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke (owners), feedback items and the questions asked
@@ -854,6 +887,7 @@ export function allNeeds(
 ): StatedNeed[] {
   const n = inboxNeeds(inbox, busy, act, compact);
   // A row may carry its own state and count (a question answered in place: ./_questions).
+  const launches = launchNeeds(inbox);
   const stated = (rows: Need[], group: NeedGroup, counted = true): StatedNeed[] =>
     rows.map((r) => ({
       ...r,
@@ -871,12 +905,14 @@ export function allNeeds(
     ...stated(reportFailureNeeds(inbox.report_failures ?? [], busy, act), "report-failures"),
     ...reportNeeds(inbox.reports ?? [], seenBefore),
     ...stated(strategyNeeds(inbox.strategy), "strategy"),
+    ...stated(launches.counted, "launches"),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.
     ...stated(n.deliveries, "deliveries", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.searches, "searches", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.revising, "revising", false).map((r) => ({ ...r, state: "open" as const })),
+    ...stated(launches.shipped, "shipped", false),
   ];
 }
 

@@ -10,7 +10,12 @@ from oracle.reports.schemas import InboxReport, InboxReportFailure
 from oracle.review.schemas import FeedbackKind
 
 Flow = Literal[
-    "baseline_to_prd", "feedback_loop", "prd_to_roadmap", "prd_to_spec", "strategy_draft"
+    "baseline_to_prd",
+    "feedback_loop",
+    "prd_to_roadmap",
+    "prd_to_spec",
+    "strategy_draft",
+    "launch_kit",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -33,6 +38,7 @@ CheckpointKind = Literal[
     "roadmap_items",
     "roadmap_review",
     "strategy_review",
+    "launch_review",
 ]
 CheckpointStatus = Literal["pending", "approved", "changes_requested", "skipped"]
 Role = Literal["viewer", "commenter", "approver", "owner"]
@@ -103,6 +109,8 @@ class FlowOut(BaseModel):
     title: str
     description: str
     requires_document: bool
+    # Offered in the New run dialog (launch_kit starts from a launch instead).
+    in_new_run_dialog: bool = True
     # The kind of document the run writes; None: the existing document's kind.
     target_kind: DocumentKind | None = None
     # The kind of approved document the run reads (prd_to_roadmap: a PRD).
@@ -656,6 +664,9 @@ class InboxStrategy(BaseModel):
     since: datetime
 
 
+from oracle.launches.schemas import InboxLaunch  # noqa: E402
+
+
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
     # Those with the checkpoint's approver role: decisions recorded and not delivered to
@@ -696,6 +707,9 @@ class InboxOut(BaseModel):
     staged: list[InboxStaged] = []
     # Feedback that needs me: new + open (staged, declined and done do not).
     needs_me: int = 0
+    # Launch rows (H6): Ready to launch and Notes to send (the launch's owner), Set tier
+    # (approvers), counted in ``total``; Shipped (a member's personal note), shown only.
+    launches: list[InboxLaunch] = []
     # My previous Inbox visit (what 'new' is measured from); None before the first.
     last_seen_at: datetime | None = None
 

@@ -5,7 +5,8 @@ segment after ``/v1`` names the area.
 """
 
 READ_AREAS = {
-    "read:sources": {"sources", "search", "snapshots"},
+    # Requester notes quote what people asked: source text (H6).
+    "read:sources": {"sources", "search", "snapshots", "requester-notes"},
     # Intakes, the gap registry and the question ledger (oracle.intake) are baseline
     # knowledge; reading source text through an intake still needs read:sources.
     # Blockers are baseline constraints (CR-04): their strategy, options, experiments
@@ -30,6 +31,11 @@ READ_AREAS = {
         "strategy",
         # Outcomes tracked against goals (a strategy draft reads them).
         "outcomes",
+        # Launches, their checklist and the changelog (H6): reading only; run tokens
+        # never publish, mark sent or mark launched.
+        "launches",
+        "launch-tasks",
+        "changelog",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }
@@ -40,6 +46,8 @@ SOURCE_READS = {
     ("intakes", "new-evidence"),
     ("intakes", "summary"),
     ("intakes", "question-batch"),
+    # A launch's requester notes: what people asked, in their words.
+    ("launches", "notes"),
 }
 # Creating a proposal or a piece of evidence; deciding one stays with people.
 PROPOSAL_WRITES = {"proposals", "evidence"}

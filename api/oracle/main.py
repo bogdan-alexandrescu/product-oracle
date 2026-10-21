@@ -35,6 +35,7 @@ from oracle.jobs.worker import (
     job_seconds,
     run_worker,
 )
+from oracle.launches.router import router as launches_router
 from oracle.mcp.oauth.routes import router as oauth_router
 from oracle.mcp.server import mount_mcp
 from oracle.members.router import people_router
@@ -214,6 +215,7 @@ def create_app() -> FastAPI:
     # F1 Plan screen: one read of the PRDs in play and the roadmap rows.
     app.include_router(plan_router)
     app.include_router(strategy_router)
+    app.include_router(launches_router)
     # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
     app.include_router(oauth_router)
     # Cloud Scheduler's run ticker (Google ID token only; not in OpenAPI, so no MCP tool).
