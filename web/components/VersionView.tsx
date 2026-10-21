@@ -154,8 +154,9 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     const feedbackParam = params.get("feedback");
     const toFeedback = feedbackParam === "open" || feedbackParam === "staged";
     arrivedAtFeedback.current = toFeedback;
-    // ?tab=reports: where applying a next draft lands, on the version's History (C1e).
-    const toHistory = params.get("tab") === "reports";
+    // ?tab=reports: where applying a next draft lands, on the version's History (C1e);
+    // ?tab=history: the overview's link to Oracle's work on this version (D15).
+    const toHistory = params.get("tab") === "reports" || params.get("tab") === "history";
     // Next writes an in-app navigation's URL, #hash included, only once the new page has
     // committed, so the hash cannot be read while rendering: read it here. This also runs
     // when Next shows a kept route again.
@@ -170,6 +171,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       if (window.matchMedia("(max-width: 639px)").matches) setSheet("review");
     } else if (toHistory) {
       setTab("history");
+      // On a phone History lives in the Review sheet.
+      if (params.get("tab") === "history" && window.matchMedia("(max-width: 639px)").matches) setSheet("review");
     }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [doc, n]);

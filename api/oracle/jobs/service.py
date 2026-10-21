@@ -37,17 +37,22 @@ from oracle.review.service import locked_section_keys
 if TYPE_CHECKING:
     from oracle.auth.deps import Principal
 
-JOB_LABELS = {
-    "review_comments": "Review comments",
-    "reporting": "Reporting",
-    "refinement": "Refinement",
-    "intake_analysis": "Intake analysis",
+#: Each per-document switch in the words History > Oracle's work shows (D15); the keys
+#: stay the job kinds. A refusal names the switch the owner unticked.
+SWITCH_LABELS = {
+    "review_comments": "Suggest changes from feedback",
+    "reporting": "Write reports",
+    "refinement": "Rewrite sections and build drafts",
     "quality_review": "Quality review",
-    "refinement_batch": "Refinement",
 }
 #: Kinds that share another kind's per-document switch: the next-draft batch is
 #: refinement, so turning refinement off turns it off too.
 SWITCH = {"refinement_batch": "refinement"}
+
+
+def turned_off(kind: str) -> str:
+    switch = SWITCH.get(kind, kind)
+    return f'"{SWITCH_LABELS.get(switch, switch)}" is turned off for this document'
 
 
 class JobError(Exception):
@@ -176,7 +181,7 @@ async def enqueue(
 ) -> LlmJob:
     """Queue a job. ``coalesce``: reuse a queued job of the same kind and version."""
     if not enabled(document, kind):
-        raise JobError(409, f"{JOB_LABELS[kind]} is turned off for this document")
+        raise JobError(409, turned_off(kind))
     if coalesce:
         queued = await db.scalar(
             select(LlmJob)
@@ -290,7 +295,7 @@ async def retry(db: AsyncSession, principal: "Principal", job_id: uuid.UUID) -> 
         raise JobError(409, f"a {job.status} job cannot be retried")
     document = await db.get(Document, job.document_id) if job.document_id else None
     if document is not None and not enabled(document, job.kind):
-        raise JobError(409, f"{JOB_LABELS[job.kind]} is turned off for this document")
+        raise JobError(409, turned_off(job.kind))
     before = job.status
     job.status = "queued"
     job.attempts = 0

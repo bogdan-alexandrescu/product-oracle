@@ -6,6 +6,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { wordDiff } from "@/lib/diff";
+import { turnedOff } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 
 import { KIND as BATCH, nextDraftRoute, runBatch, stateOf } from "./next-draft";
@@ -60,14 +61,7 @@ export type LlmContext = {
 /** The per-document switches; the next-draft batch is refinement and shares its switch. */
 const KINDS: (keyof Schemas["JobSettings"])[] = ["review_comments", "reporting", "refinement", "quality_review"];
 const SWITCH: Partial<Record<Job["kind"], keyof Schemas["JobSettings"]>> = { refinement_batch: "refinement" };
-const LABEL: Record<Job["kind"], string> = {
-  review_comments: "Review comments",
-  reporting: "Reporting",
-  refinement: "Refinement",
-  intake_analysis: "Intake analysis",
-  quality_review: "Quality review",
-  refinement_batch: "Refinement",
-};
+const switchOf = (kind: Job["kind"]) => (SWITCH[kind] ?? kind) as keyof Schemas["JobSettings"];
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
 
@@ -567,6 +561,8 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
     }
     if (p[3] === "retry" && m === "POST") {
       if (!["failed", "cancelled"].includes(job.status)) return fail(409, `a ${job.status} job cannot be retried`);
+      const doc = ctx.documents.find((d) => d.id === job.document_id);
+      if (doc && !enabled(doc, job.kind)) return fail(409, turnedOff(switchOf(job.kind)));
       Object.assign(job, { status: "queued", attempts: 0, error: null, error_reason: null, next_reset_at: null, started_at: null, finished_at: null });
       return json(200, job);
     }
@@ -668,7 +664,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
   if (p[3] === "llm-jobs") {
     if (m === "POST") {
       const input = await body<Schemas["JobCreate"]>();
-      if (!enabled(doc, input.kind)) return fail(409, `${LABEL[input.kind]} is turned off for this document`);
+      if (!enabled(doc, input.kind)) return fail(409, turnedOff(switchOf(input.kind)));
       const v = vs.find((x) => x.number === input.version) ?? vs.at(-1)!;
       const job = makeJob(ctx, doc, input.kind, v, input.since ? { input: { version: v.number, since: input.since } } : {});
       db.jobs.push(job);
@@ -708,7 +704,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
   }
   // .../sections/{key}/refine
   const key = p[6];
-  if (!enabled(doc, "refinement")) return fail(409, "Refinement is turned off for this document");
+  if (!enabled(doc, "refinement")) return fail(409, turnedOff("refinement"));
   if (vs.at(-1)!.number !== v.number) return fail(409, "refine the latest version; a newer one exists");
   if (!v.sections.some((s) => s.section_key === key)) return fail(404, `section '${key}' is not in version ${v.number}`);
   if (ctx.lockedKeys(v).includes(key)) return fail(409, `section '${key}' is approved and locked; it is never changed`);
