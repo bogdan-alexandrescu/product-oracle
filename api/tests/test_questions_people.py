@@ -33,6 +33,16 @@ from tests.test_mcp import mcp_client, run_token, text_of
 PEOPLE_KEYS = {"user_id", "name", "email", "role", "can_write"}
 
 
+@pytest.fixture(autouse=True)
+def local_runtime():
+    """The local runtime: run tokens from any address (as tests.test_mcp)."""
+    from oracle.swarm import FakeRuntime, set_runtime
+
+    set_runtime(FakeRuntime())
+    yield
+    set_runtime(None)
+
+
 @pytest.fixture
 def fake():
     holder = {}
@@ -143,7 +153,10 @@ async def test_unassigned_goes_to_author(client):
     assert {r["question"]["id"] for r in mine} == {q["id"] for q in asked}
     row = mine[0]
     assert row["asked_by"] == {"kind": "oracle"}
-    assert row["subject"]["kind"] == "intake" and row["subject"]["title"] == "Saved addresses"
+    assert (
+        row["subject"]["kind"] == "intake"
+        and row["subject"]["title"] == "Before drafting · Saved addresses"
+    )
     # No PRD yet and no intake page: nothing to open, the answer is given in place.
     assert row["subject"]["href"] is None
     assert row["answer_paths"] == ["answer", "dont_know", "defer", "delegate", "research"]
@@ -206,7 +219,9 @@ async def test_delegate_sees_question(client):
     out = await create_intake(client, ctx, "approver", batch_size=1)
     [q] = await questions_of(client, ctx, out["intake"]["id"], "asked")
     assert [r["question"]["id"] for r in await inbox(client, ctx, "approver")] == [q["id"]]
-    await answer(client, ctx, q["id"], "approver", kind="delegate", delegated_to=uid(ctx, "commenter"))
+    await answer(
+        client, ctx, q["id"], "approver", kind="delegate", delegated_to=uid(ctx, "commenter")
+    )
     theirs = await inbox(client, ctx, "commenter")
     assert [r["question"]["id"] for r in theirs] == [q["id"]]
     assert theirs[0]["question"]["status"] == "delegated"
@@ -287,7 +302,9 @@ async def test_every_subject_kind_reads_with_its_title_and_link(client):
         {"kind": "intake", "intake_id": out["intake"]["id"]},
     ]
     for subject in subjects:
-        await ask(client, ctx, prompt="Who decides?", asked_to=uid(ctx, "approver"), subject=subject)
+        await ask(
+            client, ctx, prompt="Who decides?", asked_to=uid(ctx, "approver"), subject=subject
+        )
     rows = {r["subject"]["kind"]: r["subject"] for r in await inbox(client, ctx, "approver")}
     assert rows["entity"] == {"kind": "entity", "title": "Baseline · Activation",
                               "href": f"/baseline?entity={ent['id']}"}  # fmt: skip
@@ -301,7 +318,9 @@ async def test_every_subject_kind_reads_with_its_title_and_link(client):
         {"kind": "checkpoint_item", "checkpoint_id": str(uuid.uuid4()), "item_ref": "a"},
         {"kind": "intake", "intake_id": str(uuid.uuid4())},
     ):
-        await ask(client, ctx, expect=422, prompt="Who?", asked_to=uid(ctx, "approver"), subject=subject)
+        await ask(
+            client, ctx, expect=422, prompt="Who?", asked_to=uid(ctx, "approver"), subject=subject
+        )
     resp = await client.post(
         "/v1/questions",
         json={"prompt": "Who?", "asked_to": uid(ctx, "viewer"), "subject": subjects[0]},
@@ -336,7 +355,9 @@ async def test_reassign_and_withdraw(client):
     question stays in the Inbox or anyone may move it; no_claim=notifications."""
     ctx = await company()
     _, doc_id = await document_id(client, ctx)
-    q = await ask(client, ctx, prompt="Who?", asked_to=uid(ctx, "approver"), subject=section_subject(doc_id))
+    q = await ask(
+        client, ctx, prompt="Who?", asked_to=uid(ctx, "approver"), subject=section_subject(doc_id)
+    )
     url = f"/v1/questions/{q['id']}"
     # Not the asker, not an intake author, not an approver: 403.
     async with tenant_session(ctx.tenant_id) as s:
@@ -349,17 +370,23 @@ async def test_reassign_and_withdraw(client):
     resp = await client.patch(url, json={"status": "withdrawn"}, headers=ctx.as_("viewer"))
     assert resp.status_code == 403
     # The asker reassigns: the new person is asked, the old one no longer.
-    resp = await client.patch(url, json={"asked_to": uid(ctx, "owner")}, headers=ctx.as_("commenter"))
+    resp = await client.patch(
+        url, json={"asked_to": uid(ctx, "owner")}, headers=ctx.as_("commenter")
+    )
     assert resp.status_code == 200 and resp.json()["asked_to"] == uid(ctx, "owner")
     assert await inbox(client, ctx, "approver") == []
     assert [r["question"]["id"] for r in await inbox(client, ctx, "owner")] == [q["id"]]
-    resp = await client.patch(url, json={"asked_to": uid(ctx, "viewer")}, headers=ctx.as_("commenter"))
+    resp = await client.patch(
+        url, json={"asked_to": uid(ctx, "viewer")}, headers=ctx.as_("commenter")
+    )
     assert resp.status_code == 422
     # Withdrawn: out of the Inbox at once, and final.
     resp = await client.patch(url, json={"status": "withdrawn"}, headers=ctx.as_("commenter"))
     assert resp.status_code == 200 and resp.json()["status"] == "withdrawn"
     assert await inbox(client, ctx, "owner") == []
-    resp = await client.patch(url, json={"asked_to": uid(ctx, "approver")}, headers=ctx.as_("owner"))
+    resp = await client.patch(
+        url, json={"asked_to": uid(ctx, "approver")}, headers=ctx.as_("owner")
+    )
     assert resp.status_code == 409
     async with tenant_session(ctx.tenant_id) as s:
         actions = (
@@ -378,20 +405,28 @@ async def test_an_answered_question_is_not_reassigned_and_the_author_moves_intak
     first, second = await questions_of(client, ctx, out["intake"]["id"], "asked")
     url = f"/v1/questions/{first['id']}"
     # The intake's author (also the asker here) and an approver may move it.
-    resp = await client.patch(url, json={"asked_to": uid(ctx, "approver")}, headers=ctx.as_("approver"))
+    resp = await client.patch(
+        url, json={"asked_to": uid(ctx, "approver")}, headers=ctx.as_("approver")
+    )
     assert resp.status_code == 200, resp.text
     await answer(client, ctx, first["id"], "approver", body="Returning buyers")
-    resp = await client.patch(url, json={"asked_to": uid(ctx, "commenter")}, headers=ctx.as_("commenter"))
+    resp = await client.patch(
+        url, json={"asked_to": uid(ctx, "commenter")}, headers=ctx.as_("commenter")
+    )
     assert resp.status_code == 409
     # A draft can be given its person before it is asked.
     [draft, *_] = await questions_of(client, ctx, out["intake"]["id"], "draft")
     resp = await client.patch(
-        f"/v1/questions/{draft['id']}", json={"asked_to": uid(ctx, "owner")}, headers=ctx.as_("commenter")
+        f"/v1/questions/{draft['id']}",
+        json={"asked_to": uid(ctx, "owner")},
+        headers=ctx.as_("commenter"),
     )
     assert resp.status_code == 200 and resp.json()["status"] == "draft"
     # Neither field, or both: 422.
     for body in ({}, {"asked_to": uid(ctx, "owner"), "status": "withdrawn"}, {"status": "asked"}):
-        resp = await client.patch(f"/v1/questions/{second['id']}", json=body, headers=ctx.as_("commenter"))
+        resp = await client.patch(
+            f"/v1/questions/{second['id']}", json=body, headers=ctx.as_("commenter")
+        )
         assert resp.status_code == 422, body
 
 
@@ -427,12 +462,19 @@ async def test_private_gap_not_assignable(client, fake):
         )
         assert resp.status_code == 409, resp.text
         assert resp.json()["detail"] == "Share this finding first to ask someone else"
-        resp = await client.post(
-            f"/v1/intakes/{intake_id}/question-batches",
-            json={"size": 10},
-            headers=ctx.as_("author"),
-        )
-        assert resp.status_code == 200, resp.text
+        # Asked in a later batch, of the author.
+        while True:
+            resp = await client.post(
+                f"/v1/intakes/{intake_id}/question-batches",
+                json={"size": 10},
+                headers=ctx.as_("author"),
+            )
+            if resp.status_code == 409:
+                break
+            assert resp.status_code == 200, resp.text
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(StakeholderQuestion, q.id)
+        assert (row.status, row.asked_to) == ("asked", ctx.users["author"].id)
     resp = await client.patch(
         f"/v1/questions/{q.id}", json={"asked_to": uid(ctx, "approver")}, headers=ctx.as_("author")
     )
@@ -481,7 +523,9 @@ async def test_run_tokens_are_refused_on_every_new_route(client):
     token reaches one of the four tools; no_claim=people's MCP clients (they may)."""
     ctx = await company()
     _, doc_id = await document_id(client, ctx)
-    q = await ask(client, ctx, prompt="Who?", asked_to=uid(ctx, "approver"), subject=section_subject(doc_id))
+    q = await ask(
+        client, ctx, prompt="Who?", asked_to=uid(ctx, "approver"), subject=section_subject(doc_id)
+    )
     token = await run_token(
         ctx.tenant_id, ["read:baseline", "read:sources", "read:documents", "write:proposals"],
         ctx.users["approver"].id,

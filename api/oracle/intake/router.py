@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, require_role
-from oracle.intake import answers, checks, engine, service, sharing, summary, views
+from oracle.intake import answers, checks, engine, questions, service, sharing, summary, views
 from oracle.intake import categories as cats
 from oracle.intake import evidence as ev
 from oracle.intake.models import IntakeProposal
@@ -40,6 +40,7 @@ from oracle.intake.schemas import (
     FindingSummaryIn,
     GapCreate,
     GapPatch,
+    InboxQuestion,
     IntakeCreate,
     IntakeOut,
     IntakePatch,
@@ -48,6 +49,9 @@ from oracle.intake.schemas import (
     IntakeSummary,
     NewEvidence,
     QuestionBatch,
+    QuestionBatchAsk,
+    QuestionCreate,
+    QuestionPatch,
     SharingBulkIn,
     SharingIn,
 )
@@ -288,12 +292,18 @@ async def ask_next_question_batch(
     principal: Commenter,
     db: TenantDB,
     size: Annotated[int, Query(ge=1, le=10)] = 5,
+    body: QuestionBatchAsk | None = None,
 ) -> QuestionBatch:
     """Ask the next short batch: the highest-ranked questions not asked yet (the author
-    or an approver)."""
+    or an approver). Each is asked of the person ``assign`` names for it, else its gap's
+    owner, else the intake's author (C2); a person who cannot answer is 422 and a
+    private finding's question asked of anyone but the author 409, and then nothing is
+    asked. ``size``: in the body or, as before, the query."""
     intake = await _intake(db, intake_id)
+    if body is not None and "size" in body.model_fields_set:
+        size = body.size
     try:
-        asked = await service.ask_next(db, principal, intake, size)
+        asked = await service.ask_next(db, principal, intake, size, body.assign if body else None)
     except service.IntakeError as e:
         raise _http(e) from e
     if not asked:
@@ -633,6 +643,56 @@ async def propose_gap_research(
 
 
 # --- questions ---------------------------------------------------------------------------
+
+
+async def _shown(db: TenantDB, principal: Principal, question) -> StakeholderQuestionOut:
+    shown = await views.Readers(db, principal).question(question)
+    if shown is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Question not found")
+    return StakeholderQuestionOut.model_validate(shown)
+
+
+@router.post("/questions", response_model=StakeholderQuestionOut, status_code=201)
+async def create_question(
+    body: QuestionCreate, principal: Commenter, db: TenantDB
+) -> StakeholderQuestionOut:
+    """Ask a teammate: a named person (commenter or above) is asked a question about an
+    intake, a document section, a run checkpoint item or a baseline entity. It lands in
+    their Inbox as "<your name> asks"; you see the answer on the subject. 422 when the
+    subject does not exist or the person cannot answer. Audited (``question.asked``)."""
+    try:
+        question = await questions.create(db, principal, body)
+    except service.IntakeError as e:
+        raise _http(e) from e
+    await db.commit()
+    await db.refresh(question)
+    return await _shown(db, principal, question)
+
+
+@router.patch("/questions/{question_id}", response_model=StakeholderQuestionOut)
+async def update_question(
+    question_id: uuid.UUID, body: QuestionPatch, principal: Commenter, db: TenantDB
+) -> StakeholderQuestionOut:
+    """Reassign a question (``asked_to``) or withdraw it (``status: withdrawn``): the
+    person who asked, the intake's author or an approver. A withdrawn question leaves
+    the Inbox at once. 409 for an answered or withdrawn question, and for asking a
+    private finding's question of anyone but the intake's author (S6)."""
+    try:
+        question = await service.get_question(db, question_id)
+        await questions.patch(db, principal, question, body)
+    except service.IntakeError as e:
+        raise _http(e) from e
+    await db.commit()
+    await db.refresh(question)
+    return await _shown(db, principal, question)
+
+
+@router.get("/inbox/questions", response_model=list[InboxQuestion])
+async def list_inbox_questions(principal: Viewer, db: TenantDB) -> list[InboxQuestion]:
+    """The questions asked of me and still open (asked, or delegated to me), oldest
+    first: who asks ("Oracle asks" or a person), what about and where it opens, the gap
+    as I may see it, and the answer paths. A question I may not see never appears."""
+    return await questions.inbox(db, principal)
 
 
 @router.post("/questions/{question_id}/answers", response_model=AnswerResult, status_code=201)

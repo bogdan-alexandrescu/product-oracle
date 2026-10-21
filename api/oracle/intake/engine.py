@@ -791,9 +791,14 @@ async def ask_batch(
     asked_by: uuid.UUID | None,
     size: int,
     skip: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
+    assign: dict[uuid.UUID, uuid.UUID] | None = None,
 ) -> list[StakeholderQuestion]:
     """Ask the next short batch: the highest-priority drafts, at most ``size``.
     ``skip``: gaps the asker may not see; their questions stay drafts.
+
+    Every question asked has a person (C2): ``assign`` (question id -> user id, checked
+    by the caller), else the gap's owner, else the intake's author. A question of a gap
+    hidden from everyone but the author is asked of the author (S6).
 
     Sizes and numbers are counted in what everyone may see (S6): a batch holds ``size``
     questions everyone sees, and the author's hidden questions ranked among them ride
@@ -809,6 +814,10 @@ async def ask_batch(
         return gap is None or sharing.gap_changes(gap, reg, sharing.EVERYONE) is not None
 
     waiting = [q for q in questions if q.status == "draft" and q.gap_id not in skip]
+    # Chosen before asking (the batch's preview), whether this batch asks it or a later one.
+    for q in waiting:
+        if assign and q.id in assign:
+            q.asked_to = assign[q.id]
     public = [q for q in waiting if shown(q)]
     chosen = public[:size]
     if len(public) > size:
@@ -826,6 +835,9 @@ async def ask_batch(
         q.status = "asked"
         q.batch = number
         q.asked_by = asked_by
+        q.asked_to = q.asked_to or intake.author_id
+        if not shown(q):
+            q.asked_to = intake.author_id
         gap = by_id.get(q.gap_id) if q.gap_id else None
         if gap is not None and gap.status == "unknown":
             gap.status = "asked"

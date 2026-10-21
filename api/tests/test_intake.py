@@ -26,6 +26,7 @@ from tests.intake_helpers import (
     CATEGORIES,
     all_questions,
     answer,
+    ask_of,
     batch,
     company,
     create_intake,
@@ -287,6 +288,7 @@ async def test_dont_know_on_a_critical_blocker_offers_research_and_a_decision(cl
     intake_id = out["intake"]["id"]
     q = question_for(await batch(client, ctx, intake_id), "blockers")
 
+    await ask_of(client, ctx, q["id"], "commenter")
     result = await answer(client, ctx, q["id"], kind="dont_know")
     assert result["question"]["status"] == "answered"
     assert result["gap"]["status"] == "unknown"
@@ -464,6 +466,7 @@ async def test_an_answer_on_a_linked_prd_becomes_a_patch_proposal_not_an_edit(cl
     doc = await _document(client, ctx)
     out = await create_intake(client, ctx, who="approver", document=doc)
     q = question_for(await batch(client, ctx, out["intake"]["id"]), "success_metric")
+    await ask_of(client, ctx, q["id"], "commenter")
     result = await answer(client, ctx, q["id"], body="Repeat checkout time, 95 s to 45 s.")
     [patch] = [p for p in result["proposals"] if p["kind"] == "prd_patch"]
     assert patch["status"] == "proposed"

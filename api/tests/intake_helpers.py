@@ -104,3 +104,15 @@ async def all_questions(client, ctx: Ctx, intake_id: str) -> list[dict]:
     )
     assert resp.status_code == 200, resp.text
     return resp.json()
+
+
+async def ask_of(client, ctx: Ctx, question_id: str, who: str, by: str = "approver") -> dict:
+    """Ask ``who`` the question instead (C2: a batch asks the intake's author by
+    default, and only the person asked or an approver answers)."""
+    resp = await client.patch(
+        f"/v1/questions/{question_id}",
+        json={"asked_to": str(ctx.users[who].id)},
+        headers=ctx.as_(by),
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()

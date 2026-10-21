@@ -112,3 +112,15 @@ class FollowUpOut(BaseModel):
     done_at: datetime | None = None
     dismissed_at: datetime | None = None
     dismissed_by: uuid.UUID | None = None
+
+
+class PersonOut(BaseModel):
+    """A member as the member directory shows them to everyone (``GET /v1/people``):
+    no other field, so a picker never learns more than whom it may name."""
+
+    user_id: uuid.UUID
+    name: str
+    email: str
+    role: Role
+    # Commenter or above: can answer a question, comment or be asked.
+    can_write: bool

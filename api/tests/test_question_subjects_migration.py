@@ -134,8 +134,7 @@ def test_upgrade_moves_asked_questions_to_the_author_and_adds_subjects(scratch_d
     kept = _question(t, "asked", intake=intake, asked_to=someone)
     # Every existing row has a subject (the engine always sets intake_id): the check holds.
     assert _run(
-        "SELECT count(*) FROM stakeholder_questions WHERE intake_id IS NULL "
-        "AND document_id IS NULL"
+        "SELECT count(*) FROM stakeholder_questions WHERE intake_id IS NULL AND document_id IS NULL"
     ) == [(0,)]
     assert not COLUMNS & _columns()
 
