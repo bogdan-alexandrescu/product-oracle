@@ -246,6 +246,14 @@ class Unavailable(RunError):
     # An Inbox decision's delivery that stopped on a cancel SwarmCloud did not confirm:
     # the run's workflow id and its cancel_pending marker, kept when the rest rolls back.
     held: dict[str, Any] | None = None
+    # The runtime's own failure behind it, when there is one: what the run page and the
+    # Inbox show of an undelivered decision (:func:`_cause`).
+    cause: BaseException | None = None
+
+    def __init__(self, message: str = "", *, cause: BaseException | None = None) -> None:
+        super().__init__(message)
+        if cause is not None:
+            self.cause = cause
 
 
 def _now() -> datetime:
@@ -1774,6 +1782,23 @@ def _unconfirmed(what: str) -> "Unavailable":
 def _shown(value: Any) -> str | None:
     """An upstream value as Oracle stores it: text, redacted, at most 200 characters."""
     return None if value in (None, "") else redact(str(value))[:200]
+
+
+def _cause(exc: BaseException) -> str | None:
+    """Why a call to SwarmCloud did not finish, in a few words for the run page and the
+    Inbox: "SwarmCloud HTTP 503 unavailable" when SwarmCloud answered, else what failed
+    ("cannot reach SwarmCloud ...", a timeout, the replay limit). Stored like
+    :func:`_shown`."""
+    cause = exc.cause if isinstance(exc, Unavailable) and exc.cause is not None else exc
+    if isinstance(cause, RuntimeUnavailable) and cause.status is not None:
+        code = f" {cause.code}" if cause.code else ""
+        return _shown(f"SwarmCloud HTTP {cause.status}{code}")
+    held = exc.held if isinstance(exc, Unavailable) else None
+    if held is not None and cause is exc:
+        # A cancel the decision needs, not confirmed (_unconfirmed): its own marker's why.
+        why = (held.get("cancel_pending") or {}).get("error")
+        return _shown(f"cancelling the run's workflow is not confirmed: {why or 'no answer'}")
+    return _shown(cause)
 
 
 def _clip(text: str, limit: int = 200) -> str:
@@ -5153,8 +5178,9 @@ async def _complete_decision(
     commit; the tick does for one that never finished (a crash, a failed post). The calls
     to SwarmCloud are made outside the review gate and the run's row lock
     (:func:`_replay`). Commits; raises Unavailable when it did not finish (the marker
-    stays, the tick tries again). ``stats``: the tick's, for what the cancel it may need
-    counts (its errors, a pause on the ceiling); a request logs those."""
+    stays with the failed try counted, the tick tries again), a runtime failure outside
+    the post itself (the replay limit, say) included. ``stats``: the tick's, for what the
+    cancel it may need counts (its errors, a pause on the ceiling); a request logs those."""
     mine = stats or _TickStats()
     try:
         await _replay(
@@ -5163,10 +5189,66 @@ async def _complete_decision(
             lambda: _finish_decision(db, run_id, checkpoint_id, mine),
             reset=_resetter(mine),
         )
+    except (_PostNotFound, _Unread):
+        raise  # the decision was undone: a person decides again (_finish_decision)
+    except (Unavailable, RuntimeUnavailable) as exc:
+        await _failed_try(db, run_id, checkpoint_id, exc)
+        if isinstance(exc, RuntimeUnavailable):
+            raise Unavailable(
+                f"SwarmCloud did not confirm the decision ({_shown(exc)}); the decision is "
+                "recorded and Oracle delivers it on its next tick, there is no need to decide "
+                "again",
+                cause=exc,
+            ) from None
+        raise
     finally:
         if stats is None:
             for error in mine.errors:
                 log.warning("decision on run %s: %s", run_id, error)
+
+
+async def _failed_try(
+    db: AsyncSession,
+    run_id: uuid.UUID,
+    checkpoint_id: uuid.UUID,
+    exc: Unavailable | RuntimeUnavailable,
+) -> None:
+    """A try at delivering a recorded decision that did not finish, nothing of it written:
+    what is left is the marker, with the try counted and why (shown on the run page and
+    in the Inbox), and the cancel marker the failed pass left (``exc.held``). Commits."""
+    await db.rollback()
+    run = await _get_run(db, run_id, lock=True)
+    cp = await db.scalar(
+        select(Checkpoint).where(Checkpoint.id == checkpoint_id, Checkpoint.run_id == run.id)
+    )
+    wait = dict(((cp.payload or {}).get("wait") or {}) if cp is not None else {})
+    posting = wait.get("posting")
+    held = exc.held if isinstance(exc, Unavailable) else None
+    now_wf = _live(run)
+    if held is not None and now_wf is not None and now_wf.get("id") == held["id"]:
+        # The cancel's marker (its tries, a 404 count), as the failed pass left it.
+        _set_knob(run, "workflow", {**now_wf, "cancel_pending": held["cancel_pending"]})
+        await revoke_run_tokens(db, run.id)
+    if cp is not None and cp.status in DECIDED and isinstance(posting, dict):
+        first = not posting.get("error")
+        why = _cause(exc)
+        wait["posting"] = {
+            **posting,
+            "tries": int(posting.get("tries") or 0) + 1,
+            "error": why,
+            "tried_at": _now().isoformat(),
+        }
+        _set_wait(cp, wait)
+        if first:
+            segments = await _segments(db, run.id)
+            seq = (cp.payload or {}).get("segment_seq")
+            target = next((x for x in segments if x.seq == seq), None) or segments[0]
+            _note(
+                target,
+                f"The decision at {cp.kind} is recorded; SwarmCloud did not take it yet "
+                f"({why}). Oracle tries again on every tick.",
+            )
+    await db.commit()
 
 
 async def _finish_decision(
@@ -5176,7 +5258,7 @@ async def _finish_decision(
     as it is now (locked, read afresh): post it to the wait in the live workflow (the same
     answer id and body every time, so a post made twice is one answer), or cancel the
     workflow and go on as a new one. Done, the marker is dropped, in the same commit as
-    its effect."""
+    its effect. A try that does not finish is counted by :func:`_complete_decision`."""
     try:
         await _finish_decision_now(db, run_id, checkpoint_id, stats)
     except _PostNotFound as exc:
@@ -5184,40 +5266,6 @@ async def _finish_decision(
         raise
     except _Unread as exc:
         await _hold_unread(db, run_id, checkpoint_id, exc)  # decided again by a person
-        raise
-    except Unavailable as exc:
-        # Not finished, nothing of it written: what is left is the marker, with why.
-        await db.rollback()
-        run = await _get_run(db, run_id, lock=True)
-        cp = await db.scalar(
-            select(Checkpoint).where(Checkpoint.id == checkpoint_id, Checkpoint.run_id == run.id)
-        )
-        wait = dict(((cp.payload or {}).get("wait") or {}) if cp is not None else {})
-        posting = wait.get("posting")
-        now_wf = _live(run)
-        if exc.held is not None and now_wf is not None and now_wf.get("id") == exc.held["id"]:
-            # The cancel's marker (its tries, a 404 count), as the failed pass left it.
-            _set_knob(run, "workflow", {**now_wf, "cancel_pending": exc.held["cancel_pending"]})
-            await revoke_run_tokens(db, run.id)
-        if cp is not None and cp.status in DECIDED and isinstance(posting, dict):
-            first = not posting.get("error")
-            wait["posting"] = {
-                **posting,
-                "tries": int(posting.get("tries") or 0) + 1,
-                "error": _shown(exc),
-                "tried_at": _now().isoformat(),
-            }
-            _set_wait(cp, wait)
-            if first:
-                segments = await _segments(db, run.id)
-                seq = (cp.payload or {}).get("segment_seq")
-                target = next((x for x in segments if x.seq == seq), None) or segments[0]
-                _note(
-                    target,
-                    f"The decision at {cp.kind} is recorded; SwarmCloud did not take it yet "
-                    f"({_shown(exc)}). Oracle tries again on every tick.",
-                )
-        await db.commit()
         raise
 
 
@@ -5752,7 +5800,8 @@ async def _decide_in_workflow(
             # answer_id, same body).
             raise Unavailable(
                 f"SwarmCloud did not confirm the decision ({exc}); the decision is recorded "
-                "and Oracle posts it again on its next tick, there is no need to decide again"
+                "and Oracle posts it again on its next tick, there is no need to decide again",
+                cause=exc,
             ) from None
         # Refused (the wait is closed, a person is required, or another refusal): not
         # posted, so the run continues as a new workflow with the decision.
