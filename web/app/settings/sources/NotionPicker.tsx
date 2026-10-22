@@ -92,6 +92,9 @@ function PageIcon({ page }: { page: NotionPage }) {
 function useNotionPages(connectionId: string, search: string) {
   const onAuth = useAuthRedirect();
   const [items, setItems] = useState<NotionPage[]>([]);
+  // Which load showed each item (0 for the first pages, then one per "Load more"), so a
+  // later load never moves a row already shown.
+  const [loadOf, setLoadOf] = useState<Map<string, number>>(new Map());
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -135,6 +138,7 @@ function useNotionPages(connectionId: string, search: string) {
             next = page.next_cursor;
             remember(page.items);
             setItems(all);
+            setLoadOf(new Map(all.map((p) => [p.id, 0])));
             setCursor(next);
             if (!next) break;
           }
@@ -142,6 +146,7 @@ function useNotionPages(connectionId: string, search: string) {
           if (!live()) return;
           // A failed fresh list leaves nothing to page through: Retry runs it again.
           setItems([]);
+          setLoadOf(new Map());
           setCursor(null);
           if (!onAuth(e)) setError(errorMessage(e));
         } finally {
@@ -164,6 +169,12 @@ function useNotionPages(connectionId: string, search: string) {
       const page = await fetchPage(cursor);
       if (generation !== loads.current) return;
       setItems((prev) => [...prev, ...page.items]);
+      setLoadOf((prev) => {
+        const next = new Map(prev);
+        const n = Math.max(0, ...prev.values()) + 1;
+        for (const p of page.items) if (!next.has(p.id)) next.set(p.id, n);
+        return next;
+      });
       setCursor(page.next_cursor);
       remember(page.items);
     } catch (e) {
@@ -175,6 +186,7 @@ function useNotionPages(connectionId: string, search: string) {
 
   return {
     items,
+    loadOf,
     known,
     cursor,
     loading,
@@ -209,6 +221,8 @@ export function NotionPicker({
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [link, setLink] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
+  // "<child> is now included with <parent>", after a pick folds earlier picks into it.
+  const [absorbed, setAbsorbed] = useState<string | null>(null);
   const list = useNotionPages(connectionId, search.trim());
 
   const known = list.known;
@@ -227,18 +241,29 @@ export function NotionPicker({
     // Reports only a change, so a new array of the same picks settles at once.
   }, [value, known]);
 
+  // What will be read: every known page that is picked or under a pick, and picks not seen yet.
+  const toRead = useMemo(() => {
+    let n = value.filter((id) => !known.has(id)).length;
+    for (const p of known.values()) if (picked.has(p.id) || pickedAncestor(p.id, known, picked)) n++;
+    return n;
+  }, [value, known, picked]);
+
   const tree = useMemo(() => {
     const ids = new Set(list.items.map((p) => p.id));
+    const at = (id: string) => list.loadOf.get(id) ?? 0;
     const children = new Map<string, NotionPage[]>();
     const top: NotionPage[] = [];
     for (const p of list.items) {
-      const parent = p.parent_id && ids.has(p.parent_id) ? p.parent_id : null;
+      // A parent that arrives in a later load leaves its child where it was shown.
+      const parent = p.parent_id && ids.has(p.parent_id) && at(p.parent_id) <= at(p.id) ? p.parent_id : null;
       if (parent && (p.parent_type === "page" || p.parent_type === "database")) {
         children.set(parent, [...(children.get(parent) ?? []), p]);
       } else top.push(p);
     }
-    // Shared at the top of the workspace first, then pages whose parent was not shared.
-    top.sort((a, b) => Number(b.parent_type === "workspace") - Number(a.parent_type === "workspace"));
+    // In load order; within a load, shared at the top of the workspace first, then pages whose parent was not shared.
+    top.sort(
+      (a, b) => at(a.id) - at(b.id) || Number(b.parent_type === "workspace") - Number(a.parent_type === "workspace"),
+    );
     const counts = new Map<string, number>();
     const count = (id: string, seen: Set<string>): number => {
       if (counts.has(id)) return counts.get(id)!;
@@ -249,12 +274,19 @@ export function NotionPicker({
     };
     for (const p of list.items) count(p.id, new Set());
     return { top, children, counts };
-  }, [list.items]);
+  }, [list.items, list.loadOf]);
 
   function toggle(page: NotionPage) {
+    setAbsorbed(null);
     if (picked.has(page.id)) return onChange(value.filter((id) => id !== page.id));
-    // Picking a parent covers its children: drop the picks it now includes.
-    onChange([...value.filter((id) => !isUnder(id, page.id)), page.id]);
+    // Picking a parent covers its children: drop the picks it now includes, and say so.
+    const under = value.filter((id) => isUnder(id, page.id));
+    if (under.length) {
+      const names = under.map((id) => known.get(id)?.title ?? labels[id] ?? `Page ${id.slice(0, 8)}…`);
+      const joined = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
+      setAbsorbed(`${joined} ${names.length > 1 ? "are" : "is"} now included with ${page.title}`);
+    }
+    onChange([...value.filter((id) => !under.includes(id)), page.id]);
   }
 
   function isUnder(id: string, ancestor: string): boolean {
@@ -274,6 +306,7 @@ export function NotionPicker({
     if (!id) return setLinkError("Not a Notion page link or id");
     setLinkError(null);
     setLink("");
+    setAbsorbed(null);
     if (!picked.has(id)) onChange([...value, id]);
   }
 
@@ -376,9 +409,14 @@ export function NotionPicker({
           />
         </span>
         <span className="tnum flex-none text-[13px] font-semibold text-accent-ink" aria-live="polite" data-testid="notion-picked-count">
-          {value.length} picked
+          {toRead} page{toRead === 1 ? "" : "s"} to read
         </span>
       </div>
+      {absorbed && (
+        <p role="status" className="border-b border-line bg-accent-soft px-3 py-2 text-[13px] font-medium text-accent-ink" data-testid="notion-absorbed">
+          {absorbed}
+        </p>
+      )}
 
       <div className="max-h-[340px] overflow-y-auto" aria-busy={list.loading}>
         {list.error && (
@@ -428,7 +466,10 @@ export function NotionPicker({
                 <button
                   type="button"
                   aria-label={`Remove ${title}`}
-                  onClick={() => onChange(value.filter((x) => x !== id))}
+                  onClick={() => {
+                    setAbsorbed(null);
+                    onChange(value.filter((x) => x !== id));
+                  }}
                   className="grid size-6 flex-none place-items-center rounded-full hover:bg-surface"
                 >
                   <Icon name="x" size={16} />
