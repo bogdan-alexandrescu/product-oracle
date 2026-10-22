@@ -23,6 +23,7 @@ from sqlalchemy import select
 from oracle.auth.models import User
 from oracle.auth.service import hash_password
 from oracle.config import get_settings
+from oracle.mcp.oauth.service import oauth_settings
 from oracle.members import delivery, iap_access, mailer
 from oracle.members import service as members_service
 from oracle.members.models import Invite, MemberFollowUp
@@ -126,10 +127,15 @@ async def mail(monkeypatch):
     monkeypatch.setattr(get_settings(), "mail_retry_seconds", 0)
     monkeypatch.setenv("ORACLE_PUBLIC_URL", PUBLIC)
     monkeypatch.setattr(get_settings(), "app_url", "")
+    # Both read ORACLE_PUBLIC_URL once and cache it: clear them on the way in and out,
+    # so no later test sees this URL (same_origin, the OAuth issuer).
     get_runtime_settings.cache_clear()
+    oauth_settings.cache_clear()
     yield fake
     await delivery.drain()
+    monkeypatch.delenv("ORACLE_PUBLIC_URL")
     get_runtime_settings.cache_clear()
+    oauth_settings.cache_clear()
 
 
 @pytest.fixture
@@ -685,7 +691,7 @@ def test_the_mailer_never_addresses_more_than_one_plain_address(address):
 
 
 @pytest.mark.parametrize(
-    "address", ["pat@corp.com", "pat.lee+oracle@corp.com", "o'neil!#$%&*/=?^_`{|}~-@a-1.corp.com"]
+    "address", ["pat@corp.com", "pat.lee+oracle@corp.com", "o'neil!#$%&*/?=^_`{|}~-@a-1.corp.com"]
 )
 def test_the_rendered_to_header_is_the_address_byte_for_byte(address):
     sender = mailer.GmailApiMailer("oracle@corp.com", FakeMinter())
@@ -921,10 +927,6 @@ async def test_run_and_read_only_tokens_cannot_retry_or_resend(client, iap, monk
     from tests.test_account import _admin_id, _run_token
     from tests.test_read_only_credentials import _bearer
 
-    # Signed in through Oracle's own OAuth pages at the test app's own URL (an earlier
-    # test's ORACLE_PUBLIC_URL may still be cached).
-    monkeypatch.delenv("ORACLE_PUBLIC_URL", raising=False)
-    get_runtime_settings.cache_clear()
     read_only = await _bearer(client, "oracle:read")
     mail = FakeMailer()
     monkeypatch.setattr(mailer, "get_mailer", lambda: mail)

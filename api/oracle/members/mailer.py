@@ -13,6 +13,7 @@ no sender, :func:`get_mailer` is None and nothing is sent.
 import base64
 import html
 import json
+import re
 import time
 from dataclasses import dataclass
 from email.message import EmailMessage
@@ -172,7 +173,13 @@ class GmailApiMailer:
         msg["Subject"] = message.subject
         msg.set_content(message.text)
         msg.add_alternative(message.html, subtype="html")
-        return base64.urlsafe_b64encode(msg.as_bytes()).decode()
+        raw = msg.as_bytes()
+        # The header policy parses and re-renders what it is given (an RFC 2047 word
+        # becomes the address it encodes): send only if the To line is ``to`` itself.
+        head = re.sub(rb"\r?\n[ \t]+", b" ", raw.split(b"\n\n", 1)[0]).splitlines()
+        if [line for line in head if line[:3].lower() == b"to:"] != [f"To: {to}".encode()]:
+            raise MailError("not one plain email address")
+        return base64.urlsafe_b64encode(raw).decode()
 
     async def send(self, http: httpx.AsyncClient, message: InviteEmail) -> None:
         raw = self._raw(message)

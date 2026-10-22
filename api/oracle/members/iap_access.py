@@ -15,7 +15,7 @@ from typing import Protocol
 import httpx
 
 from oracle.config import get_settings
-from oracle.members.schemas import plain_address
+from oracle.members.schemas import PLAIN_ADDRESS, plain_address
 from oracle.swarm.swarmcloud import GoogleAccessToken
 
 ROLE = "roles/iap.httpsResourceAccessor"
@@ -162,9 +162,12 @@ async def _change(client: IapPolicyClient, http: httpx.AsyncClient, backend: str
 def _member(email: str) -> str:
     """The IAM member of ``email``: ``user:`` and one plain address, or IapError."""
     try:
-        return f"user:{plain_address(email)}"
+        member = f"user:{plain_address(email)}"
     except ValueError:
         raise IapError("not one plain email address") from None
+    if PLAIN_ADDRESS.fullmatch(member.removeprefix("user:")) is None:
+        raise IapError("not one plain email address")
+    return member
 
 
 async def grant(client: IapPolicyClient, backends: list[str], email: str) -> None:

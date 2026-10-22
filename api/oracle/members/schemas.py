@@ -1,6 +1,6 @@
+import re
 import uuid
 from datetime import datetime
-from email.utils import getaddresses
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
@@ -21,23 +21,25 @@ MemberStatus = Literal["active", "disabled"]
 # (removed, and the binding not taken away yet) or grant (restored, not granted yet).
 MemberAccessPending = Literal["revoke", "grant"]
 
-# Never in a plain address: each could make one "address" a list, a display name, a
-# group or a comment in the To header or the IAM member built from it.
-_NOT_IN_AN_ADDRESS = frozenset(',;<>"():')
+# A plain address: an RFC 5322 dot-atom local part and ASCII LDH domain labels (at
+# least two, no trailing dot). Nothing else gets in: no display name, list, group,
+# comment, quoting or whitespace, and no RFC 2047 encoded-word (``=?...?=``) or non-ASCII
+# character, which the To header would decode into another address.
+_ATOM = r"[a-z0-9!#$%&'*+/=?^_`{|}~-]+"
+_LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+PLAIN_ADDRESS = re.compile(rf"{_ATOM}(?:\.{_ATOM})*@{_LABEL}(?:\.{_LABEL})+", re.ASCII)
 
 
 def plain_address(value: str) -> str:
-    """``value`` as exactly one plain address, ``local@domain``, lowercased: no display
-    name, no list, no comment, no quoting and no whitespace. Raises ValueError otherwise.
-    The invite's To header and its IAM member are only ever built from this."""
-    v = value.strip().lower()
-    if not v.isprintable() or any(c.isspace() or c in _NOT_IN_AN_ADDRESS for c in v):
+    """``value`` as exactly one plain address, ``local@domain``, lowercased (see
+    ``PLAIN_ADDRESS``). Raises ValueError otherwise. The invite's To header and its IAM
+    member are only ever built from this."""
+    v = value.strip()
+    # ASCII before lowercasing: "\u212a".lower() is an ASCII "k".
+    if not v.isascii() or "=?" in v:
         raise ValueError("not an email address")
-    local, _, domain = v.partition("@")
-    labels = domain.split(".")
-    if not local or "@" in domain or len(labels) < 2 or not all(labels):
-        raise ValueError("not an email address")
-    if getaddresses([v]) != [("", v)]:
+    v = v.lower()
+    if PLAIN_ADDRESS.fullmatch(v) is None:
         raise ValueError("not an email address")
     return v
 
