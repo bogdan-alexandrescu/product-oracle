@@ -9,7 +9,10 @@ rules are checked here:
 - linking an intake to a PRD takes an approver (it brings the intake's gaps into the
   PRD's review gate), and moving an intake with an unresolved critical blocker off its
   PRD takes an owner (it would clear ``intake.critical_blockers``, B4);
-- only the author sets what others see of a finding (``set_sharing``), audited.
+- only the author sets what others see of a finding (``set_sharing``), audited;
+- archiving an intake retires its open questions (they leave the Inbox and stay on the
+  brief as history); restoring it asks them again, a delegated one of its delegate
+  (``retire_questions``, #307).
 """
 
 import re
@@ -36,7 +39,7 @@ from oracle.sources.models import Snapshot, Source
 from oracle.templates.builtins import ensure_builtins
 from oracle.templates.models import Template, Theme
 from oracle.v2.concurrency import expect_version, flush_or_conflict
-from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderQuestion
+from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderAnswer, StakeholderQuestion
 
 
 class IntakeError(Exception):
@@ -402,6 +405,7 @@ async def patch(
             raise IntakeError(409, "A converted intake keeps its status")
         changes["status"] = [intake.status, body.status]
         intake.status = body.status
+        await retire_questions(db, intake)
     reanswer = await _patch_brief_fields(db, intake, body, changes)
     await flush_or_conflict(db)
     if reanswer:
@@ -412,6 +416,38 @@ async def patch(
     if changes:
         await audit.record(db, principal, "intake.updated", "intake", intake.id, changes)
     return intake
+
+
+# Asked of someone and waiting (oracle.intake.questions.OPEN).
+OPEN_QUESTIONS = ("asked", "delegated")
+
+
+async def retire_questions(db: AsyncSession, intake: ProductIntake) -> None:
+    """An archived intake's open questions are retired; a restored one's retired questions
+    are asked again: ``delegated`` if someone delegated it, else ``asked``."""
+    archived = intake.status == "archived"
+    rows = (
+        await db.scalars(
+            select(StakeholderQuestion).where(
+                StakeholderQuestion.intake_id == intake.id,
+                StakeholderQuestion.status.in_(OPEN_QUESTIONS if archived else ("retired",)),
+            )
+        )
+    ).all()
+    if archived:
+        for q in rows:
+            q.status = "retired"
+        return
+    delegated = set(
+        await db.scalars(
+            select(StakeholderAnswer.question_id).where(
+                StakeholderAnswer.question_id.in_([q.id for q in rows]),
+                StakeholderAnswer.kind == "delegate",
+            )
+        )
+    )
+    for q in rows:
+        q.status = "delegated" if q.id in delegated else "asked"
 
 
 BRIEF_FIELDS = ("goal_ids", "out_of_scope", "template", "theme", "prd_answers")

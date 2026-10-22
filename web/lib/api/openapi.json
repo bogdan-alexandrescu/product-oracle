@@ -17691,7 +17691,8 @@
                     "deferred",
                     "delegated",
                     "researching",
-                    "withdrawn"
+                    "withdrawn",
+                    "retired"
                   ],
                   "type": "string"
                 },
@@ -75031,7 +75032,8 @@
               "deferred",
               "delegated",
               "researching",
-              "withdrawn"
+              "withdrawn",
+              "retired"
             ],
             "title": "Status"
           },

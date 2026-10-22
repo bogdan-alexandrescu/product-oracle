@@ -8,6 +8,7 @@ import { ErrorNote, Loading } from "@/components/ui";
 import { Menu, TabBar } from "@/components/review/parts";
 import { api, unwrap } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { DraftSheet } from "./_draft-sheet";
@@ -88,7 +89,10 @@ export function BeforeDrafting({ id }: { id: string }) {
     await act(async () => {
       const intake = await unwrap(api.PATCH("/v1/intakes/{item_id}", { params: { path: { item_id: id } }, body: { status: "archived", lock_version: lock } }));
       summaryQ.setData((prev) => prev && { ...prev, intake });
+      // Its questions are retired: the Inbox badge counts them no more.
+      invalidateWaiting();
     });
+    waitingChanged();
   }
 
   if (!s) {
