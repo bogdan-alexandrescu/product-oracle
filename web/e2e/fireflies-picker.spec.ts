@@ -292,3 +292,99 @@ test("fireflies picker: at the most series a source takes, no more can be picked
   await expect(list.getByLabel("AI Agents daily standup")).toBeEnabled();
   await expect(row.getByRole("button", { name: "Save meetings" })).toBeEnabled();
 });
+
+test("fireflies picker: tick all results of a search, pages not loaded yet included, then undo", async ({ page }) => {
+  const { picker } = await openAdd(page);
+  await picker.getByRole("button", { name: "Choose" }).click();
+  const summary = picker.getByTestId("fireflies-summary");
+  const meetings = picker.getByRole("group", { name: "Meetings" });
+
+  // 34 standups, 12 a page: the first page is all that is loaded.
+  await picker.getByLabel("Search meetings").fill("standup");
+  await expect(meetings.getByRole("checkbox")).toHaveCount(12);
+  await picker.getByRole("button", { name: "Tick all 12+ results" }).click();
+  await expect(summary).toHaveText("34 meetings");
+  await expect(meetings.getByRole("checkbox")).toHaveCount(34);
+  for (const box of await meetings.getByRole("checkbox").all()) await expect(box).toBeChecked();
+  await expect(picker.getByRole("button", { name: "Load more" })).toHaveCount(0);
+
+  // One click undoes it.
+  await picker.getByRole("button", { name: "Undo tick all" }).click();
+  await expect(summary).toHaveText("Nothing picked yet");
+  await expect(meetings.getByLabel("AI Agents daily standup").first()).not.toBeChecked();
+  await expect(picker.getByRole("button", { name: "Tick all 34 results" })).toBeVisible();
+
+  // Meetings already included with a picked series are left out.
+  await picker.getByRole("list", { name: "Series" }).getByLabel("AI agents sprint planning").check();
+  await picker.getByLabel("Search meetings").fill("sprint planning");
+  await expect(meetings.getByRole("checkbox")).toHaveCount(5);
+  await picker.getByRole("button", { name: "Tick all 1 result" }).click();
+  await expect(summary).toHaveText("1 series, 1 meeting");
+  await expect(meetings.getByLabel("AI agents sprint planning", { exact: true })).toBeChecked();
+  await expect(picker.getByRole("button", { name: "Undo tick all" })).toBeVisible();
+});
+
+// #251 review: Tick all reads its pages one after another (slowly, for "all hands").
+const allHandsCalls = (page: Page) =>
+  page.evaluate(() => (window.__firefliesBrowseCalls ?? []).filter((c) => c.startsWith("meetings?") && c.includes("search=all+hands")).length);
+
+test("fireflies picker: ticks and unticks made while Tick all loads are kept", async ({ page }) => {
+  const { picker } = await openAdd(page);
+  await picker.getByRole("button", { name: "Choose" }).click();
+  const summary = picker.getByTestId("fireflies-summary");
+  const meetings = picker.getByRole("group", { name: "Meetings" });
+
+  await picker.getByLabel("Search meetings").fill("all hands");
+  await expect(meetings.getByRole("checkbox")).toHaveCount(12);
+  await meetings.getByLabel("Company all hands #100", { exact: true }).check();
+  await expect(summary).toHaveText("1 meeting");
+
+  await picker.getByRole("button", { name: "Tick all 12+ results" }).click();
+  // While the other pages load: a series ticked, a meeting unticked.
+  await picker.getByRole("list", { name: "Series" }).getByLabel("AI agents sprint planning").check();
+  await meetings.getByLabel("Company all hands #100", { exact: true }).uncheck();
+
+  await expect(picker.getByRole("button", { name: "Undo tick all" })).toBeVisible({ timeout: 10_000 });
+  await expect(summary).toContainText("1 series");
+  await expect(picker.getByRole("list", { name: "Series" }).getByLabel("AI agents sprint planning")).toBeChecked();
+  await expect(meetings.getByLabel("Company all hands #100", { exact: true })).not.toBeChecked();
+  await expect(meetings.getByLabel("Company all hands #99", { exact: true })).toBeChecked();
+});
+
+test("fireflies picker: Tick all stops when the search changes while it loads", async ({ page }) => {
+  const { picker } = await openAdd(page);
+  await picker.getByRole("button", { name: "Choose" }).click();
+  const summary = picker.getByTestId("fireflies-summary");
+  const meetings = picker.getByRole("group", { name: "Meetings" });
+
+  await picker.getByLabel("Search meetings").fill("all hands");
+  await expect(meetings.getByRole("checkbox")).toHaveCount(12);
+  await picker.getByRole("button", { name: "Tick all 12+ results" }).click();
+  await picker.getByLabel("Search meetings").fill("customer");
+  await expect(meetings.getByRole("checkbox")).toHaveCount(2);
+
+  // Long enough for several more slow pages: none is read, and nothing is ticked.
+  await page.waitForTimeout(2_500);
+  expect(await allHandsCalls(page)).toBeLessThanOrEqual(2);
+  await expect(summary).toHaveText("Nothing picked yet");
+  await expect(picker.getByRole("button", { name: "Undo tick all" })).toHaveCount(0);
+  for (const box of await meetings.getByRole("checkbox").all()) await expect(box).not.toBeChecked();
+});
+
+test("fireflies picker: Tick all reads at most 6 pages, and says so", async ({ page }) => {
+  const { picker } = await openAdd(page);
+  await picker.getByRole("button", { name: "Choose" }).click();
+  const summary = picker.getByTestId("fireflies-summary");
+  const meetings = picker.getByRole("group", { name: "Meetings" });
+
+  // 100 all hands, 12 a page: the first page and 6 more, then it stops.
+  await picker.getByLabel("Search meetings").fill("all hands");
+  await expect(meetings.getByRole("checkbox")).toHaveCount(12);
+  await picker.getByRole("button", { name: "Tick all 12+ results" }).click();
+  await expect(summary).toHaveText("84 meetings", { timeout: 10_000 });
+  await expect(picker.getByTestId("fireflies-tick-all-cap")).toContainText("Ticked the first 84 results");
+  await expect(picker.getByTestId("fireflies-tick-all-cap")).toContainText("6 pages");
+  expect(await allHandsCalls(page)).toBe(7);
+  // The rest are still there to load, a page at a time.
+  await expect(picker.getByRole("button", { name: "Load more" })).toBeVisible();
+});

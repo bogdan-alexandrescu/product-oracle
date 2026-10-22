@@ -5,6 +5,8 @@
  * the ad hoc planning session that shares the planning series' title and organizer.
  * Searching "rate limit" answers 429, as the API does past its browsing budget; so
  * does the series list from 2000-01-01, until its Retry-After wait is over.
+ * Searching "all hands" finds 100 weekly all hands on no calendar, 9 pages, and every
+ * page after the first answers slowly, so a test can act while Tick all loads them.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -73,6 +75,15 @@ function build(): Meeting[] {
 
 const MEETINGS = build();
 
+const ALL_HANDS_SEARCH = "all hands";
+const ALL_HANDS_PAGE_MS = 400;
+// Weekly, newest first: #100 on 12 Oct 2026, back a week each.
+const ALL_HANDS: Meeting[] = Array.from({ length: 100 }, (_, i) => {
+  const day = new Date(Date.UTC(2026, 9, 12 - 7 * i)).toISOString().slice(0, 10);
+  const title = `Company all hands #${100 - i}`;
+  return { id: `AH-${100 - i}`, title, date: at(day, "17:00"), duration: 30, organizer: "sam@example.com", attendee_count: 40, series_key: null, series_title: title };
+});
+
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 }
@@ -96,7 +107,7 @@ const SERIES_LIMIT_WAIT = 60;
 let seriesLimitedUntil: number | undefined;
 
 /** Handles /v1/connections/{id}/fireflies/{meetings|series}; null for other paths. */
-export function routeFirefliesBrowse(p: string[], q: URLSearchParams): Response | null {
+export async function routeFirefliesBrowse(p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "connections" || p[3] !== "fireflies") return null;
   if (typeof window !== "undefined") (window.__firefliesBrowseCalls ??= []).push(`${p[4]}?${q.toString()}`);
   if (p[2] !== FIREFLIES_CONNECTION_ID) return json(404, { detail: "Fireflies connection not found" });
@@ -114,6 +125,12 @@ export function routeFirefliesBrowse(p: string[], q: URLSearchParams): Response 
     if (left > 0) return json(429, { detail: "Fireflies limit reached, try later. Try again in 1 minute." }, { "Retry-After": String(left) });
   }
   const rows = MEETINGS.filter((m) => inRange(m, q));
+  if (p[4] === "meetings" && search === ALL_HANDS_SEARCH) {
+    const skip = Number(q.get("cursor") ?? 0);
+    if (skip > 0) await new Promise((r) => setTimeout(r, ALL_HANDS_PAGE_MS));
+    const found = ALL_HANDS.filter((m) => inRange(m, q));
+    return json(200, { meetings: found.slice(skip, skip + PAGE), next_cursor: skip + PAGE < found.length ? String(skip + PAGE) : null });
+  }
   if (p[4] === "meetings") {
     const found = search ? rows.filter((m) => m.title.toLowerCase().includes(search)) : rows;
     const skip = Number(q.get("cursor") ?? 0);
