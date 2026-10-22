@@ -47,7 +47,7 @@ RUN_STATUSES = (
     "failed",
     "cancelled",
 )
-SEGMENT_STATUSES = ("pending", "running", "succeeded", "failed", "cancelled")
+SEGMENT_STATUSES = ("pending", "running", "succeeded", "failed", "cancelled", "skipped")
 CHECKPOINT_KINDS = (
     "baseline_confirm",
     "feature_set",

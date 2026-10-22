@@ -164,7 +164,7 @@ from oracle.review.models import FeedbackItem
 from oracle.review.schemas import Resolution
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import doc_dates, schedule
-from oracle.runs import extensions, feature_set, flows, reasons, rejection, roadmap, workflow
+from oracle.runs import extensions, feature_set, flows, reasons, rejection, reuse, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -264,6 +264,9 @@ ORACLE_KNOBS = (
     "launch_id",
     # strategy_draft (oracle.strategy.brief): the owner's brief from Company › Strategy.
     "strategy_brief",
+    # C4 (B1 "Reuse base"): a Baseline to PRD run that uses the current baseline: the
+    # review it reuses, {"checkpoint_id", "approved_at"} (oracle.runs.reuse).
+    "reuse_baseline",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -469,7 +472,7 @@ def _progress(run: Run, segments: list[RunSegment]) -> RunProgress:
         (s for s in segments if s.status == "pending"), None
     )
     return RunProgress(
-        done=sum(1 for s in segments if s.status == "succeeded"),
+        done=sum(1 for s in segments if s.status in ("succeeded", "skipped")),
         total=len(segments),
         now=flow.segment(now.name).title if now else None,
     )
@@ -829,6 +832,8 @@ def _segment_out(
         attempts=[SegmentAttempt(**a) for a in art.get("attempts") or []],
         draft_import=DraftImport(**imp) if imp else None,
         sent_back=_sent_back(run, segment),
+        reused=art.get("reused") if segment.status == "skipped" else None,
+        note=art.get("note") if segment.status == "skipped" else None,
         can_retry_draft_import=can_retry_draft_import,
         items_check=ItemsCheck(**check) if check else None,
         previous_attempt=PreviousAttempt(
@@ -982,6 +987,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
             roles=knobs.roles,
             checkpoints=knobs.checkpoints,
             budget_usd=_usd(knobs.budget_usd),
+            reuse_baseline=(run.knobs or {}).get("reuse_baseline") or None,
         ),
         snapshot_id=run.snapshot_id,
         snapshot_as_of=snapshot.as_of if snapshot else None,
@@ -1614,6 +1620,33 @@ async def _one_build_at_a_time(db: AsyncSession, flow: flows.FlowDef) -> None:
         raise RunError(f"A baseline build is already under way (run {under_way})")
 
 
+class NotReusable(RunError):
+    """409 ``baseline_not_reusable``: the current baseline may not be reused (C4)."""
+
+    def __init__(self, reason: str | None) -> None:
+        super().__init__(f"the current baseline is not reusable ({reason})")
+        self.detail = {"code": "baseline_not_reusable", "reason": reason}
+
+
+async def _reuse_knob(db: AsyncSession, flow: flows.FlowDef) -> dict[str, Any]:
+    """The ``reuse_baseline`` knob for a run asking to reuse the current baseline: the
+    review it reuses. 422 off Baseline to PRD; 409 when not reusable."""
+    if flow.key != "baseline_to_prd":
+        raise Invalid(f"the {flow.title} flow does not reuse the baseline")
+    st = await reuse.review_status(db)
+    if not st.reusable:
+        raise NotReusable(st.reason)
+    return st.knob()
+
+
+async def _recheck_reuse(db: AsyncSession, run: Run) -> None:
+    """A run reusing the baseline: still reusable (else 409, nothing changed); the knob
+    follows the current review."""
+    if not (run.knobs or {}).get("reuse_baseline"):
+        return
+    _set_knob(run, "reuse_baseline", await _reuse_knob(db, _flow(run)))
+
+
 async def create_run(
     db: AsyncSession,
     principal: Principal | str,
@@ -1658,6 +1691,9 @@ async def create_run(
         depth = "standard" if template == "board-product" else "quick"
         knobs = _resolve_knobs(flow, body.knobs.model_copy(update={"depth": depth}))
     extra = {k: v for k, v in (oracle_knobs or {}).items() if k in ORACLE_KNOBS}
+    extra.pop("reuse_baseline", None)
+    if body.knobs.reuse_baseline:
+        extra["reuse_baseline"] = await _reuse_knob(db, flow)
     if body.strategy_brief is not None:
         if flow.key != "strategy_draft":
             raise Invalid("only a Vision or strategy draft run takes a brief")
@@ -1729,9 +1765,15 @@ async def update_run(
         for k in ("document", "source_version", "template", "theme"):
             if getattr(body, k) is not None:
                 setattr(current, k, getattr(body, k))
-        intake = {k: v for k, v in oracle.items() if k.startswith("intake_")}
+        intake = {
+            k: v for k, v in oracle.items() if k.startswith("intake_") or k == "reuse_baseline"
+        }
         run.document_id, oracle = await _resolve_inputs(db, flow, current)
         oracle.update(intake)
+    if body.knobs is not None and body.knobs.reuse_baseline is not None:
+        oracle.pop("reuse_baseline", None)
+        if body.knobs.reuse_baseline:
+            oracle["reuse_baseline"] = await _reuse_knob(db, flow)
     run.knobs = {**stored, **oracle}
     await _reset_segments(db, run, flow)
     await audit.record(db, principal, "run.updated", "run", run.id, {})
@@ -1742,11 +1784,16 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
     run = await _get_run(db, run_id, lock=True)
     if run.status != "draft":
         raise RunError("only a draft run can be estimated")
+    await _recheck_reuse(db, run)
     flow, knobs = _flow(run), _knobs(run)
+    reused = (run.knobs or {}).get("reuse_baseline")
     segments = {s.name: s for s in await _segments(db, run.id)}
     rows = []
     for i, sdef in enumerate(flow.segments, start=1):
         amount = flows.segment_estimate(sdef, knobs)
+        skip = bool(reused) and sdef.name == "baseline"
+        if skip:
+            amount = Decimal("0.00")
         segments[sdef.name].estimate_usd = amount
         rows.append(
             SegmentEstimate(
@@ -1755,6 +1802,10 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
                 title=sdef.title,
                 roles=knobs.roles[sdef.name],
                 estimate_usd=float(amount),
+                reused=skip,
+                note=f"Current baseline, approved {reuse.short_date(reused['approved_at'])}"
+                if skip
+                else None,
             )
         )
     total = sum((Decimal(str(r.estimate_usd)) for r in rows), Decimal(0))
@@ -1782,6 +1833,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
         raise RunError(f"run is {run.status}, not a draft")
     if run.estimate_usd is None:
         raise RunError("estimate the run first: POST /v1/runs/{id}/estimate")
+    await _recheck_reuse(db, run)
     await _one_build_at_a_time(db, _flow(run))
     knobs = _knobs(run)
     source_id = _source_id(run)
@@ -1830,7 +1882,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
         await db.commit()
         return
     await audit.record(db, principal, "run.started", "run", run.id, {})
-    await _launch(db, run)
+    await _launch(db, run, principal)
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
 
@@ -1851,17 +1903,68 @@ async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> 
     run.approved_by = principal.id
     run.approved_at = _now()
     await audit.record(db, principal, "run.approved", "run", run.id, {"usd": str(run.estimate_usd)})
-    await _launch(db, run)
+    await _launch(db, run, principal)
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
 
-async def _launch(db: AsyncSession, run: Run) -> None:
+async def _launch(db: AsyncSession, run: Run, principal: Principal | str | None = None) -> None:
     run.status = "running"
     run.started_at = _now()
     ceiling = (run.estimate_usd * flows.OVERRUN_FACTOR).quantize(Decimal("0.0001"))
     _set_knob(run, "spend_ceiling_usd", str(ceiling))
     segments = await _segments(db, run.id)
-    await _submit(db, run, segments[0], segments)
+    first = segments[0]
+    reused = (run.knobs or {}).get("reuse_baseline")
+    if reused and first.name == "baseline" and len(segments) > 1:
+        await _skip_reused_baseline(db, run, first, reused, principal)
+        first = segments[1]
+    # Workflow mode covers the segments from ``first`` on: no baseline step is submitted.
+    await _submit(db, run, first, segments)
+
+
+async def _skip_reused_baseline(
+    db: AsyncSession,
+    run: Run,
+    segment: RunSegment,
+    reused: dict[str, Any],
+    principal: Principal | str | None,
+) -> None:
+    """C4: the run uses the current baseline. Its baseline segment is recorded skipped at
+    no cost and its Confirm the baseline stop skipped; nothing runs for them."""
+    note = f"Reused the baseline approved {reuse.short_date(reused['approved_at'])}"
+    now = _now()
+    art = _art(segment)
+    art["reused"] = reused
+    art["note"] = note
+    _set_art(segment, art)
+    segment.status = "skipped"
+    segment.estimate_usd = Decimal("0.00")
+    segment.cost_usd = Decimal("0")
+    segment.finished_at = now
+    segment.error = None
+    db.add(
+        Checkpoint(
+            run_id=run.id,
+            kind="baseline_confirm",
+            status="skipped",
+            approver_role=_flow(run).segment(segment.name).approver_role,
+            note=note,
+            payload={
+                "segment_seq": segment.seq,
+                "segment": segment.name,
+                "reused_checkpoint_id": reused.get("checkpoint_id"),
+            },
+            decided_at=now,
+        )
+    )
+    await audit.record(
+        db,
+        principal if principal is not None else audit.ORACLE,
+        "run.baseline_reused",
+        "run",
+        run.id,
+        {"checkpoint_id": reused.get("checkpoint_id"), "approved_at": reused.get("approved_at")},
+    )
 
 
 # --------------------------------------------------------------------------- segments
@@ -2020,6 +2123,9 @@ async def _prompt_context(
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
         scope_yaml=scope_yaml,
         launch_id=run.knobs.get("launch_id"),
+        baseline_reused=reuse.short_date(reused["approved_at"])
+        if (reused := run.knobs.get("reuse_baseline")) and segment.name != "baseline"
+        else None,
     )
 
 

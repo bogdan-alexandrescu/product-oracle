@@ -979,6 +979,9 @@ class PromptContext:
     scope_yaml: str | None = None
     # A launch_kit run: the launch it drafts for.
     launch_id: str | None = None
+    # C4: a run that uses the current baseline: the day its review was approved ("Oct
+    # 12"), named in place of the baseline segment's output.
+    baseline_reused: str | None = None
 
 
 MAX_PRIOR_CHARS = 20_000
@@ -1110,6 +1113,12 @@ def step_prompt(
                 else "beliefs (id, statement, status supported | untested | strained)"
             )
             + ", horizon and review_on in the front matter.",
+        ]
+    if ctx.baseline_reused:
+        lines += [
+            "",
+            f"The baseline was reviewed and approved on {ctx.baseline_reused}; read it with "
+            "get_baseline.",
         ]
     if ctx.mcp_attached:
         if ctx.prior_files:

@@ -205,7 +205,9 @@ async def test_an_intake_run_reuses_a_reusable_baseline(client, runtime):
     assert rows["baseline"]["reused"] is True
     assert rows["baseline"]["note"] == f"Current baseline, approved {oct_date(at)}"
     assert rows["feature_set"]["reused"] is False and rows["feature_set"]["note"] is None
-    rebuilt = await estimate(client, ctx, (await plain_run(client, ctx, reuse_baseline=False))["id"])
+    rebuilt = await estimate(
+        client, ctx, (await plain_run(client, ctx, reuse_baseline=False))["id"]
+    )
     assert rebuilt["total_usd"] - est["total_usd"] == pytest.approx(7.0)
     assert est["total_usd"] == pytest.approx(19.5)
 
@@ -228,9 +230,7 @@ async def test_an_intake_run_reuses_a_reusable_baseline(client, runtime):
         in prompt
     )
     async with tenant_session(ctx.tenant_id) as s:
-        event = await s.scalar(
-            select(AuditEvent).where(AuditEvent.action == "run.baseline_reused")
-        )
+        event = await s.scalar(select(AuditEvent).where(AuditEvent.action == "run.baseline_reused"))
     assert event is not None and event.data["checkpoint_id"] == str(cp_id)
     assert str(event.entity_id) == run["id"]
 

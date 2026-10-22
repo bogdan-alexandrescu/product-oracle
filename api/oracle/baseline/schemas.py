@@ -475,3 +475,26 @@ class RescoreResult(BaseModel):
     evidence: int
     entities: int
     edges: int
+
+
+class BaselineSegmentUsd(BaseModel):
+    quick: float
+    standard: float
+    deep: float
+
+
+class ReviewStatusOut(BaseModel):
+    """Whether a new PRD run may use the current baseline (B1 "Reuse base"): the last
+    baseline review (the newest approved Confirm the baseline) was approved in the past
+    30 days and no baseline build is under way."""
+
+    last_approved_at: datetime | None = None
+    checkpoint_id: uuid.UUID | None = None
+    run_id: uuid.UUID | None = None
+    age_days: int | None = None
+    build_under_way: bool
+    reusable: bool
+    # When not reusable: too_old, never_reviewed or build_under_way.
+    reason: Literal["too_old", "never_reviewed", "build_under_way"] | None = None
+    # The baseline segment's estimate per depth: what Rebuild adds to a run.
+    baseline_segment_usd: BaselineSegmentUsd
