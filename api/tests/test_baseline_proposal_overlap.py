@@ -20,7 +20,12 @@ async def _feature(client, ctx) -> dict:
 async def _propose(client, ctx, feat: dict, attrs: dict) -> dict:
     resp = await client.post(
         f"{B}/proposals",
-        json={"op": "update", "kind": "entity", "entity_id": feat["id"], "fields": {"attrs": attrs}},
+        json={
+            "op": "update",
+            "kind": "entity",
+            "entity_id": feat["id"],
+            "fields": {"attrs": attrs},
+        },
         headers=ctx.as_("token"),
     )
     assert resp.status_code == 201, resp.text
@@ -67,7 +72,11 @@ async def test_a_persons_edit_since_is_a_later_edit(client, ctx):
     )
     assert resp.status_code == 200, resp.text
     [overlap] = (await _open(client, ctx))[proposal["id"]]["overlaps"]
-    assert (overlap["field"], overlap["current"], overlap["by"]) == ("attrs.milestone", "M3", "edit")
+    assert (overlap["field"], overlap["current"], overlap["by"]) == (
+        "attrs.milestone",
+        "M3",
+        "edit",
+    )
 
 
 async def test_no_overlap_when_the_value_is_back_or_already_the_proposed_one(client, ctx):
