@@ -275,8 +275,11 @@ BASELINE_SEGMENT = SegmentDef(
     outputs=("baseline.yaml", "summary.md"),
     checkpoint="baseline_confirm",
     imports_baseline=True,
-    task="Propose the baseline: company goals in measurable form (metric, "
-    "target, horizon, owner), products and their features, each with "
+    task="Propose the baseline: company goals with typed fields: metric, unit (%, "
+    "USD, EUR, GBP, ms, s, min, h, days, or a counted noun), comparison (at_least | "
+    "above | at_most | below), target (a number), horizon (short | medium | long), "
+    "optionally start and due. Leave owner and weight to people; say who the sources "
+    "suggest as owner in the goal's body. Then products and their features, each with "
     "evidence. Propose changes through propose_change; write the whole "
     "proposal to baseline.yaml in the baseline YAML format (version: 1, "
     "entities and edges, as get_baseline and `oracle baseline pull` give it) "
@@ -1243,7 +1246,9 @@ def source_lines(src: SourceContext, *, paste: bool = True) -> list[str]:
     if src.goals:
         lines += ["", "Confirmed goals:"]
         for g in src.goals:
-            extra = ", ".join(f"{k} {g[k]}" for k in ("metric", "target", "horizon") if g.get(k))
+            extra = g.get("target_words") or ", ".join(
+                f"{k} {g[k]}" for k in ("metric", "target", "horizon") if g.get(k)
+            )
             lines.append(f"- {g['key']}: {g['title']}" + (f" ({extra})" if extra else ""))
     else:
         lines += ["", "Confirmed goals: none yet; say so where an item serves no goal."]

@@ -20,7 +20,8 @@ entities:
     key: activation
     title: Raise activation
     status: confirmed
-    attrs: {metric: activated accounts, target: "40%", horizon: short, weight: 3}
+    attrs: {metric: activated accounts, unit: "%", comparison: at_least, target: 40,
+            horizon: short, weight: 3}
     evidence:
       - url: https://notes.example.com/okrs
         ref: Company goals

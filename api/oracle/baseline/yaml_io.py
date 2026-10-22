@@ -6,7 +6,8 @@
         key: activation
         title: Raise activation
         status: confirmed
-        attrs: {metric: activated accounts, target: "40%", horizon: short, weight: 3}
+        attrs: {metric: activated accounts, unit: "%", comparison: at_least, target: 40,
+                horizon: short, due: "2026-12-31", weight: 3}
         evidence:
           - url: https://notes.example.com/okrs
             ref: Company goals
@@ -25,7 +26,8 @@ goal never becomes confirmed through an import (it lands proposed; an approver
 confirms it). Evidence is matched by (url, ref, excerpt) on its item; a
 ``source_item`` id is exported and honoured only for the caller's own items.
 Evidence from a source item since removed (S5) carries ``source_removed: true``;
-an import ignores it.
+an import ignores it. A goal field that is not a typed value (B5, oracle.baseline.goals:
+``target: "about 40%"``) is kept as ``target_text`` with a ``goal_field_kept_as_text`` note.
 """
 
 import uuid
@@ -375,6 +377,14 @@ async def _merge(
                 )
                 if write.proposal is not None:
                     # Proposed, not created: its evidence and edges wait for it.
+                    result.notes.extend(
+                        ImportIssue(
+                            code="goal_field_kept_as_text",
+                            message=f"{ref}: {field} kept as {field}_text (not a typed value)",
+                            where=f"entities[{i}].attrs.{field}",
+                        )
+                        for field in write.kept_as_text
+                    )
                     result.proposals += 1
                     proposed.add(ref)
                     continue
@@ -393,6 +403,15 @@ async def _merge(
                 changed = bool(service._entity_changes(entity, changes))
                 write = await service.update_entity(db, writer, entity, changes)
                 _count(result, write, changed)
+            for field in write.kept_as_text:
+                # B5: one vague goal never fails the file; its value stays as text.
+                result.notes.append(
+                    ImportIssue(
+                        code="goal_field_kept_as_text",
+                        message=f"{ref}: {field} kept as {field}_text (not a typed value)",
+                        where=f"entities[{i}].attrs.{field}",
+                    )
+                )
         except service.ForbiddenError as e:
             raise YamlForbidden(str(e), f"entities[{i}]") from None
         except service.BaselineError as e:
