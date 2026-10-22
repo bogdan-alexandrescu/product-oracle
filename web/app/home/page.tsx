@@ -143,8 +143,9 @@ export default function HomePage() {
   const decisions = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "overruns");
   // Stuck runs and failed imports: counted in the badge, so drawn here too (searches are not).
   const runs = needs.filter((r) => r.group === "lookups" || r.group === "imports");
-  // Revokes a removed member's disable could not make (owners only), as the Inbox lists them.
-  const access = needs.filter((r) => r.group === "revoke-failures");
+  // Revokes a removed member's disable could not make, and access changes still failing
+  // (owners only), as the Inbox lists them.
+  const access = needs.filter((r) => r.group === "revoke-failures" || r.group === "access-failures");
   const reviews = needs.filter((r) => r.group === "feedback");
   const asked = needs.filter((r) => r.group === "questions");
   const shownNeeds = pickNeeds(visible, MAX_NEEDS);

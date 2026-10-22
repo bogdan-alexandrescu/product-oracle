@@ -747,6 +747,24 @@ class InboxRevokeFailure(BaseModel):
     retry_until: datetime
 
 
+class InboxAccessFailure(BaseModel):
+    """A change to someone's Google IAP access still failing after 24 hours of retries
+    (#245): retried once a day until it is done or no longer needed; Retry runs it now."""
+
+    id: uuid.UUID
+    kind: Literal["iap_revoke", "iap_grant"]
+    email: str
+    # What was owed: "Access not removed" or "Access not granted".
+    owed: str
+    # Oracle's own short reason ("Google returned 403 (permission denied)"), never
+    # Google's response body.
+    last_error: str | None = None
+    attempts: int
+    # Failing since.
+    created_at: datetime
+    next_attempt_at: datetime | None = None
+
+
 class InboxStaged(BaseModel):
     """'N changes staged for draft N+1' on one document, with the build action."""
 
@@ -847,6 +865,8 @@ class InboxOut(BaseModel):
     feedback: list[InboxDocument]
     # Owners only: provider revokes a member's disable could not make (Retry, Dismiss).
     revoke_failures: list[InboxRevokeFailure] = []
+    # Owners only (#245): access changes still failing after 24 hours.
+    access_failures: list[InboxAccessFailure] = []
     # Owners only (F6): the newest weekly alignment reports, unread ones in ``total``; and
     # the reports Slack refused for 24 hours (Retry, Dismiss), in ``total`` too.
     reports: list[InboxReport] = []

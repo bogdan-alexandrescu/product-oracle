@@ -152,8 +152,10 @@ each invite (access granted or not yet, with Retry; email sent, not sent or fail
 Resend, which waits a minute after an email went out). An invite takes exactly one plain
 address (no name, list or comment); one outside `ORACLE_IAP_ALLOWED_DOMAINS` (when set) is
 refused, because Google sign-in would refuse it. Taking access away, or granting it
-again on a restore, that fails is retried by the tick until it is done; the member's row
-says "Access not removed yet" (or "not granted yet") meanwhile. Oracle records only a
+again on a restore, that fails is retried by the tick until it is done or no longer
+needed: for 24 hours, then once a day; the member's row says "Access not removed yet" (or
+"not granted yet") meanwhile. Still failing after 24 hours, it shows in owners' Inbox
+(even for a revoked invite, which has no row), with Retry. Oracle records only a
 short reason for a failure ("Google returned 403 (permission denied)"), never Google's
 answer.
 

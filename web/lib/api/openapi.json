@@ -5326,7 +5326,7 @@
           "members"
         ],
         "summary": "Retry Member Follow Up",
-        "description": "Make a provider revoke (or runtime cancel) a disable still owes now, whatever its\nbackoff or its 24 hours of retries. A success drops Oracle's copy of the credential.",
+        "description": "Make a provider revoke (or runtime cancel) a disable still owes now, or a change\nto someone's Google IAP access that keeps failing (under the address's lock, checked\nfirst: no longer needed is done), whatever its backoff or its 24 hours of retries.\nAudited. A success drops Oracle's copy of the credential.",
         "operationId": "retry_member_follow_up",
         "security": [
           {
@@ -45856,6 +45856,74 @@
         ],
         "title": "ImportProblem"
       },
+      "InboxAccessFailure": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "iap_revoke",
+              "iap_grant"
+            ],
+            "title": "Kind"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "owed": {
+            "type": "string",
+            "title": "Owed"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "email",
+          "owed",
+          "attempts",
+          "created_at"
+        ],
+        "title": "InboxAccessFailure",
+        "description": "A change to someone's Google IAP access still failing after 24 hours of retries\n(#245): retried once a day until it is done or no longer needed; Retry runs it now."
+      },
       "InboxCheckpoint": {
         "properties": {
           "id": {
@@ -46717,6 +46785,14 @@
             },
             "type": "array",
             "title": "Revoke Failures",
+            "default": []
+          },
+          "access_failures": {
+            "items": {
+              "$ref": "#/components/schemas/InboxAccessFailure"
+            },
+            "type": "array",
+            "title": "Access Failures",
             "default": []
           },
           "reports": {

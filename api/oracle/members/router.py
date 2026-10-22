@@ -292,12 +292,15 @@ async def revoke_invite(invite_id: uuid.UUID, principal: Owner, db: TenantDB) ->
     "/member-follow-ups/{follow_up_id}/retry",
     response_model=FollowUpOut,
     responses={404: {"description": "No such follow-up"}, 409: {"description": "Not open"}},
+    dependencies=[Depends(same_origin)],
 )
 async def retry_member_follow_up(
     follow_up_id: uuid.UUID, principal: Owner, db: TenantDB, http: ProviderHttp
 ) -> FollowUpOut:
-    """Make a provider revoke (or runtime cancel) a disable still owes now, whatever its
-    backoff or its 24 hours of retries. A success drops Oracle's copy of the credential."""
+    """Make a provider revoke (or runtime cancel) a disable still owes now, or a change
+    to someone's Google IAP access that keeps failing (under the address's lock, checked
+    first: no longer needed is done), whatever its backoff or its 24 hours of retries.
+    Audited. A success drops Oracle's copy of the credential."""
     row = await _call(service.retry_follow_up(db, principal, follow_up_id, http))
     return FollowUpOut.model_validate(row)
 

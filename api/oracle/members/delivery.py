@@ -7,8 +7,9 @@ never loses it: the invite stays ``pending`` with the reason, and Retry
 (``POST /v1/invites/{id}/access``) grants again. Revoking an open invite, or removing a
 member, takes the binding away unless the person is still an active member or has
 another open invite; restoring a member grants it again. A revoke, or a restore's grant,
-that fails is owed as a follow-up the tick retries. Changes for one address are
-serialised (:func:`lock_address`).
+that fails is owed as a follow-up the tick retries: for 24 hours, then once a day, shown
+to owners in the Inbox with Retry (#245) until it is done or no longer needed. Changes
+for one address are serialised (:func:`lock_address`).
 
 Email: queued with the invite (or Resend) and sent in the background
 (:func:`schedule`), never on the request; one retry, then ``failed``. A send a dead

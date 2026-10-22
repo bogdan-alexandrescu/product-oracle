@@ -163,6 +163,7 @@ from oracle.runs.schemas import (
     FlowOut,
     FlowSegmentOut,
     FlowStart,
+    InboxAccessFailure,
     InboxCheckpoint,
     InboxCounts,
     InboxDocument,
@@ -8209,6 +8210,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     approvals = [_summary(r, refs, None) for r in waiting_runs if r.status == "awaiting_approval"]
     overruns = [_summary(r, refs, None) for r in waiting_runs if r.status == "paused_overrun"]
     revoke_failures = await _revoke_failures(db) if owner else []
+    access_failures = await _access_failures(db) if owner else []
     strategy = None
     if owner:
         from oracle.strategy import drift
@@ -8286,6 +8288,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         imports=imports,
         feedback=feedback,
         revoke_failures=revoke_failures,
+        access_failures=access_failures,
         reports=reports,
         report_failures=report_failures,
         strategy=strategy,
@@ -8299,6 +8302,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + counts.new
         + counts.open
         + len(revoke_failures)
+        + len(access_failures)
         + sum(1 for r in reports if not r.read)
         + len(report_failures)
         # Strategy drift: one row, however many findings.
@@ -8314,6 +8318,32 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         needs_me=counts.new + counts.open + counted,
         last_seen_at=seen,
     )
+
+
+async def _access_failures(db: AsyncSession) -> list[InboxAccessFailure]:
+    """IAP access changes still failing after 24 hours (#245): marked failed, retried
+    once a day; done or no longer needed closes them."""
+    from oracle.members.models import MemberFollowUp
+    from oracle.members.service import ACCESS_KINDS
+
+    rows = await db.scalars(
+        select(MemberFollowUp)
+        .where(MemberFollowUp.kind.in_(ACCESS_KINDS), MemberFollowUp.status == "failed")
+        .order_by(MemberFollowUp.created_at, MemberFollowUp.id)
+    )
+    return [
+        InboxAccessFailure(
+            id=row.id,
+            kind=row.kind,  # type: ignore[arg-type]
+            email=row.email or "",
+            owed="Access not removed" if row.kind == "iap_revoke" else "Access not granted",
+            last_error=row.last_error,
+            attempts=row.attempts,
+            created_at=row.created_at,
+            next_attempt_at=row.next_attempt_at,
+        )
+        for row in rows
+    ]
 
 
 async def _revoke_failures(db: AsyncSession) -> list[InboxRevokeFailure]:

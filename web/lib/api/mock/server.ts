@@ -108,6 +108,9 @@ export interface Db {
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
    * "revoke-failures" scenario only. */
   revoke_failures?: RevokeFailureRow[];
+  /** Access changes still failing after 24 hours (#245); seeded in the "access-failures"
+   * scenario only. A retry succeeds. */
+  access_failures?: Schemas["InboxAccessFailure"][];
   /** Alignment reports, their reads and Oracle's Slack install (./reports.ts, F6); seeded in
    * the "alignment-report" scenario only. */
   reports?: ReportsDb;
@@ -151,11 +154,45 @@ function seedRevokeFailures(): RevokeFailureRow[] {
   ];
 }
 
+/** A revoked invite's access removal, refused by Google for over 24 hours (#245). */
+function seedAccessFailures(): Schemas["InboxAccessFailure"][] {
+  return [
+    {
+      id: uuid(),
+      kind: "iap_revoke",
+      email: "jo.tester@example.com",
+      owed: "Access not removed",
+      last_error: "Google returned 403 (permission denied)",
+      attempts: 27,
+      created_at: "2026-10-18T09:00:00Z",
+      next_attempt_at: "2026-10-20T09:00:00Z",
+    },
+  ];
+}
+
 /** Retry and Dismiss of a revoke a disable owes: owners only, as in the API. A retry succeeds,
- * except while the provider's OAuth app is not configured. */
+ * except while the provider's OAuth app is not configured. An access change's Retry (#245)
+ * succeeds, and its item closes. */
 function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Response | null {
   if (p[1] !== "member-follow-ups" || req.method !== "POST") return null;
   if (!atLeast(me.role, "owner")) return forbidden("owner");
+  const access = (db.access_failures ??= []).find((r) => r.id === p[2]);
+  if (access && p[3] === "retry") {
+    db.access_failures = db.access_failures.filter((r) => r.id !== access.id);
+    return json(200, {
+      id: access.id,
+      member_id: access.id,
+      kind: access.kind,
+      email: access.email,
+      status: "done",
+      attempts: access.attempts + 1,
+      outcome: access.kind === "iap_revoke" ? "removed" : "granted",
+      last_error: null,
+      created_at: access.created_at,
+      next_attempt_at: null,
+      done_at: now(),
+    });
+  }
   db.revoke_failures ??= [];
   const row = db.revoke_failures.find((r) => r.id === p[2]);
   if (!row) return notFound("Follow-up");
@@ -210,6 +247,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * default company plus a PRD with three open Oracle suggestions (fleet-next); "big-prd" adds a PRD
  * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts); "revoke-failures" as the
  * default company plus two provider revokes a removed member's disable could not make (C2);
+ * "access-failures" as the default company plus a revoked invite whose access removal has kept
+ * failing for over 24 hours (#245);
  * "alignment-report" as the default company plus two weekly alignment reports and Oracle's
  * Slack install (./reports.ts, F6);
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
@@ -1242,6 +1281,7 @@ function load(): Db {
   );
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
+  db.access_failures = scenario === "access-failures" ? seedAccessFailures() : [];
   // Launches (H6): three synthetic launches in the "launches" scenario; none otherwise, so
   // other specs' Inbox counts stay as they were.
   if (scenario === "launches") db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
@@ -2252,6 +2292,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const failures = atLeast(me.role, "owner")
       ? db.revoke_failures.filter((r) => !r.dismissed).map((r) => ({ ...r, dismissed: undefined }))
       : [];
+    const accessFailures = atLeast(me.role, "owner") ? (db.access_failures ??= []) : [];
     // Owners also get the weekly alignment reports and the posts Slack refused (F6), and
     // one strategy drift row however many findings are open (H4). Those Oracle told: what
     // it did on its own (H11); unopened rows count.
@@ -2262,11 +2303,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, {
       ...inbox,
       revoke_failures: failures,
+      access_failures: accessFailures,
       reports: reported.reports,
       report_failures: reported.report_failures,
       strategy,
       oracle_actions: did,
-      total: inbox.total + failures.length + reported.unread + (strategy ? 1 : 0) + open,
+      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open,
     });
   }
   if (runs) return runs;
