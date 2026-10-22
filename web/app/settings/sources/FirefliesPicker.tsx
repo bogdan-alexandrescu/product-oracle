@@ -152,22 +152,47 @@ function useMeetings(connectionId: string, search: string, from?: string, to?: s
   const key = `${connectionId}|${search}|${from ?? ""}|${to ?? ""}`;
   const [state, setState] = useState<MeetingState>({ key: "", rows: [], next: null, loading: false, error: null, retryAt: null });
 
+  const page = (cursor: string | null) =>
+    unwrap(
+      api.GET("/v1/connections/{connection_id}/fireflies/meetings", {
+        params: {
+          path: { connection_id: connectionId },
+          query: { search: search || undefined, from: from || undefined, to: to || undefined, cursor: cursor ?? undefined },
+        },
+      }),
+    );
+
   async function load(cursor: string | null, reset: boolean) {
     setState((s) => ({ ...s, key, loading: true, error: null, retryAt: null, ...(reset ? { rows: [], next: null } : {}) }));
     try {
-      const page = await unwrap(
-        api.GET("/v1/connections/{connection_id}/fireflies/meetings", {
-          params: {
-            path: { connection_id: connectionId },
-            query: { search: search || undefined, from: from || undefined, to: to || undefined, cursor: cursor ?? undefined },
-          },
-        }),
-      );
+      const got = await page(cursor);
       setState((s) =>
-        s.key !== key ? s : { key, rows: reset ? page.meetings : [...s.rows, ...page.meetings], next: page.next_cursor ?? null, loading: false, error: null, retryAt: null },
+        s.key !== key ? s : { key, rows: reset ? got.meetings : [...s.rows, ...got.meetings], next: got.next_cursor ?? null, loading: false, error: null, retryAt: null },
       );
     } catch (e) {
       if (!onAuth(e)) setState((s) => (s.key !== key ? s : { ...s, loading: false, error: errorMessage(e), retryAt: retryAtOf(e) }));
+    }
+  }
+
+  /** Loads every page not loaded yet: all of the search's meetings, or null on an error. */
+  async function loadAll(): Promise<Meeting[] | null> {
+    let rows = state.rows;
+    let cursor = state.next;
+    if (!cursor) return rows;
+    setState((s) => ({ ...s, loading: true, error: null, retryAt: null }));
+    try {
+      while (cursor) {
+        const got = await page(cursor);
+        rows = [...rows, ...got.meetings];
+        cursor = got.next_cursor ?? null;
+        const shown = rows;
+        const next = cursor;
+        setState((s) => (s.key !== key ? s : { ...s, rows: shown, next, loading: next != null }));
+      }
+      return rows;
+    } catch (e) {
+      if (!onAuth(e)) setState((s) => (s.key !== key ? s : { ...s, loading: false, error: errorMessage(e), retryAt: retryAtOf(e) }));
+      return null;
     }
   }
 
@@ -176,7 +201,7 @@ function useMeetings(connectionId: string, search: string, from?: string, to?: s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, enabled]);
 
-  return { ...state, more: () => (state.next ? load(state.next, false) : undefined), retry: () => load(null, true) };
+  return { ...state, more: () => (state.next ? load(state.next, false) : undefined), retry: () => load(null, true), loadAll };
 }
 
 /** Retry for a failed list, active once the limit's wait (if any) is over. Keyed by `retryAt`. */
@@ -293,6 +318,35 @@ export function FirefliesPicker({
       meetings: on ? value.meetings.filter((id) => !covered.has(id)) : value.meetings,
       labels: { ...labels, [s.key]: s.title.slice(0, MAX_LABEL) },
     });
+  }
+
+  // Tick all: the search's meetings not in a picked series, and what it added, so one
+  // click undoes it. Forgotten once the search or dates change.
+  const tickable = meetings.rows.filter((m) => m.series_key == null || !pickedSeries.has(m.series_key));
+  const [ticked, setTicked] = useState<{ key: string; ids: string[] } | null>(null);
+  const tickKey = `${query}|${from ?? ""}|${to ?? ""}`;
+  const undo = ticked?.key === tickKey ? ticked.ids : null;
+  // Until the list shows what is typed, ticking all would tick another search's results.
+  const settled = search.trim() === query && value.date_from === from && value.date_to === to && !meetings.loading;
+
+  async function tickAll() {
+    const rows = await meetings.loadAll();
+    if (!rows) return;
+    const have = new Set(value.meetings);
+    const add = rows
+      .filter((m) => (m.series_key == null || !pickedSeries.has(m.series_key)) && !have.has(m.id))
+      .slice(0, Math.max(0, MAX_MEETINGS - value.meetings.length));
+    set({
+      meetings: [...value.meetings, ...add.map((m) => m.id)],
+      labels: { ...labels, ...Object.fromEntries(add.map((m) => [m.id, m.title.slice(0, MAX_LABEL)])) },
+    });
+    setTicked({ key: tickKey, ids: add.map((m) => m.id) });
+  }
+
+  function undoTickAll() {
+    const added = new Set(undo ?? []);
+    set({ meetings: value.meetings.filter((id) => !added.has(id)) });
+    setTicked(null);
   }
 
   function toggleMeeting(m: { id: string; title: string }, on: boolean) {
@@ -426,7 +480,19 @@ export function FirefliesPicker({
             )}
           </Section>
 
-          <Section title="Meetings" count={value.meetings.length || undefined}>
+          <Section
+            title="Meetings"
+            count={value.meetings.length || undefined}
+            action={
+              undo ? (
+                <Button onClick={undoTickAll}>Undo tick all</Button>
+              ) : (meetings.next || tickable.some((m) => !pickedMeetings.has(m.id))) && !meetingsFull ? (
+                <Button onClick={() => void tickAll()} disabled={!settled}>
+                  {`Tick all ${tickable.length}${meetings.next ? "+" : ""} result${tickable.length === 1 && !meetings.next ? "" : "s"}`}
+                </Button>
+              ) : null
+            }
+          >
             <input
               type="search"
               value={search}
