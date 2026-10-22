@@ -143,6 +143,54 @@ test("fireflies picker: the browsing budget reads as 'limit reached, try later'"
   await expect(picker.getByRole("alert")).toContainText("Try again in 5 hours.");
 });
 
+test("fireflies picker: search waits until typing stops before it asks Fireflies", async ({ page }) => {
+  // The clock is faked before the page loads, so every timer runs on it.
+  await page.clock.install();
+  const { picker } = await openAdd(page);
+  await picker.getByRole("button", { name: "Choose" }).click();
+  await page.clock.runFor(1000);
+  await expect(picker.getByRole("group", { name: "Meetings" }).getByLabel("Customer interview: Acme")).toBeVisible();
+  const searches = () =>
+    page.evaluate(() => (window.__firefliesBrowseCalls ?? []).filter((c) => c.startsWith("meetings?") && c.includes("search=")));
+
+  // A slow typist: 350 ms between keys never reaches Fireflies mid-word.
+  const box = picker.getByLabel("Search meetings");
+  await box.click();
+  for (const key of "customer") {
+    await page.keyboard.type(key);
+    await page.clock.runFor(350);
+  }
+  expect(await searches()).toEqual([]);
+  await page.clock.runFor(100);
+  await expect.poll(searches).toEqual(["meetings?search=customer"]);
+  await expect(picker.getByRole("group", { name: "Meetings" }).getByLabel("Customer interview: Acme")).toBeVisible();
+});
+
+test("fireflies picker: the limit alert has a Retry that waits out the limit", async ({ page }) => {
+  // The clock is faked before the page loads, so every timer runs on it.
+  await page.clock.install();
+  const { picker } = await openAdd(page);
+  await picker.getByRole("button", { name: "Choose" }).click();
+  await picker.getByLabel("Search meetings").fill("rate limit");
+  await page.clock.runFor(1000);
+  const alert = picker.getByRole("alert");
+  await expect(alert).toContainText("Fireflies limit reached, try later.");
+  const retry = alert.getByRole("button", { name: "Retry" });
+  await expect(retry).toBeDisabled();
+  const calls = () => page.evaluate(() => (window.__firefliesBrowseCalls ?? []).filter((c) => c.includes("search=rate")).length);
+  expect(await calls()).toBe(1);
+
+  // The mock answers Retry-After: 18000 (5 hours).
+  await page.clock.runFor("04:59:00");
+  await expect(retry).toBeDisabled();
+  await page.clock.runFor("01:01");
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await expect.poll(calls).toBe(2);
+  // Still limited: the alert is back, and Retry waits again.
+  await expect(alert.getByRole("button", { name: "Retry" })).toBeDisabled();
+});
+
 test("fireflies picker: phone layout stacks without side scroll", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const { picker } = await openAdd(page);
