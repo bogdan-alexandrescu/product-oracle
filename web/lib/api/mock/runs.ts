@@ -1036,6 +1036,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   return {
     // Launch rows (H6) are added by the server (./launches.ts).
     launches: [],
+    // Ritual rows (H2): the mock has no rituals yet (the UI lane adds them).
+    rituals: [],
     checkpoints,
     deliveries,
     approvals,
