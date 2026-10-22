@@ -6,7 +6,8 @@ PRD, accept Oracle's suggestions, and create and archive themes. A run token rea
 requests and themes under ``read:baseline`` and writes none (oracle.mcp.scopes).
 Another company's ids are 404 (tenant-scoped session).
 
-Oracle's triage (oracle.requests.triage): Classify now starts a run (approvers), and the
+Oracle's triage (oracle.requests.triage): Classify now starts a run (approvers), approvers
+turn the daily 07:00 PT run on or off (off by default), and the
 requests it found in a person's own sources are theirs alone until filed (decision S6):
 nobody else, run tokens included, lists, files or dismisses them.
 """
@@ -16,7 +17,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from oracle.auth.deps import Principal, TenantDB
+from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role, require_role_now
 from oracle.requests import service, triage
 from oracle.requests.schemas import (
@@ -37,6 +38,7 @@ from oracle.requests.schemas import (
     RequestThemeOut,
     RequestThemePatch,
     State,
+    TriageDailyIn,
     TriageStart,
     TriageStatus,
 )
@@ -106,6 +108,24 @@ async def create_request(data: RequestCreate, db: TenantDB, principal: Commenter
 async def get_request_triage(db: TenantDB, principal: Viewer) -> TriageStatus:
     """Oracle's latest triage run: under way, or how many suggestions it made and how many
     possible requests it found in your own sources."""
+    return await triage.status(db, principal)
+
+
+@router.put(
+    "/requests/triage/daily", response_model=TriageStatus, dependencies=[Depends(same_origin)]
+)
+async def set_request_triage_daily(
+    data: TriageDailyIn, db: TenantDB, principal: Approver
+) -> TriageStatus:
+    """Turn "Daily triage at 07:00 PT" on or off (approvers and owners; off by default).
+    While on, Oracle's daily run acts as whoever turned it on, while they are an active
+    approver or owner, else as the longest-standing active owner. A run's token never
+    turns it (403); a read-only credential changes nothing."""
+    if principal.is_run or principal.run_token_id is not None:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "A run's agents cannot turn the daily triage on or off"
+        )
+    await triage.set_daily(db, principal, data.on)
     return await triage.status(db, principal)
 
 

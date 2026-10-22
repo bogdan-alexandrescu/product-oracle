@@ -244,8 +244,21 @@ class TriageStatus(BaseModel):
     found: int = 0
     error: str | None = None
     # Why Oracle's daily run did not start (no active member to run it as), until a
-    # later run; None otherwise.
+    # later run; None otherwise, and while the daily triage is off.
     daily_skipped: str | None = None
+    # "Daily triage at 07:00 PT" (owner 2026-10-21: off by default). While on, the name of
+    # the member the run acts as (None when there is none); who last turned it on or off,
+    # and when.
+    daily_on: bool = False
+    daily_as: str | None = None
+    daily_changed_by: str | None = None
+    daily_changed_at: datetime | None = None
+
+
+class TriageDailyIn(_In):
+    """Turn "Daily triage at 07:00 PT" on or off."""
+
+    on: bool
 
 
 class CandidateFile(_In):

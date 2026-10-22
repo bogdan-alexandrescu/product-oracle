@@ -7,7 +7,8 @@
  *
  * It also stands in for Oracle's triage (GET and POST /v1/requests/triage: Classify now
  * starts a run that finishes on its own a few seconds later, suggesting a goal and theme for
- * every New request with none) and for the requests Oracle found in the signed-in person's
+ * every New request with none; PUT /v1/requests/triage/daily: the "Daily triage at 07:00 PT"
+ * switch, off by default, approver+, and who the daily run acts as while it is on) and for the requests Oracle found in the signed-in person's
  * own sources (GET /v1/request-candidates, file, dismiss). Each found item is its owner's
  * alone; filing one shares the item's title, link and a 400-character excerpt (C1 "Found
  * items"). The mock has no source items: a found item carries that copy itself.
@@ -15,9 +16,10 @@
  * Seed: 12 requests over 4 channels, 3 themes, 2 merged, 1 disqualified, 1 with a
  * suggestion, 2 found items for the seed owner. Synthetic placeholders only. The
  * "triage-skipped" scenario (po-mock-scenario) adds the reason Oracle's daily run did not
- * start (no active member to run it as), shown until a run.
+ * start (no active member to run it as), shown until a run, with the daily triage on.
  */
 import type { Schemas } from "@/lib/api/client";
+import { displayName } from "@/lib/names";
 import { mockUuid } from "./ids";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -51,6 +53,16 @@ export interface RequestsDb {
   themes: Theme[];
   candidates: CandidateOut[];
   triage?: TriageRun | null;
+  /** "Daily triage at 07:00 PT": who last turned it on or off, and when; absent is off. */
+  daily?: { on: boolean; by: string; at: string } | null;
+}
+
+interface Person {
+  id: string;
+  email: string;
+  role: Role;
+  disabled_at?: string | null;
+  created_at: string;
 }
 
 interface GoalRef {
@@ -78,6 +90,8 @@ export interface RequestsContext {
   features: () => { id: string; key: string; title: string }[];
   /** PRDs a request may link to, with their review progress. */
   documents: () => DocumentRef[];
+  /** The company's members: whom the daily triage runs as (none when not given). */
+  people?: () => Person[];
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -176,6 +190,30 @@ export function seedRequests(input: { ownerId: string; goals: { id: string }[]; 
       "Two prospects asked whether buyers can choose a delivery slot at check-out. Both said it would decide whether they switch this quarter."),
   );
   return db;
+}
+
+/**
+ * The daily triage's switch: off unless someone turned it on (the "triage-skipped" scenario has
+ * it on with no one to run as). While on it runs as whoever turned it on, while an active
+ * approver or owner, else as the longest-standing active owner.
+ */
+function dailyStatus(db: RequestsDb, ctx: RequestsContext, scenario: boolean) {
+  const people = ctx.people?.() ?? [];
+  const name = (id: string | undefined) => {
+    const person = people.find((x) => x.id === id);
+    return person ? displayName(person.email) : null;
+  };
+  if (!db.daily) return { daily_on: scenario, daily_as: null, daily_changed_by: null, daily_changed_at: null };
+  const active = people.filter((x) => !x.disabled_at);
+  const enabler = active.find((x) => x.id === db.daily?.by && atLeast(x.role, "approver"));
+  const owner = active.filter((x) => x.role === "owner").sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
+  const member = enabler ?? owner;
+  return {
+    daily_on: db.daily.on,
+    daily_as: db.daily.on && member ? displayName(member.email) : null,
+    daily_changed_by: name(db.daily.by),
+    daily_changed_at: db.daily.at,
+  };
 }
 
 /** The request mock's routes; null when the path is not one of them. */
@@ -320,15 +358,20 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       run.finished_at = now();
     }
     if (m === "GET") {
-      const skipped = !run && localStorage.getItem("po-mock-scenario") === SKIPPED_SCENARIO ? SKIPPED : null;
+      const scenario = localStorage.getItem("po-mock-scenario") === SKIPPED_SCENARIO;
+      const daily = dailyStatus(db, ctx, scenario);
+      // As the API: no skip reason while the daily triage is off.
+      const skipped = !run && scenario && daily.daily_on ? SKIPPED : null;
       const status: Schemas["TriageStatus"] = run
         ? {
+            ...daily,
             run_id: run.id, status: run.finished_at ? "succeeded" : "running", active: !run.finished_at,
             automatic: false, started_at: run.started_at, finished_at: run.finished_at,
             suggestions: db.requests.filter((r) => r.suggestion?.run_id === run.id).length,
             found: db.candidates.filter((c) => c.run_id === run.id && c.owner_user_id === ctx.userId).length, error: null,
           }
         : {
+            ...daily,
             run_id: null, status: null, active: false, automatic: false, started_at: null, finished_at: null,
             suggestions: 0, found: 0, error: null, daily_skipped: skipped,
           };
@@ -340,6 +383,13 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       db.triage = { id: mockUuid(), created_by: ctx.userId, started_at: now(), finished_at: null };
       return json(201, { id: db.triage.id, flow: "request_triage", status: "running", estimate_usd: 1.5 });
     }
+  }
+
+  if (p[1] === "requests" && p[2] === "triage" && p[3] === "daily" && p.length === 4 && m === "PUT") {
+    if (!atLeast(ctx.role, "approver")) return forbidden("approver");
+    const body = (await req.json()) as Schemas["TriageDailyIn"];
+    db.daily = { on: body.on, by: ctx.userId, at: now() };
+    return routeRequests(db, ctx, new Request(req.url, { method: "GET" }), p.slice(0, 3), q);
   }
 
   if (p[1] === "requests" && p[2]) {

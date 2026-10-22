@@ -7397,6 +7397,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/requests/triage/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Request Triage Daily
+         * @description Turn "Daily triage at 07:00 PT" on or off (approvers and owners; off by default).
+         *     While on, Oracle's daily run acts as whoever turned it on, while they are an active
+         *     approver or owner, else as the longest-standing active owner. A run's token never
+         *     turns it (403); a read-only credential changes nothing.
+         */
+        put: operations["set_request_triage_daily"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/requests/{request_id}": {
         parameters: {
             query?: never;
@@ -24429,6 +24452,14 @@ export interface components {
             /** Records */
             records: components["schemas"]["TrackerRecordIn"][];
         };
+        /**
+         * TriageDailyIn
+         * @description Turn "Daily triage at 07:00 PT" on or off.
+         */
+        TriageDailyIn: {
+            /** On */
+            on: boolean;
+        };
         /** TriageStart */
         TriageStart: {
             /** Depth */
@@ -24471,6 +24502,17 @@ export interface components {
             error?: string | null;
             /** Daily Skipped */
             daily_skipped?: string | null;
+            /**
+             * Daily On
+             * @default false
+             */
+            daily_on: boolean;
+            /** Daily As */
+            daily_as?: string | null;
+            /** Daily Changed By */
+            daily_changed_by?: string | null;
+            /** Daily Changed At */
+            daily_changed_at?: string | null;
         };
         /** Unaligned */
         Unaligned: {
@@ -39058,6 +39100,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_request_triage_daily: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TriageDailyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriageStatus"];
                 };
             };
             /** @description Validation Error */

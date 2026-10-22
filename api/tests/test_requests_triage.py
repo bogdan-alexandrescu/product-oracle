@@ -607,10 +607,14 @@ async def test_daily_triage(client, ctx, runtime, monkeypatch):  # noqa: F811
     await ticker_pass(ctx.tenant_id)
     assert await triage_runs(ctx) == []
 
+    # Off by default: nothing runs at 07:00 until someone turns it on.
     frozen(monkeypatch, day.replace(hour=7, minute=1))
     await ticker_pass(ctx.tenant_id)
+    assert await triage_runs(ctx) == []
+    await switch(client, ctx, "owner", True)
+    await ticker_pass(ctx.tenant_id)
     [run] = await triage_runs(ctx)
-    # No one turned it on: it runs as the company's longest-standing active owner.
+    # The owner turned it on: it runs as them.
     assert run.created_by == ctx.users["owner"].id and run.knobs["depth"] == "quick"
     assert run.knobs["triage_automatic"] is True
     assert run.estimate_usd == Decimal("1.50")
@@ -662,14 +666,30 @@ async def users_disabled(ctx: Ctx, *who: str) -> None:
         await s.commit()
 
 
+async def switch(client, ctx: Ctx, who: str, on: bool, **headers: str) -> dict:
+    """``who`` turns "Daily triage at 07:00 PT" on or off on the Requests page."""
+    resp = await client.put(
+        "/v1/requests/triage/daily", json={"on": on}, headers={**ctx.as_(who), **headers}
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def triage_status(client, ctx: Ctx, who: str = "viewer") -> dict:
+    resp = await client.get("/v1/requests/triage", headers=ctx.as_(who))
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
 async def turned_on_by(ctx: Ctx, who: str) -> None:
-    """The daily triage, turned on by ``who`` (the setting it records)."""
+    """The daily triage, turned on by ``who`` (the setting it records), written directly:
+    for an enabler whose role or account changed since."""
     async with tenant_session(ctx.tenant_id) as s:
-        s.add(
-            TenantSetting(
-                key=triage.DAILY_SETTING, value={"on": True}, updated_by=ctx.users[who].id
-            )
-        )
+        row = await s.scalar(select(TenantSetting).where(TenantSetting.key == triage.DAILY_SETTING))
+        if row is None:
+            row = TenantSetting(key=triage.DAILY_SETTING, value={"on": True})
+            s.add(row)
+        row.value, row.updated_by = {"on": True}, ctx.users[who].id
         await s.commit()
 
 
@@ -721,6 +741,111 @@ async def test_daily_triage_with_no_eligible_member_starts_none(client, ctx, run
     status = (await client.get("/v1/requests/triage", headers=ctx.as_("viewer"))).json()
     assert status["run_id"] is None
     assert status["daily_skipped"] == triage.NO_MEMBER.format(day="2026-10-21")
+
+
+async def test_daily_triage_is_off_by_default(client, ctx, runtime, monkeypatch):  # noqa: F811
+    """protects=owner decision 2026-10-21 (daily triage has an on/off switch, off by
+    default; nothing runs and nothing is spent while off); fails_when=a company that never
+    turned it on (or turned it off) gets a run, a skip record, or a status that does not
+    say it is off; no_claim=SwarmCloud scheduling."""
+    day = datetime(2026, 10, 21, tzinfo=PACIFIC)
+    await add(client, ctx)
+    status = await triage_status(client, ctx)
+    assert status["daily_on"] is False and status["daily_as"] is None
+    frozen(monkeypatch, day.replace(hour=7, minute=5))
+    await ticker_pass(ctx.tenant_id)
+    assert await triage_runs(ctx) == []
+    assert await audits(ctx, "request.triage_skipped") == []
+    assert runtime.submitted == []
+
+    # On, then off again before 07:00 the next day: still nothing.
+    await switch(client, ctx, "approver", True)
+    off = await switch(client, ctx, "owner", False)
+    assert off["daily_on"] is False and off["daily_as"] is None
+    frozen(monkeypatch, (day + timedelta(days=1)).replace(hour=7, minute=5))
+    await ticker_pass(ctx.tenant_id)
+    assert await triage_runs(ctx) == []
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.scalar(select(TenantSetting).where(TenantSetting.key == triage.DAILY_SETTING))
+        assert row.value == {"on": False} and row.updated_by == ctx.users["owner"].id
+    # Off hides an earlier day's skip reason: the status says it is off instead.
+    await turned_on_by(ctx, "commenter")
+    await users_disabled(ctx, "owner")
+    frozen(monkeypatch, (day + timedelta(days=2)).replace(hour=7, minute=5))
+    await ticker_pass(ctx.tenant_id)
+    assert (await triage_status(client, ctx))["daily_skipped"]
+    await switch(client, ctx, "approver", False)
+    status = await triage_status(client, ctx)
+    assert status["daily_on"] is False and status["daily_skipped"] is None
+
+
+async def test_the_switch_records_who_and_when(client, ctx, runtime, monkeypatch):  # noqa: F811
+    """protects=the switch writes the setting request_triage_daily (who set it and when, as
+    other settings) and the status says who the run acts as: the enabler, else (demoted)
+    the longest-standing active owner, who then runs it; fails_when=the setting does not
+    record its enabler, the status names the wrong member, or the demoted enabler still
+    runs it; no_claim=the web switch (mock e2e)."""
+    day = datetime(2026, 10, 21, tzinfo=PACIFIC)
+    await add(client, ctx)
+    on = await switch(client, ctx, "approver", True)
+    assert on["daily_on"] is True and on["daily_as"] == "Approver"
+    assert on["daily_changed_by"] == "Approver" and on["daily_changed_at"]
+    viewer = await triage_status(client, ctx, "viewer")
+    assert viewer["daily_on"] is True and viewer["daily_as"] == "Approver"
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.scalar(select(TenantSetting).where(TenantSetting.key == triage.DAILY_SETTING))
+        assert row.value == {"on": True} and row.updated_by == ctx.users["approver"].id
+        assert row.updated_at is not None
+    [event] = [
+        e for e in await audits(ctx, "setting.update") if e.data["key"] == triage.DAILY_SETTING
+    ]
+    assert event.actor == f"user:{ctx.users['approver'].id}" and event.data["value"] == {"on": True}
+
+    frozen(monkeypatch, day.replace(hour=7, minute=5))
+    await ticker_pass(ctx.tenant_id)
+    [run] = await triage_runs(ctx)
+    assert run.created_by == ctx.users["approver"].id
+    await finish(client, ctx, str(run.id))
+
+    # The enabler is demoted to commenter: the status and the next run name the oldest owner.
+    async with tenant_session(ctx.tenant_id) as s:
+        (await s.get(User, ctx.users["approver"].id)).role = "commenter"
+        await s.commit()
+    assert (await triage_status(client, ctx))["daily_as"] == "Owner"
+    await add(client, ctx, title="Dark mode")
+    frozen(monkeypatch, (day + timedelta(days=1)).replace(hour=7, minute=5))
+    await ticker_pass(ctx.tenant_id)
+    runs = await triage_runs(ctx)
+    assert len(runs) == 2 and runs[-1].created_by == ctx.users["owner"].id
+
+
+async def test_who_may_turn_the_switch(client, ctx):
+    """protects=the switch is approver+ (commenters and viewers read its state only), never
+    a run's or a read-only credential's, and refuses another site's browser request;
+    fails_when=any of them changes the setting; no_claim=the web's disabled switch (mock
+    e2e)."""
+    from tests.coverage_helpers import read_only_mcp, run_headers
+
+    url = "/v1/requests/triage/daily"
+    for who in ("commenter", "viewer"):
+        resp = await client.put(url, json={"on": True}, headers=ctx.as_(who))
+        assert resp.status_code == 403, (who, resp.text)
+    run = await client.put(url, json={"on": True}, headers=await run_headers(ctx, "owner"))
+    assert run.status_code == 403, run.text
+    ro = await client.put(url, json={"on": True}, headers=await read_only_mcp(ctx, "owner"))
+    assert ro.status_code == 403, ro.text
+    for cross in ({"Origin": "https://evil.example.net"}, {"Sec-Fetch-Site": "cross-site"}):
+        resp = await client.put(url, json={"on": True}, headers={**ctx.as_("owner"), **cross})
+        assert resp.status_code == 403, resp.text
+        assert "Cross-site" in resp.json()["detail"]
+    assert (await triage_status(client, ctx))["daily_on"] is False
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (
+            await s.scalar(select(TenantSetting).where(TenantSetting.key == triage.DAILY_SETTING))
+        ) is None
+    # The app's own origin passes.
+    on = await switch(client, ctx, "owner", True, Origin="http://localhost:3000")
+    assert on["daily_on"] is True and on["daily_as"] == "Owner"
 
 
 async def test_daily_triage_counts_new_requests_without_a_suggestion(client, ctx):

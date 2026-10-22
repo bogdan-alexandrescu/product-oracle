@@ -13,13 +13,14 @@ file one, and filing shares the item in full (decided 2026-10-21, C1 "Found item
 
 Runs start two ways: Classify now (an approver, any time) and Oracle's daily run at 07:00
 America/Los_Angeles from the ticker (decided 2026-10-21, C1 "Triage runs"), one a day per
-company, only while a New request has no suggestion. The daily run is Oracle's (audited as
-``oracle``) but acts as a real active member, so its run token reads requests, themes and
-the baseline: the member who turned the daily triage on (:data:`DAILY_SETTING`) while
-still active with the role Classify now needs, else the company's longest-standing active
-owner. With neither it does not start, and the reason shows in the triage status. It
-classifies only: its token has no ``read:sources``, its prompt says so, and it finds
-nothing.
+company, only while a New request has no suggestion, and only while an approver or owner
+has turned "Daily triage at 07:00 PT" on (:data:`DAILY_SETTING`, off by default: owner
+2026-10-21, nothing runs or is spent while it is off). The daily run is Oracle's (audited
+as ``oracle``) but acts as a real active member, so its run token reads requests, themes
+and the baseline: the member who turned the daily triage on while still active with the
+role Classify now needs, else the company's longest-standing active owner. With neither
+it does not start, and the reason shows in the triage status. It classifies only: its
+token has no ``read:sources``, its prompt says so, and it finds nothing.
 """
 
 import uuid
@@ -37,6 +38,7 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
+from oracle.members.names import display_name
 from oracle.models import AuditEvent
 from oracle.requests.models import (
     CHANNELS,
@@ -61,7 +63,8 @@ DAILY_AT = time(7, 0)
 RATIONALE_MAX = 300
 ACTIVE = ("draft", "awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
 FOUND_CHANNELS = tuple(c for c in CHANNELS if c != "interview")
-# The company setting that turns the daily run on; its ``updated_by`` is who turned it on.
+# The company setting that turns the daily run on (``{"on": true}``; off when absent); its
+# ``updated_by`` is who turned it on.
 DAILY_SETTING = "request_triage_daily"
 # What the daily run needs of the member it acts as: Classify now's role.
 DAILY_ROLE = "approver"
@@ -501,13 +504,44 @@ async def daily_due(db: AsyncSession, now: datetime) -> bool:
     return waiting is not None
 
 
+async def _daily_setting(db: AsyncSession) -> TenantSetting | None:
+    return await db.scalar(select(TenantSetting).where(TenantSetting.key == DAILY_SETTING))
+
+
+def _is_on(row: TenantSetting | None) -> bool:
+    return row is not None and isinstance(row.value, dict) and row.value.get("on") is True
+
+
+async def daily_on(db: AsyncSession) -> bool:
+    """ "Daily triage at 07:00 PT" is on (off by default)."""
+    return _is_on(await _daily_setting(db))
+
+
+async def set_daily(db: AsyncSession, principal: Principal, on: bool) -> None:
+    """Turn the daily triage on or off (approver+, checked by the route): the setting
+    records who and when, and the change is audited as other settings are. Commits."""
+    row = await _daily_setting(db)
+    value = {"on": on}
+    if row is None:
+        row = TenantSetting(key=DAILY_SETTING, value=value, updated_by=principal.id)
+        db.add(row)
+    else:
+        row.value = value
+        row.updated_by = principal.id
+        row.updated_at = _now()
+    await audit.record(
+        db, principal, "setting.update", "tenant_setting",
+        data={"key": DAILY_SETTING, "value": value},
+    )  # fmt: skip
+    await db.commit()
+
+
 async def daily_member(db: AsyncSession) -> User | None:
     """Who the daily run acts as: the member who turned it on (:data:`DAILY_SETTING`)
     while active with :data:`DAILY_ROLE` or above, else the longest-standing active owner,
     else None."""
-    enabler_id = await db.scalar(
-        select(TenantSetting.updated_by).where(TenantSetting.key == DAILY_SETTING)
-    )
+    row = await _daily_setting(db)
+    enabler_id = row.updated_by if row is not None else None
     if enabler_id is not None:
         enabler = await db.get(User, enabler_id)
         if (
@@ -534,13 +568,14 @@ async def _skipped(db: AsyncSession, day: str) -> AuditEvent | None:
 
 async def daily(db: AsyncSession) -> uuid.UUID | None:
     """The ticker step: start today's automatic run when it is due and no triage run is
-    under way; returns its id. With no member to act as (:func:`daily_member`) none
-    starts, and the reason is recorded once that day (``request.triage_skipped``, read by
-    :func:`status`); a later tick that day starts it if one is back. Commits."""
+    under way; returns its id. Nothing while the daily triage is off (:func:`daily_on`).
+    With no member to act as (:func:`daily_member`) none starts, and the reason is
+    recorded once that day (``request.triage_skipped``, read by :func:`status`); a later
+    tick that day starts it if one is back. Commits."""
     from oracle.runs import service as runs_service
 
     now = _now()
-    if not await daily_due(db, now) or await _active(db) is not None:
+    if not await daily_on(db) or not await daily_due(db, now) or await _active(db) is not None:
         await db.rollback()
         return None
     moment = daily_moment(now)
@@ -564,7 +599,8 @@ async def daily(db: AsyncSession) -> uuid.UUID | None:
 
 async def status(db: AsyncSession, principal: Principal) -> TriageStatus:
     """The latest triage run, for the Requests header: under way, or what it suggested and
-    what it found in the caller's own sources."""
+    what it found in the caller's own sources; and the daily triage's switch."""
+    daily = await _daily_status(db)
     run = await db.scalar(
         select(Run).where(Run.flow == FLOW).order_by(Run.created_at.desc()).limit(1)
     )
@@ -574,14 +610,16 @@ async def status(db: AsyncSession, principal: Principal) -> TriageStatus:
         .order_by(AuditEvent.created_at.desc())
         .limit(1)
     )
-    # A day the daily run could not start, shown until a later run.
+    # A day the daily run could not start, shown until a later run (and not while off).
     skipped = (
         str(skip.data.get("reason"))
-        if skip is not None and (run is None or skip.created_at > run.created_at)
+        if daily["daily_on"]
+        and skip is not None
+        and (run is None or skip.created_at > run.created_at)
         else None
     )
     if run is None:
-        return TriageStatus(daily_skipped=skipped)
+        return TriageStatus(daily_skipped=skipped, **daily)
     suggestions = await db.scalar(
         select(func.count(ProductRequest.id)).where(
             ProductRequest.suggestion["run_id"].astext == str(run.id)
@@ -606,7 +644,24 @@ async def status(db: AsyncSession, principal: Principal) -> TriageStatus:
         found=found or 0,
         error=run.error,
         daily_skipped=skipped,
+        **daily,
     )
+
+
+async def _daily_status(db: AsyncSession) -> dict[str, Any]:
+    """The switch, who the run acts as while it is on, and who changed it when."""
+    row = await _daily_setting(db)
+    if row is None:
+        return {"daily_on": False}
+    on = _is_on(row)
+    member = await daily_member(db) if on else None
+    changer = await db.get(User, row.updated_by) if row.updated_by is not None else None
+    return {
+        "daily_on": on,
+        "daily_as": display_name(member.email) if member is not None else None,
+        "daily_changed_by": display_name(changer.email) if changer is not None else None,
+        "daily_changed_at": row.updated_at,
+    }
 
 
 # --- found items: the owner's alone until filed -------------------------------------------

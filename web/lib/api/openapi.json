@@ -25766,6 +25766,56 @@
         ]
       }
     },
+    "/v1/requests/triage/daily": {
+      "put": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Set Request Triage Daily",
+        "description": "Turn \"Daily triage at 07:00 PT\" on or off (approvers and owners; off by default).\nWhile on, Oracle's daily run acts as whoever turned it on, while they are an active\napprover or owner, else as the longest-standing active owner. A run's token never\nturns it (403); a read-only credential changes nothing.",
+        "operationId": "set_request_triage_daily",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriageDailyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriageStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
     "/v1/requests/{request_id}": {
       "get": {
         "tags": [
@@ -74120,6 +74170,21 @@
         "title": "TrackerRecordsImport",
         "description": "Engineering status as read from a tracker, posted by an approver (an export, the\nCLI, an MCP client acting for them; not a run's token). Oracle stores it; it never\nwrites back."
       },
+      "TriageDailyIn": {
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "title": "On"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "on"
+        ],
+        "title": "TriageDailyIn",
+        "description": "Turn \"Daily triage at 07:00 PT\" on or off."
+      },
       "TriageStart": {
         "properties": {
           "depth": {
@@ -74242,6 +74307,45 @@
               }
             ],
             "title": "Daily Skipped"
+          },
+          "daily_on": {
+            "type": "boolean",
+            "title": "Daily On",
+            "default": false
+          },
+          "daily_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily As"
+          },
+          "daily_changed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Changed By"
+          },
+          "daily_changed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Changed At"
           }
         },
         "type": "object",

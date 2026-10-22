@@ -113,6 +113,43 @@ for (const email of ["commenter@example.com", "viewer@example.com"]) {
   });
 }
 
+const dailySwitch = (page: Page) => page.getByRole("switch", { name: "Daily triage at 07:00 PT" });
+
+test("daily triage: an owner turns it on and sees who it runs as", async ({ page }) => {
+  // protects=owner decision 2026-10-21 (the switch "Daily triage at 07:00 PT", off by default;
+  // the status says it is off, then who the run acts as); fails_when=the switch starts on, does
+  // not change the status, or forgets its state on reload; no_claim=the ticker's run (the API's
+  // tests/test_requests_triage.py).
+  await login(page);
+  await openRequests(page);
+  const status = page.getByTestId("triage-status");
+  await expect(dailySwitch(page)).not.toBeChecked();
+  await expect(dailySwitch(page)).toBeEnabled();
+  await expect(status).toContainText("Daily triage is off");
+  await dailySwitch(page).click();
+  await expect(dailySwitch(page)).toBeChecked();
+  await expect(status).toContainText("Daily triage at 07:00 PT runs as Admin");
+  await expect(status).not.toContainText("Daily triage is off");
+  await page.reload();
+  await expect(dailySwitch(page)).toBeChecked();
+  await expect(status).toContainText("runs as Admin");
+  await dailySwitch(page).click();
+  await expect(dailySwitch(page)).not.toBeChecked();
+  await expect(status).toContainText("Daily triage is off");
+});
+
+test("daily triage: a commenter sees the switch but cannot turn it", async ({ page }) => {
+  // protects=approvers and owners turn the switch; commenters and viewers see its state only;
+  // fails_when=the switch is hidden from a commenter or they can change it; no_claim=the API's
+  // 403 (tests/test_requests_triage.py).
+  await login(page, "commenter@example.com");
+  await openRequests(page);
+  await expect(dailySwitch(page)).toBeVisible();
+  await expect(dailySwitch(page)).toBeDisabled();
+  await expect(dailySwitch(page)).not.toBeChecked();
+  await expect(page.getByTestId("triage-status")).toContainText("Daily triage is off");
+});
+
 test("phone: the found panel and the filing dialog fit 390 px", async ({ page }) => {
   // protects=the phone layout of lane 3's parts (no horizontal scroll; the dialog fits);
   // fails_when=the panel or dialog overflows the screen; no_claim=the table's cards (lane 2).
