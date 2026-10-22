@@ -109,6 +109,9 @@ async def run_headers(ctx: Ctx, who: str) -> dict[str, str]:
 async def read_only_mcp(ctx: Ctx, who: str) -> dict[str, str]:
     """Headers of an MCP client ``who`` approved with oracle:read only."""
     raw = f"poa_{uuid.uuid4().hex}"
+    # Dated when minted, not by the import-time NOW: a long run (xdist) may reach the
+    # caller over an hour after this module was imported, and the token would be expired.
+    now = datetime.now(UTC)
     async with tenant_session(ctx.tenant_id) as s:
         client = OAuthClient(
             client_id=uuid.uuid4().hex, name="Claude", redirect_uris=["http://localhost/cb"]
@@ -122,8 +125,8 @@ async def read_only_mcp(ctx: Ctx, who: str) -> dict[str, str]:
                 client_id=client.id,
                 user_id=ctx.users[who].id,
                 scope="oracle:read",
-                expires_at=NOW + timedelta(hours=1),
-                refresh_expires_at=NOW + timedelta(days=1),
+                expires_at=now + timedelta(hours=1),
+                refresh_expires_at=now + timedelta(days=1),
                 family_id=uuid.uuid4(),
             )
         )
