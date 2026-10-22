@@ -8,7 +8,7 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { mockUuid, seeded } from "./ids";
-import { enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { attributeCommenterProposal, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
@@ -756,6 +756,8 @@ function seed(): Db {
     last_sign_in_at: m.last_sign_in_at,
     open_tokens: 0,
   }));
+  // The seeded commenter proposal is the commenter's (B4 names who made it).
+  attributeCommenterProposal(db.baseline, db.members.find((m) => m.email === "commenter@example.com")!.id);
   // A member removed two days ago (C2): kept, so history keeps the name; an owner can restore.
   db.members.push({
     ...REMOVED_MEMBER,
@@ -1937,7 +1939,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       const r = db.runs.runs.find((x) => x.id === runId);
       return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
     };
-    return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf }, req, p.slice(2), q);
+    const memberEmail = (userId: string) => db.members.find((m) => m.id === userId)?.email ?? null;
+    return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf, memberEmail }, req, p.slice(2), q);
   }
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) {

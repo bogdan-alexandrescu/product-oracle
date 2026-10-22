@@ -443,3 +443,99 @@ test("baseline: proposals by run fit a phone", async ({ page }) => {
   await expect(page.getByTestId("run-filter-line")).toBeVisible();
   expect(await overflow()).toBeLessThanOrEqual(0);
 });
+
+// B4 Proposal sentences. The mock seeds Guided setup (effort M, a run proposes L), Dark mode
+// (delivery status idea, a run proposes planned) and Team invites (effort S, the commenter
+// proposes XS). The strings are the API's (api/tests/test_baseline_describe.py): the mock's
+// TypeScript port (lib/api/mock/describe.ts) must write the same ones.
+const SENTENCES = {
+  "Guided setup": "Set Guided setup’s effort to L (was M)",
+  "Dark mode": "Set Dark mode’s delivery status to planned (was idea)",
+  "Team invites": "Set Team invites’ effort to XS (was S)",
+};
+
+/**
+ * protects: no field paths on screen; each proposal reads as one sentence, the exact change
+ * one click away under Details.
+ * fails_when: any `attrs.` text is visible outside Details, a sentence differs from the API's,
+ * the "update"/"entity" chips still show, or Details does not open the field list.
+ * no_claim: mock data; the TypeScript port is checked against the same expected strings as
+ * the Python tests, not against every rule.
+ */
+test("baseline: proposals read as sentences", async ({ page }) => {
+  await openProposals(page);
+  const rows = page.getByTestId("proposal");
+  for (const [title, sentence] of Object.entries(SENTENCES)) {
+    await expect(rows.filter({ hasText: title }).getByTestId("proposal-summary")).toHaveText(sentence);
+  }
+  const list = page.getByRole("list", { name: "Proposals" });
+  expect(await list.innerText()).not.toContain("attrs.");
+  expect(await list.innerText()).not.toMatch(/\b(update|entity)\b/);
+
+  const guided = rows.filter({ hasText: "Guided setup" });
+  const fields = guided.getByLabel("Proposed fields");
+  await expect(fields).toBeHidden();
+  await guided.getByText("Details", { exact: true }).click();
+  await expect(fields).toBeVisible();
+  await expect(fields).toHaveText("attrs.effort:L");
+});
+
+/**
+ * protects: owner call c6, "suggestions show who made them": a member's name (or You), a
+ * run's name, never an actor string.
+ * fails_when: a row shows "user:<id>", the other member's name is missing, or the signed-in
+ * member's own proposal does not say You.
+ * no_claim: API tokens and intake answers (the API tests cover their labels).
+ */
+test("baseline: each proposal says who made it", async ({ page, browser }) => {
+  await openProposals(page);
+  const rows = page.getByTestId("proposal");
+  const invites = rows.filter({ hasText: "Team invites" }).getByTestId("proposal-by");
+  await expect(invites).toHaveText(/^Commenter · Oct \d+/);
+  await expect(invites).toHaveAttribute("title", "commenter@example.com");
+  await expect(rows.filter({ hasText: "Guided setup" }).getByRole("link", { name: `From run · ${RUN_LABEL}` })).toBeVisible();
+  expect(await page.getByRole("list", { name: "Proposals" }).innerText()).not.toContain("user:");
+
+  // The commenter, signed in, reads their own proposal as You.
+  const context = await browser.newContext();
+  const theirs = await context.newPage();
+  await login(theirs, "commenter@example.com");
+  await theirs.goto("/baseline?tab=proposals");
+  const own = theirs.getByTestId("proposal").filter({ hasText: "Team invites" });
+  await expect(own.getByTestId("proposal-summary")).toHaveText(SENTENCES["Team invites"]);
+  await expect(own.getByTestId("proposal-by")).toHaveText(/^You · Oct \d+/);
+  await context.close();
+});
+
+/**
+ * protects: the item named in a sentence opens its drawer, as the title button did.
+ * fails_when: the title inside the sentence is not a button, or opens nothing.
+ * no_claim: links in run rows (B3 covers them).
+ */
+test("baseline: the title inside a proposal's sentence opens the item", async ({ page }) => {
+  await openProposals(page);
+  const dark = page.getByTestId("proposal").filter({ hasText: "Dark mode" });
+  await dark.getByTestId("proposal-summary").getByRole("button", { name: "Dark mode" }).click();
+  await expect(drawer(page, "Dark mode")).toBeVisible();
+});
+
+/**
+ * protects: proposal sentences on a phone.
+ * fails_when: at 390 px the page scrolls sideways, a sentence is cut, or Accept / Reject go
+ * out of view.
+ * no_claim: other widths.
+ */
+test("baseline: proposal sentences wrap on a phone", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openProposals(page);
+  const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(await overflow()).toBeLessThanOrEqual(0);
+  for (const [title, sentence] of Object.entries(SENTENCES)) {
+    const row = page.getByTestId("proposal").filter({ hasText: title });
+    await row.scrollIntoViewIfNeeded();
+    await expect(row.getByTestId("proposal-summary")).toHaveText(sentence);
+    await expect(row.getByTestId("proposal-summary")).toBeInViewport({ ratio: 1 });
+    await expect(row.getByRole("button", { name: "Accept" })).toBeInViewport();
+    await expect(row.getByRole("button", { name: "Reject" })).toBeInViewport();
+  }
+});

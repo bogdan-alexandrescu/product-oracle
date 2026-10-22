@@ -446,6 +446,10 @@ async def decide_proposal(
         raise ConflictError(f"Proposal is already {proposal.status}")
     if accept and await awaits_answer(db, proposal.payload):
         raise ConflictError("This proposal waits for the author to share the answer")
+    # B4: history reads the sentence the decider saw, written from the target before the change.
+    from oracle.baseline.describe import summaries
+
+    summary = (await summaries(db, [proposal]))[proposal.id]
     if accept:
         p = proposal.payload
         reason = note or p.get("reason") or f"accepted proposal {proposal.id}"
@@ -471,6 +475,7 @@ async def decide_proposal(
                 else:
                     await _detach(db, proposal)
                     await delete_edge(db, writer, target)
+    proposal.payload = {**proposal.payload, "summary": summary}
     proposal.status = "accepted" if accept else "rejected"
     proposal.decided_by = principal.id
     proposal.decided_at = _now()
