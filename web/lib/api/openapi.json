@@ -2541,6 +2541,147 @@
         }
       }
     },
+    "/v1/staging": {
+      "get": {
+        "tags": [
+          "staging"
+        ],
+        "summary": "List Staging",
+        "description": "Everything staged for one target, from every origin: for a document, the accepted\nreview suggestions (C1e) and the section changes staged from discussions; for a\ncheckpoint, its shared draft's actions from rows and from discussions. A row from a\nprivate discussion the caller is not in names no discussion.",
+        "operationId": "list_staging",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "document",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A document's slug",
+              "title": "Document"
+            },
+            "description": "A document's slug"
+          },
+          {
+            "name": "checkpoint",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A checkpoint's id",
+              "title": "Checkpoint"
+            },
+            "description": "A checkpoint's id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagingList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/next-draft-changes/{change_id}/unstage": {
+      "post": {
+        "tags": [
+          "staging"
+        ],
+        "summary": "Unstage Next Draft Change",
+        "description": "Take a discussion's section change out of the next draft; its discussion change\ngoes back to the discussion. 409 \"Already in draft <n>\" once applied.",
+        "operationId": "unstage_next_draft_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnstageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextDraftChangeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/documents/{doc}/versions/{n}/section-states": {
       "get": {
         "tags": [
@@ -57314,6 +57455,96 @@
         "type": "object",
         "title": "NextDraftApply"
       },
+      "NextDraftChangeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "raised_on_version": {
+            "type": "integer",
+            "title": "Raised On Version"
+          },
+          "instruction": {
+            "type": "string",
+            "title": "Instruction"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "unstaged",
+              "applied",
+              "superseded"
+            ],
+            "title": "Status"
+          },
+          "applied_in_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied In Version"
+          },
+          "from_private": {
+            "type": "boolean",
+            "title": "From Private",
+            "default": false
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document_id",
+          "section_key",
+          "raised_on_version",
+          "instruction",
+          "status",
+          "lock_version"
+        ],
+        "title": "NextDraftChangeOut",
+        "description": "A discussion's section change waiting for the document's next draft."
+      },
       "NextDraftDataPoint": {
         "properties": {
           "value": {
@@ -57387,10 +57618,61 @@
               }
             ],
             "title": "Feedback Ids"
+          },
+          "next_draft_change_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Draft Change Ids"
           }
         },
         "type": "object",
         "title": "NextDraftIn"
+      },
+      "NextDraftInstruction": {
+        "properties": {
+          "next_draft_change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Next Draft Change Id"
+          },
+          "instruction": {
+            "type": "string",
+            "title": "Instruction"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "next_draft_change_id",
+          "instruction",
+          "origin"
+        ],
+        "title": "NextDraftInstruction",
+        "description": "G4: a discussion's change the section was built with."
       },
       "NextDraftPlan": {
         "properties": {
@@ -57496,6 +57778,21 @@
               }
             ],
             "title": "Feedback Ids"
+          },
+          "next_draft_change_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Draft Change Ids"
           },
           "depth": {
             "type": "string",
@@ -57708,6 +58005,21 @@
             ],
             "title": "Feedback Ids"
           },
+          "next_draft_change_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Draft Change Ids"
+          },
           "depth": {
             "type": "string",
             "enum": [
@@ -57795,6 +58107,23 @@
             },
             "type": "array",
             "title": "Feedback",
+            "default": []
+          },
+          "next_draft_change_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Next Draft Change Ids",
+            "default": []
+          },
+          "instructions": {
+            "items": {
+              "$ref": "#/components/schemas/NextDraftInstruction"
+            },
+            "type": "array",
+            "title": "Instructions",
             "default": []
           }
         },
@@ -74739,6 +75068,14 @@
             "type": "array",
             "title": "Agent Items",
             "default": []
+          },
+          "next_draft_changes": {
+            "items": {
+              "$ref": "#/components/schemas/StagedDiscussionChange"
+            },
+            "type": "array",
+            "title": "Next Draft Changes",
+            "default": []
           }
         },
         "type": "object",
@@ -74749,6 +75086,511 @@
           "items"
         ],
         "title": "StagedChanges"
+      },
+      "StagedDiscussionChange": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "source": {
+            "type": "string",
+            "const": "next_draft_change",
+            "title": "Source",
+            "default": "next_draft_change"
+          },
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "section_heading": {
+            "type": "string",
+            "title": "Section Heading"
+          },
+          "instruction": {
+            "type": "string",
+            "title": "Instruction"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "origin_line": {
+            "type": "string",
+            "title": "Origin Line"
+          },
+          "discussion_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discussion Id"
+          },
+          "discussion_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discussion Title"
+          },
+          "from_private": {
+            "type": "boolean",
+            "title": "From Private",
+            "default": false
+          },
+          "staged_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staged By Name"
+          },
+          "staged_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staged At"
+          },
+          "raised_on_version": {
+            "type": "integer",
+            "title": "Raised On Version"
+          },
+          "section_gone": {
+            "type": "boolean",
+            "title": "Section Gone",
+            "default": false
+          },
+          "section_locked": {
+            "type": "boolean",
+            "title": "Section Locked",
+            "default": false
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "section_key",
+          "section_heading",
+          "instruction",
+          "origin_line",
+          "raised_on_version",
+          "lock_version"
+        ],
+        "title": "StagedDiscussionChange",
+        "description": "G4: a discussion's section change staged for the next draft (``next_draft_changes``)."
+      },
+      "StagingCounts": {
+        "properties": {
+          "staged": {
+            "type": "integer",
+            "title": "Staged",
+            "default": 0
+          },
+          "suggested": {
+            "type": "integer",
+            "title": "Suggested",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "StagingCounts"
+      },
+      "StagingDiscussion": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "private": {
+            "type": "boolean",
+            "title": "Private",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "StagingDiscussion",
+        "description": "The discussion a row came from. For a private discussion the reader is not in, only\nthat it is private: ``id`` and ``title`` are null. ``private`` is its visibility now."
+      },
+      "StagingItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "suggestion",
+              "next_draft_change",
+              "checkpoint_action"
+            ],
+            "title": "Source"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "suggested"
+            ],
+            "title": "State"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "row",
+              "discussion",
+              "review"
+            ],
+            "title": "Origin"
+          },
+          "discussion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StagingDiscussion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "from_private": {
+            "type": "boolean",
+            "title": "From Private",
+            "default": false
+          },
+          "origin_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Line"
+          },
+          "staged_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StagingPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suggested_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StagingPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "section_gone": {
+            "type": "boolean",
+            "title": "Section Gone",
+            "default": false
+          },
+          "section_locked": {
+            "type": "boolean",
+            "title": "Section Locked",
+            "default": false
+          },
+          "lock_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "kind",
+          "label",
+          "state",
+          "origin"
+        ],
+        "title": "StagingItem"
+      },
+      "StagingList": {
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/StagingTarget"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StagingItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/StagingCounts"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "can_stage": {
+            "type": "boolean",
+            "title": "Can Stage",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "items",
+          "counts"
+        ],
+        "title": "StagingList"
+      },
+      "StagingPerson": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "name"
+        ],
+        "title": "StagingPerson"
+      },
+      "StagingTarget": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "document",
+              "checkpoint"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "next_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Version"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "checkpoint_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Id"
+          },
+          "checkpoint_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "StagingTarget"
       },
       "StakeholderAnswerOut": {
         "properties": {
@@ -81007,6 +81849,19 @@
           "reason"
         ],
         "title": "UnavailableItem"
+      },
+      "UnstageIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "UnstageIn"
       },
       "UpdatePeriod": {
         "properties": {

@@ -88,8 +88,8 @@ def test_ask_person_and_scope_kinds_map_to_question_and_the_scope_vocabulary():
          "category": "scope"},
         item_key="mobile-push",
     )  # fmt: skip
-    assert (q.kind, q.field, q.value) == ("question", None, {"asked_to": asked,
-                                                             "text": "Is push in scope?"})  # fmt: skip
+    assert (q.kind, q.field) == ("question", None)
+    assert q.value == {"asked_to": asked, "text": "Is push in scope?"}
     feature = str(uuid.uuid4())
     s = mapping.to_action(
         "scope_feature", {"feature_id": feature, "decision": "defer", "reason": "Later"}
@@ -131,31 +131,33 @@ def test_the_list_merge_keeps_each_row_once_in_order():
 # --- integration: the checkpoint's shared draft --------------------------------------------
 
 
-def principal_of(review: Review, who: str, role: str) -> Principal:
-    return Principal(
-        tenant_id=review.tenant_id, kind="user", role=role, user_id=review.people[who].user_id
-    )
+def principal_of(rv: Review, who: str, role: str) -> Principal:
+    return Principal(tenant_id=rv.tenant_id, kind="user", role=role, user_id=rv.people[who].user_id)
 
 
-async def discussion(review: Review, who: str, item: str = "mobile-push", **extra) -> str:
-    resp = await review.client.post(
+async def discussion(rv: Review, who: str, item: str = "mobile-push", **extra) -> str:
+    resp = await rv.client.post(
         "/v1/discussions",
         json={
             "subject_kind": "checkpoint_item",
-            "subject": {"run_id": review.run["id"], "checkpoint_id": review.cp["id"],
-                        "checkpoint_kind": "roadmap_items", "item_key": item},
+            "subject": {
+                "run_id": rv.run["id"],
+                "checkpoint_id": rv.cp["id"],
+                "checkpoint_kind": "roadmap_items",
+                "item_key": item,
+            },
             "title": "Push timing",
             **extra,
         },  # fmt: skip
-        headers=review.h(who),
+        headers=rv.h(who),
     )
     assert resp.status_code == 201, resp.text
     return resp.json()["id"]
 
 
-async def change(review: Review, discussion_id: str, kind: str, payload: dict) -> uuid.UUID:
+async def change(rv: Review, discussion_id: str, kind: str, payload: dict) -> uuid.UUID:
     """A typed change as G3's extraction leaves it (G3's routes are not built)."""
-    async with tenant_session(review.tenant_id) as s:
+    async with tenant_session(rv.tenant_id) as s:
         row = DiscussionChange(
             discussion_id=uuid.UUID(discussion_id),
             kind=kind,
@@ -168,27 +170,27 @@ async def change(review: Review, discussion_id: str, kind: str, payload: dict) -
         return row.id
 
 
-async def suggest(review: Review, who: str, role: str, change_id: uuid.UUID):
-    async with tenant_session(review.tenant_id) as s:
+async def suggest(rv: Review, who: str, role: str, change_id: uuid.UUID):
+    async with tenant_session(rv.tenant_id) as s:
         row = await s.get(DiscussionChange, change_id)
-        return await service.suggest_discussion_change(s, principal_of(review, who, role), row)
+        return await service.suggest_discussion_change(s, principal_of(rv, who, role), row)
 
 
-async def stage(review: Review, who: str, role: str, change_id: uuid.UUID, reason=None):
-    async with tenant_session(review.tenant_id) as s:
+async def stage(rv: Review, who: str, role: str, change_id: uuid.UUID, reason=None):
+    async with tenant_session(rv.tenant_id) as s:
         row = await s.get(DiscussionChange, change_id)
         return await service.stage_discussion_change(
-            s, principal_of(review, who, role), row, reason, None
+            s, principal_of(rv, who, role), row, reason, None
         )
 
 
-async def change_row(review: Review, change_id: uuid.UUID) -> DiscussionChange:
-    async with tenant_session(review.tenant_id) as s:
+async def change_row(rv: Review, change_id: uuid.UUID) -> DiscussionChange:
+    async with tenant_session(rv.tenant_id) as s:
         return await s.get(DiscussionChange, change_id)
 
 
-async def action_rows(review: Review) -> list[CheckpointAction]:
-    async with tenant_session(review.tenant_id) as s:
+async def action_rows(rv: Review) -> list[CheckpointAction]:
+    async with tenant_session(rv.tenant_id) as s:
         return list(await s.scalars(select(CheckpointAction)))
 
 
@@ -347,9 +349,7 @@ async def test_one_read_lists_row_and_discussion_actions_and_hides_private_ones(
     disc = {i["origin"]: i for i in out["items"]}["discussion"]
     assert disc["discussion"] == {"id": d, "title": "Push timing", "private": False}
     assert disc["from_private"] is True
-    assert [r.from_private for r in await action_rows(review) if r.origin == "discussion"] == [
-        True
-    ]
+    assert [r.from_private for r in await action_rows(review) if r.origin == "discussion"] == [True]
 
 
 # --- integration: the next draft -----------------------------------------------------------
@@ -411,7 +411,7 @@ def answer_with_instructions(payload: dict) -> dict:
 
 async def test_a_staged_section_edit_lists_builds_and_applies_with_c1e_items(
     client, ctx, pool, fake  # noqa: F811
-):
+):  # fmt: skip
     """protects=a discussion's section change joins the next draft next to C1e suggestions
     and one read shows both (criteria 2, 3); fails_when=a row is missing, doubled, left out
     of the build or the Inbox count, or left staged after apply; no_claim=how the model
@@ -433,7 +433,8 @@ async def test_a_staged_section_edit_lists_builds_and_applies_with_c1e_items(
     assert out["counts"] == {"staged": 3, "suggested": 0}
     listed = await staged(client, ctx)
     [nd] = listed["next_draft_changes"]
-    assert nd["id"] == ref["id"] and nd["discussion"]["title"] == "Invite wording"
+    assert nd["id"] == ref["id"] and nd["discussion_title"] == "Invite wording"
+    assert nd["origin_line"] == "From discussion Invite wording"
     inbox = (await client.get("/v1/inbox", headers=ctx["headers"])).json()
     [srow] = inbox["staged"]
     assert srow["count"] == 3
@@ -465,7 +466,7 @@ async def test_a_staged_section_edit_lists_builds_and_applies_with_c1e_items(
 
 async def test_unticking_the_row_builds_only_the_others_and_discard_keeps_it(
     client, ctx, pool, fake  # noqa: F811
-):
+):  # fmt: skip
     """protects=the approver can untick a discussion row, and discard keeps it staged
     (criterion 3); fails_when=an unticked row is built or a discarded one leaves staging;
     no_claim=the engine choice (D12)."""
@@ -489,7 +490,7 @@ async def test_unticking_the_row_builds_only_the_others_and_discard_keeps_it(
 
 async def test_a_section_edit_on_a_locked_section_is_refused_at_build(
     client, ctx, pool, fake  # noqa: F811
-):
+):  # fmt: skip
     """protects=locked sections are never changed (criterion 4); fails_when=the build
     starts or the copy differs from C1e's; no_claim=locking itself."""
     from tests.test_llm_jobs import verdict
@@ -511,7 +512,7 @@ async def test_a_section_edit_on_a_locked_section_is_refused_at_build(
 
 async def test_unstage_is_for_approvers_and_viewers_read_the_list(
     client, ctx, pool, fake  # noqa: F811
-):
+):  # fmt: skip
     """protects=roles on the one read and the unstage route (criterion 10); fails_when=a
     commenter unstages, a viewer cannot read, or an applied row unstages; no_claim=D8's
     roles."""
@@ -519,7 +520,9 @@ async def test_unstage_is_for_approvers_and_viewers_read_the_list(
     _, cid, who = await section_discussion(client, ctx["tenant_id"])
     ref = await stage_section(ctx["tenant_id"], who, cid)
     viewer = await token_with_role(ctx["tenant_id"], "viewer")
-    assert (await client.get("/v1/staging", params={"document": SLUG}, headers=viewer)).status_code == 200  # noqa: E501
+    assert (
+        await client.get("/v1/staging", params={"document": SLUG}, headers=viewer)
+    ).status_code == 200  # noqa: E501
     commenter = await token_with_role(ctx["tenant_id"], "commenter")
     url = f"/v1/next-draft-changes/{ref['id']}/unstage"
     resp = await client.post(url, json={"lock_version": 1}, headers=commenter)

@@ -6342,6 +6342,10 @@ async def decide_checkpoint(
     # H1: the stop's decision is a checkpoint record, in this transaction.
     await decisions_capture.checkpoint(db, principal, run, cp, decided_via=via)
     await _scope_decided(db, principal, run, cp)
+    # G4: the discussion changes behind the shared draft's actions follow the decision.
+    from oracle.staging import hooks as staging_hooks
+
+    await staging_hooks.decided(db, cp, decision)
     if decision == "approved":
         # F5-1: an approved Engineering check registers its tech briefs when the run's
         # PRD exists (else the prd_draft import does), in this transaction.

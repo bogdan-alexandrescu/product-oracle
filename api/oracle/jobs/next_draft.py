@@ -39,6 +39,7 @@ from oracle.jobs.models import LlmJob, LlmSuggestion
 from oracle.jobs.schemas import (
     AgentItem,
     NextDraftFeedback,
+    NextDraftInstruction,
     NextDraftPlan,
     NextDraftPreview,
     NextDraftReason,
@@ -46,6 +47,7 @@ from oracle.jobs.schemas import (
     SkippedSection,
     StagedChange,
     StagedChanges,
+    StagedDiscussionChange,
 )
 from oracle.jobs.service import (
     JobError,
@@ -163,7 +165,56 @@ async def _estimate(db: AsyncSession, sections: int) -> float | None:
 # --- staged changes -----------------------------------------------------------------------
 
 
-async def staged_changes(db: AsyncSession, doc: str, include_gone: bool = False) -> StagedChanges:
+async def _discussion_changes(
+    db: AsyncSession,
+    principal: "Principal | None",
+    document: Document,
+    headings: dict[str, str],
+    locked: set[str],
+    include_gone: bool,
+) -> list[StagedDiscussionChange]:
+    """G4: the discussions' section changes staged for the next draft, each with the
+    line saying where it came from, as the reader may see it."""
+    from oracle.staging import service as staging
+
+    rows = await staging.staged_rows(db, document.id)
+    views = await staging.discussion_views(db, principal, [r.discussion_id for r in rows])
+    who = await names(db, {r.staged_by for r in rows})
+    out = []
+    for r in rows:
+        gone = r.section_key not in headings
+        if gone and not include_gone:
+            continue
+        view = views.get(r.discussion_id) if r.discussion_id else None
+        out.append(
+            StagedDiscussionChange(
+                id=r.id,
+                section_key=r.section_key,
+                section_heading=headings.get(r.section_key, r.section_key),
+                instruction=r.instruction,
+                text=r.text,
+                reason=r.reason,
+                origin_line=staging.origin_line(view) or staging.PRIVATE_LINE,
+                discussion_id=view.id if view else None,
+                discussion_title=view.title if view else None,
+                from_private=r.from_private,
+                staged_by_name=who.get(r.staged_by),
+                staged_at=r.created_at,
+                raised_on_version=r.raised_on_version,
+                section_gone=gone,
+                section_locked=r.section_key in locked,
+                lock_version=r.lock_version,
+            )
+        )
+    return out
+
+
+async def staged_changes(
+    db: AsyncSession,
+    doc: str,
+    include_gone: bool = False,
+    principal: "Principal | None" = None,
+) -> StagedChanges:
     document = await get_document(db, doc)
     latest = await _latest(db, document)
     sections = await _sections(db, latest)
@@ -261,6 +312,9 @@ async def staged_changes(db: AsyncSession, doc: str, include_gone: bool = False)
             )
             for f in agent_rows
         ],
+        next_draft_changes=await _discussion_changes(
+            db, principal, document, headings, locked, include_gone
+        ),
     )
 
 
@@ -327,10 +381,14 @@ async def _chosen(
     doc: str,
     suggestion_ids: list[uuid.UUID] | None,
     feedback_ids: list[uuid.UUID] | None,
+    next_draft_change_ids: list[uuid.UUID] | None = None,
 ) -> tuple[StagedChanges, list[StagedChange], list[AgentItem]]:
     """The staged items a build takes: the ones named (each must be staged), else every
-    staged text change whose section exists and every item staged for the agents."""
+    staged text change whose section exists and every item staged for the agents. G4:
+    a discussion's staged section change counts as a text change; the build reads those
+    with :func:`_chosen_rows`."""
     staged = await staged_changes(db, doc, include_gone=True)
+    rows = _chosen_rows(staged, next_draft_change_ids)
     if suggestion_ids is None:
         changes = [c for c in staged.items if not c.section_gone]
     else:
@@ -345,12 +403,26 @@ async def _chosen(
         items = [i for i in staged.agent_items if i.feedback_id in wanted]
         if len(items) != len(wanted):
             raise JobError(422, "every feedback item must be staged for the agents")
-    if not changes and not items:
+    if not changes and not items and not rows:
         raise JobError(422, "nothing is staged for the next draft")
     return staged, changes, items
 
 
-def _locked_refusal(changes: Sequence[StagedChange]) -> str | None:
+def _chosen_rows(
+    staged: StagedChanges, ids: list[uuid.UUID] | None
+) -> list[StagedDiscussionChange]:
+    """G4: the discussions' section changes a build takes: the ones named (each must be
+    staged), else every staged one whose section exists."""
+    if ids is None:
+        return [c for c in staged.next_draft_changes if not c.section_gone]
+    wanted = set(ids)
+    rows = [c for c in staged.next_draft_changes if c.id in wanted]
+    if len(rows) != len(wanted):
+        raise JobError(422, "every discussion change must be staged for the next draft")
+    return rows
+
+
+def _locked_refusal(changes: Sequence[StagedChange | StagedDiscussionChange]) -> str | None:
     hit = sorted({(c.section_heading, c.section_key) for c in changes if c.section_locked})
     if not hit:
         return None
@@ -370,17 +442,21 @@ async def plan(
     suggestion_ids: list[uuid.UUID] | None,
     feedback_ids: list[uuid.UUID] | None,
     depth: str = "standard",
+    next_draft_change_ids: list[uuid.UUID] | None = None,
 ) -> NextDraftPlan:
     """Which engine builds the chosen staged items (default: every staged one), and why;
     the agents' run estimate, or why the built-in build cannot start."""
-    staged, changes, items = await _chosen(db, doc, suggestion_ids, feedback_ids)
+    staged, changes, items = await _chosen(
+        db, doc, suggestion_ids, feedback_ids, next_draft_change_ids
+    )
+    rows = _chosen_rows(staged, next_draft_change_ids)
     chosen = choose_engine(changes, items, await get_document(db, doc))
     out = NextDraftPlan(
         engine=chosen.engine,
         why=chosen.why,
-        text_changes=len(changes),
+        text_changes=len(changes) + len(rows),
         agent_items=len(items),
-        sections=len({c.section_key for c in changes}),
+        sections=len({c.section_key for c in changes} | {r.section_key for r in rows}),
         next_version=staged.next_version,
     )
     if chosen.engine == "agents":
@@ -390,7 +466,7 @@ async def plan(
     elif not enabled(await get_document(db, doc), KIND):
         out.refused = "Refinement is turned off for this document"
     else:
-        out.refused = _locked_refusal(changes)
+        out.refused = _locked_refusal([*changes, *rows])
     return out
 
 
@@ -442,6 +518,7 @@ async def build(
     doc: str,
     suggestion_ids: list[uuid.UUID] | None,
     feedback_ids: list[uuid.UUID] | None = None,
+    next_draft_change_ids: list[uuid.UUID] | None = None,
 ) -> LlmJob:
     document = await get_document(db, doc)
     # Serialise builds per document: the row lock is held until the request commits, so a
@@ -457,10 +534,13 @@ async def build(
             f"a build is already running (job {pending.id}); wait for it or discard it",
         )
     # D12: the built-in engine builds only what needs no agents.
-    _, changes, items = await _chosen(db, doc, suggestion_ids, feedback_ids)
+    staged, changes, items = await _chosen(
+        db, doc, suggestion_ids, feedback_ids, next_draft_change_ids
+    )
     chosen = choose_engine(changes, items, document)
     if chosen.engine == "agents":
         raise NeedsAgents(chosen.why)
+    nd_rows = _chosen_rows(staged, next_draft_change_ids)
     sections = await _sections(db, latest)
     headings = {s.section_key: s.heading for s in sections}
     ids = [str(i) for i in suggestion_ids] if suggestion_ids is not None else None
@@ -468,21 +548,23 @@ async def build(
     if ids is not None and len(rows) != len(set(ids)):
         raise JobError(422, "every suggestion must be a staged (accepted, not applied) change")
     gone = [r for r in rows if r.section_key not in headings]
+    # Named items whose section is gone are refused; by default they are left out.
+    gone_keys = {r.section_key or "?" for r in gone} if ids is not None else set()
+    if next_draft_change_ids is not None:
+        gone_keys |= {c.section_key for c in nd_rows if c.section_key not in headings}
     if ids is None:
         rows = [r for r in rows if r.section_key in headings]
-    elif gone:
-        keys = ", ".join(sorted({r.section_key or "?" for r in gone}))
+    if gone_keys:
+        keys = ", ".join(sorted(gone_keys))
         raise JobError(
             422, f"section(s) {keys} are no longer in version {latest.number}; untick them"
         )
-    if not rows:
+    nd_rows = [c for c in nd_rows if c.section_key in headings]
+    if not rows and not nd_rows:
         raise JobError(422, "nothing is staged for the next draft")
     locked = await locked_section_keys(db, latest.id)
-    hit = [
-        s
-        for s in sections
-        if s.section_key in locked and s.section_key in {r.section_key for r in rows}
-    ]
+    touched = {r.section_key for r in rows} | {c.section_key for c in nd_rows}
+    hit = [s for s in sections if s.section_key in locked and s.section_key in touched]
     if hit:
         named = ", ".join(f"{s.heading} ({s.section_key})" for s in hit)
         raise JobError(409, f"approved and locked, never changed: {named}; untick them")
@@ -491,7 +573,10 @@ async def build(
         document,
         KIND,
         version=latest,
-        input={"suggestion_ids": [str(r.id) for r in rows]},
+        input={
+            "suggestion_ids": [str(r.id) for r in rows],
+            "next_draft_change_ids": [str(c.id) for c in nd_rows],
+        },
         principal=principal,
     )
 
@@ -536,6 +621,7 @@ async def preview(db: AsyncSession, doc: str, job_id: uuid.UUID) -> NextDraftPre
             )
         ).all()
     )
+    instructions = await _instructions(db, data)
     out.notes = data.get("notes") or ""
     out.skipped = [SkippedSection.model_validate(x) for x in data.get("skipped") or []]
     out.sections = [
@@ -557,10 +643,41 @@ async def preview(db: AsyncSession, doc: str, job_id: uuid.UUID) -> NextDraftPre
                 )
                 for r in s.get("resolutions") or []
             ],
+            next_draft_change_ids=s.get("next_draft_change_ids") or [],
+            instructions=[
+                instructions[i] for i in s.get("next_draft_change_ids") or [] if i in instructions
+            ],
         )
         for s in data.get("sections") or []
     ]
     return out
+
+
+async def _instructions(db: AsyncSession, data: dict[str, Any]) -> dict[str, NextDraftInstruction]:
+    """G4: the discussions' changes a build used, with where each came from. The preview
+    names no private discussion (it has no reader to check)."""
+    from oracle.staging import service as staging
+    from oracle.staging.models import NextDraftChange
+
+    ids = [
+        uuid.UUID(i)
+        for s in data.get("sections") or []
+        for i in s.get("next_draft_change_ids") or []
+    ]
+    if not ids:
+        return {}
+    rows = list(await db.scalars(select(NextDraftChange).where(NextDraftChange.id.in_(ids))))
+    views = await staging.discussion_views(db, None, [r.discussion_id for r in rows])
+    return {
+        str(r.id): NextDraftInstruction(
+            next_draft_change_id=r.id,
+            instruction=r.instruction,
+            text=r.text,
+            origin=staging.origin_line(views.get(r.discussion_id) if r.discussion_id else None)
+            or staging.PRIVATE_LINE,
+        )
+        for r in rows
+    }
 
 
 # --- apply and discard --------------------------------------------------------------------
@@ -624,10 +741,23 @@ async def apply(
         )
     )
     still = {str(u.id) for u in used}
+    from oracle.staging.models import NextDraftChange
+
+    wanted_rows = [uuid.UUID(i) for k in kept for i in built[k].get("next_draft_change_ids") or []]
+    live_rows = list(
+        await db.scalars(
+            select(NextDraftChange).where(
+                NextDraftChange.id.in_(wanted_rows), NextDraftChange.status == "staged"
+            )
+        )
+    )
+    still |= {str(r.id) for r in live_rows}
     kept = [
         k
         for k in kept
-        if not built[k].get("suggestion_ids") or set(built[k]["suggestion_ids"]) & still
+        if not (built[k].get("suggestion_ids") or built[k].get("next_draft_change_ids"))
+        or set(built[k].get("suggestion_ids") or []) & still
+        or set(built[k].get("next_draft_change_ids") or []) & still
     ]
     if not kept:
         raise JobError(409, "every suggestion in this draft was dismissed since the build")
@@ -711,6 +841,21 @@ async def apply(
     for s in [*used, *dupes]:
         s.status = "applied"
         s.applied_in_version = number
+    # G4: the discussions' changes built into the kept sections are applied, and done.
+    from oracle.discussions.models import DiscussionChange
+
+    for r in live_rows:
+        if any(str(r.id) in (built[k].get("next_draft_change_ids") or []) for k in kept):
+            r.status = "applied"
+            r.applied_in_version = number
+            change = (
+                await db.get(DiscussionChange, r.discussion_change_id)
+                if r.discussion_change_id
+                else None
+            )
+            if change is not None and change.status == "staged":
+                change.status = "done"
+                change.decision_note = f"Applied in draft {number}"
     await audit.record(
         db,
         principal,

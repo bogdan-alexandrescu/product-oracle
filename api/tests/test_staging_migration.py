@@ -99,8 +99,8 @@ def test_up_down_up_keeps_existing_actions_as_row_actions(scratch_db):
     with pytest.raises(Exception, match="ck_checkpoint_actions_origin"):
         _run("UPDATE checkpoint_actions SET origin = 'chat'")
     doc = uuid.uuid4()
-    _run("INSERT INTO documents (id, tenant_id, slug, title) VALUES (:d, :t, 'doc', 'Doc')",
-         d=doc, t=tenant)  # fmt: skip
+    _run("INSERT INTO documents (id, tenant_id, slug, title, status) "
+         "VALUES (:d, :t, 'doc', 'Doc', 'draft')", d=doc, t=tenant)  # fmt: skip
     insert = (
         "INSERT INTO next_draft_changes (id, tenant_id, document_id, section_key, "
         "raised_on_version, instruction, staged_by, discussion_change_id, status) VALUES "
@@ -108,7 +108,7 @@ def test_up_down_up_keeps_existing_actions_as_row_actions(scratch_db):
     )
     change = uuid.uuid4()
     _run("ALTER TABLE next_draft_changes DROP CONSTRAINT "
-         "next_draft_changes_discussion_change_id_fkey")  # fmt: skip
+         "fk_next_draft_changes_discussion_change_id_discussion_changes")  # fmt: skip
     _run(insert, t=tenant, d=doc, u=uuid.uuid4(), c=change, s="staged")
     _run(insert, t=tenant, d=doc, u=uuid.uuid4(), c=change, s="applied")
     with pytest.raises(Exception, match="uq_next_draft_changes_change_live"):

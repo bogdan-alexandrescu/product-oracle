@@ -258,6 +258,30 @@ class AgentItem(BaseModel):
     staged_at: datetime | None = None
 
 
+class StagedDiscussionChange(BaseModel):
+    """G4: a discussion's section change staged for the next draft (``next_draft_changes``)."""
+
+    id: uuid.UUID
+    source: Literal["next_draft_change"] = "next_draft_change"
+    section_key: str
+    section_heading: str
+    instruction: str
+    # A proposed section body, when the discussion settled on one.
+    text: str | None = None
+    reason: str | None = None
+    # "From discussion <title>", or "From a private discussion" to a reader not in it.
+    origin_line: str
+    discussion_id: uuid.UUID | None = None
+    discussion_title: str | None = None
+    from_private: bool = False
+    staged_by_name: str | None = None
+    staged_at: datetime | None = None
+    raised_on_version: int
+    section_gone: bool = False
+    section_locked: bool = False
+    lock_version: int
+
+
 class StagedChanges(BaseModel):
     document_id: uuid.UUID
     slug: str
@@ -274,6 +298,9 @@ class StagedChanges(BaseModel):
     draft_job: LlmJobOut | None = None
     # D12: feedback items staged for the agents, oldest first.
     agent_items: list[AgentItem] = []
+    # G4: section changes staged from discussions, oldest first (gone ones only with
+    # include_gone).
+    next_draft_changes: list[StagedDiscussionChange] = []
 
 
 class NextDraftIn(BaseModel):
@@ -281,6 +308,9 @@ class NextDraftIn(BaseModel):
     suggestion_ids: list[uuid.UUID] | None = None
     # D12: the items staged for the agents to build with; default: every one.
     feedback_ids: list[uuid.UUID] | None = None
+    # G4: the discussions' section changes to build; default: every staged one whose
+    # section exists.
+    next_draft_change_ids: list[uuid.UUID] | None = None
 
 
 class NextDraftPlanIn(NextDraftIn):
@@ -338,6 +368,16 @@ class NextDraftDataPoint(BaseModel):
     source: str = ""
 
 
+class NextDraftInstruction(BaseModel):
+    """G4: a discussion's change the section was built with."""
+
+    next_draft_change_id: uuid.UUID
+    instruction: str
+    text: str | None = None
+    # "From discussion <title>" or "From a private discussion".
+    origin: str
+
+
 class NextDraftSection(BaseModel):
     section_key: str
     heading: str
@@ -351,6 +391,8 @@ class NextDraftSection(BaseModel):
     resolutions: list[NextDraftResolution] = []
     suggestion_ids: list[uuid.UUID] = []
     feedback: list[NextDraftFeedback] = []
+    next_draft_change_ids: list[uuid.UUID] = []
+    instructions: list[NextDraftInstruction] = []
 
 
 class SkippedSection(BaseModel):

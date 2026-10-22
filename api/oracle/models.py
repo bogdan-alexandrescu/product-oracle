@@ -110,6 +110,7 @@ from oracle.sources.models import (  # noqa: E402
     SourceItem,
     SourceItemVersion,
 )
+from oracle.staging.models import NextDraftChange  # noqa: E402
 from oracle.strategy.models import StrategyCheck, StrategyFinding  # noqa: E402
 from oracle.swarm.learned import LearnedFeature  # noqa: E402
 from oracle.templates.models import Template, TemplateVersion, Theme  # noqa: E402
@@ -140,6 +141,7 @@ from oracle.v2.models import (  # noqa: E402
 )
 
 __all__ = [
+    "NextDraftChange",
     "AlignmentReport",
     "AlignmentReportRead",
     "ApiToken",
