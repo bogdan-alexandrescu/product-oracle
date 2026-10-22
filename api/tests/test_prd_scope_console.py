@@ -56,7 +56,7 @@ async def test_console_approval_with_blocking_is_recorded_not_followed(
         run = await get(client, auth, run["id"])
         assert run["waiting_on"] == "feature_set", run
         cp = pending(run)
-        assert cp["cannot_approve"].startswith("The feature set has 1 blocking problem")
+        assert cp["cannot_approve"].startswith("1 blocking problem left")
         wf = cp["payload"]["wait"]["workflow_id"]
         posted = len(swarm.answers)
         swarm.console_answer(wf, "feature_set-review1", "MERGE", by="lead@example.com")
@@ -82,7 +82,7 @@ async def test_console_approval_with_blocking_is_recorded_not_followed(
             headers=auth,
         )
         assert resp.status_code == 409, resp.text
-        assert resp.json()["detail"].startswith("The feature set has 1 blocking problem")
+        assert resp.json()["detail"]["code"] == "blocking_open"
         (scope,) = await scopes(tenant_id, run["id"])
         assert scope.status == "proposed"
     finally:

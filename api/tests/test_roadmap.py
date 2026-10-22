@@ -1032,6 +1032,15 @@ async def test_role_checks(client, owner, runtime):
     assert resp.status_code == 403
     inbox = (await client.get("/v1/inbox", headers=approver)).json()
     assert [c["segment_title"] for c in inbox["checkpoints"]] == ["Roadmap items"]
+    # D3: the default file's blocking reasons are waived by the approver first.
+    for left in pending(run)["gate"]["left"]:
+        resp = await client.post(
+            f"/v1/runs/{run['id']}/checkpoints/{pending(run)['id']}/actions",
+            json={"item_key": left["item"], "kind": "waive", "answers": [left["code"]],
+                  "value": {"reason": "Linked in the next PRD version"}},
+            headers=approver,
+        )  # fmt: skip
+        assert resp.status_code == 200, resp.text
     run = await decide(client, approver, await get(client, approver, run["id"]))
     assert run["status"] == "running"
     # Viewers read runs and roadmaps.

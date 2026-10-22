@@ -156,8 +156,8 @@ async def test_withdrawal_removes_the_date_everywhere(client, owner, runtime):  
 
 
 async def test_a_date_outside_now_is_dropped_on_import(client, owner, runtime):  # noqa: F811
-    """With the items checkpoint on, a reviewer may approve a file with a dated Next
-    item; the stored item keeps the milestone's name and records the dropped date."""
+    """With the items checkpoint on, a dated Next item blocks Approve (D3: a date reason
+    is never waived), so no dropped date is ever stored by an approval."""
     _, auth = owner
     await approved_prd(client, auth)
     await record(client, auth, reference="ENG-413", prd=PRD, supports_date="2027-02-01")
@@ -181,11 +181,7 @@ async def test_a_date_outside_now_is_dropped_on_import(client, owner, runtime): 
         json={"decision": "approved"},
         headers=auth,
     )
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 409, resp.text
+    assert [x["code"] for x in resp.json()["detail"]["left"]] == ["date_outside_now"]
     await tick(client, auth)
-    assert (await get(client, auth, run["id"]))["status"] == "succeeded"
-    pay, ship = (await client.get(URL, headers=auth)).json()["items"]
-    assert pay["milestone"]["date"] == "2026-11-30"
-    assert ship["milestone"]["name"] == "GA" and ship["milestone"]["date"] is None
-    assert ship["milestone"]["refused_date"] == "2027-02-01"
-    assert "only in now" in ship["milestone"]["refused"]
+    assert (await get(client, auth, run["id"]))["status"] == "awaiting_checkpoint"
