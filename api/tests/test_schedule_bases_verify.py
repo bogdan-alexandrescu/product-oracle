@@ -54,7 +54,9 @@ LEAD = uuid.uuid4()
 def _p(role: str, user_id: uuid.UUID | None = None, kind: str = "user") -> Principal:
     if kind == "token":
         return Principal(tenant_id=uuid.uuid4(), kind="token", role=role, token_id=uuid.uuid4())
-    return Principal(tenant_id=uuid.uuid4(), kind="user", role=role, user_id=user_id or uuid.uuid4())
+    return Principal(
+        tenant_id=uuid.uuid4(), kind="user", role=role, user_id=user_id or uuid.uuid4()
+    )
 
 
 WHO = {
@@ -345,9 +347,9 @@ async def test_impact_matches_what_withdraw_changes(client, owner, runtime):  # 
     assert resp.status_code == 200, resp.text
     impact = resp.json()
     assert impact["basis_id"] == eng["id"]
-    assert [(m["id"], m["name"], m["target_date"], m["keeps_date"]) for m in impact["milestones"]] == [
-        (milestone_id, "Beta launch", "2026-11-30", False)
-    ]
+    assert [
+        (m["id"], m["name"], m["target_date"], m["keeps_date"]) for m in impact["milestones"]
+    ] == [(milestone_id, "Beta launch", "2026-11-30", False)]
     assert [(i["roadmap"], i["version"], i["item_key"]) for i in impact["items"]] == [
         (ROADMAP, 1, "payment-step")
     ]
@@ -359,7 +361,9 @@ async def test_impact_matches_what_withdraw_changes(client, owner, runtime):  # 
     resp = await _withdraw(client, auth, eng["id"])
     assert resp.status_code == 200, resp.text
     out = resp.json()
-    assert out["undated_milestones"] == [m["id"] for m in impact["milestones"] if not m["keeps_date"]]
+    assert out["undated_milestones"] == [
+        m["id"] for m in impact["milestones"] if not m["keeps_date"]
+    ]
     assert out["stale_items"] == [i["id"] for i in impact["items"]]
     marks = await _marks(client, auth)
     assert sum(1 for s in marks.values() if s == "withdrawn") == impact["documents"][0]["marks"]
@@ -397,7 +401,7 @@ async def test_the_lead_s_inbox_lists_proposed_bases(client, owner):  # noqa: F8
 # --- AC9: another company, run tokens ---------------------------------------------------------
 
 
-async def test_another_company_gets_404_and_run_tokens_are_refused(client, owner):  # noqa: F811
+async def test_another_company_gets_404_and_run_tokens_are_refused(client, owner, runtime):  # noqa: F811
     # protects=AC9; fails_when=another company reads or acts on a basis, or a run token
     # reaches a basis tool; no_claim=the tenancy layer itself.
     tenant_id, auth = owner
@@ -409,7 +413,9 @@ async def test_another_company_gets_404_and_run_tokens_are_refused(client, owner
     eng = await _eng_412(client, auth)
     other = await other_company()
     for basis_id in (proposed["id"], eng["id"]):
-        assert (await client.get(f"/v1/schedule-bases/{basis_id}/impact", headers=other)).status_code == 404
+        assert (
+            await client.get(f"/v1/schedule-bases/{basis_id}/impact", headers=other)
+        ).status_code == 404
         assert (await _verify(client, other, basis_id)).status_code == 404
         assert (await _reject(client, other, basis_id)).status_code == 404
         assert (await _withdraw(client, other, basis_id)).status_code == 404

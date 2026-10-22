@@ -8,6 +8,7 @@ Sync on purpose (Alembic runs its own event loop); its own scratch database.
 import asyncio
 import json
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from alembic import command
@@ -93,8 +94,10 @@ def test_up_down_up_keeps_bases_and_backfills_reasons(scratch_db):
         id=doc, t=tenant,
     )  # fmt: skip
     _basis(tenant, doc, "ENG-1", "verified")
-    gone = _basis(tenant, doc, "ENG-2", "withdrawn", withdrawn_at="2026-10-20T10:00:00Z")
-    _basis(tenant, doc, "ENG-3", "withdrawn", withdrawn_at="2026-10-20T11:00:00Z")
+    gone = _basis(
+        tenant, doc, "ENG-2", "withdrawn", withdrawn_at=datetime(2026, 10, 20, 10, tzinfo=UTC)
+    )
+    _basis(tenant, doc, "ENG-3", "withdrawn", withdrawn_at=datetime(2026, 10, 20, 11, tzinfo=UTC))
     _run(
         "INSERT INTO audit_events (id, tenant_id, actor, action, entity, entity_id, data) "
         "VALUES (:id, :t, 'user:x', 'schedule_basis.withdrawn', 'schedule_basis', :e, "
@@ -112,7 +115,10 @@ def test_up_down_up_keeps_bases_and_backfills_reasons(scratch_db):
         ("ENG-3", None),
     ]
     _basis(tenant, doc, "ENG-4", "verified")
-    _run("UPDATE schedule_bases SET status = 'proposed', verified_at = NULL WHERE reference = 'ENG-4'")
+    _run(
+        "UPDATE schedule_bases SET status = 'proposed', verified_at = NULL "
+        "WHERE reference = 'ENG-4'"
+    )
     _basis(tenant, doc, "ENG-5", "verified")
     _run(
         "UPDATE schedule_bases SET status = 'rejected', verified_at = NULL, "
@@ -126,8 +132,7 @@ def test_up_down_up_keeps_bases_and_backfills_reasons(scratch_db):
     columns = {
         r[0]
         for r in _run(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'schedule_bases'"
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'schedule_bases'"
         )
     }
     assert not columns & {"proposed_by", "note", "withdrawn_reason", "rejected_reason"}
