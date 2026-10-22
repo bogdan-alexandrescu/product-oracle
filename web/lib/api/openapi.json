@@ -1559,6 +1559,920 @@
         }
       }
     },
+    "/v1/discussions": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Create Discussion",
+        "description": "Start a discussion about one subject: open (everyone who can see the subject reads\nit) or private (only the people picked). ``title`` defaults to the subject's label;\n``participants`` is the starter's pick for a private discussion and mentions on an\nopen one; ``message`` is optional.",
+        "operationId": "create_discussion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The subject is not in this company"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "List Discussions",
+        "description": "Discussions, latest activity first. A private discussion the caller is not in is\nlisted only when the filter names its subject (``subject_key``, ``document_id`` or\n``run_id``), as ``{id, visibility, hidden, summary}``: that it exists, and its summary\nwhen the starter shared it. ``mine``: the ones the caller is in.",
+        "operationId": "list_discussions",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "subject_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 400
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subject Key"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "closed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "mine",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Mine"
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "discuss",
+                    "panel",
+                    "slack"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/discussions/{discussion_id}": {
+      "get": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Get Discussion",
+        "description": "One discussion with its people. The starter of a private discussion also gets\n``exposure``: what making it open would expose now.",
+        "operationId": "get_discussion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Update Discussion",
+        "description": "Rename, make private or open, close or reopen, write the summary or share it. The\nstarter changes title, visibility and summary; the starter or an approver closes and\nreopens. Making a private discussion open needs ``exposes``: the counts its warning\nshowed; without them, or when they are no longer current, 409 \"Confirm what this\nexposes\" with the current ``messages`` and ``people``, and nothing changes.",
+        "operationId": "update_discussion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Stale, closed, or counts to confirm",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionExposureConflict"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/discussions/{discussion_id}/messages": {
+      "get": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "List Discussion Messages",
+        "description": "The thread, a page at a time, oldest first within the page; ``before``: the\nmessages older than that one.",
+        "operationId": "list_discussion_messages",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionMessagePage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Create Discussion Message",
+        "description": "Write in a discussion (commenters and up; in a private one, its people). Plain\ntext with Markdown links, at most 8,000 characters. ``mentions`` (member ids from\n``GET /v1/people``) add people to an open discussion; in a private one only the\nstarter adds people.",
+        "operationId": "create_discussion_message",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionMessageOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "This discussion is closed"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/discussions/{discussion_id}/messages/{message_id}": {
+      "patch": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Update Discussion Message",
+        "description": "Edit your own message; it shows \"edited\". Oracle's messages cannot be edited.",
+        "operationId": "update_discussion_message",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Message Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionMessageEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionMessageOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Delete Discussion Message",
+        "description": "Delete your own message: it reads \"Message deleted\" and its text is gone.",
+        "operationId": "delete_discussion_message",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Message Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/discussions/{discussion_id}/participants": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Add Discussion Participants",
+        "description": "Add people. On a private discussion only the starter may; on an open one any\nreader adds themselves (Follow) and commenters and up add others. Returns everyone\nin it.",
+        "operationId": "add_discussion_participants",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionParticipantsIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DiscussionParticipantOut"
+                  },
+                  "title": "Response Add Discussion Participants"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/discussions/{discussion_id}/participants/{user_id}": {
+      "delete": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Remove Discussion Participant",
+        "description": "Leave (or unfollow), or, the starter of a private discussion, remove someone.",
+        "operationId": "remove_discussion_participant",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/discussions/{discussion_id}/read": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Mark Discussion Read",
+        "description": "Mark the thread read up to a message (what is unread for the caller).",
+        "operationId": "mark_discussion_read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionReadIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/discussions/{discussion_id}/changes": {
+      "get": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "List Discussion Changes",
+        "description": "The typed changes the discussion ended in, read-only here (proposing, suggesting\nand staging arrive with G3 and G4).",
+        "operationId": "list_discussion_changes",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "proposed",
+                    "suggested",
+                    "staged",
+                    "done",
+                    "dismissed",
+                    "superseded"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DiscussionChangeOut"
+                  },
+                  "title": "Response List Discussion Changes"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/documents/{doc}/versions/{n}/section-states": {
       "get": {
         "tags": [
@@ -38854,6 +39768,1145 @@
         ],
         "title": "DiffOut"
       },
+      "DiscussionChangeCounts": {
+        "properties": {
+          "proposed": {
+            "type": "integer",
+            "title": "Proposed",
+            "default": 0
+          },
+          "suggested": {
+            "type": "integer",
+            "title": "Suggested",
+            "default": 0
+          },
+          "staged": {
+            "type": "integer",
+            "title": "Staged",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "DiscussionChangeCounts"
+      },
+      "DiscussionChangeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "target": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Target"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "edited_payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited Payload"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "proposed_by_kind": {
+            "type": "string",
+            "enum": [
+              "oracle",
+              "person"
+            ],
+            "title": "Proposed By Kind"
+          },
+          "proposed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By"
+          },
+          "suggested_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested By"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "suggested",
+              "staged",
+              "done",
+              "dismissed",
+              "superseded"
+            ],
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "target",
+          "payload",
+          "edited_payload",
+          "rationale",
+          "proposed_by_kind",
+          "proposed_by",
+          "suggested_by",
+          "status",
+          "created_at",
+          "lock_version"
+        ],
+        "title": "DiscussionChangeOut"
+      },
+      "DiscussionCreate": {
+        "properties": {
+          "subject_kind": {
+            "type": "string",
+            "enum": [
+              "document",
+              "section",
+              "checkpoint",
+              "checkpoint_item",
+              "roadmap_item",
+              "entity",
+              "conflict",
+              "intake",
+              "gap",
+              "track",
+              "priorities",
+              "screen"
+            ],
+            "title": "Subject Kind"
+          },
+          "subject": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Subject"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "open",
+              "private"
+            ],
+            "title": "Visibility",
+            "default": "open"
+          },
+          "participants": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Participants"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscussionMessageIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "subject_kind"
+        ],
+        "title": "DiscussionCreate"
+      },
+      "DiscussionExposure": {
+        "properties": {
+          "messages": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Messages"
+          },
+          "people": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "People"
+          }
+        },
+        "type": "object",
+        "required": [
+          "messages",
+          "people"
+        ],
+        "title": "DiscussionExposure",
+        "description": "What making a private discussion open exposes: the messages not deleted (people's\nand Oracle's, system lines excluded) and the distinct people who wrote them."
+      },
+      "DiscussionExposureConflict": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "messages": {
+            "type": "integer",
+            "title": "Messages"
+          },
+          "people": {
+            "type": "integer",
+            "title": "People"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "messages",
+          "people"
+        ],
+        "title": "DiscussionExposureConflict",
+        "description": "409: the counts the warning showed are not the discussion's now."
+      },
+      "DiscussionMe": {
+        "properties": {
+          "participant": {
+            "type": "boolean",
+            "title": "Participant"
+          },
+          "can_write": {
+            "type": "boolean",
+            "title": "Can Write"
+          },
+          "unread": {
+            "type": "integer",
+            "title": "Unread"
+          },
+          "can_manage": {
+            "type": "boolean",
+            "title": "Can Manage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "participant",
+          "can_write",
+          "unread",
+          "can_manage"
+        ],
+        "title": "DiscussionMe"
+      },
+      "DiscussionMeSummary": {
+        "properties": {
+          "participant": {
+            "type": "boolean",
+            "title": "Participant"
+          },
+          "can_write": {
+            "type": "boolean",
+            "title": "Can Write"
+          },
+          "unread": {
+            "type": "integer",
+            "title": "Unread"
+          }
+        },
+        "type": "object",
+        "required": [
+          "participant",
+          "can_write",
+          "unread"
+        ],
+        "title": "DiscussionMeSummary"
+      },
+      "DiscussionMessageEdit": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "DiscussionMessageEdit"
+      },
+      "DiscussionMessageIn": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "mentions": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Mentions"
+          },
+          "mention_oracle": {
+            "type": "boolean",
+            "title": "Mention Oracle",
+            "default": false
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "DiscussionMessageIn"
+      },
+      "DiscussionMessageOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "discussion_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Discussion Id"
+          },
+          "author_kind": {
+            "type": "string",
+            "enum": [
+              "person",
+              "oracle",
+              "system"
+            ],
+            "title": "Author Kind"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscussionPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "via": {
+            "type": "string",
+            "enum": [
+              "web",
+              "mcp",
+              "slack"
+            ],
+            "title": "Via"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "mentions": {
+            "items": {
+              "$ref": "#/components/schemas/DiscussionPerson"
+            },
+            "type": "array",
+            "title": "Mentions"
+          },
+          "mentions_oracle": {
+            "type": "boolean",
+            "title": "Mentions Oracle"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "streaming",
+              "complete",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "citations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "edited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited At"
+          },
+          "deleted": {
+            "type": "boolean",
+            "title": "Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "discussion_id",
+          "author_kind",
+          "author",
+          "via",
+          "body",
+          "mentions",
+          "mentions_oracle",
+          "reply_to",
+          "status",
+          "citations",
+          "created_at",
+          "edited_at",
+          "deleted"
+        ],
+        "title": "DiscussionMessageOut"
+      },
+      "DiscussionMessagePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DiscussionMessageOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "has_more"
+        ],
+        "title": "DiscussionMessagePage"
+      },
+      "DiscussionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "subject_kind": {
+            "type": "string",
+            "enum": [
+              "document",
+              "section",
+              "checkpoint",
+              "checkpoint_item",
+              "roadmap_item",
+              "entity",
+              "conflict",
+              "intake",
+              "gap",
+              "track",
+              "priorities",
+              "screen"
+            ],
+            "title": "Subject Kind"
+          },
+          "subject_key": {
+            "type": "string",
+            "title": "Subject Key"
+          },
+          "subject_label": {
+            "type": "string",
+            "title": "Subject Label"
+          },
+          "subject_url": {
+            "type": "string",
+            "title": "Subject Url"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "open",
+              "private"
+            ],
+            "title": "Visibility"
+          },
+          "author_only": {
+            "type": "boolean",
+            "title": "Author Only"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "discuss",
+              "panel",
+              "slack"
+            ],
+            "title": "Origin"
+          },
+          "started_by": {
+            "$ref": "#/components/schemas/DiscussionStarter"
+          },
+          "started_on_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started On Version"
+          },
+          "message_count": {
+            "type": "integer",
+            "title": "Message Count"
+          },
+          "last_message_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Message At"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "summary_status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "draft",
+              "confirmed"
+            ],
+            "title": "Summary Status"
+          },
+          "summary_shared": {
+            "type": "boolean",
+            "title": "Summary Shared"
+          },
+          "changes": {
+            "$ref": "#/components/schemas/DiscussionChangeCounts"
+          },
+          "me": {
+            "$ref": "#/components/schemas/DiscussionMe"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "subject": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Subject"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/DiscussionParticipantOut"
+            },
+            "type": "array",
+            "title": "Participants"
+          },
+          "exposure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscussionExposure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "subject_kind",
+          "subject_key",
+          "subject_label",
+          "subject_url",
+          "title",
+          "visibility",
+          "author_only",
+          "status",
+          "origin",
+          "started_by",
+          "message_count",
+          "last_message_at",
+          "summary",
+          "summary_status",
+          "summary_shared",
+          "changes",
+          "me",
+          "lock_version",
+          "created_at",
+          "updated_at",
+          "subject",
+          "participants"
+        ],
+        "title": "DiscussionOut"
+      },
+      "DiscussionPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DiscussionSummary"
+                },
+                {
+                  "$ref": "#/components/schemas/HiddenDiscussion"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "DiscussionPage"
+      },
+      "DiscussionParticipantOut": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          },
+          "can_write": {
+            "type": "boolean",
+            "title": "Can Write"
+          },
+          "added_via": {
+            "type": "string",
+            "enum": [
+              "started",
+              "mention",
+              "added",
+              "followed",
+              "posted"
+            ],
+            "title": "Added Via"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "name",
+          "role",
+          "can_write",
+          "added_via"
+        ],
+        "title": "DiscussionParticipantOut"
+      },
+      "DiscussionParticipantsIn": {
+        "properties": {
+          "user_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "User Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_ids"
+        ],
+        "title": "DiscussionParticipantsIn"
+      },
+      "DiscussionPatch": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "private"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility"
+          },
+          "exposes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscussionExposure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "closed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "summary_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "confirmed"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Status"
+          },
+          "summary_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Shared"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "DiscussionPatch"
+      },
+      "DiscussionPerson": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "name"
+        ],
+        "title": "DiscussionPerson"
+      },
+      "DiscussionReadIn": {
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Message Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message_id"
+        ],
+        "title": "DiscussionReadIn"
+      },
+      "DiscussionStarter": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "name",
+          "role"
+        ],
+        "title": "DiscussionStarter"
+      },
+      "DiscussionSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "subject_kind": {
+            "type": "string",
+            "enum": [
+              "document",
+              "section",
+              "checkpoint",
+              "checkpoint_item",
+              "roadmap_item",
+              "entity",
+              "conflict",
+              "intake",
+              "gap",
+              "track",
+              "priorities",
+              "screen"
+            ],
+            "title": "Subject Kind"
+          },
+          "subject_key": {
+            "type": "string",
+            "title": "Subject Key"
+          },
+          "subject_label": {
+            "type": "string",
+            "title": "Subject Label"
+          },
+          "subject_url": {
+            "type": "string",
+            "title": "Subject Url"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "open",
+              "private"
+            ],
+            "title": "Visibility"
+          },
+          "author_only": {
+            "type": "boolean",
+            "title": "Author Only"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "discuss",
+              "panel",
+              "slack"
+            ],
+            "title": "Origin"
+          },
+          "started_by": {
+            "$ref": "#/components/schemas/DiscussionStarter"
+          },
+          "started_on_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started On Version"
+          },
+          "message_count": {
+            "type": "integer",
+            "title": "Message Count"
+          },
+          "last_message_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Message At"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "summary_status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "draft",
+              "confirmed"
+            ],
+            "title": "Summary Status"
+          },
+          "summary_shared": {
+            "type": "boolean",
+            "title": "Summary Shared"
+          },
+          "changes": {
+            "$ref": "#/components/schemas/DiscussionChangeCounts"
+          },
+          "me": {
+            "$ref": "#/components/schemas/DiscussionMeSummary"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "subject_kind",
+          "subject_key",
+          "subject_label",
+          "subject_url",
+          "title",
+          "visibility",
+          "author_only",
+          "status",
+          "origin",
+          "started_by",
+          "message_count",
+          "last_message_at",
+          "summary",
+          "summary_status",
+          "summary_shared",
+          "changes",
+          "me",
+          "lock_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DiscussionSummary",
+        "description": "A discussion as a list shows it to someone who can read it."
+      },
       "DismissIn": {
         "properties": {
           "reason": {
@@ -44470,6 +46523,45 @@
           "database"
         ],
         "title": "Health"
+      },
+      "HiddenDiscussion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "visibility": {
+            "type": "string",
+            "const": "private",
+            "title": "Visibility"
+          },
+          "hidden": {
+            "type": "boolean",
+            "const": true,
+            "title": "Hidden"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "visibility",
+          "hidden",
+          "summary"
+        ],
+        "title": "HiddenDiscussion",
+        "description": "A private discussion the caller is not in: only that it exists, and its summary\nwhen the starter shared it."
       },
       "HistoryOut": {
         "properties": {

@@ -10,6 +10,7 @@ import {
   useSuggestionDecision,
   type SuggestionDecision as SuggestionDecisionState,
 } from "@/components/SuggestionCard";
+import { DiscussionList, type DiscussionRow } from "@/components/discuss/DiscussionList";
 import { Avatar, Button, Chip, Empty, FilterChips, type ChipKind } from "@/components/ds";
 import { LayerChip, Quote, SELECT, TEXTAREA, VerdictChip } from "@/components/review/parts";
 import { ErrorNote } from "@/components/ui";
@@ -35,7 +36,7 @@ export type FeedbackFilters = { state: FeedbackState; scope: FeedbackScope; kind
 export const DEFAULT_FILTERS: FeedbackFilters = { state: "open", scope: "auto", kind: "all" };
 
 const STATE_KIND: Record<FeedbackState, ChipKind> = { open: "acc", staged: "warn", declined: "na", done: "pass" };
-const KIND_LABEL: Record<FeedbackKind, string> = { comment: "Comment", suggestion: "Suggestion", review: "Review" };
+const KIND_LABEL: Record<FeedbackKind, string> = { comment: "Comment", suggestion: "Suggestion", review: "Review", discussion: "Discussion" };
 
 type Ctx = {
   doc: string;
@@ -346,7 +347,8 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
  * (Open, Staged, Declined, Done) and scope (this section, all, or General: the whole-draft
  * items), with a kind filter; commenters add whole-draft feedback at its top. A
  * suggestion just decided stays in view, in its new state, until a filter changes; a
- * resolved item leaves the Open list at once.
+ * resolved item leaves the Open list at once. Discussions (G1) are the fourth kind, behind
+ * their own chip: the document's discussions, never counted as open feedback.
  */
 export function FeedbackList({
   entries,
@@ -358,8 +360,11 @@ export function FeedbackList({
   generalOpen = false,
   setGeneralOpen,
   onGeneral,
+  discussions,
   ...ctx
 }: Ctx & {
+  /** The document's discussions (G1), shown under the Discussion chip; absent: no chip. */
+  discussions?: { rows: DiscussionRow[] | null; onOpen: (id: string) => void };
   /** "Comment on the whole draft" is open (the header's action opens it too). */
   generalOpen?: boolean;
   setGeneralOpen?: (open: boolean) => void;
@@ -421,6 +426,33 @@ export function FeedbackList({
     listRef.current?.querySelector(`[data-comment-id="${ctx.activeId}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [ctx.activeId]);
 
+  const discussing = filters.kind === "discussion";
+  const discussionChip = discussions && (
+    <button
+      type="button"
+      data-testid="feedback-discussions"
+      aria-pressed={discussing}
+      onClick={() => setFilters({ ...filters, kind: discussing ? "all" : "discussion" })}
+      className={`flex h-8 flex-none items-center gap-2 rounded-full border px-3 text-sm font-medium max-[639px]:h-11 ${
+        discussing ? "border-accent bg-accent text-on-accent" : "border-line-strong text-text hover:bg-surface2"
+      }`}
+    >
+      Discussion
+      <b className={`tnum font-semibold ${discussing ? "text-on-accent" : "text-text2"}`}>{discussions.rows?.length ?? "–"}</b>
+    </button>
+  );
+  if (discussing && discussions) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {discussionChip}
+          <KindSelect filters={filters} setFilters={setFilters} />
+        </div>
+        {discussions.rows ? <DiscussionList rows={discussions.rows} onOpen={discussions.onOpen} version={ctx.n} /> : null}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3">
       {onGeneral &&
@@ -459,23 +491,8 @@ export function FeedbackList({
               { value: "general", label: "General", count: scopeCount("general") },
             ]}
           />
-          <label className="flex min-w-0 flex-1 basis-32">
-            <span className="sr-only">Kind</span>
-            <select
-              aria-label="Filter by kind"
-              data-testid="feedback-kind"
-              value={filters.kind}
-              onChange={(e) => setFilters({ ...filters, kind: e.target.value as FeedbackKind | "all" })}
-              className={`${SELECT} w-full max-[639px]:h-11`}
-            >
-              <option value="all">All kinds</option>
-              {FEEDBACK_KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {FEEDBACK_KIND_LABEL[k]}
-                </option>
-              ))}
-            </select>
-          </label>
+          {discussionChip}
+          <KindSelect filters={filters} setFilters={setFilters} />
         </div>
       </div>
       {shown.length === 0 ? (
@@ -502,5 +519,27 @@ export function FeedbackList({
         </ol>
       )}
     </div>
+  );
+}
+
+function KindSelect({ filters, setFilters }: { filters: FeedbackFilters; setFilters: (f: FeedbackFilters) => void }) {
+  return (
+    <label className="flex min-w-0 flex-1 basis-32">
+      <span className="sr-only">Kind</span>
+      <select
+        aria-label="Filter by kind"
+        data-testid="feedback-kind"
+        value={filters.kind}
+        onChange={(e) => setFilters({ ...filters, kind: e.target.value as FeedbackKind | "all" })}
+        className={`${SELECT} w-full max-[639px]:h-11`}
+      >
+        <option value="all">All kinds</option>
+        {FEEDBACK_KINDS.map((k) => (
+          <option key={k} value={k}>
+            {FEEDBACK_KIND_LABEL[k]}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
