@@ -396,6 +396,11 @@ class SwarmCloudRuntime:
         now = time.time()
         states = base.as_dict()
         reasons = dict(base.reasons)
+        if self._features is None and self._mcp_works:
+            # Not read yet (a fresh instance): caller MCP stays confirmed as last learned,
+            # its row expired or not, as a reading would report it (#274).
+            states["mcp"] = "on"
+            reasons.pop("mcp", None)
         for key, learned in list(self._learned.items()):
             if learned.until < now:
                 del self._learned[key]

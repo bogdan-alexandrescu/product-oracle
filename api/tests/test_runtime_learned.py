@@ -13,6 +13,7 @@ caller MCP stays confirmed until something shows it off.
 
 import logging
 import time
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -222,6 +223,33 @@ async def test_status_and_the_new_run_form_say_on_after_a_restart(client):
     assert body["features"]["mcp"] == "on", body
     assert "mcp" not in body["feature_reasons"]
     assert body["can_reach_oracle"] is True and body["notes"] == []
+
+
+async def test_the_new_run_form_trusts_an_expired_learned_on_on_a_fresh_instance(client):
+    """Issue #274: right after a deploy, the New run form's catalog said caller MCP was
+    off or not confirmed while the last learned state was on (its row expired), until a
+    runtime status read refreshed it."""
+    _, auth = await seed_auth()
+    async with unscoped_session() as s:
+        s.add(
+            LearnedFeature(
+                feature="mcp",
+                state="on",
+                reason="",
+                learned_at=datetime.now(UTC) - timedelta(hours=2),
+                expires_at=datetime.now(UTC) - timedelta(hours=1),
+            )
+        )
+        await s.commit()
+    swarm = on()
+    # A fresh instance: nothing in memory, no reading of SwarmCloud yet.
+    set_runtime(process(swarm))
+    flows = (await client.get("/v1/flows", headers=auth)).json()
+    assert flows["runtime_notes"] == []
+    run = await create(client, auth)
+    assert NO_MCP_NOTE not in run["notes"]
+    # Nothing read SwarmCloud to get there.
+    assert swarm.requests == []
 
 
 def test_the_configured_runtime_keeps_what_it_learns_in_the_database():
