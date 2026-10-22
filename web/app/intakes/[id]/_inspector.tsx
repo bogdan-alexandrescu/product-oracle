@@ -1,0 +1,202 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+
+import { Button, Chip, Inspector, InspectorRow, InspectorSection } from "@/components/ds";
+import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { hasRole, type Role } from "@/lib/me";
+import { errorMessage } from "@/lib/use-query";
+
+import { CATEGORY_LABEL, HARD_BLOCKERS, criticalCount, type Gap, type Summary } from "./_lib";
+
+type Decision = Schemas["DecisionIn"]["decision"];
+
+const DECISIONS: { value: Decision; label: string }[] = [
+  { value: "accept_assumption", label: "Accept as an assumption" },
+  { value: "accept_risk", label: "Accept the risk" },
+  { value: "validate", label: "Validate" },
+];
+
+/**
+ * Record a decision on a gap (B4): the choice, a required rationale, and the server's
+ * message in place when the decision is an owner's (a critical gap's risk, a hard blocker).
+ */
+export function DecideForm({
+  gap,
+  choices = DECISIONS,
+  submit = "Record decision",
+  onDone,
+  onCancel,
+}: {
+  gap: Gap;
+  choices?: { value: Decision; label: string }[];
+  submit?: string;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [decision, setDecision] = useState<Decision>(choices[0].value);
+  const [rationale, setRationale] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function record() {
+    if (!rationale.trim()) {
+      setError("Write a rationale first");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await unwrap(
+        api.POST("/v1/gaps/{gap_id}/decisions", {
+          params: { path: { gap_id: gap.id } },
+          body: { decision, rationale: rationale.trim() },
+        }),
+      );
+      onDone();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 flex min-w-0 flex-col gap-2 rounded-button border border-line bg-surface2 p-2.5" data-testid="decide-form">
+      {choices.length > 1 && (
+        <fieldset className="flex flex-col gap-1">
+          <legend className="sr-only">Decision</legend>
+          {choices.map((c) => (
+            <label key={c.value} className="flex items-center gap-2 text-sm text-text">
+              <input type="radio" name={`decision-${gap.id}`} checked={decision === c.value} onChange={() => setDecision(c.value)} />
+              {c.label}
+            </label>
+          ))}
+        </fieldset>
+      )}
+      <label className={FIELD_LABEL}>
+        Rationale
+        <textarea rows={2} maxLength={2000} value={rationale} onChange={(e) => setRationale(e.target.value)} className={TEXTAREA} />
+      </label>
+      {error && <InlineError>{error}</InlineError>}
+      <div className="flex flex-wrap gap-1.5">
+        <Button variant="solid" icon="check" disabled={busy} onClick={record}>
+          {busy ? "Recording…" : submit}
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Who may decide a gap here: an approver, an owner for a hard blocker's validation (B4). */
+export function mayReview(role: Role | null, gap: Gap): boolean {
+  return hasRole(role, HARD_BLOCKERS.has(gap.category) ? "owner" : "approver");
+}
+
+/**
+ * The right column (a sheet behind "Gaps N open" on a phone): Ready to draft, with each
+ * critical question that holds the draft and Decide; the figures; the goals; the template.
+ */
+export function IntakeInspector({
+  summary: s,
+  role,
+  onChanged,
+}: {
+  summary: Summary;
+  role: Role | null;
+  onChanged: () => void;
+}) {
+  const [deciding, setDeciding] = useState<string | null>(null);
+  const gate = s.readiness;
+  const blocking = gate.blocking_gap_ids.map((id) => s.gaps.find((g) => g.id === id)).filter((g): g is Summary["gaps"][number] => !!g);
+  const converted = s.intake.status === "converted";
+  return (
+    <Inspector
+      eyebrow="Before drafting"
+      title="Ready to draft?"
+      testId="intake-inspector"
+      label="Before drafting"
+      stats={[
+        { label: "Open", value: s.batch.asked, testId: "stat-open" },
+        { label: "Answered", value: s.batch.answered, testId: "stat-answered" },
+        { label: "Critical", value: gate.open_critical, tone: gate.open_critical ? "crit" : undefined, testId: "stat-critical" },
+      ]}
+    >
+      <InspectorSection testId="ready-to-draft">
+        {gate.gate === "clear" ? (
+          <Chip kind="pass" dot>
+            Ready to draft
+          </Chip>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            <Chip kind="crit" dot>
+              {criticalCount(blocking.length)} open
+            </Chip>
+            <ul className="flex flex-col gap-2.5">
+              {blocking.map((g) => (
+                <li key={g.id} className="flex min-w-0 flex-col gap-1.5" data-testid="blocking-gap">
+                  <div className="flex min-w-0 items-start gap-2">
+                    <span className="min-w-0 flex-1 text-sm break-words text-text">{g.statement}</span>
+                    <Chip kind="crit">{g.importance === "critical" ? "Critical" : g.importance}</Chip>
+                  </div>
+                  <span className="text-[13px] text-text2">{CATEGORY_LABEL[g.category]}</span>
+                  {hasRole(role, "approver") && deciding !== g.id && (
+                    <div>
+                      <Button onClick={() => setDeciding(g.id)}>Decide</Button>
+                    </div>
+                  )}
+                  {deciding === g.id && (
+                    <DecideForm
+                      gap={g}
+                      onCancel={() => setDeciding(null)}
+                      onDone={() => {
+                        setDeciding(null);
+                        onChanged();
+                      }}
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {gate.private_blocking_gap_ids.length > 0 && (
+          <p className="mt-2 text-[13px] text-text2">
+            {criticalCount(gate.private_blocking_gap_ids.length)} from your own sources hold nothing until you share them.
+          </p>
+        )}
+      </InspectorSection>
+      <InspectorSection label="Goals" testId="intake-goals">
+        {s.goals.length ? (
+          s.goals.map((g) => (
+            <InspectorRow key={g.entity_id ?? g.title} value={<Chip kind="acc">{g.key ?? "Goal"}</Chip>}>
+              {g.title}
+            </InspectorRow>
+          ))
+        ) : (
+          <p className="text-sm text-text2">No confirmed company goal yet</p>
+        )}
+      </InspectorSection>
+      <InspectorSection label="Template" testId="intake-template">
+        <InspectorRow value={s.template.theme ?? undefined}>{s.template.name}</InspectorRow>
+      </InspectorSection>
+      {converted && (
+        <InspectorSection label="Drafting" testId="answers-since">
+          <p className="text-sm text-text">
+            {s.answers_since_run === 1 ? "1 answer" : `${s.answers_since_run ?? 0} answers`} since drafting started
+          </p>
+          {s.draft_run_id && (
+            <Link href={`/runs/${s.draft_run_id}`} className="text-sm font-semibold text-accent-ink underline">
+              Open the draft run
+            </Link>
+          )}
+        </InspectorSection>
+      )}
+    </Inspector>
+  );
+}

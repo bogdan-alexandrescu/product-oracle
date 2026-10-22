@@ -241,10 +241,10 @@ async def subject_of(
     doc = await db.get(Document, q.document_id) if q.document_id else None
     intake = await readers.intake(q.intake_id)
     if intake is not None:
-        # The intake page (C5) comes later: its PRD until then, else nothing to open.
+        # Its Before drafting page (C5), with or without a PRD.
         return InboxSubject(
             kind="intake", title=f"Before drafting · {intake.title}",
-            href=f"/documents/{doc.slug}" if doc else None,
+            href=f"/intakes/{intake.id}",
         )  # fmt: skip
     if doc is None:
         return InboxSubject(kind="document_section", title="A document", href=None)

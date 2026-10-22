@@ -5302,6 +5302,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/intakes/{intake_id}/next-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Next Question Batch
+         * @description The next batch as it would be asked, without asking it (C5; the author or an
+         *     approver, as asking it): the same questions in the same order as
+         *     ``POST .../question-batches`` with the same ``size`` asks next, each with the person
+         *     it would be asked of (the gap's owner, else the author), and how many are not asked
+         *     yet. ``assign`` on the ask changes only who is asked.
+         */
+        get: operations["get_next_question_batch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/intakes/{intake_id}/question-batches": {
         parameters: {
             query?: never;
@@ -5359,7 +5383,9 @@ export interface paths {
         /**
          * Start Intake Run
          * @description Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs
-         *     until an approver estimates and starts it.
+         *     until an approver estimates and starts it. Drafting waits until decided (C5): 409
+         *     with ``blocking_gap_ids`` while a critical question everyone may see is neither
+         *     answered nor decided (a private one gates nothing until shared, S6).
          */
         post: operations["start_intake_run"];
         delete?: never;
@@ -12143,6 +12169,16 @@ export interface components {
             prd?: components["schemas"]["Choice"] | null;
             roadmap?: components["schemas"]["Choice"] | null;
         };
+        /**
+         * DraftGateClosedOut
+         * @description 409: drafting waits until each shared critical question is answered or decided.
+         */
+        DraftGateClosedOut: {
+            /** Detail */
+            detail: string;
+            /** Blocking Gap Ids */
+            blocking_gap_ids: string[];
+        };
         /** DraftImport */
         DraftImport: {
             /** Document Id */
@@ -15077,6 +15113,13 @@ export interface components {
              * @default false
              */
             is_author: boolean;
+            /** Draft Run Id */
+            draft_run_id?: string | null;
+            /**
+             * Answers Since Run
+             * @default 0
+             */
+            answers_since_run: number;
         };
         /** InviteCreate */
         InviteCreate: {
@@ -16689,6 +16732,17 @@ export interface components {
              * @enum {string}
              */
             role: "commenter" | "approver" | "owner";
+        };
+        /**
+         * NextBatch
+         * @description The next batch as it would be asked (C5): each question with the person it would
+         *     be asked of, in order; asking it asks exactly these.
+         */
+        NextBatch: {
+            /** Questions */
+            questions: components["schemas"]["QuestionCard"][];
+            /** Remaining */
+            remaining: number;
         };
         /** NextDraftApply */
         NextDraftApply: {
@@ -35196,6 +35250,39 @@ export interface operations {
             };
         };
     };
+    get_next_question_batch: {
+        parameters: {
+            query?: {
+                size?: number;
+            };
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextBatch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     ask_next_question_batch: {
         parameters: {
             query?: {
@@ -35286,6 +35373,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftGateClosedOut"];
                 };
             };
             /** @description Validation Error */

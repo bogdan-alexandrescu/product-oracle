@@ -27,6 +27,7 @@ commits.
 """
 
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import func, select
@@ -803,42 +804,37 @@ async def an_approver(db: AsyncSession) -> uuid.UUID | None:
     )
 
 
-async def ask_batch(
-    db: AsyncSession,
-    intake: ProductIntake,
-    asked_by: uuid.UUID | None,
+@dataclass(frozen=True)
+class Batch:
+    """The next batch's questions, in the order they are asked, and its number."""
+
+    questions: list[StakeholderQuestion]
+    number: int | None
+
+
+def choose_batch(
+    questions: list[StakeholderQuestion],
+    gaps: dict[uuid.UUID, KnowledgeGap],
+    reg: dict[str, dict[str, Any]],
     size: int,
     skip: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
-    assign: dict[uuid.UUID, uuid.UUID] | None = None,
-) -> list[StakeholderQuestion]:
-    """Ask the next short batch: the highest-priority drafts, at most ``size``.
-    ``skip``: gaps the asker may not see; their questions stay drafts.
-
-    Every question asked has a person who can answer it (C2, :func:`can_answer`): the
-    person ``assign`` names (checked by the caller) or the draft's own, else the gap's
-    owner, else the intake's author, else the person asking the batch (the author or an
-    approver, :func:`oracle.intake.service.ask_next`), else the longest-standing active
-    approver; someone disabled or now a viewer is passed over. A question of a gap
-    hidden from everyone but the author is asked of the author (S6).
+) -> Batch:
+    """Which drafts the next batch asks, and its number; changes nothing. ``questions``:
+    the intake's, in priority order (:func:`intake_questions`); ``skip``: gaps the asker
+    may not see, whose questions stay drafts. The preview (``GET .../next-batch``) and
+    :func:`ask_batch` both choose with it, so what is shown is what is asked.
 
     Sizes and numbers are counted in what everyone may see (S6): a batch holds ``size``
     questions everyone sees, and the author's hidden questions ranked among them ride
-    along; hidden questions asked on their own join the latest batch instead of
-    opening a new number. So no reader but the author learns from a short batch or a
-    skipped number that a hidden question exists."""
-    questions = await intake_questions(db, intake.id)
-    by_id = {g.id: g for g in await intake_gaps(db, intake.id)}
-    reg = sharing.registry(intake)
+    along; hidden questions asked on their own join the latest batch instead of opening
+    a new number. So no reader but the author learns from a short batch or a skipped
+    number that a hidden question exists."""
 
     def shown(q: StakeholderQuestion) -> bool:
-        gap = by_id.get(q.gap_id) if q.gap_id else None
+        gap = gaps.get(q.gap_id) if q.gap_id else None
         return gap is None or sharing.gap_changes(gap, reg, sharing.EVERYONE) is not None
 
     waiting = [q for q in questions if q.status == "draft" and q.gap_id not in skip]
-    # Chosen before asking (the batch's preview), whether this batch asks it or a later one.
-    for q in waiting:
-        if assign and q.id in assign:
-            q.asked_to = assign[q.id]
     public = [q for q in waiting if shown(q)]
     chosen = public[:size]
     if len(public) > size:
@@ -849,35 +845,69 @@ async def ask_batch(
         riders = [q for q in waiting if not shown(q)][: max(0, size - len(chosen))]
     drafts = [q for q in waiting if q in chosen or q in riders]
     if not drafts:
-        return []
+        return Batch([], None)
     latest = max((q.batch or 0 for q in questions if shown(q)), default=0)
-    number = latest + 1 if chosen else max(latest, 1)
+    return Batch(drafts, latest + 1 if chosen else max(latest, 1))
+
+
+async def default_person(
+    db: AsyncSession,
+    intake: ProductIntake,
+    question: StakeholderQuestion,
+    gap: KnowledgeGap | None,
+    asked_by: uuid.UUID | None,
+    hidden: bool = False,
+    able: dict[uuid.UUID, bool] | None = None,
+) -> uuid.UUID:
+    """Who a question is asked of (C2, :func:`can_answer`): the draft's own person, else
+    the gap's owner, else the intake's author, else the person asking the batch, else
+    the longest-standing active approver; a question hidden from everyone but the author
+    is asked of the author (S6). ``able``: a cache of who can answer."""
+    if hidden:
+        return intake.author_id
+    able = able if able is not None else {}
+    for user_id in (question.asked_to, gap.owner_id if gap else None, intake.author_id, asked_by):
+        if user_id is not None and user_id not in able:
+            able[user_id] = can_answer(await db.get(User, user_id))
+        if user_id is not None and able[user_id]:
+            return user_id
+    return await an_approver(db) or intake.author_id
+
+
+async def ask_batch(
+    db: AsyncSession,
+    intake: ProductIntake,
+    asked_by: uuid.UUID | None,
+    size: int,
+    skip: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
+    assign: dict[uuid.UUID, uuid.UUID] | None = None,
+) -> list[StakeholderQuestion]:
+    """Ask the next short batch, as :func:`choose_batch` chooses it: at most ``size``
+    questions everyone sees, and the author's hidden ones ranked among them.
+    ``skip``: gaps the asker may not see; their questions stay drafts.
+
+    Every question asked has a person who can answer it (:func:`default_person`): the
+    person ``assign`` names (checked by the caller) or the draft's own, else the gap's
+    owner, else the intake's author, else the person asking the batch (the author or an
+    approver, :func:`oracle.intake.service.ask_next`), else the longest-standing active
+    approver; someone disabled or now a viewer is passed over."""
+    questions = await intake_questions(db, intake.id)
+    by_id = {g.id: g for g in await intake_gaps(db, intake.id)}
+    reg = sharing.registry(intake)
+    # Chosen before asking (the batch's preview), whether this batch asks it or a later one.
+    for q in questions:
+        if assign and q.status == "draft" and q.gap_id not in skip and q.id in assign:
+            q.asked_to = assign[q.id]
+    batch = choose_batch(questions, by_id, reg, size, skip)
     able: dict[uuid.UUID, bool] = {}
-
-    async def first_able(*ids: uuid.UUID | None) -> uuid.UUID | None:
-        for user_id in ids:
-            if user_id is not None and user_id not in able:
-                able[user_id] = can_answer(await db.get(User, user_id))
-            if user_id is not None and able[user_id]:
-                return user_id
-        return None
-
-    for q in drafts:
+    for q in batch.questions:
         gap = by_id.get(q.gap_id) if q.gap_id else None
+        hidden = gap is not None and sharing.gap_changes(gap, reg, sharing.EVERYONE) is None
+        q.asked_to = await default_person(db, intake, q, gap, asked_by, hidden, able)
         q.status = "asked"
-        q.batch = number
+        q.batch = batch.number
         q.asked_by = asked_by
-        if not shown(q):
-            q.asked_to = intake.author_id
-        else:
-            q.asked_to = (
-                await first_able(
-                    q.asked_to, gap.owner_id if gap else None, intake.author_id, asked_by
-                )
-                or await an_approver(db)
-                or intake.author_id
-            )
         if gap is not None and gap.status == "unknown":
             gap.status = "asked"
     await db.flush()
-    return drafts
+    return batch.questions

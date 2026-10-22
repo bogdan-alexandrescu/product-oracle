@@ -29,6 +29,7 @@ from oracle.docs.router import router as docs_router
 from oracle.docs.schemas import ImportErrorResponse
 from oracle.engineering.router import router as engineering_router
 from oracle.export.router import router as export_router
+from oracle.intake.drafting import DraftGateClosed, draft_gate_closed
 from oracle.intake.router import router as intake_router
 from oracle.integrations.router import router as company_integrations_router
 from oracle.jobs.router import router as llm_jobs_router
@@ -150,6 +151,10 @@ def create_app() -> FastAPI:
             detail=f"draft rejected: {len(exc.problems)} problem(s)", errors=exc.problems
         )
         return JSONResponse(body.model_dump(mode="json"), 422)
+
+    # C5: drafting from an intake waits until its critical questions are decided; the
+    # 409 names them, on every path that creates or starts such a run.
+    app.add_exception_handler(DraftGateClosed, draft_gate_closed)
 
     @app.exception_handler(ParseBusy)
     async def parse_busy(_request: Request, exc: ParseBusy) -> JSONResponse:

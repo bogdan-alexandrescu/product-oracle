@@ -24,7 +24,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import Principal
-from oracle.intake import engine, sharing, summary
+from oracle.intake import drafting, engine, sharing, summary
 from oracle.v2 import router as v2_router
 from oracle.v2.models import (
     AssumptionDecision,
@@ -123,6 +123,8 @@ async def questions(db: AsyncSession, principal: Principal, rows: list[Any]) -> 
 
 async def answers(db: AsyncSession, principal: Principal, rows: list[Any]) -> list[Any]:
     readers = Readers(db, principal)
+    # A run reads the answers given before it started (C5).
+    pin = await drafting.pin_of(db, principal)
     ids = {a.question_id for a in rows}
     found = {
         q.id: q
@@ -134,6 +136,8 @@ async def answers(db: AsyncSession, principal: Principal, rows: list[Any]) -> li
     for a in rows:
         q = found.get(a.question_id)
         if q is not None and await readers.question(q) is None:
+            continue
+        if pin is not None and not pin.keeps(q.intake_id if q else None, a.id):
             continue
         out.append(StakeholderAnswerOut.model_validate(a))
     return out
@@ -278,6 +282,26 @@ def _answers_kept(hidden: set[uuid.UUID]) -> Any:
     return StakeholderAnswer.question_id.not_in(hidden_questions)
 
 
+_answers_shared = _hidden(_answer_scope, _answers_kept)
+
+
+async def _answers_hidden(db: AsyncSession, principal: Principal, filters: dict[str, Any]) -> Any:
+    """Answers left out of ``/v1/answers``: those of gaps hidden from the reader (S6) and,
+    for a run started from an intake, that intake's answers given after it started (C5),
+    so a page of a run's reads never shifts with later answers."""
+    clauses = [c for c in [await _answers_shared(db, principal, filters)] if c is not None]
+    pin = await drafting.pin_of(db, principal)
+    if pin is not None:
+        later = select(StakeholderQuestion.id).where(StakeholderQuestion.intake_id == pin.intake_id)
+        clauses.append(
+            or_(
+                StakeholderAnswer.question_id.not_in(later),
+                StakeholderAnswer.id == any_(_uuids(pin.answer_ids or {uuid.UUID(int=0)})),
+            )
+        )
+    return and_(*clauses) if clauses else None
+
+
 def _events_kept(hidden: set[uuid.UUID]) -> Any:
     text = ChangeEvent.data["gap_id"].astext
     ids = bindparam(None, [str(i) for i in hidden], type_=ARRAY(Text()))
@@ -326,7 +350,7 @@ def register() -> None:
         "/questions",
         _hidden(_question_scope, lambda h: _not_hidden(StakeholderQuestion.gap_id, h)),
     )
-    v2_router.register_hidden("/answers", _hidden(_answer_scope, _answers_kept))
+    v2_router.register_hidden("/answers", _answers_hidden)
     v2_router.register_hidden(
         "/assumption-decisions",
         _hidden(_decision_scope, lambda h: _not_hidden(AssumptionDecision.gap_id, h)),

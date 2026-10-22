@@ -18912,6 +18912,70 @@
         }
       }
     },
+    "/v1/intakes/{intake_id}/next-batch": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Get Next Question Batch",
+        "description": "The next batch as it would be asked, without asking it (C5; the author or an\napprover, as asking it): the same questions in the same order as\n``POST .../question-batches`` with the same ``size`` asks next, each with the person\nit would be asked of (the gap's owner, else the author), and how many are not asked\nyet. ``assign`` on the ask changes only who is asked.",
+        "operationId": "get_next_question_batch",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10,
+              "minimum": 1,
+              "default": 5,
+              "title": "Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextBatch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/intakes/{intake_id}/question-batches": {
       "post": {
         "tags": [
@@ -19051,7 +19115,7 @@
           "intake"
         ],
         "summary": "Start Intake Run",
-        "description": "Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs\nuntil an approver estimates and starts it.",
+        "description": "Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs\nuntil an approver estimates and starts it. Drafting waits until decided (C5): 409\nwith ``blocking_gap_ids`` while a critical question everyone may see is neither\nanswered nor decided (a private one gates nothing until shared, S6).",
         "operationId": "start_intake_run",
         "security": [
           {
@@ -19093,6 +19157,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftGateClosedOut"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "description": "Validation Error",
@@ -39540,6 +39614,29 @@
         "title": "DraftDefaults",
         "description": "Company default per document kind (tenant setting ``draft_defaults``)."
       },
+      "DraftGateClosedOut": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "blocking_gap_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Blocking Gap Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "blocking_gap_ids"
+        ],
+        "title": "DraftGateClosedOut",
+        "description": "409: drafting waits until each shared critical question is answered or decided."
+      },
       "DraftImport": {
         "properties": {
           "document_id": {
@@ -47430,6 +47527,23 @@
             "type": "boolean",
             "title": "Is Author",
             "default": false
+          },
+          "draft_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Run Id"
+          },
+          "answers_since_run": {
+            "type": "integer",
+            "title": "Answers Since Run",
+            "default": 0
           }
         },
         "type": "object",
@@ -51804,6 +51918,28 @@
           "role"
         ],
         "title": "NextAction"
+      },
+      "NextBatch": {
+        "properties": {
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionCard"
+            },
+            "type": "array",
+            "title": "Questions"
+          },
+          "remaining": {
+            "type": "integer",
+            "title": "Remaining"
+          }
+        },
+        "type": "object",
+        "required": [
+          "questions",
+          "remaining"
+        ],
+        "title": "NextBatch",
+        "description": "The next batch as it would be asked (C5): each question with the person it would\nbe asked of, in order; asking it asks exactly these."
       },
       "NextDraftApply": {
         "properties": {

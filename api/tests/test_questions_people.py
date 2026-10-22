@@ -157,8 +157,8 @@ async def test_unassigned_goes_to_author(client):
         row["subject"]["kind"] == "intake"
         and row["subject"]["title"] == "Before drafting · Saved addresses"
     )
-    # No PRD yet and no intake page: nothing to open, the answer is given in place.
-    assert row["subject"]["href"] is None
+    # Open goes to the intake's Before drafting page (C5), with or without a PRD.
+    assert row["subject"]["href"] == f"/intakes/{intake_id}"
     assert row["answer_paths"] == ["answer", "dont_know", "defer", "delegate", "research"]
     assert row["gap"] is not None and row["gap"]["id"] == row["question"]["gap_id"]
     # Oldest first.
