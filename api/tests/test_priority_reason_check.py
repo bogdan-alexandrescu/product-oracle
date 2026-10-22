@@ -26,7 +26,7 @@ from oracle.priorities.models import PriorityOverride
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 from tests.claude_account_helpers import add_account, window
-from tests.test_priority_overrides import _baseline
+from tests.test_priority_overrides import SECRET_TITLE, _baseline, hidden, private_evidence
 
 REASON = "Customers keep asking for it every week"
 SECRET_EXCERPT = "One request from a single support thread in August"
@@ -317,6 +317,29 @@ async def test_cited_evidence_is_checked_and_remove_makes_no_call(client, fake):
     )
     assert gone.status_code == 200, gone.text
     assert len(model.requests) == 1
+
+
+async def test_a_private_item_in_the_pushback_is_cited_without_its_title(client, fake):
+    """protects=S3 and S6; fails_when=the reason check's pushback, the record kept after
+    it or the model's prompt carries a private item's current title, kind or date, even
+    when the item's author makes the change; no_claim=the excerpt."""
+    ctx, ids, _ = await _company()
+    ev = await private_evidence(ctx, ids["address-lookup"], owner="approver")
+    model = fake(contradiction([ev]))
+    body = _move(ids, evidence_ids=[ev])
+    seen = await _post(client, ctx, body)
+    assert seen.status_code == 409, seen.text
+    assert SECRET_TITLE not in seen.text and "notion" not in seen.text
+    hidden(seen.json()["pushback"][-1]["evidence"][0])
+    assert SECRET_TITLE not in json.dumps(model.requests[0].messages)
+    kept = await _post(client, ctx, {**body, "confirm": True})
+    assert kept.status_code == 201, kept.text
+    assert SECRET_TITLE not in kept.text
+    hidden(kept.json()["pushback"][-1]["evidence"][0])
+    [row] = await _stored(ctx)
+    assert SECRET_TITLE not in json.dumps(row.pushback)
+    log = await client.get("/v1/priorities/overrides", headers=ctx.as_("viewer"))
+    assert log.status_code == 200 and SECRET_TITLE not in log.text
 
 
 def test_the_prompt_holds_the_reason_cited_evidence_first_and_quoted_data():

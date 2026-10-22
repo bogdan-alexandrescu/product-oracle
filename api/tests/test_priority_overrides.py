@@ -10,6 +10,7 @@ here no Claude account exists, so every check reads ``failed`` and the rules dec
 
 import asyncio
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -32,7 +33,7 @@ from oracle.priorities.scoring import (
     rank,
 )
 from oracle.tenancy import tenant_session
-from tests.baseline_helpers import Ctx, make_ctx
+from tests.baseline_helpers import Ctx, make_ctx, make_item
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 from tests.test_mcp import mcp_client, run_token, text_of
 
@@ -606,6 +607,113 @@ async def test_overrides_are_company_scoped(client):
         headers=other.as_("owner"),
     )
     assert gone.status_code == 404
+
+
+# A private source item: its current title, kind and date are its owner's alone (S3, S6).
+SECRET_TITLE = "Board memo: churn in the enterprise tier"
+CITED_AS = "Partner call notes"
+ITEM_DAY = datetime(2026, 3, 14, 9, 0, tzinfo=UTC)
+
+
+async def private_evidence(ctx: Ctx, feature_id: uuid.UUID, owner: str = "approver") -> str:
+    """Evidence on ``feature_id`` from an item of ``owner``'s own Notion source; the
+    stored ref (the label people cite it by) is not the item's current title."""
+    item_id = await make_item(
+        ctx,
+        owner,
+        kind="notion",
+        item_kind="page",
+        title=SECRET_TITLE,
+        url=None,
+        updated=ITEM_DAY,
+    )
+    async with tenant_session(ctx.tenant_id) as s:
+        ev = Evidence(
+            entity_id=feature_id,
+            source_item_id=item_id,
+            ref=CITED_AS,
+            excerpt="Two partners asked for it on the call.",
+            confidence=Decimal("0.7"),
+        )
+        s.add(ev)
+        await s.commit()
+        return str(ev.id)
+
+
+def cited(features: list[dict], key: str, evidence_id: str) -> dict:
+    row = next(r for r in features if r["key"] == key)
+    return next(e for e in row["explanation"]["confidence"]["evidence"] if e["id"] == evidence_id)
+
+
+def hidden(chip: dict) -> None:
+    """Cited as a reader who may not see the item: its stored ref, no kind, no date."""
+    assert chip["title"] == CITED_AS
+    assert chip["source_kind"] == "private_source"
+    assert chip["date"] is None
+
+
+async def test_a_private_item_is_cited_without_its_title_kind_or_date(client, local_runtime):
+    """protects=S3 and S6 (a private item's title, kind and date reach only its owner);
+    fails_when=a viewer, a run token, a snapshot or an override record shows the
+    item's current title, its source kind or its date; no_claim=the excerpt (evidence
+    copies it for everyone)."""
+    ctx = await make_ctx()
+    ids = await _baseline(ctx)
+    ev = await private_evidence(ctx, ids["address-lookup"])
+    pinned = await _create(
+        client,
+        ctx,
+        feature_id=str(ids["address-lookup"]),
+        kind="pin",
+        position=1,
+        evidence_ids=[ev],
+        confirm=True,
+    )
+    assert pinned.status_code == 201, pinned.text
+    assert SECRET_TITLE not in pinned.text and "notion" not in pinned.text
+    [chip] = pinned.json()["evidence"]
+    hidden(chip)
+
+    # Its author sees it as cited from their own source.
+    mine = cited(await _ranking(client, ctx, "approver"), "address-lookup", ev)
+    assert mine["title"] == SECRET_TITLE
+    assert mine["source_kind"] == "notion"
+    assert mine["date"] == ITEM_DAY.date().isoformat()
+
+    # Everyone else does not.
+    for who in ("viewer", "owner"):
+        resp = await client.get("/v1/priorities", headers=ctx.as_(who))
+        assert resp.status_code == 200 and SECRET_TITLE not in resp.text, who
+        hidden(cited(resp.json()["features"], "address-lookup", ev))
+    log = await client.get("/v1/priorities/overrides", headers=ctx.as_("viewer"))
+    assert log.status_code == 200 and SECRET_TITLE not in log.text
+    hidden(log.json()[0]["evidence"][0])
+
+    # A snapshot is a record everyone reads: stored as no one in particular sees it,
+    # even when the item's author saves it.
+    snap = await client.post(
+        "/v1/priorities/snapshots", json={"method": "goal_weighted"}, headers=ctx.as_("approver")
+    )
+    assert snap.status_code == 201, snap.text
+    assert SECRET_TITLE not in snap.text
+    hidden(cited(snap.json()["ranking"], "address-lookup", ev))
+    read = await client.get(
+        f"/v1/priorities/snapshots/{snap.json()['id']}", headers=ctx.as_("viewer")
+    )
+    assert read.status_code == 200 and SECRET_TITLE not in read.text
+    async with tenant_session(ctx.tenant_id) as s:
+        stored = (await s.scalars(select(PrioritySnapshot))).one()
+        assert SECRET_TITLE not in str(stored.ranking)
+
+    # A run token reads the ranking as another person would.
+    token = await run_token(ctx.tenant_id, ["read:baseline"], ctx.users["owner"].id)
+    async with mcp_client(token) as c:
+        got = await c.call_tool("get_priorities", {})
+        assert not got.is_error, text_of(got)
+        assert SECRET_TITLE not in text_of(got)
+        hidden(cited(got.structured_content["features"], "address-lookup", ev))
+        listed = await c.call_tool("list_priority_overrides", {})
+        assert not listed.is_error and SECRET_TITLE not in text_of(listed)
 
 
 # --- migration --------------------------------------------------------------------------

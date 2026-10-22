@@ -81,16 +81,81 @@ def _contribution(value: Any) -> int | None:
     return None if number is None else int(min(3, max(0, round(number))))
 
 
+# The kind shown for a source item the reader may not see: its source is its owner's.
+PRIVATE_KIND = "private_source"
+# A source item cited: (title, kind of source, date, owner, deleted upstream).
+CitedItem = tuple[str | None, str, datetime | None, uuid.UUID, bool]
+
+
 def _cited_as(
-    ev: Evidence, item: tuple[str | None, str, datetime | None] | None
+    ev: Evidence, item: CitedItem | None, *, shown: bool, run: bool = False
 ) -> dict[str, str | None]:
-    """Title, kind of source and date a person cites a piece of evidence by."""
-    title, kind, at = item or (None, None, None)
+    """Title, kind of source and date a person cites a piece of evidence by.
+
+    A source item is its owner's (S3, S6): a reader who may not see it (``shown``
+    false, see :func:`_shown_items`) cites it as ``baseline.evidence.present`` shows
+    it, by the evidence's stored ref or url, with no kind or date. A run reads its
+    user's own item by the title as read (S6, titles), never the current one.
+    """
+    if ev.source_item_id is not None and (item is None or not shown):
+        return {
+            "title": (ev.ref or ev.url or "Evidence").strip(),
+            "source_kind": PRIVATE_KIND,
+            "date": None,
+        }
+    title, kind, at = item[:3] if item else (None, None, None)
+    if run:
+        title = None
     when = at or ev.retrieved_at or ev.created_at
     return {
         "title": (title or ev.ref or ev.url or (ev.excerpt or "")[:80] or "Evidence").strip(),
         "source_kind": kind or ev.kind or "link",
         "date": when.date().isoformat() if when else None,
+    }
+
+
+async def _shown_items(
+    db: AsyncSession, principal: Principal | None, items: dict[uuid.UUID, CitedItem]
+) -> set[uuid.UUID]:
+    """The items ``principal`` may see cited, as ``baseline.evidence.present`` decides:
+    its user's own only; a run never one its user's intakes withhold, one frozen with
+    no version released, or one deleted upstream (S6). No principal (a record everyone
+    reads: a snapshot, an override and its pushback) sees none."""
+    if principal is None or principal.user_id is None:
+        return set()
+    own = {i for i, item in items.items() if item[3] == principal.user_id}
+    if not own:
+        return set()
+    withheld = await baseline_evidence.withheld_from(db, principal)
+    frozen = await baseline_evidence.run_versions(db, principal, own)
+    return {
+        i
+        for i in own
+        if i not in withheld
+        and not (i in frozen and frozen[i] is None)
+        and not (principal.is_run and items[i][4])
+    }
+
+
+async def _cited_items(db: AsyncSession, item_ids: set[uuid.UUID]) -> dict[uuid.UUID, CitedItem]:
+    if not item_ids:
+        return {}
+    return {
+        item_id: (title, kind, at, owner, deleted is not None)
+        for item_id, title, kind, at, owner, deleted in (
+            await db.execute(
+                select(
+                    SourceItem.id,
+                    SourceItem.title,
+                    Source.kind,
+                    func.coalesce(SourceItem.occurred_at, SourceItem.source_updated_at),
+                    Source.owner_user_id,
+                    SourceItem.deleted_at,
+                )
+                .join(Source, Source.id == SourceItem.source_id)
+                .where(SourceItem.id.in_(item_ids))
+            )
+        ).all()
     }
 
 
@@ -150,26 +215,10 @@ async def load_features(
     unscored = {ev.entity_id for ev in evidence if ev.confidence is None}
     if unscored and rescore:
         await baseline_scoring.rescore_targets(db, entity_ids=unscored)
-    from_items = {ev.source_item_id for ev in evidence if ev.source_item_id}
-    removed: set[uuid.UUID] = set()
-    items: dict[uuid.UUID, tuple[str | None, str, datetime | None]] = {}
-    if from_items:
-        for item_id, title, kind, at, deleted in (
-            await db.execute(
-                select(
-                    SourceItem.id,
-                    SourceItem.title,
-                    Source.kind,
-                    func.coalesce(SourceItem.occurred_at, SourceItem.source_updated_at),
-                    SourceItem.deleted_at,
-                )
-                .join(Source, Source.id == SourceItem.source_id)
-                .where(SourceItem.id.in_(from_items))
-            )
-        ).all():
-            items[item_id] = (title, kind, at)
-            if deleted is not None:
-                removed.add(item_id)
+    items = await _cited_items(db, {ev.source_item_id for ev in evidence if ev.source_item_id})
+    removed = {item_id for item_id, item in items.items() if item[4]}
+    shown = await _shown_items(db, principal, items)
+    run = principal is not None and principal.is_run
     # A run reads every score as of its pin, as the entity detail does (S6).
     view = await baseline_evidence.run_view(db, principal, entity_ids=list(inputs))
     if view is not None:
@@ -186,7 +235,12 @@ async def load_features(
                 ),
                 ref=ev.url or ev.ref,
                 source_removed=ev.source_item_id in removed,
-                **_cited_as(ev, items.get(ev.source_item_id) if ev.source_item_id else None),
+                **_cited_as(
+                    ev,
+                    items.get(ev.source_item_id) if ev.source_item_id else None,
+                    shown=ev.source_item_id in shown,
+                    run=run,
+                ),
             )
         )
     for f in inputs.values():
@@ -410,25 +464,11 @@ async def _open_blockers(db: AsyncSession, feature: Entity) -> list[str]:
 async def _evidence_items(
     db: AsyncSession, rows: list[Evidence]
 ) -> dict[uuid.UUID, reason_check.EvidenceItem]:
-    item_ids = {ev.source_item_id for ev in rows if ev.source_item_id}
-    items: dict[uuid.UUID, tuple[str | None, str, datetime | None]] = {}
-    if item_ids:
-        for item_id, title, kind, at in (
-            await db.execute(
-                select(
-                    SourceItem.id,
-                    SourceItem.title,
-                    Source.kind,
-                    func.coalesce(SourceItem.occurred_at, SourceItem.source_updated_at),
-                )
-                .join(Source, Source.id == SourceItem.source_id)
-                .where(SourceItem.id.in_(item_ids))
-            )
-        ).all():
-            items[item_id] = (title, kind, at)
+    # Chips are stored (pushback) or read by everyone (the override log), and the
+    # model's prompt is no item owner's own: a source item is cited as no one sees it.
     out = {}
     for ev in rows:
-        cited = _cited_as(ev, items.get(ev.source_item_id) if ev.source_item_id else None)
+        cited = _cited_as(ev, None, shown=False)
         out[ev.id] = reason_check.EvidenceItem(
             id=str(ev.id),
             title=cited["title"] or "Evidence",
