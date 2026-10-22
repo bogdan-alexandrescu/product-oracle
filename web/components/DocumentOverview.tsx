@@ -7,6 +7,7 @@ import { useState } from "react";
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { DocToolbar } from "@/components/DocToolbar";
+import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import {
   Chip,
   DataTable,
@@ -206,6 +207,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
   const versions = [...(d?.versions ?? [])].reverse();
   const [picked, setPicked] = useState<number | null>(null);
   const selected = versions.find((v) => v.number === picked) ?? versions[0] ?? null;
+  const templateOnly = isTemplateOnly(d?.kind, d?.versions ?? []);
   return (
     <div>
       <DocToolbar doc={d} />
@@ -239,8 +241,9 @@ export function DocumentOverview({ doc }: { doc: string }) {
               action={
                 <>
                   {d.kind === "prd" && <BuildRoadmapButton prd={d} />}
+                  {templateOnly && <DraftWithOracleButton slug={d.slug} />}
                   {d.latest_version != null && (
-                    <LinkButton variant="primary" href={versionHref(doc, d.kind, d.latest_version)}>
+                    <LinkButton variant={templateOnly ? "secondary" : "primary"} href={versionHref(doc, d.kind, d.latest_version)}>
                       Open latest (v{d.latest_version})
                     </LinkButton>
                   )}

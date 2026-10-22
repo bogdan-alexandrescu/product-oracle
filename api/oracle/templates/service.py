@@ -1012,7 +1012,9 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
     try:
         # The skeleton's sections are the company template's: only the title the person
         # typed is checked for dates (O4 'document dates').
-        result = await docs_service.import_draft(db, slug, markdown, principal, date_sections={""})
+        result = await docs_service.import_draft(
+            db, slug, markdown, principal, date_sections={""}, template_only=True
+        )
     except DraftError as e:
         await db.rollback()
         raise InvalidError(
