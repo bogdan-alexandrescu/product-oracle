@@ -655,9 +655,26 @@ function updateEntity(
     s.proposals.push(p);
     return p;
   }
+  const before = entitySnapshot(e);
   Object.assign(e, diff, { updated_at: now() });
   if (writer.origin === "user") lock(e, writer.userId);
+  // A revision for the change, as service._revision records it.
+  (s.revisions ??= []).push({
+    id: newId(),
+    entity_id: e.id,
+    edge_id: null,
+    before,
+    after: entitySnapshot(e),
+    actor: writer.runId ? `run:${writer.runId}` : `user:${writer.userId}`,
+    reason: writer.reason ?? null,
+    created_at: e.updated_at,
+  });
   return null;
+}
+
+/** service.entity_snapshot: what a revision keeps of an entity. */
+function entitySnapshot(e: EntityRow): Record<string, unknown> {
+  return { type: e.type, key: e.key, title: e.title, body: e.body ?? null, attrs: { ...e.attrs }, status: e.status };
 }
 
 function changesFor(field: string, value: unknown): Changes {
