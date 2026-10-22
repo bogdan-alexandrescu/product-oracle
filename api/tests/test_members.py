@@ -67,6 +67,7 @@ class World:
     invite_id: str
     token_id: uuid.UUID
     follow_up_id: uuid.UUID
+    update: str
 
     def ids(self) -> dict[str, object]:
         return {
@@ -79,13 +80,14 @@ class World:
             "invite_id": self.invite_id,
             "token_id": self.token_id,
             "follow_up_id": self.follow_up_id,
+            "update": self.update,
         }
 
 
 @pytest.fixture
 async def world(client) -> World:
-    """One document version with a comment, a changes-requested verdict, a second member
-    and an open invite, all made by the owner token."""
+    """One document version with a comment, a changes-requested verdict, a second member,
+    an open invite and an investor update (H8), all made by the owner token."""
     r = await seed()
     # A token without a user (the seeded one acts as the admin, whose role changes here).
     async with tenant_session(r.tenant_id) as s:
@@ -122,6 +124,12 @@ async def world(client) -> World:
         "/v1/invites", json={"email": "new@example.com", "role": "viewer"}, headers=owner
     )
     assert inv.status_code == 201, inv.text
+    update = await client.post(
+        "/v1/drafts",
+        json={"kind": "update", "title": "Investor update", "template": "investor-update"},
+        headers=owner,
+    )
+    assert update.status_code == 201, update.text
     async with tenant_session(r.tenant_id) as s:
         from oracle.members.models import MemberFollowUp
 
@@ -161,6 +169,7 @@ async def world(client) -> World:
         inv.json()["id"],
         bot.id,
         follow_up.id,
+        update.json()["slug"],
     )
 
 
@@ -169,6 +178,13 @@ V2 = V.replace("{n}", "2")
 MATRIX: list[tuple[str, str, str, dict]] = [
     ("GET", "/v1/documents", "viewer", {}),
     ("GET", "/v1/documents/{doc}", "viewer", {}),
+    # H8: on an update (only an update's visibility changes); approvers to approvers.
+    (
+        "PATCH",
+        "/v1/documents/{update}/visibility",
+        "owner",
+        {"json": {"visibility": "approvers", "reason": "Owners and approvers"}},
+    ),
     (
         "POST",
         "/v1/documents/{doc}/versions",
@@ -228,7 +244,8 @@ MATRIX: list[tuple[str, str, str, dict]] = [
 
 
 def _template(path: str) -> str:
-    return path.replace("/versions/2", "/versions/{n}")
+    # {update}: the world's update (H8), on the documents routes' {doc}.
+    return path.replace("/versions/2", "/versions/{n}").replace("{update}", "{doc}")
 
 
 def test_matrix_covers_every_route():
@@ -342,6 +359,7 @@ async def test_list_members(client, world):
         "id",
         "email",
         "role",
+        "engineering_lead",
         "created_at",
         "disabled_at",
         "disabled_by",

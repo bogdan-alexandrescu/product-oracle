@@ -16,6 +16,8 @@ const REMOVED = "an item that was removed";
 export const INTAKE_LABEL = "From an intake answer";
 const MAX_VALUE = 60;
 const MAX_FIELDS = 3;
+/** Words of what the two texts share, shown before where a long text change starts. */
+const CONTEXT_WORDS = 2;
 
 const EDGE_VERBS: Record<string, string> = {
   supports: "supports",
@@ -86,13 +88,51 @@ function old(current: Entity | Edge | undefined, key: string): [boolean, unknown
   return [v != null, v];
 }
 
+/** Whether a proposed value is the one the item has, as describe.py's _same (deep, like Python's ==). */
+function same(was: unknown, next: unknown): boolean {
+  if (was == null || next == null) return was == null && next == null;
+  if (typeof was === "string" && typeof next === "string" && ONLY_UUID.test(was)) return was.toLowerCase() === next.trim().toLowerCase();
+  if (Array.isArray(was) || Array.isArray(next)) {
+    return Array.isArray(was) && Array.isArray(next) && was.length === next.length && was.every((x, i) => same(x, next[i]));
+  }
+  if (isRecord(was) && isRecord(next)) {
+    const keys = Object.keys(was);
+    return keys.length === Object.keys(next).length && keys.every((k) => k in next && same(was[k], next[k]));
+  }
+  return was === next;
+}
+
+/** The changes whose new value differs from the item's (#262); all when it is gone. */
+function real(changed: [string, unknown][], current: Entity | Edge | undefined): [string, unknown][] {
+  return current ? changed.filter(([k, v]) => !same(old(current, k)[1], v)) : changed;
+}
+
+function excerpt(ws: string[], start: number): string {
+  const text = ws.slice(start).join(" ");
+  const cut = text.length > MAX_VALUE ? `${text.slice(0, MAX_VALUE)}…` : text;
+  return start ? `…${cut}` : cut;
+}
+
+/** [old, new] as short words; two long texts from just before where they differ, so the
+ * cut never leaves two identical prefixes. */
+function values(was: unknown, next: unknown, key: string, entities: Map<string, Entity>): [string, string] {
+  if (typeof was === "string" && typeof next === "string" && Math.max(was.length, next.length) > MAX_VALUE && !ONLY_UUID.test(next.trim())) {
+    const [a, b] = [was, next].map((t) => t.replace(UUID, "an item").split(/\s+/).filter(Boolean));
+    const differ = a.findIndex((x, i) => i < b.length && x !== b[i]);
+    const start = Math.max(0, (differ < 0 ? Math.min(a.length, b.length) : differ) - CONTEXT_WORDS);
+    return [excerpt(a, start), excerpt(b, start)];
+  }
+  return [value(was, key, entities), value(next, key, entities)];
+}
+
 function change(key: string, next: unknown, current: Entity | Edge | undefined, entityType: string | null, entities: Map<string, Entity>) {
   const bare = key.startsWith("attrs.") ? key.slice("attrs.".length) : key;
   const name = (!key.startsWith("attrs.") && FIELD_LABELS[key]) || label(bare, entityType);
   const [known, was] = old(current, key);
-  const before = known ? ` (was ${value(was, bare, entities)})` : "";
-  if (next == null) return `${name} cleared${before}`;
-  return `${name} to ${value(next, bare, entities)}${before}`;
+  if (next == null) return `${name} cleared${known ? ` (was ${value(was, bare, entities)})` : ""}`;
+  if (!known) return `${name} to ${value(next, bare, entities)}`;
+  const [before, after] = values(was, next, bare, entities);
+  return `${name} to ${after} (was ${before})`;
 }
 
 function changedList(clauses: string[]): string {
@@ -113,7 +153,8 @@ function entitySentence(op: string, fields: Fields, target: Entity | undefined, 
   const entityType = target ? target.type : null;
   const title = target ? target.title : REMOVED;
   if (op === "delete") return `Remove ${type} “${title}”`;
-  const changed = changes(fields);
+  const changed = real(changes(fields), target);
+  if (changed.length === 0) return `No change to ${title}`;
   const keys = changed.map(([k]) => k).join(",");
   if (keys === "title") return `Rename “${title}” to “${String(changed[0][1])}”`;
   if (keys === "body") return `Rewrite the description of ${title}`;
@@ -127,11 +168,11 @@ function entitySentence(op: string, fields: Fields, target: Entity | undefined, 
     const [key, next] = changed[0];
     const bare = key.startsWith("attrs.") ? key.slice("attrs.".length) : key;
     const [known, was] = old(target, key);
-    const before = known ? ` (was ${value(was, bare, entities)})` : "";
-    if (next == null) return `Clear ${possessive(title)} ${label(bare, entityType)}${before}`;
-    return `Set ${possessive(title)} ${label(bare, entityType)} to ${value(next, bare, entities)}${before}`;
+    if (next == null) return `Clear ${possessive(title)} ${label(bare, entityType)}${known ? ` (was ${value(was, bare, entities)})` : ""}`;
+    if (!known) return `Set ${possessive(title)} ${label(bare, entityType)} to ${value(next, bare, entities)}`;
+    const [before, after] = values(was, next, bare, entities);
+    return `Set ${possessive(title)} ${label(bare, entityType)} to ${after} (was ${before})`;
   }
-  if (changed.length === 0) return `Change ${title}`;
   return `Change ${title}: ${changedList(changed.map(([k, v]) => change(k, v, target, entityType, entities)))}`;
 }
 
@@ -149,8 +190,9 @@ function edgeSentence(op: string, fields: Fields, target: Edge | undefined, enti
   if (!target) return op === "delete" ? "Remove a link that was removed" : "Change a link that was removed";
   const link = `${title(target.src_id)} ${EDGE_VERBS[target.type] ?? words(target.type)} ${title(target.dst_id)}`;
   if (op === "delete") return `Remove link: ${link}`;
-  const clauses = changes(fields).map(([k, v]) => change(k, v, target, null, entities));
-  return clauses.length ? `Change link ${link}: ${changedList(clauses)}` : `Change link ${link}`;
+  const changed = real(changes(fields), target);
+  if (changed.length === 0) return `No change to link ${link}`;
+  return `Change link ${link}: ${changedList(changed.map(([k, v]) => change(k, v, target, null, entities)))}`;
 }
 
 /** The proposal as one sentence; `awaiting` for a question-only intake proposal. */

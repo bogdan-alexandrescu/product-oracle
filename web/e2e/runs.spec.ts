@@ -115,7 +115,8 @@ test("new run: knobs, estimate before start, skipped checkpoints", async ({ page
   await expect(page.getByTestId("checkpoint-prd_review")).toContainText("Waiting");
 });
 
-test("new run over $50 waits for an owner's approval", async ({ page }) => {
+/** Opens New run and estimates a deep run of platform-prd: $53.00, over the $50 approval line. */
+async function estimateOverFifty(page: Page) {
   await openRuns(page);
   await page.getByRole("button", { name: "New run" }).click();
   const dialog = page.getByRole("dialog", { name: "New run" });
@@ -124,12 +125,25 @@ test("new run over $50 waits for an owner's approval", async ({ page }) => {
   await dialog.getByRole("button", { name: "Estimate" }).click();
   await expect(dialog.getByTestId("estimate-total")).toHaveText("$53.00");
   await expect(dialog).toContainText("an owner approves the cost");
+  return dialog;
+}
+
+test("#259: an owner approves their own run over $50 from the dialog", async ({ page }) => {
+  const dialog = await estimateOverFifty(page);
+  await expect(dialog.getByRole("button", { name: "Ask an owner to approve" })).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Approve $53.00 and start" }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  await expect(status(page)).toHaveText("Running");
+});
+
+test("#259: an approver's run over $50 waits for an owner's approval", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("po-mock-role", "approver"));
+  const dialog = await estimateOverFifty(page);
+  await expect(dialog.getByRole("button", { name: /^Approve/ })).toHaveCount(0);
   await dialog.getByRole("button", { name: "Ask an owner to approve" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-
   await expect(status(page)).toHaveText("Awaiting cost approval");
-  await page.getByRole("button", { name: "Approve $53.00 and start" }).click();
-  await expect(status(page)).toHaveText("Running");
+  await expect(page.getByRole("button", { name: "Approve $53.00 and start" })).toHaveCount(0);
 });
 
 /**

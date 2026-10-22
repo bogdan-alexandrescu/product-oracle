@@ -76,7 +76,13 @@ async def list_members(db: TenantDB) -> list[MemberOut]:
 async def update_member(
     user_id: uuid.UUID, body: MemberPatch, principal: Owner, db: TenantDB
 ) -> MemberOut:
-    user = await _call(service.set_role(db, principal, user_id, body.role))
+    """Change a member's role, name them engineering lead or clear it (A3), or both in
+    one change, role first. A viewer is never the engineering lead: naming one is a 422,
+    and a demotion to viewer clears the flag. Clearing it returns the engineering-stop
+    decisions they gave that are not delivered yet to the Inbox."""
+    user = await _call(
+        service.update_member(db, principal, user_id, body.role, body.engineering_lead)
+    )
     await db.commit()
     return (await service.members_out(db, [user]))[0]
 
@@ -205,7 +211,8 @@ async def list_invites(
     },
 )
 async def create_invite(body: InviteCreate, principal: Owner, db: TenantDB) -> InviteOut:
-    """Pre-assign a role to an email: its first Google sign-in lands with that role.
+    """Pre-assign a role to an email: its first Google sign-in lands with that role, and as
+    an engineering lead when ``engineering_lead`` (never with role viewer: 422).
 
     The invitee is granted Google IAP access on Oracle's backend services
     (``access``: ``granted``; ``skipped`` with no backends configured; ``pending`` with
@@ -214,7 +221,9 @@ async def create_invite(body: InviteCreate, principal: Owner, db: TenantDB) -> I
     link in the background (``email_status``: ``queued``, then ``sent`` or ``failed``;
     ``not_sent`` with no sender configured: send them ``sign_in_url``). Refused (422)
     for an address outside the domains that can sign in."""
-    invite = await _call(service.create_invite(db, principal, body.email, body.role))
+    invite = await _call(
+        service.create_invite(db, principal, body.email, body.role, body.engineering_lead)
+    )
     send = delivery.queue_email(invite)
     await db.commit()
     await delivery.grant_invite_access(db, principal, invite)
@@ -292,12 +301,15 @@ async def revoke_invite(invite_id: uuid.UUID, principal: Owner, db: TenantDB) ->
     "/member-follow-ups/{follow_up_id}/retry",
     response_model=FollowUpOut,
     responses={404: {"description": "No such follow-up"}, 409: {"description": "Not open"}},
+    dependencies=[Depends(same_origin)],
 )
 async def retry_member_follow_up(
     follow_up_id: uuid.UUID, principal: Owner, db: TenantDB, http: ProviderHttp
 ) -> FollowUpOut:
-    """Make a provider revoke (or runtime cancel) a disable still owes now, whatever its
-    backoff or its 24 hours of retries. A success drops Oracle's copy of the credential."""
+    """Make a provider revoke (or runtime cancel) a disable still owes now, or a change
+    to someone's Google IAP access that keeps failing (under the address's lock, checked
+    first: no longer needed is done), whatever its backoff or its 24 hours of retries.
+    Audited. A success drops Oracle's copy of the credential."""
     row = await _call(service.retry_follow_up(db, principal, follow_up_id, http))
     return FollowUpOut.model_validate(row)
 

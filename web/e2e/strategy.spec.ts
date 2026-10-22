@@ -117,7 +117,7 @@ test("strategy: an owner opens Company and lands on Strategy with the vision, th
   await page.getByTestId("app-nav").getByTestId("nav-company").click();
   await expect(page).toHaveURL(/\/company\/strategy$/);
   const tabs = page.getByRole("navigation", { name: "Company" });
-  await expect(tabs.getByRole("link")).toHaveText(["Strategy", "Decisions"]);
+  await expect(tabs.getByRole("link")).toHaveText(["Strategy", "Decisions", "Updates"]);
   await expect(tabs.getByTestId("company-tab-strategy")).toHaveAttribute("aria-current", "page");
 
   const root = strategyPage(page);

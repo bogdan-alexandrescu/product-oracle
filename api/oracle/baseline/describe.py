@@ -20,6 +20,8 @@ REMOVED = "an item that was removed"
 INTAKE_LABEL = "From an intake answer"
 MAX_VALUE = 60
 MAX_FIELDS = 3
+# Words of what the two texts share, shown before where a long text change starts.
+CONTEXT_WORDS = 2
 
 EDGE_VERBS = {
     "supports": "supports",
@@ -104,6 +106,42 @@ def _old(current: Entity | Edge | None, key: str) -> tuple[bool, Any]:  # (known
     return v is not None, v
 
 
+def _same(old: Any, new: Any) -> bool:
+    """Whether a proposed value is the one the item has: yes/no never equals 1/0."""
+    if isinstance(old, uuid.UUID):
+        old = str(old)
+    if isinstance(old, bool) != isinstance(new, bool):
+        return False
+    if isinstance(old, str) and isinstance(new, str) and _UUID.fullmatch(old):
+        return old.lower() == new.strip().lower()
+    return bool(old == new)
+
+
+def _real(changes: list[tuple[str, Any]], current: Entity | Edge | None) -> list[tuple[str, Any]]:
+    """The changes whose new value differs from the item's (#262); all when it is gone."""
+    if current is None:
+        return changes
+    return [(k, v) for k, v in changes if not _same(_old(current, k)[1], v)]
+
+
+def _excerpt(words: list[str], start: int) -> str:
+    text = " ".join(words[start:])
+    text = text[:MAX_VALUE] + "…" if len(text) > MAX_VALUE else text
+    return f"…{text}" if start else text
+
+
+def _values(old: Any, new: Any, key: str, entities: Mapping[uuid.UUID, Entity]) -> tuple[str, str]:
+    """(old, new) as short words; two long texts from just before where they differ, so
+    the cut never leaves two identical prefixes."""
+    texts = isinstance(old, str) and isinstance(new, str)
+    if texts and max(len(old), len(new)) > MAX_VALUE and not _UUID.fullmatch(new.strip()):
+        a, b = _UUID.sub("an item", old).split(), _UUID.sub("an item", new).split()
+        differ = next((i for i, (x, y) in enumerate(zip(a, b, strict=False)) if x != y), None)
+        start = max(0, (min(len(a), len(b)) if differ is None else differ) - CONTEXT_WORDS)
+        return _excerpt(a, start), _excerpt(b, start)
+    return _value(old, key, entities), _value(new, key, entities)
+
+
 def _change(
     key: str,
     new: Any,
@@ -116,10 +154,12 @@ def _change(
     label = FIELD_LABELS.get(key) if not key.startswith("attrs.") else None
     label = label or _label(bare, entity_type)
     known, old = _old(current, key)
-    was = f" (was {_value(old, bare, entities)})" if known else ""
     if new is None:
-        return f"{label} cleared{was}"
-    return f"{label} to {_value(new, bare, entities)}{was}"
+        return f"{label} cleared" + (f" (was {_value(old, bare, entities)})" if known else "")
+    if not known:
+        return f"{label} to {_value(new, bare, entities)}"
+    was, to = _values(old, new, bare, entities)
+    return f"{label} to {to} (was {was})"
 
 
 def _changed_list(clauses: list[str]) -> str:
@@ -147,7 +187,9 @@ def _entity_sentence(
     title = target.title if target is not None else REMOVED
     if op == "delete":
         return f"Remove {type_} “{title}”"
-    changes = _changes(fields)
+    changes = _real(_changes(fields), target)
+    if not changes:
+        return f"No change to {title}"
     keys = [k for k, _ in changes]
     if keys == ["title"]:
         return f"Rename “{title}” to “{changes[0][1]}”"
@@ -168,10 +210,10 @@ def _entity_sentence(
         if new is None:
             was = f" (was {_value(old, bare, entities)})" if known else ""
             return f"Clear {_possessive(title)} {label}{was}"
-        was = f" (was {_value(old, bare, entities)})" if known else ""
-        return f"Set {_possessive(title)} {label} to {_value(new, bare, entities)}{was}"
-    if not changes:
-        return f"Change {title}"
+        if not known:
+            return f"Set {_possessive(title)} {label} to {_value(new, bare, entities)}"
+        was, to = _values(old, new, bare, entities)
+        return f"Set {_possessive(title)} {label} to {to} (was {was})"
     clauses = [_change(k, v, target, entity_type, entities) for k, v in changes]
     return f"Change {title}: {_changed_list(clauses)}"
 
@@ -208,8 +250,11 @@ def _edge_sentence(
     link = f"{title(target.src_id)} {verb} {title(target.dst_id)}"
     if op == "delete":
         return f"Remove link: {link}"
-    clauses = [_change(k, v, target, None, entities) for k, v in _changes(fields)]
-    return f"Change link {link}: {_changed_list(clauses)}" if clauses else f"Change link {link}"
+    changes = _real(_changes(fields), target)
+    if not changes:
+        return f"No change to link {link}"
+    clauses = [_change(k, v, target, None, entities) for k, v in changes]
+    return f"Change link {link}: {_changed_list(clauses)}"
 
 
 def describe(

@@ -26,9 +26,9 @@ type Tool = "evidence" | "refine" | "ask";
 
 /**
  * One section of a version. The open section (one at a time) carries the review bar and a
- * ⋯ menu with Add evidence link, Refine section and Ask a teammate; a `nested` section (detail shown in
- * place inside a brief section) shows its content only and offers to review it in the
- * full document.
+ * ⋯ menu with Add evidence link, Refine section, Ask a teammate and Discuss this section; a
+ * `nested` section (detail shown in place inside a brief section) shows its content only
+ * and offers to review it in the full document.
  */
 export const SectionView = memo(function SectionView({
   section,
@@ -49,6 +49,8 @@ export const SectionView = memo(function SectionView({
   showLayer = true,
   headTools,
   dateMarks,
+  onDiscuss,
+  placeholder = false,
 }: {
   section: SectionOut;
   blocks: Block[];
@@ -77,6 +79,10 @@ export const SectionView = memo(function SectionView({
   headTools?: ReactNode;
   /** A roadmap's dates in this section that rest on no verified basis (O4). */
   dateMarks?: DateMarkOut[];
+  /** Commenters and above: "Discuss this section" (G1). */
+  onDiscuss?: (section: SectionOut) => void;
+  /** H8: the section still holds the template's "Owner to fill" text (an update's Asks). */
+  placeholder?: boolean;
 }) {
   const Heading = (`h${Math.min(section.level, 3)}` as "h1" | "h2" | "h3");
   // E1: a spec's part states; the acceptance criteria's proposed half starts at a block.
@@ -154,7 +160,7 @@ export const SectionView = memo(function SectionView({
                 </Button>
               )
             : headTools}
-          {!nested && (evidenceTargets || canRefine || ask || mayDecide) && (
+          {!nested && (evidenceTargets || canRefine || ask || mayDecide || onDiscuss) && (
             <Menu label={`Actions for ${section.heading}`} icon="more" iconOnly>
               {(closeMenu) => (
                 <span role="menu" aria-label={`Actions for ${section.heading}`} className="flex min-w-44 flex-col gap-0.5">
@@ -191,6 +197,17 @@ export const SectionView = memo(function SectionView({
                       Ask a teammate
                     </MenuItem>
                   )}
+                  {onDiscuss && (
+                    <MenuItem
+                      label="Discuss this section"
+                      onClick={() => {
+                        closeMenu();
+                        onDiscuss(section);
+                      }}
+                    >
+                      Discuss this section
+                    </MenuItem>
+                  )}
                   {mayDecide && (
                     <MenuItem
                       label={`Record a decision about ${section.heading}`}
@@ -225,7 +242,16 @@ export const SectionView = memo(function SectionView({
           ))}
         </p>
       )}
-      <div className="doc-body" data-section-body={section.section_key}>
+      {placeholder && (
+        <p className="mb-2" data-testid="asks-placeholder-label">
+          <Chip kind="warn">Owner to fill</Chip>
+        </p>
+      )}
+      <div
+        className={`doc-body${placeholder ? " rounded-button border-2 border-warn bg-warn-bg px-4 py-3" : ""}`}
+        data-section-body={section.section_key}
+        data-testid={placeholder ? "asks-placeholder" : undefined}
+      >
         <MarkdownBody
           blocks={blocks}
           highlights={highlights}

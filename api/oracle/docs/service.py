@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes, safe_yaml
 from oracle.auth.deps import Principal
+from oracle.auth.models import ApiToken, User
 from oracle.docs import layers
 from oracle.docs.diff import diff_sections
 from oracle.docs.models import DOCUMENT_KINDS, Citation, Document, DocumentVersion, Section
@@ -42,6 +43,8 @@ from oracle.docs.schemas import (
     VersionSummary,
     VersionWarning,
 )
+from oracle.members.names import display_name
+from oracle.models import AuditEvent
 from oracle.review import service as review_service
 from oracle.review.models import SectionReview
 from oracle.review.schemas import Resolution
@@ -52,6 +55,10 @@ from oracle.templates.models import Template, TemplateVersion
 
 class NotFoundError(LookupError):
     pass
+
+
+class VisibilityKindError(ValueError):
+    """Only an update's visibility changes (H8): every other document stays company-wide."""
 
 
 class ImportConflictError(RuntimeError):
@@ -192,15 +199,45 @@ def _summary(
     latest: int | None,
     approved: int | None = None,
     source: VersionSource | None = None,
+    period: dict | None = None,
 ) -> dict:
     return {
         **DocumentSummary.model_validate(document).model_dump(
-            exclude={"latest_version", "approved_version", "source"}
+            exclude={"latest_version", "approved_version", "source", "period"}
         ),
         "latest_version": latest,
         "approved_version": approved,
         "source": source,
+        "period": period,
     }
+
+
+async def _update_periods(db: AsyncSession, documents: list[Document]) -> dict[uuid.UUID, dict]:
+    """H8: each update's period, from its latest version's front matter."""
+    from oracle.updates.frontmatter import parse_period
+
+    ids = [d.id for d in documents if d.kind == "update"]
+    if not ids:
+        return {}
+    latest = (
+        select(DocumentVersion.document_id, func.max(DocumentVersion.number).label("n"))
+        .where(DocumentVersion.document_id.in_(ids))
+        .group_by(DocumentVersion.document_id)
+        .subquery()
+    )
+    rows = await db.execute(
+        select(DocumentVersion.document_id, DocumentVersion.front_matter).join(
+            latest,
+            (DocumentVersion.document_id == latest.c.document_id)
+            & (DocumentVersion.number == latest.c.n),
+        )
+    )
+    out: dict[uuid.UUID, dict] = {}
+    for doc_id, fm in rows.all():
+        period = parse_period((fm or {}).get("period"))
+        if period is not None:
+            out[doc_id] = {"from": period[0], "to": period[1]}
+    return out
 
 
 async def list_documents(db: AsyncSession, kind: str | None = None) -> list[DocumentSummary]:
@@ -225,6 +262,7 @@ async def list_documents(db: AsyncSession, kind: str | None = None) -> list[Docu
         for doc_id, source_id in rows.all():
             latest_sources[doc_id] = source_id
     sources = await version_sources(db, list(latest_sources.values()))
+    periods = await _update_periods(db, documents)
     return [
         DocumentSummary(
             **_summary(
@@ -232,6 +270,7 @@ async def list_documents(db: AsyncSession, kind: str | None = None) -> list[Docu
                 latest.get(d.id),
                 approved.get(d.id),
                 sources.get(latest_sources.get(d.id)),  # type: ignore[arg-type]
+                periods.get(d.id),
             )
         )
         for d in documents
@@ -247,12 +286,54 @@ async def list_versions(db: AsyncSession, document: Document) -> list[VersionSum
         )
     )
     sources = await version_sources(db, [v.source_version_id for v in rows])
+    names = await importer_names(db, rows)
     return [
         VersionSummary.model_validate(v).model_copy(
-            update={"source": sources.get(v.source_version_id)}  # type: ignore[arg-type]
+            update={
+                "source": sources.get(v.source_version_id),  # type: ignore[arg-type]
+                "imported_by_name": names.get(v.id),
+            }
         )
         for v in rows
     ]
+
+
+async def importer_names(db: AsyncSession, versions: list[DocumentVersion]) -> dict[uuid.UUID, str]:
+    """Who imported each version, by name, keyed by version id (#256): "Oracle" for a
+    run's draft (its import's audit event names the run; ``imported_by`` is the person
+    the run acted for), else the member's display name or the API token's name."""
+    ids = {v.imported_by for v in versions if v.imported_by}
+    people: dict[uuid.UUID, str] = {
+        uid: display_name(email)
+        for uid, email in (
+            await db.execute(select(User.id, User.email).where(User.id.in_(ids)))
+        ).all()
+    }
+    tokens: dict[uuid.UUID, str] = {
+        tid: name
+        for tid, name in (
+            await db.execute(
+                select(ApiToken.id, ApiToken.name).where(ApiToken.id.in_(ids - set(people)))
+            )
+        ).all()
+    }
+    by_run = set(
+        await db.scalars(
+            select(AuditEvent.entity_id).where(
+                AuditEvent.action == "document.version_imported",
+                AuditEvent.entity_id.in_([v.id for v in versions]),
+                AuditEvent.data.has_key("run_id"),
+            )
+        )
+    )
+    names = {**people, **tokens}
+    out: dict[uuid.UUID, str] = {}
+    for v in versions:
+        if v.id in by_run:
+            out[v.id] = "Oracle"
+        elif v.imported_by in names:
+            out[v.id] = names[v.imported_by]
+    return out
 
 
 async def read_document(db: AsyncSession, doc: str) -> DocumentOut:
@@ -262,10 +343,43 @@ async def read_document(db: AsyncSession, doc: str) -> DocumentOut:
     approved = max((v.number for v in versions if v.approved_at), default=None)
     return DocumentOut(
         **_summary(
-            document, latest.number if latest else None, approved, latest.source if latest else None
+            document,
+            latest.number if latest else None,
+            approved,
+            latest.source if latest else None,
+            (await _update_periods(db, [document])).get(document.id),
         ),
         versions=versions,
     )
+
+
+async def set_visibility(
+    db: AsyncSession, doc: str, visibility: str, reason: str, principal: Principal
+) -> DocumentOut:
+    """H8: an owner opens an update to the company, or back to owners and approvers, with
+    a reason (audited ``document.visibility``, before and after). Any other kind is a
+    :class:`VisibilityKindError`."""
+    document = await find_document(db, doc, for_update=True)
+    if document is None:
+        raise NotFoundError(f"document '{doc}' not found")
+    if document.kind != "update":
+        raise VisibilityKindError(
+            "Only an update can be limited to owners and approvers; every other document "
+            "is visible to the whole company"
+        )
+    before = document.visibility
+    if before != visibility:
+        document.visibility = visibility
+        await audit.record(
+            db,
+            principal,
+            "document.visibility",
+            "document",
+            document.id,
+            {"before": before, "after": visibility, "reason": reason},
+        )
+        await db.commit()
+    return await read_document(db, str(document.id))
 
 
 async def _latest_verdicts(db: AsyncSession, version_id: uuid.UUID) -> dict[str, SectionVerdict]:
@@ -407,7 +521,7 @@ async def read_version(
             .where(Document.id == version.document_id)
         )
     ).one()
-    if kind == "roadmap":
+    if kind in ("roadmap", "update"):
         from oracle.roadmap import doc_dates
 
         try:
@@ -418,8 +532,9 @@ async def read_version(
             marks = []
         date_marks = [m.as_json() for m in doc_dates.per_section(marks)]
     return VersionOut(
-        **VersionSummary.model_validate(version).model_dump(exclude={"source"}),
+        **VersionSummary.model_validate(version).model_dump(exclude={"source", "imported_by_name"}),
         source=source,
+        imported_by_name=(await importer_names(db, [version])).get(version.id),
         approval_lapses=version.approval_lapses or [],
         front_matter=version.front_matter,
         sections=[
@@ -444,7 +559,7 @@ async def version_markdown(db: AsyncSession, version: DocumentVersion) -> tuple[
     (``<!-- oracle: date unverified -->``, ``<!-- oracle: date withdrawn -->``; the import
     drops them), and the list names them (O4 'document dates')."""
     kind = await db.scalar(select(Document.kind).where(Document.id == version.document_id))
-    if kind != "roadmap":
+    if kind not in ("roadmap", "update"):
         return version.markdown, []
     from oracle.roadmap import doc_dates
 
@@ -529,8 +644,14 @@ async def _check_document_dates(
                 section_key=doc_dates.SOURCES_KEY,
             )
         )
-    prd_id = await doc_dates.prd_of(db, document.id, source_version_id, draft.front_matter)
-    marks = await doc_dates.check(db, found, prd_id, exempt=exempt)
+    if document.kind == "update":
+        # H8: every PRD with an active product track, not one roadmap's PRD.
+        prds = await doc_dates.prds_with_active_track(db)
+        prd_id = None
+    else:
+        prd_id = await doc_dates.prd_of(db, document.id, source_version_id, draft.front_matter)
+        prds = [prd_id] if prd_id is not None else []
+    marks = await doc_dates.check(db, found, prds, exempt=exempt)
     bad = [
         m
         for m in doc_dates.flagged(marks)
@@ -544,7 +665,7 @@ async def _check_document_dates(
     problems += [
         ImportProblem(
             code="unverified_date",
-            message=doc_dates.problem_message(m, prd_slug),
+            message=doc_dates.problem_message(m, prd_slug, update=document.kind == "update"),
             section_key=m.section_key or None,
         )
         for m in bad
@@ -860,7 +981,7 @@ async def import_draft(
                 "keeps the changes made since the version it was written on",
             )
         )
-    if document.kind == "roadmap":
+    if document.kind in ("roadmap", "update"):
         date_warnings, dates = await _check_document_dates(
             db,
             document,
@@ -886,6 +1007,32 @@ async def import_draft(
         warnings += await frontmatter.check_import(
             db, document.kind, draft.front_matter, {s.section_key for s in draft.sections}
         )
+    if document.kind == "update":
+        # H8: the numbers come first, the period is set, every figure cites, and Asks is
+        # the owner's (a run's text there is flagged).
+        from oracle.updates import frontmatter as update_frontmatter
+
+        named = update_frontmatter.template_of(draft.front_matter, document.template)
+        body = await template_body(
+            db,
+            *(
+                (draft.template, draft.template_version)
+                if draft.template
+                else (document.template, document.template_version)
+            ),
+        )
+        try:
+            warnings += update_frontmatter.check_import(
+                draft.front_matter,
+                draft.sections,
+                brief,
+                template=named,
+                template_body=body,
+                from_run=origin == "run",
+            )
+        except DraftError:
+            await db.rollback()
+            raise
     if previous is not None:
         locked = await review_service.locked_section_keys(db, previous.id)
         if locked:

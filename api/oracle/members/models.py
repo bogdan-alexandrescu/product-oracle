@@ -1,10 +1,21 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Index, Integer, LargeBinary, Text, Uuid, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Index,
+    Integer,
+    LargeBinary,
+    Text,
+    Uuid,
+    false,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
-from oracle.auth.models import ROLES
+from oracle.auth.models import ENGINEERING_LEAD_ROLE, ROLES
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
@@ -24,6 +35,7 @@ class Invite(TenantScoped, Base):
     __table_args__ = (
         CheckConstraint(_in("role", ROLES), name="role"),
         CheckConstraint("email = lower(email)", name="email_lowercase"),
+        CheckConstraint(ENGINEERING_LEAD_ROLE, name="engineering_lead_role"),
         CheckConstraint(_in("access", INVITE_ACCESS), name="access"),
         CheckConstraint(_in("email_status", INVITE_EMAIL), name="email_status"),
         # One open invite per email; accepted and revoked ones are history.
@@ -38,6 +50,10 @@ class Invite(TenantScoped, Base):
 
     email: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(Text, nullable=False)
+    # A3: the first sign-in lands as an engineering lead (never with role viewer).
+    engineering_lead: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     # User id or API token id; no FK because it can be either.
     invited_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -54,8 +70,8 @@ class Invite(TenantScoped, Base):
 
 FOLLOW_UP_KINDS = ("provider_revoke", "run_cancel", "iap_revoke", "iap_grant")
 # pending: retried by the tick, by time; failed: still not done after the retry window,
-# no more automatic retries (an owner's Retry or Dismiss in the Inbox); done; dismissed:
-# an owner gave up on it.
+# no more automatic retries (an owner's Retry or Dismiss in the Inbox; an access change,
+# #245: retried once a day, and an owner's Retry); done; dismissed: an owner gave up on it.
 FOLLOW_UP_STATUSES = ("pending", "done", "failed", "dismissed")
 
 
@@ -68,7 +84,9 @@ class MemberFollowUp(TenantScoped, Base):
     recorded here and retried from the tick
     (``oracle.members.service.run_follow_ups``), with a backoff, for 24 hours; a provider
     revoke still not done keeps its copy of the credential and is shown to owners in the
-    Inbox (Retry, Dismiss) until it succeeds or an owner dismisses it."""
+    Inbox (Retry, Dismiss) until it succeeds or an owner dismisses it; an access change
+    still failing is retried once a day and shown to owners in the Inbox (Retry, #245)
+    until it succeeds or is no longer needed."""
 
     __tablename__ = "member_follow_ups"
     __table_args__ = (

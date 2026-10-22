@@ -43,6 +43,7 @@ SEGMENT_FILES: dict[str, tuple[str, ...]] = {
     "roadmap_items": ("roadmap_items.yaml",),
     "roadmap_draft": ("roadmap.md",),
     "spec_draft": ("spec.md", "design.json"),
+    "index": ("code_map.json",),
 }
 # The machine-readable line a spec prompt carries (oracle.specs.service.prompt_lines).
 _SPEC_INPUTS = re.compile(r"^Spec inputs \(JSON\): (\{.*\})$", re.M)
@@ -96,6 +97,44 @@ def document_of(prompt: str) -> str | None:
     names it, as the run's agents are told to."""
     m = _DOCUMENT.search(prompt or "")
     return m[1] if m else None
+
+
+# The approved PRD scope a prompt pastes (oracle.runs.flows: "--- PRD scope ---").
+_SCOPE = re.compile(r"^--- PRD scope ---\n(.*?)(?:\n\n|\Z)", re.M | re.S)
+
+
+def scope_order_of(prompt: str) -> list[str] | None:
+    """The included feature keys of the approved PRD scope a prompt pastes, each after the
+    features it depends on (as the run's prioritizer is told), or None when none is pasted:
+    the default priority.yaml ranks them."""
+    m = _SCOPE.search(prompt or "")
+    if m is None:
+        return None
+    from oracle import safe_yaml
+
+    try:
+        data = safe_yaml.load(m[1])
+    except Exception:  # noqa: BLE001 - a pasted scope the fake cannot read: the default order
+        return None
+    features = [
+        f for f in (data or {}).get("features") or [] if isinstance(f, dict) and f.get("key")
+    ]
+    keys = [str(f["key"]) for f in features]
+    deps = {
+        str(f["key"]): [str(d) for d in f.get("depends_on") or [] if d in keys] for f in features
+    }
+    order: list[str] = []
+
+    def place(key: str, seen: frozenset[str] = frozenset()) -> None:
+        if key in order or key in seen:
+            return
+        for dep in deps.get(key, []):
+            place(dep, seen | {key})
+        order.append(key)
+
+    for key in keys:
+        place(key)
+    return order
 
 
 def _spec_inputs(prompt: str) -> dict:
@@ -165,6 +204,8 @@ def _default_files(
     files = {}
     if segment == "spec_draft":
         return {"spec.md": _spec_md(attempt), "design.json": _design_json(_spec_inputs(prompt))}
+    if segment == "index":
+        return {"code_map.json": _code_map_json(prompt)}
     names = SEGMENT_FILES.get(segment, ("summary.md",))
     # A segment whose draft file depends on the document's kind (the feedback loop on a
     # roadmap writes roadmap.md): the spec's outputs say which.
@@ -172,11 +213,42 @@ def _default_files(
         names = tuple("roadmap.md" if n == "prd.md" else n for n in names)
     document = document_of(prompt)
     for name in names:
-        files[name] = _default_content(name, segment, attempt, document)
+        files[name] = _default_content(name, segment, attempt, document, scope_order_of(prompt))
     return files
 
 
-def _default_content(name: str, segment: str, attempt: int, document: str | None = None) -> str:
+_REPO_LINE = re.compile(r"^Repository: (\S+?)[ .]", re.M)
+
+
+def _code_map_json(prompt: str) -> str:
+    """A docs-only code map of the repo the code_map prompt names (F5-2)."""
+    found = _REPO_LINE.search(prompt)
+    return json.dumps(
+        {
+            "version": 1,
+            "repo": found.group(1) if found else "example-org/app",
+            "commit": None,
+            "generated_at": "2026-10-18T10:00:00Z",
+            "partial": True,
+            "modules": [
+                {"id": "module:app", "path": "app", "summary": "The application (from its "
+                 "README)", "depends_on": []},
+            ],
+            "apis": [],
+            "data_models": [],
+            "flags": [],
+            "jobs": [],
+        }
+    )  # fmt: skip
+
+
+def _default_content(
+    name: str,
+    segment: str,
+    attempt: int,
+    document: str | None = None,
+    scope: list[str] | None = None,
+) -> str:
     if name == "prd.md":
         return (
             "---\n"
@@ -263,6 +335,18 @@ def _default_content(name: str, segment: str, attempt: int, document: str | None
         return (
             f"# {segment} (local agent runtime, attempt {attempt})\n"
             "version: 1\nrequests: []\nfound: []\n"
+        )
+    if name == "priority.yaml":
+        # The C8 format (oracle.priorities.run_order): the approved scope the prompt pastes,
+        # in dependency order, else the default feature set's one feature.
+        rows = "".join(
+            f"  - key: {key}\n    rank: {n}\n    score: 0\n"
+            "    explanation: Ranked by the local agent runtime\n"
+            for n, key in enumerate(scope or ["price-early"], start=1)
+        )
+        return (
+            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            "version: 1\nmethod: goal_weighted\norder:\n" + rows
         )
     if name.endswith(".yaml"):
         return f"# {segment} (local agent runtime, attempt {attempt})\nitems: []\n"

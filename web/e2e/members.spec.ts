@@ -63,9 +63,12 @@ test("members: undo brings a revoked invite back", async ({ page }) => {
   await login(page);
   await page.goto("/settings/members");
   const row = page.getByTestId("invite-row").filter({ hasText: "new.hire@example.com" });
+  const emailed = await row.getByTestId("invite-email").textContent();
   await page.getByRole("button", { name: "Revoke invite for new.hire@example.com" }).click();
   await row.getByRole("button", { name: "Undo" }).click();
   await expect(row.getByRole("button", { name: "Revoke invite for new.hire@example.com" })).toBeVisible();
+  // Undo invites them again: the row shows the new invite's email once it is made.
+  await expect(row.getByTestId("invite-email")).not.toHaveText(emailed ?? "");
   await page.reload();
   await expect(page.getByTestId("invite-row").filter({ hasText: "new.hire@example.com" })).toHaveCount(1);
 });

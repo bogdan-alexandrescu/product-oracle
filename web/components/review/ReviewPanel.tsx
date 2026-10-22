@@ -22,7 +22,8 @@ type FeedbackProps = Omit<ComponentProps<typeof FeedbackList>, "entries"> & {
 
 /**
  * The review panel (I3 PRD navigation, 2026-10-20): Reviewed / Locked / Open feedback in
- * the head, then three tabs. Feedback: comments, suggestions and reviews in one list.
+ * the head, then three tabs. Feedback: comments, suggestions and reviews in one list, and
+ * the document's discussions as a fourth kind (G1), a thread opening in their place.
  * Sources: the version's sources. History: Resolutions, Reports and Jobs, each folding.
  * `variant="side"`: sticky beside the section, capped at the viewport and scrolling inside,
  * so a tall card's foot is always reachable; "sheet": the phone's Review sheet.
@@ -41,6 +42,7 @@ export function ReviewPanel({
   variant,
   goTo,
   questions,
+  discussion,
 }: {
   version: VersionOut | undefined;
   doc: string;
@@ -58,6 +60,8 @@ export function ReviewPanel({
   goTo?: GoTo;
   /** The questions asked about the open section (C2), above its feedback. */
   questions?: ReactNode;
+  /** A discussion open in the Feedback tab (G1): its thread, or the form starting one, in place of the list. */
+  discussion?: ReactNode;
 }) {
   const uid = useId();
   const idFor = (t: PanelTab) => `${uid}-${t}`;
@@ -109,9 +113,10 @@ export function ReviewPanel({
           variant === "side" ? "min-[1101px]:min-h-0 min-[1101px]:flex-1 min-[1101px]:overflow-y-auto min-[1101px]:overscroll-contain" : ""
         }`}
       >
-        {tab === "feedback" && questions}
+        {tab === "feedback" && !discussion && questions}
         {tab === "feedback" &&
-          (error ? <ErrorNote>{error}</ErrorNote> : !entries ? <Loading /> : <FeedbackList entries={entries} {...list} />)}
+          (discussion ??
+            (error ? <ErrorNote>{error}</ErrorNote> : !entries ? <Loading /> : <FeedbackList entries={entries} {...list} />))}
         {tab === "sources" && version && <SourcesTab version={version} />}
         {tab === "history" && <HistoryTab doc={doc} n={n} refreshKey={refreshKey} goTo={goTo} />}
       </div>

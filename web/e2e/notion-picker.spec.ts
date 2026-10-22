@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
+import { NOTION_PAGED_SCENARIO } from "../lib/api/mock/notion";
 import { SOURCES_STORAGE_KEY } from "../lib/api/mock/sources";
 import { login } from "./helpers";
 
@@ -59,12 +60,17 @@ test("notion picker: tree by parent, pick a parent, search, paste a link, save r
   await expect(handbook.getByTestId("notion-page").first()).toContainText("6 sub-pages");
   await expect(tree.getByRole("treeitem", { name: "Roadmap" })).toHaveCount(0);
 
-  // A child picked first is folded into its parent when the parent is picked.
+  // A child picked first is folded into its parent when the parent is picked, with a note;
+  // the counter counts the pages that will be read (a pick and its known sub-pages).
+  const count = picker.getByTestId("notion-picked-count");
   await handbook.getByRole("button", { name: "Expand Product handbook" }).click();
   await tree.getByRole("checkbox", { name: "Roadmap", exact: true }).check();
-  await expect(picker.getByTestId("notion-picked-count")).toHaveText("1 picked");
+  await expect(count).toHaveText("2 pages to read");
+  await expect(picker.getByTestId("notion-absorbed")).toHaveCount(0);
   await tree.getByRole("checkbox", { name: "Product handbook", exact: true }).check();
-  await expect(picker.getByTestId("notion-picked-count")).toHaveText("1 picked");
+  await expect(count).toHaveText("7 pages to read");
+  await expect(picker.getByTestId("notion-absorbed")).toHaveText("Roadmap is now included with Product handbook");
+  await expect(picker.getByRole("list", { name: "Picked pages" }).getByRole("listitem")).toHaveText(["Product handbook"]);
   const roadmap = tree.getByRole("checkbox", { name: "Roadmap", exact: true });
   await expect(roadmap).toBeChecked();
   await expect(roadmap).toBeDisabled();
@@ -78,7 +84,9 @@ test("notion picker: tree by parent, pick a parent, search, paste a link, save r
   await expect(hits).toHaveCount(3);
   await expect(hits.nth(0)).toContainText("in Research");
   await picker.getByRole("checkbox", { name: /^Customer interviews/ }).check();
+  await expect(picker.getByTestId("notion-absorbed")).toHaveCount(0);
   await expect(picker.getByRole("checkbox", { name: /^Interview: Acme/ })).toBeDisabled();
+  await expect(count).toHaveText("10 pages to read");
   await picker.getByLabel("Search Notion pages").fill("");
   await expect(top).toHaveCount(4);
 
@@ -89,7 +97,7 @@ test("notion picker: tree by parent, pick a parent, search, paste a link, save r
   await expect(picker.getByRole("alert")).toHaveText("Not a Notion page link or id");
   await link.fill(`https://www.notion.so/example/Engineering-onboarding-${ONBOARDING.replaceAll("-", "")}?pvs=4`);
   await link.press("Enter");
-  await expect(picker.getByTestId("notion-picked-count")).toHaveText("3 picked");
+  await expect(count).toHaveText("11 pages to read");
   await expect(picker.getByRole("list", { name: "Picked pages" })).toContainText("Engineering onboarding");
 
   // Saving writes { roots: [ids] }, the key the connector reads.
@@ -106,7 +114,7 @@ test("notion picker: tree by parent, pick a parent, search, paste a link, save r
   await row.getByRole("button", { name: "More actions for Handbook" }).click();
   await row.getByRole("menuitem", { name: "Edit pages" }).click();
   const editor = row.getByTestId("notion-picker");
-  await expect(editor.getByTestId("notion-picked-count")).toHaveText("3 picked");
+  await expect(editor.getByTestId("notion-picked-count")).toHaveText("11 pages to read");
   await expect(editor.getByRole("checkbox", { name: "Product handbook", exact: true })).toBeChecked();
   await editor.getByRole("button", { name: "Remove Engineering onboarding" }).click();
   await expect(editor.getByRole("checkbox", { name: "Engineering onboarding", exact: true })).not.toBeChecked();
@@ -117,6 +125,32 @@ test("notion picker: tree by parent, pick a parent, search, paste a link, save r
     roots: [HANDBOOK, RESEARCH_INTERVIEWS],
     labels: { [HANDBOOK]: "Product handbook", [RESEARCH_INTERVIEWS]: "Customer interviews" },
   });
+});
+
+test("notion picker: load more only appends, never moving rows already shown", async ({ page }) => {
+  await page.addInitScript((scenario) => localStorage.setItem("po-mock-scenario", scenario), NOTION_PAGED_SCENARIO);
+  const { picker } = await openPicker(page);
+  const tree = picker.getByRole("tree", { name: "Shared Notion pages" });
+  const top = tree.locator(":scope > li");
+  const before = ["Product handbook", "Customer interviews", "Pricing survey", "Team notes"];
+  await expect(top).toHaveCount(4);
+  for (const [i, name] of before.entries()) await expect(top.nth(i)).toHaveAccessibleName(name);
+  // A child shown before its parent stays where it was; picking the parent includes it.
+  await picker.getByRole("checkbox", { name: "Customer interviews", exact: true }).check();
+  await expect(picker.getByTestId("notion-picked-count")).toHaveText("3 pages to read");
+
+  await picker.getByRole("button", { name: "Load more" }).click();
+  await expect(picker.getByRole("button", { name: "Load more" })).toHaveCount(0);
+  await expect(top).toHaveCount(6);
+  for (const [i, name] of [...before, "Engineering onboarding", "Research"].entries()) {
+    await expect(top.nth(i)).toHaveAccessibleName(name);
+  }
+  await picker.getByRole("checkbox", { name: "Research", exact: true }).check();
+  await expect(picker.getByTestId("notion-absorbed")).toHaveText("Customer interviews is now included with Research");
+  await expect(picker.getByRole("checkbox", { name: "Customer interviews", exact: true })).toBeDisabled();
+  await expect(picker.getByRole("checkbox", { name: "Pricing survey", exact: true })).toBeDisabled();
+  await expect(picker.getByTestId("notion-picked-count")).toHaveText("5 pages to read");
+  await expect(top.nth(1)).toHaveAccessibleName("Customer interviews");
 });
 
 test("notion picker: loads icons only over https from Notion's hosts, without a referrer", async ({ page }) => {

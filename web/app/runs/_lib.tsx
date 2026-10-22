@@ -85,6 +85,7 @@ export const CHECKPOINT_LABEL: Record<CheckpointKind, string> = {
   strategy_review: "Vision or strategy review",
   request_triage: "Request triage",
   launch_review: "Launch kit review",
+  update_review: "Update review",
 };
 
 export const SEGMENT_STATUS_KIND: Record<SegmentOut["status"], ChipKind> = {
@@ -109,6 +110,12 @@ export const SEGMENT_STATUS_LABEL: Record<SegmentOut["status"], string> = {
  * and nobody is asked to decide until the revision is imported or still refused.
  */
 export const SENT_BACK_STATE = "Revising: sent back by Oracle";
+
+/** C8: the Priorities screen in run mode for a priority stop's proposed order, if it has one. */
+export function orderHref(cp: { kind: CheckpointKind; payload?: Record<string, unknown> | null }): string | null {
+  const id = cp.kind === "priority_order" ? cp.payload?.priority_snapshot_id : null;
+  return typeof id === "string" ? `/priorities?snapshot=${id}` : null;
+}
 
 export const FINAL_STATUSES: RunStatus[] = ["succeeded", "failed", "cancelled"];
 

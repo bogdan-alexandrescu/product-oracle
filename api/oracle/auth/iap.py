@@ -135,6 +135,8 @@ async def user_for_claims(claims: dict[str, Any]) -> User | None:
             email=email,
             password_hash=await hash_password_async(secrets.token_urlsafe(32)),
             role=role,
+            # A3: an invite naming them engineering lead (never with role viewer).
+            engineering_lead=invite is not None and invite.engineering_lead,
             password_sign_in=False,
             last_sign_in_at=datetime.now(UTC),
         )
@@ -144,7 +146,9 @@ async def user_for_claims(claims: dict[str, Any]) -> User | None:
             from oracle.auth.deps import Principal
 
             principal = Principal(tenant_id=tenant_id, kind="user", role=user.role, user_id=user.id)
-            data = {"via": "iap", "role": role}
+            data: dict[str, Any] = {"via": "iap", "role": role}
+            if user.engineering_lead:
+                data["engineering_lead"] = True
             if invite is not None:
                 data["invite_id"] = str(invite.id)
                 await record(

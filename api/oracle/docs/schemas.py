@@ -41,7 +41,8 @@ Verdict = Literal["approved", "changes_requested", "rejected"]
 # O1f: brief sections make up the brief layer; the full layer is every section.
 Layer = Literal["brief", "detail"]
 BriefSource = Literal["draft", "template", "full_heading", "none"]
-DocumentKind = Literal["prd", "roadmap", "spec", "vision", "strategy"]
+DocumentKind = Literal["prd", "roadmap", "spec", "vision", "strategy", "update"]
+DocumentVisibility = Literal["company", "approvers"]
 
 
 class ORM(BaseModel):
@@ -84,6 +85,15 @@ class VersionSource(BaseModel):
     approved_at: datetime | None = None
 
 
+class UpdatePeriod(BaseModel):
+    """The period an update covers (its latest version's front matter ``period``)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_: date = Field(alias="from")
+    to: date
+
+
 class DocumentSummary(ORM):
     id: uuid.UUID
     slug: str
@@ -93,6 +103,10 @@ class DocumentSummary(ORM):
     template: str | None = None
     template_version: str | None = None
     theme: str | None = None
+    # H8: "approvers": owners and approvers only (an update, unless an owner opened it).
+    visibility: DocumentVisibility = "company"
+    # H8: an update's period, from its latest version's front matter.
+    period: UpdatePeriod | None = None
     latest_version: int | None = None
     # The latest approved version's number, if any (a PRD a roadmap can be built from).
     approved_version: int | None = None
@@ -112,7 +126,11 @@ class VersionSummary(ORM):
     # How the version came in, e.g. base_version_missing: imported without a base
     # version, so nothing checked that it keeps the changes made since.
     notes: list[VersionWarning] = []
+    # The member or API token id; a run's draft has the id of the person it acted for.
     imported_by: uuid.UUID | None = None
+    # Who imported it, as people read it (#256): the member's display name, "Oracle" for
+    # a run's draft, or the API token's name. None when the importer is gone.
+    imported_by_name: str | None = None
     approved_at: datetime | None = None
     # Where the brief layer came from; "none": no brief, the version opens on the full
     # document.
@@ -272,3 +290,12 @@ class DiffOut(BaseModel):
     from_version: int
     to_version: int
     sections: list[SectionDiff]
+
+
+class VisibilityIn(BaseModel):
+    """An owner's switch of who sees a document, with the reason (audited)."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    visibility: DocumentVisibility
+    reason: str = Field(min_length=1, max_length=2000)

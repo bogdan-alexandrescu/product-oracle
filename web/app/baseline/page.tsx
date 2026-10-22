@@ -3,18 +3,19 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
-import { Chip, InfoTip, KpiStrip, Notice, Page, PageHeader, Split, type Kpi } from "@/components/ds";
+import { Button, Chip, InfoTip, KpiStrip, Notice, Page, PageHeader, Split, type Kpi } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
+import { BuildBanner, BuildBaselineSheet, BuildChip, currentBuild } from "./_components/BuildBaseline";
 import { goalTags, KPI_PHONE } from "./_components/common";
 import { ConflictsTab } from "./_components/ConflictsTab";
 import { EntityDrawer } from "./_components/EntityDrawer";
 import { FlaggedTab } from "./_components/FlaggedTab";
 import { GraphTab } from "./_components/GraphTab";
-import { ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
+import { noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
 import { Tabs, type TabItem } from "./_components/Tabs";
 
 type Tab = "graph" | "flagged" | "conflicts" | "proposals";
@@ -29,6 +30,15 @@ function TabFromUrl({ onTab, onFrom }: { onTab: (tab: Tab) => void; onFrom: (fro
     if (tab && (TABS as readonly string[]).includes(tab)) onTab(tab as Tab);
   }, [tab, onTab]);
   useEffect(() => onFrom(run), [run, onFrom]);
+  return null;
+}
+
+/** ?build=1 opens the Build the baseline sheet (Home, Set up and the New run dialog link here). */
+function BuildFromUrl({ onBuild }: { onBuild: () => void }) {
+  const build = useSearchParams().get("build") === "1";
+  useEffect(() => {
+    if (build) onBuild();
+  }, [build, onBuild]);
   return null;
 }
 
@@ -77,6 +87,20 @@ export default function BaselinePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // B1: the latest Build the baseline run (the banner and the header's chip), and the sheet.
+  const runs = useQuery("baseline-builds", () => unwrap(api.GET("/v1/runs")));
+  const build = currentBuild(runs.data);
+  const [building, setBuilding] = useState(false);
+  const openBuild = useCallback(() => setBuilding(true), []);
+  const closeBuild = () => {
+    setBuilding(false);
+    router.replace("/baseline", { scroll: false });
+  };
+  const started = () => {
+    closeBuild();
+    setNotice("Building the baseline. You'll get an Inbox item when it's ready to review.");
+    void runs.reload();
+  };
 
   const { reload: reloadGraph } = graph;
   const { reload: reloadTrace } = trace;
@@ -131,7 +155,8 @@ export default function BaselinePage() {
       const params = { params: { path: { proposal_id: proposal.id } } };
       if (accept) await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/accept", params));
       else await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/reject", params));
-      return accept ? "Proposal accepted: the change is applied and the item locked." : "Proposal rejected.";
+      if (accept) return "Proposal accepted: the change is applied and the item locked.";
+      return noChange(proposal) ? "Proposal dismissed: it changed nothing." : "Proposal rejected.";
     });
 
   const openConflicts = conflicts.data?.filter((c) => c.status === "open").length;
@@ -145,7 +170,7 @@ export default function BaselinePage() {
   const low = trace.data?.low;
   const tags = useMemo(() => goalTags(graph.data), [graph.data]);
   // The From select's runs: each run with open proposals, newest first, and the one chosen.
-  const runs = useMemo(() => {
+  const fromRuns = useMemo(() => {
     const seen = new Map<string, NonNullable<ProposalOut["run"]>>();
     for (const p of [...(proposals.data ?? []), ...(filtered.data ?? [])]) if (p.run) seen.set(p.run.id, p.run);
     return [...seen.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -179,9 +204,22 @@ export default function BaselinePage() {
       <Suspense fallback={null}>
         <OpenFromUrl onOpen={setOpenId} />
         <TabFromUrl onTab={setTab} onFrom={setFrom} />
+        {canWrite && <BuildFromUrl onBuild={openBuild} />}
       </Suspense>
+      {building && canWrite && <BuildBaselineSheet onClose={closeBuild} onStarted={started} />}
       <PageHeader
         title="Baseline"
+        action={
+          canWrite &&
+          runs.data &&
+          (build && build.status !== "failed" ? (
+            <BuildChip build={build} />
+          ) : (
+            <Button variant="primary" icon="baseline" onClick={openBuild}>
+              Build baseline
+            </Button>
+          ))
+        }
         status={
           <>
             {s && (
@@ -227,6 +265,8 @@ export default function BaselinePage() {
         <div className={KPI_PHONE}>
           <KpiStrip label="Counts" items={kpis} />
         </div>
+
+        {build && <BuildBanner build={build} />}
 
         <Tabs label="Baseline views" items={tabs} value={tab} onChange={setTab} />
 
@@ -284,7 +324,7 @@ export default function BaselinePage() {
               {shown && (
                 <ProposalsTab
                   proposals={shown}
-                  runs={runs}
+                  runs={fromRuns}
                   from={from}
                   onFrom={chooseFrom}
                   graph={graph.data}

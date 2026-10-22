@@ -10,6 +10,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    false,
     true,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -20,6 +21,8 @@ from oracle.docs.models import _in
 # Lowest to highest; oracle.authz compares by position.
 ROLES = ("viewer", "commenter", "approver", "owner")
 Role = Literal["viewer", "commenter", "approver", "owner"]
+# A3: the engineering lead flag is a commenter's or above, never a viewer's.
+ENGINEERING_LEAD_ROLE = "NOT engineering_lead OR role <> 'viewer'"
 
 
 class User(TenantScoped, Base):
@@ -27,6 +30,7 @@ class User(TenantScoped, Base):
     __table_args__ = (
         UniqueConstraint("tenant_id", "email"),
         CheckConstraint(_in("role", ROLES), name="role"),
+        CheckConstraint(ENGINEERING_LEAD_ROLE, name="engineering_lead_role"),
     )
 
     email: Mapped[str] = mapped_column(Text, nullable=False)
@@ -47,6 +51,12 @@ class User(TenantScoped, Base):
     # keeps, so there is no password to sign in with or to change.
     password_sign_in: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=true()
+    )
+    # A3: speaks for engineering. Once one member carries it, the engineering stops (the
+    # check and the dates) wait for an engineering lead or an owner, and leads may verify
+    # dates (oracle.members.leads). Several members may carry it.
+    engineering_lead: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
     )
 
 

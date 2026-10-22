@@ -34,12 +34,14 @@ export type VersionSeed = {
   brief?: string[];
   /** Provenance (O4b): the PRD version a roadmap version was built from. */
   source?: { slug: string; version: number };
+  /** Who imported it (#256); the agent-track API token by default. */
+  by?: { id: string; name: string };
 };
 
 export type DocumentSeed = {
   slug: string;
   title: string;
-  kind?: "prd" | "roadmap" | "spec" | "vision" | "strategy";
+  kind?: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update";
   /** A spec's depth: a technical brief or a full engineering spec (E1). */
   depth?: "brief" | "full";
   template?: string;
@@ -731,9 +733,10 @@ export const DOCUMENTS: DocumentSeed[] = [
     template: "oracle-default",
     template_version: "1",
     versions: [
-      { number: 1, created_at: "2026-10-14T09:00:00Z", sections: DEPOSITS_V1, citations: [] },
+      { number: 1, created_at: "2026-10-14T09:00:00Z", sections: DEPOSITS_V1, citations: [], by: { id: "5e6b65ac-0d1f-4c2a-9b7e-3f8a1c2d4e01", name: "Approver" } },
       { number: 2, created_at: "2026-10-15T09:00:00Z", sections: DEPOSITS_V2, citations: [] },
-      { number: 3, created_at: "2026-10-16T09:00:00Z", sections: DEPOSITS_V3, citations: [] },
+      // A run's draft: imported for the person who started the run, named Oracle.
+      { number: 3, created_at: "2026-10-16T09:00:00Z", sections: DEPOSITS_V3, citations: [], by: { id: "9c2f4b1d-7a3e-4f60-8d15-b2e9a0c7f312", name: "Oracle" } },
     ],
   },
   {
@@ -806,22 +809,24 @@ export const MOCK_LOGIN = { email: "admin@example.com", password: MOCK_PASS };
 
 /** Mock members, one per role; each signs in with the mock password. */
 export const MOCK_MEMBERS = [
-  { email: "admin@example.com", role: "owner", created_at: "2026-09-01T09:00:00Z", last_sign_in_at: "2026-10-20T07:30:00Z" },
-  { email: "approver@example.com", role: "approver", created_at: "2026-09-02T09:00:00Z", last_sign_in_at: "2026-10-19T16:00:00Z" },
-  { email: "commenter@example.com", role: "commenter", created_at: "2026-09-03T09:00:00Z", last_sign_in_at: "2026-10-12T10:15:00Z" },
-  { email: "viewer@example.com", role: "viewer", created_at: "2026-09-04T09:00:00Z", last_sign_in_at: null },
+  // A3: nobody is the engineering lead in the default company (the "eng-review" scenario names one).
+  { email: "admin@example.com", role: "owner", engineering_lead: false, created_at: "2026-09-01T09:00:00Z", last_sign_in_at: "2026-10-20T07:30:00Z" },
+  { email: "approver@example.com", role: "approver", engineering_lead: false, created_at: "2026-09-02T09:00:00Z", last_sign_in_at: "2026-10-19T16:00:00Z" },
+  { email: "commenter@example.com", role: "commenter", engineering_lead: false, created_at: "2026-09-03T09:00:00Z", last_sign_in_at: "2026-10-12T10:15:00Z" },
+  { email: "viewer@example.com", role: "viewer", engineering_lead: false, created_at: "2026-09-04T09:00:00Z", last_sign_in_at: null },
 ] as const;
 
 /** A member an owner removed (disabled, C2); their tokens were revoked with it. */
 export const REMOVED_MEMBER = {
   email: "former.pm@example.com",
   role: "approver",
+  engineering_lead: false,
   created_at: "2026-09-05T09:00:00Z",
   last_sign_in_at: "2026-10-17T21:50:00Z",
   disabled_at: "2026-10-18T09:00:00Z",
 } as const;
 
-export const MOCK_INVITES = [{ email: "new.hire@example.com", role: "commenter", created_at: "2026-10-15T09:00:00Z" }] as const;
+export const MOCK_INVITES = [{ email: "new.hire@example.com", role: "commenter", engineering_lead: false, created_at: "2026-10-15T09:00:00Z" }] as const;
 
 /*
  * The "suggestions" scenario (MOCK_SCENARIO_KEY): a PRD whose open feedback is three Oracle
@@ -923,5 +928,179 @@ export const FLEET_SUGGESTIONS: { key: string; summary: string; rationale: strin
       "",
       "The depot lead sees open mismatches on the dashboard until each one is closed.",
     ].join("\n"),
+  },
+];
+
+/*
+ * H8 Board and investor drafts: the default company's two synthetic updates, for the
+ * fictional "Example Co" (made-up numbers; "Project Larkspur" is a code name only these
+ * updates use). Both are seen by owners and approvers only. The September investor update
+ * is approved; the October board update is in review and its timeline writes one date no
+ * verified schedule basis supports (2027-01-19), so it cannot be approved yet. The board
+ * update presents as two slides (front matter `slides`). Seeded after DOCUMENTS (server.ts).
+ */
+export type UpdateSeed = DocumentSeed & {
+  kind: "update";
+  template: "investor-update" | "board-product";
+  period: { from: string; to: string };
+  status: "draft" | "in_review" | "approved";
+  approved_at?: string;
+};
+
+export const UPDATE_SOURCES = (rows: string[], evidence: string[]): SectionSeed[] => [
+  { key: "full", level: 1, heading: "Full version", body: "The detail behind the brief." },
+  { key: "sources", level: 2, heading: "Sources and data points", body: "Every number above, with its value, as-of date and source." },
+  {
+    key: "sources-list",
+    level: 3,
+    heading: "Sources",
+    body: "- g1: oracle, Goals in the baseline, retrieved 2026-10-20\n- t1: oracle, Product tracks and milestones, retrieved 2026-10-20",
+  },
+  { key: "sources-data", level: 3, heading: "Data points", body: rows.map((r) => `- ${r}`).join("\n") },
+  { key: "sources-evidence", level: 3, heading: "Evidence by section", body: evidence.map((r) => `- ${r}`).join("\n") },
+];
+
+export const UPDATE_SEED_CITATIONS: CitationSeed[] = [
+  {
+    id: "g1",
+    source: "oracle",
+    ref: "oracle://baseline/goals",
+    title: "Goals in the baseline",
+    excerpt: "Confirmed goals with their targets and current values.",
+    retrieved_at: "2026-10-20T08:00:00Z",
+  },
+  {
+    id: "t1",
+    source: "oracle",
+    ref: "oracle://tracks",
+    title: "Product tracks and milestones",
+    excerpt: "Active tracks, their milestones and verified schedule bases.",
+    retrieved_at: "2026-10-20T08:00:00Z",
+  },
+];
+
+export const UPDATE_DOCUMENTS: UpdateSeed[] = [
+  {
+    slug: "investor-update-2026-09",
+    title: "Investor update · September 2026",
+    kind: "update",
+    template: "investor-update",
+    template_version: "1",
+    theme: "one-page-brief",
+    period: { from: "2026-09-01", to: "2026-09-30" },
+    status: "approved",
+    approved_at: "2026-10-03T16:00:00Z",
+    versions: [
+      {
+        number: 1,
+        created_at: "2026-10-02T09:00:00Z",
+        brief: ["metrics", "asks", "highlights", "lowlights", "product"],
+        citations: UPDATE_SEED_CITATIONS,
+        sections: [
+          { key: "title", level: 1, heading: "Investor update · September 2026", body: "Example Co's product update for September 2026." },
+          {
+            key: "metrics",
+            level: 2,
+            heading: "Metrics",
+            body: [
+              "| Goal | Target | Now | Distance to go | Change since last update |",
+              "| --- | --- | --- | --- | --- |",
+              "| Weekly active teams | 1,200 | 940 | 260 | +85 |",
+              "| Trial to paid conversion | 12% | 9.4% | 2.6 pts | +0.8 pts |",
+              "| Monthly churn | 2.0% | 2.6% | 0.6 pts | -0.3 pts |",
+            ].join("\n"),
+          },
+          {
+            key: "asks",
+            level: 2,
+            heading: "Asks",
+            body: "Introductions to two finance leads at mid-size software companies who would pilot team billing.",
+          },
+          {
+            key: "highlights",
+            level: 2,
+            heading: "Highlights",
+            body: "- Project Larkspur, the onboarding checklist, shipped to every new team.\n- Usage alerts entered a private pilot with 9 teams.\n- Trial to paid conversion rose for the second month running.",
+          },
+          {
+            key: "lowlights",
+            level: 2,
+            heading: "Lowlights",
+            body: "- Churn among teams of fewer than five seats did not improve.\n- The pricing page test was inconclusive.",
+          },
+          {
+            key: "product",
+            level: 2,
+            heading: "Product recap",
+            body: "Shipped: the onboarding checklist.\n\nNext: usage alerts beta on 2026-11-30.",
+          },
+          ...UPDATE_SOURCES(
+            ["Weekly active teams: 940, as of 2026-09-30, from g1", "Trial to paid conversion: 9.4%, as of 2026-09-30, from g1", "Monthly churn: 2.6%, as of 2026-09-30, from g1"],
+            ["metrics: g1", "highlights: g1, t1", "lowlights: g1", "product: t1"],
+          ),
+        ],
+      },
+    ],
+  },
+  {
+    slug: "board-update-2026-10",
+    title: "Board update · October 2026",
+    kind: "update",
+    template: "board-product",
+    template_version: "1",
+    theme: "roadmap-board",
+    period: { from: "2026-09-08", to: "2026-10-20" },
+    status: "in_review",
+    versions: [
+      {
+        number: 1,
+        created_at: "2026-10-20T07:00:00Z",
+        brief: ["headline", "goals", "timeline", "shipped", "lowlights", "asks"],
+        citations: UPDATE_SEED_CITATIONS,
+        sections: [
+          { key: "title", level: 1, heading: "Board update · October 2026", body: "Example Co's product section for the board, October 2026." },
+          {
+            key: "headline",
+            level: 2,
+            heading: "Product in one line",
+            body: "Usage alerts are ready for beta and Project Larkspur lifted activation; team billing is a month behind.",
+          },
+          {
+            key: "goals",
+            level: 2,
+            heading: "Goals: where we are",
+            body: [
+              "| Goal | Target | Now | Distance to go | Trend since last board | Track |",
+              "| --- | --- | --- | --- | --- | --- |",
+              "| Weekly active teams | 1,200 | 1,010 | 190 | +160 | On track |",
+              "| Trial to paid conversion | 12% | 10.1% | 1.9 pts | +1.5 pts | On track |",
+              "| Monthly churn | 2.0% | 2.4% | 0.4 pts | -0.5 pts | Off track |",
+            ].join("\n"),
+          },
+          {
+            key: "timeline",
+            level: 2,
+            heading: "Timeline",
+            body: "**Now**\n\n- Usage alerts beta: 2026-11-30\n- Team billing general availability: 2027-01-19\n\n**Next**\n\n- Seat-based plans\n\n**Later**\n\n- Annual invoicing",
+          },
+          { key: "shipped", level: 2, heading: "Shipped since last board", body: "- Onboarding checklist (Project Larkspur)\n- Usage alerts for pilot teams" },
+          {
+            key: "lowlights",
+            level: 2,
+            heading: "What slipped or did not work",
+            body: "- Team billing slipped a month: the invoicing partner's sandbox came late.\n- The pricing page test did not move conversion.",
+          },
+          { key: "asks", level: 2, heading: "Decisions we need from the board", body: "Owner to fill: the decisions you need from the board this meeting." },
+          { key: "full", level: 1, heading: "Full version", body: "The detail behind the brief." },
+          { key: "outcomes", level: 2, heading: "Predicted versus actual", body: "- Onboarding checklist: predicted +5 weekly active teams a week; measured +6." },
+          { key: "risks", level: 2, heading: "Risks and blockers", body: "- Invoicing partner dependency for team billing; reviewed at the next planning meeting." },
+          { key: "decisions", level: 2, heading: "Decisions made", body: "- Usage alerts launch to every plan, not only paid plans." },
+          ...UPDATE_SOURCES(
+            ["Weekly active teams: 1,010, as of 2026-10-20, from g1", "Trial to paid conversion: 10.1%, as of 2026-10-20, from g1", "Monthly churn: 2.4%, as of 2026-10-20, from g1"],
+            ["goals: g1", "timeline: t1", "shipped: t1", "lowlights: t1"],
+          ).slice(1),
+        ],
+      },
+    ],
   },
 ];

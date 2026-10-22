@@ -14,6 +14,7 @@ import {
   CANCEL_AGAIN_CONFIRM,
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
+  orderHref,
   RETRY_CONFIRM,
   SENT_BACK_STATE,
   STOP_CANCELLING_CONFIRM,
@@ -188,6 +189,7 @@ export type NeedGroup =
   | "lookups"
   | "imports"
   | "revoke-failures"
+  | "access-failures"
   | "report-failures"
   | "reports"
   | "strategy"
@@ -414,6 +416,53 @@ export function revokeNeeds(failures: RevokeFailure[], busy: string | null, act:
   });
 }
 
+type AccessFailure = NonNullable<InboxOut["access_failures"]>[number];
+
+/** Owners only (#245): a change to someone's access to Oracle still failing after 24 hours,
+ * retried once a day; Retry makes it now. It leaves once done or no longer needed. */
+export function accessNeeds(failures: AccessFailure[], busy: string | null, act: Act): Need[] {
+  return failures.map((f) => {
+    const why = [
+      f.last_error ?? "Google did not make the change",
+      `since ${formatDateTime(f.created_at)}`,
+      `tried ${f.attempts} time${f.attempts === 1 ? "" : "s"}`,
+      ...(f.next_attempt_at ? [`next try ${formatDateTime(f.next_attempt_at)}`] : []),
+    ].join(" · ");
+    const path = { params: { path: { follow_up_id: f.id } } };
+    return {
+      key: f.id,
+      icon: "lock",
+      kind: f.owed,
+      item: (
+        <>
+          <span className="truncate" title={f.email}>
+            {f.email}
+          </span>
+          <InfoTip label="this access change" align="start">
+            {f.kind === "iap_revoke"
+              ? "This person may still be able to open Oracle. Oracle tries again once a day until the access is removed, or until they are a member or invited again."
+              : "This member cannot open Oracle yet. Oracle tries again once a day until the access is granted, or until they are removed again."}
+          </InfoTip>
+        </>
+      ),
+      context: (
+        <span className="block truncate text-text2" title={why}>
+          {why}
+        </span>
+      ),
+      at: f.created_at,
+      action: (
+        <Button
+          disabled={busy !== null}
+          onClick={() => act(`retry-${f.id}`, () => unwrap(api.POST("/v1/member-follow-ups/{follow_up_id}/retry", path)))}
+        >
+          Retry
+        </Button>
+      ),
+    };
+  });
+}
+
 type InboxReport = NonNullable<InboxOut["reports"]>[number];
 type ReportFailure = NonNullable<InboxOut["report_failures"]>[number];
 
@@ -616,8 +665,9 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     run: shortId(c.run_id),
     at: c.created_at,
     action: (
-      // The same verb as the runs list: the run page opens at the decision.
-      <LinkButton href={`/runs/${c.run_id}#decide`}>Decide</LinkButton>
+      // The same verb as the runs list: the run page opens at the decision; a priority stop
+      // opens its order next to the live ranking (C8), where it is decided too.
+      <LinkButton href={orderHref(c) ?? `/runs/${c.run_id}#decide`}>Decide</LinkButton>
     ),
   }));
 
@@ -939,7 +989,7 @@ export function launchNeeds(inbox: InboxOut): { counted: Need[]; shipped: Need[]
 
 /**
  * Every row of the one Inbox, each in its state (owner, 2026-10-20): checkpoints, cost
- * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke (owners), feedback items and the questions asked
+ * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke and access changes still failing (owners), feedback items and the questions asked
  * of me are New or Open; feedback items also Staged, Declined or Done. Home's Needs you is
  * the New and Open rows, so the badge, Home and /inbox count the same items.
  */
@@ -969,6 +1019,7 @@ export function allNeeds(
     ...stated(n.lookups, "lookups"),
     ...stated(n.imports, "imports"),
     ...stated(revokeNeeds(inbox.revoke_failures ?? [], busy, act), "revoke-failures"),
+    ...stated(accessNeeds(inbox.access_failures ?? [], busy, act), "access-failures"),
     ...stated(reportFailureNeeds(inbox.report_failures ?? [], busy, act), "report-failures"),
     ...reportNeeds(inbox.reports ?? [], seenBefore),
     ...stated(strategyNeeds(inbox.strategy), "strategy"),

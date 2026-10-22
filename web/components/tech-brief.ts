@@ -10,6 +10,8 @@ export const FRESHNESS: Record<TechBrief["freshness"], { label: string; kind: Ch
   under_review: { label: "Under review", kind: "na" },
   reconciled: { label: "Reconciled", kind: "pass" },
 };
+/** Shown wherever a code map built from the synced docs only is cited (F5-2, codemap.PARTIAL_LABEL). */
+export const DOCS_ONLY = "Docs only: code not read";
 /** Size and its person-weeks (oracle.engineering.briefs.SIZES). */
 const WEEKS: Record<string, number> = { xs: 0.5, s: 1, m: 2, l: 4, xl: 8 };
 

@@ -110,6 +110,13 @@ async def latest_number(db: AsyncSession, document_id: uuid.UUID) -> int | None:
 
 async def get_job(db: AsyncSession, job_id: uuid.UUID) -> LlmJob:
     job = await db.get(LlmJob, job_id)
+    if job is not None and job.document_id is not None:
+        # H8: a job on a document the caller may not see is not found
+        # (oracle.docs.visibility).
+        from oracle.docs import visibility
+
+        if job.document_id in await visibility.hidden_document_ids(db, [job.document_id]):
+            job = None
     if job is None:
         raise JobError(404, f"job {job_id} not found")
     return job

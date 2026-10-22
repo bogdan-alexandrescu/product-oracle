@@ -78,9 +78,21 @@ export class ApiError extends Error {
     message: string,
     /** The API's machine-readable code, when the error body has one ("source_changed"). */
     readonly code?: string,
+    /** Seconds to wait before trying again, from a 429's Retry-After. */
+    readonly retryAfter?: number,
   ) {
     super(message);
   }
+}
+
+/** Retry-After in seconds (as seconds or an HTTP date); undefined when absent or unreadable. */
+function retryAfter(response: Response): number | undefined {
+  const value = response.headers.get("Retry-After");
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds);
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? undefined : Math.max(0, (at - Date.now()) / 1000);
 }
 
 type Result<T> = { data?: T; error?: unknown; response: Response };
@@ -91,13 +103,19 @@ export async function unwrap<T>(call: Promise<Result<T>>): Promise<T> {
   if (response.ok) return data as T;
   if (error && typeof error === "object" && "code" in error && typeof error.code === "string") {
     const message = "message" in error && typeof error.message === "string" ? error.message : response.statusText;
-    throw new ApiError(response.status, message, error.code);
+    throw new ApiError(response.status, message, error.code, retryAfter(response));
+  }
+  // A structured refusal ({detail: {code, message}}, e.g. D8 "review_changed") keeps its code.
+  const inner = error && typeof error === "object" && "detail" in error ? error.detail : null;
+  if (inner && typeof inner === "object" && "code" in inner && typeof inner.code === "string") {
+    const message = "message" in inner && typeof inner.message === "string" ? inner.message : response.statusText;
+    throw new ApiError(response.status, message, inner.code);
   }
   const detail =
     error && typeof error === "object" && "detail" in error && typeof error.detail === "string"
       ? error.detail
       : response.statusText;
-  throw new ApiError(response.status, describeStatus(response.status, detail));
+  throw new ApiError(response.status, describeStatus(response.status, detail), undefined, retryAfter(response));
 }
 
 function describeStatus(status: number, detail: string): string {

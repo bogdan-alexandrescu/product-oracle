@@ -54,6 +54,7 @@ def invite_out(invite: Invite) -> InviteOut:
         id=invite.id,
         email=invite.email,
         role=invite.role,
+        engineering_lead=invite.engineering_lead,
         status=invite_status(invite),
         invited_by=invite.invited_by,
         created_at=invite.created_at,
@@ -166,11 +167,25 @@ async def set_role(
         if not await _other_active_owner(session, user.id):
             raise MemberError("conflict", "Cannot demote the last owner; make someone else owner")
     before = user.role
+    # A3: a viewer never carries the engineering lead flag: a demotion to viewer clears it
+    # in this change.
+    cleared = role == "viewer" and user.engineering_lead
+    if cleared:
+        user.engineering_lead = False
     user.role = role
     await session.flush()
     await audit.record(
         session, principal, "member.role", "user", user.id, {"before": before, "after": role}
     )
+    if cleared:
+        await audit.record(
+            session,
+            principal,
+            "member.engineering_lead",
+            "user",
+            user.id,
+            {"before": True, "after": False, "reason": "role viewer"},
+        )
     if has_role(before, "approver") and not has_role(role, "approver"):
         await lapse_approvals(
             session, principal, reviewer_id=user.id, reason=f"approver demoted to {role}"
@@ -186,6 +201,7 @@ async def set_role(
         if has_role(before, "owner"):
             await _void_spend_approvals(session, principal, acted_as, None, via)
         await _void_checkpoint_decisions(session, principal, acted_as, via, keep_role=role)
+        await _unstage_checkpoint_actions(session, principal, acted_as, via, keep_role=role)
         # A decision they recorded that is not delivered to its run yet, on a checkpoint
         # the new role may not decide: never delivered now.
         await void_owed_decisions(
@@ -201,6 +217,76 @@ async def set_role(
         subject_ref=f"member:{user.id}",
         data={"before": before, "after": role},
     )
+    return user
+
+
+async def set_engineering_lead(
+    session: AsyncSession, principal: "Principal", user_id: uuid.UUID, value: bool
+) -> User:
+    """Name a member engineering lead, or clear the flag (A3). A viewer is never named.
+    Clearing it voids the engineering-stop decisions they gave that are not delivered to
+    their run yet and that they may no longer give (C2, as for a demotion): those stops go
+    back to the Inbox. An owner keeps deciding every stop, so an owner's are kept."""
+    from oracle.members.leads import ENGINEERING_KINDS, VIEWER_REFUSED, engineering_leads
+    from oracle.runs.service import void_owed_decisions
+
+    await _gate(session, principal)
+    user = await session.get(User, user_id, with_for_update=True)
+    if user is None:
+        raise MemberError("not_found", f"Member {user_id} not found")
+    if value and user.role == "viewer":
+        raise MemberError("invalid", VIEWER_REFUSED)
+    if user.engineering_lead == value:
+        return user
+    user.engineering_lead = value
+    await session.flush()
+    await audit.record(
+        session,
+        principal,
+        "member.engineering_lead",
+        "user",
+        user.id,
+        {"before": not value, "after": value},
+    )
+    if not value and user.role != "owner":
+        # With other leads named, the engineering stops are theirs (and owners'); with none
+        # left, the member decides them by role again.
+        keep: Role | None = None if await engineering_leads(session) else user.role  # type: ignore[assignment]
+        via = {"via": "member.engineering_lead", "member_id": str(user.id)}
+        tokens = set(await session.scalars(select(ApiToken.id).where(ApiToken.user_id == user.id)))
+        acted_as = {user.id, *tokens}
+        await _void_checkpoint_decisions(
+            session, principal, acted_as, via, keep_role=keep, kinds=ENGINEERING_KINDS
+        )
+        await void_owed_decisions(
+            session,
+            principal,
+            acted_as,
+            "its decider is no longer an engineering lead",
+            via,
+            role=keep,
+            kinds=ENGINEERING_KINDS,
+        )
+    return user
+
+
+async def update_member(
+    session: AsyncSession,
+    principal: "Principal",
+    user_id: uuid.UUID,
+    role: Role | None,
+    engineering_lead: bool | None,
+) -> User:
+    """``PATCH /v1/members/{user_id}``: the role, the engineering lead flag, or both, in
+    one change, role first (so a viewer made commenter can be named at once)."""
+    if role is None and engineering_lead is None:
+        raise MemberError("invalid", "Send role, engineering_lead or both")
+    user: User | None = None
+    if role is not None:
+        user = await set_role(session, principal, user_id, role)
+    if engineering_lead is not None:
+        user = await set_engineering_lead(session, principal, user_id, engineering_lead)
+    assert user is not None
     return user
 
 
@@ -227,6 +313,7 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
 
     Disabling a disabled member is a no-op. The last active owner cannot be disabled.
     :func:`restore_member` re-enables sign-in only."""
+    from oracle.discussions.service import hand_over as hand_over_discussions
     from oracle.mcp.oauth.models import OAuthToken
     from oracle.review.publish import record_source_revocation
     from oracle.review.state import lapse_approvals
@@ -305,6 +392,7 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
     jobs = await _cancel_llm_jobs(session, acted_as, at)
     voided = await _void_spend_approvals(session, principal, acted_as, user.id, via)
     decisions = await _void_checkpoint_decisions(session, principal, acted_as, via)
+    await _unstage_checkpoint_actions(session, principal, acted_as, via)
     # Decisions recorded and not delivered to their run yet (SwarmCloud did not take the
     # post): never delivered now.
     decisions += await void_owed_decisions(
@@ -313,6 +401,9 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
     lapsed = await lapse_approvals(
         session, principal, reviewer_id=user.id, reason="member was removed (disabled)"
     )
+
+    # G1: their discussions pass to an approver in each (audited).
+    await hand_over_discussions(session, principal, user.id)
 
     user.disabled_at = at
     user.disabled_by = principal.id
@@ -495,14 +586,17 @@ async def _void_checkpoint_decisions(
     via: dict[str, str],
     *,
     keep_role: Role | None = None,
+    kinds: tuple[str, ...] | None = None,
 ) -> list[uuid.UUID]:
     """A checkpoint decision the removed member gave whose segment has not been
     submitted yet (the submission is under way, or waits for the tick's retry) is void,
     as a spend approval is: the checkpoint waits for a decision again, nothing runs for
     it. A decision whose workflow was submitted stands (it is running). With
     ``keep_role`` (a demotion), a decision on a checkpoint that role may still decide
-    stands."""
+    stands. With ``kinds`` (an engineering lead unflagged, A3), only checkpoints of those
+    kinds that the lead rule governs (oracle.members.leads.lead_stop) are voided."""
     from oracle.authz import has_role
+    from oracle.members.leads import SPEC_FLOW
     from oracle.runs.models import Checkpoint, Run, RunSegment
     from oracle.runs.service import void_decision
 
@@ -535,11 +629,58 @@ async def _void_checkpoint_decisions(
         cp = await session.get(Checkpoint, uuid.UUID(decision["checkpoint_id"]))
         if cp is None or cp.run_id != run.id:
             continue
+        if kinds is not None and (cp.kind not in kinds or run.flow == SPEC_FLOW):
+            continue
         if keep_role is not None and has_role(keep_role, cp.approver_role):  # type: ignore[arg-type]
             continue
         await void_decision(session, principal, run, segment, cp, via)
         voided.append(cp.id)
     return voided
+
+
+async def _unstage_checkpoint_actions(
+    session: AsyncSession,
+    principal: "Principal",
+    stagers: set[uuid.UUID],
+    via: dict[str, str],
+    *,
+    keep_role: Role | None = None,
+) -> None:
+    """D8: what the member staged on a pending checkpoint's shared draft becomes a
+    suggestion again (it needs an approver); each checkpoint's draft revision is bumped
+    once. With ``keep_role`` (a demotion), actions on a checkpoint that role may still
+    stage stand."""
+    from oracle.authz import has_role
+    from oracle.runs.models import Checkpoint, CheckpointAction
+
+    rows = (
+        await session.execute(
+            select(CheckpointAction, Checkpoint)
+            .join(Checkpoint, Checkpoint.id == CheckpointAction.checkpoint_id)
+            .where(
+                Checkpoint.status == "pending",
+                CheckpointAction.state == "staged",
+                CheckpointAction.updated_by.in_(stagers),
+            )
+            .with_for_update(of=Checkpoint)
+        )
+    ).all()
+    touched: dict[uuid.UUID, Checkpoint] = {}
+    for action, cp in rows:
+        if keep_role is not None and has_role(keep_role, cp.approver_role):  # type: ignore[arg-type]
+            continue
+        action.state = "suggested"
+        touched[cp.id] = cp
+        await audit.record(
+            session, principal, "checkpoint.action_suggested", "checkpoint", cp.id,
+            {"run_id": str(cp.run_id), "kind": cp.kind, "item_key": action.item_key,
+             "action": {"id": str(action.id), "kind": action.kind, "field": action.field,
+                        "value": action.value, "state": "suggested"},
+             "revision": (cp.draft_revision or 0) + 1, "unstaged": via},
+        )  # fmt: skip
+    for cp in touched.values():
+        cp.draft_revision = (cp.draft_revision or 0) + 1
+    await session.flush()
 
 
 async def _disconnect_all(
@@ -702,8 +843,11 @@ async def sweep_disabled(
 # A failed follow-up is retried by time, not by tick: after each failure it waits a
 # backoff (a minute, doubling, at most an hour), for FOLLOW_UP_RETRY_WINDOW from the
 # disable. Then it is marked failed: no more automatic retries, and a provider revoke
-# keeps its copy of the credential and stays in the owners' Inbox (Retry, Dismiss).
+# keeps its copy of the credential and stays in the owners' Inbox (Retry, Dismiss). An
+# access change (ACCESS_KINDS, #245) is retried on, once a day, until it is done or no
+# longer needed, and shows in the owners' Inbox meanwhile (Retry).
 FOLLOW_UP_RETRY_WINDOW = timedelta(hours=24)
+FOLLOW_UP_DAILY = timedelta(days=1)
 FOLLOW_UP_FIRST_BACKOFF = timedelta(minutes=1)
 FOLLOW_UP_MAX_BACKOFF = timedelta(hours=1)
 # How long one call may take in all, whatever the HTTP client's own timeouts; and how
@@ -749,7 +893,11 @@ async def run_follow_ups(
         budget = min(budget, budget_seconds)
     deadline = loop.time() + budget
     stmt = select(MemberFollowUp.id).where(
-        MemberFollowUp.status == "pending",
+        or_(
+            MemberFollowUp.status == "pending",
+            # Past its 24 hours, an access change is still retried, once a day.
+            (MemberFollowUp.status == "failed") & MemberFollowUp.kind.in_(ACCESS_KINDS),
+        ),
         or_(
             MemberFollowUp.next_attempt_at.is_(None),
             MemberFollowUp.next_attempt_at <= datetime.now(UTC),
@@ -764,7 +912,7 @@ async def run_follow_ups(
         if loop.time() >= deadline:
             break
         try:
-            row = await _attempt(session, principal, http, follow_up_id, ("pending",), deadline)
+            row = await _attempt(session, principal, http, follow_up_id, FOLLOW_UP_OPEN, deadline)
         except _BudgetSpent:
             break
         except Exception:  # noqa: BLE001 - a DB error in one must not stop the others
@@ -852,9 +1000,10 @@ async def _record_attempt(
         row.next_attempt_at = None
         row.ciphertext = None
     elif now >= row.created_at + FOLLOW_UP_RETRY_WINDOW:
-        # No more automatic retries; the copy stays for an owner's Retry or Dismiss.
+        # No more automatic retries; the copy stays for an owner's Retry or Dismiss. An
+        # access change waits for an owner's Retry, and is retried once a day meanwhile.
         row.status = "failed"
-        row.next_attempt_at = None
+        row.next_attempt_at = now + FOLLOW_UP_DAILY if row.kind in ACCESS_KINDS else None
     else:
         row.status = "pending"
         row.next_attempt_at = now + follow_up_backoff(row.attempts)
@@ -1259,10 +1408,17 @@ async def list_invites(session: AsyncSession, status: str) -> list[Invite]:
 
 
 async def create_invite(
-    session: AsyncSession, principal: "Principal", email: str, role: Role
+    session: AsyncSession,
+    principal: "Principal",
+    email: str,
+    role: Role,
+    engineering_lead: bool = False,
 ) -> Invite:
     from oracle.auth.service import ReservedEmailError, check_email_allowed
+    from oracle.members.leads import VIEWER_REFUSED
 
+    if engineering_lead and role == "viewer":
+        raise MemberError("invalid", VIEWER_REFUSED)
     try:
         # One plain address only: the To header and the IAM member are built from it.
         email = plain_address(email)
@@ -1281,16 +1437,19 @@ async def create_invite(
         raise MemberError("conflict", f"{email} is already a member")
     if await session.scalar(select(Invite.id).where(Invite.email == email, *_open())) is not None:
         raise MemberError("conflict", f"{email} already has an open invite; revoke it first")
-    invite = Invite(email=email, role=role, invited_by=principal.id)
+    invite = Invite(
+        email=email, role=role, engineering_lead=engineering_lead, invited_by=principal.id
+    )
     session.add(invite)
     try:
         await session.flush()
     except IntegrityError:
         # A concurrent request invited the same email first; nothing is committed.
         raise MemberError("conflict", f"{email} already has an open invite") from None
-    await audit.record(
-        session, principal, "invite.create", "invite", invite.id, {"email": email, "role": role}
-    )
+    data: dict[str, object] = {"email": email, "role": role}
+    if engineering_lead:
+        data["engineering_lead"] = True
+    await audit.record(session, principal, "invite.create", "invite", invite.id, data)
     return invite
 
 

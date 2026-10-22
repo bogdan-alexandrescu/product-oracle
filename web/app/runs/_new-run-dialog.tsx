@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { Button, Icon, InfoTip } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { CHECKPOINT_LABEL, EstimateSummary, RunsWhere, usd, type EstimateOut, type FlowCatalog } from "./_lib";
@@ -17,6 +18,7 @@ type Depth = "quick" | "standard" | "deep";
 /** Pick a flow and its knobs, see the estimate, then start the run. */
 export function NewRunDialog({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const { role } = useMe();
   const catalog = useQuery("flows", () => unwrap(api.GET("/v1/flows")));
   const documents = useQuery("documents", () => unwrap(api.GET("/v1/documents")));
 
@@ -48,7 +50,8 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
   };
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // A field that handled Escape itself (closing its suggestions) marks it handled.
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !e.defaultPrevented && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -57,7 +60,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
     () => ({
       depth,
       roles: Object.fromEntries((flow?.segments ?? []).map((s) => [s.name, roles[s.name] ?? s.roles])),
-      checkpoints: Object.fromEntries((flow?.segments ?? []).map((s) => [s.checkpoint, checkpoints[s.checkpoint] ?? true])),
+      checkpoints: Object.fromEntries((flow?.segments ?? []).flatMap((s) => (s.checkpoint ? [[s.checkpoint, checkpoints[s.checkpoint] ?? true]] : []))),
       budget_usd: budget.trim() ? Number(budget) : null,
     }),
     [flow, depth, roles, checkpoints, budget],
@@ -100,7 +103,10 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await unwrap(api.POST("/v1/runs/{run_id}/start", { params: { path: { run_id: draft.id } } }));
+      const path = { params: { path: { run_id: draft.id } } };
+      await unwrap(api.POST("/v1/runs/{run_id}/start", path));
+      // #259: an owner approves their own run's cost here rather than on the run page.
+      if (ownerApproves) await unwrap(api.POST("/v1/runs/{run_id}/approve", path));
       router.push(`/runs/${draft.id}`);
     } catch (e) {
       setError(errorMessage(e));
@@ -108,6 +114,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const ownerApproves = role === "owner" && !!estimate?.needs_approval;
   const docOptions = documents.data ?? [];
   const inputCls = `${INPUT} h-10 placeholder:text-text2`;
   const legendCls = "mb-1.5 flex items-center gap-1.5 text-[13px] font-semibold tracking-[0.02em] text-text2";
@@ -171,10 +178,17 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                 <FlowPointers flows={pointers} />
               </fieldset>
 
-              <label className="block">
-                <span className={legendCls}>{flow.requires_document ? "PRD or roadmap to revise" : "PRD document"}</span>
+              <div>
+                <span id="run-document-label" className={legendCls}>
+                  {flow.requires_document ? "PRD or roadmap to revise" : "PRD document"}
+                </span>
                 {flow.requires_document ? (
-                  <select className={inputCls} value={document} onChange={(e) => change(setDocument)(e.target.value)}>
+                  <select
+                    aria-labelledby="run-document-label"
+                    className={inputCls}
+                    value={document}
+                    onChange={(e) => change(setDocument)(e.target.value)}
+                  >
                     <option value="">Choose a document…</option>
                     {docOptions.map((d) => (
                       <option key={d.id} value={d.slug}>
@@ -184,25 +198,14 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                     ))}
                   </select>
                 ) : (
-                  <>
-                    <input
-                      className={inputCls}
-                      list="run-documents"
-                      placeholder="new-prd-slug or an existing document"
-                      value={document}
-                      onChange={(e) => change(setDocument)(e.target.value)}
-                    />
-                    <datalist id="run-documents">
-                      {docOptions.filter((d) => d.kind === "prd").map((d) => (
-                        <option key={d.id} value={d.slug}>
-                          {d.title}
-                        </option>
-                      ))}
-                    </datalist>
-                    <span className="sr-only">A new slug creates the document when the draft is imported.</span>
-                  </>
+                  <DocumentField
+                    className={inputCls}
+                    value={document}
+                    onChange={change(setDocument)}
+                    options={docOptions.filter((d) => d.kind === "prd")}
+                  />
                 )}
-              </label>
+              </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
@@ -243,17 +246,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                         <span className="min-w-0 truncate font-semibold">
                           <span className="tnum">{i + 1}</span>. {s.title}
                         </span>
-                        <label className="flex items-center gap-1.5 text-sm text-text2">
-                          <input
-                            type="checkbox"
-                            className="size-4 accent-[var(--accent)]"
-                            checked={checkpoints[s.checkpoint] ?? true}
-                            onChange={(e) => change(setCheckpoints)({ ...checkpoints, [s.checkpoint]: e.target.checked })}
-                            aria-label={`Stop for ${CHECKPOINT_LABEL[s.checkpoint]}`}
-                          />
-                          <Icon name="flag" size={16} />
-                          <span className="max-w-56 truncate">{CHECKPOINT_LABEL[s.checkpoint]}</span>
-                        </label>
+                        {s.checkpoint && <StopToggle kind={s.checkpoint} on={checkpoints[s.checkpoint] ?? true} onChange={(on) => change(setCheckpoints)({ ...checkpoints, [s.checkpoint!]: on })} />}
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {catalog.data!.roles.map((r) => {
@@ -292,7 +285,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
             {estimate ? "Re-estimate" : "Estimate"}
           </Button>
           <Button variant="primary" onClick={start} disabled={busy || !estimate || !estimate.within_budget}>
-            {estimate?.needs_approval ? "Ask an owner to approve" : "Start run"}
+            {ownerApproves ? `Approve ${usd(estimate!.total_usd)} and start` : estimate?.needs_approval ? "Ask an owner to approve" : "Start run"}
           </Button>
         </div>
       </div>
@@ -320,5 +313,120 @@ function FlowPointers({ flows }: { flows: Flow[] }) {
         );
       })}
     </ul>
+  );
+}
+
+/** A segment's stop, on or off (a segment without a stop shows none). */
+function StopToggle({ kind, on, onChange }: { kind: keyof typeof CHECKPOINT_LABEL; on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-1.5 text-sm text-text2">
+      <input
+        type="checkbox"
+        className="size-4 accent-[var(--accent)]"
+        checked={on}
+        onChange={(e) => onChange(e.target.checked)}
+        aria-label={`Stop for ${CHECKPOINT_LABEL[kind]}`}
+      />
+      <Icon name="flag" size={16} />
+      <span className="max-w-56 truncate">{CHECKPOINT_LABEL[kind]}</span>
+    </label>
+  );
+}
+
+type DocOption = { id: string; slug: string; title: string };
+
+/** A new slug or an existing PRD, with its own suggestion list: Escape closes the list first. */
+function DocumentField({
+  className,
+  value,
+  onChange,
+  options,
+}: {
+  className: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: DocOption[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const q = value.trim().toLowerCase();
+  const matches = options
+    .filter((d) => d.slug !== value && (d.slug.toLowerCase().includes(q) || d.title.toLowerCase().includes(q)))
+    .slice(0, 8);
+  const shown = open && matches.length > 0;
+
+  const pick = (slug: string) => {
+    onChange(slug);
+    setOpen(false);
+    setActive(-1);
+  };
+
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape" && shown) {
+      e.preventDefault();
+      setOpen(false);
+      setActive(-1);
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!shown) return setOpen(true);
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      setActive((a) => (a + step + matches.length) % matches.length);
+    } else if (e.key === "Enter" && shown && active >= 0 && matches[active]) {
+      e.preventDefault();
+      pick(matches[active].slug);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <input
+        role="combobox"
+        aria-labelledby="run-document-label"
+        aria-describedby="run-document-hint"
+        aria-autocomplete="list"
+        aria-expanded={shown}
+        aria-controls="run-documents"
+        aria-activedescendant={shown && active >= 0 ? `run-document-${active}` : undefined}
+        autoComplete="off"
+        className={className}
+        placeholder="new-prd-slug or an existing document"
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+          setActive(-1);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={onKeyDown}
+      />
+      {shown && (
+        <ul
+          id="run-documents"
+          role="listbox"
+          aria-label="Document suggestions"
+          className="absolute inset-x-0 top-full z-10 mt-1 max-h-56 overflow-y-auto rounded-inspector border border-line bg-surface py-1 shadow-tip"
+        >
+          {matches.map((d, i) => (
+            <li
+              key={d.id}
+              id={`run-document-${i}`}
+              role="option"
+              aria-selected={i === active}
+              className={`flex min-w-0 cursor-pointer items-baseline gap-2 px-3 py-1.5 ${i === active ? "bg-surface2" : "hover:bg-surface2"}`}
+              // Keep focus in the field so the click lands before blur closes the list.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pick(d.slug)}
+            >
+              <span className="truncate font-semibold">{d.slug}</span>
+              <span className="truncate text-text2">{d.title}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <span id="run-document-hint" className="sr-only">
+        A new slug creates the document when the draft is imported.
+      </span>
+    </div>
   );
 }

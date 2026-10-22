@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     SmallInteger,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     Uuid,
     false,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -25,7 +27,11 @@ from oracle.db import Base, TenantScoped
 DOCUMENT_STATUSES = ("draft", "in_review", "approved")
 # "spec": a technical brief or engineering spec built from an approved PRD (CR-09).
 # H4 (migration 0020_strategy): a product vision and a product strategy.
-DOCUMENT_KINDS = ("prd", "roadmap", "spec", "vision", "strategy")
+# H8 (migration 0022_updates): a board update's product section or an investor update.
+DOCUMENT_KINDS = ("prd", "roadmap", "spec", "vision", "strategy", "update")
+# H8: who sees a document. "company": every member (S3); "approvers": owners and approvers
+# only (oracle.docs.visibility), the default of an update.
+DOCUMENT_VISIBILITIES = ("company", "approvers")
 # O1f: a section belongs to the brief layer or is detail (oracle.docs.layers).
 SECTION_LAYERS = ("brief", "detail")
 BRIEF_SOURCES = ("draft", "template", "full_heading", "none")
@@ -44,6 +50,14 @@ class Document(TenantScoped, Base):
         UniqueConstraint("tenant_id", "slug"),
         CheckConstraint(_in("status", DOCUMENT_STATUSES), name="status"),
         CheckConstraint(_in("kind", DOCUMENT_KINDS), name="kind"),
+        CheckConstraint(_in("visibility", DOCUMENT_VISIBILITIES), name="visibility"),
+        # The few documents that are not company-wide (oracle.docs.visibility).
+        Index(
+            "ix_documents_visibility",
+            "tenant_id",
+            "visibility",
+            postgresql_where=text("visibility <> 'company'"),
+        ),
     )
 
     slug: Mapped[str] = mapped_column(Text, nullable=False)
@@ -54,6 +68,9 @@ class Document(TenantScoped, Base):
     kind: Mapped[str] = mapped_column(Text, nullable=False, server_default="prd")
     # Theme key (oracle.templates.models.Theme), picked when the draft starts.
     theme: Mapped[str | None] = mapped_column(Text)
+    # H8: "approvers" hides the document from commenters and viewers on every read path
+    # (oracle.docs.visibility).
+    visibility: Mapped[str] = mapped_column(Text, nullable=False, server_default="company")
     # Built-in model jobs (oracle.jobs) an owner turned off for this document; all on
     # by default.
     disabled_llm_jobs: Mapped[list[str]] = mapped_column(

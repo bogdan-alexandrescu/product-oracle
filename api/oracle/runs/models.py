@@ -7,13 +7,16 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     Text,
     UniqueConstraint,
     Uuid,
+    func,
+    text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.auth.models import ROLES
@@ -29,6 +32,10 @@ FLOWS = (
     "request_triage",
     "strategy_draft",
     "launch_kit",
+    "baseline",
+    # F5-2 (migration 0022_code_maps): one repo's code capability map.
+    "code_map",
+    "update_draft",
 )
 RUN_STATUSES = (
     "draft",
@@ -52,8 +59,28 @@ CHECKPOINT_KINDS = (
     "request_triage",
     "strategy_review",
     "launch_review",
+    "update_review",
 )
 CHECKPOINT_STATUSES = ("pending", "approved", "changes_requested", "skipped")
+# D8: what a person does to one item of a pending checkpoint's shared draft. Every kind the
+# backlog uses is listed here from the start (look_again: B2 Baseline review from this run;
+# add: C7 Scope review's added requirement); oracle.runs.actions.VOCABULARY says which a
+# checkpoint kind takes.
+ACTION_KINDS = (
+    "accept",
+    "edit",
+    "drop",
+    "restore",
+    "split",
+    "merge",
+    "question",
+    "waive",
+    "look_again",
+    "add",
+)
+# Staged by the checkpoint's approver role or above; suggested by a commenter (counts for
+# nothing until an approver stages it).
+ACTION_STATES = ("staged", "suggested")
 
 # US dollars to four decimal places: enough for per-call model costs.
 Usd = Numeric(12, 4)
@@ -145,3 +172,50 @@ class Checkpoint(TenantScoped, Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     note: Mapped[str | None] = mapped_column(Text)
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # D8: the shared draft's note to the agents, and its revision (every draft write bumps
+    # it; a decision sent with an older one is refused).
+    draft_note: Mapped[str | None] = mapped_column(Text)
+    draft_revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+
+class CheckpointAction(TenantScoped, Base):
+    """One staged or suggested action on one item of a pending checkpoint (D8)."""
+
+    __tablename__ = "checkpoint_actions"
+    __table_args__ = (
+        CheckConstraint(_in("kind", ACTION_KINDS), name="kind"),
+        CheckConstraint(_in("state", ACTION_STATES), name="state"),
+        # One action per item, kind and field: staging again replaces it.
+        Index(
+            "ux_checkpoint_actions_slot",
+            "checkpoint_id",
+            "item_key",
+            "kind",
+            text("coalesce(field, '')"),
+            unique=True,
+        ),
+    )
+
+    checkpoint_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("checkpoints.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # The item's id in the reviewed file; "*" for the whole file.
+    item_key: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    # kind=edit: horizon | milestone_date | milestone_name | depends_on | outcome | title
+    #            | prd_section | order | clear:<field>   (the D2 vocabulary)
+    field: Mapped[str | None] = mapped_column(Text)
+    value: Mapped[Any | None] = mapped_column(JSONB)
+    # The reason codes (D2) this action answers, e.g. ["unverified_date"].
+    answers: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")
+    note: Mapped[str | None] = mapped_column(Text)
+    state: Mapped[str] = mapped_column(Text, nullable=False, server_default="staged")
+    question_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("stakeholder_questions.id", ondelete="SET NULL")
+    )
+    # User or API token ids (no FK, as on Run.created_by).
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )

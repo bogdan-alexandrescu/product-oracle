@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from oracle.docs.schemas import DocumentKind, ImportProblem, VersionSource
 from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
+from oracle.priorities.schemas import PriorityCheck
 from oracle.reports.schemas import InboxReport, InboxReportFailure
 from oracle.review.schemas import FeedbackKind
 
@@ -17,6 +18,9 @@ Flow = Literal[
     "request_triage",
     "strategy_draft",
     "launch_kit",
+    "baseline",
+    "code_map",
+    "update_draft",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -41,6 +45,7 @@ CheckpointKind = Literal[
     "request_triage",
     "strategy_review",
     "launch_review",
+    "update_review",
 ]
 CheckpointStatus = Literal["pending", "approved", "changes_requested", "skipped"]
 Role = Literal["viewer", "commenter", "approver", "owner"]
@@ -124,7 +129,8 @@ class FlowSegmentOut(BaseModel):
     roles: list[str]
     scopes: list[str]
     outputs: list[str]
-    checkpoint: CheckpointKind
+    # None: the segment opens no stop (the code_map flow's index).
+    checkpoint: CheckpointKind | None
     approver_role: Role
 
 
@@ -150,6 +156,8 @@ class FlowOut(BaseModel):
     in_new_run_dialog: bool = False
     # Where a flow with its own door starts: a pointer line under the dialog's list.
     starts_from: FlowStart | None = None
+    # False: the run writes no document (launch_kit, baseline).
+    writes_document: bool = True
 
 
 class FlowCatalog(BaseModel):
@@ -378,8 +386,8 @@ class SegmentOut(BaseModel):
     status: SegmentStatus
     roles: list[str]
     scopes: list[str]
-    # The checkpoint this segment ends at, and whether it is on.
-    checkpoint: CheckpointKind
+    # The checkpoint this segment ends at (None: it has none), and whether it is on.
+    checkpoint: CheckpointKind | None
     checkpoint_on: bool
     estimate_usd: float | None = None
     cost_usd: float
@@ -401,6 +409,8 @@ class SegmentOut(BaseModel):
     previous_attempt: PreviousAttempt | None = None
     # The feature-set segment's check of feature_set.yaml (C6).
     feature_set_check: FeatureSetCheck | None = None
+    # The priority segment's check of priority.yaml (C8).
+    priority_check: PriorityCheck | None = None
     # H11: the baseline's level changed this segment's merge (skipped at observe, or
     # every change a proposal): one line saying so, else None.
     autonomy_note: str | None = None
@@ -620,6 +630,9 @@ class CheckpointDecision(BaseModel):
     decision: Literal["approved", "changes_requested", "confirm", "redo", "continue"]
     # Required with changes_requested: it goes to the agents re-running the segment.
     note: str | None = Field(default=None, max_length=10_000)
+    # D8: the draft revision the decider saw (``GET .../review``). When given and the draft
+    # changed since, the decision is refused (409 ``review_changed``) and nothing changes.
+    expected_revision: int | None = None
 
 
 class ClaudeSweepSummary(BaseModel):
@@ -747,6 +760,24 @@ class InboxRevokeFailure(BaseModel):
     retry_until: datetime
 
 
+class InboxAccessFailure(BaseModel):
+    """A change to someone's Google IAP access still failing after 24 hours of retries
+    (#245): retried once a day until it is done or no longer needed; Retry runs it now."""
+
+    id: uuid.UUID
+    kind: Literal["iap_revoke", "iap_grant"]
+    email: str
+    # What was owed: "Access not removed" or "Access not granted".
+    owed: str
+    # Oracle's own short reason ("Google returned 403 (permission denied)"), never
+    # Google's response body.
+    last_error: str | None = None
+    attempts: int
+    # Failing since.
+    created_at: datetime
+    next_attempt_at: datetime | None = None
+
+
 class InboxStaged(BaseModel):
     """'N changes staged for draft N+1' on one document, with the build action."""
 
@@ -847,6 +878,8 @@ class InboxOut(BaseModel):
     feedback: list[InboxDocument]
     # Owners only: provider revokes a member's disable could not make (Retry, Dismiss).
     revoke_failures: list[InboxRevokeFailure] = []
+    # Owners only (#245): access changes still failing after 24 hours.
+    access_failures: list[InboxAccessFailure] = []
     # Owners only (F6): the newest weekly alignment reports, unread ones in ``total``; and
     # the reports Slack refused for 24 hours (Retry, Dismiss), in ``total`` too.
     reports: list[InboxReport] = []
@@ -907,3 +940,151 @@ class McpServerRegistration(BaseModel):
     url: str
     # created | updated (the URL changed) | unchanged
     result: Literal["created", "updated", "unchanged"]
+
+
+# --------------------------------------------------------------------------- D8 shared draft
+
+
+class ActionIn(BaseModel):
+    """One action on one item of a pending checkpoint's shared draft (D8). ``kind``,
+    ``field`` and ``value`` are checked against the checkpoint kind's vocabulary
+    (oracle.runs.actions.VOCABULARY); a wrong one is 422 naming the rule."""
+
+    # The item's id in the reviewed file; "*" for the whole file.
+    item_key: str = Field(min_length=1, max_length=200)
+    # accept | edit | drop | restore | split | merge | question | waive | look_again | add
+    kind: str = Field(min_length=1, max_length=40)
+    field: str | None = Field(default=None, max_length=80)
+    value: Any = None
+    # The reason codes (D2) this action answers.
+    answers: list[str] = Field(default=[], max_length=20)
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class DraftNoteIn(BaseModel):
+    note: str | None = Field(default=None, max_length=10_000)
+
+
+class WaitInfo(BaseModel):
+    """The SwarmCloud wait of the checkpoint: ``open`` (``ends_at``, ``seconds_left``),
+    ``ended`` (deciding continues the run as a new workflow) or ``none`` (one workflow per
+    segment: the checkpoint waits in the Inbox with no end)."""
+
+    state: Literal["open", "ended", "none"]
+    ends_at: datetime | None = None
+    seconds_left: int | None = None
+
+
+class ReviewFile(BaseModel):
+    name: str
+    seq: int
+
+
+class ReviewPerson(BaseModel):
+    id: uuid.UUID | None = None
+    name: str
+    # Their role now; None for someone no longer found.
+    role: str | None = None
+
+
+class ReviewAnswerer(BaseModel):
+    id: uuid.UUID | None = None
+    name: str
+
+
+class ReviewAnswer(BaseModel):
+    kind: str
+    body: str | None = None
+    answered_by: ReviewAnswerer | None = None
+
+
+class ReviewQuestion(BaseModel):
+    """The stakeholder question a ``question`` action asked (C2), with its latest answer."""
+
+    id: uuid.UUID
+    status: str
+    text: str
+    asked_to: ReviewAnswerer | None = None
+    answer: ReviewAnswer | None = None
+
+
+class ReviewAction(BaseModel):
+    id: uuid.UUID
+    item_key: str
+    kind: str
+    field: str | None = None
+    value: Any = None
+    answers: list[str] = []
+    state: Literal["staged", "suggested"]
+    note: str | None = None
+    created_by: ReviewPerson | None = None
+    updated_by: ReviewPerson | None = None
+    updated_at: datetime
+    question: ReviewQuestion | None = None
+
+
+class ReviewMilestone(BaseModel):
+    name: str | None = None
+    date: str | None = None
+
+
+class ReviewItem(BaseModel):
+    """One item of the reviewed file, its reasons (recomputed on every read) and its
+    actions. ``state``: ``needs_you`` (an open reason no staged action answers),
+    ``handled`` (every reason answered by a staged action), ``waiting`` (only open
+    questions) or ``fine`` (no reasons). An item only the reasons or the actions name (a
+    dropped item, the whole file "*") has no ``position``."""
+
+    key: str
+    position: int | None = None
+    title: str | None = None
+    horizon: str | None = None
+    milestone: ReviewMilestone | None = None
+    confidence: str | None = None
+    rank: int | None = None
+    outcome: str | None = None
+    depends_on: list[str] = []
+    prd_section: str | None = None
+    reasons: list[ItemReason] = []
+    actions: list[ReviewAction] = []
+    state: Literal["needs_you", "handled", "waiting", "fine"]
+
+
+class WaitingOn(BaseModel):
+    user_id: uuid.UUID
+    name: str
+    count: int
+
+
+class ReviewTally(BaseModel):
+    need_you: int = 0
+    handled: int = 0
+    blocking_open: int = 0
+    to_confirm_open: int = 0
+    # Open questions per person asked.
+    waiting_on: list[WaitingOn] = []
+    suggested: int = 0
+
+
+class CheckpointReview(BaseModel):
+    """A checkpoint's shared draft decision (D8): its items with their reasons and actions,
+    the note to the agents, the revision a decision is sent with, the wait's time left and
+    what the reader may do. Checkpoint kinds with no item file serve ``items: []``."""
+
+    checkpoint_id: uuid.UUID
+    run_id: uuid.UUID
+    kind: CheckpointKind
+    status: Literal["pending", "approved", "changes_requested", "skipped"]
+    approver_role: str
+    attempt: int | None = None
+    revision: int
+    wait: WaitInfo
+    file: ReviewFile | None = None
+    file_problems: list[ItemsProblem] = []
+    items: list[ReviewItem] = []
+    tally: ReviewTally
+    note: str | None = None
+    can_read: bool = True
+    can_suggest: bool = False
+    can_stage: bool = False
+    can_decide: bool = False

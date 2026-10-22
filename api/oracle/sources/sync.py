@@ -59,7 +59,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.connections.models import Connection
+from oracle.engineering import codemaps
 from oracle.sources import base, service, store
+from oracle.sources.connectors import github
 from oracle.sources.models import Source, SourceItem
 
 log = logging.getLogger(__name__)
@@ -408,6 +410,11 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
                 _, written = await store.upsert_item(db, source, event)
                 stats.upserted += 1
                 stats.versions_written += int(written)
+                merged = github.merged_pull(event) if written and kind == "github" else None
+                if merged is not None:
+                    # F5-2: a merge after the repo's code map was built makes it stale
+                    # (written with the item, so a rolled-back sync notices it again).
+                    await codemaps.note_merge(db, source_id, *merged)
             elif isinstance(event, base.ItemDelete):
                 stats.deleted += int(await store.delete_item(db, source, event))
             elif isinstance(event, base.ItemUnavailable):
@@ -423,7 +430,11 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
                 cursor = dict(event.cursor)
                 # The lost-access report so far too, so a sync that fails later shows it.
                 await _write(
-                    db, start, cursor=stamped(cursor), unavailable_items=list(stats.unavailable)
+                    db,
+                    start,
+                    cursor=stamped(cursor),
+                    unavailable_items=list(stats.unavailable),
+                    partly_synced_at=func.now(),
                 )
                 await db.commit()
                 held = False
@@ -442,6 +453,7 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
             last_error=message,
             unavailable_items=list(stats.unavailable),
             last_synced_at=func.now(),
+            partly_synced_at=None,
         )
     except _Superseded as e:
         return await _superseded(db, stats, start, e.company_narrowed)

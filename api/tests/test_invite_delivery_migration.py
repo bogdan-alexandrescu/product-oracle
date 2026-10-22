@@ -68,10 +68,12 @@ def _columns() -> list[str]:
     )
 
 
-def test_the_chain_ends_here_after_feedback_agent_staging():
+def test_the_chain_after_feedback_agent_staging():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == [REVISION]
+    # 0022_baseline_flow (B1) and the train's revisions chain on it; one head.
+    assert script.get_heads() == ["0023_source_partial_sync"]
     assert script.get_revision(REVISION).down_revision == "0021_feedback_agent_staging"
+    assert script.get_revision("0022_baseline_flow").down_revision == REVISION
 
 
 def test_upgrade_adds_the_delivery_columns_and_downgrade_drops_them(scratch_db):
