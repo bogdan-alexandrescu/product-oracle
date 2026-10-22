@@ -226,12 +226,20 @@ CASES = [
     ),
     (
         "long-text-one-field",
-        upd(SHOPS, title="Reach paid shops", attrs={"weight": 0.5, "note": None, "metric": (
-            "Shops that take a paid order on their first two days of opening their doors"
-        )}),
+        upd(
+            SHOPS,
+            title="Reach paid shops",
+            attrs={
+                "weight": 0.5,
+                "note": None,
+                "metric": (
+                    "Shops that take a paid order on their first two days of opening their doors"
+                ),
+            },
+        ),
         "Set Reach paid shops’ metric to …their first two days of opening their doors "
         "(was …their first day of opening their doors)",
-    ),  # fmt: skip
+    ),
     (
         "body-left-after-unchanged-title",
         upd(DARK, title="Dark mode", body="Darker."),
