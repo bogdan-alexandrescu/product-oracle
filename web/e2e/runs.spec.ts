@@ -80,27 +80,38 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
   await expect(page).toHaveURL(/\/documents\/team-onboarding\/v\/1$/);
 });
 
+/**
+ * C4: a Baseline to PRD run starts at New PRD (the brief, then Draft with Oracle on the
+ * Before drafting page), no longer from Runs › New run. Rebuilding the baseline keeps the
+ * whole flow, so its figures are the dialog's were.
+ */
+async function draftSheet(page: Page, title: string) {
+  await login(page, "approver@example.com");
+  await page.goto("/documents/new?kind=prd");
+  await page.getByRole("textbox", { name: "Title" }).fill(title);
+  await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Teams pay through a slow manual invoice. Billing should be self-serve.");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
+  await page.getByRole("button", { name: "Draft with Oracle" }).click();
+  const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
+  await sheet.getByRole("radio", { name: /^Rebuild it/ }).check();
+  return sheet;
+}
+
 test("new run: knobs, estimate before start, skipped checkpoints", async ({ page }) => {
-  await openRuns(page);
-  await page.getByRole("button", { name: "New run" }).click();
-  const dialog = page.getByRole("dialog", { name: "New run" });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByTestId("runtime-notes")).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Start run" })).toBeDisabled();
+  const sheet = await draftSheet(page, "Billing revamp");
+  await expect(sheet.getByRole("button", { name: "Start drafting" })).toBeDisabled();
 
-  await dialog.getByPlaceholder("new-prd-slug or an existing document").fill("billing-revamp");
-  await dialog.getByLabel("Stop for Feature set and dependencies").uncheck();
-  await dialog.getByLabel("Stop for Priority order").uncheck();
-  await dialog.getByRole("button", { name: "Estimate" }).click();
-  await expect(dialog.getByTestId("estimate-total")).toHaveText("$26.50");
+  await sheet.getByRole("switch", { name: "Feature set and dependencies" }).uncheck();
+  await sheet.getByRole("switch", { name: "Priority order" }).uncheck();
+  await sheet.getByRole("button", { name: "Estimate" }).click();
+  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $26.50");
 
-  // Changing a knob clears the estimate until it is re-run.
-  await dialog.getByLabel("Depth").selectOption("quick");
-  await expect(dialog.getByTestId("estimate")).toHaveCount(0);
-  await dialog.getByRole("button", { name: "Estimate" }).click();
-  await expect(dialog.getByTestId("estimate-total")).toHaveText("$13.25");
+  // Changing a knob re-estimates the same draft run.
+  await sheet.getByRole("group", { name: "Depth" }).getByRole("button", { name: "Quick" }).click();
+  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $13.25");
 
-  await dialog.getByRole("button", { name: "Start run" }).click();
+  await sheet.getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(status(page)).toHaveText("Running");
   await expect(page.getByTestId("segment-feature_set")).toContainText("Feature set and dependencies: off");
@@ -116,18 +127,21 @@ test("new run: knobs, estimate before start, skipped checkpoints", async ({ page
 });
 
 test("new run over $50 waits for an owner's approval", async ({ page }) => {
-  await openRuns(page);
-  await page.getByRole("button", { name: "New run" }).click();
-  const dialog = page.getByRole("dialog", { name: "New run" });
-  await dialog.getByPlaceholder("new-prd-slug or an existing document").fill("platform-prd");
-  await dialog.getByLabel("Depth").selectOption("deep");
-  await dialog.getByRole("button", { name: "Estimate" }).click();
-  await expect(dialog.getByTestId("estimate-total")).toHaveText("$53.00");
-  await expect(dialog).toContainText("an owner approves the cost");
-  await dialog.getByRole("button", { name: "Ask an owner to approve" }).click();
+  const sheet = await draftSheet(page, "Platform PRD");
+  await sheet.getByRole("group", { name: "Depth" }).getByRole("button", { name: "Deep" }).click();
+  await sheet.getByRole("button", { name: "Estimate" }).click();
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("Estimated $53.00");
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("Needs an owner's approval before it starts");
+  await sheet.getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 
   await expect(status(page)).toHaveText("Awaiting cost approval");
+  // An owner approves the cost.
+  const url = page.url();
+  await page.getByTestId("user-menu").click();
+  await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
+  await login(page);
+  await page.goto(url);
   await page.getByRole("button", { name: "Approve $53.00 and start" }).click();
   await expect(status(page)).toHaveText("Running");
 });

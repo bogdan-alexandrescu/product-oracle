@@ -4,8 +4,9 @@ import { routeIntake, type IntakeContext } from "../lib/api/mock/intake";
 import { seedV2 } from "../lib/api/mock/v2";
 
 /**
- * The intake mock (CR-03) has no screen yet (I3: the UI follows the design system), so
- * this drives its routes directly: the shapes the API returns, and the same rules.
+ * The intake mock (CR-03), its routes driven directly: the shapes the API returns, and the
+ * same rules. Its screens (New PRD, Before drafting) have their own specs
+ * (new-prd-door.spec.ts, intake-page.spec.ts).
  */
 const USER = "b1000000-0000-4000-8000-000000000001";
 

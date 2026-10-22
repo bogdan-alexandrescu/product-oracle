@@ -141,7 +141,7 @@ test("the New run dialog does not offer Build the baseline and points at the Bas
   await page.goto("/runs");
   await page.getByRole("button", { name: "New run" }).click();
   const dialog = page.getByRole("dialog", { name: "New run" });
-  await expect(dialog.getByRole("radio", { name: "Baseline to PRD" })).toBeChecked();
+  await expect(dialog.getByTestId("flow-pointers")).toBeVisible();
   await expect(dialog.getByRole("radio", { name: "Build the baseline" })).toHaveCount(0);
   const pointer = dialog.getByRole("link", { name: "Build the baseline · Baseline" });
   await expect(pointer).toHaveAttribute("href", "/baseline?build=1");
