@@ -186,6 +186,17 @@ export function seedStrategy(uuid: () => string, entities: GoalRow[] = [], { vis
   };
 }
 
+/**
+ * A company with no approved strategy (nor vision): the only finding is the open
+ * `no_strategy` one, which belongs to no stack row (and is info, so the stack counts skip it).
+ */
+export function seedNoStrategy(uuid: () => string): StrategyDb {
+  return {
+    findings: [finding(uuid(), { kind: "no_strategy", severity: "info", subject_kind: "document", subject_ref: "strategy" })],
+    stack: { vision: null, strategy: null, unaligned: { goals: [], items: [] }, counts: { open: 0, high: 0, waived: 0 } },
+  };
+}
+
 const open = (db: StrategyDb) => db.findings.filter((f) => f.status === "open" && f.severity !== "info");
 
 /** The owners' Inbox row (null for others, or with nothing open), as the API. */

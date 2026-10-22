@@ -430,7 +430,11 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
                 cursor = dict(event.cursor)
                 # The lost-access report so far too, so a sync that fails later shows it.
                 await _write(
-                    db, start, cursor=stamped(cursor), unavailable_items=list(stats.unavailable)
+                    db,
+                    start,
+                    cursor=stamped(cursor),
+                    unavailable_items=list(stats.unavailable),
+                    partly_synced_at=func.now(),
                 )
                 await db.commit()
                 held = False
@@ -449,6 +453,7 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
             last_error=message,
             unavailable_items=list(stats.unavailable),
             last_synced_at=func.now(),
+            partly_synced_at=None,
         )
     except _Superseded as e:
         return await _superseded(db, stats, start, e.company_narrowed)

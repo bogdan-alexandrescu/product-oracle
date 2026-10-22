@@ -5,7 +5,7 @@ Additive: every existing intake gets empty lists and answers and no template or 
 The downgrade drops the five columns.
 
 Revision ID: 0023_intake_brief_fields
-Revises: 0022_updates
+Revises: 0023_source_partial_sync
 """
 
 from collections.abc import Sequence
@@ -15,7 +15,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0023_intake_brief_fields"
-down_revision: str | None = "0022_updates"
+down_revision: str | None = "0023_source_partial_sync"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

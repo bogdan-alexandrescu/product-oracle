@@ -8,7 +8,7 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { mockUuid, seeded } from "./ids";
-import { attributeCommenterProposal, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { addNoisyProposals, attributeCommenterProposal, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
@@ -36,7 +36,7 @@ import { publishRefusal, routeQuality, seedQuality, type QualityContext, type Qu
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
-import { inboxStrategy, routeStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
+import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
@@ -74,6 +74,8 @@ export interface Db {
   user_id: string;
   members: MemberRow[];
   invites: InviteRow[];
+  /** Invites an owner resent (the "mail-fails" scenario sends those). */
+  invites_resent?: string[];
   documents: DocumentRow[];
   versions: VersionRow[];
   comments: CommentRow[];
@@ -117,6 +119,9 @@ export interface Db {
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
    * "revoke-failures" scenario only. */
   revoke_failures?: RevokeFailureRow[];
+  /** Access changes still failing after 24 hours (#245); seeded in the "access-failures"
+   * scenario only. A retry succeeds. */
+  access_failures?: Schemas["InboxAccessFailure"][];
   /** Alignment reports, their reads and Oracle's Slack install (./reports.ts, F6); seeded in
    * the "alignment-report" scenario only. */
   reports?: ReportsDb;
@@ -162,11 +167,45 @@ function seedRevokeFailures(): RevokeFailureRow[] {
   ];
 }
 
+/** A revoked invite's access removal, refused by Google for over 24 hours (#245). */
+function seedAccessFailures(): Schemas["InboxAccessFailure"][] {
+  return [
+    {
+      id: uuid(),
+      kind: "iap_revoke",
+      email: "jo.tester@example.com",
+      owed: "Access not removed",
+      last_error: "Google returned 403 (permission denied)",
+      attempts: 27,
+      created_at: "2026-10-18T09:00:00Z",
+      next_attempt_at: "2026-10-20T09:00:00Z",
+    },
+  ];
+}
+
 /** Retry and Dismiss of a revoke a disable owes: owners only, as in the API. A retry succeeds,
- * except while the provider's OAuth app is not configured. */
+ * except while the provider's OAuth app is not configured. An access change's Retry (#245)
+ * succeeds, and its item closes. */
 function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Response | null {
   if (p[1] !== "member-follow-ups" || req.method !== "POST") return null;
   if (!atLeast(me.role, "owner")) return forbidden("owner");
+  const access = (db.access_failures ??= []).find((r) => r.id === p[2]);
+  if (access && p[3] === "retry") {
+    db.access_failures = db.access_failures.filter((r) => r.id !== access.id);
+    return json(200, {
+      id: access.id,
+      member_id: access.id,
+      kind: access.kind,
+      email: access.email,
+      status: "done",
+      attempts: access.attempts + 1,
+      outcome: access.kind === "iap_revoke" ? "removed" : "granted",
+      last_error: null,
+      created_at: access.created_at,
+      next_attempt_at: null,
+      done_at: now(),
+    });
+  }
   db.revoke_failures ??= [];
   const row = db.revoke_failures.find((r) => r.id === p[2]);
   if (!row) return notFound("Follow-up");
@@ -221,6 +260,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * default company plus a PRD with three open Oracle suggestions (fleet-next); "big-prd" adds a PRD
  * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts); "revoke-failures" as the
  * default company plus two provider revokes a removed member's disable could not make (C2);
+ * "access-failures" as the default company plus a revoked invite whose access removal has kept
+ * failing for over 24 hours (#245);
  * "alignment-report" as the default company plus two weekly alignment reports and Oracle's
  * Slack install (./reports.ts, F6);
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
@@ -243,7 +284,12 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
  * "discussions" as the default company plus one private discussion the commenter started
  * with the approver on team-workspaces v2's Problem, 3 messages from the 2 of them (G1,
- * ./discussions.ts).
+ * ./discussions.ts);
+ * "mail-off" as the default company with no invite sender configured (invites are not
+ * emailed); "mail-fails" where every first invite email fails (Resend sends it);
+ * "iap-pending" where an invite's Google IAP access is not granted until Retry (#242);
+ * "iap-revoke-fails" where removing a member leaves their Google IAP access to remove (the
+ * tick retries it).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -303,6 +349,9 @@ function hash(text: string): string {
 
 const now = () => new Date().toISOString();
 
+/** The seeded API token that imports the mock's versions unless a seed says who did. */
+const AGENT_TRACK = { id: "3d7e9a52-6b14-4c8f-a0e2-71f5c9b8d046", name: "agent-track" };
+
 function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
   const id = uuid();
   const layered = resolveBrief(seed.sections.map((s) => ({ section_key: s.key, level: s.level })), seed.brief);
@@ -330,7 +379,8 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     snapshot: seed.snapshot ?? null,
     warnings: [],
     notes: [],
-    imported_by: "agent-track",
+    imported_by: (seed.by ?? AGENT_TRACK).id,
+    imported_by_name: (seed.by ?? AGENT_TRACK).name,
     approved_at: null,
     approval_lapses: [],
     created_at: seed.created_at,
@@ -483,6 +533,13 @@ function seedManyPeople(): Db {
   });
   for (let i = 0; i < 20; i++) db.members.push(join(`member.${String(i).padStart(2, "0")}@example.com`, i));
   db.members.push(join("zoe.zimmer@example.com", 20));
+  return db;
+}
+
+/** The default company with no approved strategy: one open `no_strategy` finding (H4, #244). */
+function seedNoStrategyScenario(): Db {
+  const db = seed();
+  db.strategy = seedNoStrategy(uuid);
   return db;
 }
 
@@ -859,6 +916,11 @@ function seed(): Db {
     invited_by: db.user_id,
     accepted_at: null,
     revoked_at: null,
+    access: "granted",
+    access_at: i.created_at,
+    email_status: "sent",
+    email_at: i.created_at,
+    sign_in_url: signInUrl(),
   }));
   const docs = new Map<string, DocumentRow>();
   for (const d of DOCUMENTS as DocumentSeed[]) {
@@ -1360,10 +1422,13 @@ function load(): Db {
                 ? seedManyPeople
                 : scenario === "strategy" || scenario === "strategy-no-vision"
                   ? () => seedStrategyScenario(scenario === "strategy")
-                  : seed,
+                  : scenario === "strategy-none"
+                    ? seedNoStrategyScenario
+                    : seed,
   );
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
+  db.access_failures = scenario === "access-failures" ? seedAccessFailures() : [];
   // Launches (H6): three synthetic launches in the "launches" scenario; none otherwise, so
   // other specs' Inbox counts stay as they were.
   if (scenario === "launches") db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
@@ -1372,6 +1437,7 @@ function load(): Db {
   // so other specs' counts stay as they were.
   db.discussions = scenario === "discussions" ? seedDiscussionsScenario(db) : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
+  if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   save(db);
   return db;
 }
@@ -1485,6 +1551,7 @@ function summary(v: VersionRow): Schemas["VersionSummary"] {
     warnings: v.warnings,
     notes: v.notes,
     imported_by: v.imported_by,
+    imported_by_name: v.imported_by_name,
     approved_at: v.approved_at,
     brief_source: v.brief_source ?? "none",
     source: v.source ?? null,
@@ -1810,6 +1877,24 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
   };
 }
 
+/** Where an invitee signs in with Google: the app's own address in the mock. */
+const signInUrl = () => `${location.origin}/`;
+/** The mock company's sign-in domains (ORACLE_IAP_ALLOWED_DOMAINS). */
+const SIGN_IN_DOMAINS = ["example.com"];
+/** A queued invite email goes out (or fails) this long after it was queued. */
+const MAIL_DELAY_MS = 400;
+
+/** The background send: queued invite emails whose time has come are sent, or fail. */
+function settleInviteEmails(db: Db) {
+  const fails = localStorage.getItem(MOCK_SCENARIO_KEY) === "mail-fails";
+  for (const i of db.invites) {
+    if (i.email_status !== "queued" || Date.now() - Date.parse(i.email_at ?? "") < MAIL_DELAY_MS) continue;
+    const resent = (db.invites_resent ??= []).includes(i.id);
+    if (fails && !resent) Object.assign(i, { email_status: "failed", email_error: "the Gmail API answered 503", email_at: now() });
+    else Object.assign(i, { email_status: "sent", email_error: null, email_at: now() });
+  }
+}
+
 /** Members, invites: owners only, as in the API. */
 async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): Promise<Response> {
   if (!atLeast(me.role, "owner")) return forbidden("owner");
@@ -1848,6 +1933,9 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
           return json(409, { detail: "Cannot remove the last owner; make someone else owner" });
         }
         Object.assign(target, { status: "disabled", disabled_at: now(), disabled_by: me.id });
+        // Their Google IAP access is taken away; in "iap-revoke-fails" Google refuses, and
+        // the revoke is owed (the tick retries it).
+        if (localStorage.getItem(MOCK_SCENARIO_KEY) === "iap-revoke-fails") target.access_pending = "revoke";
         // Every credential acting for them is revoked with the disable.
         revokeMemberTokens(account, target.id, target.disabled_at!);
         for (const i of db.invites) {
@@ -1857,11 +1945,13 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       return m === "DELETE" ? json(204, undefined) : json(200, out(target));
     }
     if (m === "POST" && p[3] === "restore") {
-      Object.assign(target, { status: "active", disabled_at: null, disabled_by: null });
+      Object.assign(target, { status: "active", disabled_at: null, disabled_by: null, access_pending: null });
       return json(200, out(target));
     }
   }
   if (p[1] === "invites") {
+    settleInviteEmails(db);
+    const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
     if (!p[2] && m === "GET") {
       const status = new URL(req.url).searchParams.get("status") ?? "open";
       return json(
@@ -1874,6 +1964,9 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       const email = input.email.trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(422, { detail: "Not an email address" });
       if (input.engineering_lead && input.role === "viewer") return json(422, { detail: VIEWER_REFUSED });
+      if (!SIGN_IN_DOMAINS.includes(email.split("@")[1])) {
+        return json(422, { detail: `Only addresses at ${SIGN_IN_DOMAINS.join(" or ")} can sign in to Oracle` });
+      }
       if (db.members.some((x) => x.email === email)) return json(409, { detail: `${email} is already a member` });
       if (db.invites.some((i) => i.email === email && i.status === "open")) {
         return json(409, { detail: `${email} already has an open invite; revoke it first` });
@@ -1888,12 +1981,32 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         created_at: now(),
         accepted_at: null,
         revoked_at: null,
+        ...(scenario === "iap-pending"
+          ? { access: "pending", access_error: "oracle-api-be: Google returned 403 (permission denied)" }
+          : { access: "granted", access_error: null }),
+        access_at: now(),
+        email_status: scenario === "mail-off" ? "not_sent" : "queued",
+        email_at: now(),
+        sign_in_url: signInUrl(),
       };
       db.invites.push(invite);
       return json(201, invite);
     }
     const invite = db.invites.find((i) => i.id === p[2]);
     if (!invite) return notFound("Invite");
+    if (m === "POST" && (p[3] === "access" || p[3] === "email")) {
+      if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
+      if (p[3] === "access") Object.assign(invite, { access: "granted", access_error: null, access_at: now() });
+      else if (invite.email_status === "queued") return json(409, { detail: "Oracle is sending this invite's email" });
+      else if (invite.email_status === "sent" && invite.email_at && Date.now() - Date.parse(invite.email_at) < 60_000) {
+        const wait = Math.ceil((60_000 - (Date.now() - Date.parse(invite.email_at))) / 1000);
+        return json(429, { detail: `Oracle emailed this invite under a minute ago; resend it in ${wait} seconds` });
+      } else {
+        (db.invites_resent ??= []).push(invite.id);
+        Object.assign(invite, { email_status: scenario === "mail-off" ? "not_sent" : "queued", email_error: null, email_at: now() });
+      }
+      return json(200, invite);
+    }
     if (m === "DELETE") {
       if (invite.status === "accepted") return json(409, { detail: "This invite was already accepted" });
       if (invite.status === "open") Object.assign(invite, { status: "revoked", revoked_at: now() });
@@ -2522,6 +2635,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const failures = atLeast(me.role, "owner")
       ? db.revoke_failures.filter((r) => !r.dismissed).map((r) => ({ ...r, dismissed: undefined }))
       : [];
+    const accessFailures = atLeast(me.role, "owner") ? (db.access_failures ??= []) : [];
     // Owners also get the weekly alignment reports and the posts Slack refused (F6), and
     // one strategy drift row however many findings are open (H4). Those Oracle told: what
     // it did on its own (H11); unopened rows count.
@@ -2532,11 +2646,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, {
       ...inbox,
       revoke_failures: failures,
+      access_failures: accessFailures,
       reports: reported.reports,
       report_failures: reported.report_failures,
       strategy,
       oracle_actions: did,
-      total: inbox.total + failures.length + reported.unread + (strategy ? 1 : 0) + open,
+      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open,
     });
   }
   if (runs) return runs;

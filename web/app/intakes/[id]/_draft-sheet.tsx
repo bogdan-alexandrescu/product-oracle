@@ -9,6 +9,7 @@ import { ErrorNote, Loading } from "@/components/ui";
 import { CHECKPOINT_LABEL } from "@/app/runs/_lib";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDayUtc } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import type { Summary } from "./_lib";
@@ -66,6 +67,7 @@ export function DraftSheet({ summary, onClose }: { summary: Summary; onClose: ()
 
 function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run | null; onClose: () => void }) {
   const router = useRouter();
+  const { role } = useMe();
   const id = useId();
   const intake = summary.intake;
   const prd = useMemo(() => intake.prd_answers ?? {}, [intake.prd_answers]);
@@ -178,7 +180,10 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
     setBusy(true);
     setError(null);
     try {
-      await unwrap(api.POST("/v1/runs/{run_id}/start", { params: { path: { run_id: runId } } }));
+      const path = { params: { path: { run_id: runId } } };
+      await unwrap(api.POST("/v1/runs/{run_id}/start", path));
+      // #259: an owner approves their own run's cost here rather than on the run page.
+      if (ownerApproves) await unwrap(api.POST("/v1/runs/{run_id}/approve", path));
       router.push(`/runs/${runId}`);
     } catch (e) {
       await refused(e);
@@ -187,6 +192,7 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
   }
 
   const rebuildUsd = status?.baseline_segment_usd?.[depth];
+  const ownerApproves = role === "owner" && !!estimate?.needs_approval;
 
   return (
     <Sheet open title="Draft with Oracle" onClose={onClose} testId="draft-sheet">
@@ -302,7 +308,7 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
             </Button>
           )}
           <Button variant="primary" onClick={start} disabled={busy || !estimate}>
-            Start drafting
+            {ownerApproves ? `Approve ${usd(estimate!.total_usd)} and start` : "Start drafting"}
           </Button>
         </div>
       </div>

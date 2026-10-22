@@ -13,7 +13,7 @@ entities, edges and proposals they wrote stay, their run_id set to null) and sto
 allowing the value.
 
 Revision ID: 0022_baseline_flow
-Revises: 0021_feedback_agent_staging
+Revises: 0022_invite_delivery
 """
 
 from collections.abc import Sequence
@@ -24,7 +24,7 @@ from alembic import op
 from oracle.migration_checks import add_check_values, remove_check_values
 
 revision: str = "0022_baseline_flow"
-down_revision: str | None = "0021_feedback_agent_staging"
+down_revision: str | None = "0022_invite_delivery"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

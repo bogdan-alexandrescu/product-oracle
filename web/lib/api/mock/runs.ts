@@ -269,6 +269,21 @@ function buildUnderWay(ctx: RunsContext, flowKey: string): Response | null {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const monthDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
+/**
+ * The "new-run-prd" scenario keeps Baseline to PRD in the New run dialog, as a catalog from
+ * before C4 did: the dialog's PRD document field (#257) stays reachable for its spec.
+ */
+export const NEW_RUN_PRD_SCENARIO = "new-run-prd";
+
+function flowCatalog(): Schemas["FlowCatalog"] {
+  const inDialog = typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === NEW_RUN_PRD_SCENARIO;
+  if (!inDialog) return FLOW_CATALOG;
+  return {
+    ...FLOW_CATALOG,
+    flows: FLOW_CATALOG.flows.map((f) => (f.key === "baseline_to_prd" ? { ...f, in_new_run_dialog: true, starts_from: null } : f)),
+  };
+}
+
 function flowOf(key: string) {
   return FLOW_CATALOG.flows.find((f) => f.key === key)!;
 }
@@ -1033,6 +1048,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     imports,
     feedback,
     revoke_failures: [],
+    access_failures: [],
     // The weekly alignment reports and their failed posts: the server adds them (./reports.ts).
     reports: [],
     report_failures: [],
@@ -1053,7 +1069,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
-  if (p[1] === "flows" && m === "GET") return json(200, FLOW_CATALOG);
+  if (p[1] === "flows" && m === "GET") return json(200, flowCatalog());
   if (p[1] === "inbox" && m === "GET") return json(200, inbox(ctx));
   if (p[1] === "internal" && p[2] === "tick" && m === "POST") return json(200, tick(ctx));
   // C6: the document's approved PRD scope, by id or slug (a new PRD's run names it by slug).

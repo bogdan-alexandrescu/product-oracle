@@ -126,7 +126,17 @@ function VersionInspector({
     >
       <InspectorSection label="Details">
         <InspectorRow value={formatDateTime(v.created_at)}>Imported</InspectorRow>
-        {v.imported_by && <InspectorRow value={v.imported_by}>By</InspectorRow>}
+        {v.imported_by_name && (
+          <InspectorRow
+            value={
+              <span data-testid="version-importer" title={v.imported_by ?? undefined}>
+                {v.imported_by_name}
+              </span>
+            }
+          >
+            By
+          </InspectorRow>
+        )}
         {v.approved_at && <InspectorRow value={formatDate(v.approved_at)}>Approved</InspectorRow>}
         <InspectorRow value={<span className="font-mono text-[13px] font-medium">{v.content_hash.slice(0, 8)}</span>}>Hash</InspectorRow>
       </InspectorSection>

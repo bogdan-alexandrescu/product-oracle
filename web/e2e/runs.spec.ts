@@ -126,18 +126,32 @@ test("new run: knobs, estimate before start, skipped checkpoints", async ({ page
   await expect(page.getByTestId("checkpoint-prd_review")).toContainText("Waiting");
 });
 
-test("new run over $50 waits for an owner's approval", async ({ page }) => {
+/** Drafts a deep Baseline to PRD run that rebuilds the baseline: $53.00, over the $50 approval line. */
+async function estimateOverFifty(page: Page) {
   const sheet = await draftSheet(page, "Platform PRD");
   await sheet.getByRole("group", { name: "Depth" }).getByRole("button", { name: "Deep" }).click();
   await sheet.getByRole("button", { name: "Estimate" }).click();
   await expect(sheet.getByTestId("draft-estimate")).toContainText("Estimated $53.00");
   await expect(sheet.getByTestId("draft-estimate")).toContainText("Needs an owner's approval before it starts");
+  return sheet;
+}
+
+test("#259: an owner approves their own run over $50 where they start it", async ({ page }) => {
+  const sheet = await estimateOverFifty(page);
+  await expect(sheet.getByRole("button", { name: "Start drafting" })).toHaveCount(0);
+  await sheet.getByRole("button", { name: "Approve $53.00 and start" }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  await expect(status(page)).toHaveText("Running");
+});
+
+test("#259: an approver's run over $50 waits for an owner's approval", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("po-mock-role", "approver"));
+  const sheet = await estimateOverFifty(page);
+  await expect(sheet.getByRole("button", { name: /^Approve/ })).toHaveCount(0);
   await sheet.getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-
   await expect(status(page)).toHaveText("Awaiting cost approval");
-  await page.getByRole("button", { name: "Approve $53.00 and start" }).click();
-  await expect(status(page)).toHaveText("Running");
+  await expect(page.getByRole("button", { name: "Approve $53.00 and start" })).toHaveCount(0);
 });
 
 /**

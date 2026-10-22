@@ -64,14 +64,16 @@ def _columns() -> list[str]:
     )
 
 
-def test_the_chain_ends_here_after_feedback_authors():
+def test_the_chain_after_feedback_authors():
     script = ScriptDirectory.from_config(_cfg())
-    # 0022_baseline_flow (B1) chains on it, then 0022_engineering_lead (A3),
-    # 0022_discussions (G1), 0022_priority_snapshot_runs (C8), C9 Move and pin's
-    # 0022_priority_overrides, 0022_code_maps (F5-2), 0022_checkpoint_actions (D8) and
-    # 0022_updates (H8); one head.
+    # 0022_invite_delivery (A5) chains on it, then 0022_baseline_flow (B1),
+    # 0022_engineering_lead (A3), 0022_discussions (G1), 0022_priority_snapshot_runs (C8),
+    # C9 Move and pin's 0022_priority_overrides, 0022_code_maps (F5-2),
+    # 0022_checkpoint_actions (D8), 0022_updates (H8), 0023_source_partial_sync (#249),
+    # 0023_intake_brief_fields (C4) and 0024_segment_skipped; one head.
     assert script.get_heads() == ["0024_segment_skipped"]
-    assert script.get_revision("0022_baseline_flow").down_revision == REVISION
+    assert script.get_revision("0022_invite_delivery").down_revision == REVISION
+    assert script.get_revision("0022_baseline_flow").down_revision == "0022_invite_delivery"
     assert script.get_revision("0022_engineering_lead").down_revision == "0022_baseline_flow"
     assert script.get_revision("0022_discussions").down_revision == "0022_engineering_lead"
     assert script.get_revision("0022_priority_snapshot_runs").down_revision == "0022_discussions"
@@ -80,6 +82,11 @@ def test_the_chain_ends_here_after_feedback_authors():
     )
     assert script.get_revision("0022_checkpoint_actions").down_revision == "0022_code_maps"
     assert script.get_revision("0022_updates").down_revision == "0022_checkpoint_actions"
+    assert script.get_revision("0023_source_partial_sync").down_revision == "0022_updates"
+    assert script.get_revision("0023_intake_brief_fields").down_revision == (
+        "0023_source_partial_sync"
+    )
+    assert script.get_revision("0024_segment_skipped").down_revision == "0023_intake_brief_fields"
     assert script.get_revision(REVISION).down_revision == "0020_prd_scopes"
 
 

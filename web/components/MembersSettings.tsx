@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ActedCell, SETTLING, Unavailable, useActed } from "@/components/account/acted";
 import { ConfirmDialog } from "@/components/account/ConfirmDialog";
@@ -155,21 +155,87 @@ const removed = (m: Member) => m.status === "disabled";
 const shortFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 /** "Oct 18": the chip's date; the full one is in its title. */
 const shortDate = (iso: string) => shortFmt.format(new Date(iso));
+/** How long the page waits between looks at an invite email Oracle is still sending. */
+const MAIL_POLL_MS = 1000;
+const MAIL_POLLS = 30;
+
+/** An invite's Google IAP access: granted, or not yet with Retry. Nothing without IAP. */
+function AccessState({ invite, retrying, onRetry }: { invite: Invite; retrying: boolean; onRetry: () => void }) {
+  if (invite.access === "granted") {
+    return (
+      <Chip kind="pass" data-testid="invite-access" title={invite.access_at ? `Granted ${formatDateTime(invite.access_at)}` : undefined}>
+        Access granted
+      </Chip>
+    );
+  }
+  if (invite.access !== "pending") return null;
+  return (
+    <>
+      <Chip kind="warn" data-testid="invite-access" title={invite.access_error ?? undefined}>
+        Access not granted yet
+      </Chip>
+      <Button variant="ghost" aria-label={`Retry access for ${invite.email}`} disabled={retrying} onClick={onRetry}>
+        {retrying ? "Retrying…" : "Retry"}
+      </Button>
+    </>
+  );
+}
+
+const EMAIL_LABEL: Record<Invite["email_status"], string> = {
+  queued: "Sending…",
+  sent: "Sent",
+  failed: "Failed",
+  not_sent: "Not sent",
+};
+
+/** An invite's email: Sent <date>, Sending…, Not sent (no sender), or Failed; Resend. */
+function EmailState({ invite, resending, onResend }: { invite: Invite; resending: boolean; onResend: () => void }) {
+  const s = invite.email_status;
+  const title =
+    s === "failed"
+      ? (invite.email_error ?? undefined)
+      : s === "not_sent"
+        ? "Oracle has no sender set up: send them the sign-in link"
+        : invite.email_at
+          ? `${EMAIL_LABEL[s]} ${formatDateTime(invite.email_at)}`
+          : undefined;
+  return (
+    <>
+      <Chip kind={s === "failed" ? "crit" : s === "sent" ? "line" : "na"} data-testid="invite-email" title={title}>
+        {EMAIL_LABEL[s]}
+        {s === "sent" && invite.email_at ? ` ${shortDate(invite.email_at)}` : ""}
+      </Chip>
+      {(s === "failed" || s === "sent") && (
+        <Button variant="ghost" aria-label={`Resend invitation to ${invite.email}`} disabled={resending} onClick={onResend}>
+          {resending ? "Resending…" : "Resend"}
+        </Button>
+      )}
+    </>
+  );
+}
+
 const tokensPhrase = (n: number) => (n === 0 ? "nothing else is" : n === 1 ? "their 1 open token is" : `their ${n} open tokens are`);
 
 /** "Removed Oct 18, 2026" */
 function StatusChip({ m }: { m: Member }) {
-  if (!removed(m)) {
-    return (
-      <Chip kind="pass" dot>
-        Active
-      </Chip>
-    );
-  }
-  return (
+  const status = !removed(m) ? (
+    <Chip kind="pass" dot>
+      Active
+    </Chip>
+  ) : (
     <Chip kind="na" dot title={m.disabled_at ? `Removed ${formatDateTime(m.disabled_at)}` : undefined}>
       Removed{m.disabled_at ? ` ${shortDate(m.disabled_at)}` : ""}
     </Chip>
+  );
+  if (!m.access_pending) return status;
+  // A Google IAP access change that failed; Oracle retries it on its own.
+  return (
+    <span className="flex flex-col items-start gap-1">
+      {status}
+      <Chip kind="warn" data-testid="member-access" title="Google refused the change; Oracle retries it for a day">
+        {m.access_pending === "revoke" ? "Access not removed yet" : "Access not granted yet"}
+      </Chip>
+    </span>
   );
 }
 
@@ -190,6 +256,10 @@ function OwnerView({ selfId }: { selfId: string | null }) {
   const [pending, setPending] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  // The invite just made, whose outcome the form reports.
+  const [made, setMade] = useState<Invite | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const polls = useRef(0);
 
   const members = membersQ.data;
   const activeOwners = members?.filter((m) => m.role === "owner" && !removed(m)).length ?? 0;
@@ -277,12 +347,39 @@ function OwnerView({ selfId }: { selfId: string | null }) {
     }
   }
 
-  async function copyLink(invite: Invite) {
+  async function copyLink(invite: Invite, key = invite.id) {
     // They sign in with Google at the app's address; the invite gives them the role.
-    const link = `${window.location.origin}/`;
-    await navigator.clipboard?.writeText(link).catch(() => undefined);
-    setCopied(invite.id);
-    setTimeout(() => setCopied((c) => (c === invite.id ? null : c)), 1500);
+    await navigator.clipboard?.writeText(invite.sign_in_url).catch(() => undefined);
+    setCopied(key);
+    setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500);
+  }
+
+  const replaceInvite = (updated: Invite) => invitesQ.setData((prev) => prev?.map((i) => (i.id === updated.id ? updated : i)));
+
+  async function retryAccess(invite: Invite) {
+    setBusy(`access:${invite.id}`);
+    setError(null);
+    try {
+      replaceInvite(await unwrap(api.POST("/v1/invites/{invite_id}/access", { params: { path: { invite_id: invite.id } } })));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function resend(invite: Invite) {
+    setBusy(`email:${invite.id}`);
+    setError(null);
+    try {
+      const updated = await unwrap(api.POST("/v1/invites/{invite_id}/email", { params: { path: { invite_id: invite.id } } }));
+      polls.current = 0;
+      replaceInvite(updated);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function invite(e: FormEvent) {
@@ -295,6 +392,8 @@ function OwnerView({ selfId }: { selfId: string | null }) {
         api.POST("/v1/invites", { body: { email: email.trim(), role: inviteRole, engineering_lead: inviteLead && inviteRole !== "viewer" } }),
       );
       invitesQ.setData((prev) => [created, ...(prev ?? [])]);
+      polls.current = 0;
+      setMade(created);
       setEmail("");
       setInviteLead(false);
     } catch (err) {
@@ -421,7 +520,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
       hideOnPhone: true,
       cell: (m) => (removed(m) ? <span className="text-text2">{m.engineering_lead ? "Yes" : "—"}</span> : leadBox(m)),
     },
-    { key: "status", header: "Status", width: "146px", cell: (m) => <StatusChip m={m} /> },
+    { key: "status", header: "Status", width: "146px", wrap: true, cell: (m) => <StatusChip m={m} /> },
     {
       key: "signin",
       header: "Last sign-in",
@@ -459,6 +558,21 @@ function OwnerView({ selfId }: { selfId: string | null }) {
   ];
 
   const invites = invitesQ.data;
+  // Oracle sends invite emails in the background: look again until none is still sending.
+  const sending = invites?.some((i) => i.email_status === "queued") ?? false;
+  const reloadInvites = invitesQ.reload;
+  useEffect(() => {
+    if (!sending || polls.current >= MAIL_POLLS) return;
+    const t = setTimeout(() => {
+      polls.current += 1;
+      void reloadInvites();
+    }, MAIL_POLL_MS);
+    return () => clearTimeout(t);
+  }, [sending, invites, reloadInvites]);
+  // The invite just made, as the list has it now (gone once revoked).
+  const latest = made ? invites?.find((i) => i.id === made.id) : undefined;
+  const outcome = latest && <InviteOutcome invite={latest} copied={copied === `made:${latest.id}`} onCopy={() => copyLink(latest, `made:${latest.id}`)} />;
+
   const inspector = (
     <Inspector
       eyebrow="Members · invite"
@@ -468,8 +582,9 @@ function OwnerView({ selfId }: { selfId: string | null }) {
         <>
           <Chip hero>Google sign-in</Chip>
           <InfoTip label="invites" hero align="start" side="bottom">
-            Their first Google sign-in lands with the role you pick. Copy link copies the app&apos;s address to send
-            them. Without an invite, a Google sign-in from an allowed domain gets the company&apos;s default role.
+            Oracle lets their Google account through and emails them the sign-in link; their first Google sign-in lands
+            with the role you pick. Copy link copies the sign-in link, to send it yourself. Without an invite, a Google
+            sign-in from an allowed domain gets the company&apos;s default role.
           </InfoTip>
         </>
       }
@@ -487,11 +602,21 @@ function OwnerView({ selfId }: { selfId: string | null }) {
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setInviteError(null);
+              }}
               placeholder="name@company.com"
+              aria-invalid={inviteError ? true : undefined}
+              aria-describedby={inviteError ? "invite-error" : undefined}
               className={INPUT}
             />
           </Field>
+          {inviteError && (
+            <p id="invite-error" role="alert" className="-mt-1.5 text-[13px] font-medium text-crit">
+              {inviteError}
+            </p>
+          )}
           <Field label="Role">
             <RoleSelect
               value={inviteRole}
@@ -512,12 +637,12 @@ function OwnerView({ selfId }: { selfId: string | null }) {
             />
             Engineering lead
           </label>
-          {inviteError && <Notice tone="error">{inviteError}</Notice>}
           <div>
             <Button type="submit" variant="solid" icon="plus" disabled={pending || !email.trim()}>
               {pending ? "Inviting…" : "Send invite"}
             </Button>
           </div>
+          {outcome}
         </form>
       </InspectorSection>
       <InspectorSection label="Open invites" testId="open-invites">
@@ -542,12 +667,16 @@ function OwnerView({ selfId }: { selfId: string | null }) {
                   <>
                     <Chip kind="acc">{ROLE_LABEL[i.role]}</Chip>
                     {i.engineering_lead && <Chip kind="acc">Eng lead</Chip>}
-                    <Button variant="ghost" icon="link" aria-label={`Copy sign-in link for ${i.email}`} onClick={() => copyLink(i)}>
-                      {copied === i.id ? "Copied" : <span className="sr-only">Copy link</span>}
+                    <Button variant="ghost" icon="link" aria-label={`Copy link for ${i.email}`} onClick={() => copyLink(i)}>
+                      {copied === i.id ? "Copied" : "Copy link"}
                     </Button>
                     <Button variant="ghost" aria-label={`Revoke invite for ${i.email}`} onClick={() => revokeInvite(i)}>
                       Revoke
                     </Button>
+                    <span className="flex basis-full flex-wrap items-center gap-1.5">
+                      <AccessState invite={i} retrying={busy === `access:${i.id}`} onRetry={() => retryAccess(i)} />
+                      <EmailState invite={i} resending={busy === `email:${i.id}`} onResend={() => resend(i)} />
+                    </span>
                   </>
                 )}
               </li>
@@ -629,5 +758,39 @@ function OwnerView({ selfId }: { selfId: string | null }) {
         ]}
       />
     </>
+  );
+}
+
+/** What happened to the invite just made: emailed, being emailed, or the link to send. */
+function InviteOutcome({ invite, copied, onCopy }: { invite: Invite; copied: boolean; onCopy: () => void }) {
+  if (invite.email_status === "sent") {
+    return (
+      <Notice tone="pass" testId="invite-outcome">
+        Invite sent to {invite.email}
+      </Notice>
+    );
+  }
+  if (invite.email_status === "queued") {
+    return (
+      <Notice testId="invite-outcome">
+        Sending the invite to {invite.email}…
+      </Notice>
+    );
+  }
+  return (
+    <Notice
+      tone="warn"
+      testId="invite-outcome"
+      action={
+        <Button icon="link" onClick={onCopy}>
+          {copied ? "Copied" : "Copy sign-in link"}
+        </Button>
+      }
+    >
+      Oracle didn&apos;t email this invite. Send them this link:{" "}
+      <code data-testid="invite-link" className="break-all font-mono text-[13px]">
+        {invite.sign_in_url}
+      </code>
+    </Notice>
   );
 }

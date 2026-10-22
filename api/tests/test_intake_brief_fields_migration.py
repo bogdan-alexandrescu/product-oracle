@@ -22,7 +22,7 @@ from sqlalchemy.engine import make_url
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
 REVISION = "0023_intake_brief_fields"
-PREVIOUS = "0022_updates"
+PREVIOUS = "0023_source_partial_sync"
 COLUMNS = {"goal_ids", "out_of_scope", "draft_template", "draft_theme", "prd_answers"}
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -69,9 +69,9 @@ def scratch_db():
 def test_chains_on_mains_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    # One head; later lanes (0024_segment_skipped, ...) chain on this revision.
-    (head,) = script.get_heads()
-    assert REVISION in {r.revision for r in script.walk_revisions(base="base", head=head)}
+    # 0024_segment_skipped chains on it; one head.
+    assert script.get_heads() == ["0024_segment_skipped"]
+    assert script.get_revision("0024_segment_skipped").down_revision == REVISION
 
 
 def test_upgrade_adds_the_brief_fields_and_downgrade_drops_them(scratch_db):
