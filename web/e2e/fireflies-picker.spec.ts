@@ -292,3 +292,46 @@ test("fireflies picker: at the most series a source takes, no more can be picked
   await expect(list.getByLabel("AI Agents daily standup")).toBeEnabled();
   await expect(row.getByRole("button", { name: "Save meetings" })).toBeEnabled();
 });
+
+test("fireflies picker: series count the whole window, and ticking one offers its same-title meetings", async ({ page }) => {
+  const { picker } = await openAdd(page);
+  await picker.getByRole("button", { name: "Choose" }).click();
+  const series = picker.getByRole("list", { name: "Series" });
+  const meetings = picker.getByRole("group", { name: "Meetings" });
+  // Issue #252: the meetings list loads a page at a time (12 in the mock), but a series
+  // counts every meeting of the From/To window: 34 weekday standups.
+  await expect(meetings.getByRole("checkbox")).toHaveCount(12);
+  await expect(series.getByRole("listitem").filter({ hasText: "AI Agents daily standup" })).toContainText("34 ·");
+
+  // The ad hoc session has the planning series' title but is on no calendar.
+  await series.getByLabel("AI agents sprint planning").check();
+  const sameTitle = picker.getByTestId("fireflies-same-title");
+  await expect(sameTitle).toHaveCount(1);
+  await expect(sameTitle).toContainText("1 meeting titled “AI agents sprint planning” is outside this series in these dates");
+  await sameTitle.getByRole("button", { name: "Also tick them" }).click();
+  await expect(sameTitle).toHaveCount(0);
+  await expect(picker.getByTestId("fireflies-summary")).toHaveText("1 series, 1 meeting");
+  await picker.getByLabel("Search meetings").fill("sprint planning");
+  await expect(meetings.getByLabel("AI agents sprint planning", { exact: true })).toBeChecked();
+  // Unticking the series drops the offer, not the meeting ticked on its own.
+  await series.getByLabel("AI agents sprint planning").uncheck();
+  await expect(picker.getByTestId("fireflies-summary")).toHaveText("1 meeting");
+
+  // A window holding only the series' own meetings has nothing to offer.
+  await series.getByLabel("AI agents sprint planning").check();
+  await meetings.getByLabel("AI agents sprint planning", { exact: true }).uncheck();
+  await expect(sameTitle).toHaveCount(1);
+  await picker.getByLabel("From").fill("2026-10-07");
+  await expect(series.getByRole("listitem").filter({ hasText: "AI agents sprint planning" })).toContainText("1 ·");
+  await expect(sameTitle).toHaveCount(0);
+});
+
+test("fireflies picker: a series list the browsing limit cut short says what it counted", async ({ page }) => {
+  const { picker } = await openAdd(page);
+  await picker.getByRole("button", { name: "Choose" }).click();
+  // The mock's series list from 2001-01-01 stops after the newest 20 meetings.
+  await picker.getByLabel("From").fill("2001-01-01");
+  await expect(picker.getByTestId("fireflies-series-partial")).toContainText("Counts cover the newest 20 meetings");
+  await picker.getByLabel("From").fill("2026-09-01");
+  await expect(picker.getByTestId("fireflies-series-partial")).toHaveCount(0);
+});

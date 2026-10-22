@@ -696,7 +696,29 @@ async def test_run_tokens_cannot_browse_a_connection(
     assert fake.requests == []
 
 
-async def test_the_series_list_makes_a_fixed_number_of_calls(fake, alice, conn, clock):
+async def test_series_counts_cover_the_whole_window(fake, alice, conn, clock):
+    """Issue #252: a series counts every meeting of the From/To window, not the newest
+    page or four: each page read is one call from the browse budget."""
+    fake.meetings = [
+        meeting(
+            f"W{i}",
+            "Weekly sync",
+            (datetime(2026, 10, 1, 9, tzinfo=UTC) - timedelta(hours=i)).isoformat(),
+            calendar_id="weeklycal1",
+        )
+        for i in range(350)
+    ]
+    async with client_for(alice) as a:
+        resp = await a.get(f"/v1/connections/{conn}/fireflies/series")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["truncated"] is False
+    assert body["scanned"] == 350
+    assert body["series"][0]["meeting_count"] == 350
+    assert len(fake.requests) == 7
+
+
+async def test_the_series_list_stops_at_the_browse_budget(fake, alice, conn, clock):
     fake.meetings = [
         meeting(f"M{i}", f"Meeting {i}", f"2026-{1 + i % 9:02d}-{1 + i % 28:02d}T09:00:00Z")
         for i in range(1000)
@@ -705,7 +727,37 @@ async def test_the_series_list_makes_a_fixed_number_of_calls(fake, alice, conn, 
         resp = await a.get(f"/v1/connections/{conn}/fireflies/series")
     assert resp.status_code == 200
     assert resp.json()["truncated"] is True
-    assert len(fake.requests) == fireflies_browse.SERIES_CALLS
+    assert resp.json()["scanned"] == fireflies_browse.CALLS_PER_MINUTE * 50
+    assert len(fake.requests) == fireflies_browse.CALLS_PER_MINUTE
+
+
+async def test_a_series_lists_same_title_meetings_outside_it(fake, alice, conn):
+    """Issue #252: a reschedule or one-off copy with the series' title is not in the
+    series; the list names them so the picker can offer to tick them too."""
+    fake.meetings = [
+        *SAMPLE,
+        meeting("X1", "AI agents sprint planning", "2026-10-06T17:00:00Z"),
+        meeting("X2", "AI Agents Sprint Planning #12", "2026-09-20T17:00:00Z", calendar_id="other9"),
+        meeting("X3", "AI agents sprint planning retro", "2026-10-07T17:00:00Z"),
+    ]
+    async with client_for(alice) as a:
+        resp = await a.get(f"/v1/connections/{conn}/fireflies/series")
+        assert resp.status_code == 200, resp.text
+        series = {s["key"]: s for s in resp.json()["series"]}
+        same = series[PLANNING]["same_title"]
+        assert [m["id"] for m in same] == ["X1", "X2"]
+        assert same[0] == {
+            "id": "X1",
+            "title": "AI agents sprint planning",
+            "date": "2026-10-06T17:00:00Z",
+        }
+        assert series[STANDUP]["same_title"] == []
+        # Only the From/To window counts.
+        resp = await a.get(
+            f"/v1/connections/{conn}/fireflies/series", params={"from": "2026-10-01"}
+        )
+        series = {s["key"]: s for s in resp.json()["series"]}
+        assert [m["id"] for m in series[PLANNING]["same_title"]] == ["X1"]
 
 
 async def test_mcp_clients_acting_as_the_person_can_browse(fake, tenant_id, alice, conn, clock):
