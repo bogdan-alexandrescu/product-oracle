@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Icon, InfoTip } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { CHECKPOINT_LABEL, EstimateSummary, RunsWhere, usd, type EstimateOut, type FlowCatalog } from "./_lib";
@@ -17,6 +18,7 @@ type Depth = "quick" | "standard" | "deep";
 /** Pick a flow and its knobs, see the estimate, then start the run. */
 export function NewRunDialog({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const { role } = useMe();
   const catalog = useQuery("flows", () => unwrap(api.GET("/v1/flows")));
   const documents = useQuery("documents", () => unwrap(api.GET("/v1/documents")));
 
@@ -100,7 +102,10 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await unwrap(api.POST("/v1/runs/{run_id}/start", { params: { path: { run_id: draft.id } } }));
+      const path = { params: { path: { run_id: draft.id } } };
+      await unwrap(api.POST("/v1/runs/{run_id}/start", path));
+      // #259: an owner approves their own run's cost here rather than on the run page.
+      if (ownerApproves) await unwrap(api.POST("/v1/runs/{run_id}/approve", path));
       router.push(`/runs/${draft.id}`);
     } catch (e) {
       setError(errorMessage(e));
@@ -108,6 +113,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const ownerApproves = role === "owner" && !!estimate?.needs_approval;
   const docOptions = documents.data ?? [];
   const inputCls = `${INPUT} h-10 placeholder:text-text2`;
   const legendCls = "mb-1.5 flex items-center gap-1.5 text-[13px] font-semibold tracking-[0.02em] text-text2";
@@ -292,7 +298,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
             {estimate ? "Re-estimate" : "Estimate"}
           </Button>
           <Button variant="primary" onClick={start} disabled={busy || !estimate || !estimate.within_budget}>
-            {estimate?.needs_approval ? "Ask an owner to approve" : "Start run"}
+            {ownerApproves ? `Approve ${usd(estimate!.total_usd)} and start` : estimate?.needs_approval ? "Ask an owner to approve" : "Start run"}
           </Button>
         </div>
       </div>
