@@ -502,9 +502,12 @@ function SourceRow({
       ? entries(source.config, allowlist.key).map((id) => names[id] ?? id)
       : [];
   const attention = source.status === "needs_attention";
-  const synced = source.last_synced_at
-    ? `last ${source.kind === "upload" ? "upload" : "sync"} ${formatDateTime(source.last_synced_at)}`
-    : "never synced";
+  // A sync that stopped part way (a rate limit) kept what it stored: say so, never "never synced".
+  const synced = source.partly_synced_at
+    ? `partly synced ${formatDateTime(source.partly_synced_at)} · resumes on the next sync`
+    : source.last_synced_at
+      ? `last ${source.kind === "upload" ? "upload" : "sync"} ${formatDateTime(source.last_synced_at)}`
+      : "never synced";
 
   return (
     <li
@@ -586,7 +589,7 @@ function SourceRow({
       </div>
       <div className="tnum mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-text2">
         <span>{source.item_count} item(s)</span>
-        <span>{synced}</span>
+        <span data-testid="source-synced">{synced}</span>
         {fireflies && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5" data-testid="fireflies-included">
             <Label className="flex-none">{fireflies.titleRule ? "Title rule" : "Meetings"}</Label>

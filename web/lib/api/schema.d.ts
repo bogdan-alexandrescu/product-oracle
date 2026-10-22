@@ -22146,6 +22146,8 @@ export interface components {
             last_error: string | null;
             /** Last Synced At */
             last_synced_at: string | null;
+            /** Partly Synced At */
+            partly_synced_at?: string | null;
             /**
              * Created At
              * Format: date-time

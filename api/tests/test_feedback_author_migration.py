@@ -55,7 +55,7 @@ def scratch_db():
 
 def test_it_follows_the_prd_review_chain():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0022_invite_delivery"]
+    assert script.get_heads() == ["0023_source_partial_sync"]
     assert script.get_revision(REVISION).down_revision == "0014_member_follow_up_retry"
 
 

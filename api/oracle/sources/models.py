@@ -77,6 +77,9 @@ class Source(TenantScoped, Base):
     )
     last_error: Mapped[str | None] = mapped_column(Text)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When a sync that has not finished last committed a checkpoint (it resumes on the
+    # next sync); null once a sync finishes (#249).
+    partly_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Connector-defined incremental sync position (oracle.sources.base.CursorCheckpoint).
     cursor: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     # Allowlisted items the last completed sync could not read:

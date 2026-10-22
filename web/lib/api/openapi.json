@@ -67406,6 +67406,18 @@
             ],
             "title": "Last Synced At"
           },
+          "partly_synced_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partly Synced At"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
