@@ -582,6 +582,8 @@ class RunSummary(BaseModel):
     finished_at: datetime | None = None
     # The kind of the checkpoint the run waits on, if any.
     waiting_on: CheckpointKind | None = None
+    # D10: where that checkpoint is decided when it is a run review (its version).
+    review_link: str | None = None
     error: str | None = None
     # What the Inbox says of a run waiting for its owner or creator: a lost submission
     # Oracle could neither find nor rule out past the lookup cap (Retry and Cancel;

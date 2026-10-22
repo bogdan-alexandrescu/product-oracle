@@ -154,6 +154,10 @@ async def test_run_review_matches_the_version_the_run_imported(client, owner, ru
     assert cp["review_link"] == f"/documents/{DOC}/v/2?run_review={cp['id']}"
     inbox = (await client.get("/v1/inbox", headers=auth)).json()
     assert inbox["checkpoints"][0]["review_link"] == cp["review_link"]
+    [listed] = [
+        r for r in (await client.get("/v1/runs", headers=auth)).json() if r["id"] == run["id"]
+    ]
+    assert listed["review_link"] == cp["review_link"]
 
 
 async def test_a_commenter_reads_the_run_review_without_deciding(client, owner, runtime):

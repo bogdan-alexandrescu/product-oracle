@@ -68717,6 +68717,17 @@
             ],
             "title": "Waiting On"
           },
+          "review_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Link"
+          },
           "error": {
             "anyOf": [
               {
@@ -69403,6 +69414,17 @@
               }
             ],
             "title": "Waiting On"
+          },
+          "review_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Link"
           },
           "error": {
             "anyOf": [

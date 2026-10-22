@@ -521,6 +521,7 @@ def _summary(
         started_at=run.started_at,
         finished_at=run.finished_at,
         waiting_on=waiting.kind if waiting else None,  # type: ignore[arg-type]
+        review_link=review_link.link(waiting) if waiting else None,
         error=run.error,
         stuck=_stuck(run),
         can_retry=_can_retry(run),

@@ -22495,6 +22495,8 @@ export interface components {
             finished_at?: string | null;
             /** Waiting On */
             waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            /** Review Link */
+            review_link?: string | null;
             /** Error */
             error?: string | null;
             /** Stuck */
@@ -22709,6 +22711,8 @@ export interface components {
             finished_at?: string | null;
             /** Waiting On */
             waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            /** Review Link */
+            review_link?: string | null;
             /** Error */
             error?: string | null;
             /** Stuck */

@@ -24,7 +24,22 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
-import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngReviewRun, seedFeatureSetRun, seedPriorityRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import {
+  approveRunReview,
+  ENGINEERING_KINDS,
+  enlargeRuns,
+  lastBaselineBuild,
+  reviewedVersion,
+  routeRuns,
+  seedEngReviewRun,
+  seedFeatureSetRun,
+  seedPriorityRuns,
+  seedRunReviewRun,
+  seedRuns,
+  sendBackEntries,
+  type RunsContext,
+  type RunsDb,
+} from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
@@ -710,6 +725,13 @@ function seedEngReview(): Db {
   const db = seed();
   db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
   seeded("eng-review", () => seedEngReviewRun(db.runs!, runsContext(db)));
+  return db;
+}
+
+/** D10 "run-review" scenario: the default seed plus a run waiting at its PRD review of usage-alerts v2 (./runs.ts). */
+function seedRunReview(): Db {
+  const db = seed();
+  seeded("run-review", () => seedRunReviewRun(db.runs!, runsContext(db)));
   return db;
 }
 
@@ -1408,6 +1430,8 @@ function load(): Db {
             ? seedFeatureSet
           : scenario === "eng-review"
             ? seedEngReview
+          : scenario === "run-review"
+            ? seedRunReview
           : scenario === "priority-order"
             ? seedPriorityOrder
           : scenario === "next-draft" || scenario === "next-draft-costly"
@@ -1576,6 +1600,23 @@ function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
     approved_version: vs.filter((v) => v.approved_at).pop()?.number ?? null,
     source: latest?.source ?? null,
   };
+}
+
+/** D10: the latest run review checkpoint whose import made version `number` of the document. */
+function runReviewOf(db: Db, documentId: string, number: number) {
+  const found = (db.runs?.runs ?? []).flatMap((run) => run.checkpoints.map((cp) => ({ run, cp })));
+  return found.filter(({ cp }) => {
+    const v = reviewedVersion(cp);
+    return v?.document_id === documentId && v.version === number;
+  }).pop();
+}
+
+/** D10: a pending run review of `v` is approved once every section is approved, or `v` is published. */
+function followRunReview(db: Db, doc: DocumentRow, v: VersionRow, published: boolean) {
+  const found = runReviewOf(db, doc.id, v.number);
+  if (!found || found.cp.status !== "pending" || !db.runs) return;
+  if (!published && !v.sections.every((x) => latestReview(db, v.id, x.section_key)?.verdict === "approved")) return;
+  approveRunReview({ ...runsContext(db), db: db.runs }, found.run.id, found.cp.id);
 }
 
 function latestReview(db: Db, versionId: string, key: string): ReviewRow | undefined {
@@ -2789,7 +2830,33 @@ async function route(db: Db, req: Request): Promise<Response> {
     const r = addReview(db, v, p[6], await body<Schemas["SectionReviewIn"]>(), { reviewer_id: me.id });
     touch(db, doc.id);
     if (r.feedback_item_id) onFeedback(llm, doc.id, v.number);
+    // D10: the last section approved approves the run review of this version.
+    followRunReview(db, doc, v, false);
     return json(200, { ...r, layer: sectionLayer(db, v.id, r.section_key) });
+  }
+  if (sub === "run-review" && m === "GET") {
+    const found = runReviewOf(db, doc.id, v.number);
+    if (!found) return json(404, { detail: "no run review for this version" });
+    const { run, cp } = found;
+    const reviews = v.sections.map((x) => latestReview(db, v.id, x.section_key));
+    const entries = sendBackEntries(runsContext(db), doc.id, v.number);
+    const staged = db.feedback.filter((f) => f.document_id === doc.id && isStaged(withSuggestion(db.llm, f).suggestion)).length;
+    return json(200, {
+      checkpoint_id: cp.id,
+      run_id: run.id,
+      kind: cp.kind,
+      status: cp.status,
+      flow_title: run.flow_title,
+      approver_role: cp.approver_role,
+      sections: {
+        total: v.sections.length,
+        reviewed: reviews.filter(Boolean).length,
+        approved: reviews.filter((x) => x?.verdict === "approved").length,
+      },
+      feedback: { open: entries - staged, staged, verdicts: reviews.filter((x) => x && x.verdict !== "approved").length },
+      wait: { state: "none" },
+      can_decide: cp.status === "pending" && run.status === "awaiting_checkpoint" && atLeast(me.role, cp.approver_role),
+    });
   }
   if (sub === "feedback-package") {
     return json(200, {
@@ -2854,6 +2921,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     v.approved_at = now();
     doc.status = "approved";
     doc.updated_at = v.approved_at;
+    // D10: publishing the version approves its run review.
+    followRunReview(db, doc, v, true);
     return json(200, { document_id: doc.id, document_status: doc.status, version: summary(v) });
   }
   if (sub === "deck" || (sub === "export" && (q.get("layer") ?? "full") !== "full")) {

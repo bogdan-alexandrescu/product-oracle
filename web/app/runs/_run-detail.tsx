@@ -793,7 +793,12 @@ function SegmentItem({
           {delivering.map((cp) => (
             <DeliveryLine key={cp.id} cp={cp} />
           ))}
-          {deciding.map((cp, i) => (
+          {deciding.map((cp, i) =>
+            // D10: a PRD or roadmap review with its draft imported is decided in the version;
+            // a refused draft and a console answer stay here.
+            cp.review_link && !cp.console && !cp.cannot_approve ? (
+              <RunReviewSummary key={cp.id} cp={cp} anchor={i === 0} />
+            ) : (
             <CheckpointRow
               key={cp.id}
               cp={cp}
@@ -810,10 +815,47 @@ function SegmentItem({
                 noteFields.current[cp.id] = el;
               }}
             />
-          ))}
+            ),
+          )}
         </div>
       )}
     </li>
+  );
+}
+
+/** D10: a run review decided in its version: how far the review got, and a link to it. */
+function RunReviewSummary({ cp, anchor }: { cp: CheckpointOut; anchor?: boolean }) {
+  const imp = (cp.payload as { import?: { slug?: string; version?: number } }).import ?? {};
+  const doc = imp.slug ?? "";
+  const n = imp.version ?? 0;
+  const q = useQuery(`run-review|${doc}|${n}|${cp.id}`, () =>
+    unwrap(api.GET("/v1/documents/{doc}/versions/{n}/run-review", { params: { path: { doc, n } } })),
+  );
+  const sections = q.data?.sections;
+  return (
+    <div
+      id={anchor ? "decide" : undefined}
+      tabIndex={anchor ? -1 : undefined}
+      role="group"
+      aria-label={`Decide: ${CHECKPOINT_LABEL[cp.kind]}`}
+      className="flex scroll-mt-24 flex-wrap items-center gap-2 rounded-button border border-line bg-surface p-3"
+      data-testid={`checkpoint-${cp.kind}`}
+    >
+      <Icon name="flag" size={16} className="text-accent-ink" />
+      <span className="font-semibold">{CHECKPOINT_LABEL[cp.kind]}</span>
+      <span className="min-w-0 flex-1 text-text2" data-testid="run-review-summary">
+        Waiting for review of v{n}
+        {sections && (
+          <>
+            {" "}
+            · {sections.reviewed}/{sections.total} sections reviewed
+          </>
+        )}
+      </span>
+      <LinkButton href={cp.review_link!} icon="arrow">
+        Open review
+      </LinkButton>
+    </div>
   );
 }
 
