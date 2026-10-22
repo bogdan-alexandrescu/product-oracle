@@ -112,7 +112,11 @@ class VersionSummary(ORM):
     # How the version came in, e.g. base_version_missing: imported without a base
     # version, so nothing checked that it keeps the changes made since.
     notes: list[VersionWarning] = []
+    # The member or API token id; a run's draft has the id of the person it acted for.
     imported_by: uuid.UUID | None = None
+    # Who imported it, as people read it (#256): the member's display name, "Oracle" for
+    # a run's draft, or the API token's name. None when the importer is gone.
+    imported_by_name: str | None = None
     approved_at: datetime | None = None
     # Where the brief layer came from; "none": no brief, the version opens on the full
     # document.

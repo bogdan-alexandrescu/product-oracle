@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes, safe_yaml
 from oracle.auth.deps import Principal
+from oracle.auth.models import ApiToken, User
 from oracle.docs import layers
 from oracle.docs.diff import diff_sections
 from oracle.docs.models import DOCUMENT_KINDS, Citation, Document, DocumentVersion, Section
@@ -42,6 +43,8 @@ from oracle.docs.schemas import (
     VersionSummary,
     VersionWarning,
 )
+from oracle.members.names import display_name
+from oracle.models import AuditEvent
 from oracle.review import service as review_service
 from oracle.review.models import SectionReview
 from oracle.review.schemas import Resolution
@@ -247,12 +250,54 @@ async def list_versions(db: AsyncSession, document: Document) -> list[VersionSum
         )
     )
     sources = await version_sources(db, [v.source_version_id for v in rows])
+    names = await importer_names(db, rows)
     return [
         VersionSummary.model_validate(v).model_copy(
-            update={"source": sources.get(v.source_version_id)}  # type: ignore[arg-type]
+            update={
+                "source": sources.get(v.source_version_id),  # type: ignore[arg-type]
+                "imported_by_name": names.get(v.id),
+            }
         )
         for v in rows
     ]
+
+
+async def importer_names(db: AsyncSession, versions: list[DocumentVersion]) -> dict[uuid.UUID, str]:
+    """Who imported each version, by name, keyed by version id (#256): "Oracle" for a
+    run's draft (its import's audit event names the run; ``imported_by`` is the person
+    the run acted for), else the member's display name or the API token's name."""
+    ids = {v.imported_by for v in versions if v.imported_by}
+    people: dict[uuid.UUID, str] = {
+        uid: display_name(email)
+        for uid, email in (
+            await db.execute(select(User.id, User.email).where(User.id.in_(ids)))
+        ).all()
+    }
+    tokens: dict[uuid.UUID, str] = {
+        tid: name
+        for tid, name in (
+            await db.execute(
+                select(ApiToken.id, ApiToken.name).where(ApiToken.id.in_(ids - set(people)))
+            )
+        ).all()
+    }
+    by_run = set(
+        await db.scalars(
+            select(AuditEvent.entity_id).where(
+                AuditEvent.action == "document.version_imported",
+                AuditEvent.entity_id.in_([v.id for v in versions]),
+                AuditEvent.data.has_key("run_id"),
+            )
+        )
+    )
+    names = {**people, **tokens}
+    out: dict[uuid.UUID, str] = {}
+    for v in versions:
+        if v.id in by_run:
+            out[v.id] = "Oracle"
+        elif v.imported_by in names:
+            out[v.id] = names[v.imported_by]
+    return out
 
 
 async def read_document(db: AsyncSession, doc: str) -> DocumentOut:
@@ -418,8 +463,9 @@ async def read_version(
             marks = []
         date_marks = [m.as_json() for m in doc_dates.per_section(marks)]
     return VersionOut(
-        **VersionSummary.model_validate(version).model_dump(exclude={"source"}),
+        **VersionSummary.model_validate(version).model_dump(exclude={"source", "imported_by_name"}),
         source=source,
+        imported_by_name=(await importer_names(db, [version])).get(version.id),
         approval_lapses=version.approval_lapses or [],
         front_matter=version.front_matter,
         sections=[

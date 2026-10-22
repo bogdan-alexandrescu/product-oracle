@@ -75447,6 +75447,17 @@
             ],
             "title": "Imported By"
           },
+          "imported_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported By Name"
+          },
           "approved_at": {
             "anyOf": [
               {
@@ -75754,6 +75765,17 @@
               }
             ],
             "title": "Imported By"
+          },
+          "imported_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported By Name"
           },
           "approved_at": {
             "anyOf": [

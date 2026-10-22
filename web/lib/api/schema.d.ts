@@ -24930,6 +24930,8 @@ export interface components {
             notes: components["schemas"]["VersionWarning"][];
             /** Imported By */
             imported_by?: string | null;
+            /** Imported By Name */
+            imported_by_name?: string | null;
             /** Approved At */
             approved_at?: string | null;
             /**
@@ -25056,6 +25058,8 @@ export interface components {
             notes: components["schemas"]["VersionWarning"][];
             /** Imported By */
             imported_by?: string | null;
+            /** Imported By Name */
+            imported_by_name?: string | null;
             /** Approved At */
             approved_at?: string | null;
             /**

@@ -261,6 +261,9 @@ function hash(text: string): string {
 
 const now = () => new Date().toISOString();
 
+/** The seeded API token that imports the mock's versions unless a seed says who did. */
+const AGENT_TRACK = { id: "3d7e9a52-6b14-4c8f-a0e2-71f5c9b8d046", name: "agent-track" };
+
 function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
   const id = uuid();
   const layered = resolveBrief(seed.sections.map((s) => ({ section_key: s.key, level: s.level })), seed.brief);
@@ -288,7 +291,8 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     snapshot: seed.snapshot ?? null,
     warnings: [],
     notes: [],
-    imported_by: "agent-track",
+    imported_by: (seed.by ?? AGENT_TRACK).id,
+    imported_by_name: (seed.by ?? AGENT_TRACK).name,
     approved_at: null,
     approval_lapses: [],
     created_at: seed.created_at,
@@ -1312,6 +1316,7 @@ function summary(v: VersionRow): Schemas["VersionSummary"] {
     warnings: v.warnings,
     notes: v.notes,
     imported_by: v.imported_by,
+    imported_by_name: v.imported_by_name,
     approved_at: v.approved_at,
     brief_source: v.brief_source ?? "none",
     source: v.source ?? null,
