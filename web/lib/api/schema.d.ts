@@ -7441,6 +7441,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/schedule-bases/rights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Schedule Basis Rights
+         * @description The caller's date rights (F3): ``verify``, ``propose`` or null, and whether an
+         *     engineering lead is named (the Record basis dialog's submit label).
+         */
+        get: operations["get_schedule_basis_rights"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/schedule-bases/{basis_id}/withdraw": {
         parameters: {
             query?: never;
@@ -12531,6 +12552,13 @@ export interface components {
              * @enum {string}
              */
             where: "title" | "heading" | "body";
+        };
+        /** DateRightsOut */
+        DateRightsOut: {
+            /** Rights */
+            rights: ("verify" | "propose") | null;
+            /** Lead Named */
+            lead_named: boolean;
         };
         /** DecideIn */
         DecideIn: {
@@ -41712,6 +41740,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_schedule_basis_rights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DateRightsOut"];
                 };
             };
         };

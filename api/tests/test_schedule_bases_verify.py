@@ -205,6 +205,10 @@ async def test_a_proposed_basis_supports_nothing_until_the_lead_verifies(client,
     approver = await person(tenant_id, "approver")
     await _flag(client, auth, lead.user_id)
 
+    resp = await client.get("/v1/schedule-bases/rights", headers=approver.headers)
+    assert resp.json() == {"rights": "propose", "lead_named": True}
+    resp = await client.get("/v1/schedule-bases/rights", headers=lead.headers)
+    assert resp.json() == {"rights": "verify", "lead_named": True}
     beta = await _record(client, approver.headers, "ENG-412", "2026-11-30")
     ga = await _record(client, approver.headers, "ENG-500", "2026-12-15")
     for b in (beta, ga):

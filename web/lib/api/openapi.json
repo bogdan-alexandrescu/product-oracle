@@ -26027,6 +26027,36 @@
         }
       }
     },
+    "/v1/schedule-bases/rights": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Schedule Basis Rights",
+        "description": "The caller's date rights (F3): ``verify``, ``propose`` or null, and whether an\nengineering lead is named (the Record basis dialog's submit label).",
+        "operationId": "get_schedule_basis_rights",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateRightsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
     "/v1/schedule-bases/{basis_id}/withdraw": {
       "post": {
         "tags": [
@@ -41007,6 +41037,35 @@
         ],
         "title": "DateMarkOut",
         "description": "A date written in a roadmap's text, checked against its PRD's schedule bases now\n(O4 'document dates', oracle.roadmap.doc_dates). ``label`` is the marker shown next\nto the date (``unverified``, ``date withdrawn``); None for a verified date. The\ntext itself is never rewritten."
+      },
+      "DateRightsOut": {
+        "properties": {
+          "rights": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "verify",
+                  "propose"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rights"
+          },
+          "lead_named": {
+            "type": "boolean",
+            "title": "Lead Named"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rights",
+          "lead_named"
+        ],
+        "title": "DateRightsOut"
       },
       "DecideIn": {
         "properties": {

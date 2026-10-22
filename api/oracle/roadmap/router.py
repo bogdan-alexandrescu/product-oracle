@@ -40,6 +40,7 @@ from oracle.roadmap.schemas import (
     AlignmentReport,
     BasisImpactOut,
     BasisStatus,
+    DateRightsOut,
     ItemProblem,
     ItemsImport,
     ItemsImportOut,
@@ -297,6 +298,14 @@ async def list_schedule_bases(
     if status_ is not None:
         query = query.where(ScheduleBasis.status == status_)
     return list(await db.scalars(query))
+
+
+@router.get("/schedule-bases/rights", response_model=DateRightsOut)
+async def get_schedule_basis_rights(principal: Reader, db: TenantDB) -> DateRightsOut:
+    """The caller's date rights (F3): ``verify``, ``propose`` or null, and whether an
+    engineering lead is named (the Record basis dialog's submit label)."""
+    leads = await engineering_leads(db)
+    return DateRightsOut(rights=date_rights(principal, leads), lead_named=bool(leads))
 
 
 async def _record_is_prds(db, record: TrackerRecord, prd: Document) -> bool:

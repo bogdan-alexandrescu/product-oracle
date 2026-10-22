@@ -138,6 +138,11 @@ class ImpactDocument(BaseModel):
     marks: int
 
 
+class DateRightsOut(BaseModel):
+    rights: Literal["verify", "propose"] | None
+    lead_named: bool
+
+
 class BasisImpactOut(BaseModel):
     """What withdrawing a basis would change (F3), computed as the withdrawal would."""
 
