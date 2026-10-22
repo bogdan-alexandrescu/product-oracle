@@ -26,6 +26,7 @@ from oracle.config import get_settings
 from oracle.members import delivery, iap_access, mailer
 from oracle.members import service as members_service
 from oracle.members.models import Invite, MemberFollowUp
+from oracle.members.schemas import plain_address
 from oracle.models import AuditEvent
 from oracle.seed import seed
 from oracle.swarm.settings import get_runtime_settings
@@ -620,9 +621,26 @@ MALFORMED = [
     "pat@corp..com",
     "pat@.corp.com",
 ]
+# RFC 2047 encoded-words and non-ASCII: the To header would decode each into another
+# address (``a@evil.com``, or the list ``a@evil.com,x@corp.com``).
+ENCODED = [
+    "=?utf-8?q?a=40evil.com=3e?=x@corp.com",
+    "=?utf-8?q?a=40evil.com=2c?=x@corp.com",
+    "x@=?utf-8?q?corp.com?=",
+    "x@=?utf-8?q?evil?=.corp.com",
+    "p\u00e4t@corp.com",
+    "pat@c\u00f6rp.com",
+    "\u212aim@corp.com",
+    ".pat@corp.com",
+    "pat.@corp.com",
+    "pa..t@corp.com",
+    "pat@corp.com.",
+    "pat@-corp.com",
+    "pat@corp_x.com",
+]
 
 
-@pytest.mark.parametrize("address", CRAFTED + MALFORMED)
+@pytest.mark.parametrize("address", CRAFTED + MALFORMED + ENCODED)
 async def test_a_crafted_or_malformed_address_is_refused_and_nothing_happens(
     client, owner, iap, mail, monkeypatch, address
 ):
@@ -650,7 +668,13 @@ async def test_one_plain_address_is_taken_lowercased(client, owner, iap, mail, m
     assert [m.to for m in mail.sent] == ["pat.lee+oracle@corp.com"]
 
 
-@pytest.mark.parametrize("address", CRAFTED[:8])
+@pytest.mark.parametrize("address", CRAFTED + MALFORMED + ENCODED)
+def test_a_crafted_malformed_or_encoded_address_is_not_a_plain_address(address):
+    with pytest.raises(ValueError):
+        plain_address(address)
+
+
+@pytest.mark.parametrize("address", CRAFTED[:8] + ENCODED[:4])
 def test_the_mailer_never_addresses_more_than_one_plain_address(address):
     sender = mailer.GmailApiMailer("oracle@corp.com", FakeMinter())
     message = mailer.invite_email(
@@ -660,7 +684,34 @@ def test_the_mailer_never_addresses_more_than_one_plain_address(address):
         sender._raw(message)
 
 
-@pytest.mark.parametrize("address", CRAFTED[:8])
+@pytest.mark.parametrize(
+    "address", ["pat@corp.com", "pat.lee+oracle@corp.com", "o'neil!#$%&*/=?^_`{|}~-@a-1.corp.com"]
+)
+def test_the_rendered_to_header_is_the_address_byte_for_byte(address):
+    sender = mailer.GmailApiMailer("oracle@corp.com", FakeMinter())
+    message = mailer.invite_email(
+        to=address, company="C", role="viewer", inviter="a@corp.com", link="/"
+    )
+    raw = base64.urlsafe_b64decode(sender._raw(message))
+    head = raw.split(b"\n\n", 1)[0].splitlines()
+    assert [line for line in head if line.lower().startswith(b"to:")] == [
+        b"To: " + address.encode()
+    ]
+
+
+def test_the_mailer_refuses_a_to_header_that_does_not_render_as_the_address(monkeypatch):
+    # Defence in depth: past plain_address, the rendered To line is still checked.
+    monkeypatch.setattr(mailer, "plain_address", lambda v: v)
+    sender = mailer.GmailApiMailer("oracle@corp.com", FakeMinter())
+    for address in ENCODED[:2]:
+        message = mailer.invite_email(
+            to=address, company="C", role="viewer", inviter="a@corp.com", link="/"
+        )
+        with pytest.raises(mailer.MailError):
+            sender._raw(message)
+
+
+@pytest.mark.parametrize("address", CRAFTED[:8] + ENCODED[:4])
 async def test_the_iap_member_is_only_ever_one_plain_address(address):
     fake = FakeIap()
     with pytest.raises(iap_access.IapError):
