@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
-import { Button, Chip, Notice, Page, PageHeader, Sheet, Split } from "@/components/ds";
+import { Button, Chip, confirmInPage, Notice, Page, PageHeader, Sheet, Split } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { Menu, TabBar } from "@/components/review/parts";
 import { api, unwrap } from "@/lib/api/client";
@@ -80,6 +80,17 @@ export function BeforeDrafting({ id }: { id: string }) {
     }
   }
 
+  /** Archive asks first; the page shows the archived brief at once, before the summary is read again. */
+  async function archive() {
+    if (!s) return;
+    const lock = s.intake.lock_version;
+    if (!(await confirmInPage({ action: "Archive", message: "Archive this brief? It leaves PRDs › Ideas and Oracle stops asking its questions." }))) return;
+    await act(async () => {
+      const intake = await unwrap(api.PATCH("/v1/intakes/{item_id}", { params: { path: { item_id: id } }, body: { status: "archived", lock_version: lock } }));
+      summaryQ.setData((prev) => prev && { ...prev, intake });
+    });
+  }
+
   if (!s) {
     return <Page>{summaryQ.error ? <ErrorNote>{summaryQ.error}</ErrorNote> : <Loading />}</Page>;
   }
@@ -121,10 +132,7 @@ export function BeforeDrafting({ id }: { id: string }) {
               role="menuitem"
               className="justify-start"
               disabled={busy}
-              onClick={() =>
-                (close(),
-                act(() => unwrap(api.PATCH("/v1/intakes/{item_id}", { params: { path: { item_id: id } }, body: { status: "archived", lock_version: s.intake.lock_version } }))))
-              }
+              onClick={() => (close(), archive())}
             >
               Archive
             </Button>
@@ -175,6 +183,9 @@ export function BeforeDrafting({ id }: { id: string }) {
         </p>
       )}
       {error && <Notice tone="error">{error}</Notice>}
+      {archived && (
+        <Notice testId="intake-archived">This brief is archived: it has left PRDs › Ideas and Oracle asks nothing more.</Notice>
+      )}
       {phone && (
         <Button className="mb-3 w-full" onClick={() => setSheet(true)}>
           Gaps {openGaps} open

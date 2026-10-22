@@ -5,9 +5,10 @@ import { useState } from "react";
 
 import { Button, Chip, Inspector, InspectorRow, InspectorSection } from "@/components/ds";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
+import { assess, goalViews } from "@/app/home/_goals";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole, type Role } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
+import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { CATEGORY_LABEL, HARD_BLOCKERS, criticalCount, type Gap, type Summary } from "./_lib";
 
@@ -99,6 +100,37 @@ export function mayReview(role: Role | null, gap: Gap): boolean {
 }
 
 /**
+ * The brief's goals (C5): the goal_alignment gap's goals (those ticked at the New PRD door),
+ * then the summary's goal links, each with its distance to go (Home's reading).
+ */
+function IntakeGoals({ summary: s }: { summary: Summary }) {
+  const confirmed = useQuery("intake-goals", () =>
+    unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } })),
+  );
+  const views = new Map(goalViews(confirmed.data ?? []).map((g) => [g.id, g]));
+  const ids = [...new Set([...s.gaps.filter((g) => g.category === "goal_alignment").flatMap((g) => g.entity_ids), ...s.goals.map((g) => g.entity_id)])];
+  const goals = ids
+    .map((id) => {
+      const view = views.get(id);
+      const link = s.goals.find((g) => g.entity_id === id);
+      const title = view?.title ?? link?.title;
+      return title ? { id, title, key: link?.key ?? view?.tag ?? "Goal", progress: view ? assess(view) : null } : null;
+    })
+    .filter((g) => g !== null);
+  if (goals.length)
+    return goals.map((g) => (
+      <InspectorRow
+        key={g.id}
+        value={g.progress && (g.progress.state === "togo" || g.progress.state === "met") ? <span className="text-text2">{g.progress.text}</span> : <Chip kind="acc">{g.key}</Chip>}
+      >
+        {g.title}
+      </InspectorRow>
+    ));
+  if (confirmed.loading) return null;
+  return <p className="text-sm text-text2">{confirmed.data?.length ? "No goal chosen yet" : "No confirmed company goal yet"}</p>;
+}
+
+/**
  * The right column (a sheet behind "Gaps N open" on a phone): Ready to draft, with each
  * critical question that holds the draft and Decide; the figures; the goals; the template.
  */
@@ -172,15 +204,7 @@ export function IntakeInspector({
         )}
       </InspectorSection>
       <InspectorSection label="Goals" testId="intake-goals">
-        {s.goals.length ? (
-          s.goals.map((g) => (
-            <InspectorRow key={g.entity_id ?? g.title} value={<Chip kind="acc">{g.key ?? "Goal"}</Chip>}>
-              {g.title}
-            </InspectorRow>
-          ))
-        ) : (
-          <p className="text-sm text-text2">No confirmed company goal yet</p>
-        )}
+        <IntakeGoals summary={s} />
       </InspectorSection>
       <InspectorSection label="Template" testId="intake-template">
         <InspectorRow value={s.template.theme ?? undefined}>{s.template.name}</InspectorRow>
