@@ -248,6 +248,27 @@ def _parse_time(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
+def _agent_progress(task: dict[str, Any]) -> dict[str, Any]:
+    """#258: a task's agent for the run page: its role (the step's metadata), when it
+    started and its last heartbeat (the task's own times, else its lease's) and its cost
+    so far. Anything missing or unreadable is None."""
+    lease = task.get("lease") if isinstance(task.get("lease"), dict) else {}
+    role = (task.get("metadata") or {}).get("agent_role")
+    cost = task.get("cost_usd_total")
+    try:
+        cost_usd = Decimal(str(cost)) if cost is not None else None
+    except ArithmeticError:
+        cost_usd = None
+    return {
+        "role": str(role) if role else None,
+        "started_at": _parse_time(task.get("started_at")) or _parse_time(lease.get("created_at")),
+        "heartbeat_at": _parse_time(task.get("heartbeat_at"))
+        or _parse_time(task.get("last_heartbeat_at"))
+        or _parse_time(lease.get("heartbeat_at")),
+        "cost_usd": cost_usd,
+    }
+
+
 def _enabled(value: Any) -> FeatureState | None:
     """on / off from a capability entry (a bool, or an object with enabled/available)."""
     if isinstance(value, bool):
@@ -1067,6 +1088,7 @@ class SwarmCloudRuntime:
                             "opened_at"
                         )
                     ),
+                    **_agent_progress(task or {}),
                 )
             )
             if task is not None and task_state == "PARKED":
