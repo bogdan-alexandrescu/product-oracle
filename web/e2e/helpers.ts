@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 import { MOCK_LOGIN } from "../lib/api/mock/fixtures";
-import { ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
+import { ROADMAP_REVIEW_HELD_RUN, ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
 
 export const ADMIN = MOCK_LOGIN;
 
@@ -227,7 +227,7 @@ export async function seedSentBack(page: Page): Promise<string> {
  * nine-item file checked with 3 blocking reasons and a reason of every to-confirm code (one
  * of them a dropped item). Returns the run's id.
  */
-export async function seedRoadmapReview(page: Page): Promise<string> {
+export async function seedRoadmapReview(page: Page, seed: typeof ROADMAP_REVIEW_RUN = ROADMAP_REVIEW_RUN): Promise<string> {
   return page.evaluate((seed) => {
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);
@@ -236,7 +236,13 @@ export async function seedRoadmapReview(page: Page): Promise<string> {
     Object.assign(db.runs.artifacts, seed.artifacts);
     localStorage.setItem(key, JSON.stringify(db));
     return seed.run.id;
-  }, ROADMAP_REVIEW_RUN);
+  }, seed);
+}
+
+/** Seeds D3's roadmap-items-console-held scenario (ROADMAP_REVIEW_HELD_RUN): the roadmap review run
+ * approved in SwarmCloud's console while blocking reasons are open. Returns the run's id. */
+export async function seedRoadmapReviewConsoleHeld(page: Page): Promise<string> {
+  return seedRoadmapReview(page, ROADMAP_REVIEW_HELD_RUN);
 }
 
 /** The finished run seedDecidedRun adds. */
