@@ -267,6 +267,7 @@ function buildUnderWay(ctx: RunsContext, flowKey: string): Response | null {
   return first ? fail(409, `A baseline build is already under way (run ${first.id})`) : null;
 }
 const round2 = (n: number) => Math.round(n * 100) / 100;
+const monthDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 function flowOf(key: string) {
   return FLOW_CATALOG.flows.find((f) => f.key === key)!;
@@ -319,14 +320,14 @@ function summary(r: RunOut): Schemas["RunSummary"] {
 }
 
 /** C4: `reuse_baseline` (B1 "Reuse base"): true asks to reuse; stored as the review it reuses. */
-type Reuse = { checkpoint_id: string | null; approved_at: string | null };
-type KnobsIn = Partial<Schemas["KnobsIn"]> & { reuse_baseline?: boolean | Reuse | null };
-type Knobs = RunOut["knobs"] & { reuse_baseline?: Reuse | false };
+type Reuse = Schemas["ReusedBaseline"];
+type KnobsIn = Partial<Omit<Schemas["KnobsIn"], "reuse_baseline">> & { reuse_baseline?: boolean | Reuse | null };
+type Knobs = RunOut["knobs"];
 
 /** The review a Baseline to PRD run reuses, or false (C4). */
 export function reusedReview(r: Pick<RunOut, "flow" | "knobs">): Reuse | false {
   if (r.flow !== "baseline_to_prd") return false;
-  return (r.knobs as Knobs).reuse_baseline || false;
+  return r.knobs.reuse_baseline ?? false;
 }
 
 /** As the API: reusing the baseline is re-checked at estimate and start (409 when it no longer holds). */
@@ -336,11 +337,11 @@ function notReusable(r: RunOut): Response | null {
   return status.reusable ? null : json(409, { detail: { code: "baseline_not_reusable", reason: status.reason } });
 }
 
-function reuseKnob(raw: KnobsIn["reuse_baseline"]): Reuse | false {
-  if (!raw) return false;
+function reuseKnob(raw: KnobsIn["reuse_baseline"]): Reuse | null {
+  if (!raw) return null;
   if (typeof raw === "object") return raw;
   const status = baselineReviewStatus();
-  return { checkpoint_id: status.checkpoint_id, approved_at: status.last_approved_at };
+  return status.checkpoint_id && status.last_approved_at ? { checkpoint_id: status.checkpoint_id, approved_at: status.last_approved_at } : null;
 }
 
 function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut["knobs"] | string {
@@ -922,8 +923,8 @@ function launch(ctx: RunsContext, r: RunOut) {
   const first = r.segments[0];
   if (reused && first?.name === "baseline") {
     // C4: the reused baseline segment runs no step and costs nothing; its stop is skipped.
-    const on = reused.approved_at ? new Date(reused.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "earlier";
-    Object.assign(first, { status: "succeeded", cost_usd: 0, estimate_usd: 0, started_at: ctx.now(), finished_at: ctx.now() });
+    const on = monthDay(reused.approved_at);
+    Object.assign(first, { status: "skipped", cost_usd: 0, estimate_usd: 0, started_at: ctx.now(), finished_at: ctx.now() });
     r.checkpoints.push({
       id: ctx.uuid(), run_id: r.id, kind: "baseline_confirm", status: "skipped", approver_role: "approver",
       segment_seq: first.seq, decided_by: null, decided_at: ctx.now(), note: `Reused the baseline approved ${on}`, payload: {},
@@ -1243,7 +1244,13 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       run_id: r.id,
       depth: r.knobs.depth,
       total_usd: total,
-      segments: r.segments.map((s) => ({ seq: s.seq, name: s.name, title: s.title, roles: s.roles, estimate_usd: s.estimate_usd ?? 0 })),
+      segments: r.segments.map((s) => {
+        const skip = !!reused && s.name === "baseline";
+        return {
+          seq: s.seq, name: s.name, title: s.title, roles: s.roles, estimate_usd: s.estimate_usd ?? 0, reused: skip,
+          note: skip && reused ? `Current baseline, approved ${monthDay(reused.approved_at)}` : null,
+        };
+      }),
       approval_threshold_usd: THRESHOLD,
       needs_approval: total > THRESHOLD,
       budget_usd: budget,

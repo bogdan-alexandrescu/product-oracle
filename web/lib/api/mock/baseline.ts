@@ -59,16 +59,7 @@ const OTHER_MEMBER = "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e6f7";
 export const AGENT_RUN = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a291";
 
 /** GET /v1/baseline/review-status (C4, B1 "Reuse base"): whether a PRD run may reuse the baseline. */
-export interface ReviewStatus {
-  last_approved_at: string | null;
-  checkpoint_id: string | null;
-  run_id: string | null;
-  age_days: number | null;
-  build_under_way: boolean;
-  reusable: boolean;
-  reason: "too_old" | "never_reviewed" | "build_under_way" | null;
-  baseline_segment_usd: Record<"quick" | "standard" | "deep", number>;
-}
+export type ReviewStatus = Schemas["ReviewStatusOut"];
 
 /** The scenario whose last baseline review is too old to reuse (approved 41 days ago). */
 export const BASELINE_STALE_SCENARIO = "baseline-stale";

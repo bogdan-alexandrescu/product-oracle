@@ -645,14 +645,8 @@ export function NewDraft({ kind }: { kind: Kind }) {
 
 // ---------------------------------------------------------------- New PRD door (C4)
 
-/** POST /v1/intakes with the brief's fields (C4); typed here until the API types carry them all. */
-type BriefIn = Schemas["IntakeCreate"] & {
-  goal_ids?: string[];
-  out_of_scope?: string[];
-  template?: string | null;
-  theme?: string | null;
-  prd_answers?: PrdAnswers | null;
-};
+/** POST /v1/intakes with the brief's fields (C4). */
+type BriefIn = Schemas["IntakeCreate"];
 
 const MAX_OUT_OF_SCOPE = 20;
 const PROBLEM_MIN = 20;

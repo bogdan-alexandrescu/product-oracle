@@ -12,22 +12,11 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 
 import type { Summary } from "./_lib";
 
-type Depth = "quick" | "standard" | "deep";
-type Reason = "too_old" | "never_reviewed" | "build_under_way";
-
+type Depth = Schemas["KnobsIn"]["depth"];
 /** GET /v1/baseline/review-status (B1 "Reuse base"): whether a PRD run may reuse the baseline. */
-type ReviewStatus = {
-  last_approved_at?: string | null;
-  checkpoint_id?: string | null;
-  age_days?: number | null;
-  build_under_way: boolean;
-  reusable: boolean;
-  reason?: Reason | null;
-  baseline_segment_usd: Record<Depth, number>;
-};
-
+type ReviewStatus = Schemas["ReviewStatusOut"];
 /** The knobs the sheet sets; `reuse_baseline` is the B1 knob of a Baseline to PRD run. */
-type SheetKnobs = Schemas["KnobsIn"] & { reuse_baseline: boolean };
+type SheetKnobs = Schemas["KnobsIn"];
 
 const DEPTHS: { value: Depth; label: string }[] = [
   { value: "quick", label: "Quick" },
@@ -46,9 +35,7 @@ function reasonText(status: ReviewStatus): string {
   return `The last baseline review was approved ${days} day${days === 1 ? "" : "s"} ago`;
 }
 
-// The review status route is read through the client untyped until the API types carry it.
-const getReviewStatus = () =>
-  unwrap((api.GET as unknown as (path: string) => Promise<{ data?: ReviewStatus; error?: unknown; response: Response }>)("/v1/baseline/review-status"));
+const getReviewStatus = () => unwrap(api.GET("/v1/baseline/review-status"));
 
 /**
  * Draft with Oracle (C4): the template and theme chosen at the door (Change opens the same
@@ -60,12 +47,7 @@ const getReviewStatus = () =>
 export function DraftSheet({ summary, onClose }: { summary: Summary; onClose: () => void }) {
   const router = useRouter();
   const id = useId();
-  const intake = summary.intake as Summary["intake"] & {
-    template?: string | null;
-    theme?: string | null;
-    prd_answers?: Schemas["PrdAnswers"] | null;
-    run_ids?: string[];
-  };
+  const intake = summary.intake;
   const prd = useMemo(() => intake.prd_answers ?? {}, [intake.prd_answers]);
   const choice = useDraftChoice({ kind: "prd", prd }, { template: intake.template ?? null, theme: intake.theme ?? null });
   const { template, templateKey, themeKey, themes } = choice;
@@ -79,7 +61,7 @@ export function DraftSheet({ summary, onClose }: { summary: Summary; onClose: ()
   const [reuse, setReuse] = useState<boolean | null>(null);
   const [depth, setDepth] = useState<Depth>("standard");
   const [stops, setStops] = useState<Record<string, boolean>>({});
-  const [runId, setRunId] = useState<string | null>(summary.draft_run_id ?? intake.run_ids?.[0] ?? null);
+  const [runId, setRunId] = useState<string | null>(summary.draft_run_id ?? intake.run_ids[0] ?? null);
   const [estimate, setEstimate] = useState<Schemas["EstimateOut"] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,11 +96,14 @@ export function DraftSheet({ summary, onClose }: { summary: Summary; onClose: ()
     try {
       let rid = runId;
       if (rid) {
-        const patch = { knobs: current, template: templateKey, theme: themeKey };
-        await unwrap(api.PATCH("/v1/runs/{run_id}", { params: { path: { run_id: rid } }, body: patch }));
+        await unwrap(api.PATCH("/v1/runs/{run_id}", { params: { path: { run_id: rid } }, body: { knobs: current, template: templateKey, theme: themeKey } }));
       } else {
-        const body = { knobs: current, template: templateKey, theme: themeKey, reuse_baseline: current.reuse_baseline };
-        const run = await unwrap(api.POST("/v1/intakes/{intake_id}/runs", { params: { path: { intake_id: intake.id } }, body }));
+        const run = await unwrap(
+          api.POST("/v1/intakes/{intake_id}/runs", {
+            params: { path: { intake_id: intake.id } },
+            body: { knobs: current, template: templateKey, theme: themeKey, reuse_baseline: current.reuse_baseline },
+          }),
+        );
         rid = run.id;
         setRunId(rid);
       }
