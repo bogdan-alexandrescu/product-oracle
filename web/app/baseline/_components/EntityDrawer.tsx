@@ -54,6 +54,12 @@ const EDIT_ATTRS: Partial<Record<EntityOut["type"], { key: string; label: string
   ],
 };
 
+/** Attributes the edit form offers to add when the entry lacks them, per entity type. */
+const KNOWN_ATTRS: Partial<Record<EntityOut["type"], string[]>> = {
+  feature: ["milestone", "size", "evidence_gap", "confidence", "priority_note"],
+  goal: ["current"],
+};
+
 type Props = {
   entity: EntityOut;
   graph: GraphOut | undefined;
@@ -309,6 +315,8 @@ export function EntityDrawer({
               </>
             )}
 
+            <History entityId={d.id} updatedAt={d.updated_at} />
+
             <Links detail={d} graph={graph} tags={tags} onOpen={onOpen} />
 
             <InspectorSection label="Evidence" tools={<span className="tnum text-text">{d.evidence.length}</span>}>
@@ -452,6 +460,20 @@ function Links({
   );
 }
 
+type AttrField = { key: string; label: string; numeric?: boolean; json?: boolean };
+
+/** The labelled fields for the type, then every other attribute the entry has (the suggested-blocker mark aside). */
+function attrFields(entity: EntityDetail): AttrField[] {
+  const fields: AttrField[] = [...(EDIT_ATTRS[entity.type] ?? [])];
+  for (const [key, v] of Object.entries(entity.attrs ?? {})) {
+    if (key === "proposed_blocker" || fields.some((f) => f.key === key)) continue;
+    fields.push({ key, label: key, numeric: typeof v === "number", json: v != null && typeof v === "object" });
+  }
+  return fields;
+}
+
+const asText = (v: unknown) => (v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v));
+
 function EditForm({
   entity,
   busy,
@@ -463,19 +485,22 @@ function EditForm({
   onCancel: () => void;
   onSave: (patch: { title: string; body: string | null; attrs: Record<string, unknown> }) => void;
 }) {
-  const fields = EDIT_ATTRS[entity.type] ?? [];
+  const [fields, setFields] = useState(() => attrFields(entity));
   const [title, setTitle] = useState(entity.title);
   const [body, setBody] = useState(entity.body ?? "");
   const [attrs, setAttrs] = useState<Record<string, string>>(() =>
-    Object.fromEntries(fields.map((f) => [f.key, entity.attrs?.[f.key] == null ? "" : String(entity.attrs[f.key])])),
+    Object.fromEntries(fields.map((f) => [f.key, asText(entity.attrs?.[f.key])])),
   );
   const [invalid, setInvalid] = useState<string | null>(null);
+  const addable = (KNOWN_ATTRS[entity.type] ?? []).filter((k) => !fields.some((f) => f.key === k));
 
   function submit(e: FormEvent) {
     e.preventDefault();
+    // Only the attributes that changed: an untouched one is not rewritten.
     const out: Record<string, unknown> = {};
     for (const f of fields) {
       const raw = attrs[f.key].trim();
+      if (raw === asText(entity.attrs?.[f.key]).trim()) continue;
       if (!raw) {
         out[f.key] = null; // removes the key
       } else if (f.numeric) {
@@ -485,6 +510,13 @@ function EditForm({
           return;
         }
         out[f.key] = n;
+      } else if (f.json) {
+        try {
+          out[f.key] = JSON.parse(raw);
+        } catch {
+          setInvalid(`${f.label} must be valid JSON.`);
+          return;
+        }
       } else {
         out[f.key] = raw;
       }
@@ -495,6 +527,12 @@ function EditForm({
     }
     setInvalid(null);
     onSave({ title: title.trim(), body: body.trim() ? body : null, attrs: out });
+  }
+
+  function add(key: string) {
+    if (!key) return;
+    setFields((fs) => [...fs, { key, label: key }]);
+    setAttrs((a) => ({ ...a, [key]: "" }));
   }
 
   const label = "flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2";
@@ -519,6 +557,19 @@ function EditForm({
           />
         </label>
       ))}
+      {addable.length > 0 && (
+        <label className={label}>
+          Add attribute
+          <select className={INPUT} value="" onChange={(e) => add(e.target.value)}>
+            <option value="">Choose…</option>
+            {addable.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {invalid && <Notice tone="error">{invalid}</Notice>}
       <div className="flex items-center gap-2">
         <Button type="submit" variant="solid" disabled={busy}>
@@ -532,6 +583,60 @@ function EditForm({
         </InfoTip>
       </div>
     </form>
+  );
+}
+
+/** What one revision changed: "milestone: Beta → GA", "Title: A → B". */
+function revisionChanges(before: Record<string, unknown> | null | undefined, after: Record<string, unknown> | null | undefined) {
+  if (!before) return ["Created"];
+  if (!after) return ["Removed"];
+  const out: string[] = [];
+  for (const [k, name] of [
+    ["title", "Title"],
+    ["body", "Description"],
+    ["status", "Status"],
+  ] as const) {
+    if (asText(before[k]) !== asText(after[k])) out.push(k === "body" ? "Description changed" : `${name}: ${asText(before[k])} → ${asText(after[k])}`);
+  }
+  const was = (before.attrs ?? {}) as Record<string, unknown>;
+  const now = (after.attrs ?? {}) as Record<string, unknown>;
+  for (const k of new Set([...Object.keys(was), ...Object.keys(now)])) {
+    if (asText(was[k]) === asText(now[k])) continue;
+    if (!(k in now)) out.push(`${k} removed`);
+    else if (!(k in was)) out.push(`${k}: ${formatValue(now[k])}`);
+    else out.push(`${k}: ${formatValue(was[k])} → ${formatValue(now[k])}`);
+  }
+  return out;
+}
+
+/** The entry's history: its revisions, newest first. Reloads when the entry changes. */
+function History({ entityId, updatedAt }: { entityId: string; updatedAt: string }) {
+  const q = useQuery(`baseline-revisions:${entityId}:${updatedAt}`, () =>
+    unwrap(
+      api.GET("/v1/baseline/entities/{entity_id}/revisions", {
+        params: { path: { entity_id: entityId }, query: { limit: 20 } },
+      }),
+    ),
+    { keepPrevious: true },
+  );
+  const rows = q.data ?? [];
+  return (
+    <InspectorSection label="History" testId="entity-history">
+      {q.loading && !q.data ? (
+        <Loading />
+      ) : rows.length === 0 ? (
+        <p className="text-text2">No changes recorded</p>
+      ) : (
+        <ul className="flex flex-col gap-1.5" aria-label="History">
+          {rows.map((r) => (
+            <li key={r.id} className="text-sm">
+              <span className="tnum text-text2">{formatDateTime(r.created_at)}</span>{" "}
+              {revisionChanges(r.before, r.after).join(" · ")}
+            </li>
+          ))}
+        </ul>
+      )}
+    </InspectorSection>
   );
 }
 
