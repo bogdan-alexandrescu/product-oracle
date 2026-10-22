@@ -2059,7 +2059,7 @@
           "discussions"
         ],
         "summary": "Create Discussion Message",
-        "description": "Write in a discussion (commenters and up; in a private one, its people). Plain\ntext with Markdown links, at most 8,000 characters. ``mentions`` (member ids from\n``GET /v1/people``) add people to an open discussion; in a private one only the\nstarter adds people.",
+        "description": "Write in a discussion (commenters and up; in a private one, its people). Plain\ntext with Markdown links, at most 8,000 characters. ``mentions`` (member ids from\n``GET /v1/people``) add people to an open discussion; in a private one only the\nstarter adds people.\n\nOracle replies to every message while only one person is in the discussion, and\nafter that when addressed (``@Oracle`` or ``mention_oracle``): ``reply`` is its\n``pending`` reply, whose text streams from ``GET \u2026/messages/{reply_id}/stream``.\n``wait``: the reply runs here, without streaming, for at most 120 s, and comes back\n``complete`` or ``failed``. 429 when Oracle has answered a lot here in a short time\n(the message is stored).",
         "operationId": "create_discussion_message",
         "security": [
           {
@@ -2079,6 +2079,16 @@
               "format": "uuid",
               "title": "Discussion Id"
             }
+          },
+          {
+            "name": "wait",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Wait"
+            }
           }
         ],
         "requestBody": {
@@ -2097,7 +2107,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DiscussionMessageOut"
+                  "$ref": "#/components/schemas/DiscussionMessagePosted"
                 }
               }
             }
@@ -2110,6 +2120,215 @@
           },
           "409": {
             "description": "This discussion is closed"
+          },
+          "429": {
+            "description": "Oracle has answered a lot here; the message is still stored"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/discussions/{discussion_id}/messages/{reply_id}/stream": {
+      "get": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Stream Discussion Reply",
+        "description": "Oracle's reply as it is written (``text/event-stream``): ``delta`` events with\nthe new text, then ``citations`` and ``done`` (the message), or ``error``\n(``reason``, ``message``, ``retry``); ``: ping`` every 15 s. The first reader runs\nthe reply; every other reader (another tab, another person, a reload) tails it.",
+        "operationId": "stream_discussion_reply",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          },
+          {
+            "name": "reply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The reply's events",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/discussions/{discussion_id}/messages/{reply_id}/cancel": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Cancel Discussion Reply",
+        "description": "Stop Oracle's reply (the person who asked, or an approver): it ends ``cancelled``\nwith the text written so far, within a second.",
+        "operationId": "cancel_discussion_reply",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          },
+          {
+            "name": "reply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionMessageOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/discussions/{discussion_id}/messages/{reply_id}/retry": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Retry Discussion Reply",
+        "description": "Ask again for a failed or stopped reply (the person who asked, or an approver):\nit is ``pending`` again, with no text; open its stream to run it. 429 when Oracle\nhas answered a lot here in a short time (each Retry counts as an answer).",
+        "operationId": "retry_discussion_reply",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          },
+          {
+            "name": "reply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionMessageOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Not failed or stopped"
+          },
+          "429": {
+            "description": "Oracle has answered a lot here in a short time"
           },
           "422": {
             "description": "Validation Error",
@@ -42732,6 +42951,16 @@
           "can_manage": {
             "type": "boolean",
             "title": "Can Manage"
+          },
+          "private_findings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrivateFindings"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -42924,6 +43153,50 @@
           "deleted": {
             "type": "boolean",
             "title": "Deleted"
+          },
+          "error_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Reason"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "pushback": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pushback"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplyUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -42965,6 +43238,29 @@
           "has_more"
         ],
         "title": "DiscussionMessagePage"
+      },
+      "DiscussionMessagePosted": {
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/DiscussionMessageOut"
+          },
+          "reply": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscussionMessageOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "DiscussionMessagePosted",
+        "description": "A person's message, and Oracle's ``pending`` reply when the rule calls for one\n(``complete`` or ``failed`` with ``wait``)."
       },
       "DiscussionOut": {
         "properties": {
@@ -60927,6 +61223,27 @@
         ],
         "title": "PrioritySnapshotSummary"
       },
+      "PrivateFindings": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Count"
+          },
+          "intake_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intake Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "intake_id"
+        ],
+        "title": "PrivateFindings",
+        "description": "G1 \u00a73.4.6: the caller's own findings below Summary that bear on the subject."
+      },
       "Problem": {
         "properties": {
           "code": {
@@ -64091,6 +64408,91 @@
           "body"
         ],
         "title": "ReplyCreate"
+      },
+      "ReplyUsage": {
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Tokens"
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Usd"
+          },
+          "account_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Label"
+          },
+          "llm_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Via"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model",
+          "input_tokens",
+          "output_tokens",
+          "cost_usd",
+          "account_label",
+          "llm_via",
+          "attempts"
+        ],
+        "title": "ReplyUsage"
       },
       "RepoRef": {
         "properties": {

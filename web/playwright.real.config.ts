@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-import { API_PORT, API_URL, DATABASE_URL, STATE_FILE, WEB_PORT } from "./e2e/real/stack";
+import { API_PORT, API_URL, DATABASE_URL, FAKE_CLAUDE_PORT, STATE_FILE, WEB_PORT } from "./e2e/real/stack";
 
 /**
  * End-to-end against the real stack: the API (uvicorn) on a fresh database and a
@@ -31,6 +31,8 @@ export default defineConfig({
         E2E_API_PORT: String(API_PORT),
         // The test build: the seeded admin is admin@example.com, a reserved example domain.
         ORACLE_ALLOW_RESERVED_EMAIL_DOMAINS: "1",
+        // Oracle's model in discussion-stream.spec.ts: a fake Messages API the spec starts.
+        ORACLE_ANTHROPIC_API_URL: `http://127.0.0.1:${FAKE_CLAUDE_PORT}`,
       },
       timeout: 120_000,
       reuseExistingServer: false,

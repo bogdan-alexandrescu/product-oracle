@@ -82,7 +82,7 @@ test("discuss a section: the mention shows as a chip, the Discussion chip counts
   await discussProblem(page);
   await expect(thread(page).getByTestId("discussion-visibility")).toHaveText("Open");
   await expect(thread(page).getByTestId("discussion-visibility")).toHaveAttribute("title", "Everyone who can see this can read it");
-  await expect(thread(page).getByRole("textbox", { name: "Message" })).toHaveAttribute("placeholder", "Write to the team…");
+  await expect(thread(page).getByRole("textbox", { name: "Message" })).toHaveAttribute("placeholder", "Reply to Oracle and the team");
   await mention(page, "appr", "Approver");
   await thread(page).getByRole("textbox", { name: "Message" }).pressSequentially("can you check the drop-off numbers?");
   await thread(page).getByRole("button", { name: "Send" }).click();
@@ -203,7 +203,8 @@ test("at 390 px the thread opens in the review sheet with the composer and no si
   await expect(composer).toBeVisible();
   await composer.fill("Checking this on the bus.");
   await sheet.getByRole("button", { name: "Send" }).click();
-  await expect(sheet.getByTestId("discussion-message")).toContainText("Checking this on the bus.");
+  // Alone in it, the commenter also gets Oracle's reply (G2): the person's message is one of two.
+  await expect(sheet.getByTestId("discussion-message").filter({ hasText: "Checking this on the bus." })).toHaveCount(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 

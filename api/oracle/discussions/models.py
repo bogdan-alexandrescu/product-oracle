@@ -7,6 +7,7 @@ as SQLAlchemy's ``version_id_col`` (oracle.v2.concurrency).
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
@@ -16,6 +17,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     Text,
     UniqueConstraint,
     Uuid,
@@ -179,6 +181,12 @@ class DiscussionMessage(TenantScoped, Base):
         CheckConstraint(f"char_length(body) <= {MAX_BODY}", name="body"),
         CheckConstraint(_in("status", MESSAGE_STATUSES), name="status"),
         Index("ix_discussion_messages_thread", "discussion_id", "created_at"),
+        Index(
+            "ix_discussion_messages_open_replies",
+            "status",
+            "created_at",
+            postgresql_where=text("status IN ('pending', 'streaming')"),
+        ),
     )
 
     discussion_id: Mapped[uuid.UUID] = mapped_column(
@@ -207,6 +215,21 @@ class DiscussionMessage(TenantScoped, Base):
     )
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # G2 Live replies: an Oracle reply's call, its accounting (owners only, P3d), its
+    # stream's lease, a Stop request, how it failed, and a pushback (C1b).
+    model: Mapped[str | None] = mapped_column(Text)
+    input_tokens: Mapped[int | None] = mapped_column(Integer)
+    output_tokens: Mapped[int | None] = mapped_column(Integer)
+    cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+    account_label: Mapped[str | None] = mapped_column(Text)
+    llm_via: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    error: Mapped[str | None] = mapped_column(Text)
+    error_reason: Mapped[str | None] = mapped_column(Text)
+    stream_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    prompt: Mapped[str | None] = mapped_column(Text)
+    pushback: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class DiscussionChange(TenantScoped, Base):
