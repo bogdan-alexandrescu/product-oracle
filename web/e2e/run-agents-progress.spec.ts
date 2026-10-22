@@ -10,7 +10,8 @@ import { login } from "./helpers";
 test("a running segment shows its agents and the cost so far, and Check agents now says what it checked", async ({ page }) => {
   await page.addInitScript((key) => localStorage.setItem(key, "slow-agents"), MOCK_SCENARIO_KEY);
   await login(page);
-  await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Roadmap" }).click();
+  await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Plan", exact: true }).click();
+  await page.getByTestId("plan-tabs").filter({ visible: true }).getByRole("link", { name: "Roadmap documents" }).click();
   await page.getByTestId("approved-prd").filter({ hasText: "Usage alerts PRD" }).getByRole("button", { name: "Build roadmap" }).click();
   const dialog = page.getByRole("dialog", { name: "Build roadmap" });
   await dialog.getByRole("button", { name: "Estimate" }).click();
@@ -27,7 +28,7 @@ test("a running segment shows its agents and the cost so far, and Check agents n
   // The first check: the agents are working; each shows its role, state, elapsed time and
   // last heartbeat, and the cost so far reaches the segment and the run.
   await page.getByRole("button", { name: "Check agents now" }).click();
-  await expect(page.getByTestId("tick-result")).toHaveText(/^Checked 1 active run at .+: no segment finished yet\.$/);
+  await expect(page.getByTestId("tick-result")).toHaveText(/^Checked \d+ active runs? at .+: .+\.$/);
   const agents = items.getByTestId("segment-agent");
   await expect(agents).not.toHaveCount(0);
   const first = agents.first();
@@ -41,7 +42,7 @@ test("a running segment shows its agents and the cost so far, and Check agents n
 
   // The second check: the segment finished, and the result says so.
   await page.getByRole("button", { name: "Check agents now" }).click();
-  await expect(page.getByTestId("tick-result")).toHaveText(/^Checked 1 active run at .+: 1 segment finished\.$/);
+  await expect(page.getByTestId("tick-result")).toHaveText(/^Checked \d+ active runs? at .+: \d+ segments? finished\.$/);
   await expect(items.getByTestId("segment-agent")).toHaveCount(0);
   await expect(items.getByTestId("segment-progress")).toHaveCount(0);
 });

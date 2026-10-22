@@ -23605,6 +23605,22 @@ export interface components {
             /** Lapse Reason */
             lapse_reason?: string | null;
         };
+        /**
+         * SegmentAgent
+         * @description #258: one agent working on a running segment, as Oracle's last tick read it.
+         */
+        SegmentAgent: {
+            /** Role */
+            role?: string | null;
+            /** State */
+            state: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Heartbeat At */
+            heartbeat_at?: string | null;
+            /** Cost Usd */
+            cost_usd?: number | null;
+        };
         /** SegmentAttempt */
         SegmentAttempt: {
             /** Attempt */
@@ -23709,6 +23725,13 @@ export interface components {
             finished_at?: string | null;
             /** Error */
             error?: string | null;
+            /**
+             * Agents
+             * @default []
+             */
+            agents: components["schemas"]["SegmentAgent"][];
+            /** Checked At */
+            checked_at?: string | null;
         };
         /** SettingIn */
         SettingIn: {

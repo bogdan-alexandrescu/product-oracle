@@ -71915,6 +71915,66 @@
         "title": "SectionVerdict",
         "description": "Latest verdict for a section in this version."
       },
+      "SegmentAgent": {
+        "properties": {
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "heartbeat_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heartbeat At"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "SegmentAgent",
+        "description": "#258: one agent working on a running segment, as Oracle's last tick read it."
+      },
       "SegmentAttempt": {
         "properties": {
           "attempt": {
@@ -72291,6 +72351,26 @@
               }
             ],
             "title": "Error"
+          },
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/SegmentAgent"
+            },
+            "type": "array",
+            "title": "Agents",
+            "default": []
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
           }
         },
         "type": "object",

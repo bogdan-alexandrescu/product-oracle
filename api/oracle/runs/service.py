@@ -199,6 +199,7 @@ from oracle.runs.schemas import (
     RunPatch,
     RunProgress,
     RunSummary,
+    SegmentAgent,
     SegmentAttempt,
     SegmentEstimate,
     SegmentOut,
@@ -219,7 +220,7 @@ from oracle.swarm import (
     load_learned,
     redact,
 )
-from oracle.swarm.runtime import MERGE, NOT_YET, not_reached
+from oracle.swarm.runtime import MERGE, NOT_YET, WORKING, not_reached
 from oracle.swarm.settings import get_runtime_settings
 from oracle.templates import service as templates_service
 from oracle.templates.builtins import (
@@ -816,6 +817,9 @@ def _segment_out(
     imp = art.get("import")
     check = art.get("items_check")
     merged = art.get("baseline_import") or {}
+    progress = art.get("progress") or {}
+    if segment.status != "running" or progress.get("workflow_id") != segment.swarm_workflow_id:
+        progress = {}
     return SegmentOut(
         id=segment.id,
         seq=segment.seq,
@@ -848,6 +852,9 @@ def _segment_out(
         started_at=segment.started_at,
         finished_at=segment.finished_at,
         error=segment.error,
+        # #258: only while it runs, and only what was read of its current workflow.
+        agents=[SegmentAgent(**a) for a in progress.get("agents") or []],
+        checked_at=progress.get("checked_at"),
     )
 
 
@@ -2526,6 +2533,28 @@ def _lookup_exhausted(lost: dict[str, Any]) -> bool:
 
 def _plan_entry(wf: dict[str, Any], seq: int) -> dict[str, Any] | None:
     return next((e for e in wf.get("segments") or [] if e.get("seq") == seq), None)
+
+
+def _record_agents(
+    segment: RunSegment, workflow_id: str, status: WorkflowStatus, steps: set[str] | None = None
+) -> None:
+    """#258: the running segment's working agents as this tick read them (``steps``: the
+    segment's own steps in a workflow that runs several; None: every step), and when."""
+    agents = [
+        {
+            "role": st.role,
+            "state": st.state.lower(),
+            "started_at": st.started_at.isoformat() if st.started_at else None,
+            "heartbeat_at": st.heartbeat_at.isoformat() if st.heartbeat_at else None,
+            "cost_usd": float(st.cost_usd) if st.cost_usd is not None else None,
+        }
+        for st in status.steps
+        if st.state in WORKING and (steps is None or st.step_id in steps)
+    ]
+    art = _art(segment)
+    checked = _now().isoformat()
+    art["progress"] = {"workflow_id": workflow_id, "checked_at": checked, "agents": agents}
+    _set_art(segment, art)
 
 
 @dataclass
@@ -4637,6 +4666,9 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
         (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
     )
     _recompute_spend(run, segments)
+    _set_art(running, art)
+    _record_agents(running, workflow_id, status)
+    art = _art(running)
 
     if status.terminal:
         stats.finished += 1
@@ -5444,6 +5476,10 @@ async def _tick_workflow(
         status = await _rt().status(wf["id"])
     start = _take_cost(run, wf, status, segments)
     current = next((s for s in segments if s.status == "running"), None)
+    if current is not None:
+        entry = _plan_entry(wf, current.seq)
+        own = {*(entry.get("work") or []), *(entry.get("revises") or [])} if entry else None
+        _record_agents(current, wf["id"], status, own)
     for parked in status.parked:
         if parked.reason == "CREDENTIAL_MISSING":
             _note(current or start or segments[0], workflow.ADVICE["CREDENTIAL_MISSING"])
