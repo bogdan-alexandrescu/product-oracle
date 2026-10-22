@@ -9,6 +9,10 @@
  *
  * Also the derived feedback state (open, staged, declined, done) and the Inbox's states
  * (new, open, staged, declined, done) with its staged rows.
+ *
+ * G4: a discussion's section change staged for the next draft (a `next_draft_changes` row)
+ * is listed next to the accepted suggestions, ticked by default, built with them and marked
+ * applied when its section is kept.
  */
 import type { Schemas } from "@/lib/api/client";
 import { wordDiff } from "@/lib/diff";
@@ -33,6 +37,8 @@ type BuiltSection = {
   data_points: { value: string; as_of: string; source: string }[];
   notes: string;
   suggestion_ids: string[];
+  /** G4: the discussions' section changes built into it. */
+  next_draft_change_ids?: string[];
   resolutions: Resolution[];
   preview: Schemas["WordOp"][];
 };
@@ -102,6 +108,31 @@ export function agentItems(ctx: LlmContext, docId: string): Schemas["AgentItem"]
       staged_by_name: memberName(ctx, f.staged_for_agents_by),
       staged_at: f.staged_for_agents_at ?? null,
     }));
+}
+
+/** G4: a discussion's section change waiting for the document's next draft (`next_draft_changes`). */
+export type NextDraftChangeRow = Omit<Schemas["NextDraftChangeOut"], "text" | "reason" | "applied_in_version"> & {
+  text: string | null;
+  reason: string | null;
+  applied_in_version: number | null;
+  discussion_id: string | null;
+  staged_by: string;
+  suggested_by: string | null;
+  created_at: string;
+};
+
+export const PRIVATE_LINE = "From a private discussion";
+
+/** "From discussion <title>", or for a private one the reader is not in, only that. */
+export function originLine(view: Schemas["StagingDiscussion"] | null | undefined): string {
+  return view?.title ? `From discussion ${view.title}` : PRIVATE_LINE;
+}
+
+/** G4: the document's staged next-draft rows, oldest first. */
+export function stagedRows(ctx: LlmContext, docId: string): NextDraftChangeRow[] {
+  return (ctx.db.next_draft_changes ?? [])
+    .filter((r) => r.document_id === docId && r.status === "staged")
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
 type Reason = Schemas["NextDraftReason"];
@@ -193,8 +224,33 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
       section_locked: locked.has(key),
     });
   }
+  const changes: Schemas["StagedDiscussionChange"][] = [];
+  for (const r of stagedRows(ctx, doc.id)) {
+    const section = latest?.sections.find((x) => x.section_key === r.section_key);
+    if (!section && !includeGone) continue;
+    const view = r.discussion_id ? (ctx.discussion?.(r.discussion_id) ?? null) : null;
+    changes.push({
+      id: r.id,
+      source: "next_draft_change",
+      section_key: r.section_key,
+      section_heading: section?.heading ?? r.section_key,
+      instruction: r.instruction,
+      text: r.text,
+      reason: r.reason,
+      origin_line: originLine(view),
+      discussion_id: view?.id ?? null,
+      discussion_title: view?.title ?? null,
+      from_private: r.from_private,
+      staged_by_name: memberName(ctx, r.staged_by),
+      staged_at: r.created_at,
+      raised_on_version: r.raised_on_version,
+      section_gone: !section,
+      section_locked: locked.has(r.section_key),
+      lock_version: r.lock_version,
+    });
+  }
   const job = currentJob(ctx, doc.id);
-  const sections = new Set(items.filter((i) => !i.section_gone).map((i) => i.section_key));
+  const sections = new Set([...items, ...changes].filter((i) => !i.section_gone).map((i) => i.section_key));
   return {
     document_id: doc.id,
     slug: doc.slug,
@@ -205,10 +261,17 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
     estimate_usd: sections.size ? Math.round(sections.size * 0.0312 * 10000) / 10000 : null,
     draft_job: job,
     agent_items: agentItems(ctx, doc.id),
+    next_draft_changes: changes,
   };
 }
 
-type Chosen = { texts: Schemas["StagedChange"][]; agents: Schemas["AgentItem"][]; staged: Schemas["StagedChanges"] };
+type Chosen = {
+  texts: Schemas["StagedChange"][];
+  agents: Schemas["AgentItem"][];
+  /** G4: the discussions' section changes the build takes. */
+  rows: Schemas["StagedDiscussionChange"][];
+  staged: Schemas["StagedChanges"];
+};
 
 /** The staged items a build takes (the API's _chosen), or why not. */
 function chosen(ctx: LlmContext, doc: Doc, input: Schemas["NextDraftIn"]): Chosen | Response {
@@ -219,8 +282,11 @@ function chosen(ctx: LlmContext, doc: Doc, input: Schemas["NextDraftIn"]): Chose
   if (sids && texts.length !== new Set(sids).size) return fail(422, "every suggestion must be a staged (accepted, not applied) change");
   const agents = fids ? all.agent_items.filter((a) => fids.includes(a.feedback_id)) : all.agent_items;
   if (fids && agents.length !== new Set(fids).size) return fail(422, "every feedback item must be staged for the agents");
-  if (!texts.length && !agents.length) return fail(422, "nothing is staged for the next draft");
-  return { texts, agents, staged: all };
+  const nids = input.next_draft_change_ids ?? null;
+  const rows = nids ? all.next_draft_changes.filter((r) => nids.includes(r.id)) : all.next_draft_changes.filter((r) => !r.section_gone);
+  if (nids && rows.length !== new Set(nids).size) return fail(422, "every discussion change must be staged for the next draft");
+  if (!texts.length && !agents.length && !rows.length) return fail(422, "nothing is staged for the next draft");
+  return { texts, agents, rows, staged: all };
 }
 
 /** The run estimate at a depth; the mock's "costly" setting stands in for a bigger run. */
@@ -268,13 +334,15 @@ export function runBatch(ctx: LlmContext, job: Job, v: Version): BatchOutput {
       reason: `the section is not in version ${v.number}`,
     }));
   const usable = used.filter((s) => keys.has(s.section_key ?? ""));
+  const rowIds = (job.input.next_draft_change_ids as string[] | undefined) ?? [];
+  const rows = stagedRows(ctx, job.document_id ?? "").filter((r) => rowIds.includes(r.id) && keys.has(r.section_key));
   const sections: BuiltSection[] = [];
   for (const section of v.sections) {
     const mine = usable.filter((s) => s.section_key === section.section_key);
-    if (!mine.length) continue;
+    const mineRows = rows.filter((r) => r.section_key === section.section_key);
+    if (!mine.length && !mineRows.length) continue;
     const body = strip(
-      mine
-        .map((s) => s.edited_text ?? s.text ?? "")
+      [...mine.map((s) => s.edited_text ?? s.text ?? ""), ...mineRows.map((r) => r.text ?? `${section.body_md}\n\n${r.instruction}`)]
         .filter(Boolean)
         .at(-1) ?? section.body_md,
     );
@@ -288,6 +356,7 @@ export function runBatch(ctx: LlmContext, job: Job, v: Version): BatchOutput {
       data_points: [],
       notes: mine.length === 1 ? "Worked the accepted change in." : `Worked ${mine.length} accepted changes in together.`,
       suggestion_ids: mine.map((s) => s.id),
+      next_draft_change_ids: mineRows.map((r) => r.id),
       resolutions: mine.map((s) => ({
         feedback_id: s.feedback_item_id,
         status: "addressed",
@@ -332,6 +401,13 @@ function preview(ctx: LlmContext, job: Job): Schemas["NextDraftPreview"] {
           data_points: s.data_points,
           resolutions: s.resolutions,
           suggestion_ids: s.suggestion_ids,
+          next_draft_change_ids: s.next_draft_change_ids ?? [],
+          instructions: (s.next_draft_change_ids ?? []).flatMap((id) => {
+            const r = (ctx.db.next_draft_changes ?? []).find((x) => x.id === id);
+            if (!r) return [];
+            const view = r.discussion_id ? (ctx.discussion?.(r.discussion_id) ?? null) : null;
+            return [{ next_draft_change_id: r.id, instruction: r.instruction, text: r.text, origin: originLine(view) }];
+          }),
           feedback: s.resolutions.map((r) => ({
             id: r.feedback_id,
             summary: ctx.feedback.find((f) => f.id === r.feedback_id)?.summary ?? "",
@@ -374,21 +450,21 @@ export async function nextDraftRoute(
     const estimate = engine === "agents" ? runEstimate(ctx, input.depth ?? "standard") : null;
     const latest = latestOf(ctx, doc.id);
     const locked = new Set(latest ? ctx.lockedKeys(latest) : []);
-    const hit = c.texts.filter((t) => locked.has(t.section_key));
+    const hit = [...c.texts, ...c.rows].filter((t) => locked.has(t.section_key));
     const refused =
       engine === "agents"
         ? null
         : !enabled(doc)
           ? "Refinement is turned off for this document"
           : hit.length
-            ? `approved and locked, never changed: ${hit.map((t) => `${t.section_heading} (${t.section_key})`).join(", ")}; untick them`
+            ? `approved and locked, never changed: ${[...new Set(hit.map((t) => `${t.section_heading} (${t.section_key})`))].join(", ")}; untick them`
             : null;
     return json(200, {
       engine,
       why,
-      text_changes: c.texts.length,
+      text_changes: c.texts.length + c.rows.length,
       agent_items: c.agents.length,
-      sections: new Set(c.texts.map((t) => t.section_key)).size,
+      sections: new Set([...c.texts, ...c.rows].map((t) => t.section_key)).size,
       next_version: c.staged.next_version,
       needs_owner_approval: estimate != null && estimate > OWNER_APPROVAL_USD,
       estimate_usd: estimate,
@@ -435,22 +511,22 @@ export async function nextDraftRoute(
     if (ids && rows.length !== new Set(ids).size)
       return fail(422, "every suggestion must be a staged (accepted, not applied) change");
     const keys = new Set(latest.sections.map((s) => s.section_key));
-    const gone = rows.filter((s) => !keys.has(s.section_key ?? ""));
+    // Named items whose section is gone are refused; by default they are left out.
+    const gone = new Set(ids ? rows.filter((s) => !keys.has(s.section_key ?? "")).map((s) => s.section_key ?? "?") : []);
+    if (input.next_draft_change_ids) for (const r of c.rows) if (!keys.has(r.section_key)) gone.add(r.section_key);
     if (!ids) rows = rows.filter((s) => keys.has(s.section_key ?? ""));
-    else if (gone.length)
-      return fail(
-        422,
-        `section(s) ${gone.map((s) => s.section_key).join(", ")} are no longer in version ${latest.number}; untick them`,
-      );
-    if (!rows.length) return fail(422, "nothing is staged for the next draft");
+    if (gone.size) return fail(422, `section(s) ${[...gone].join(", ")} are no longer in version ${latest.number}; untick them`);
+    const nd = c.rows.filter((r) => keys.has(r.section_key));
+    if (!rows.length && !nd.length) return fail(422, "nothing is staged for the next draft");
     const locked = new Set(ctx.lockedKeys(latest));
-    const hit = latest.sections.filter((s) => locked.has(s.section_key) && rows.some((r) => r.section_key === s.section_key));
+    const touched = new Set([...rows.map((r) => r.section_key ?? ""), ...nd.map((r) => r.section_key)]);
+    const hit = latest.sections.filter((s) => locked.has(s.section_key) && touched.has(s.section_key));
     if (hit.length)
       return fail(
         409,
         `approved and locked, never changed: ${hit.map((s) => `${s.heading} (${s.section_key})`).join(", ")}; untick them`,
       );
-    const job = makeJob(doc, latest, { suggestion_ids: rows.map((r) => r.id) });
+    const job = makeJob(doc, latest, { suggestion_ids: rows.map((r) => r.id), next_draft_change_ids: nd.map((r) => r.id) });
     ctx.db.jobs.push(job);
     return json(201, job);
   }
@@ -507,6 +583,10 @@ export async function nextDraftRoute(
       if (used.includes(s) || dupe)
         Object.assign(s, { status: "applied", applied_in_version: next.number, updated_at: ctx.now() });
     }
+    // G4: the discussions' changes built into the kept sections are applied.
+    const builtRows = new Set(kept.flatMap((k) => k.next_draft_change_ids ?? []));
+    for (const r of ctx.db.next_draft_changes ?? [])
+      if (builtRows.has(r.id) && r.status === "staged") Object.assign(r, { status: "applied", applied_in_version: next.number });
     hooks.onImported(doc, next);
     return json(201, { number: next.number, document_id: doc.id, id: next.id });
   }

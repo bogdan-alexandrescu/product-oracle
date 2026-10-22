@@ -663,6 +663,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/staging": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Staging
+         * @description Everything staged for one target, from every origin: for a document, the accepted
+         *     review suggestions (C1e) and the section changes staged from discussions; for a
+         *     checkpoint, its shared draft's actions from rows and from discussions. A row from a
+         *     private discussion the caller is not in names no discussion.
+         */
+        get: operations["list_staging"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/next-draft-changes/{change_id}/unstage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unstage Next Draft Change
+         * @description Take a discussion's section change out of the next draft; its discussion change
+         *     goes back to the discussion. 409 "Already in draft <n>" once applied.
+         */
+        post: operations["unstage_next_draft_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{doc}/versions/{n}/section-states": {
         parameters: {
             query?: never;
@@ -18655,6 +18699,46 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /**
+         * NextDraftChangeOut
+         * @description A discussion's section change waiting for the document's next draft.
+         */
+        NextDraftChangeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Section Key */
+            section_key: string;
+            /** Raised On Version */
+            raised_on_version: number;
+            /** Instruction */
+            instruction: string;
+            /** Text */
+            text?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "staged" | "unstaged" | "applied" | "superseded";
+            /** Applied In Version */
+            applied_in_version?: number | null;
+            /**
+             * From Private
+             * @default false
+             */
+            from_private: boolean;
+            /** Lock Version */
+            lock_version: number;
+        };
         /** NextDraftDataPoint */
         NextDraftDataPoint: {
             /** Value */
@@ -18686,6 +18770,25 @@ export interface components {
             suggestion_ids?: string[] | null;
             /** Feedback Ids */
             feedback_ids?: string[] | null;
+            /** Next Draft Change Ids */
+            next_draft_change_ids?: string[] | null;
+        };
+        /**
+         * NextDraftInstruction
+         * @description G4: a discussion's change the section was built with.
+         */
+        NextDraftInstruction: {
+            /**
+             * Next Draft Change Id
+             * Format: uuid
+             */
+            next_draft_change_id: string;
+            /** Instruction */
+            instruction: string;
+            /** Text */
+            text?: string | null;
+            /** Origin */
+            origin: string;
         };
         /**
          * NextDraftPlan
@@ -18729,6 +18832,8 @@ export interface components {
             suggestion_ids?: string[] | null;
             /** Feedback Ids */
             feedback_ids?: string[] | null;
+            /** Next Draft Change Ids */
+            next_draft_change_ids?: string[] | null;
             /**
              * Depth
              * @default standard
@@ -18822,6 +18927,8 @@ export interface components {
             suggestion_ids?: string[] | null;
             /** Feedback Ids */
             feedback_ids?: string[] | null;
+            /** Next Draft Change Ids */
+            next_draft_change_ids?: string[] | null;
             /**
              * Depth
              * @default standard
@@ -18873,6 +18980,16 @@ export interface components {
              * @default []
              */
             feedback: components["schemas"]["NextDraftFeedback"][];
+            /**
+             * Next Draft Change Ids
+             * @default []
+             */
+            next_draft_change_ids: string[];
+            /**
+             * Instructions
+             * @default []
+             */
+            instructions: components["schemas"]["NextDraftInstruction"][];
         };
         /** NextMilestone */
         NextMilestone: {
@@ -24758,6 +24875,203 @@ export interface components {
              * @default []
              */
             agent_items: components["schemas"]["AgentItem"][];
+            /**
+             * Next Draft Changes
+             * @default []
+             */
+            next_draft_changes: components["schemas"]["StagedDiscussionChange"][];
+        };
+        /**
+         * StagedDiscussionChange
+         * @description G4: a discussion's section change staged for the next draft (``next_draft_changes``).
+         */
+        StagedDiscussionChange: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Source
+             * @default next_draft_change
+             * @constant
+             */
+            source: "next_draft_change";
+            /** Section Key */
+            section_key: string;
+            /** Section Heading */
+            section_heading: string;
+            /** Instruction */
+            instruction: string;
+            /** Text */
+            text?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Origin Line */
+            origin_line: string;
+            /** Discussion Id */
+            discussion_id?: string | null;
+            /** Discussion Title */
+            discussion_title?: string | null;
+            /**
+             * From Private
+             * @default false
+             */
+            from_private: boolean;
+            /** Staged By Name */
+            staged_by_name?: string | null;
+            /** Staged At */
+            staged_at?: string | null;
+            /** Raised On Version */
+            raised_on_version: number;
+            /**
+             * Section Gone
+             * @default false
+             */
+            section_gone: boolean;
+            /**
+             * Section Locked
+             * @default false
+             */
+            section_locked: boolean;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** StagingCounts */
+        StagingCounts: {
+            /**
+             * Staged
+             * @default 0
+             */
+            staged: number;
+            /**
+             * Suggested
+             * @default 0
+             */
+            suggested: number;
+        };
+        /**
+         * StagingDiscussion
+         * @description The discussion a row came from. For a private discussion the reader is not in, only
+         *     that it is private: ``id`` and ``title`` are null. ``private`` is its visibility now.
+         */
+        StagingDiscussion: {
+            /** Id */
+            id?: string | null;
+            /** Title */
+            title?: string | null;
+            /**
+             * Private
+             * @default false
+             */
+            private: boolean;
+        };
+        /** StagingItem */
+        StagingItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "suggestion" | "next_draft_change" | "checkpoint_action";
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Item Key */
+            item_key?: string | null;
+            /** Section Key */
+            section_key?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            };
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "staged" | "suggested";
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "row" | "discussion" | "review";
+            discussion?: components["schemas"]["StagingDiscussion"] | null;
+            /**
+             * From Private
+             * @default false
+             */
+            from_private: boolean;
+            /** Origin Line */
+            origin_line?: string | null;
+            staged_by?: components["schemas"]["StagingPerson"] | null;
+            suggested_by?: components["schemas"]["StagingPerson"] | null;
+            /** At */
+            at?: string | null;
+            /**
+             * Section Gone
+             * @default false
+             */
+            section_gone: boolean;
+            /**
+             * Section Locked
+             * @default false
+             */
+            section_locked: boolean;
+            /** Lock Version */
+            lock_version?: number | null;
+        };
+        /** StagingList */
+        StagingList: {
+            target: components["schemas"]["StagingTarget"];
+            /** Items */
+            items: components["schemas"]["StagingItem"][];
+            counts: components["schemas"]["StagingCounts"];
+            /** Revision */
+            revision?: number | null;
+            /**
+             * Can Stage
+             * @default false
+             */
+            can_stage: boolean;
+        };
+        /** StagingPerson */
+        StagingPerson: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+        };
+        /** StagingTarget */
+        StagingTarget: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "document" | "checkpoint";
+            /** Label */
+            label: string;
+            /** Document Id */
+            document_id?: string | null;
+            /** Slug */
+            slug?: string | null;
+            /** Next Version */
+            next_version?: number | null;
+            /** Run Id */
+            run_id?: string | null;
+            /** Checkpoint Id */
+            checkpoint_id?: string | null;
+            /** Checkpoint Kind */
+            checkpoint_kind?: string | null;
         };
         /** StakeholderAnswerOut */
         StakeholderAnswerOut: {
@@ -26921,6 +27235,11 @@ export interface components {
              */
             status: "unavailable" | "skipped" | "flagged" | "limited";
         };
+        /** UnstageIn */
+        UnstageIn: {
+            /** Lock Version */
+            lock_version: number;
+        };
         /**
          * UpdatePeriod
          * @description The period an update covers (its latest version's front matter ``period``).
@@ -28926,6 +29245,75 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_staging: {
+        parameters: {
+            query?: {
+                /** @description A document's slug */
+                document?: string | null;
+                /** @description A checkpoint's id */
+                checkpoint?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StagingList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unstage_next_draft_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnstageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextDraftChangeOut"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -24,6 +24,7 @@ import {
   type ChipKind,
 } from "@/components/ds";
 import { DiscussSubject } from "@/components/discuss/StartDiscussion";
+import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime, formatDayUtc } from "@/lib/format";
@@ -781,6 +782,8 @@ function SegmentItem({
             </p>
           )}
           {s.items_check && <ItemsCheckLine check={s.items_check} draft={draftActs} />}
+          {/* G4: everything staged at the waiting checkpoint, from rows and discussions. */}
+          {waitingCp && shared && <StagingBar runId={run.id} checkpointId={waitingCp.id} revision={shared.revision} />}
           {shared && deciding.length === 0 && <SharedDraftLine review={shared} />}
           {sentReviews.map((cp) => (
             <SentReviewLine key={cp.id} runId={run.id} cp={cp} />

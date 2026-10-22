@@ -10,6 +10,7 @@ every open item is new.
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -198,6 +199,19 @@ async def staged_rows(db: AsyncSession) -> list[InboxStaged]:
         ).all()
     )
     doc_ids |= set(agents)
+    # G4: the discussions' section changes staged for the next draft count with them.
+    from oracle.staging.models import NextDraftChange
+
+    discussed: dict[Any, list[str]] = {}
+    for doc_id, key in (
+        await db.execute(
+            select(NextDraftChange.document_id, NextDraftChange.section_key).where(
+                NextDraftChange.status == "staged"
+            )
+        )
+    ).all():
+        discussed.setdefault(doc_id, []).append(key)
+    doc_ids |= set(discussed)
     if not doc_ids:
         return []
     latest = await latest_numbers(db, doc_ids)
@@ -215,6 +229,8 @@ async def staged_rows(db: AsyncSession) -> list[InboxStaged]:
                 )
             )
         buildable = [r for r in rows if r.section_key in keys]
+        sections = discussed.get(d.id, [])
+        built_rows = [k for k in sections if k in keys]
         job = await current_job(db, d.id)
         out.append(
             InboxStaged(
@@ -223,8 +239,8 @@ async def staged_rows(db: AsyncSession) -> list[InboxStaged]:
                 title=d.title,
                 latest_version=number,
                 next_version=(number or 0) + 1,
-                count=len(buildable) + agents.get(d.id, 0),
-                gone_count=len(rows) - len(buildable),
+                count=len(buildable) + len(built_rows) + agents.get(d.id, 0),
+                gone_count=len(rows) - len(buildable) + len(sections) - len(built_rows),
                 draft_job_id=job.id if job else None,
                 draft_job_status=job.status if job else None,
             )
