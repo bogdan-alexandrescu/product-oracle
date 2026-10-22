@@ -106,6 +106,18 @@ DECISIONS_TASK = (
     "the draft departs from a decided call, say so and name its D-number."
 )
 
+# #306 Named codes: every step's text (draft sections, proposals, notes for a checkpoint)
+# reads well on its own, in the app and in exports.
+NAMED_CODES = (
+    "Codes: the first time a section or note uses a code (a feature, requirement, goal, "
+    "decision or milestone key), write it with its name: F-28 Retire the legacy deploy "
+    "path, not F-28; later mentions in the same section may use the code alone. Write "
+    "three or more codes as a list, one per line, each with its name, never as a "
+    "comma-separated run of codes. Title a milestone section with its dates, e.g. "
+    "M1 · Oct 19 – Nov 13, not just M1. Never invent a code to stand for something; a "
+    "thing without a code goes by its name."
+)
+
 
 @dataclass(frozen=True)
 class AgentRole:
@@ -1069,6 +1081,7 @@ def step_prompt(
         "(0-1). Weigh evidence by its confidence, prefer the higher-confidence source when "
         "two disagree, and flag every claim whose best evidence is below "
         f"{ctx.low_confidence:g} as low confidence instead of stating it as fact.",
+        NAMED_CODES,
     ]
     if last:
         lines.append(
