@@ -1,0 +1,126 @@
+import { expect, test, type Page } from "@playwright/test";
+
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { RUN_REVIEW_RUN } from "../lib/api/mock/runs";
+import { login, openSection } from "./helpers";
+
+/**
+ * D10 One review place: a run's PRD review is decided in the version its draft made. Decide
+ * (Inbox, runs list) opens the version with the run review bar; the run page only links to
+ * it. On the mock layer ("run-review" scenario: a Baseline to PRD run waiting at its PRD
+ * review of usage-alerts v2, three sections), driven as a person would. Each test states its
+ * card: protects / fails_when / no_claim.
+ */
+
+const VERSION = "/documents/usage-alerts/v/2";
+const KEYS = ["title", "behaviour", "metrics"];
+const bar = (page: Page) => page.getByTestId("run-review-bar").filter({ visible: true });
+const barText = (page: Page) => bar(page).getByTestId("run-review-text");
+
+async function start(page: Page, email?: string) {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "run-review"]);
+  await login(page, email);
+}
+
+async function approveSection(page: Page, key: string) {
+  const review = (await openSection(page, key)).getByTestId("review-bar");
+  await review.getByRole("button", { name: "Approve" }).click();
+  await review.getByRole("button", { name: /^Save/ }).click();
+  await expect(review.getByTestId("verdict-state")).toContainText("Approved");
+}
+
+test("Decide in the Inbox and the runs list opens the version with the run review bar", async ({ page }) => {
+  // protects=AC2, Decide lands in the version; fails_when=Decide opens the run page or the bar
+  // misreads the review; no_claim=the API's matching rule (api/tests/test_run_review_link.py).
+  await start(page);
+  await page.goto("/inbox");
+  const row = page.getByTestId("inbox-checkpoints").locator("tr[data-row]").filter({ hasText: "usage-alerts" });
+  await row.getByRole("link", { name: "Decide" }).click();
+  await expect(page).toHaveURL(new RegExp(`${VERSION}\\?run_review=`));
+  await expect(barText(page)).toHaveText("Run review · Baseline to PRD · draft v2 · 0 of 3 sections reviewed");
+
+  await page.goto("/runs");
+  const listed = page.getByRole("row").filter({ hasText: "usage-alerts" }).filter({ has: page.getByRole("button", { name: "Decide" }) });
+  await listed.getByRole("button", { name: "Decide" }).click();
+  await expect(page).toHaveURL(new RegExp(`${VERSION}\\?run_review=`));
+  await expect(bar(page)).toBeVisible();
+});
+
+test("approving the last section approves the run review", async ({ page }) => {
+  // protects=AC3, the review decides it on its own; fails_when=the run still waits once every
+  // section is approved; no_claim=the audit's via (API test).
+  await start(page);
+  await page.goto(VERSION);
+  for (const key of KEYS.slice(0, -1)) await approveSection(page, key);
+  await expect(barText(page)).toContainText("2 of 3 sections reviewed");
+  await expect(bar(page).getByRole("button", { name: "Approve draft" })).toBeVisible();
+  await approveSection(page, KEYS[KEYS.length - 1]);
+  await expect(barText(page)).toContainText("3 of 3 sections reviewed · Approved");
+  await expect(bar(page).getByRole("button", { name: "Approve draft" })).toHaveCount(0);
+  await page.goto(`/runs/${RUN_REVIEW_RUN}`);
+  await expect(page.getByTestId("run-status").filter({ visible: true })).toHaveText("Succeeded");
+});
+
+test("Approve draft with unreviewed sections asks once, naming how many; Cancel decides nothing", async ({ page }) => {
+  // protects=AC5, the "Unreviewed" decision (allowed, with a confirmation); fails_when=no
+  // confirmation, a wrong count, Cancel decides, or the sections lose their state;
+  // no_claim=F4's Engineering dates continuation.
+  await start(page);
+  await page.goto(VERSION);
+  await approveSection(page, "title");
+  await bar(page).getByRole("button", { name: "Approve draft" }).click();
+  const confirm = bar(page).getByRole("group", { name: "Confirm Approve draft" });
+  await expect(confirm).toContainText("2 sections aren't reviewed yet. The run's review ends; they stay open for review and the next draft.");
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(barText(page)).not.toContainText("Approved");
+
+  await bar(page).getByRole("button", { name: "Approve draft" }).click();
+  await bar(page).getByRole("group", { name: "Confirm Approve draft" }).getByRole("button", { name: "Approve draft" }).click();
+  await expect(barText(page)).toContainText("1 of 3 sections reviewed · Approved");
+  // The unreviewed sections keep their state.
+  await expect((await openSection(page, "metrics")).getByTestId("verdict-state")).toHaveText("Not reviewed");
+});
+
+test("Send back lists what goes, refuses an empty send-back and sends a note", async ({ page }) => {
+  // protects=AC6/AC7 (UI part), the document's feedback is the change request; fails_when=the
+  // counts are wrong, nothing open is sent, or a note alone is refused; no_claim=the review
+  // file's content and workflow findings (API tests).
+  await start(page);
+  await page.goto(VERSION);
+  await bar(page).getByRole("button", { name: "Send back to agents" }).click();
+  const sheet = page.getByTestId("send-back-sheet");
+  await expect(sheet.getByTestId("send-back-counts")).toHaveText(
+    "0 open feedback items · 0 staged changes · 0 sections with Request changes or Reject",
+  );
+  await sheet.getByRole("button", { name: "Send back", exact: true }).click();
+  await expect(sheet.getByRole("alert")).toContainText("Nothing to send back");
+  await sheet.getByLabel("Note to the agents (optional)").fill("Name who receives the alerts.");
+  await sheet.getByRole("button", { name: "Send back", exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(barText(page)).toContainText("Sent back to agents");
+});
+
+test("the run page waits for the review in the version, with no note box", async ({ page }) => {
+  // protects=AC8, one review place; fails_when=the run page still decides the PRD review;
+  // no_claim=a draft refused at import (web/e2e/runs-sent-back.spec.ts keeps that).
+  await start(page);
+  await page.goto(`/runs/${RUN_REVIEW_RUN}`);
+  const panel = page.getByTestId("checkpoint-prd_review").filter({ visible: true });
+  await expect(panel.getByTestId("run-review-summary")).toHaveText("Waiting for review of v2 · 0/3 sections reviewed");
+  await expect(panel.getByRole("textbox")).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "Approve" })).toHaveCount(0);
+  await panel.getByRole("link", { name: "Open review" }).click();
+  await expect(page).toHaveURL(new RegExp(`${VERSION}\\?run_review=`));
+  await expect(bar(page)).toBeVisible();
+});
+
+test("a commenter reads the run review without deciding it", async ({ page }) => {
+  // protects=AC11, approvers decide; fails_when=a commenter sees Approve draft or Send back;
+  // no_claim=the API's 403 on decide.
+  await start(page, "commenter@example.com");
+  await page.goto(VERSION);
+  await expect(barText(page)).toHaveText("Run review · Baseline to PRD · draft v2 · 0 of 3 sections reviewed");
+  await expect(bar(page)).toContainText("An approver decides");
+  await expect(bar(page).getByRole("button")).toHaveCount(0);
+});
