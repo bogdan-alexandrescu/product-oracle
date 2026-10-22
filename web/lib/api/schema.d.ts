@@ -3023,8 +3023,10 @@ export interface paths {
         };
         /**
          * List Fireflies Series
-         * @description Your meetings grouped into their calendar series, with counts and the last date
-         *     (from/to: whole days in UTC). Meetings on no calendar are in no series.
+         * @description Your meetings grouped into their calendar series, with counts, the last date and
+         *     the same-title meetings outside each (from/to: whole days in UTC). Every page of the
+         *     window is read, one browse call each, until the budget stops it (truncated).
+         *     Meetings on no calendar are in no series.
          */
         get: operations["list_fireflies_series"];
         put?: never;
@@ -15152,12 +15154,23 @@ export interface components {
             /** Next Cursor */
             next_cursor: string | null;
         };
+        /** FirefliesSameTitleOut */
+        FirefliesSameTitleOut: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Date */
+            date: string | null;
+        };
         /** FirefliesSeriesList */
         FirefliesSeriesList: {
             /** Series */
             series: components["schemas"]["FirefliesSeriesOut"][];
             /** Truncated */
             truncated: boolean;
+            /** Scanned */
+            scanned: number;
         };
         /** FirefliesSeriesOut */
         FirefliesSeriesOut: {
@@ -15171,6 +15184,8 @@ export interface components {
             last_date: string | null;
             /** Organizer */
             organizer: string | null;
+            /** Same Title */
+            same_title: components["schemas"]["FirefliesSameTitleOut"][];
         };
         /**
          * FixAction

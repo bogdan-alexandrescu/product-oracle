@@ -265,10 +265,21 @@ export function FirefliesPicker({
     const rows = listed.filter((s) => s.meeting_count > 1 || pickedSeries.has(s.key));
     const shown = new Set(rows.map((s) => s.key));
     for (const key of value.series) {
-      if (!shown.has(key)) rows.push({ key, title: labels[key] ?? "Picked series", meeting_count: 0, last_date: null, organizer: null });
+      if (!shown.has(key)) rows.push({ key, title: labels[key] ?? "Picked series", meeting_count: 0, last_date: null, organizer: null, same_title: [] });
     }
     return rows;
   }, [series.data, pickedSeries, value.series, labels]);
+
+  // Picked series with same-title meetings outside them (a reschedule, a one-off copy)
+  // that are not picked: picking the series does not take them.
+  const sameTitle = useMemo(
+    () =>
+      seriesRows
+        .filter((s) => pickedSeries.has(s.key))
+        .map((s) => ({ series: s, missing: s.same_title.filter((m) => !pickedMeetings.has(m.id)) }))
+        .filter((o) => o.missing.length > 0),
+    [seriesRows, pickedSeries, pickedMeetings],
+  );
 
   const groups = useMemo(() => {
     const byDay = new Map<string, Meeting[]>();
@@ -292,6 +303,14 @@ export function FirefliesPicker({
       series: nextSeries,
       meetings: on ? value.meetings.filter((id) => !covered.has(id)) : value.meetings,
       labels: { ...labels, [s.key]: s.title.slice(0, MAX_LABEL) },
+    });
+  }
+
+  function tickSameTitle(missing: { id: string; title: string }[]) {
+    const room = missing.slice(0, Math.max(0, MAX_MEETINGS - value.meetings.length));
+    set({
+      meetings: [...value.meetings, ...room.map((m) => m.id)],
+      labels: { ...labels, ...Object.fromEntries(room.map((m) => [m.id, m.title.slice(0, MAX_LABEL)])) },
     });
   }
 
@@ -390,6 +409,26 @@ export function FirefliesPicker({
             )}
             {!series.data && !series.error && <span className="block h-11 animate-pulse rounded-button bg-surface2" aria-busy />}
             {series.data && seriesRows.length === 0 && <p className="px-1 text-[15px] text-text2">No recurring meetings</p>}
+            {series.data?.truncated && (
+              <Notice testId="fireflies-series-partial" tone="warn">
+                Counts cover the newest {series.data.scanned.toLocaleString("en-US")} meetings: browsing reached its Fireflies
+                limit before the end of these dates. Narrow From and To to count them all.
+              </Notice>
+            )}
+            {sameTitle.map(({ series: s, missing }) => (
+              <Notice
+                key={s.key}
+                testId="fireflies-same-title"
+                action={
+                  <Button onClick={() => tickSameTitle(missing)} disabled={meetingsFull}>
+                    Also tick them
+                  </Button>
+                }
+              >
+                {missing.length} meeting{missing.length === 1 ? "" : "s"} titled “{s.title}” {missing.length === 1 ? "is" : "are"}{" "}
+                outside this series in these dates.
+              </Notice>
+            ))}
             {seriesFull && (
               <Notice testId="fireflies-series-cap">
                 {MAX_SERIES} series picked, the most a source takes: unpick one to pick another.

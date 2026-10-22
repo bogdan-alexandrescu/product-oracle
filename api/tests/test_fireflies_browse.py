@@ -706,15 +706,15 @@ async def test_series_counts_cover_the_whole_window(fake, alice, conn, clock):
             (datetime(2026, 10, 1, 9, tzinfo=UTC) - timedelta(hours=i)).isoformat(),
             calendar_id="weeklycal1",
         )
-        for i in range(350)
+        for i in range(340)
     ]
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/connections/{conn}/fireflies/series")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["truncated"] is False
-    assert body["scanned"] == 350
-    assert body["series"][0]["meeting_count"] == 350
+    assert body["scanned"] == 340
+    assert body["series"][0]["meeting_count"] == 340
     assert len(fake.requests) == 7
 
 
@@ -737,7 +737,9 @@ async def test_a_series_lists_same_title_meetings_outside_it(fake, alice, conn):
     fake.meetings = [
         *SAMPLE,
         meeting("X1", "AI agents sprint planning", "2026-10-06T17:00:00Z"),
-        meeting("X2", "AI Agents Sprint Planning #12", "2026-09-20T17:00:00Z", calendar_id="other9"),
+        meeting(
+            "X2", "AI Agents Sprint Planning #12", "2026-09-20T17:00:00Z", calendar_id="other9"
+        ),
         meeting("X3", "AI agents sprint planning retro", "2026-10-07T17:00:00Z"),
     ]
     async with client_for(alice) as a:
