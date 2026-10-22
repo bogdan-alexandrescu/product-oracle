@@ -132,8 +132,9 @@ async def test_a_run_started_from_an_intake_reads_its_pinned_snapshot(client, ru
     run = resp.json()
     assert run["status"] == "draft" and run["flow"] == "baseline_to_prd"
     assert runtime.submitted == []
+    # A draft run starts nothing: the brief is converted when its run starts (C4).
     intake = (await client.get(f"/v1/intakes/{intake_id}", headers=ctx.as_("viewer"))).json()
-    assert intake["status"] == "converted"
+    assert intake["status"] != "converted"
 
     # A sync after the pin, then the run starts: it keeps the intake's snapshot.
     await make_item(ctx, "commenter", content="A newer thread")
@@ -143,6 +144,8 @@ async def test_a_run_started_from_an_intake_reads_its_pinned_snapshot(client, ru
     ).status_code == 200
     resp = await client.post(f"/v1/runs/{run['id']}/start", headers=approver)
     assert resp.status_code == 200, resp.text
+    intake = (await client.get(f"/v1/intakes/{intake_id}", headers=ctx.as_("viewer"))).json()
+    assert intake["status"] == "converted"
     async with tenant_session(ctx.tenant_id) as s:
         row = await s.get(Run, uuid.UUID(run["id"]))
         assert str(row.snapshot_id) == pinned

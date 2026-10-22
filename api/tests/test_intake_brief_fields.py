@@ -9,7 +9,8 @@ Card (test_brief_goals_answer_gap and the tests below):
 - fails_when: Oracle asks the goal or non-goals question again in the first batch, a
   non-owner clears a critical gap (B4), an unconfirmed goal or a roadmap template is
   accepted or leaves a half-made intake, a converted intake's brief fields change, or a
-  second POST /v1/intakes/{id}/runs makes a second draft run.
+  second POST /v1/intakes/{id}/runs makes a second draft run, or creating or estimating
+  the draft run converts the brief (only starting it does).
 - no_claim: goal quality, the wording of the questions, or the web sheet itself.
 
 Synthetic placeholders only.
@@ -218,8 +219,10 @@ async def test_patching_the_brief_fields_answers_again(client):
 
 async def test_estimating_twice_leaves_one_draft_run_and_a_converted_brief_is_409(client, runtime):
     """Criterion 6: reopening the sheet after an estimate posts the intake's run again;
-    the one draft run is updated, not doubled (run_ids length 1). Once converted the
-    brief fields are refused with 409."""
+    the one draft run is updated, not doubled (run_ids length 1). An estimate converts
+    nothing: the brief stays open (Draft with Oracle, PRDs > Ideas) and its fields stay
+    editable until the run starts. Once started it is converted and its brief fields are
+    refused with 409."""
     ctx = await company()
     out = await create_intake(client, ctx, who="approver", template="one-pager")
     intake_id = out["intake"]["id"]
@@ -230,6 +233,20 @@ async def test_estimating_twice_leaves_one_draft_run_and_a_converted_brief_is_40
     assert (
         await client.post(f"/v1/runs/{first['id']}/estimate", headers=approver)
     ).status_code == 200
+    intake = (await client.get(f"/v1/intakes/{intake_id}", headers=ctx.as_("viewer"))).json()
+    # The estimate started nothing: the brief is not converted and links no PRD yet.
+    assert intake["status"] != "converted"
+    assert intake["document_id"] is None
+    resp = await client.patch(
+        f"/v1/intakes/{intake_id}",
+        json={"lock_version": intake["lock_version"], "out_of_scope": ["Gift wrapping"]},
+        headers=approver,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["out_of_scope"] == ["Gift wrapping"]
+    assert resp.json()["run_ids"] == [first["id"]]
+
+    # Reopening the sheet: the same draft run takes the new choices.
     resp = await client.post(
         f"/v1/intakes/{intake_id}/runs",
         json={"knobs": {"depth": "deep"}, "template": "prd-rfc"},
@@ -238,10 +255,17 @@ async def test_estimating_twice_leaves_one_draft_run_and_a_converted_brief_is_40
     assert resp.status_code in (200, 201), resp.text
     second = resp.json()
     assert second["id"] == first["id"]
+    assert second["status"] == "draft"
     assert second["knobs"]["depth"] == "deep" and second["template"] == "prd-rfc"
     assert (
         await client.post(f"/v1/runs/{first['id']}/estimate", headers=approver)
     ).status_code == 200
+    intake = (await client.get(f"/v1/intakes/{intake_id}", headers=ctx.as_("viewer"))).json()
+    assert intake["status"] != "converted"
+
+    # Starting the run converts the brief.
+    resp = await client.post(f"/v1/runs/{first['id']}/start", headers=approver)
+    assert resp.status_code == 200, resp.text
     intake = (await client.get(f"/v1/intakes/{intake_id}", headers=ctx.as_("viewer"))).json()
     assert intake["status"] == "converted"
     resp = await client.patch(
@@ -253,7 +277,7 @@ async def test_estimating_twice_leaves_one_draft_run_and_a_converted_brief_is_40
     assert resp.json()["run_ids"] == [first["id"]]
     resp = await client.patch(
         f"/v1/intakes/{intake_id}",
-        json={"lock_version": resp.json()["lock_version"], "out_of_scope": ["Gift wrapping"]},
+        json={"lock_version": resp.json()["lock_version"], "out_of_scope": ["Gift cards"]},
         headers=approver,
     )
     assert resp.status_code == 409, resp.text

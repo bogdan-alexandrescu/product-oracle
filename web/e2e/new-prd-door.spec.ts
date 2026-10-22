@@ -15,6 +15,11 @@ import { login, signOut } from "./helpers";
  *   and one draft run per intake however often it is re-estimated; fails_when=reuse is not the
  *   default, Rebuild does not raise the estimate by the baseline segment, the stop shows while
  *   reusing, or re-estimating makes a second run; no_claim=the API's 30-day rule.
+ * - "reopen after an estimate" (criterion 6): protects=an estimate starts nothing, so the brief
+ *   keeps Draft with Oracle, stays in PRDs › Ideas and editable, and reopening the sheet takes
+ *   up the same draft run with its choices; fails_when=the button is gone after a reload, the
+ *   brief leaves Ideas, the sheet forgets the run's choices, or starting makes a second run;
+ *   no_claim=the API's 409 on a converted brief (test_intake_brief_fields.py).
  * - "stale baseline" (criterion 8d): protects=a baseline that cannot be reused offers no reuse;
  *   fails_when=the reuse choice shows, or the reason is missing from the tooltip;
  *   no_claim=the other two reasons.
@@ -136,6 +141,46 @@ test("baseline choice: reuse is preselected; Rebuild costs the baseline segment 
   await page.getByTestId("nav-runs").filter({ visible: true }).first().click();
   await expect(page.getByTestId("run-row")).toHaveCount(6);
   await expect(page.getByTestId("run-row").filter({ hasText: "faster-repeat-checkout" })).toHaveCount(1);
+});
+
+test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet takes up the same draft run", async ({ page }) => {
+  await login(page, "approver@example.com");
+  await openDoor(page);
+  await writeBrief(page, "Saved addresses for guests");
+  const id = await continueToIntake(page);
+  await page.getByRole("button", { name: "Draft with Oracle" }).click();
+  await sheet(page).getByRole("button", { name: "Estimate" }).click();
+  await expect(estimate(page)).toHaveText("Estimated $19.50");
+  await sheet(page).getByRole("radio", { name: "Rebuild it ($7.00)" }).check();
+  await expect(estimate(page)).toHaveText("Estimated $26.50");
+  await sheet(page).getByRole("button", { name: "Close Draft with Oracle" }).click();
+  await expect(sheet(page)).toHaveCount(0);
+
+  // Nothing started: after a reload the brief is still open, editable and in PRDs › Ideas.
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved addresses for guests" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Draft with Oracle" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "More actions" })).toBeVisible();
+  await page.goto("/documents");
+  await page.getByRole("button", { name: /^Ideas\s*\d+$/ }).click();
+  const row = page.getByTestId("idea-row").filter({ hasText: "Saved addresses for guests" });
+  await row.getByRole("link", { name: "Saved addresses for guests" }).click();
+  await expect(page).toHaveURL(new RegExp(`/intakes/${id}$`));
+
+  // Reopening takes up the draft run: its choices and its estimate, not a fresh sheet.
+  await page.getByRole("button", { name: "Draft with Oracle" }).click();
+  await expect(sheet(page).getByRole("radio", { name: "Rebuild it ($7.00)" })).toBeChecked();
+  await expect(estimate(page)).toHaveText("Estimated $26.50");
+  await sheet(page).getByRole("button", { name: "Start drafting" }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  await page.getByTestId("nav-runs").filter({ visible: true }).first().click();
+  await expect(page.getByTestId("run-row").filter({ hasText: "saved-addresses-for-guests" })).toHaveCount(1);
+
+  // Started: the brief is drafting, so Draft with Oracle is gone.
+  await page.goto(`/intakes/${id}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Saved addresses for guests" })).toBeVisible();
+  await expect(page.getByTestId("intake-status-link")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Draft with Oracle" })).toHaveCount(0);
 });
 
 test("stale baseline: only 'Oracle rebuilds the baseline first', with the reason in its tooltip", async ({ page }) => {

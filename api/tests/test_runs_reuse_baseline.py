@@ -60,9 +60,11 @@ async def review(ctx, days_ago: float, flow: str = "baseline") -> tuple[uuid.UUI
         return cp.id, at
 
 
-async def build(ctx, flow: str, status: str, checkpoint: str | None = None) -> uuid.UUID:
+async def build(
+    ctx, flow: str, status: str, checkpoint: str | None = None, knobs: dict | None = None
+) -> uuid.UUID:
     async with tenant_session(ctx.tenant_id) as s:
-        run = Run(flow=flow, status=status, knobs={})
+        run = Run(flow=flow, status=status, knobs=knobs or {})
         s.add(run)
         await s.flush()
         if checkpoint:
@@ -167,6 +169,24 @@ async def test_a_prd_run_past_its_baseline_is_not_a_build(client):
     await review(ctx, 2)
     await build(ctx, "baseline_to_prd", "awaiting_checkpoint", checkpoint="skipped")
     assert (await status_of(client, ctx))["reusable"] is True
+
+
+async def test_a_prd_run_awaiting_approval_that_reuses_is_not_a_build(client):
+    """A run waiting for an owner's cost approval has no checkpoint yet: it counts as a
+    build under way only when it builds the baseline itself."""
+    ctx = await make_ctx()
+    cp_id, at = await review(ctx, 2)
+    knob = {"checkpoint_id": str(cp_id), "approved_at": at.isoformat()}
+    await build(ctx, "baseline_to_prd", "awaiting_approval", knobs={"reuse_baseline": knob})
+    out = await status_of(client, ctx)
+    assert out["reusable"] is True and out["build_under_way"] is False
+
+
+async def test_a_prd_run_awaiting_approval_that_rebuilds_is_under_way(client):
+    ctx = await make_ctx()
+    await review(ctx, 2)
+    await build(ctx, "baseline_to_prd", "awaiting_approval")
+    assert (await status_of(client, ctx))["reason"] == "build_under_way"
 
 
 async def test_review_status_is_an_mcp_read_refused_to_run_tokens(client):
@@ -321,3 +341,49 @@ async def test_a_plain_run_without_the_knob_still_builds_the_baseline(client, ru
     assert started["segments"][0]["status"] == "running"
     [spec] = runtime.submitted
     assert spec.labels["segment"] == "baseline"
+
+
+async def _awaiting_approval(client, ctx) -> dict:
+    """A run reusing the baseline whose estimate is over the owner's threshold (P3)."""
+    run = await plain_run(client, ctx, reuse_baseline=True)
+    await estimate(client, ctx, run["id"])
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(Run, uuid.UUID(run["id"]))
+        row.estimate_usd = 60
+        await s.commit()
+    started = await start(client, ctx, run["id"])
+    assert started["status"] == "awaiting_approval"
+    return started
+
+
+async def test_approve_starts_a_run_reusing_a_still_reusable_baseline(client, runtime):
+    ctx = await make_ctx()
+    await review(ctx, 3)
+    run = await _awaiting_approval(client, ctx)
+    # Waiting for the owner, it builds nothing: the baseline stays reusable.
+    assert (await status_of(client, ctx))["reusable"] is True
+    resp = await client.post(f"/v1/runs/{run['id']}/approve", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    approved = resp.json()
+    assert approved["status"] == "running"
+    assert approved["segments"][0]["status"] == "skipped"
+    [spec] = runtime.submitted
+    assert spec.labels["segment"] == "feature_set"
+
+
+async def test_approve_refuses_a_review_that_went_stale(client, runtime):
+    ctx = await make_ctx()
+    cp_id, _ = await review(ctx, 3)
+    run = await _awaiting_approval(client, ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        cp = await s.get(Checkpoint, cp_id)
+        cp.decided_at = datetime.now(UTC) - timedelta(days=31)
+        await s.commit()
+    resp = await client.post(f"/v1/runs/{run['id']}/approve", headers=ctx.as_("owner"))
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"] == {"code": "baseline_not_reusable", "reason": "too_old"}
+    after = (await client.get(f"/v1/runs/{run['id']}", headers=ctx.as_("owner"))).json()
+    assert after["status"] == "awaiting_approval"
+    assert after["approved_by"] is None
+    assert after["checkpoints"] == []
+    assert runtime.submitted == []
