@@ -9949,6 +9949,36 @@
         ]
       }
     },
+    "/v1/baseline/review-status": {
+      "get": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Get Baseline Review Status",
+        "description": "Whether a new PRD run may use the current baseline instead of rebuilding it: the\nlast baseline review, its age, whether a baseline build is under way, and the\nbaseline segment's estimate per depth (B1 \"Reuse base\").",
+        "operationId": "get_baseline_review_status",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewStatusOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
     "/v1/baseline/entities": {
       "get": {
         "tags": [
@@ -32944,6 +32974,29 @@
         ],
         "title": "AutonomyOut"
       },
+      "BaselineSegmentUsd": {
+        "properties": {
+          "quick": {
+            "type": "number",
+            "title": "Quick"
+          },
+          "standard": {
+            "type": "number",
+            "title": "Standard"
+          },
+          "deep": {
+            "type": "number",
+            "title": "Deep"
+          }
+        },
+        "type": "object",
+        "required": [
+          "quick",
+          "standard",
+          "deep"
+        ],
+        "title": "BaselineSegmentUsd"
+      },
       "Basis": {
         "properties": {
           "path": {
@@ -51784,6 +51837,63 @@
             "minimum": 1.0,
             "title": "Batch Size",
             "default": 5
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Goal Ids",
+            "default": []
+          },
+          "out_of_scope": {
+            "items": {
+              "type": "string",
+              "maxLength": 300,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Out Of Scope",
+            "default": []
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          },
+          "prd_answers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrdAnswers"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -51877,6 +51987,64 @@
             "type": "array",
             "title": "Source Ids",
             "default": []
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Goal Ids",
+            "default": []
+          },
+          "out_of_scope": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Out Of Scope",
+            "default": []
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          },
+          "prd_answers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrdAnswers"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Run Ids",
+            "default": []
           }
         },
         "type": "object",
@@ -51939,6 +52107,75 @@
               }
             ],
             "title": "Status"
+          },
+          "goal_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Ids"
+          },
+          "out_of_scope": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 300,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Out Of Scope"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          },
+          "prd_answers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrdAnswers"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -52120,6 +52357,43 @@
               "roles": {},
               "checkpoints": {}
             }
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          },
+          "reuse_baseline": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reuse Baseline"
           }
         },
         "type": "object",
@@ -53404,6 +53678,17 @@
               }
             ],
             "title": "Budget Usd"
+          },
+          "reuse_baseline": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reuse Baseline"
           }
         },
         "type": "object",
@@ -53447,6 +53732,16 @@
               }
             ],
             "title": "Budget Usd"
+          },
+          "reuse_baseline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReusedBaseline"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -65758,6 +66053,27 @@
         "title": "ResolutionReport",
         "description": "How each feedback item raised on earlier versions was handled, as of ``version``."
       },
+      "ReusedBaseline": {
+        "properties": {
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checkpoint Id"
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Approved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkpoint_id",
+          "approved_at"
+        ],
+        "title": "ReusedBaseline",
+        "description": "The baseline review a run reuses: its Confirm the baseline checkpoint."
+      },
       "ReviewAction": {
         "properties": {
           "id": {
@@ -66444,6 +66760,92 @@
         ],
         "title": "ReviewQueueItem",
         "description": "A section the caller owns or reviews, in the latest version of its document."
+      },
+      "ReviewStatusOut": {
+        "properties": {
+          "last_approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Approved At"
+          },
+          "checkpoint_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Id"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "age_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Days"
+          },
+          "build_under_way": {
+            "type": "boolean",
+            "title": "Build Under Way"
+          },
+          "reusable": {
+            "type": "boolean",
+            "title": "Reusable"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "too_old",
+                  "never_reviewed",
+                  "build_under_way"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "baseline_segment_usd": {
+            "$ref": "#/components/schemas/BaselineSegmentUsd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "build_under_way",
+          "reusable",
+          "baseline_segment_usd"
+        ],
+        "title": "ReviewStatusOut",
+        "description": "Whether a new PRD run may use the current baseline (B1 \"Reuse base\"): the last\nbaseline review (the newest approved Confirm the baseline) was approved in the past\n30 days and no baseline build is under way."
       },
       "ReviewTally": {
         "properties": {
@@ -68275,7 +68677,8 @@
           }
         },
         "type": "object",
-        "title": "RunPatch"
+        "title": "RunPatch",
+        "description": "A draft run's new choices. ``template``/``theme``: as on RunCreate (prd_to_roadmap\nand, since C4, baseline_to_prd)."
       },
       "RunProgress": {
         "properties": {
@@ -71333,6 +71736,22 @@
           "estimate_usd": {
             "type": "number",
             "title": "Estimate Usd"
+          },
+          "reused": {
+            "type": "boolean",
+            "title": "Reused",
+            "default": false
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           }
         },
         "type": "object",
@@ -71371,7 +71790,8 @@
               "running",
               "succeeded",
               "failed",
-              "cancelled"
+              "cancelled",
+              "skipped"
             ],
             "title": "Status"
           },
@@ -71471,6 +71891,27 @@
             "type": "boolean",
             "title": "Sent Back",
             "default": false
+          },
+          "reused": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReusedBaseline"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           },
           "can_retry_draft_import": {
             "type": "boolean",
