@@ -316,7 +316,10 @@ FLOWS: dict[str, FlowDef] = {
             key="baseline_to_prd",
             title="Baseline to PRD",
             description="Baseline proposal, feature set and design, priority order, PRD draft.",
-            in_new_run_dialog=True,
+            # C4 One New PRD door: a PRD run starts from New PRD's brief (POST /v1/runs
+            # keeps the flow for agents and the CLI).
+            in_new_run_dialog=False,
+            starts_from=("New PRD · PRDs", "/documents/new?kind=prd"),
             segments=(
                 BASELINE_SEGMENT,
                 SegmentDef(
@@ -888,7 +891,11 @@ class SourceContext:
 
 
 @dataclass(frozen=True)
-class RoadmapContext:
+class DraftContext:
+    """The draft's template, theme and starting skeleton: a roadmap's (prd_to_roadmap)
+    or a PRD's (baseline_to_prd with the template picked at New PRD, C4)."""
+
+    kind: str
     slug: str
     template: str
     template_version: int
@@ -966,8 +973,9 @@ class PromptContext:
     kind: str = "prd"
     # prd_to_roadmap: the approved PRD version the roadmap is built from.
     source: SourceContext | None = None
-    # prd_to_roadmap: the target roadmap's template, theme and starting skeleton.
-    roadmap: RoadmapContext | None = None
+    # The target document's template, theme and starting skeleton (prd_to_roadmap's
+    # roadmap; baseline_to_prd's PRD when the run has a template, C4).
+    draft: DraftContext | None = None
     # Lines a lane's prompt extension adds (oracle.runs.extensions), e.g. the spec contract.
     extra_lines: list[str] = field(default_factory=list)
     # A run started from a product intake: its id (agents read it through Oracle's
@@ -1088,8 +1096,8 @@ def step_prompt(
         lines += ["", "Locked (approved) sections: " + ", ".join(ctx.locked_sections)]
     if ctx.source is not None:
         lines += source_lines(ctx.source, paste=not ctx.mcp_attached)
-    if ctx.roadmap is not None:
-        lines += roadmap_lines(ctx.roadmap, ctx.source)
+    if ctx.draft is not None:
+        lines += draft_lines(ctx.draft.kind, ctx.draft, ctx.source)
     if ctx.extra_lines:
         lines += ["", *ctx.extra_lines]
     if flow.key == "update_draft" and ctx.document:
@@ -1263,7 +1271,24 @@ def source_lines(src: SourceContext, *, paste: bool = True) -> list[str]:
     return lines
 
 
-def roadmap_lines(rm: RoadmapContext, src: SourceContext | None) -> list[str]:
+def draft_lines(kind: str, rm: DraftContext, src: SourceContext | None) -> list[str]:
+    """The draft prompt's template lines: the template, version and theme, the front
+    matter to keep and the skeleton. The roadmap's text is the one from before C4, byte
+    for byte (tests/test_runs_prd_template.py pins it)."""
+    if kind != "roadmap":
+        return [
+            "",
+            f"{KIND_NAMES[kind]} document '{rm.slug}': template {rm.template} version "
+            f"{rm.template_version}"
+            + (f", theme {rm.theme}" if rm.theme else "")
+            + f". Front matter: document, title, kind: {kind}, template, template_version"
+            + (", theme" if rm.theme else "")
+            + " and the template's brief list, as in the skeleton below. Keep the "
+            "skeleton's section ids and their order.",
+            "",
+            "--- template skeleton ---",
+            rm.skeleton,
+        ]
     lines = [
         "",
         f"Roadmap document '{rm.slug}': template {rm.template} version {rm.template_version}"

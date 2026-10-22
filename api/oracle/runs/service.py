@@ -1534,6 +1534,11 @@ async def _free_slug(db: AsyncSession, base: str) -> str:
     return await templates_service._free_slug(db, base)
 
 
+# Flows whose target kind takes a template and theme at the run: roadmaps (prd_to_roadmap)
+# and, since C4 One New PRD door, PRDs (baseline_to_prd). The feedback loop refuses them.
+TEMPLATED_KINDS = ("roadmap", "prd")
+
+
 @dataclass
 class _Inputs:
     document: str | None = None
@@ -1559,7 +1564,7 @@ async def _resolve_inputs(
         if any(v is not None for v in named):
             raise Invalid(f"the {flow.title} flow writes no document")
         return None, {}
-    if flow.target_kind != "roadmap" and (inputs.template or inputs.theme):
+    if flow.target_kind not in TEMPLATED_KINDS and (inputs.template or inputs.theme):
         raise Invalid(f"the {flow.title} flow takes no template or theme")
     source = await _resolve_source(db, flow, inputs.source, inputs.source_version)
     default_slug = None
@@ -1578,9 +1583,9 @@ async def _resolve_inputs(
         oracle["document_slug"] = new_slug
     if source is not None:
         oracle["source_version_id"] = str(source[1].id)
-    if flow.target_kind == "roadmap":
+    if flow.target_kind in TEMPLATED_KINDS:
         oracle.update(
-            await _resolve_template(db, "roadmap", inputs.template, inputs.theme, document)
+            await _resolve_template(db, flow.target_kind, inputs.template, inputs.theme, document)
         )
     return (document.id if document else None), oracle
 
@@ -2031,10 +2036,21 @@ async def _prompt_context(
     document = document or run.knobs.get("document_slug")
     kind = await _target_kind(db, run)
     source = await _source_context(db, run) if _flow(run).source_prompt else None
-    roadmap_ctx = None
-    if source is not None and _flow(run).segment(segment.name).imports_draft:
-        title = doc.title if doc is not None else f"{source.title} roadmap"
-        roadmap_ctx = await _roadmap_context(db, run, document or "", title)
+    draft_ctx = None
+    # A roadmap draft is built from its source PRD (as before C4); a PRD draft from the
+    # baseline, with the template picked at New PRD.
+    if (
+        _flow(run).segment(segment.name).imports_draft
+        and run.knobs.get("template")
+        and (source is not None or kind != "roadmap")
+    ):
+        if doc is not None:
+            title = doc.title
+        elif source is not None:
+            title = f"{source.title} {flows.KIND_NAMES[kind]}"
+        else:
+            title = await _intake_title(db, run) or (document or "")
+        draft_ctx = await _draft_context(db, run, kind, document or "", title)
     prior: dict[str, str] = {}
     prior_files: list[tuple[int, str, list[str]]] = []
     in_workflow = {seq for seq, _, _ in planned or []}
@@ -2117,7 +2133,7 @@ async def _prompt_context(
         prior_files=prior_files,
         kind=kind,
         source=source,
-        roadmap=roadmap_ctx,
+        draft=draft_ctx,
         extra_lines=await extensions.prompt_lines(db, run),
         intake_id=run.knobs.get("intake_id"),
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
@@ -2251,11 +2267,26 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
     )
 
 
-async def _roadmap_context(
-    db: AsyncSession, run: Run, slug: str, title: str
-) -> flows.RoadmapContext | None:
-    """The roadmap draft's template, theme and skeleton (the template's body as a first
-    draft of this document, front matter included)."""
+async def _intake_title(db: AsyncSession, run: Run) -> str | None:
+    """The title of the intake a run started from (a new PRD takes it, C4)."""
+    raw = run.knobs.get("intake_id")
+    if not raw:
+        return None
+    from oracle.v2.models import ProductIntake
+
+    try:
+        intake = await db.get(ProductIntake, uuid.UUID(str(raw)))
+    except ValueError:
+        return None
+    return intake.title if intake is not None else None
+
+
+async def _draft_context(
+    db: AsyncSession, run: Run, kind: str, slug: str, title: str
+) -> flows.DraftContext | None:
+    """The draft's template, theme and skeleton (the template's body as a first draft of
+    this ``kind`` document, front matter included): a roadmap's (prd_to_roadmap) and a
+    PRD's (baseline_to_prd, C4)."""
     key, number = run.knobs.get("template"), run.knobs.get("template_version")
     if not key or not number:
         return None
@@ -2267,13 +2298,18 @@ async def _roadmap_context(
         body,
         slug=slug,
         title=title,
-        kind="roadmap",
+        kind=kind,
         template=key,
         version=int(number),
         theme=theme,
     )
-    return flows.RoadmapContext(
-        slug=slug, template=key, template_version=int(number), theme=theme, skeleton=skeleton
+    return flows.DraftContext(
+        kind=kind,
+        slug=slug,
+        template=key,
+        template_version=int(number),
+        theme=theme,
+        skeleton=skeleton,
     )
 
 

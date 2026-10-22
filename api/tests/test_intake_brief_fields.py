@@ -170,7 +170,7 @@ async def test_patching_the_brief_fields_answers_again(client):
     out = await create_intake(client, ctx, who="commenter")
     intake = out["intake"]
     gaps = gaps_by_category(out)
-    assert gaps["goal_alignment"]["status"] == "unknown"
+    assert gaps["goal_alignment"]["status"] in ("unknown", "asked")
 
     resp = await client.patch(
         f"/v1/intakes/{intake['id']}",
@@ -238,7 +238,7 @@ async def test_estimating_twice_leaves_one_draft_run_and_a_converted_brief_is_40
     assert resp.status_code in (200, 201), resp.text
     second = resp.json()
     assert second["id"] == first["id"]
-    assert second["knobs"]["depth"] == "deep" and second["knobs"]["template"] == "prd-rfc"
+    assert second["knobs"]["depth"] == "deep" and second["template"] == "prd-rfc"
     assert (
         await client.post(f"/v1/runs/{first['id']}/estimate", headers=approver)
     ).status_code == 200

@@ -44,7 +44,10 @@ async def test_prd_run_takes_template(client, runtime):
         f"/v1/intakes/{out['intake']['id']}/runs", json={}, headers=ctx.as_("approver")
     )
     assert resp.status_code == 201, resp.text
-    knobs = resp.json()["knobs"]
+    run = resp.json()
+    assert run["template"] == "one-pager" and run["theme"] == "one-page-brief"
+    async with tenant_session(ctx.tenant_id) as s:
+        knobs = (await s.get(Run, uuid.UUID(run["id"]))).knobs
     assert knobs["template"] == "one-pager"
     assert isinstance(knobs["template_version"], int) and knobs["template_version"] >= 1
     assert knobs["theme"] == "one-page-brief"
@@ -59,8 +62,8 @@ async def test_the_run_body_overrides_and_no_template_takes_the_default(client, 
         headers=ctx.as_("approver"),
     )
     assert resp.status_code == 201, resp.text
-    assert resp.json()["knobs"]["template"] == "prd-rfc"
-    assert resp.json()["knobs"]["theme"] == "clean-document"
+    assert resp.json()["template"] == "prd-rfc"
+    assert resp.json()["theme"] == "clean-document"
 
     # A plain POST /v1/runs with no template: the built-in default, as roadmaps.
     resp = await client.post(
@@ -70,8 +73,8 @@ async def test_the_run_body_overrides_and_no_template_takes_the_default(client, 
     )
     assert resp.status_code == 201, resp.text
     run = (await client.get(f"/v1/runs/{resp.json()['id']}", headers=ctx.as_("approver"))).json()
-    assert run["knobs"]["template"] == "oracle-default"
-    assert run["knobs"]["theme"] == "clean-document"
+    assert run["template"] == "oracle-default"
+    assert run["theme"] == "clean-document"
     for body in ({"template": "now-next-later"}, {"theme": "roadmap-board"}):
         resp = await client.post(
             "/v1/runs",

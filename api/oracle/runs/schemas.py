@@ -33,7 +33,8 @@ RunStatus = Literal[
     "failed",
     "cancelled",
 ]
-SegmentStatus = Literal["pending", "running", "succeeded", "failed", "cancelled"]
+# skipped: a Baseline to PRD run that used the current baseline (C4) never ran it.
+SegmentStatus = Literal["pending", "running", "succeeded", "failed", "cancelled", "skipped"]
 CheckpointKind = Literal[
     "baseline_confirm",
     "feature_set",
@@ -114,6 +115,9 @@ class RunCreate(BaseModel):
     source_version: int | None = Field(default=None, ge=1)
     # prd_to_roadmap: the roadmap template (default now-next-later, or the existing
     # roadmap's) and theme (default roadmap-board, or the existing roadmap's).
+    # baseline_to_prd (C4): the PRD template and theme (default: the existing PRD's, else
+    # the company's new-draft default, else oracle-default and clean-document); the
+    # draft prompt pastes the template's skeleton. Other flows refuse both (422).
     template: str | None = Field(default=None, min_length=1, max_length=100)
     theme: str | None = Field(default=None, min_length=1, max_length=100)
     knobs: KnobsIn = KnobsIn()
@@ -122,6 +126,9 @@ class RunCreate(BaseModel):
 
 
 class RunPatch(BaseModel):
+    """A draft run's new choices. ``template``/``theme``: as on RunCreate (prd_to_roadmap
+    and, since C4, baseline_to_prd)."""
+
     document: str | None = Field(default=None, min_length=1, max_length=200)
     source: str | None = Field(default=None, min_length=1, max_length=200)
     source_version: int | None = Field(default=None, ge=1)
@@ -560,7 +567,7 @@ class RunSummary(BaseModel):
     # The kind of document the run writes (feedback loop: the document's kind).
     document_kind: DocumentKind | None = None
     # prd_to_roadmap: the approved PRD version it reads, and the roadmap's template and
-    # theme.
+    # theme; baseline_to_prd: the PRD's template and theme (C4).
     source: VersionSource | None = None
     template: str | None = None
     theme: str | None = None

@@ -69,7 +69,9 @@ def scratch_db():
 def test_chains_on_mains_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    # One head; later lanes (0024_segment_skipped, ...) chain on this revision.
+    (head,) = script.get_heads()
+    assert REVISION in {r.revision for r in script.walk_revisions(base="base", head=head)}
 
 
 def test_upgrade_adds_the_brief_fields_and_downgrade_drops_them(scratch_db):
