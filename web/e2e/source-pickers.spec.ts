@@ -211,13 +211,13 @@ test("named picks: a Notion source's row lists its page titles (AC 10)", async (
   const picker = form.getByTestId("notion-picker");
   await picker.getByRole("checkbox", { name: "Product handbook", exact: true }).check();
   await picker.getByRole("checkbox", { name: "Team notes", exact: true }).check();
-  await expect(picker.getByTestId("notion-picked-count")).toHaveText("2 picked");
+  await expect(picker.getByTestId("notion-picked-count")).toHaveText("8 pages to read");
   await form.getByLabel("Name").fill("Specs");
   await form.getByRole("button", { name: "Add source" }).click();
 
   const row = page.getByRole("listitem", { name: "Specs" });
   await expect(row.getByTestId("source-picks")).toHaveText("Product handbook, Team notes");
-  await expect(row).not.toContainText("2 picked");
+  await expect(row).not.toContainText("8 pages to read");
 });
 
 test("named picks: the row menus and the save read in plain words (AC 11)", async ({ page }) => {

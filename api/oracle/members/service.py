@@ -843,8 +843,11 @@ async def sweep_disabled(
 # A failed follow-up is retried by time, not by tick: after each failure it waits a
 # backoff (a minute, doubling, at most an hour), for FOLLOW_UP_RETRY_WINDOW from the
 # disable. Then it is marked failed: no more automatic retries, and a provider revoke
-# keeps its copy of the credential and stays in the owners' Inbox (Retry, Dismiss).
+# keeps its copy of the credential and stays in the owners' Inbox (Retry, Dismiss). An
+# access change (ACCESS_KINDS, #245) is retried on, once a day, until it is done or no
+# longer needed, and shows in the owners' Inbox meanwhile (Retry).
 FOLLOW_UP_RETRY_WINDOW = timedelta(hours=24)
+FOLLOW_UP_DAILY = timedelta(days=1)
 FOLLOW_UP_FIRST_BACKOFF = timedelta(minutes=1)
 FOLLOW_UP_MAX_BACKOFF = timedelta(hours=1)
 # How long one call may take in all, whatever the HTTP client's own timeouts; and how
@@ -890,7 +893,11 @@ async def run_follow_ups(
         budget = min(budget, budget_seconds)
     deadline = loop.time() + budget
     stmt = select(MemberFollowUp.id).where(
-        MemberFollowUp.status == "pending",
+        or_(
+            MemberFollowUp.status == "pending",
+            # Past its 24 hours, an access change is still retried, once a day.
+            (MemberFollowUp.status == "failed") & MemberFollowUp.kind.in_(ACCESS_KINDS),
+        ),
         or_(
             MemberFollowUp.next_attempt_at.is_(None),
             MemberFollowUp.next_attempt_at <= datetime.now(UTC),
@@ -905,7 +912,7 @@ async def run_follow_ups(
         if loop.time() >= deadline:
             break
         try:
-            row = await _attempt(session, principal, http, follow_up_id, ("pending",), deadline)
+            row = await _attempt(session, principal, http, follow_up_id, FOLLOW_UP_OPEN, deadline)
         except _BudgetSpent:
             break
         except Exception:  # noqa: BLE001 - a DB error in one must not stop the others
@@ -993,9 +1000,10 @@ async def _record_attempt(
         row.next_attempt_at = None
         row.ciphertext = None
     elif now >= row.created_at + FOLLOW_UP_RETRY_WINDOW:
-        # No more automatic retries; the copy stays for an owner's Retry or Dismiss.
+        # No more automatic retries; the copy stays for an owner's Retry or Dismiss. An
+        # access change waits for an owner's Retry, and is retried once a day meanwhile.
         row.status = "failed"
-        row.next_attempt_at = None
+        row.next_attempt_at = now + FOLLOW_UP_DAILY if row.kind in ACCESS_KINDS else None
     else:
         row.status = "pending"
         row.next_attempt_at = now + follow_up_backoff(row.attempts)

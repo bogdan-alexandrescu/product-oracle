@@ -65,7 +65,11 @@ class SourceOut(ORM):
     # base_version when saving.
     config_version: int = 1
     last_error: str | None
+    # The last sync that finished; null when none has.
     last_synced_at: datetime | None
+    # Set when a sync stopped part way after storing something (a rate limit): what it
+    # stored is kept and the next sync resumes. Null once a sync finishes.
+    partly_synced_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     item_count: int = 0

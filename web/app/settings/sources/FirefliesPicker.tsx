@@ -3,7 +3,7 @@
 import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
 
 import { Button, Chip, InfoTip, Label, Notice, SegmentedControl } from "@/components/ds";
-import { api, type Schemas, unwrap } from "@/lib/api/client";
+import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { INPUT } from "../_components/fields";
@@ -130,16 +130,30 @@ function useDebounced<T>(value: T, ms = 300): T {
   return v;
 }
 
-type MeetingState = { key: string; rows: Meeting[]; next: string | null; loading: boolean; error: string | null };
+/** When a limit answer (429) may be retried, as Date.now(); null for other errors. */
+function retryAtOf(e: unknown): number | null {
+  const wait = e instanceof ApiError && e.status === 429 ? e.retryAfter : undefined;
+  return wait ? Date.now() + wait * 1000 : null;
+}
+
+type MeetingState = {
+  key: string;
+  rows: Meeting[];
+  next: string | null;
+  loading: boolean;
+  error: string | null;
+  /** When a limit answer (429) may be retried, as Date.now(); null when it may now. */
+  retryAt: number | null;
+};
 
 /** Pages of the connection's meetings for the current search and range. */
 function useMeetings(connectionId: string, search: string, from?: string, to?: string, enabled = true) {
   const onAuth = useAuthRedirect();
   const key = `${connectionId}|${search}|${from ?? ""}|${to ?? ""}`;
-  const [state, setState] = useState<MeetingState>({ key: "", rows: [], next: null, loading: false, error: null });
+  const [state, setState] = useState<MeetingState>({ key: "", rows: [], next: null, loading: false, error: null, retryAt: null });
 
   async function load(cursor: string | null, reset: boolean) {
-    setState((s) => ({ ...s, key, loading: true, error: null, ...(reset ? { rows: [], next: null } : {}) }));
+    setState((s) => ({ ...s, key, loading: true, error: null, retryAt: null, ...(reset ? { rows: [], next: null } : {}) }));
     try {
       const page = await unwrap(
         api.GET("/v1/connections/{connection_id}/fireflies/meetings", {
@@ -150,10 +164,10 @@ function useMeetings(connectionId: string, search: string, from?: string, to?: s
         }),
       );
       setState((s) =>
-        s.key !== key ? s : { key, rows: reset ? page.meetings : [...s.rows, ...page.meetings], next: page.next_cursor ?? null, loading: false, error: null },
+        s.key !== key ? s : { key, rows: reset ? page.meetings : [...s.rows, ...page.meetings], next: page.next_cursor ?? null, loading: false, error: null, retryAt: null },
       );
     } catch (e) {
-      if (!onAuth(e)) setState((s) => (s.key !== key ? s : { ...s, loading: false, error: errorMessage(e) }));
+      if (!onAuth(e)) setState((s) => (s.key !== key ? s : { ...s, loading: false, error: errorMessage(e), retryAt: retryAtOf(e) }));
     }
   }
 
@@ -162,7 +176,23 @@ function useMeetings(connectionId: string, search: string, from?: string, to?: s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, enabled]);
 
-  return { ...state, more: () => (state.next ? load(state.next, false) : undefined) };
+  return { ...state, more: () => (state.next ? load(state.next, false) : undefined), retry: () => load(null, true) };
+}
+
+/** Retry for a failed list, active once the limit's wait (if any) is over. Keyed by `retryAt`. */
+function RetryButton({ retryAt, onRetry }: { retryAt: number | null; onRetry: () => void }) {
+  const [waiting, setWaiting] = useState(() => retryAt != null && retryAt > Date.now());
+  useEffect(() => {
+    if (retryAt == null) return;
+    // setTimeout takes at most 2^31-1 ms (about 24 days).
+    const t = setTimeout(() => setWaiting(false), Math.min(Math.max(0, retryAt - Date.now()), 2 ** 31 - 1));
+    return () => clearTimeout(t);
+  }, [retryAt]);
+  return (
+    <Button onClick={onRetry} disabled={waiting}>
+      Retry
+    </Button>
+  );
 }
 
 const LIST = "flex max-h-[360px] flex-col overflow-y-auto rounded-button border border-line bg-surface";
@@ -199,7 +229,8 @@ export function FirefliesPicker({
   const choosing = value.mode === "selected";
   const ongoing = !value.date_to;
   const [search, setSearch] = useState("");
-  const query = useDebounced(search.trim());
+  // Each search is a Fireflies call from a small browse budget: it waits until typing stops.
+  const query = useDebounced(search.trim(), 400);
   // Typing a date changes it on every keystroke (0002, 0020, 0202, 2026): the lists
   // follow once it settles.
   const from = useDebounced(value.date_from, 400);
@@ -208,13 +239,18 @@ export function FirefliesPicker({
 
   const set = (patch: Partial<FirefliesConfig>) => onChange({ ...value, ...patch });
 
+  // The series list spends the same browse budget: its limit alert waits out the 429 too.
+  const [seriesRetryAt, setSeriesRetryAt] = useState<number | null>(null);
   const series = useQuery(`ff-series|${connectionId}|${from ?? ""}|${to ?? ""}|${choosing}`, () =>
     choosing
       ? unwrap(
           api.GET("/v1/connections/{connection_id}/fireflies/series", {
             params: { path: { connection_id: connectionId }, query: { from: from || undefined, to: to || undefined } },
           }),
-        )
+        ).catch((e: unknown) => {
+          setSeriesRetryAt(retryAtOf(e));
+          throw e;
+        })
       : Promise.resolve(null),
   );
   const meetings = useMeetings(connectionId, query, from, to, choosing);
@@ -347,7 +383,11 @@ export function FirefliesPicker({
       {choosing && (
         <div className="grid min-w-0 gap-4 @[700px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           <Section title="Series" count={series.data ? seriesRows.length : undefined}>
-            {series.error && <Notice tone="error">{series.error}</Notice>}
+            {series.error && (
+              <Notice tone="error" action={<RetryButton key={seriesRetryAt ?? 0} retryAt={seriesRetryAt} onRetry={() => void series.reload()} />}>
+                {series.error}
+              </Notice>
+            )}
             {!series.data && !series.error && <span className="block h-11 animate-pulse rounded-button bg-surface2" aria-busy />}
             {series.data && seriesRows.length === 0 && <p className="px-1 text-[15px] text-text2">No recurring meetings</p>}
             {seriesFull && (
@@ -395,7 +435,14 @@ export function FirefliesPicker({
               aria-label="Search meetings"
               className={INPUT}
             />
-            {meetings.error && <Notice tone="error">{meetings.error}</Notice>}
+            {meetings.error && (
+              <Notice
+                tone="error"
+                action={<RetryButton key={meetings.retryAt ?? 0} retryAt={meetings.retryAt} onRetry={() => void meetings.retry()} />}
+              >
+                {meetings.error}
+              </Notice>
+            )}
             {meetingsFull && (
               <Notice testId="fireflies-meetings-cap">
                 {MAX_MEETINGS.toLocaleString("en-US")} meetings picked, the most a source takes: unpick one, or pick its

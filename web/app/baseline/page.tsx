@@ -15,7 +15,7 @@ import { ConflictsTab } from "./_components/ConflictsTab";
 import { EntityDrawer } from "./_components/EntityDrawer";
 import { FlaggedTab } from "./_components/FlaggedTab";
 import { GraphTab } from "./_components/GraphTab";
-import { ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
+import { noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
 import { Tabs, type TabItem } from "./_components/Tabs";
 
 type Tab = "graph" | "flagged" | "conflicts" | "proposals";
@@ -155,7 +155,8 @@ export default function BaselinePage() {
       const params = { params: { path: { proposal_id: proposal.id } } };
       if (accept) await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/accept", params));
       else await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/reject", params));
-      return accept ? "Proposal accepted: the change is applied and the item locked." : "Proposal rejected.";
+      if (accept) return "Proposal accepted: the change is applied and the item locked.";
+      return noChange(proposal) ? "Proposal dismissed: it changed nothing." : "Proposal rejected.";
     });
 
   const openConflicts = conflicts.data?.filter((c) => c.status === "open").length;

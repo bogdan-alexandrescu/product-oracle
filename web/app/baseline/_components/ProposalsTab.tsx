@@ -164,6 +164,9 @@ function Source({ p, meId }: { p: ProposalOut; meId?: string | null }) {
   );
 }
 
+/** A proposal whose every field already has its proposed value: the API's sentence says so. */
+export const noChange = (p: ProposalOut) => p.summary.startsWith("No change to ");
+
 /** The sentence, with the item it names as a button that opens its drawer. */
 function Sentence({ p, graph, onOpen }: { p: ProposalOut; graph: GraphOut | undefined; onOpen: (id: string) => void }) {
   const op = (p.payload as Payload).op;
@@ -266,12 +269,21 @@ function ProposalList({
                 </div>
                 {canWrite && (
                   <div className="flex flex-none gap-2">
-                    <Button disabled={busy} onClick={() => onDecide(p, true)}>
-                      Accept
-                    </Button>
-                    <Button disabled={busy} onClick={() => onDecide(p, false)}>
-                      Reject
-                    </Button>
+                    {noChange(p) ? (
+                      // Nothing to accept: the item already reads so (#262). Dismissing rejects it.
+                      <Button disabled={busy} onClick={() => onDecide(p, false)}>
+                        Dismiss
+                      </Button>
+                    ) : (
+                      <>
+                        <Button disabled={busy} onClick={() => onDecide(p, true)}>
+                          Accept
+                        </Button>
+                        <Button disabled={busy} onClick={() => onDecide(p, false)}>
+                          Reject
+                        </Button>
+                      </>
+                    )}
                   </div>
                 )}
               </li>

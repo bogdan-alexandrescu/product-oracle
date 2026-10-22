@@ -539,3 +539,45 @@ test("baseline: proposal sentences wrap on a phone", async ({ page }) => {
     await expect(row.getByRole("button", { name: "Reject" })).toBeInViewport();
   }
 });
+
+// #262: the "proposal-noise" scenario adds three run proposals on the goals that repeat
+// unchanged fields, as agents write them (lib/api/mock/baseline.ts addNoisyProposals).
+// The strings are the API's (api/tests/test_baseline_describe.py writes the same rules).
+const NOISY = {
+  "Cut early churn":
+    "Change Cut early churn: weight to 0.25 (was 0.2), target to below 7% (was below 8%), horizon to 2026-Q4 (was 2027-H1) and 1 more",
+  "Raise activation":
+    "Change Raise activation: description to …the first two weeks. (was …the first week.), target to 50% (was 45%)",
+  "Grow paid conversion": "No change to Grow paid conversion",
+};
+
+/**
+ * protects: a reviewer sees what each proposal changes without opening Details (#262).
+ * fails_when: a sentence lists a field whose value is unchanged, "and N more" counts one,
+ * a long description change shows two identical prefixes, or a proposal that changes
+ * nothing offers Accept instead of Dismiss, or Dismiss leaves it open.
+ * no_claim: every rule of the port (the Python table pins them); edges (no seeded edge
+ * proposals).
+ */
+test("baseline: proposal sentences show only real changes, and a no-change one is dismissed", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "proposal-noise"));
+  await openBaseline(page);
+  const tab = page.getByRole("tab", { name: /Proposals/ });
+  await expect(tab.getByTestId("tab-count-proposals")).toHaveText("6");
+  await tab.click();
+  const rows = page.getByTestId("proposal");
+  for (const [title, sentence] of Object.entries(NOISY)) {
+    await expect(rows.filter({ hasText: title }).getByTestId("proposal-summary")).toHaveText(sentence);
+  }
+
+  const noChange = rows.filter({ hasText: "Grow paid conversion" });
+  await expect(noChange.getByRole("button", { name: "Accept" })).toHaveCount(0);
+  await expect(noChange.getByRole("button", { name: "Reject" })).toHaveCount(0);
+  await noChange.getByRole("button", { name: "Dismiss" }).click();
+  await expect(page.getByRole("status")).toContainText("Proposal dismissed");
+  await expect(rows).toHaveCount(5);
+  await expect(rows.filter({ hasText: "Grow paid conversion" })).toHaveCount(0);
+  await expect(tab.getByTestId("tab-count-proposals")).toHaveText("5");
+  // Proposals that change something still offer Accept and Reject.
+  await expect(rows.filter({ hasText: "Cut early churn" }).getByRole("button", { name: "Accept" })).toBeVisible();
+});

@@ -34,6 +34,8 @@ export type VersionSeed = {
   brief?: string[];
   /** Provenance (O4b): the PRD version a roadmap version was built from. */
   source?: { slug: string; version: number };
+  /** Who imported it (#256); the agent-track API token by default. */
+  by?: { id: string; name: string };
 };
 
 export type DocumentSeed = {
@@ -731,9 +733,10 @@ export const DOCUMENTS: DocumentSeed[] = [
     template: "oracle-default",
     template_version: "1",
     versions: [
-      { number: 1, created_at: "2026-10-14T09:00:00Z", sections: DEPOSITS_V1, citations: [] },
+      { number: 1, created_at: "2026-10-14T09:00:00Z", sections: DEPOSITS_V1, citations: [], by: { id: "5e6b65ac-0d1f-4c2a-9b7e-3f8a1c2d4e01", name: "Approver" } },
       { number: 2, created_at: "2026-10-15T09:00:00Z", sections: DEPOSITS_V2, citations: [] },
-      { number: 3, created_at: "2026-10-16T09:00:00Z", sections: DEPOSITS_V3, citations: [] },
+      // A run's draft: imported for the person who started the run, named Oracle.
+      { number: 3, created_at: "2026-10-16T09:00:00Z", sections: DEPOSITS_V3, citations: [], by: { id: "9c2f4b1d-7a3e-4f60-8d15-b2e9a0c7f312", name: "Oracle" } },
     ],
   },
   {

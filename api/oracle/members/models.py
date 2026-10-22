@@ -70,8 +70,8 @@ class Invite(TenantScoped, Base):
 
 FOLLOW_UP_KINDS = ("provider_revoke", "run_cancel", "iap_revoke", "iap_grant")
 # pending: retried by the tick, by time; failed: still not done after the retry window,
-# no more automatic retries (an owner's Retry or Dismiss in the Inbox); done; dismissed:
-# an owner gave up on it.
+# no more automatic retries (an owner's Retry or Dismiss in the Inbox; an access change,
+# #245: retried once a day, and an owner's Retry); done; dismissed: an owner gave up on it.
 FOLLOW_UP_STATUSES = ("pending", "done", "failed", "dismissed")
 
 
@@ -84,7 +84,9 @@ class MemberFollowUp(TenantScoped, Base):
     recorded here and retried from the tick
     (``oracle.members.service.run_follow_ups``), with a backoff, for 24 hours; a provider
     revoke still not done keeps its copy of the credential and is shown to owners in the
-    Inbox (Retry, Dismiss) until it succeeds or an owner dismisses it."""
+    Inbox (Retry, Dismiss) until it succeeds or an owner dismisses it; an access change
+    still failing is retried once a day and shown to owners in the Inbox (Retry, #245)
+    until it succeeds or is no longer needed."""
 
     __tablename__ = "member_follow_ups"
     __table_args__ = (

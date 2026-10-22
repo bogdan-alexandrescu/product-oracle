@@ -3,7 +3,8 @@
  * and /series): a fixed set of meetings, two calendar series among them, paged newest
  * first like the API. Meetings on no calendar are in no series (series_key null), like
  * the ad hoc planning session that shares the planning series' title and organizer.
- * Searching "rate limit" answers 429, as the API does past its browsing budget.
+ * Searching "rate limit" answers 429, as the API does past its browsing budget; so
+ * does the series list from 2000-01-01, until its Retry-After wait is over.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -90,6 +91,10 @@ declare global {
   }
 }
 
+const SERIES_LIMITED_FROM = "2000-01-01";
+const SERIES_LIMIT_WAIT = 60;
+let seriesLimitedUntil: number | undefined;
+
 /** Handles /v1/connections/{id}/fireflies/{meetings|series}; null for other paths. */
 export function routeFirefliesBrowse(p: string[], q: URLSearchParams): Response | null {
   if (p[1] !== "connections" || p[3] !== "fireflies") return null;
@@ -102,6 +107,11 @@ export function routeFirefliesBrowse(p: string[], q: URLSearchParams): Response 
       { detail: "Fireflies limit reached, try later. Browsing may make 25 Fireflies calls a day for this connection, so syncs keep the rest of your Fireflies quota. Try again in 5 hours." },
       { "Retry-After": "18000" },
     );
+  }
+  if (p[4] === "series" && q.get("from") === SERIES_LIMITED_FROM) {
+    seriesLimitedUntil ??= Date.now() + SERIES_LIMIT_WAIT * 1000;
+    const left = Math.ceil((seriesLimitedUntil - Date.now()) / 1000);
+    if (left > 0) return json(429, { detail: "Fireflies limit reached, try later. Try again in 1 minute." }, { "Retry-After": String(left) });
   }
   const rows = MEETINGS.filter((m) => inRange(m, q));
   if (p[4] === "meetings") {

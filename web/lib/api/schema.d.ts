@@ -1813,8 +1813,10 @@ export interface paths {
         put?: never;
         /**
          * Retry Member Follow Up
-         * @description Make a provider revoke (or runtime cancel) a disable still owes now, whatever its
-         *     backoff or its 24 hours of retries. A success drops Oracle's copy of the credential.
+         * @description Make a provider revoke (or runtime cancel) a disable still owes now, or a change
+         *     to someone's Google IAP access that keeps failing (under the address's lock, checked
+         *     first: no longer needed is done), whatever its backoff or its 24 hours of retries.
+         *     Audited. A success drops Oracle's copy of the credential.
          */
         post: operations["retry_member_follow_up"];
         delete?: never;
@@ -15657,6 +15659,38 @@ export interface components {
             /** Line */
             line?: number | null;
         };
+        /**
+         * InboxAccessFailure
+         * @description A change to someone's Google IAP access still failing after 24 hours of retries
+         *     (#245): retried once a day until it is done or no longer needed; Retry runs it now.
+         */
+        InboxAccessFailure: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "iap_revoke" | "iap_grant";
+            /** Email */
+            email: string;
+            /** Owed */
+            owed: string;
+            /** Last Error */
+            last_error?: string | null;
+            /** Attempts */
+            attempts: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Next Attempt At */
+            next_attempt_at?: string | null;
+        };
         /** InboxCheckpoint */
         InboxCheckpoint: {
             /**
@@ -16022,6 +16056,11 @@ export interface components {
              * @default []
              */
             revoke_failures: components["schemas"]["InboxRevokeFailure"][];
+            /**
+             * Access Failures
+             * @default []
+             */
+            access_failures: components["schemas"]["InboxAccessFailure"][];
             /**
              * Reports
              * @default []
@@ -23931,6 +23970,8 @@ export interface components {
             last_error: string | null;
             /** Last Synced At */
             last_synced_at: string | null;
+            /** Partly Synced At */
+            partly_synced_at?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -26732,6 +26773,8 @@ export interface components {
             notes: components["schemas"]["VersionWarning"][];
             /** Imported By */
             imported_by?: string | null;
+            /** Imported By Name */
+            imported_by_name?: string | null;
             /** Approved At */
             approved_at?: string | null;
             /**
@@ -26858,6 +26901,8 @@ export interface components {
             notes: components["schemas"]["VersionWarning"][];
             /** Imported By */
             imported_by?: string | null;
+            /** Imported By Name */
+            imported_by_name?: string | null;
             /** Approved At */
             approved_at?: string | null;
             /**

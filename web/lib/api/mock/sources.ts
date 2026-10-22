@@ -125,6 +125,9 @@ function confidence(kind: string, freshness: number): Confidence {
   return { value: Math.round(value * 1000) / 1000, breakdown, low: value < 0.4 };
 }
 
+/** A Slack channel whose first sync stops on the rate limit part way (#249). */
+const RATE_LIMITED_CHANNEL = "C0RATELIMIT";
+
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
 
 function seed(): SourcesDb {
@@ -648,7 +651,17 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     if (s.status === "error") {
       return json(200, { source_id: s.id, outcome: "error", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
     }
+    // Slack rate-limits the first sync of channel C0RATELIMIT after its first checkpoint:
+    // what it stored is kept and the next sync resumes (and finishes).
+    const channels = s.kind === "slack" ? ((s.config.channels as string[] | undefined) ?? []) : [];
+    if (channels.includes(RATE_LIMITED_CHANNEL) && !s.partly_synced_at && !s.last_synced_at) {
+      s.partly_synced_at = now();
+      s.last_error = "Rate limited by slack; the next sync resumes (retry after 30s)";
+      return json(200, { source_id: s.id, outcome: "rate_limited", upserted: 1, versions_written: 1, deleted: 0, checkpoints: 1, retry_after: 30, error: null, source: counted(db, s) });
+    }
     s.last_synced_at = now();
+    s.partly_synced_at = null;
+    s.last_error = null;
     // A sync also deletes what left the picks (sources narrowed before narrowing took
     // effect on save).
     const deleted = s.kind === "google_docs" ? hideOutsidePicks(db, s) : 0;
