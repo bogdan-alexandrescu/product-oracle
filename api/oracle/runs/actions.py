@@ -432,6 +432,8 @@ async def put_action(
 ) -> None:
     """Stage (the approver role or above) or suggest (commenters) one action: one per
     item, kind and field, so the same again replaces it."""
+    from oracle.auth.service import caller_refusal
+
     run, cp = await _writable(db, principal, run_id, checkpoint_id, stage=False)
     found = await _file(db, run, cp) if cp.kind in VOCABULARY else None
     ctx = _context(found)
@@ -440,6 +442,11 @@ async def put_action(
     except InvalidAction as exc:
         raise service.Invalid(str(exc)) from None
     stages = _stages(principal, cp)
+    if stages:
+        # A staged action counts: the approver role, re-read under the gate.
+        refusal = await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+        if refusal is not None:
+            raise service.Forbidden(refusal)
     existing = await db.scalar(
         select(CheckpointAction).where(
             CheckpointAction.checkpoint_id == cp.id,

@@ -651,3 +651,29 @@ async def test_a_demoted_approvers_staged_actions_need_an_approver_again(review)
     assert resp.status_code == 200, resp.text
     got = await review.get()
     assert [a["state"] for a in item_of(got, "payment-step")["actions"]] == ["suggested"]
+
+
+async def test_an_approver_demoted_while_staging_is_refused(review, monkeypatch):
+    """protects=staging re-reads the approver role under the gate, as other approver writes
+    do (CR-06); fails_when=an approver demoted to commenter while the request waits stores
+    a counting staged action (or any action); no_claim=demotions that commit after it."""
+    from oracle.auth.models import User
+    from oracle.review import publish
+
+    real = publish.gate_lock
+    fired: list[bool] = []
+
+    async def demote_first(db, *, shared):
+        if not fired:
+            fired.append(True)
+            async with tenant_session(review.tenant_id) as s:
+                (await s.get(User, review.people["approver"].user_id)).role = "commenter"
+                await s.commit()
+        await real(db, shared=shared)
+
+    monkeypatch.setattr(publish, "gate_lock", demote_first)
+    await review.act("approver", expect=403, item_key="gift-cards", kind="drop")
+    assert fired
+    async with tenant_session(review.tenant_id) as s:
+        assert await s.scalar(select(func.count()).select_from(CheckpointAction)) == 0
+    assert (await review.get())["revision"] == 0
