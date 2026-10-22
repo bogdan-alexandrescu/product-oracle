@@ -47,7 +47,7 @@ test("members: invite someone, copy the link, then revoke the invite", async ({ 
   await expect(page.getByRole("alert").filter({ hasText: "already a member" })).toBeVisible();
 
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.getByRole("button", { name: "Copy sign-in link for pat@example.com" }).click();
+  await page.getByRole("button", { name: "Copy link for pat@example.com" }).click();
   await expect(invites.first()).toContainText("Copied");
 
   // Revoked: the row keeps its place with the outcome and Undo for a moment, then leaves.

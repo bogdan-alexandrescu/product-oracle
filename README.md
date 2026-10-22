@@ -143,3 +143,32 @@ Users are matched by lowercased email in the seeded tenant (run `make seed` firs
 created as owners; roles come later. A present but invalid assertion is a 401. *Sign
 out* sends the browser to IAP's `?gcp-iap-mode=CLEAR_LOGIN_COOKIE`, which clears the
 IAP session.
+
+### Invites reach the person
+
+Settings › Members invites someone by email. Oracle then lets their Google account
+through IAP and emails them the sign-in link; the Members page says what happened to
+each invite (access granted or not yet, with Retry; email sent, not sent or failed, with
+Resend, which waits a minute after an email went out). An invite takes exactly one plain
+address (no name, list or comment); one outside `ORACLE_IAP_ALLOWED_DOMAINS` (when set) is
+refused, because Google sign-in would refuse it. Taking access away, or granting it
+again on a restore, that fails is retried by the tick until it is done; the member's row
+says "Access not removed yet" (or "not granted yet") meanwhile. Oracle records only a
+short reason for a failure ("Google returned 403 (permission denied)"), never Google's
+answer.
+
+| Variable | Meaning |
+|----------|---------|
+| `ORACLE_IAP_BACKENDS` | JSON list of the IAP backend service names an invite grants `roles/iap.httpsResourceAccessor` on, e.g. `'["oracle-api-be", "oracle-web-be"]'`. Revoking the invite, or removing the member, takes it away (kept while they are an active member or have another open invite); restoring the member grants it again. Empty (default, local and dev): no grant, and the invite says so. |
+| `ORACLE_GCP_PROJECT` | The project id of those backend services. |
+| `ORACLE_MAIL_PROVIDER` | `gmail_api` sends the invite email through the Gmail API as `ORACLE_MAIL_SENDER`, by domain-wide delegation. Either unset: no email is sent, and the Members page gives the owner the link to send. |
+| `ORACLE_MAIL_SENDER` | The company mailbox the invite emails come from. |
+
+Oracle calls IAP and the Gmail API as its own Cloud Run service account, with no key
+file: the delegated Gmail token's JWT is signed by the IAM Credentials API. The owner
+applies the grants this needs (`ops/invite-access-grants.sh <project-id>
+<runtime-service-account-email> <backend-service>...` prints and runs them):
+`roles/iap.admin` for the runtime service account on Oracle's two backend services only,
+and `roles/iam.serviceAccountTokenCreator` for it on itself. A Google Workspace admin
+then grants the service account's client id (the script prints it) domain-wide
+delegation for the `https://www.googleapis.com/auth/gmail.send` scope.

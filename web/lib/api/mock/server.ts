@@ -65,6 +65,8 @@ export interface Db {
   user_id: string;
   members: MemberRow[];
   invites: InviteRow[];
+  /** Invites an owner resent (the "mail-fails" scenario sends those). */
+  invites_resent?: string[];
   documents: DocumentRow[];
   versions: VersionRow[];
   comments: CommentRow[];
@@ -227,7 +229,12 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
  * problem (C6, saved-addresses);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
- * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting).
+ * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
+ * "mail-off" as the default company with no invite sender configured (invites are not
+ * emailed); "mail-fails" where every first invite email fails (Resend sends it);
+ * "iap-pending" where an invite's Google IAP access is not granted until Retry (#242);
+ * "iap-revoke-fails" where removing a member leaves their Google IAP access to remove (the
+ * tick retries it).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -790,6 +797,11 @@ function seed(): Db {
     invited_by: db.user_id,
     accepted_at: null,
     revoked_at: null,
+    access: "granted",
+    access_at: i.created_at,
+    email_status: "sent",
+    email_at: i.created_at,
+    sign_in_url: signInUrl(),
   }));
   const docs = new Map<string, DocumentRow>();
   for (const d of DOCUMENTS as DocumentSeed[]) {
@@ -1610,6 +1622,24 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
   };
 }
 
+/** Where an invitee signs in with Google: the app's own address in the mock. */
+const signInUrl = () => `${location.origin}/`;
+/** The mock company's sign-in domains (ORACLE_IAP_ALLOWED_DOMAINS). */
+const SIGN_IN_DOMAINS = ["example.com"];
+/** A queued invite email goes out (or fails) this long after it was queued. */
+const MAIL_DELAY_MS = 400;
+
+/** The background send: queued invite emails whose time has come are sent, or fail. */
+function settleInviteEmails(db: Db) {
+  const fails = localStorage.getItem(MOCK_SCENARIO_KEY) === "mail-fails";
+  for (const i of db.invites) {
+    if (i.email_status !== "queued" || Date.now() - Date.parse(i.email_at ?? "") < MAIL_DELAY_MS) continue;
+    const resent = (db.invites_resent ??= []).includes(i.id);
+    if (fails && !resent) Object.assign(i, { email_status: "failed", email_error: "the Gmail API answered 503", email_at: now() });
+    else Object.assign(i, { email_status: "sent", email_error: null, email_at: now() });
+  }
+}
+
 /** Members, invites: owners only, as in the API. */
 async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): Promise<Response> {
   if (!atLeast(me.role, "owner")) return forbidden("owner");
@@ -1641,6 +1671,9 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
           return json(409, { detail: "Cannot remove the last owner; make someone else owner" });
         }
         Object.assign(target, { status: "disabled", disabled_at: now(), disabled_by: me.id });
+        // Their Google IAP access is taken away; in "iap-revoke-fails" Google refuses, and
+        // the revoke is owed (the tick retries it).
+        if (localStorage.getItem(MOCK_SCENARIO_KEY) === "iap-revoke-fails") target.access_pending = "revoke";
         // Every credential acting for them is revoked with the disable.
         revokeMemberTokens(account, target.id, target.disabled_at!);
         for (const i of db.invites) {
@@ -1650,11 +1683,13 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       return m === "DELETE" ? json(204, undefined) : json(200, out(target));
     }
     if (m === "POST" && p[3] === "restore") {
-      Object.assign(target, { status: "active", disabled_at: null, disabled_by: null });
+      Object.assign(target, { status: "active", disabled_at: null, disabled_by: null, access_pending: null });
       return json(200, out(target));
     }
   }
   if (p[1] === "invites") {
+    settleInviteEmails(db);
+    const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
     if (!p[2] && m === "GET") {
       const status = new URL(req.url).searchParams.get("status") ?? "open";
       return json(
@@ -1666,6 +1701,9 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       const input = await body<Schemas["InviteCreate"]>();
       const email = input.email.trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(422, { detail: "Not an email address" });
+      if (!SIGN_IN_DOMAINS.includes(email.split("@")[1])) {
+        return json(422, { detail: `Only addresses at ${SIGN_IN_DOMAINS.join(" or ")} can sign in to Oracle` });
+      }
       if (db.members.some((x) => x.email === email)) return json(409, { detail: `${email} is already a member` });
       if (db.invites.some((i) => i.email === email && i.status === "open")) {
         return json(409, { detail: `${email} already has an open invite; revoke it first` });
@@ -1679,12 +1717,32 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         created_at: now(),
         accepted_at: null,
         revoked_at: null,
+        ...(scenario === "iap-pending"
+          ? { access: "pending", access_error: "oracle-api-be: Google returned 403 (permission denied)" }
+          : { access: "granted", access_error: null }),
+        access_at: now(),
+        email_status: scenario === "mail-off" ? "not_sent" : "queued",
+        email_at: now(),
+        sign_in_url: signInUrl(),
       };
       db.invites.push(invite);
       return json(201, invite);
     }
     const invite = db.invites.find((i) => i.id === p[2]);
     if (!invite) return notFound("Invite");
+    if (m === "POST" && (p[3] === "access" || p[3] === "email")) {
+      if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
+      if (p[3] === "access") Object.assign(invite, { access: "granted", access_error: null, access_at: now() });
+      else if (invite.email_status === "queued") return json(409, { detail: "Oracle is sending this invite's email" });
+      else if (invite.email_status === "sent" && invite.email_at && Date.now() - Date.parse(invite.email_at) < 60_000) {
+        const wait = Math.ceil((60_000 - (Date.now() - Date.parse(invite.email_at))) / 1000);
+        return json(429, { detail: `Oracle emailed this invite under a minute ago; resend it in ${wait} seconds` });
+      } else {
+        (db.invites_resent ??= []).push(invite.id);
+        Object.assign(invite, { email_status: scenario === "mail-off" ? "not_sent" : "queued", email_error: null, email_at: now() });
+      }
+      return json(200, invite);
+    }
     if (m === "DELETE") {
       if (invite.status === "accepted") return json(409, { detail: "This invite was already accepted" });
       if (invite.status === "open") Object.assign(invite, { status: "revoked", revoked_at: now() });

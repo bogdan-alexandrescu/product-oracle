@@ -4740,7 +4740,7 @@
           "members"
         ],
         "summary": "Disable Member",
-        "description": "Remove a member by disabling them: sign-in is refused on every path; their\nconnections are disconnected (revoked at the provider) and their sources recorded\nas revoked, so documents citing them cannot publish; their API tokens and OAuth\ngrants are revoked, their runs cancelled, the open invite for their email revoked;\ntheir approvals lapse for good; every session they signed is ended. The calls at\nthe providers and the runtime are made after the disable commits, outside the\nreview gate, and retried by the tick when they fail. The member stays in the list\n(history keeps the name); an owner can restore them, and they sign in fresh. A\nno-op for a disabled member.",
+        "description": "Remove a member by disabling them: sign-in is refused on every path; their\nconnections are disconnected (revoked at the provider) and their sources recorded\nas revoked, so documents citing them cannot publish; their API tokens and OAuth\ngrants are revoked, their runs cancelled, the open invite for their email revoked;\ntheir approvals lapse for good; every session they signed is ended. The calls at\nthe providers and the runtime are made after the disable commits, outside the\nreview gate, and retried by the tick when they fail. Their Google IAP access is\ntaken away, and that of the invites revoked with them (audited). The member stays\nin the list (history keeps the name); an owner can restore them, and they sign in\nfresh. A no-op for a disabled member.",
         "operationId": "disable_member",
         "security": [
           {
@@ -4798,7 +4798,7 @@
           "members"
         ],
         "summary": "Restore Member",
-        "description": "Let a disabled member sign in again, with their role. Their approvals stay\nlapsed, their tokens revoked and their connections gone: nothing else comes back.",
+        "description": "Let a disabled member sign in again, with their role. Their approvals stay\nlapsed, their tokens revoked and their connections gone: nothing else comes back.\nTheir Google IAP access is granted again (audited).",
         "operationId": "restore_member",
         "security": [
           {
@@ -5116,7 +5116,7 @@
           "members"
         ],
         "summary": "Create Invite",
-        "description": "Pre-assign a role to an email: its first Google sign-in lands with that role.",
+        "description": "Pre-assign a role to an email: its first Google sign-in lands with that role.\n\nThe invitee is granted Google IAP access on Oracle's backend services\n(``access``: ``granted``; ``skipped`` with no backends configured; ``pending`` with\n``access_error`` when the grant failed: the invite is kept, and\n``POST /v1/invites/{invite_id}/access`` retries it). Oracle emails them the sign-in\nlink in the background (``email_status``: ``queued``, then ``sent`` or ``failed``;\n``not_sent`` with no sender configured: send them ``sign_in_url``). Refused (422)\nfor an address outside the domains that can sign in.",
         "operationId": "create_invite",
         "security": [
           {
@@ -5151,6 +5151,118 @@
             "description": "Already a member, or an open invite exists"
           },
           "422": {
+            "description": "Not an address that can sign in (ORACLE_IAP_ALLOWED_DOMAINS)"
+          }
+        }
+      }
+    },
+    "/v1/invites/{invite_id}/access": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Retry Invite Access",
+        "description": "Grant an open invite's Google IAP access again (Retry on \"Access not granted\nyet\"). Each attempt is audited; ``access`` says how it went.",
+        "operationId": "retry_invite_access",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "invite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Invite Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such invite"
+          },
+          "409": {
+            "description": "Not open"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/invites/{invite_id}/email": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Resend Invite Email",
+        "description": "Email an open invite again (Resend): queued and sent in the background\n(``email_status``), or ``not_sent`` with no sender configured. Refused (429) under\na minute after its last send.",
+        "operationId": "resend_invite_email",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "invite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Invite Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such invite"
+          },
+          "409": {
+            "description": "Not open, or its email is being sent"
+          },
+          "429": {
+            "description": "Its email went out under a minute ago (Retry-After: seconds)"
+          },
+          "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
@@ -5169,7 +5281,7 @@
           "members"
         ],
         "summary": "Revoke Invite",
-        "description": "Revoke an open invite. Revoking twice is a no-op; an accepted invite is a 409.",
+        "description": "Revoke an open invite. Revoking twice is a no-op; an accepted invite is a 409.\nThe invitee's Google IAP access is taken away, unless they are an active member or\nhave another open invite (audited).",
         "operationId": "revoke_invite",
         "security": [
           {
@@ -44575,7 +44687,9 @@
             "type": "string",
             "enum": [
               "provider_revoke",
-              "run_cancel"
+              "run_cancel",
+              "iap_revoke",
+              "iap_grant"
             ],
             "title": "Kind"
           },
@@ -44589,6 +44703,17 @@
               }
             ],
             "title": "Provider"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
           },
           "status": {
             "type": "string",
@@ -44690,7 +44815,7 @@
           "created_at"
         ],
         "title": "FollowUpOut",
-        "description": "A call a member's disable owes (a provider revoke, a runtime cancel) and how it\nstands: pending (retried by the tick), failed (no more automatic retries; Retry or\nDismiss), done, or dismissed by an owner."
+        "description": "A call a member's disable owes (a provider revoke, a runtime cancel), or a change\nto a person's Google IAP access that failed (an IAP revoke or grant), and how it\nstands: pending (retried by the tick), failed (no more automatic retries; Retry or\nDismiss), done, or dismissed by an owner."
       },
       "FreshnessCounts": {
         "properties": {
@@ -48314,6 +48439,77 @@
               }
             ],
             "title": "Revoked At"
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "granted",
+              "pending",
+              "skipped"
+            ],
+            "title": "Access",
+            "default": "pending"
+          },
+          "access_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Error"
+          },
+          "access_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access At"
+          },
+          "email_status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "sent",
+              "failed",
+              "not_sent"
+            ],
+            "title": "Email Status",
+            "default": "not_sent"
+          },
+          "email_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Error"
+          },
+          "email_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email At"
+          },
+          "sign_in_url": {
+            "type": "string",
+            "title": "Sign In Url"
           }
         },
         "type": "object",
@@ -48322,7 +48518,8 @@
           "email",
           "role",
           "status",
-          "created_at"
+          "created_at",
+          "sign_in_url"
         ],
         "title": "InviteOut"
       },
@@ -51477,6 +51674,21 @@
             "type": "integer",
             "title": "Open Tokens",
             "default": 0
+          },
+          "access_pending": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "revoke",
+                  "grant"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Pending"
           },
           "status": {
             "type": "string",
