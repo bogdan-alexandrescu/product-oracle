@@ -856,6 +856,42 @@ export function enlargeBaseline(s: BaselineState, uuid: () => string, extra: num
   }
 }
 
+/**
+ * The "proposal-noise" scenario (#262): run proposals that repeat unchanged fields, as agents
+ * write them. One changes four of six fields, one rewords a long description, one changes
+ * nothing at all.
+ */
+export function addNoisyProposals(s: BaselineState, uuid: () => string) {
+  const goal = (key: string) => s.entities.find((e) => e.key === key)!;
+  const propose = (target: EntityRow, fields: Attrs, created_at: string) =>
+    s.proposals.push({
+      id: uuid(),
+      entity_id: target.id,
+      edge_id: null,
+      payload: { op: "update", kind: "entity", fields, reason: "Restated from the planning notes.", origin: "agent" },
+      run_id: AGENT_RUN,
+      actor: `run:${AGENT_RUN}`,
+      status: "open",
+      decided_by: null,
+      decided_at: null,
+      created_at,
+    });
+  const churn = goal("g.early-churn");
+  propose(
+    churn,
+    { title: churn.title, body: churn.body, attrs: { ...churn.attrs, weight: 0.25, target: "below 7%", horizon: "2026-Q4", current: "10%" } },
+    "2026-10-16T08:20:00Z",
+  );
+  const activation = goal("g.activation");
+  propose(
+    activation,
+    { title: activation.title, body: "More new accounts reach their first successful order in the first two weeks.", attrs: { ...activation.attrs, target: "50%" } },
+    "2026-10-16T08:21:00Z",
+  );
+  const paid = goal("g.paid-conversion");
+  propose(paid, { title: paid.title, attrs: { target: paid.attrs.target } }, "2026-10-16T08:22:00Z");
+}
+
 /** Makes the seeded commenter proposal the given member's (the mock's members get their ids after the seed). */
 export function attributeCommenterProposal(s: BaselineState, userId: string) {
   const p = s.proposals.find((x) => x.id === COMMENTER_PROPOSAL);

@@ -5,8 +5,9 @@ is checked against the same strings by web/e2e/baseline.spec.ts.
 
 Card for each case of test_describe_table:
   protects: the approver reads what a proposal changes, from what, in plain words.
-  fails_when: the sentence omits the old value, shows a field path (attrs.) or an id, or
-    names the wrong item or link.
+  fails_when: the sentence omits the old value, shows a field path (attrs.) or an id,
+    names the wrong item or link, lists a field whose value is unchanged (#262), or shows a
+    long text change as two identical prefixes.
   no_claim: English only; no check of tone.
 """
 
@@ -37,7 +38,18 @@ GOAL = Entity(
     attrs={"weight": 0.5},
 )
 CRIT = Entity(id=uuid.uuid4(), type="acceptance_criterion", title="Loads fast", attrs={})
-ENTITIES = {e.id: e for e in (DARK, SETTINGS, GOAL, CRIT)}
+SHOPS = Entity(
+    id=uuid.uuid4(),
+    type="goal",
+    title="Reach paid shops",
+    body="Reach fifty paid shops a day by the end of the second quarter of next year.",
+    status="confirmed",
+    attrs={
+        "weight": 0.5,
+        "metric": "Shops that take a paid order on their first day of opening their doors",
+    },
+)
+ENTITIES = {e.id: e for e in (DARK, SETTINGS, GOAL, CRIT, SHOPS)}
 SUPPORTS = Edge(
     id=uuid.uuid4(), src_id=DARK.id, dst_id=GOAL.id, type="supports", attrs={"contribution": 1}
 )
@@ -177,6 +189,54 @@ CASES = [
     ),  # fmt: skip
     ("object-value", upd(DARK, attrs={"spec": {"x": 1}}), "Set Dark mode’s spec to a new value"),
     ("bool-value", upd(DARK, attrs={"beta": False}), "Set Dark mode’s beta to no"),
+    # #262: only real changes are listed, and counted.
+    (
+        "unchanged-fields-left-out",
+        upd(DARK, title="Dark mode", attrs={"effort": "L", "status": "idea"}),
+        "Set Dark mode’s effort to L (was M)",
+    ),
+    (
+        "more-counts-only-real-changes",
+        upd(
+            DARK,
+            title="Dark mode",
+            body="A dark theme.",
+            attrs={"effort": "L", "status": "planned", "release_window": "Q2", "a": 1},
+        ),
+        "Change Dark mode: effort to L (was M), delivery status to planned (was idea), "
+        "release window to Q2 (was Q1) and 1 more",
+    ),
+    ("no-change", upd(DARK, title="Dark mode", attrs={"effort": "M"}), "No change to Dark mode"),
+    ("no-change-status", upd(SETTINGS, status="confirmed"), "No change to Saved carts"),
+    ("no-change-body", upd(DARK, body="A dark theme."), "No change to Dark mode"),
+    (
+        "no-change-edge",
+        proposal("update", "edge", {"attrs": {"contribution": 1}}, edge=SUPPORTS),
+        "No change to link Dark mode supports Raise activation",
+    ),
+    (
+        "long-text-shows-what-differs",
+        upd(
+            SHOPS,
+            body="Reach fifty paid shops a day by the end of the third quarter of next year.",
+            attrs={"weight": 0.6},
+        ),
+        "Change Reach paid shops: description to …of the third quarter of next year. "
+        "(was …of the second quarter of next year.), weight to 0.6 (was 0.5)",
+    ),
+    (
+        "long-text-one-field",
+        upd(SHOPS, title="Reach paid shops", attrs={"weight": 0.5, "note": None, "metric": (
+            "Shops that take a paid order on their first two days of opening their doors"
+        )}),
+        "Set Reach paid shops’ metric to …their first two days of opening their doors "
+        "(was …their first day of opening their doors)",
+    ),  # fmt: skip
+    (
+        "body-left-after-unchanged-title",
+        upd(DARK, title="Dark mode", body="Darker."),
+        "Rewrite the description of Dark mode",
+    ),
 ]
 
 
@@ -212,6 +272,22 @@ def test_long_value_is_cut_at_60_and_snake_case_reads_in_words():
     assert describe(upd(DARK, attrs={"status": "in_progress"}), ENTITIES, EDGES) == (
         "Set Dark mode’s delivery status to in progress (was idea)"
     )
+
+
+def test_long_change_far_into_the_text_shows_two_different_sides():
+    """protects: a reviewer sees what a long text change changes without opening Details.
+    fails_when: both sides are the same 60-character prefix.
+    no_claim: the exact words around the change (the table pins two cases)."""
+    before = "word " * 30 + "alpha " + "tail " * 20
+    after = "word " * 30 + "beta " + "tail " * 20
+    item = Entity(id=uuid.uuid4(), type="feature", title="Notes", attrs={"note": before})
+    sentence = describe(upd(item, attrs={"note": after}), {item.id: item}, {})
+    match = re.fullmatch(r"Set Notes’ note to (.+) \(was (.+)\)", sentence)
+    assert match is not None, sentence
+    new, old = match.groups()
+    assert new != old
+    assert "beta" in new and "alpha" in old
+    assert new.startswith("…") and len(new) <= 62
 
 
 _ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I)
