@@ -164,6 +164,7 @@ from oracle.review.models import FeedbackItem
 from oracle.review.schemas import Resolution
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import doc_dates, schedule
+from oracle.roadmap.views import items_version, version_items
 from oracle.runs import extensions, feature_set, flows, reasons, rejection, reuse, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
@@ -2258,7 +2259,10 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         if e.type == "goal" and e.status == "confirmed"
     ]
     bases = await schedule.verified_bases(db, version.document_id)
+    known_from, known = await _known_roadmap_items(db, run)
     return flows.SourceContext(
+        known_items=known,
+        known_from=known_from,
         horizons=await _run_horizons(db, run),
         schedule_bases=[b.as_json() for b in bases],
         slug=document.slug if document else str(version.document_id),
@@ -2271,6 +2275,22 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         edges=edges,
         goals=goals,
     )
+
+
+async def _known_roadmap_items(db: AsyncSession, run: Run) -> tuple[str, list[dict[str, str]]]:
+    """E3: the latest items of the roadmap a prd_to_roadmap run writes the next version
+    of, so the agents keep their ids; none for a new roadmap."""
+    doc = await db.get(Document, run.document_id) if run.document_id else None
+    if doc is None and run.knobs.get("document_slug"):
+        doc = await db.scalar(select(Document).where(Document.slug == run.knobs["document_slug"]))
+    if doc is None or doc.kind != "roadmap":
+        return "", []
+    version = await items_version(db, doc)
+    rows = await version_items(db, version)
+    if not rows or version is None:
+        return "", []
+    known = [{"id": r.item_key, "title": r.title, "horizon": r.horizon} for r in rows]
+    return f"roadmap v{version.number}", known
 
 
 async def _intake_title(db: AsyncSession, run: Run) -> str | None:

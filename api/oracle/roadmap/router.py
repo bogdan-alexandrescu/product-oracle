@@ -26,8 +26,8 @@ from oracle.authz import require_role
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.leads import engineering_leads, may_verify_dates
+from oracle.roadmap import diff_views, schedule, staleness, tracker, tracks, views
 from oracle.roadmap import items as items_mod
-from oracle.roadmap import schedule, staleness, tracker, tracks, views
 from oracle.roadmap.models import (
     ProductTrack,
     RoadmapItem,
@@ -39,6 +39,7 @@ from oracle.roadmap.schemas import (
     AlignmentReport,
     BasisStatus,
     ItemProblem,
+    ItemsDiffOut,
     ItemsImport,
     ItemsImportOut,
     ItemStalenessAction,
@@ -48,6 +49,7 @@ from oracle.roadmap.schemas import (
     MilestoneOut,
     MilestonePatch,
     MonitorOut,
+    RoadmapItemHistoryOut,
     RoadmapItemsOut,
     ScheduleBasisCreate,
     ScheduleBasisOut,
@@ -222,6 +224,45 @@ async def act_on_roadmap_item_staleness(
     await db.commit()
     out = await views.items_view(db, document, version, "full")
     return ItemStalenessOut(changed=changed, items=out.items)
+
+
+# --- roadmap item diff (E3) ------------------------------------------------------------------
+
+
+@router.get("/roadmap-items/diff", response_model=ItemsDiffOut)
+async def diff_roadmap_items(
+    principal: Reader,
+    db: TenantDB,
+    head: Annotated[str, Query(min_length=1, max_length=300)],
+    base: Annotated[str, Query(min_length=1, max_length=300)] = "previous",
+) -> ItemsDiffOut:
+    """What changed, item by item, between two sets of roadmap items: ``head`` and
+    ``base`` are refs (``<slug>@<n>``, a roadmap version's items); ``base`` is also
+    ``previous`` (the nearest earlier version with items, the default) or ``approved``
+    (the roadmap's latest approved version other than the head). Plan changes count
+    (oracle.roadmap.diff.COUNTED_FIELDS); confidence, one-place rank moves and the PRD
+    section's text are notes. Nothing to compare with: ``base`` null and no items. A PRD
+    version's draft items are not stored yet (409)."""
+    try:
+        return await diff_views.diff_view(db, head, base)
+    except diff_views.DiffError as e:
+        raise _fail(e) from e
+
+
+@router.get("/roadmap-items/history", response_model=RoadmapItemHistoryOut)
+async def get_roadmap_item_history(
+    principal: Reader,
+    db: TenantDB,
+    prd: Annotated[str, Query(min_length=1, max_length=200)],
+    item_key: Annotated[str, Query(min_length=1, max_length=200)],
+) -> RoadmapItemHistoryOut:
+    """One item across the roadmap versions whose items trace to the PRD, oldest first
+    (the latest 50), each entry against the one before; ``present: false`` where it
+    left. Follows the key only: a rename starts a new history."""
+    try:
+        return await diff_views.history(db, prd, item_key)
+    except diff_views.DiffError as e:
+        raise _fail(e) from e
 
 
 @router.get("/roadmaps/{doc}/alignment", response_model=AlignmentReport)

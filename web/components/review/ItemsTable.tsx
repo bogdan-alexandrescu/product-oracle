@@ -96,13 +96,18 @@ export function ItemsTable({
   );
   const counts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of shown) m.set(r.horizon, (m.get(r.horizon) ?? 0) + 1);
+    for (const r of shown) if (!r.ghost) m.set(r.horizon, (m.get(r.horizon) ?? 0) + 1);
     return m;
   }, [shown]);
 
   const columns: Column<ItemRow>[] = [
-    { key: "position", header: "#", width: "44px", align: "right", phone: "hide", className: "tnum text-text2", cell: (r) => r.position + 1 },
-    { key: "title", header: "Item", phone: "title", cell: (r) => <span className="font-medium">{r.title}</span> },
+    { key: "position", header: "#", width: "44px", align: "right", phone: "hide", className: "tnum text-text2", cell: (r) => (r.ghost ? "" : r.position + 1) },
+    {
+      key: "title",
+      header: "Item",
+      phone: "title",
+      cell: (r) => (r.ghost ? <s className="text-text2">{r.title}</s> : <span className="font-medium">{r.title}</span>),
+    },
     { key: "horizon", header: "Horizon", width: "84px", phone: "action", cell: (r) => <HorizonChip horizon={r.horizon} /> },
     { key: "milestone", header: "Milestone", width: "172px", phone: "meta", cell: (r) => <MilestoneCell row={r} /> },
     { key: "confidence", header: "Conf.", width: "76px", phone: "meta", phoneLabel: "Conf.", cell: (r) => <Confidence value={r.confidence} /> },
