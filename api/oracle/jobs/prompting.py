@@ -34,6 +34,9 @@ CURRENT = {
     "quality_review": "quality_review.v1",
     "refinement_batch": "refinement_batch.v1",
     "decision_options": "decision_options.v1",
+    "interview_guide": "interview_guide.v1",
+    "interview_turn": "interview_turn.v1",
+    "interview_snapshot": "interview_snapshot.v1",
 }
 
 

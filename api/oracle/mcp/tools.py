@@ -28,6 +28,13 @@ EXCLUDED_OPERATIONS = {"login", "logout"}
 # Only from the signed-in browser (AC1, owner 2026-10-20): a credential never mints
 # another, changes the password or signs its person out everywhere.
 BROWSER_ONLY_OPERATIONS = {"create_personal_token", "change_password", "sign_out_everywhere"}
+# The interviewee's own routes behind a private interview link (C3): no member credential.
+PUBLIC_OPERATIONS = {
+    "public_interview",
+    "public_interview_message",
+    "public_interview_skip",
+    "public_interview_finish",
+}
 INTERNAL_BASE_URL = "http://oracle.internal"
 
 
@@ -111,6 +118,8 @@ TEXT_BODY_MEDIA_TYPES = frozenset({"application/yaml", "application/x-yaml"})
 def _exclusion(op_id: str, path: str, tags: Iterable[str], media: str | None) -> str | None:
     if op_id in EXCLUDED_OPERATIONS:
         return "browser sign-in; MCP clients authenticate with a bearer token"
+    if op_id in PUBLIC_OPERATIONS:
+        return "for the interviewee's browser behind a private interview link"
     if op_id in BROWSER_ONLY_OPERATIONS:
         return "from the signed-in browser only (My account)"
     segments = [s for s in path.split("/") if s]

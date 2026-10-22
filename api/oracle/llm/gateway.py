@@ -72,6 +72,11 @@ JOBS = (
     "decision_options",
     # C9: Oracle reads a person's reason for a move or pin against the evidence.
     "override_reason_check",
+    # C3 Interviews: a customer interview's guide and snapshot (queued) and its turns
+    # (inline, in the customer's request).
+    "interview_guide",
+    "interview_turn",
+    "interview_snapshot",
 )
 
 #: Accounts one call may try before giving up (the first plus two swaps).

@@ -28692,6 +28692,704 @@
         }
       }
     },
+    "/v1/interviews": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Create Interview",
+        "description": "Create a Draft customer interview and queue Oracle's draft of its questions.",
+        "operationId": "create_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterviewCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "List Interviews",
+        "description": "Interviews, newest first.",
+        "operationId": "list_interviews",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "draft",
+                    "invited",
+                    "in_progress",
+                    "finished",
+                    "expired",
+                    "revoked"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "intake_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Intake Id"
+            }
+          },
+          {
+            "name": "theme_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Theme Id"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "team",
+                    "customer"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InterviewSummary"
+                  },
+                  "title": "Response List Interviews"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interviews/{interview_id}": {
+      "get": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Get Interview",
+        "description": "An interview: its approved guide, the guide job, the transcript, the snapshot and\nthe requests it created.",
+        "operationId": "get_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Patch Interview",
+        "description": "Edit a Draft's intro, questions (at most 8, in order) or the customer's name.",
+        "operationId": "patch_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterviewPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interviews/{interview_id}/guide": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Redraft Interview Guide",
+        "description": "Ask Oracle to draft a Draft's questions again.",
+        "operationId": "redraft_interview_guide",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interviews/{interview_id}/link": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Create Interview Link",
+        "description": "Create the private link: shown once, works once, expires after 7 days.",
+        "operationId": "create_interview_link",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewLinkOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interviews/{interview_id}/revoke": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Revoke Interview",
+        "description": "Withdraw the interview: its link stops working at once.",
+        "operationId": "revoke_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/public/interviews/{token}": {
+      "get": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Public Interview",
+        "description": "The interview behind a private link (no member credential). The first open binds\nthe link to this browser with a cookie and posts Oracle's first question.",
+        "operationId": "public_interview",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterview"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown link (the body of an expired one)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Used in another browser, expired or withdrawn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/public/interviews/{token}/messages": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Public Interview Message",
+        "description": "The customer's answer; Oracle acknowledges it and asks one follow-up or the next\napproved question.",
+        "operationId": "public_interview_message",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicInterviewMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewTurn"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown link (the body of an expired one)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Used in another browser, expired or withdrawn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Empty or too long"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/v1/public/interviews/{token}/skip": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Public Interview Skip",
+        "description": "Skip the current question: Oracle asks the next one.",
+        "operationId": "public_interview_skip",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewTurn"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown link (the body of an expired one)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Used in another browser, expired or withdrawn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/public/interviews/{token}/finish": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Public Interview Finish",
+        "description": "Send my answers: the interview finishes and the link stops working.",
+        "operationId": "public_interview_finish",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewDone"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown link (the body of an expired one)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Used in another browser, expired or withdrawn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/plan": {
       "get": {
         "tags": [
@@ -52776,6 +53474,658 @@
         "title": "IntakeSummary",
         "description": "The Opportunity and Gaps summary, as the reader may see it (S6)."
       },
+      "InterviewCreate": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "customer",
+            "title": "Kind",
+            "default": "customer"
+          },
+          "interviewee_name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Interviewee Name"
+          },
+          "interviewee_company": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Company"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/InterviewSubject"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "interviewee_name",
+          "subject"
+        ],
+        "title": "InterviewCreate"
+      },
+      "InterviewGuideItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "prompt": {
+            "type": "string",
+            "title": "Prompt"
+          },
+          "purpose": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "prompt"
+        ],
+        "title": "InterviewGuideItem"
+      },
+      "InterviewGuideItemIn": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "prompt": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Prompt"
+          },
+          "purpose": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "InterviewGuideItemIn"
+      },
+      "InterviewJobState": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "InterviewJobState"
+      },
+      "InterviewLinkOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "title": "InterviewLinkOut",
+        "description": "The private link, shown once."
+      },
+      "InterviewMessageOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "oracle",
+              "interviewee"
+            ],
+            "title": "Role"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "guide_item": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guide Item"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "kind",
+          "body",
+          "created_at"
+        ],
+        "title": "InterviewMessageOut"
+      },
+      "InterviewOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "team",
+              "customer"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "invited",
+              "in_progress",
+              "finished",
+              "expired",
+              "revoked"
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "intake_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Id"
+          },
+          "theme_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Id"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "intro": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intro"
+          },
+          "guide": {
+            "items": {
+              "$ref": "#/components/schemas/InterviewGuideItem"
+            },
+            "type": "array",
+            "title": "Guide"
+          },
+          "guide_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InterviewJobState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "interviewee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Name"
+          },
+          "interviewee_company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Company"
+          },
+          "link_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Expires At"
+          },
+          "link_opened_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Opened At"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Created By"
+          },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/InterviewMessageOut"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Snapshot"
+          },
+          "snapshot_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InterviewJobState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Request Ids"
+          },
+          "can_manage": {
+            "type": "boolean",
+            "title": "Can Manage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "title",
+          "guide",
+          "created_by",
+          "created_at",
+          "lock_version",
+          "messages",
+          "snapshot",
+          "request_ids",
+          "can_manage"
+        ],
+        "title": "InterviewOut"
+      },
+      "InterviewPatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "intro": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intro"
+          },
+          "guide": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/InterviewGuideItemIn"
+                },
+                "type": "array",
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guide"
+          },
+          "interviewee_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Name"
+          },
+          "interviewee_company": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Company"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "InterviewPatch"
+      },
+      "InterviewSubject": {
+        "properties": {
+          "intake_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Id"
+          },
+          "theme_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Id"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "InterviewSubject",
+        "description": "What the interview is about: exactly one of an intake, a request theme or a topic."
+      },
+      "InterviewSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "team",
+              "customer"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "invited",
+              "in_progress",
+              "finished",
+              "expired",
+              "revoked"
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "interviewee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Name"
+          },
+          "interviewee_company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Company"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Created By"
+          },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "request_count": {
+            "type": "integer",
+            "title": "Request Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "title",
+          "created_by",
+          "created_at",
+          "request_count"
+        ],
+        "title": "InterviewSummary"
+      },
       "InviteCreate": {
         "properties": {
           "email": {
@@ -61549,6 +62899,166 @@
           "token_help"
         ],
         "title": "ProviderOut"
+      },
+      "PublicInterview": {
+        "properties": {
+          "company": {
+            "type": "string",
+            "title": "Company"
+          },
+          "interviewee_name": {
+            "type": "string",
+            "title": "Interviewee Name"
+          },
+          "intro": {
+            "type": "string",
+            "title": "Intro"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "invited",
+              "in_progress",
+              "finished"
+            ],
+            "title": "Status"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/PublicInterviewMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/PublicInterviewProgress"
+          }
+        },
+        "type": "object",
+        "required": [
+          "company",
+          "interviewee_name",
+          "intro",
+          "status",
+          "messages",
+          "progress"
+        ],
+        "title": "PublicInterview"
+      },
+      "PublicInterviewDone": {
+        "properties": {
+          "done": {
+            "type": "boolean",
+            "title": "Done"
+          }
+        },
+        "type": "object",
+        "required": [
+          "done"
+        ],
+        "title": "PublicInterviewDone"
+      },
+      "PublicInterviewMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "oracle",
+              "customer"
+            ],
+            "title": "Role"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "body",
+          "at"
+        ],
+        "title": "PublicInterviewMessage"
+      },
+      "PublicInterviewMessageIn": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "PublicInterviewMessageIn"
+      },
+      "PublicInterviewProgress": {
+        "properties": {
+          "asked": {
+            "type": "integer",
+            "title": "Asked"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asked",
+          "total"
+        ],
+        "title": "PublicInterviewProgress"
+      },
+      "PublicInterviewRefusal": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "used",
+              "expired",
+              "withdrawn"
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "PublicInterviewRefusal"
+      },
+      "PublicInterviewTurn": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/PublicInterviewMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/PublicInterviewProgress"
+          },
+          "done": {
+            "type": "boolean",
+            "title": "Done"
+          }
+        },
+        "type": "object",
+        "required": [
+          "messages",
+          "progress",
+          "done"
+        ],
+        "title": "PublicInterviewTurn"
       },
       "PublicationOut": {
         "properties": {

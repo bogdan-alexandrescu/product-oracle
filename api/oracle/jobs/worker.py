@@ -1,9 +1,9 @@
 """Runs queued built-in jobs: from ``oracle tick`` and the local background worker.
 
-One job at a time per document (or per product intake, for intake jobs): a job is
-claimed under the document's (intake's) row lock, and only when no other job of it is
-running. Claiming commits (``running``,
-``attempts + 1``) before the model call, so a long call holds no lock.
+One job at a time per document (or per product intake, decision or interview, for their
+jobs): a job is claimed under the document's (intake's, ...) row lock, and only when no
+other job of it is running. Claiming commits (``running``, ``attempts + 1``) before the
+model call, so a long call holds no lock.
 
 Outcomes:
 - the answer is written with the call's account, tokens and cost: ``succeeded``;
@@ -46,6 +46,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
+from oracle.interviews.models import Interview
 from oracle.jobs import kinds, prompting
 from oracle.jobs.models import LlmJob
 from oracle.jobs.schemas import LlmJobsTick
@@ -162,22 +163,30 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
         await reclaim_stale(s)
         candidates = (
             await s.execute(
-                select(LlmJob.id, LlmJob.document_id, LlmJob.intake_id, LlmJob.decision_id)
+                select(
+                    LlmJob.id,
+                    LlmJob.document_id,
+                    LlmJob.intake_id,
+                    LlmJob.decision_id,
+                    LlmJob.interview_id,
+                )
                 .where(LlmJob.status == "queued")
                 .order_by(LlmJob.created_at, LlmJob.id)
                 .limit(50)
             )
         ).all()
         busy: set[uuid.UUID] = set()
-        for job_id, document_id, intake_id, decision_id in candidates:
-            # A document's jobs run one at a time; so do an intake's and a decision's
-            # (they have no document).
+        for job_id, document_id, intake_id, decision_id, interview_id in candidates:
+            # A document's jobs run one at a time; so do an intake's, a decision's and an
+            # interview's (they have no document).
             if document_id is not None:
                 owner, model, column = document_id, Document, LlmJob.document_id
             elif intake_id is not None:
                 owner, model, column = intake_id, ProductIntake, LlmJob.intake_id
-            else:
+            elif decision_id is not None:
                 owner, model, column = decision_id, Decision, LlmJob.decision_id
+            else:
+                owner, model, column = interview_id, Interview, LlmJob.interview_id
             if owner in busy:
                 continue
             # The owner's row lock serialises claims of its jobs across workers.
