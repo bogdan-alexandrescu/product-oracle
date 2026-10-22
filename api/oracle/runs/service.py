@@ -165,7 +165,7 @@ from oracle.review.schemas import Resolution
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import doc_dates, schedule
 from oracle.runs import extensions, feature_set, flows, reasons, rejection, reuse, roadmap, workflow
-from oracle.runs.models import Checkpoint, Run, RunSegment
+from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
     CheckpointDelivery,
@@ -240,6 +240,8 @@ log = logging.getLogger(__name__)
 FINAL = ("succeeded", "failed", "cancelled")
 # A checkpoint decided by a person (the others: pending, skipped).
 DECIDED = ("approved", "changes_requested")
+# D4: a send-back with nothing staged and no note.
+NOTHING_TO_SEND = "Stage a change, ask a question, or write a note to send back."
 ACTIVE = ("running", "awaiting_checkpoint", "paused_overrun")
 # Run knobs Oracle sets (not the user's knobs): kept when a draft's knobs change.
 ORACLE_KNOBS = (
@@ -791,6 +793,7 @@ def _checkpoint_out(
         decided_by=cp.decided_by,
         decided_at=cp.decided_at,
         note=cp.note,
+        review=cp.review,
         payload=payload,
         created_at=cp.created_at,
         console=ConsoleAnswer.model_validate({**console, "can_redo": _can_redo(console)})
@@ -948,7 +951,7 @@ async def list_decisions(
                 via=via,
                 note=cp.note,
                 edits=extra.get("edits"),
-                review=extra.get("review"),
+                review=cp.review or extra.get("review"),
                 delivered=delivered,
                 summary=decision_summary(cp.kind, cp.status, role, via, cp.note, delivered),
             )
@@ -6276,6 +6279,9 @@ async def decide_checkpoint(
         raise await actions.review_changed(db, cp, expected_revision)
     # The note defaults to the shared draft's (D8).
     note = (note if note is not None else cp.draft_note or "").strip() or None
+    # D4: an Inbox send-back delivers a structured review of the shared draft (a console
+    # Redo carries the console's findings instead).
+    send_back = decision == "changes_requested"
     wait = (cp.payload or {}).get("wait") or {}
     redo = False
     # A choice about an answer SwarmCloud's console recorded is decided through it (H1).
@@ -6318,7 +6324,15 @@ async def decide_checkpoint(
         # Approve, a confirmed console approval and Continue alike: nothing is decided.
         raise RunError(blocked)
     if decision == "changes_requested" and not note:
-        raise Invalid("say what to change: a note is required to request changes")
+        if not send_back:
+            raise Invalid("say what to change: a note is required to request changes")
+        staged = await db.scalar(
+            select(func.count())
+            .select_from(CheckpointAction)
+            .where(CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged")
+        )
+        if not staged:
+            raise Invalid(NOTHING_TO_SEND)
     segments = await _segments(db, run.id)
     seq = (cp.payload or {}).get("segment_seq")
     segment = next((s for s in segments if s.seq == seq), None)
@@ -6333,6 +6347,10 @@ async def decide_checkpoint(
     cp.decided_by = principal.id
     cp.decided_at = _now()
     cp.note = note
+    if send_back:
+        from oracle.runs import review_file
+
+        cp.review = await review_file.sent_review(db, principal, run, cp, note)
     _record_decider(cp, *decider)
     data: dict[str, Any] = {"run_id": str(run.id), "kind": cp.kind}
     if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW:
@@ -6398,6 +6416,21 @@ async def decide_checkpoint(
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
 
+async def read_review_file(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: uuid.UUID) -> str:
+    """The ``review.yaml`` a send-back at the checkpoint delivered (D4)."""
+    from oracle.runs import review_file
+
+    run = await _get_run(db, run_id)
+    cp = await db.scalar(
+        select(Checkpoint).where(Checkpoint.id == checkpoint_id, Checkpoint.run_id == run.id)
+    )
+    if cp is None:
+        raise NotFound(f"checkpoint {checkpoint_id} not found")
+    if cp.status == "pending" or not cp.review:
+        raise NotFound("no review was sent back at this checkpoint")
+    return review_file.render_yaml(cp.review, cp.decided_at)
+
+
 async def _continue_decided(
     db: AsyncSession,
     run: Run,
@@ -6431,6 +6464,10 @@ async def _continue_decided(
         "restore": restore,
     }
     _set_art(target, art)
+    if decision != "approved" and cp.review:
+        from oracle.runs import review_file
+
+        note = review_file.change_request(cp.review, cp.decided_at)
     await _submit(db, run, target, segments, change_request=note)
 
 
@@ -6707,6 +6744,7 @@ async def _void_owed(
     cp.decided_by = None
     cp.decided_at = None
     cp.note = None
+    cp.review = None
     # H1: a decision voided before it reached the run is not in the decision log.
     await decisions_capture.checkpoint_voided(db, cp.id)
     await _scope_reopened(db, cp)
@@ -6822,6 +6860,7 @@ async def void_decision(
     cp.decided_by = None
     cp.decided_at = None
     cp.note = None
+    cp.review = None
     # H1: a decision voided before it reached the run is not in the decision log.
     await decisions_capture.checkpoint_voided(db, cp.id)
     await _scope_reopened(db, cp)
@@ -6877,6 +6916,7 @@ async def _undecide(db: AsyncSession, run: Run, cp: Checkpoint) -> bool:
     cp.decided_by = None
     cp.decided_at = None
     cp.note = None
+    cp.review = None
     # H1: a decision voided before it reached the run is not in the decision log.
     await decisions_capture.checkpoint_voided(db, cp.id)
     await _scope_reopened(db, cp)
@@ -7079,7 +7119,7 @@ async def _decide_in_workflow(
         if approved
         else {
             "verdict": NOT_YET,
-            "findings": ([cp.note] if cp.note else []) + await _problem_findings(db, run, cp),
+            "findings": await _send_back_findings(db, run, cp),
         }
     )
     on_behalf_of = await _email(db, user_id)
@@ -7135,6 +7175,17 @@ async def _decide_in_workflow(
     ):
         raise _unconfirmed("end the run")
     return True
+
+
+async def _send_back_findings(db: AsyncSession, run: Run, cp: Checkpoint) -> list[str]:
+    """What a send-back posts to the revise step: the structured review (D4), one line per
+    entry, with Oracle's check; the note and the check for a decision stored without one."""
+    problems = await _problem_findings(db, run, cp)
+    if cp.review:
+        from oracle.runs import review_file
+
+        return review_file.findings(cp.review, problems)
+    return ([cp.note] if cp.note else []) + problems
 
 
 async def _problem_findings(db: AsyncSession, run: Run, cp: Checkpoint) -> list[str]:

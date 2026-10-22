@@ -4570,6 +4570,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review.yaml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Checkpoint Review File
+         * @description The structured review a send-back delivered to the agents (D4), any member: the
+         *     ``review.yaml`` of a decided checkpoint. 404 while pending or when none was sent.
+         */
+        get: operations["get_checkpoint_review_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions": {
         parameters: {
             query?: never;
@@ -11047,6 +11068,10 @@ export interface components {
             decided_at?: string | null;
             /** Note */
             note?: string | null;
+            /** Review */
+            review?: {
+                [key: string]: unknown;
+            } | null;
             /** Payload */
             payload: {
                 [key: string]: unknown;
@@ -11114,6 +11139,12 @@ export interface components {
             tally: components["schemas"]["ReviewTally"];
             /** Note */
             note?: string | null;
+            /** Sent Review */
+            sent_review?: {
+                [key: string]: unknown;
+            } | null;
+            /** Sent Review Yaml */
+            sent_review_yaml?: string | null;
             /**
              * Can Read
              * @default true
@@ -15759,6 +15790,10 @@ export interface components {
             decided_at?: string | null;
             /** Note */
             note?: string | null;
+            /** Review */
+            review?: {
+                [key: string]: unknown;
+            } | null;
             /** Payload */
             payload: {
                 [key: string]: unknown;
@@ -36506,6 +36541,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckpointReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_checkpoint_review_file: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
             /** @description Validation Error */

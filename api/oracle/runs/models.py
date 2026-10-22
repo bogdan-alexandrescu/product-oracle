@@ -176,6 +176,8 @@ class Checkpoint(TenantScoped, Base):
     # it; a decision sent with an older one is refused).
     draft_note: Mapped[str | None] = mapped_column(Text)
     draft_revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # The structured review sent with a send-back (D4), or the edits applied (D7).
+    review: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class CheckpointAction(TenantScoped, Base):
