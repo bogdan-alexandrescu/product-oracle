@@ -153,15 +153,19 @@ test("fireflies picker: search waits until typing stops before it asks Fireflies
   const searches = () =>
     page.evaluate(() => (window.__firefliesBrowseCalls ?? []).filter((c) => c.startsWith("meetings?") && c.includes("search=")));
 
-  // A slow typist: 350 ms between keys never reaches Fireflies mid-word.
+  // A slow typist: 350 ms between keys never reaches Fireflies mid-word. Time stands still
+  // between steps, so each gap is exactly 350 ms however slow the machine is.
   const box = picker.getByLabel("Search meetings");
   await box.click();
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
   for (const key of "customer") {
     await page.keyboard.type(key);
     await page.clock.runFor(350);
   }
   expect(await searches()).toEqual([]);
   await page.clock.runFor(100);
+  // The search is due: let time run again so the answer arrives.
+  await page.clock.resume();
   await expect.poll(searches).toEqual(["meetings?search=customer"]);
   await expect(picker.getByRole("group", { name: "Meetings" }).getByLabel("Customer interview: Acme")).toBeVisible();
 });

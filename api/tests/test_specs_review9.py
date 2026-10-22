@@ -152,14 +152,14 @@ async def test_slow_posts_do_not_make_a_small_honest_import_fail(client, monkeyp
         asyncio.create_task(import_md(client, posters[i % 4], slow, doc=f"slow-{i}"))
         for i in range(8)
     ]
-    # The slow posts hold every worker of the parse pool and more wait for one.
+    # The slow posts hold every worker of the parse pool and more wait for one. A busy
+    # machine takes a while to bring them to the parse stage: wait on that, not on a clock.
     pool = safe_yaml._EXECUTOR
-    for _ in range(500):
-        if len(pool._threads) == pool._max_workers and pool._work_queue.qsize():
-            break
+    deadline = time.monotonic() + 30
+    while not (len(pool._threads) == pool._max_workers and pool._work_queue.qsize()):
+        if time.monotonic() > deadline:
+            pytest.fail("the slow posts never filled the parse pool")
         await asyncio.sleep(0.01)
-    else:
-        pytest.fail("the slow posts never filled the parse pool")
     resp = await import_md(client, owner, SMALL, doc="small")
     assert resp.status_code == 201, resp.text[:300]
     for done in await asyncio.gather(*posts):
