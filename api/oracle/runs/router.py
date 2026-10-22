@@ -22,10 +22,13 @@ from oracle.authz import require_role, require_role_now
 from oracle.claude_accounts.sweep import summarise_sweep
 from oracle.connections.router import ProviderHttp
 from oracle.jobs.worker import run_pending as run_llm_jobs
-from oracle.runs import service
+from oracle.runs import actions, service
 from oracle.runs.schemas import (
+    ActionIn,
     CancelAgain,
     CheckpointDecision,
+    CheckpointReview,
+    DraftNoteIn,
     EstimateOut,
     FlowCatalog,
     InboxOut,
@@ -58,7 +61,8 @@ async def _call[T](op: Awaitable[T]) -> T:
     try:
         return await op
     except service.RunError as exc:
-        raise HTTPException(exc.status, str(exc)) from exc
+        # A refusal with a structured detail (D8 ``review_changed``) keeps it.
+        raise HTTPException(exc.status, getattr(exc, "detail", None) or str(exc)) from exc
 
 
 @router.get("/runtime/status", response_model=RuntimeStatusOut)
@@ -284,10 +288,111 @@ async def decide_checkpoint(
     runs again with the note). Approving is refused (409) while the draft its segment left
     is not imported (``cannot_approve``): retry the import, or request changes."""
     await _call(
-        service.decide_checkpoint(db, principal, run_id, checkpoint_id, body.decision, body.note)
+        service.decide_checkpoint(
+            db,
+            principal,
+            run_id,
+            checkpoint_id,
+            body.decision,
+            body.note,
+            body.expected_revision,
+        )
     )
     await service.submit_queued(db, run_id)
     return await service.read_run(db, run_id, principal)
+
+
+# D8: the checkpoint's shared draft decision. Every write answers the whole draft, so a
+# client never reads twice.
+
+
+@router.get(
+    "/runs/{run_id}/checkpoints/{checkpoint_id}/review",
+    response_model=CheckpointReview,
+    operation_id="get_checkpoint_draft",
+)
+async def get_checkpoint_draft(
+    run_id: uuid.UUID, checkpoint_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
+) -> CheckpointReview:
+    """A checkpoint's shared draft decision (D8), any member: the items of the file it
+    reviews with their reasons (recomputed on every read) and the actions people staged or
+    suggested, the tally, the note to the agents, the revision to decide with, the time
+    the SwarmCloud wait has left and what I may do. Kinds with no item file: ``items: []``."""
+    return await _call(actions.read(db, principal, run_id, checkpoint_id))
+
+
+@router.post(
+    "/runs/{run_id}/checkpoints/{checkpoint_id}/actions",
+    response_model=CheckpointReview,
+    operation_id="create_checkpoint_action",
+)
+async def create_checkpoint_action(
+    run_id: uuid.UUID,
+    checkpoint_id: uuid.UUID,
+    body: ActionIn,
+    principal: CurrentPrincipal,
+    db: TenantDB,
+) -> CheckpointReview:
+    """Stage (the checkpoint's approver role or above) or suggest (commenters) one action
+    on one item: one per item, kind and field, so the same again replaces it (a commenter
+    replaces only their own suggestion). A ``question`` asks the named member about the
+    item (C2). 422 names the rule a value breaks; 409 once the checkpoint is decided."""
+    await _call(actions.put_action(db, principal, run_id, checkpoint_id, body))
+    return await _call(actions.read(db, principal, run_id, checkpoint_id))
+
+
+@router.post(
+    "/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage",
+    response_model=CheckpointReview,
+    operation_id="stage_checkpoint_action",
+)
+async def stage_checkpoint_action(
+    run_id: uuid.UUID,
+    checkpoint_id: uuid.UUID,
+    action_id: uuid.UUID,
+    principal: CurrentPrincipal,
+    db: TenantDB,
+) -> CheckpointReview:
+    """Stage a suggestion (the checkpoint's approver role or above): it keeps who
+    suggested it."""
+    await _call(actions.stage_action(db, principal, run_id, checkpoint_id, action_id))
+    return await _call(actions.read(db, principal, run_id, checkpoint_id))
+
+
+@router.delete(
+    "/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}",
+    response_model=CheckpointReview,
+    operation_id="delete_checkpoint_action",
+)
+async def delete_checkpoint_action(
+    run_id: uuid.UUID,
+    checkpoint_id: uuid.UUID,
+    action_id: uuid.UUID,
+    principal: CurrentPrincipal,
+    db: TenantDB,
+) -> CheckpointReview:
+    """Undo an action: its author, or the checkpoint's approver role or above. A question
+    is withdrawn while nobody answered it."""
+    await _call(actions.remove_action(db, principal, run_id, checkpoint_id, action_id))
+    return await _call(actions.read(db, principal, run_id, checkpoint_id))
+
+
+@router.put(
+    "/runs/{run_id}/checkpoints/{checkpoint_id}/note",
+    response_model=CheckpointReview,
+    operation_id="set_checkpoint_note",
+)
+async def set_checkpoint_note(
+    run_id: uuid.UUID,
+    checkpoint_id: uuid.UUID,
+    body: DraftNoteIn,
+    principal: CurrentPrincipal,
+    db: TenantDB,
+) -> CheckpointReview:
+    """Set the draft's note to the agents (the checkpoint's approver role or above); a
+    decision without a note of its own sends it."""
+    await _call(actions.set_note(db, principal, run_id, checkpoint_id, body.note))
+    return await _call(actions.read(db, principal, run_id, checkpoint_id))
 
 
 @router.get(

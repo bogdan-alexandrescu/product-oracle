@@ -52,7 +52,7 @@ def scratch_db():
 def test_0015_specs_chains_after_main_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0015_specs").down_revision == "0020_feedback_author"
-    assert script.get_heads() == ["0022_code_maps"]
+    assert script.get_heads() == ["0022_checkpoint_actions"]
 
 
 def _doc(t, kind: str) -> uuid.UUID:

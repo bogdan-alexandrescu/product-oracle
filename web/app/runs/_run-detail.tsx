@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 import { SourceLink } from "@/components/BuildRoadmap";
@@ -22,7 +22,7 @@ import {
   type ChipKind,
 } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
-import { api, ApiError, unwrap } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -52,8 +52,23 @@ import {
 } from "./_lib";
 
 const POLL_MS = 5000;
+// D8: a pending checkpoint's shared draft is read again this often while the page shows.
+const DRAFT_POLL_MS = 10_000;
+// The note to the agents is saved this long after the last keystroke.
+const NOTE_SAVE_MS = 800;
 
-type Decide = (cp: CheckpointOut, decision: CheckpointChoice, note: string) => void;
+type CheckpointReview = Schemas["CheckpointReview"];
+type WaitInfo = Schemas["WaitInfo"];
+type ActionIn = Schemas["ActionIn"];
+
+/** `revision`: the shared draft's the decider saw (D8); `onChanged` hears it changed since. */
+type Decide = (
+  cp: CheckpointOut,
+  decision: CheckpointChoice,
+  note: string,
+  revision?: number | null,
+  onChanged?: (message: string) => void,
+) => void;
 
 /** The decision panel (#decide): scrolled to and focused, so the keyboard continues from it. */
 function toDecision() {
@@ -131,18 +146,24 @@ export function RunDetail({ id }: { id: string }) {
   // A decision is recorded before SwarmCloud is told: a failed decide re-reads the run. A 503
   // left it recorded and delivering, which the review now says; a 409 (decided meanwhile,
   // say) keeps its message.
-  const decide: Decide = (cp, decision, note) =>
+  // D8: sent with the shared draft's revision the decider saw; a draft that changed since is
+  // refused (409 review_changed) and said at the decision, with Reload.
+  const decide: Decide = (cp, decision, note, revision, onChanged) =>
     act(
       () =>
         unwrap(
           api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide", {
             params: { path: { run_id: id, checkpoint_id: cp.id } },
-            body: { decision, note: note || null },
+            body: { decision, note: note || null, expected_revision: revision ?? null },
           }),
         ),
       async (e) => {
         const after = await unwrap(api.GET("/v1/runs/{run_id}", path)).catch(() => null);
         if (after) q.setData(() => after);
+        if (e instanceof ApiError && e.code === "review_changed" && onChanged) {
+          onChanged(e.message);
+          return true;
+        }
         return e instanceof ApiError && e.status === 503 && !!after?.checkpoints.some((c) => c.id === cp.id && c.delivery);
       },
     );
@@ -550,17 +571,76 @@ function SegmentItem({
   onRetryImport: (seq: number) => void;
 }) {
   const kind = s.checkpoint;
+  const { me } = useMe();
+  // D8: the waiting checkpoint's shared draft, for every member who can see the run.
+  const waitingCp = checkpoints.find((c) => c.status === "pending") ?? null;
+  const draft = useDraft(run.id, waitingCp?.id ?? null);
+  const shared = draft.review && draft.review.checkpoint_id === waitingCp?.id ? draft.review : null;
+  const [draftError, setDraftError] = useState<string | null>(null);
   const deciding = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
   const compact = checkpoints.filter((c) => !(c.status === "pending" && c.can_decide));
   const waiting = checkpoints.some((c) => c.status === "pending");
   // Decided, not delivered to the run yet: said under the segment, with why it waits.
   const delivering = checkpoints.filter((c) => c.delivery && !s.sent_back);
   const details =
-    s.error || s.autonomy_note || s.items_check || s.feature_set_check || s.draft_import || s.artifacts.length > 0 || deciding.length > 0 || delivering.length > 0;
+    s.error ||
+    s.autonomy_note ||
+    s.items_check ||
+    s.feature_set_check ||
+    s.draft_import ||
+    s.artifacts.length > 0 ||
+    deciding.length > 0 ||
+    delivering.length > 0 ||
+    !!shared;
   const rejected = !!s.draft_import?.error;
   // Each open decision's note, here so Send back to writer can fill it in.
   const [notes, setNotes] = useState<Record<string, string>>({});
   const noteFields = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  // The shared note as last read: a new one (another approver's, a reload) replaces what
+  // the field shows unless I changed it since (my edit is being saved).
+  const serverNote = shared?.note ?? "";
+  const [synced, setSynced] = useState<{ cp: string | null; note: string }>({ cp: null, note: "" });
+  if (shared && (synced.cp !== shared.checkpoint_id || synced.note !== serverNote)) {
+    const had = synced.cp === shared.checkpoint_id ? synced.note : "";
+    setSynced({ cp: shared.checkpoint_id, note: serverNote });
+    if ((notes[shared.checkpoint_id] ?? "") === had) setNotes({ ...notes, [shared.checkpoint_id]: serverNote });
+  }
+  const draftPath = (cpId: string) => ({ params: { path: { run_id: run.id, checkpoint_id: cpId } } });
+  async function write(call: () => Promise<CheckpointReview>) {
+    setDraftError(null);
+    try {
+      draft.accept(await call());
+    } catch (e) {
+      setDraftError(errorMessage(e));
+    }
+  }
+  const draftActs: DraftActs | undefined = shared
+    ? {
+        review: shared,
+        meId: me?.user_id ?? null,
+        error: draftError,
+        act: (body) => write(() => unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions", { ...draftPath(shared.checkpoint_id), body }))),
+        stage: (actionId) =>
+          write(() =>
+            unwrap(
+              api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage", {
+                params: { path: { run_id: run.id, checkpoint_id: shared.checkpoint_id, action_id: actionId } },
+              }),
+            ),
+          ),
+        undo: (actionId) =>
+          write(() =>
+            unwrap(
+              api.DELETE("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}", {
+                params: { path: { run_id: run.id, checkpoint_id: shared.checkpoint_id, action_id: actionId } },
+              }),
+            ),
+          ),
+      }
+    : undefined;
+  const saveNote = async (cpId: string, text: string) => {
+    draft.accept(await unwrap(api.PUT("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note", { ...draftPath(cpId), body: { note: text || null } })));
+  };
   // Send back to writer: the Request changes flow of this segment's review, its note the
   // summary of what Oracle refused (kept with anything already written), to edit and send.
   const review = deciding.find((cp) => cp.console?.needs !== "redo_or_continue");
@@ -686,7 +766,8 @@ function SegmentItem({
               </Link>
             </p>
           )}
-          {s.items_check && <ItemsCheckLine check={s.items_check} />}
+          {s.items_check && <ItemsCheckLine check={s.items_check} draft={draftActs} />}
+          {shared && deciding.length === 0 && <SharedDraftLine review={shared} />}
           {s.feature_set_check && <FeatureSetCheckLine check={s.feature_set_check} />}
           {s.draft_import && (
             <DraftImportLine
@@ -710,6 +791,9 @@ function SegmentItem({
               anchor={i === 0}
               note={notes[cp.id] ?? ""}
               onNote={(text) => setNotes((n) => ({ ...n, [cp.id]: text }))}
+              review={shared?.checkpoint_id === cp.id ? shared : null}
+              onSaveNote={(text) => saveNote(cp.id, text)}
+              onReload={draft.reload}
               noteRef={(el) => {
                 noteFields.current[cp.id] = el;
               }}
@@ -889,7 +973,46 @@ function byItem(reasons: ItemReason[]): { item: string; title: string; reasons: 
 // Reason chips wrap instead of cutting their label short (a phone is 390 px wide).
 const REASON_CHIP = "h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left";
 
-function ItemsCheckLine({ check }: { check: ItemsCheck }) {
+/** D8: the waiting checkpoint's shared draft as the items check uses it. */
+interface DraftActs {
+  review: CheckpointReview;
+  meId: string | null;
+  error: string | null;
+  act: (body: ActionIn) => Promise<void>;
+  stage: (actionId: string) => Promise<void>;
+  undo: (actionId: string) => Promise<void>;
+}
+type DraftAction = CheckpointReview["items"][number]["actions"][number];
+type FixAction = ItemReason["fixes"][number]["action"];
+
+// Fixes that need a person's input (a section, a title) wait for the items review (D1).
+const NEEDS_INPUT = ["horizon", "title", "outcome", "milestone_name", "prd_section"];
+const complete = (a: FixAction) => !(a.kind === "edit" && NEEDS_INPUT.includes(a.field ?? "") && a.value == null);
+const sameSlot = (a: { item_key: string; kind: string; field?: string | null }, b: FixAction) =>
+  a.item_key === b.item && a.kind === b.kind && (a.field ?? null) === (b.field ?? null);
+
+const ACTION_WORDS: Record<string, string> = {
+  accept: "Accept",
+  drop: "Drop",
+  restore: "Keep",
+  split: "Split",
+  merge: "Merge",
+  waive: "Waive",
+  question: "Ask",
+  look_again: "Look again",
+  add: "Add",
+};
+
+/** An action in the words of the fix it applies, else of its kind. */
+function actionLabel(a: DraftAction, reasons: ItemReason[]): string {
+  const same = (f: FixAction) => sameSlot(a, f) && JSON.stringify(f.value ?? null) === JSON.stringify(a.value ?? null);
+  const fix = reasons.flatMap((r) => r.fixes).find((f) => same(f.action));
+  if (fix) return fix.label;
+  if (a.kind === "edit") return `Edit ${(a.field ?? "").replace("clear:", "clear ").replace("_", " ")}`;
+  return ACTION_WORDS[a.kind] ?? a.kind;
+}
+
+function ItemsCheckLine({ check, draft }: { check: ItemsCheck; draft?: DraftActs }) {
   const horizons = Object.entries(check.by_horizon).map(([h, n]) => `${n} ${h}`);
   const reasons = check.reasons ?? [];
   // An item's problems read as its blocking reasons; the box keeps the file's own problems
@@ -939,12 +1062,45 @@ function ItemsCheckLine({ check }: { check: ItemsCheck }) {
                         {fixText(r)}
                       </span>
                     )}
+                    {draft?.review.can_suggest && r.fixes.some((f) => complete(f.action)) && (
+                      // D8: an approver stages a fix, a commenter suggests it (an approver stages it later).
+                      <span className="flex flex-wrap gap-1.5" data-testid="reason-fix-buttons">
+                        {r.fixes
+                          .filter((f) => complete(f.action))
+                          .map((f) => (
+                            <Button
+                              key={f.label}
+                              className="h-8 px-2.5 text-sm"
+                              title={`${draft.review.can_stage ? "Stage" : "Suggest"}: ${f.label}`}
+                              onClick={() => {
+                                const had = allActions(draft.review).find((a) => sameSlot(a, f.action));
+                                const answers = f.action.item === r.item ? [r.code] : [];
+                                void draft.act({
+                                  item_key: f.action.item,
+                                  kind: f.action.kind,
+                                  field: f.action.field ?? null,
+                                  value: f.action.value ?? null,
+                                  answers: [...new Set([...(had?.answers ?? []), ...answers])],
+                                });
+                              }}
+                            >
+                              {f.label}
+                            </Button>
+                          ))}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
+              {draft && <DraftActions draft={draft} item={g.item} reasons={reasons} />}
             </li>
           ))}
         </ul>
+      )}
+      {draft?.error && (
+        <p className="mt-1.5 text-sm text-crit" role="alert">
+          {draft.error}
+        </p>
       )}
       {boxed.length > 0 && (
         <ul className="mt-1.5 space-y-0.5 rounded-button bg-warn-bg px-3 py-1.5 text-sm text-warn" data-testid="items-check-problems">
@@ -957,6 +1113,114 @@ function ItemsCheckLine({ check }: { check: ItemsCheck }) {
       )}
     </div>
   );
+}
+
+const allActions = (review: CheckpointReview) => review.items.flatMap((i) => i.actions);
+
+/** D8: what people staged or suggested on one item, who, and Stage / Undo for those who may. */
+function DraftActions({ draft, item, reasons }: { draft: DraftActs; item: string; reasons: ItemReason[] }) {
+  const actions = draft.review.items.find((i) => i.key === item)?.actions ?? [];
+  if (actions.length === 0) return null;
+  return (
+    <ul className="mt-1.5 space-y-1" data-testid="draft-actions">
+      {actions.map((a) => {
+        const who = a.created_by?.name ?? "someone";
+        const mine = !!draft.meId && a.created_by?.id === draft.meId;
+        return (
+          <li key={a.id} data-testid="draft-action" data-state={a.state} className="flex flex-wrap items-center gap-2 text-sm">
+            <Chip kind={a.state === "staged" ? "acc" : "line"} className={REASON_CHIP}>
+              {actionLabel(a, reasons)} · {a.state === "staged" ? "Staged" : "Suggested"} by {who}
+            </Chip>
+            {a.state === "suggested" && draft.review.can_stage && (
+              <Button className="h-8 px-2.5 text-sm" onClick={() => void draft.stage(a.id)}>
+                Stage
+              </Button>
+            )}
+            {(draft.review.can_stage || (mine && draft.review.can_suggest)) && (
+              <Button className="h-8 px-2.5 text-sm" onClick={() => void draft.undo(a.id)}>
+                Undo
+              </Button>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** D8: the waiting checkpoint's time left, in the decision's header. */
+function WaitChip({ wait, forYou, role }: { wait: WaitInfo; forYou: boolean; role: string }) {
+  if (wait.state === "none") return null;
+  if (wait.state === "ended") {
+    return (
+      <Chip kind="na" className={REASON_CHIP} data-testid="wait-chip">
+        Wait ended · deciding continues the run as a new workflow
+      </Chip>
+    );
+  }
+  const lead = forYou ? "Waiting for you" : `Waiting for an ${role} or above`;
+  const s = wait.seconds_left;
+  if (s == null) {
+    return (
+      <Chip kind="line" data-testid="wait-chip">
+        {lead}
+      </Chip>
+    );
+  }
+  const left = s >= 3600 ? `${Math.floor(s / 3600)} h left` : `${Math.max(1, Math.floor(s / 60))} min left`;
+  return (
+    <Chip kind={s < 600 ? "crit" : s < 3600 ? "warn" : "line"} className={REASON_CHIP} data-testid="wait-chip">
+      <Icon name="clock" size={16} />
+      {lead} · {left}
+    </Chip>
+  );
+}
+
+/** D8: the shared draft as someone who does not decide it reads it: time left and the note. */
+function SharedDraftLine({ review }: { review: CheckpointReview }) {
+  return (
+    <div data-testid="shared-draft" className="space-y-1 text-sm">
+      <p className="flex flex-wrap items-center gap-2">
+        <span className="font-medium">{CHECKPOINT_LABEL[review.kind]}: shared decision</span>
+        <WaitChip wait={review.wait} forYou={false} role={review.approver_role} />
+      </p>
+      <p className="break-words text-text2" data-testid="shared-note">
+        {review.note ? `Note for the agents: ${review.note}` : "No note for the agents yet."}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * D8: a pending checkpoint's shared draft, read on mount and every 10 s while the page is
+ * visible (paused while hidden, read at once when shown again). `accept` takes a write's
+ * answer; an answer older than the one shown is ignored.
+ */
+function useDraft(runId: string, cpId: string | null) {
+  const q = useQuery(`draft|${runId}|${cpId ?? ""}`, () =>
+    cpId
+      ? unwrap(api.GET("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review", { params: { path: { run_id: runId, checkpoint_id: cpId } } }))
+      : Promise.resolve(null),
+  );
+  const { reload, setData } = q;
+  const accept = useCallback(
+    (out: CheckpointReview) =>
+      setData((prev) => (!prev || prev.checkpoint_id !== out.checkpoint_id || out.revision >= prev.revision || out.status !== prev.status ? out : prev)),
+    [setData],
+  );
+  useEffect(() => {
+    if (!cpId) return;
+    const read = () => {
+      if (document.visibilityState === "visible") void reload();
+    };
+    const t = setInterval(read, DRAFT_POLL_MS);
+    document.addEventListener("visibilitychange", read);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", read);
+    };
+  }, [cpId, reload]);
+  return { review: q.data ?? null, accept, reload };
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -1096,6 +1360,9 @@ function CheckpointRow({
   note,
   onNote: setNote,
   noteRef,
+  review,
+  onSaveNote,
+  onReload,
 }: {
   cp: CheckpointOut;
   busy: boolean;
@@ -1104,7 +1371,33 @@ function CheckpointRow({
   note: string;
   onNote: (note: string) => void;
   noteRef: (el: HTMLTextAreaElement | null) => void;
+  /** D8: the checkpoint's shared draft, once read. */
+  review: CheckpointReview | null;
+  onSaveNote: (note: string) => Promise<void>;
+  onReload: () => Promise<void>;
 }) {
+  // D8: the note is saved to the shared draft as I type; the line under it says how it went.
+  const saved = review?.note ?? "";
+  const canSave = !!review?.can_stage;
+  const [save, setSave] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const saveNow = useCallback(() => {
+    setSave("saving");
+    onSaveNote(note).then(
+      () => setSave("saved"),
+      () => setSave("failed"),
+    );
+  }, [note, onSaveNote]);
+  useEffect(() => {
+    if (!canSave || note === saved) return;
+    const t = setTimeout(saveNow, NOTE_SAVE_MS);
+    return () => clearTimeout(t);
+    // onSaveNote is a new function on every render: the note and what is saved decide.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note, saved, canSave]);
+  const status = save === "failed" ? "failed" : note !== saved ? (save === "saving" ? "saving" : null) : save === "saved" ? "saved" : null;
+  // The draft changed since I loaded it: my decision was refused (nothing decided).
+  const [changed, setChanged] = useState<string | null>(null);
+  const decideWith = (decision: CheckpointChoice) => onDecide(cp, decision, note, review?.revision ?? null, setChanged);
   const answer = cp.console;
   // A counted console change request the workflow went on past: Redo or Continue only.
   const redoOrContinue = answer?.needs === "redo_or_continue";
@@ -1133,6 +1426,7 @@ function CheckpointRow({
           <Icon name="user" size={16} />
           {cp.approver_role}+
         </Chip>
+        {review && <WaitChip wait={review.wait} forYou role={cp.approver_role} />}
       </div>
       {cp.note && <p className="mt-1.5 text-text2">{cp.note}</p>}
       {answer && <ConsolePanel answer={answer} />}
@@ -1150,6 +1444,28 @@ function CheckpointRow({
         rows={2}
         className={`${INPUT} mt-2.5 placeholder:text-text2`}
       />
+      {status && (
+        <p className={`mt-1 text-sm ${status === "failed" ? "text-crit" : "text-text2"}`} data-testid="note-status" aria-live="polite">
+          {status === "saved" && "Saved"}
+          {status === "saving" && "Saving…"}
+          {status === "failed" && (
+            <>
+              Not saved:{" "}
+              <button type="button" className="font-medium underline" onClick={saveNow}>
+                retry
+              </button>
+            </>
+          )}
+        </p>
+      )}
+      {changed && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn" data-testid="review-changed" role="alert">
+          <span className="min-w-0 flex-1 break-words">{changed}</span>
+          <Button className="h-8 px-2.5 text-sm" onClick={() => void onReload().then(() => setChanged(null))}>
+            Reload
+          </Button>
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap gap-2">
         {redoOrContinue ? (
           <>
@@ -1158,14 +1474,14 @@ function CheckpointRow({
               icon="check"
               disabled={busy || !!approveBlocked}
               title={approveBlocked ?? undefined}
-              onClick={() => onDecide(cp, "continue", note)}
+              onClick={() => decideWith("continue")}
             >
               Continue
             </Button>
             <Button
               disabled={busy || redoBlocked}
               title={redoBlocked ? "No findings were recorded: write a note to redo" : undefined}
-              onClick={() => onDecide(cp, "redo", note)}
+              onClick={() => decideWith("redo")}
             >
               Redo from {answer.redo_segment} (+{usd(answer.redo_cost_usd)}, one more segment)
             </Button>
@@ -1178,7 +1494,7 @@ function CheckpointRow({
                 icon="check"
                 disabled={busy || (answer.verdict === "MERGE" && !!approveBlocked)}
                 title={answer.verdict === "MERGE" ? (approveBlocked ?? undefined) : undefined}
-                onClick={() => onDecide(cp, "confirm", note)}
+                onClick={() => decideWith("confirm")}
               >
                 Confirm {answer.verdict === "MERGE" ? "approval" : "change request"}
               </Button>
@@ -1188,15 +1504,15 @@ function CheckpointRow({
               icon={answer?.needs === "confirm" ? undefined : "check"}
               disabled={busy || !!approveBlocked}
               title={approveBlocked ?? undefined}
-              onClick={() => onDecide(cp, "approved", note)}
+              onClick={() => decideWith("approved")}
             >
               Approve and continue
             </Button>
-            <Button disabled={busy || !note.trim()} onClick={() => onDecide(cp, "changes_requested", note)}>
+            <Button disabled={busy || !note.trim()} onClick={() => decideWith("changes_requested")}>
               Request changes
             </Button>
             {(answer?.needs === "unreadable" || answer?.needs === "unread") && (
-              <Button disabled={busy || redoBlocked} onClick={() => onDecide(cp, "redo", note)}>
+              <Button disabled={busy || redoBlocked} onClick={() => decideWith("redo")}>
                 Redo from {answer.redo_segment} (+{usd(answer.redo_cost_usd)})
               </Button>
             )}

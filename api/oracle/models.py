@@ -95,7 +95,7 @@ from oracle.roadmap.models import (  # noqa: E402
     TrackerRecord,
     TrackMilestone,
 )
-from oracle.runs.models import Checkpoint, Run, RunSegment  # noqa: E402
+from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment  # noqa: E402
 from oracle.runs.scope_models import PrdScope, PrdScopeItem  # noqa: E402
 from oracle.runtokens import RunToken  # noqa: E402
 from oracle.sources.models import (  # noqa: E402
@@ -149,6 +149,7 @@ __all__ = [
     "BlockerResolutionEvent",
     "ChangeEvent",
     "Checkpoint",
+    "CheckpointAction",
     "Decision",
     "DecisionReview",
     "Citation",

@@ -4091,6 +4091,26 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
             "problems": [{"code": "missing_file", "message": f"the segment left no {ITEMS_FILE}"}],
         }
         return reasons.summarize(missing, [], None)
+    checked = await checked_items(db, run, text)
+    return reasons.summarize(
+        checked.check.as_json(), checked.reasons, checked.base, checked.partial
+    )
+
+
+@dataclass
+class CheckedItems:
+    """roadmap_items.yaml checked, with its reasons: what :func:`_check_items` stores and
+    the shared draft (oracle.runs.actions) reads again on every read."""
+
+    check: roadmap.ItemsCheck
+    reasons: list[dict[str, Any]]
+    base: dict[str, Any] | None
+    partial: bool
+    # The section keys of the run's PRD version; None without one.
+    prd_sections: set[str] | None
+
+
+async def checked_items(db: AsyncSession, run: Run, text: str) -> CheckedItems:
     slug = version = prd_id = None
     keys: set[str] | None = None
     source_id = _source_id(run)
@@ -4108,7 +4128,7 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
         text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
     )
     if not check.items:
-        return reasons.summarize(check.as_json(), [], None)
+        return CheckedItems(check, [], None, False, keys)
     try:
         # In a savepoint: a database or trace error loses the advisory reasons only; the
         # blocking ones (the check's) are still stored, flagged partial.
@@ -4120,7 +4140,7 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
         context = reasons.ReasonContext(prd_title=slug, prd_version=version, advisory=False)
         partial = True
     found = reasons.reasons_for(check.items, check.problems, context)
-    return reasons.summarize(check.as_json(), found, context.base, partial)
+    return CheckedItems(check, found, context.base, partial, keys)
 
 
 # --------------------------------------------------------------------------- tick
@@ -5857,6 +5877,7 @@ async def decide_checkpoint(
     checkpoint_id: uuid.UUID,
     decision: str,
     note: str | None,
+    expected_revision: int | None = None,
 ) -> None:
     from oracle.auth.service import caller_refusal
     from oracle.review import publish
@@ -5887,7 +5908,14 @@ async def decide_checkpoint(
         )
     if cp.status != "pending" or run.status != "awaiting_checkpoint":
         raise RunError(f"checkpoint is {cp.status}; run is {run.status}")
-    note = (note or "").strip() or None
+    if expected_revision is not None and expected_revision != (cp.draft_revision or 0):
+        # D8: the shared draft changed since the decider loaded it (a console confirm
+        # too): nothing is decided; they look again.
+        from oracle.runs import actions
+
+        raise await actions.review_changed(db, cp, expected_revision)
+    # The note defaults to the shared draft's (D8).
+    note = (note if note is not None else cp.draft_note or "").strip() or None
     wait = (cp.payload or {}).get("wait") or {}
     redo = False
     # A choice about an answer SwarmCloud's console recorded is decided through it (H1).
