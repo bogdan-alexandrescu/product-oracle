@@ -99,6 +99,8 @@ test("brief to draft: goals, out of scope and a template, then Draft with Oracle
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   await expect(page.getByText("template one-pager")).toBeVisible();
+  // The current baseline was reused: its segment ran no step.
+  await expect(page.getByTestId("segment-baseline").getByTestId("segment-state")).toHaveText(/^Reused \(approved [A-Z][a-z]{2} \d{1,2}\)$/);
 });
 
 test("baseline choice: reuse is preselected; Rebuild costs the baseline segment and lists its stop", async ({ page }) => {

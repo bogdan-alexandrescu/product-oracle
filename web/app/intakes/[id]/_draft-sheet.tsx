@@ -41,8 +41,9 @@ const getReviewStatus = () => unwrap(api.GET("/v1/baseline/review-status"));
  * Draft with Oracle (C4): the template and theme chosen at the door (Change opens the same
  * picker), whether to reuse the current baseline or rebuild it (B1 "Reuse base"), the depth,
  * the flow's stops (each on by default, W2), one estimate line (P3d), and Start drafting.
- * The first estimate makes the intake's draft run; every later change updates that run
- * (PATCH) and re-estimates it, so the intake never gets a second one.
+ * The first estimate makes the intake's draft run (POST /v1/intakes/{id}/runs); every later
+ * change goes through the same route, which updates that run, and re-estimates it, so the
+ * intake never gets a second one.
  */
 export function DraftSheet({ summary, onClose }: { summary: Summary; onClose: () => void }) {
   const router = useRouter();
@@ -61,7 +62,7 @@ export function DraftSheet({ summary, onClose }: { summary: Summary; onClose: ()
   const [reuse, setReuse] = useState<boolean | null>(null);
   const [depth, setDepth] = useState<Depth>("standard");
   const [stops, setStops] = useState<Record<string, boolean>>({});
-  const [runId, setRunId] = useState<string | null>(summary.draft_run_id ?? intake.run_ids[0] ?? null);
+  const [runId, setRunId] = useState<string | null>(null);
   const [estimate, setEstimate] = useState<Schemas["EstimateOut"] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,19 +95,15 @@ export function DraftSheet({ summary, onClose }: { summary: Summary; onClose: ()
     setError(null);
     setNotice(null);
     try {
-      let rid = runId;
-      if (rid) {
-        await unwrap(api.PATCH("/v1/runs/{run_id}", { params: { path: { run_id: rid } }, body: { knobs: current, template: templateKey, theme: themeKey } }));
-      } else {
-        const run = await unwrap(
-          api.POST("/v1/intakes/{intake_id}/runs", {
-            params: { path: { intake_id: intake.id } },
-            body: { knobs: current, template: templateKey, theme: themeKey, reuse_baseline: current.reuse_baseline },
-          }),
-        );
-        rid = run.id;
-        setRunId(rid);
-      }
+      // The intake's run route makes its draft run, or updates it once made: never a second run.
+      const run = await unwrap(
+        api.POST("/v1/intakes/{intake_id}/runs", {
+          params: { path: { intake_id: intake.id } },
+          body: { knobs: current, template: templateKey, theme: themeKey, reuse_baseline: current.reuse_baseline },
+        }),
+      );
+      const rid = run.id;
+      setRunId(rid);
       setEstimate(await unwrap(api.POST("/v1/runs/{run_id}/estimate", { params: { path: { run_id: rid } } })));
     } catch (e) {
       setEstimate(null);

@@ -696,6 +696,13 @@ function SegmentItem({
             <Chip kind="crit">
               <span data-testid="segment-state">Draft rejected</span>
             </Chip>
+          ) : s.reused ? (
+            // C4 (B1 "Reuse base"): the run used the current baseline; this segment ran no step.
+            <Chip kind="na" className={WRAP_CHIP}>
+              <span data-testid="segment-state">
+                Reused (approved {new Date(s.reused.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })})
+              </span>
+            </Chip>
           ) : (
             <Chip kind={SEGMENT_STATUS_KIND[s.status]}>
               {s.status === "succeeded" && <Icon name="check" size={16} />}

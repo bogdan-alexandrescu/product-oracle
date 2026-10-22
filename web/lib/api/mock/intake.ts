@@ -66,6 +66,8 @@ export interface IntakeContext {
   confirmedGoals?: () => Map<string, string>;
   /** Creates a draft run through the runs mock (POST /v1/runs). */
   createRun: (body: Schemas["RunCreate"]) => Promise<Response>;
+  /** C4: changes the intake's draft run, not started yet (PATCH /v1/runs/{id}); null when it is no longer a draft. */
+  updateRun?: (id: string, body: Schemas["RunPatch"]) => Promise<Response | null>;
   /** The company's members (C2); without them nobody can be asked a teammate's question. */
   people?: MockPerson[];
   subjects?: SubjectLookup;
@@ -557,6 +559,15 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       const review = baselineReviewStatus();
       if (wanted === true && !review.reusable) return json(409, { detail: { code: "baseline_not_reusable", reason: review.reason } });
       knobs.reuse_baseline = wanted ?? review.reusable;
+      // Reopening the sheet after an estimate (C4): the intake's one draft run takes the new
+      // choices; no second run is made.
+      const existing = db.intake_runs?.[intake.id];
+      if (existing && ctx.updateRun) {
+        const updated = await ctx.updateRun(existing.run_id, {
+          knobs, template: input.template ?? (intake as Intake).template ?? null, theme: input.theme ?? (intake as Intake).theme ?? null,
+        });
+        if (updated) return updated.ok ? new Response(updated.body, { status: 201, headers: updated.headers }) : updated;
+      }
       const resp = await ctx.createRun({
         flow: "baseline_to_prd", document, knobs, template: input.template ?? (intake as Intake).template ?? null, theme: input.theme ?? (intake as Intake).theme ?? null,
       });

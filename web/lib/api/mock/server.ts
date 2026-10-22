@@ -2378,8 +2378,14 @@ async function route(db: Db, req: Request): Promise<Response> {
         return null;
       },
     };
+    const updateRun = async (id: string, body: Schemas["RunPatch"]) => {
+      const run = db.runs?.runs.find((r) => r.id === id);
+      if (!run || run.status !== "draft") return null;
+      const patch = new Request(new URL(`/v1/runs/${id}`, req.url), { method: "PATCH", body: JSON.stringify(body) });
+      return routeRuns({ ...runsContext(db), db: db.runs! }, patch, ["v1", "runs", id]).then((r) => r ?? notFound("Route"));
+    };
     const confirmedGoals = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, people: db.members, subjects, confirmedGoals }, req, p, q);
+    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals }, req, p, q);
     if (intake) return intake;
   }
   // Requests and their themes (C1) check roles themselves: commenters add, approvers decide.

@@ -924,7 +924,7 @@ function launch(ctx: RunsContext, r: RunOut) {
   if (reused && first?.name === "baseline") {
     // C4: the reused baseline segment runs no step and costs nothing; its stop is skipped.
     const on = monthDay(reused.approved_at);
-    Object.assign(first, { status: "skipped", cost_usd: 0, estimate_usd: 0, started_at: ctx.now(), finished_at: ctx.now() });
+    Object.assign(first, { status: "skipped", cost_usd: 0, estimate_usd: 0, reused, note: `Reused the baseline approved ${on}`, started_at: ctx.now(), finished_at: ctx.now() });
     r.checkpoints.push({
       id: ctx.uuid(), run_id: r.id, kind: "baseline_confirm", status: "skipped", approver_role: "approver",
       segment_seq: first.seq, decided_by: null, decided_at: ctx.now(), note: `Reused the baseline approved ${on}`, payload: {},
