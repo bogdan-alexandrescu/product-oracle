@@ -73,7 +73,8 @@ def test_0016_roadmap_follows_the_wave_1_head():
     # 0020_question_subjects ... 0014_account_fixes, then 0020_decisions, 0020_prd_scopes
     # 0021_feedback_agent_staging, 0022_baseline_flow, 0022_engineering_lead,
     # 0022_discussions, 0022_priority_snapshot_runs, 0022_priority_overrides,
-    # 0022_code_maps, 0022_checkpoint_actions, 0022_updates, 0023_intake_brief_fields and 0024_segment_skipped;
+    # 0022_code_maps, 0022_checkpoint_actions, 0022_updates, 0023_intake_brief_fields and
+    # 0024_segment_skipped;
     # one head.
     assert script.get_heads() == ["0024_segment_skipped"]
     assert script.get_revision("0016_refinement_batch").down_revision == REVISION
