@@ -8485,6 +8485,36 @@ def _waits_for(item: FeedbackItem, suggestion: str | None) -> str:
     return "other"
 
 
+async def _date_rows(db: AsyncSession, principal: Principal, leads: frozenset[uuid.UUID]) -> list:
+    """F3 Date bases: the proposed schedule bases, for the engineering leads (and the owners
+    while no lead is named), oldest first, each with its PRD."""
+    from oracle.roadmap.models import ScheduleBasis
+    from oracle.roadmap.schemas import DocumentRef, InboxDateBasis, ScheduleBasisOut
+
+    lead = (
+        principal.user_id is not None
+        and principal.user_id in leads
+        and has_role(principal.role, "commenter")
+    )
+    if not (lead or (principal.role == "owner" and not leads)):
+        return []
+    rows = (
+        await db.execute(
+            select(ScheduleBasis, Document.slug, Document.title)
+            .join(Document, Document.id == ScheduleBasis.prd_document_id)
+            .where(ScheduleBasis.status == "proposed")
+            .order_by(ScheduleBasis.proposed_at, ScheduleBasis.id)
+        )
+    ).all()
+    return [
+        InboxDateBasis(
+            **ScheduleBasisOut.model_validate(b).model_dump(),
+            prd=DocumentRef(id=b.prd_document_id, slug=slug, title=title),
+        )
+        for b, slug, title in rows
+    ]
+
+
 async def _revising(db: AsyncSession, principal: Principal) -> list[RunSummary]:
     """The Inbox's Revising rows (owner, 2026-10-20): runs whose refused draft Oracle sent
     back to the writer itself (:func:`_sent_back`), for those with that review's approver
@@ -8708,6 +8738,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.autonomy_router import inbox_actions
 
     oracle_actions = await inbox_actions(db, principal)
+    dates = await _date_rows(db, principal, leads)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -8728,8 +8759,10 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         report_failures=report_failures,
         strategy=strategy,
         oracle_actions=oracle_actions,
+        dates=dates,
         # Every new or open item (C1e, owner 2026-10-20): the rail badge, = New + Open.
         total=len(checkpoints)
+        + len(dates)
         + len(approvals)
         + len(overruns)
         + len(lookups)

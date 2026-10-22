@@ -5,6 +5,7 @@ import { formatDay } from "@/lib/format";
 export type PlanItem = Schemas["PlanItem"];
 export type PlanPrd = Schemas["PlanPrd"];
 export type Horizon = PlanItem["horizon"];
+type Basis = Schemas["ScheduleBasisOut"];
 
 export const HORIZONS: Horizon[] = ["now", "next", "later"];
 export const HORIZON_LABEL: Record<Horizon, string> = { now: "Now", next: "Next", later: "Later" };
@@ -42,6 +43,19 @@ export function engineeringLine(i: PlanItem): string {
   else if (e.date_status === "withdrawn") day = "date withdrawn";
   else if (keys.length && !e.date) day = "no date";
   return [issue, day].filter(Boolean).join(" · ") || "—";
+}
+
+/**
+ * F3: the basis the item's date rests on (verified) or lost (withdrawn): this PRD's, for this
+ * date, for the whole PRD or this item; the latest when several match. None for an unverified date.
+ */
+export function dateBasis(i: PlanItem, bases: Basis[]): Basis | undefined {
+  const { date, date_status } = i.engineering;
+  if (!date || !i.prd || (date_status !== "verified" && date_status !== "withdrawn")) return undefined;
+  const at = (b: Basis) => (date_status === "verified" ? b.verified_at : b.withdrawn_at) ?? b.created_at;
+  return bases
+    .filter((b) => b.status === date_status && b.prd_document_id === i.prd!.id && b.supports_date === date && (!b.item_key || b.item_key === i.key))
+    .sort((a, b) => at(b).localeCompare(at(a)))[0];
 }
 
 /** Who makes the next decision: a person when one is named (the viewer reads "you"), else the role. */
