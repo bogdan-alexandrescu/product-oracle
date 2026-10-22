@@ -340,6 +340,7 @@ async def test_list_members(client, world):
         "id",
         "email",
         "role",
+        "engineering_lead",
         "created_at",
         "disabled_at",
         "disabled_by",

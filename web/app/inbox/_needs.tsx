@@ -14,6 +14,7 @@ import {
   CANCEL_AGAIN_CONFIRM,
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
+  orderHref,
   RETRY_CONFIRM,
   SENT_BACK_STATE,
   STOP_CANCELLING_CONFIRM,
@@ -616,8 +617,9 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     run: shortId(c.run_id),
     at: c.created_at,
     action: (
-      // The same verb as the runs list: the run page opens at the decision.
-      <LinkButton href={`/runs/${c.run_id}#decide`}>Decide</LinkButton>
+      // The same verb as the runs list: the run page opens at the decision; a priority stop
+      // opens its order next to the live ranking (C8), where it is decided too.
+      <LinkButton href={orderHref(c) ?? `/runs/${c.run_id}#decide`}>Decide</LinkButton>
     ),
   }));
 

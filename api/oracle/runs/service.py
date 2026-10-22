@@ -125,6 +125,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, or_, select
@@ -142,8 +143,21 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
 from oracle.jobs.models import LlmSuggestion
+from oracle.members.leads import (
+    ENGINEERING_KINDS,
+    LEAD_ONLY,
+    SPEC_FLOW,
+    decides,
+    engineering_leads,
+    lead_now,
+    lead_refusal,
+    lead_stop,
+    may_decide,
+)
+from oracle.priorities import run_order
 from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
+from oracle.priorities.schemas import PriorityCheck
 from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.schemas import Resolution
@@ -350,6 +364,7 @@ def flow_catalog() -> FlowCatalog:
                 source_kind=f.source_kind,  # type: ignore[arg-type]
                 entry=f.entry,
                 in_new_run_dialog=f.in_new_run_dialog,
+                writes_document=f.writes_document,
                 starts_from=FlowStart(label=f.starts_from[0], href=f.starts_from[1])
                 if f.starts_from
                 else None,
@@ -746,9 +761,15 @@ def _delivery(
 
 
 def _checkpoint_out(
-    cp: Checkpoint, principal: Principal | None, names: dict[uuid.UUID, str] | None = None
+    cp: Checkpoint,
+    principal: Principal | None,
+    names: dict[uuid.UUID, str] | None = None,
+    *,
+    flow: str,
+    leads: frozenset[uuid.UUID],
 ) -> CheckpointOut:
-    """``names``: :func:`_decider_names` of the checkpoints read."""
+    """``names``: :func:`_decider_names` of the checkpoints read; ``flow``: the run's;
+    ``leads``: :func:`oracle.members.leads.engineering_leads`, read once per request."""
     console = ((cp.payload or {}).get("wait") or {}).get("console")
     payload, delivery = _delivery(cp, names or {})
     return CheckpointOut(
@@ -768,7 +789,7 @@ def _checkpoint_out(
         else None,
         can_decide=cp.status == "pending"
         and principal is not None
-        and has_role(principal.role, cp.approver_role),  # type: ignore[arg-type]
+        and may_decide(principal, cp, flow, leads),
         cannot_approve=_cannot_approve(cp),
         delivery=delivery,
     )
@@ -811,6 +832,7 @@ def _segment_out(
         if isinstance(previous := art.get("previous"), dict)
         else None,
         feature_set_check=FeatureSetCheck(**fs) if (fs := art.get("feature_set_check")) else None,
+        priority_check=PriorityCheck(**pc) if (pc := art.get("priority_check")) else None,
         autonomy_note=(merged.get("autonomy") or {}).get("note"),
         started_at=segment.started_at,
         finished_at=segment.finished_at,
@@ -930,6 +952,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     segments = await _segments(db, run.id)
     checkpoints = await _checkpoints(db, [run.id])
     names = await _decider_names(db, checkpoints)
+    leads = await engineering_leads(db)
     refs = await _refs(db, [run])
     knobs = _knobs(run)
     kind = await _target_kind(db, run)
@@ -965,7 +988,9 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         runtime=runtime.name,
         notes=notes,
         segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
-        checkpoints=[_checkpoint_out(c, principal, names) for c in checkpoints],
+        checkpoints=[
+            _checkpoint_out(c, principal, names, flow=run.flow, leads=leads) for c in checkpoints
+        ],
         token_read_only=await token_hold(db, run.id, live=False) is not None,
         open_proposals=await db.scalar(
             select(func.count())
@@ -1008,7 +1033,8 @@ def _holds_token(cp: Checkpoint) -> bool:
 
 
 def console_blocked(cp: Checkpoint) -> bool:
-    """A console approval held because the feature set has blocking problems (C6)."""
+    """A console approval held because the feature set (C6) or the priority order (C8)
+    has blocking problems."""
     return bool((((cp.payload or {}).get("wait") or {}).get("console") or {}).get("blocking"))
 
 
@@ -1017,8 +1043,9 @@ def _hold_reason(cp: Checkpoint) -> str:
     if _owes(cp):
         why = "has a decision recorded in Oracle that is not delivered to the run yet"
     elif needs == "confirm" and console_blocked(cp):
+        what = CHECKPOINT_TITLES.get(cp.kind, cp.kind).lower()
         why = (
-            "was approved in SwarmCloud's console while the feature set has blocking "
+            f"was approved in SwarmCloud's console while the {what} has blocking "
             "problems; an Oracle approver confirms it once they are fixed or waived"
         )
     elif needs == "confirm":
@@ -1507,12 +1534,19 @@ async def _resolve_inputs(
 ) -> tuple[uuid.UUID | None, dict[str, Any]]:
     """(target document id, the knobs Oracle sets) for a run's document, source and
     template choices."""
+    if not flow.writes_document:
+        named = (
+            inputs.document,
+            inputs.source,
+            inputs.source_version,
+            inputs.template,
+            inputs.theme,
+        )
+        if any(v is not None for v in named):
+            raise Invalid(f"the {flow.title} flow writes no document")
+        return None, {}
     if flow.target_kind != "roadmap" and (inputs.template or inputs.theme):
         raise Invalid(f"the {flow.title} flow takes no template or theme")
-    if not flow.writes_document:
-        if inputs.document or inputs.source:
-            raise Invalid(f"the {flow.title} flow writes no document and reads none")
-        return None, {}
     source = await _resolve_source(db, flow, inputs.source, inputs.source_version)
     default_slug = None
     if source is not None and inputs.document is None:
@@ -1553,6 +1587,25 @@ async def _reset_segments(db: AsyncSession, run: Run, flow: flows.FlowDef) -> No
     run.estimate_usd = None
 
 
+# A baseline build in these states is under way: another is refused (B1), as two would
+# race on the same (type, key) items and double the proposals.
+BUILD_UNDER_WAY = ("awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
+
+
+async def _one_build_at_a_time(db: AsyncSession, flow: flows.FlowDef) -> None:
+    """Refuse a second Build the baseline run while one is under way (409)."""
+    if flow.key != "baseline":
+        return
+    under_way = await db.scalar(
+        select(Run.id)
+        .where(Run.flow == flow.key, Run.status.in_(BUILD_UNDER_WAY))
+        .order_by(Run.created_at)
+        .limit(1)
+    )
+    if under_way is not None:
+        raise RunError(f"A baseline build is already under way (run {under_way})")
+
+
 async def create_run(
     db: AsyncSession,
     principal: Principal | str,
@@ -1578,6 +1631,7 @@ async def create_run(
             "(POST /v1/launches/{id}/draft)"
         )
     knobs = _resolve_knobs(flow, body.knobs)
+    await _one_build_at_a_time(db, flow)
     document_id, oracle = await _resolve_inputs(
         db,
         flow,
@@ -1708,6 +1762,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
         raise RunError(f"run is {run.status}, not a draft")
     if run.estimate_usd is None:
         raise RunError("estimate the run first: POST /v1/runs/{id}/estimate")
+    await _one_build_at_a_time(db, _flow(run))
     knobs = _knobs(run)
     source_id = _source_id(run)
     if source_id is not None and await db.get(DocumentVersion, source_id) is None:
@@ -1987,11 +2042,22 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
             )
         ).all()
     )
-    # The latest stored priority order, else the live goal-weighted ranking.
+    # C8 rule 7: this PRD's approved order, else a person's company-wide snapshot (no
+    # run), else the live goal-weighted ranking. A proposed or discarded order never counts.
+    newest = PrioritySnapshot.created_at.desc()
+    saved = select(PrioritySnapshot).where(PrioritySnapshot.status == "saved")
     stored = await db.scalar(
-        select(PrioritySnapshot).order_by(PrioritySnapshot.created_at.desc()).limit(1)
+        saved.where(PrioritySnapshot.document_id == version.document_id).order_by(newest).limit(1)
     )
     if stored is not None:
+        at = stored.decided_at or stored.created_at
+        method = f"{stored.method}, this PRD's approved order of {at.day} {at:%b}"
+        ranking = list(stored.ranking or [])
+    elif (
+        stored := await db.scalar(
+            saved.where(PrioritySnapshot.run_id.is_(None)).order_by(newest).limit(1)
+        )
+    ) is not None:
         method = f"{stored.method}, priority snapshot of {stored.created_at:%Y-%m-%d}"
         ranking = list(stored.ranking or [])
     else:
@@ -3652,6 +3718,26 @@ async def _advance(
             )
             fs_check = failed.as_json()
         art["feature_set_check"] = fs_check
+    order_check: dict[str, Any] | None = None
+    snapshot_id: uuid.UUID | None = None
+    if run_order.FILE in sdef.outputs:
+        try:
+            # In a savepoint, as the items check: a database error rolls back the check's
+            # own reads and writes only.
+            async with db.begin_nested():
+                order_check, snapshot_id = await _check_priority_order(
+                    db, run, segment, number, art["files"].get(run_order.FILE)
+                )
+        except safe_yaml.ParseBusy:
+            raise  # no worker for it: this tick gives up, the next retries
+        except Exception as exc:  # noqa: BLE001 - a bad file fails the check, never the tick
+            log.exception("checking %s of run %s failed", run_order.FILE, run.id)
+            failed = run_order.OrderCheck()
+            failed.add(
+                "unreadable_yaml", f"{run_order.FILE} could not be checked ({type(exc).__name__})"
+            )
+            order_check = failed.as_json()
+        art["priority_check"] = order_check
     launch_import: dict[str, Any] | None = None
     if flows.LAUNCH_FILE in sdef.outputs:
         from oracle.launches import service as launches_service
@@ -3712,8 +3798,10 @@ async def _advance(
             if imported.get("document_id"):
                 run.document_id = uuid.UUID(imported["document_id"])
                 _set_knob(run, "document_slug", None)
-                # Rule 6 (C6): the run's PRD scope names the document from now on.
+                # Rule 6 (C6, C8): the run's PRD scope and priority order name the
+                # document from now on.
                 await feature_set.fill_document(db, run.id, run.document_id)
+                await run_order.fill_document(db, run.id, run.document_id)
         art["import"] = imported
     if sdef.importer:
         # Committed first: the importer runs in its own transaction.
@@ -3751,6 +3839,10 @@ async def _advance(
         payload["feature_set_check"] = fs_check
         if scope_id is not None:
             payload["scope_id"] = str(scope_id)
+    if order_check is not None:
+        payload["priority_check"] = order_check
+        if snapshot_id is not None:
+            payload["priority_snapshot_id"] = str(snapshot_id)
     if launch_import is not None:
         payload["launch_import"] = launch_import
     if triage_import is not None:
@@ -3782,6 +3874,7 @@ async def _advance(
             )
         )
         await _link_scope(db, scope_id, checkpoint_id)
+        await _link_order(db, snapshot_id, checkpoint_id)
         run.status = "awaiting_checkpoint"
         return True
     db.add(
@@ -3797,6 +3890,7 @@ async def _advance(
         )
     )
     await _link_scope(db, scope_id, checkpoint_id)
+    await _link_order(db, snapshot_id, checkpoint_id)
     for result in (baseline_import, imported, launch_import, triage_import):
         if result is not None and result.get("error"):
             await _finish(db, run, "failed", result["error"])
@@ -3823,6 +3917,24 @@ async def _advance(
                 scope.id,
                 {"by": "oracle", "reason": "stop off", "run_id": str(run.id)},
             )
+    if order_check is not None:
+        blocking = [p for p in order_check["problems"] if p.get("blocking", True)]
+        if blocking or snapshot_id is None:
+            problems = "; ".join(f"[{p['code']}] {p['message']}" for p in blocking[:5])
+            await _finish(db, run, "failed", f"{run_order.FILE} was rejected: {problems}")
+            return True
+        # Rule 5 (C8): the stop is off and nothing blocks, so Oracle saves the order.
+        snapshot = await db.get(PrioritySnapshot, snapshot_id)
+        if snapshot is not None:
+            run_order.approve(snapshot, None, run.document_id)
+            await audit.record(
+                db,
+                audit.ORACLE,
+                "priority_snapshot.approved",
+                "priority_snapshot",
+                snapshot.id,
+                {"by": "oracle", "reason": "stop off", "run_id": str(run.id)},
+            )
     await _next(db, run, segment, segments)
     return True
 
@@ -3845,6 +3957,38 @@ async def _check_feature_set(
         db, run, segment_seq=segment.seq, attempt=attempt, check=check, known=known
     )
     return check.as_json(), scope.id
+
+
+async def _check_priority_order(
+    db: AsyncSession, run: Run, segment: RunSegment, attempt: int, text: str | None
+) -> tuple[dict[str, Any], uuid.UUID]:
+    """C8: priority.yaml checked against the baseline, the run's approved PRD scope and the
+    live ranking, and stored as the run's proposed snapshot (even with blocking problems,
+    so they can be seen and sent back)."""
+    known, scope_id = await run_order.known_for_run(db, run)
+    if text is None:
+        check = run_order.OrderCheck()
+        check.add("unreadable_yaml", f"the segment left no {run_order.FILE}")
+    else:
+        # In a worker thread with a time cap: agent output never holds the event loop.
+        check = await run_order.check_order_async(text, known=known)
+    snapshot = await run_order.propose(
+        db, run, segment_seq=segment.seq, attempt=attempt, check=check, known=known,
+        scope_id=scope_id,
+    )  # fmt: skip
+    return check.as_json(), snapshot.id
+
+
+async def _link_order(
+    db: AsyncSession, snapshot_id: uuid.UUID | None, checkpoint_id: uuid.UUID
+) -> None:
+    """The proposed order names the checkpoint that decides it (added in the same flush)."""
+    if snapshot_id is None:
+        return
+    await db.flush()
+    snapshot = await db.get(PrioritySnapshot, snapshot_id)
+    if snapshot is not None:
+        snapshot.checkpoint_id = checkpoint_id
 
 
 async def _link_scope(
@@ -5387,13 +5531,18 @@ async def _take_answer(
         member, reason = (
             (None, None)
             if ours
-            else await _console_member(db, cp, by, altered=record.answered_by_altered)
+            else await _console_member(
+                db, cp, by, flow=run.flow, altered=record.answered_by_altered
+            )
         )
     counted = ours or reason is None
     if counted and approved and not ours and cp.kind == "feature_set":
         if await _recheck_scope(db, cp):
             await _hold_console_approval(db, run, cp, segment, record, wait, at, revise, member)
             return
+    if counted and approved and not ours and cp.kind == "priority_order" and _order_blocking(cp):
+        await _hold_console_approval(db, run, cp, segment, record, wait, at, revise, member)
+        return
     if not counted or (not approved and not revise):
         console = _console_record(run, segment, record, at, revise)
         console.update(
@@ -5504,12 +5653,19 @@ async def _take_answer(
 
 
 async def _console_member(
-    db: AsyncSession, cp: Checkpoint, answered_by: str | None, *, altered: bool = False
+    db: AsyncSession,
+    cp: Checkpoint,
+    answered_by: str | None,
+    *,
+    flow: str = "",
+    altered: bool = False,
 ) -> tuple[User | None, str | None]:
     """The Oracle member who answered in SwarmCloud, and why their answer does not count
     (None when it does): matched by ``answered_by`` only, never one that redaction
     altered. Emails match case-insensitively; an exact match wins, and two members that
-    differ only by case with neither exact is no match (the same answer every time)."""
+    differ only by case with neither exact is no match (the same answer every time). An
+    engineering stop with a lead named counts only a lead's or an owner's (A3); ``flow``
+    is the run's (prd_to_spec keeps its own rule)."""
     if not answered_by:
         return None, "SwarmCloud recorded no answerer"
     if altered:
@@ -5530,6 +5686,11 @@ async def _console_member(
         return None, f"{answered_by} matches more than one Oracle member (by case)"
     else:
         return None, f"{answered_by} is not an Oracle member"
+    leads = await engineering_leads(db)
+    if lead_stop(cp.kind, flow, leads):
+        if user.disabled_at is not None or not decides(user.role, user.id, cp, flow, leads):
+            return user, f"{answered_by} is not an engineering lead"
+        return user, None
     if not has_role(user.role, cp.approver_role):  # type: ignore[arg-type]
         return user, (
             f"{answered_by} is an Oracle {user.role}, below the checkpoint's "
@@ -5882,9 +6043,17 @@ async def decide_checkpoint(
     )
     if cp is None:
         raise NotFound(f"checkpoint {checkpoint_id} not found")
-    if not has_role(principal.role, cp.approver_role):  # type: ignore[arg-type]
-        raise Forbidden(f"Requires the {cp.approver_role} role")
-    refusal = await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+    # A3: an engineering stop waits for the engineering leads and owners once a lead is
+    # named (C2 Multiple reviewers); the flag is re-read here, under the run's lock.
+    leads = await engineering_leads(db)
+    by_lead = lead_stop(cp.kind, run.flow, leads)
+    if not may_decide(principal, cp, run.flow, leads):
+        raise Forbidden(LEAD_ONLY if by_lead else f"Requires the {cp.approver_role} role")
+    refusal = (
+        await lead_refusal(db, principal)
+        if by_lead
+        else await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+    )
     if refusal is not None:
         raise Forbidden(refusal)
     if cp.status in DECIDED:
@@ -5956,14 +6125,11 @@ async def decide_checkpoint(
     cp.decided_at = _now()
     cp.note = note
     _record_decider(cp, *decider)
-    await audit.record(
-        db,
-        principal,
-        f"checkpoint.{decision}",
-        "checkpoint",
-        cp.id,
-        {"run_id": str(run.id), "kind": cp.kind},
-    )
+    data: dict[str, Any] = {"run_id": str(run.id), "kind": cp.kind}
+    if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW:
+        # F4 Engineering review stop reads whether a lead was named when it was decided.
+        data["engineering_lead_named"] = bool(leads)
+    await audit.record(db, principal, f"checkpoint.{decision}", "checkpoint", cp.id, data)
     # H1: the stop's decision is a checkpoint record, in this transaction.
     await decisions_capture.checkpoint(db, principal, run, cp, decided_via=via)
     await _scope_decided(db, principal, run, cp)
@@ -6207,7 +6373,14 @@ async def _finish_decision_now(
         # delivered once an owner resumes the run (resume: awaiting_checkpoint again).
         await db.rollback()
         return
-    refusal = await _decider_refusal(db, posting, cp.approver_role)
+    role = cp.approver_role
+    lead = _posting_id(posting, "user_id")
+    if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW and lead is not None:
+        # A3: an engineering lead decided it (any commenter or above may carry the flag);
+        # an unflagged lead's owed decision was voided with the flag (set_engineering_lead).
+        if await lead_now(db, lead):
+            role = "commenter"
+    refusal = await _decider_refusal(db, posting, role)
     if refusal is not None:
         await _void_owed(db, None, run, cp, refusal, {"via": "decision.recheck"})
         await db.commit()
@@ -6351,10 +6524,12 @@ async def void_owed_decisions(
     via: dict[str, str],
     *,
     role: str | None = None,
+    kinds: tuple[str, ...] | None = None,
 ) -> list[uuid.UUID]:
     """Void the decisions ``deciders`` recorded that are not delivered to their run yet
     (``wait.posting``): a disable (every one), or a demotion to ``role`` (those whose
-    checkpoint needs more than ``role``). The caller holds the gate exclusively and
+    checkpoint needs more than ``role``). With ``kinds`` (an engineering lead unflagged,
+    A3), only those kinds outside prd_to_spec. The caller holds the gate exclusively and
     commits; a delivery under way re-reads the checkpoint under the gate and finds nothing
     owed (:func:`_finish_decision_now`). Returns the checkpoints voided."""
     if not deciders:
@@ -6387,6 +6562,8 @@ async def void_owed_decisions(
         if not isinstance(((cp.payload or {}).get("wait") or {}).get("posting"), dict):
             continue
         if cp.decided_by not in deciders:
+            continue
+        if kinds is not None and (cp.kind not in kinds or run.flow == SPEC_FLOW):
             continue
         if role is not None and has_role(role, cp.approver_role):  # type: ignore[arg-type]
             continue  # the new role still decides this checkpoint
@@ -7298,7 +7475,9 @@ async def _scope_decided(
 ) -> None:
     """A feature-set checkpoint was decided (any path): approved, its scope is approved
     and supersedes the document's earlier approved one (rule 3); changes requested, the
-    proposed scope is superseded (rule 4) and the re-run writes the next attempt's."""
+    proposed scope is superseded (rule 4) and the re-run writes the next attempt's. A
+    priority-order checkpoint's snapshot likewise (C8, :func:`_order_decided`)."""
+    await _order_decided(db, principal, run, cp)
     scope = await _scope_of(db, cp)
     if scope is None:
         return
@@ -7319,7 +7498,11 @@ async def _scope_decided(
 
 async def _scope_reopened(db: AsyncSession, cp: Checkpoint) -> None:
     """A feature-set decision was voided or not posted: its scope is proposed again (an
-    earlier approved scope it superseded stays superseded until this one is decided)."""
+    earlier approved scope it superseded stays superseded until this one is decided). A
+    priority-order decision's snapshot is proposed again too (C8)."""
+    snapshot = await run_order.snapshot_for(db, cp)
+    if snapshot is not None and snapshot.status != "proposed":
+        run_order.reopen(snapshot)
     scope = await _scope_of(db, cp)
     if scope is None or scope.status == "proposed":
         return
@@ -7327,6 +7510,36 @@ async def _scope_reopened(db: AsyncSession, cp: Checkpoint) -> None:
     scope.approved_by = None
     scope.approved_at = None
     scope.lock_version += 1
+
+
+async def _order_decided(
+    db: AsyncSession, principal: Principal | None, run: Run, cp: Checkpoint
+) -> None:
+    """C8 rules 3 and 4: a priority-order checkpoint approved saves its snapshot for the
+    PRD (audited ``priority_snapshot.approved``); changes requested discards it."""
+    snapshot = await run_order.snapshot_for(db, cp)
+    if snapshot is None or snapshot.status != "proposed":
+        return
+    if cp.status == "approved":
+        run_order.approve(snapshot, cp.decided_by, run.document_id)
+        await audit.record(
+            db,
+            principal if principal is not None else audit.ORACLE,
+            "priority_snapshot.approved",
+            "priority_snapshot",
+            snapshot.id,
+            {"run_id": str(run.id), "checkpoint_id": str(cp.id), "by": str(cp.decided_by)},
+        )
+    elif cp.status == "changes_requested":
+        run_order.discard(snapshot, cp.decided_by)
+
+
+def _order_blocking(cp: Checkpoint) -> int:
+    """Blocking problems of the priority order a checkpoint decides (C8), as checked at
+    segment end: nothing edits the order until pick C9, so it is not re-checked."""
+    if cp.kind != "priority_order":
+        return 0
+    return run_order.blocking_of((cp.payload or {}).get("priority_check"))
 
 
 # What the Inbox says of a console approval held while the feature set has blocking problems
@@ -7345,10 +7558,11 @@ async def _hold_console_approval(
     revise: bool,
     member: User | None,
 ) -> None:
-    """A counted console approval of a feature set with blocking problems open: recorded,
-    not followed. The checkpoint stays pending with ``needs = "confirm"`` (so the run's
-    token stays read-only, :func:`_holds_token`), nothing is posted to the workflow, and
-    Confirm is refused like Approve until the problems are fixed or waived."""
+    """A counted console approval of a feature set or a priority order with blocking
+    problems open: recorded, not followed. The checkpoint stays pending with ``needs =
+    "confirm"`` (so the run's token stays read-only, :func:`_holds_token`), nothing is
+    posted to the workflow, and Confirm is refused like Approve until the problems are
+    fixed or waived."""
     console = _console_record(run, segment, record, at, revise)
     console.update(
         counted=True,
@@ -7378,7 +7592,8 @@ async def _hold_console_approval(
     _note(
         segment,
         f"{cp.kind} was approved in SwarmCloud by {record.answered_by or 'someone'}: "
-        f"{_said(record, at)}. The feature set has blocking problems, so Oracle recorded the "
+        f"{_said(record, at)}. The {CHECKPOINT_TITLES.get(cp.kind, cp.kind).lower()} has "
+        "blocking problems, so Oracle recorded the "
         "approval and did not follow it: the checkpoint stays open in the Inbox, and an "
         "approver confirms it once the problems are fixed or waived, or requests changes.",
     )
@@ -7391,8 +7606,9 @@ NOT_IMPORTED = "the draft was not imported: retry import, or request changes"
 
 def _cannot_approve(cp: Checkpoint) -> str | None:
     """Why approving this checkpoint is refused now (web, Inbox and MCP alike): the draft
-    its segment left was refused at import (until Retry import imports it), or the feature
-    set it stands for has blocking problems (C6, as last checked: :func:`_recheck_scope`)."""
+    its segment left was refused at import (until Retry import imports it), the feature
+    set it stands for has blocking problems (C6, as last checked: :func:`_recheck_scope`),
+    or the priority order does (C8, :func:`_order_blocking`)."""
     imp = (cp.payload or {}).get("import")
     if cp.status == "pending" and isinstance(imp, dict) and imp.get("error"):
         return NOT_IMPORTED
@@ -7402,6 +7618,9 @@ def _cannot_approve(cp: Checkpoint) -> str | None:
         n = feature_set.blocking_of((cp.payload or {}).get("feature_set_check"))
         if n:
             return feature_set.blocking_message(n)
+    if cp.status == "pending" and (n := _order_blocking(cp)):
+        # C8 (call c3): the same for the priority order; pick D3 takes it over too.
+        return run_order.blocking_message(n)
     return None
 
 
@@ -7539,6 +7758,7 @@ async def retry_draft_import(
         run.document_id = uuid.UUID(imported["document_id"])
         _set_knob(run, "document_slug", None)
         await feature_set.fill_document(db, run.id, run.document_id)
+        await run_order.fill_document(db, run.id, run.document_id)
         _note_art(
             art,
             f"{who} retried importing {name}{after}: imported as {imported.get('slug')} "
@@ -8070,9 +8290,11 @@ async def _revising(db: AsyncSession, principal: Principal) -> list[RunSummary]:
         )
     ).all()
     runs: dict[uuid.UUID, Run] = {}
+    leads = await engineering_leads(db) if rows else frozenset()
     for run, segment in rows:
-        role = _flow(run).segment(segment.name).approver_role
-        if _sent_back(run, segment) and has_role(principal.role, role):  # type: ignore[arg-type]
+        sdef = _flow(run).segment(segment.name)
+        stop = SimpleNamespace(kind=sdef.checkpoint, approver_role=sdef.approver_role)
+        if _sent_back(run, segment) and may_decide(principal, stop, run.flow, leads):
             runs.setdefault(run.id, run)
     if not runs:
         return []
@@ -8098,19 +8320,26 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
             .order_by(Checkpoint.created_at, Checkpoint.id)
         )
     )
-    mine = [c for c in pending if has_role(principal.role, c.approver_role)]  # type: ignore[arg-type]
     # Decisions recorded and not delivered to the run yet (shown, nothing to decide).
-    owed = [
+    owing = [
         c
         for c in await db.scalars(
             select(Checkpoint)
             .where(Checkpoint.status.in_(DECIDED), Checkpoint.payload["wait"].has_key("posting"))
             .order_by(Checkpoint.decided_at, Checkpoint.id)
         )
-        if _owes(c) and has_role(principal.role, c.approver_role)  # type: ignore[arg-type]
+        if _owes(c)
     ]
+    run_ids = {c.run_id for c in [*pending, *owing]}
+    runs: dict[uuid.UUID, Run] = {}
+    if run_ids:
+        runs = {r.id: r for r in await db.scalars(select(Run).where(Run.id.in_(run_ids)))}
+    # Who decides each (A3): the engineering stops go to the leads and owners once one is
+    # named; the runs' flows come from the query above, the leads in one more.
+    leads = await engineering_leads(db)
+    mine = [c for c in pending if may_decide(principal, c, runs[c.run_id].flow, leads)]
+    owed = [c for c in owing if may_decide(principal, c, runs[c.run_id].flow, leads)]
     names = await _decider_names(db, owed)
-    run_ids = {c.run_id for c in [*mine, *owed]}
     owner = principal.role == "owner"
     waiting_runs: list[Run] = []
     if owner:
@@ -8121,17 +8350,15 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
                 .order_by(Run.created_at)
             )
         )
-    runs: dict[uuid.UUID, Run] = {}
-    if run_ids:
-        runs = {r.id: r for r in await db.scalars(select(Run).where(Run.id.in_(run_ids)))}
-    refs = await _refs(db, [*runs.values(), *waiting_runs])
+    shown = {c.run_id for c in [*mine, *owed]}
+    refs = await _refs(db, [*(r for r in runs.values() if r.id in shown), *waiting_runs])
 
     def item(c: Checkpoint) -> InboxCheckpoint:
         run = runs[c.run_id]
         seq = (c.payload or {}).get("segment_seq")
         sdef = _flow(run).segments[seq - 1] if seq else None
         return InboxCheckpoint(
-            **_checkpoint_out(c, principal, names).model_dump(),
+            **_checkpoint_out(c, principal, names, flow=run.flow, leads=leads).model_dump(),
             flow=run.flow,  # type: ignore[arg-type]
             flow_title=_flow(run).title,
             document_slug=refs.get(run.document_id),

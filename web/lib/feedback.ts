@@ -3,13 +3,14 @@ import type { CommentOut, FeedbackItem } from "@/lib/api/client";
 /*
  * The review panel's one feedback list (I3 PRD navigation, 2026-10-20): comments, Oracle
  * suggestions and section reviews, each in one of four states (C1e: Open, Staged, Declined,
- * Done). "Open feedback" has ONE definition, used by the panel head, the Feedback tab's
- * count, the outline's per-section pills and the switcher: open comments + open
- * suggestions + open change requests.
+ * Done). Discussions (G1) are the fourth kind, listed apart with their own chip and never
+ * counted in "Open feedback", which has ONE definition, used by the panel head, the
+ * Feedback tab's count, the outline's per-section pills and the switcher: open comments +
+ * open suggestions + open change requests.
  */
 
 export type FeedbackState = "open" | "staged" | "declined" | "done";
-export type FeedbackKind = "comment" | "suggestion" | "review";
+export type FeedbackKind = "comment" | "suggestion" | "review" | "discussion";
 
 export const FEEDBACK_STATES: FeedbackState[] = ["open", "staged", "declined", "done"];
 export const FEEDBACK_STATE_LABEL: Record<FeedbackState, string> = {
@@ -18,11 +19,12 @@ export const FEEDBACK_STATE_LABEL: Record<FeedbackState, string> = {
   declined: "Declined",
   done: "Done",
 };
-export const FEEDBACK_KINDS: FeedbackKind[] = ["comment", "suggestion", "review"];
+export const FEEDBACK_KINDS: FeedbackKind[] = ["comment", "suggestion", "review", "discussion"];
 export const FEEDBACK_KIND_LABEL: Record<FeedbackKind, string> = {
   comment: "Comments",
   suggestion: "Suggestions",
   review: "Reviews",
+  discussion: "Discussions",
 };
 
 /** A suggestion Oracle made with something to accept (not "no change" and not a duplicate). */

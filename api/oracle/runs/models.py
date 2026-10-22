@@ -29,6 +29,7 @@ FLOWS = (
     "request_triage",
     "strategy_draft",
     "launch_kit",
+    "baseline",
 )
 RUN_STATUSES = (
     "draft",

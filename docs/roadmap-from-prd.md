@@ -32,9 +32,10 @@ Brief / Full / Deck exports work unchanged on a roadmap).
 | `roadmap_draft` | writer, critic | `roadmap_review` | `roadmap.md`, imported as the roadmap's next version |
 
 The `roadmap_items` prompt carries the PRD version (its markdown and section ids), the
-confirmed goals and B2 horizons, the priority order (the latest priority snapshot, else
-the live goal-weighted ranking, every score with its explanation) and the baseline's
-`depends_on` / `blocks` edges. The `roadmap_draft` prompt adds the approved items file,
+confirmed goals and B2 horizons, the priority order (this PRD's approved order, else the
+latest saved company-wide priority snapshot, else the live goal-weighted ranking, every
+score with its explanation; a run's order that is not approved never counts) and the
+baseline's `depends_on` / `blocks` edges. The `roadmap_draft` prompt adds the approved items file,
 the template skeleton (front matter with the template's brief markers, O1f) and the link
 form below.
 

@@ -24,6 +24,7 @@ from oracle.connections.notion_pages import router as notion_pages_router
 from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
 from oracle.decisions.router import router as decisions_router
+from oracle.discussions.router import router as discussions_router
 from oracle.docs.parser import DraftError
 from oracle.docs.router import router as docs_router
 from oracle.docs.schemas import ImportErrorResponse
@@ -181,6 +182,8 @@ def create_app() -> FastAPI:
     app.include_router(preferences_router)
     app.include_router(docs_router)
     app.include_router(review_router)
+    # G1: one thread per subject, open by default, private when its starter says so.
+    app.include_router(discussions_router)
     app.include_router(review_v2_router)
     app.include_router(export_router)
     app.include_router(llm_jobs_router)

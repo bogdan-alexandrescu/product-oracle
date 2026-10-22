@@ -9,6 +9,7 @@ import {
   Button,
   Chip,
   confirmInPage,
+  LinkButton,
   Icon,
   InfoTip,
   Inspector,
@@ -18,9 +19,11 @@ import {
   Page,
   PageHeader,
   Panel,
+  Sheet,
   Split,
   type ChipKind,
 } from "@/components/ds";
+import { DiscussSubject } from "@/components/discuss/StartDiscussion";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
@@ -32,6 +35,7 @@ import {
   CANCEL_AGAIN_CONFIRM,
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
+  orderHref,
   RETRY_CONFIRM,
   runStatusLabel,
   RunStatusBadge,
@@ -704,6 +708,7 @@ function SegmentItem({
             <CheckpointRow
               key={cp.id}
               cp={cp}
+              run={run}
               busy={busy}
               onDecide={onDecide}
               anchor={i === 0}
@@ -1089,6 +1094,7 @@ function Artifacts({
 
 function CheckpointRow({
   cp,
+  run,
   busy,
   onDecide,
   anchor,
@@ -1097,6 +1103,7 @@ function CheckpointRow({
   noteRef,
 }: {
   cp: CheckpointOut;
+  run: RunOut;
   busy: boolean;
   onDecide: Decide;
   anchor?: boolean;
@@ -1111,6 +1118,8 @@ function CheckpointRow({
   const redoBlocked = !answer?.can_redo && !note.trim();
   // The draft was not imported: approving is refused until Retry import imports it.
   const approveBlocked = cp.cannot_approve ? `${cp.cannot_approve.charAt(0).toUpperCase()}${cp.cannot_approve.slice(1)}.` : null;
+  // G1: talk the checkpoint through with the team before deciding, in a sheet.
+  const [discussing, setDiscussing] = useState(false);
   return (
     <div
       id={anchor ? "decide" : undefined}
@@ -1138,6 +1147,14 @@ function CheckpointRow({
       {approveBlocked && (
         <p className="mt-2 text-sm text-warn" data-testid="cannot-approve">
           {approveBlocked}
+        </p>
+      )}
+      {orderHref(cp) && (
+        // C8: the run's order next to Oracle's live ranking, where it can also be decided.
+        <p className="mt-2">
+          <LinkButton href={orderHref(cp)!} icon="priorities">
+            Review the order
+          </LinkButton>
         </p>
       )}
       <textarea
@@ -1201,7 +1218,22 @@ function CheckpointRow({
             )}
           </>
         )}
+        <Button variant="ghost" icon="comment" onClick={() => setDiscussing(true)}>
+          Discuss
+        </Button>
       </div>
+      <Sheet open={discussing} title={`Discuss: ${CHECKPOINT_LABEL[cp.kind]}`} onClose={() => setDiscussing(false)} testId="sheet-discuss">
+        <div className="px-4 py-3">
+          <DiscussSubject
+            subjectKey={`checkpoint:${run.id}:${cp.kind}`}
+            subject={{
+              kind: "checkpoint",
+              subject: { run_id: run.id, checkpoint_id: cp.id },
+              label: `${run.flow_title} · ${CHECKPOINT_LABEL[cp.kind]}`,
+            }}
+          />
+        </div>
+      </Sheet>
     </div>
   );
 }

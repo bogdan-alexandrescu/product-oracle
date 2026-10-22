@@ -2,6 +2,7 @@
 
 import { Button, Icon, LinkButton, Panel } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
+import { formatDay } from "@/lib/format";
 
 type Step = Schemas["SetupStep"];
 
@@ -31,10 +32,21 @@ const STEPS: Record<string, { label: string; href: string; status: (s: Step) => 
     href: "/settings/sources?from=setup#company-domains",
     status: (s) => (!s.done ? "Not set" : (s.detail ?? `${s.count} domains`)),
   },
+  eng_lead: {
+    label: "Engineering lead",
+    href: "/settings/members?from=setup#engineering-lead",
+    status: (s) => (s.done ? `${s.count} ${s.count === 1 ? "lead" : "leads"}` : "None"),
+  },
   horizons: {
     label: "Horizons",
     href: "/settings/company?from=setup#horizons",
     status: (s) => (s.done ? "Checked" : "Not checked"),
+  },
+  // B1: done once a Build the baseline run succeeded; detail is when the last one finished.
+  build_baseline: {
+    label: "Build baseline",
+    href: "/baseline?build=1",
+    status: (s) => (!s.done ? "Not built" : s.detail ? `Built ${formatDay(s.detail)}` : "Built"),
   },
 };
 

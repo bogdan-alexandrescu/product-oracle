@@ -148,7 +148,11 @@ writing the PRD alone from memory plus a few searches.
   checked `feature_set.yaml` (every feature traces to a confirmed goal or is flagged;
   blocking problems disable Approve) becomes the features and requirements this PRD
   includes, excludes or defers, and the priority order, the PRD draft and the
-  document's next drafts read that scope, not the whole baseline (C6).
+  document's next drafts read that scope, not the whole baseline (C6). The priority
+  order's `priority.yaml` is checked the same way (every included feature ranked once,
+  after the features it depends on; blocking problems disable Approve) and compared with
+  Oracle's live ranking on the Priorities screen; approving the stop saves it as this
+  PRD's priority snapshot, which the roadmap reads (C8).
 - **Outputs:** PRD with multiple versioned templates (O1); feature design = stories,
   acceptance criteria, SVG flow, low-fi HTML wireframes, with hi-fi mockups and
   clickable prototypes opt-in in v2 (O2); goal-weighted prioritization by default,

@@ -1,10 +1,10 @@
 """Roadmap alignment and product track routes (CR-11, V2b).
 
 Everyone reads (viewer+). Approvers and owners write: import a version's items, settle
-item staleness, record tracker state and schedule bases, start and edit tracks and
-milestones, monitor a track, start a roadmap run. Every route is company-scoped; another
-company's id is a 404. MCP tools derive from these operations. Run tokens reach none of
-them (their areas are not in oracle.mcp.scopes).
+item staleness, record tracker state and schedule bases (engineering leads too, A3),
+start and edit tracks and milestones, monitor a track, start a roadmap run. Every route
+is company-scoped; another company's id is a 404. MCP tools derive from these
+operations. Run tokens reach none of them (their areas are not in oracle.mcp.scopes).
 
 Importing this module registers two ``oracle.changes`` handlers: ``roadmap.items`` (store
 a roadmap version's items; mark items traced to a changed PRD section or baseline item
@@ -20,11 +20,12 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes
-from oracle.auth.deps import Principal, TenantDB
+from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.auth.models import User
 from oracle.authz import require_role
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
+from oracle.members.leads import engineering_leads, may_verify_dates
 from oracle.roadmap import items as items_mod
 from oracle.roadmap import schedule, staleness, tracker, tracks, views
 from oracle.roadmap.models import (
@@ -74,6 +75,20 @@ router = APIRouter(prefix="/v1", tags=["roadmaps"])
 
 Reader = Annotated[Principal, Depends(require_role("viewer"))]
 Approver = Annotated[Principal, Depends(require_role("approver"))]
+
+
+async def date_verifier(principal: CurrentPrincipal, db: TenantDB) -> Principal:
+    """Who records and withdraws a verified schedule basis (A3): approvers and owners (O4
+    Roadmap shape), plus engineering leads, until F3 Date bases applies the owner's decided
+    rule (oracle.members.leads.may_verify_dates)."""
+    if not may_verify_dates(principal, await engineering_leads(db)):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Requires the approver role or the engineering lead"
+        )
+    return principal
+
+
+DateVerifier = Annotated[Principal, Depends(date_verifier)]
 
 changes.register_handler(staleness.HANDLER, staleness.mark_items, subjects=staleness.SUBJECTS)
 changes.register_handler("roadmap.start_track", tracks.on_published, subjects={"document_version"})
@@ -256,11 +271,12 @@ async def _record_is_prds(db, record: TrackerRecord, prd: Document) -> bool:
 
 @router.post("/schedule-bases", response_model=ScheduleBasisOut, status_code=201)
 async def create_schedule_basis(
-    body: ScheduleBasisCreate, principal: Approver, db: TenantDB
+    body: ScheduleBasisCreate, principal: DateVerifier, db: TenantDB
 ) -> ScheduleBasis:
     """Record a verified estimate, capacity figure or commitment supporting a date for
     one PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a
-    tracker issue is matched to (``tracker_key``). The approver recording it verifies it.
+    tracker issue is matched to (``tracker_key``). The approver or engineering lead
+    recording it verifies it.
     From a tracker record, the record's own target date must be that date, and the record
     must be this PRD's."""
     prd = await _document(db, body.prd, "prd")
@@ -330,7 +346,7 @@ async def create_schedule_basis(
 
 @router.post("/schedule-bases/{basis_id}/withdraw", response_model=WithdrawOut)
 async def withdraw_schedule_basis(
-    basis_id: uuid.UUID, body: ScheduleBasisWithdraw, principal: Approver, db: TenantDB
+    basis_id: uuid.UUID, body: ScheduleBasisWithdraw, principal: DateVerifier, db: TenantDB
 ) -> WithdrawOut:
     """Withdraw a basis: it supports nothing from now on. Milestones lose a date no other
     verified basis supports, and roadmap items whose date rested on it go potentially

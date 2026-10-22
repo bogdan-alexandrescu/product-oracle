@@ -87,7 +87,7 @@ export function GoalsPanel({
   history: Map<string, Point[]>;
   error: string | null;
   loading: boolean;
-  /** Approvers and owners import a baseline; a viewer sees no action they cannot take. */
+  /** Approvers and owners build the baseline; a viewer sees no action they cannot take. */
   canImport: boolean;
   /** Home's band by default; Plan shows the same band under its own id. */
   testId?: string;
@@ -134,13 +134,13 @@ export function GoalsPanel({
       {goals && shown.length === 0 && (
         <div data-testid="home-goals-empty" className="flex flex-wrap items-center gap-3 px-4 py-4">
           <span className="text-[15px] font-semibold text-text2">No goals yet</span>
-          <InfoTip label="importing a baseline" align="start">
-            Push a baseline YAML with <code>oracle push</code>, or start a Baseline to PRD run; its goals show here once
-            confirmed.
+          <InfoTip label="building the baseline" align="start">
+            Oracle reads your sources and proposes your goals; they show here once confirmed. You can also push a
+            baseline YAML with <code>oracle push</code>.
           </InfoTip>
           {canImport && (
-            <LinkButton href="/baseline" className="ml-auto">
-              Import your baseline
+            <LinkButton href="/baseline?build=1" className="ml-auto">
+              Build the baseline
             </LinkButton>
           )}
         </div>

@@ -447,6 +447,200 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/discussions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Discussions
+         * @description Discussions, latest activity first. A private discussion the caller is not in is
+         *     listed only when the filter names its subject (``subject_key``, ``document_id`` or
+         *     ``run_id``), as ``{id, visibility, hidden, summary}``: that it exists, and its summary
+         *     when the starter shared it. ``mine``: the ones the caller is in.
+         */
+        get: operations["list_discussions"];
+        put?: never;
+        /**
+         * Create Discussion
+         * @description Start a discussion about one subject: open (everyone who can see the subject reads
+         *     it) or private (only the people picked). ``title`` defaults to the subject's label;
+         *     ``participants`` is the starter's pick for a private discussion and mentions on an
+         *     open one; ``message`` is optional.
+         */
+        post: operations["create_discussion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Discussion
+         * @description One discussion with its people. The starter of a private discussion also gets
+         *     ``exposure``: what making it open would expose now.
+         */
+        get: operations["get_discussion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Discussion
+         * @description Rename, make private or open, close or reopen, write the summary or share it. The
+         *     starter changes title, visibility and summary; the starter or an approver closes and
+         *     reopens. Making a private discussion open needs ``exposes``: the counts its warning
+         *     showed; without them, or when they are no longer current, 409 "Confirm what this
+         *     exposes" with the current ``messages`` and ``people``, and nothing changes.
+         */
+        patch: operations["update_discussion"];
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Discussion Messages
+         * @description The thread, a page at a time, oldest first within the page; ``before``: the
+         *     messages older than that one.
+         */
+        get: operations["list_discussion_messages"];
+        put?: never;
+        /**
+         * Create Discussion Message
+         * @description Write in a discussion (commenters and up; in a private one, its people). Plain
+         *     text with Markdown links, at most 8,000 characters. ``mentions`` (member ids from
+         *     ``GET /v1/people``) add people to an open discussion; in a private one only the
+         *     starter adds people.
+         */
+        post: operations["create_discussion_message"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/messages/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Discussion Message
+         * @description Delete your own message: it reads "Message deleted" and its text is gone.
+         */
+        delete: operations["delete_discussion_message"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Discussion Message
+         * @description Edit your own message; it shows "edited". Oracle's messages cannot be edited.
+         */
+        patch: operations["update_discussion_message"];
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/participants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Discussion Participants
+         * @description Add people. On a private discussion only the starter may; on an open one any
+         *     reader adds themselves (Follow) and commenters and up add others. Returns everyone
+         *     in it.
+         */
+        post: operations["add_discussion_participants"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/participants/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Discussion Participant
+         * @description Leave (or unfollow), or, the starter of a private discussion, remove someone.
+         */
+        delete: operations["remove_discussion_participant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Discussion Read
+         * @description Mark the thread read up to a message (what is unread for the caller).
+         */
+        post: operations["mark_discussion_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Discussion Changes
+         * @description The typed changes the discussion ended in, read-only here (proposing, suggesting
+         *     and staging arrive with G3 and G4).
+         */
+        get: operations["list_discussion_changes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{doc}/versions/{n}/section-states": {
         parameters: {
             query?: never;
@@ -1358,7 +1552,13 @@ export interface paths {
         delete: operations["remove_member"];
         options?: never;
         head?: never;
-        /** Update Member */
+        /**
+         * Update Member
+         * @description Change a member's role, name them engineering lead or clear it (A3), or both in
+         *     one change, role first. A viewer is never the engineering lead: naming one is a 422,
+         *     and a demotion to viewer clears the flag. Clearing it returns the engineering-stop
+         *     decisions they gave that are not delivered yet to the Inbox.
+         */
         patch: operations["update_member"];
         trace?: never;
     };
@@ -1495,7 +1695,8 @@ export interface paths {
         put?: never;
         /**
          * Create Invite
-         * @description Pre-assign a role to an email: its first Google sign-in lands with that role.
+         * @description Pre-assign a role to an email: its first Google sign-in lands with that role, and as
+         *     an engineering lead when ``engineering_lead`` (never with role viewer: 422).
          */
         post: operations["create_invite"];
         delete?: never;
@@ -3307,6 +3508,28 @@ export interface paths {
         };
         /** Get Priority Snapshot */
         get: operations["get_priority_snapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/priorities/snapshots/{snapshot_id}/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare Priority Snapshot
+         * @description A snapshot in any status (a run's proposed order included) next to the live
+         *     ranking of its method: each row's run rank, live rank, delta and the check's problems,
+         *     and the run and checkpoint that decide it.
+         */
+        get: operations["compare_priority_snapshot"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6868,7 +7091,8 @@ export interface paths {
          * Create Schedule Basis
          * @description Record a verified estimate, capacity figure or commitment supporting a date for
          *     one PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a
-         *     tracker issue is matched to (``tracker_key``). The approver recording it verifies it.
+         *     tracker issue is matched to (``tracker_key``). The approver or engineering lead
+         *     recording it verifies it.
          *     From a tracker record, the record's own target date must be that date, and the record
          *     must be this PRD's.
          */
@@ -10794,6 +11018,74 @@ export interface components {
             /** Kinds */
             kinds: components["schemas"]["CompanyKindCoverage"][];
         };
+        /** CompareCheckpoint */
+        CompareCheckpoint: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+            /** Approver Role */
+            approver_role: string;
+            /** Cannot Approve */
+            cannot_approve?: string | null;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+        };
+        /**
+         * CompareOut
+         * @description A snapshot (a run's order) next to Oracle's live ranking of the same method.
+         */
+        CompareOut: {
+            snapshot: components["schemas"]["PrioritySnapshotOut"];
+            /** Rows */
+            rows: components["schemas"]["CompareRow"][];
+            /**
+             * Live Generated At
+             * Format: date-time
+             */
+            live_generated_at: string;
+            run?: components["schemas"]["CompareRun"] | null;
+            checkpoint?: components["schemas"]["CompareCheckpoint"] | null;
+        };
+        /** CompareRow */
+        CompareRow: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Run Rank */
+            run_rank: number;
+            /** Live Rank */
+            live_rank: number | null;
+            /** Delta */
+            delta: number | null;
+            /** Run Explanation */
+            run_explanation: string | null;
+            /** Live Explanation */
+            live_explanation: string | null;
+            /** Problems */
+            problems: components["schemas"]["PriorityProblem"][];
+        };
+        /** CompareRun */
+        CompareRun: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Flow Title */
+            flow_title: string;
+            /** Status */
+            status: string;
+            /** Document Slug */
+            document_slug?: string | null;
+        };
         /**
          * ComposedModule
          * @description A module in a composition, with everything the inspector explains (§4.5).
@@ -12130,6 +12422,444 @@ export interface components {
             to_version: number;
             /** Sections */
             sections: components["schemas"]["SectionDiff"][];
+        };
+        /** DiscussionChangeCounts */
+        DiscussionChangeCounts: {
+            /**
+             * Proposed
+             * @default 0
+             */
+            proposed: number;
+            /**
+             * Suggested
+             * @default 0
+             */
+            suggested: number;
+            /**
+             * Staged
+             * @default 0
+             */
+            staged: number;
+        };
+        /** DiscussionChangeOut */
+        DiscussionChangeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Target */
+            target: {
+                [key: string]: unknown;
+            };
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Edited Payload */
+            edited_payload: {
+                [key: string]: unknown;
+            } | null;
+            /** Rationale */
+            rationale: string | null;
+            /**
+             * Proposed By Kind
+             * @enum {string}
+             */
+            proposed_by_kind: "oracle" | "person";
+            /** Proposed By */
+            proposed_by: string | null;
+            /** Suggested By */
+            suggested_by: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "suggested" | "staged" | "done" | "dismissed" | "superseded";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** DiscussionCreate */
+        DiscussionCreate: {
+            /**
+             * Subject Kind
+             * @enum {string}
+             */
+            subject_kind: "document" | "section" | "checkpoint" | "checkpoint_item" | "roadmap_item" | "entity" | "conflict" | "intake" | "gap" | "track" | "priorities" | "screen";
+            /** Subject */
+            subject?: {
+                [key: string]: unknown;
+            };
+            /** Title */
+            title?: string | null;
+            /**
+             * Visibility
+             * @default open
+             * @enum {string}
+             */
+            visibility: "open" | "private";
+            /** Participants */
+            participants?: string[];
+            message?: components["schemas"]["DiscussionMessageIn"] | null;
+        };
+        /**
+         * DiscussionExposure
+         * @description What making a private discussion open exposes: the messages not deleted (people's
+         *     and Oracle's, system lines excluded) and the distinct people who wrote them.
+         */
+        DiscussionExposure: {
+            /** Messages */
+            messages: number;
+            /** People */
+            people: number;
+        };
+        /**
+         * DiscussionExposureConflict
+         * @description 409: the counts the warning showed are not the discussion's now.
+         */
+        DiscussionExposureConflict: {
+            /** Detail */
+            detail: string;
+            /** Messages */
+            messages: number;
+            /** People */
+            people: number;
+        };
+        /** DiscussionMe */
+        DiscussionMe: {
+            /** Participant */
+            participant: boolean;
+            /** Can Write */
+            can_write: boolean;
+            /** Unread */
+            unread: number;
+            /** Can Manage */
+            can_manage: boolean;
+        };
+        /** DiscussionMeSummary */
+        DiscussionMeSummary: {
+            /** Participant */
+            participant: boolean;
+            /** Can Write */
+            can_write: boolean;
+            /** Unread */
+            unread: number;
+        };
+        /** DiscussionMessageEdit */
+        DiscussionMessageEdit: {
+            /** Body */
+            body: string;
+        };
+        /** DiscussionMessageIn */
+        DiscussionMessageIn: {
+            /** Body */
+            body: string;
+            /** Mentions */
+            mentions?: string[];
+            /**
+             * Mention Oracle
+             * @default false
+             */
+            mention_oracle: boolean;
+            /** Reply To */
+            reply_to?: string | null;
+        };
+        /** DiscussionMessageOut */
+        DiscussionMessageOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Discussion Id
+             * Format: uuid
+             */
+            discussion_id: string;
+            /**
+             * Author Kind
+             * @enum {string}
+             */
+            author_kind: "person" | "oracle" | "system";
+            author: components["schemas"]["DiscussionPerson"] | null;
+            /**
+             * Via
+             * @enum {string}
+             */
+            via: "web" | "mcp" | "slack";
+            /** Body */
+            body: string;
+            /** Mentions */
+            mentions: components["schemas"]["DiscussionPerson"][];
+            /** Mentions Oracle */
+            mentions_oracle: boolean;
+            /** Reply To */
+            reply_to: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "streaming" | "complete" | "failed" | "cancelled";
+            /** Citations */
+            citations: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Edited At */
+            edited_at: string | null;
+            /** Deleted */
+            deleted: boolean;
+        };
+        /** DiscussionMessagePage */
+        DiscussionMessagePage: {
+            /** Items */
+            items: components["schemas"]["DiscussionMessageOut"][];
+            /** Has More */
+            has_more: boolean;
+        };
+        /** DiscussionOut */
+        DiscussionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Subject Kind
+             * @enum {string}
+             */
+            subject_kind: "document" | "section" | "checkpoint" | "checkpoint_item" | "roadmap_item" | "entity" | "conflict" | "intake" | "gap" | "track" | "priorities" | "screen";
+            /** Subject Key */
+            subject_key: string;
+            /** Subject Label */
+            subject_label: string;
+            /** Subject Url */
+            subject_url: string;
+            /** Title */
+            title: string;
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "open" | "private";
+            /** Author Only */
+            author_only: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "closed";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "discuss" | "panel" | "slack";
+            started_by: components["schemas"]["DiscussionStarter"];
+            /** Started On Version */
+            started_on_version?: number | null;
+            /** Message Count */
+            message_count: number;
+            /** Last Message At */
+            last_message_at: string | null;
+            /** Summary */
+            summary: string | null;
+            /**
+             * Summary Status
+             * @enum {string}
+             */
+            summary_status: "none" | "draft" | "confirmed";
+            /** Summary Shared */
+            summary_shared: boolean;
+            changes: components["schemas"]["DiscussionChangeCounts"];
+            me: components["schemas"]["DiscussionMe"];
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Subject */
+            subject: {
+                [key: string]: unknown;
+            };
+            /** Participants */
+            participants: components["schemas"]["DiscussionParticipantOut"][];
+            exposure?: components["schemas"]["DiscussionExposure"] | null;
+        };
+        /** DiscussionPage */
+        DiscussionPage: {
+            /** Items */
+            items: (components["schemas"]["DiscussionSummary"] | components["schemas"]["HiddenDiscussion"])[];
+            /** Next */
+            next?: string | null;
+        };
+        /** DiscussionParticipantOut */
+        DiscussionParticipantOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+            /** Can Write */
+            can_write: boolean;
+            /**
+             * Added Via
+             * @enum {string}
+             */
+            added_via: "started" | "mention" | "added" | "followed" | "posted";
+        };
+        /** DiscussionParticipantsIn */
+        DiscussionParticipantsIn: {
+            /** User Ids */
+            user_ids: string[];
+        };
+        /** DiscussionPatch */
+        DiscussionPatch: {
+            /** Title */
+            title?: string | null;
+            /** Visibility */
+            visibility?: ("open" | "private") | null;
+            exposes?: components["schemas"]["DiscussionExposure"] | null;
+            /** Status */
+            status?: ("open" | "closed") | null;
+            /** Summary */
+            summary?: string | null;
+            /** Summary Status */
+            summary_status?: "confirmed" | null;
+            /** Summary Shared */
+            summary_shared?: boolean | null;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** DiscussionPerson */
+        DiscussionPerson: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+        };
+        /** DiscussionReadIn */
+        DiscussionReadIn: {
+            /**
+             * Message Id
+             * Format: uuid
+             */
+            message_id: string;
+        };
+        /** DiscussionStarter */
+        DiscussionStarter: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+        };
+        /**
+         * DiscussionSummary
+         * @description A discussion as a list shows it to someone who can read it.
+         */
+        DiscussionSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Subject Kind
+             * @enum {string}
+             */
+            subject_kind: "document" | "section" | "checkpoint" | "checkpoint_item" | "roadmap_item" | "entity" | "conflict" | "intake" | "gap" | "track" | "priorities" | "screen";
+            /** Subject Key */
+            subject_key: string;
+            /** Subject Label */
+            subject_label: string;
+            /** Subject Url */
+            subject_url: string;
+            /** Title */
+            title: string;
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "open" | "private";
+            /** Author Only */
+            author_only: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "closed";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "discuss" | "panel" | "slack";
+            started_by: components["schemas"]["DiscussionStarter"];
+            /** Started On Version */
+            started_on_version?: number | null;
+            /** Message Count */
+            message_count: number;
+            /** Last Message At */
+            last_message_at: string | null;
+            /** Summary */
+            summary: string | null;
+            /**
+             * Summary Status
+             * @enum {string}
+             */
+            summary_status: "none" | "draft" | "confirmed";
+            /** Summary Shared */
+            summary_shared: boolean;
+            changes: components["schemas"]["DiscussionChangeCounts"];
+            me: components["schemas"]["DiscussionMeSummary"];
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** DismissIn */
         DismissIn: {
@@ -13828,7 +14558,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline";
             /** Title */
             title: string;
             /** Description */
@@ -13849,6 +14579,11 @@ export interface components {
              */
             in_new_run_dialog: boolean;
             starts_from?: components["schemas"]["FlowStart"] | null;
+            /**
+             * Writes Document
+             * @default true
+             */
+            writes_document: boolean;
         };
         /** FlowSegmentOut */
         FlowSegmentOut: {
@@ -14103,6 +14838,30 @@ export interface components {
             /** Database */
             database: string;
         };
+        /**
+         * HiddenDiscussion
+         * @description A private discussion the caller is not in: only that it exists, and its summary
+         *     when the starter shared it.
+         */
+        HiddenDiscussion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Visibility
+             * @constant
+             */
+            visibility: "private";
+            /**
+             * Hidden
+             * @constant
+             */
+            hidden: true;
+            /** Summary */
+            summary: string | null;
+        };
         /** HistoryOut */
         HistoryOut: {
             /** Account Id */
@@ -14332,7 +15091,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -15337,6 +16096,11 @@ export interface components {
              * @enum {string}
              */
             role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Engineering Lead
+             * @default false
+             */
+            engineering_lead: boolean;
         };
         /** InviteOut */
         InviteOut: {
@@ -15352,6 +16116,11 @@ export interface components {
              * @enum {string}
              */
             role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Engineering Lead
+             * @default false
+             */
+            engineering_lead: boolean;
             /**
              * Status
              * @enum {string}
@@ -16464,6 +17233,11 @@ export interface components {
             user_id?: string | null;
             /** Email */
             email?: string | null;
+            /**
+             * Engineering Lead
+             * @default false
+             */
+            engineering_lead: boolean;
             /** Token Id */
             token_id?: string | null;
             /** Token Name */
@@ -16483,6 +17257,11 @@ export interface components {
              * @enum {string}
              */
             role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Engineering Lead
+             * @default false
+             */
+            engineering_lead: boolean;
             /**
              * Created At
              * Format: date-time
@@ -16505,13 +17284,15 @@ export interface components {
              */
             readonly status: "active" | "disabled";
         };
-        /** MemberPatch */
+        /**
+         * MemberPatch
+         * @description A role, the engineering lead flag, or both (applied in one change, role first).
+         */
         MemberPatch: {
-            /**
-             * Role
-             * @enum {string}
-             */
-            role: "viewer" | "commenter" | "approver" | "owner";
+            /** Role */
+            role?: ("viewer" | "commenter" | "approver" | "owner") | null;
+            /** Engineering Lead */
+            engineering_lead?: boolean | null;
         };
         /** MergeIn */
         MergeIn: {
@@ -17990,6 +18771,55 @@ export interface components {
             /** Artifacts */
             artifacts: string[];
         };
+        /**
+         * PriorityCheck
+         * @description The check of a run's priority.yaml (C8): the file's method, the features ranked,
+         *     every problem, and the order as the file gives it.
+         */
+        PriorityCheck: {
+            /** Method */
+            method?: ("goal_weighted" | "rice" | "moscow" | "wsjf") | null;
+            /** Features */
+            features: number;
+            /** Problems */
+            problems: components["schemas"]["PriorityProblem"][];
+            /**
+             * Order
+             * @default []
+             */
+            order: components["schemas"]["PriorityOrderRow"][];
+        };
+        /** PriorityOrderRow */
+        PriorityOrderRow: {
+            /** Key */
+            key: string;
+            /** Rank */
+            rank: number;
+            /** Score */
+            score?: number | null;
+            /** Explanation */
+            explanation?: string | null;
+            /** Live Rank */
+            live_rank?: number | null;
+        };
+        /**
+         * PriorityProblem
+         * @description One problem of a run's priority.yaml (oracle.priorities.run_order). A blocking one
+         *     refuses Approve until the order is sent back (call c3).
+         */
+        PriorityProblem: {
+            /** Code */
+            code: string;
+            /**
+             * Blocking
+             * @default true
+             */
+            blocking: boolean;
+            /** Feature */
+            feature?: string | null;
+            /** Message */
+            message: string;
+        };
         /** PriorityRanking */
         PriorityRanking: {
             /**
@@ -18046,12 +18876,30 @@ export interface components {
             feature_count: number;
             /** Top */
             top: string[];
+            /**
+             * Status
+             * @default saved
+             * @enum {string}
+             */
+            status: "saved" | "proposed" | "discarded";
+            /** Run Id */
+            run_id?: string | null;
+            document?: components["schemas"]["SnapshotDocument"] | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
             /** Params */
             params: {
                 [key: string]: unknown;
             };
             /** Ranking */
             ranking: components["schemas"]["RankedFeature"][];
+            /** Checkpoint Id */
+            checkpoint_id?: string | null;
+            /** Scope Id */
+            scope_id?: string | null;
+            check_result?: components["schemas"]["PriorityCheck"] | null;
         };
         /** PrioritySnapshotSummary */
         PrioritySnapshotSummary: {
@@ -18078,6 +18926,19 @@ export interface components {
             feature_count: number;
             /** Top */
             top: string[];
+            /**
+             * Status
+             * @default saved
+             * @enum {string}
+             */
+            status: "saved" | "proposed" | "discarded";
+            /** Run Id */
+            run_id?: string | null;
+            document?: components["schemas"]["SnapshotDocument"] | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
         };
         /** Problem */
         Problem: {
@@ -18665,6 +19526,10 @@ export interface components {
             /** Dependents */
             dependents: string[];
             explanation: components["schemas"]["Explanation"];
+            /** Live Rank */
+            live_rank?: number | null;
+            /** Run Explanation */
+            run_explanation?: string | null;
         };
         /** RankedGap */
         RankedGap: {
@@ -20323,7 +21188,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline";
             /** Document */
             document?: string | null;
             /** Source */
@@ -20412,7 +21277,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline";
             /** Flow Title */
             flow_title: string;
             /**
@@ -20562,7 +21427,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline";
             /** Flow Title */
             flow_title: string;
             /**
@@ -21669,6 +22534,7 @@ export interface components {
             items_check?: components["schemas"]["ItemsCheck"] | null;
             previous_attempt?: components["schemas"]["PreviousAttempt"] | null;
             feature_set_check?: components["schemas"]["FeatureSetCheck"] | null;
+            priority_check?: components["schemas"]["PriorityCheck"] | null;
             /** Autonomy Note */
             autonomy_note?: string | null;
             /** Started At */
@@ -21858,6 +22724,19 @@ export interface components {
             label?: string | null;
             /** As Of */
             as_of?: string | null;
+        };
+        /**
+         * SnapshotDocument
+         * @description The PRD a run's order is for: its document once the draft imported, else the slug
+         *     the run writes (no id or title yet).
+         */
+        SnapshotDocument: {
+            /** Id */
+            id?: string | null;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title?: string | null;
         };
         /** SnapshotOut */
         SnapshotOut: {
@@ -25998,6 +26877,571 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PublishBlockedOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_discussions: {
+        parameters: {
+            query?: {
+                subject_key?: string | null;
+                document_id?: string | null;
+                run_id?: string | null;
+                status?: ("open" | "closed") | null;
+                mine?: boolean;
+                origin?: ("discuss" | "panel" | "slack") | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_discussion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscussionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionOut"];
+                };
+            };
+            /** @description The subject is not in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_discussion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionOut"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_discussion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscussionPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionOut"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale, closed, or counts to confirm */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionExposureConflict"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_discussion_messages: {
+        parameters: {
+            query?: {
+                before?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionMessagePage"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_discussion_message: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscussionMessageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionMessageOut"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This discussion is closed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_discussion_message: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_discussion_message: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscussionMessageEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionMessageOut"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_discussion_participants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscussionParticipantsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionParticipantOut"][];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_discussion_participant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_discussion_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscussionReadIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_discussion_changes: {
+        parameters: {
+            query?: {
+                status?: ("proposed" | "suggested" | "staged" | "done" | "dismissed" | "superseded") | null;
+            };
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionChangeOut"][];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -31632,6 +33076,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                status?: "saved" | "proposed" | "discarded" | "all";
             };
             header?: never;
             path?: never;
@@ -31694,7 +33139,9 @@ export interface operations {
     };
     get_priority_snapshot: {
         parameters: {
-            query?: never;
+            query?: {
+                status?: "saved" | "proposed" | "discarded" | "all";
+            };
             header?: never;
             path: {
                 snapshot_id: string;
@@ -31710,6 +33157,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrioritySnapshotOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_priority_snapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                snapshot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompareOut"];
                 };
             };
             /** @description Validation Error */

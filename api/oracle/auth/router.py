@@ -26,7 +26,12 @@ async def login(body: LoginRequest, response: Response) -> Me:
         path="/",
     )
     return Me(
-        kind="user", tenant_id=user.tenant_id, role=user.role, user_id=user.id, email=user.email
+        kind="user",
+        tenant_id=user.tenant_id,
+        role=user.role,
+        user_id=user.id,
+        email=user.email,
+        engineering_lead=user.engineering_lead,
     )
 
 
@@ -48,6 +53,7 @@ async def me(principal: CurrentPrincipal, db: TenantDB) -> Me:
             role=principal.role,
             user_id=user.id,
             email=user.email,
+            engineering_lead=user.engineering_lead,
             token_id=token.id if token else None,
             token_name=token.name if token else None,
         )
