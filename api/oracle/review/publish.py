@@ -13,6 +13,7 @@ A publish is refused for:
   approver (approvals count only while the approver still is one, read now:
   ``oracle.review.state.standing``);
 - missing required sections (template, composition and policy);
+- a PRD version with nothing written (#254: every section still the template's text);
 - stale or missing mandatory approvals: each section the policy requires must be
   approved on its current revision, and every mandatory reviewer must have approved it
   (no unanimity unless the company configures mandatory reviewers);
@@ -56,6 +57,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, changes, readiness
 from oracle.baseline.models import Evidence
 from oracle.connections.models import Connection
+from oracle.docs import written
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.export import offload
 from oracle.jobs.models import LlmSuggestion
@@ -850,6 +852,8 @@ async def publish_check(
                 "setting publish_latest_only)",
             )
         )
+    if document.kind == "prd" and await written.nothing_written(db, document, version):
+        blockers.append(_problem("nothing_written", written.NOTHING_WRITTEN))
     published = await db.scalar(
         select(DocumentPublication.number).where(DocumentPublication.version_id == version.id)
     )

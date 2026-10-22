@@ -38,7 +38,9 @@ async def stamp_approved(ctx: Ctx, n: int = 1) -> None:
 async def test_approving_a_template_only_prd_is_409_nothing_written(client):
     ctx = await make_ctx()
     await start_prd(client, ctx)
-    resp = await client.post(f"/v1/documents/{SLUG}/versions/1/approve", headers=ctx.as_("approver"))
+    resp = await client.post(
+        f"/v1/documents/{SLUG}/versions/1/approve", headers=ctx.as_("approver")
+    )
     assert resp.status_code == 409, resp.text
     assert resp.json()["detail"].startswith("Nothing is written yet")
     async with tenant_session(ctx.tenant_id) as s:
@@ -69,7 +71,9 @@ async def test_publish_check_blocks_a_template_only_prd(client):
     ctx = await make_ctx()
     await start_prd(client, ctx)
     await stamp_approved(ctx)
-    resp = await client.get(f"/v1/documents/{SLUG}/versions/1/publish-check", headers=ctx.as_("approver"))
+    resp = await client.get(
+        f"/v1/documents/{SLUG}/versions/1/publish-check", headers=ctx.as_("approver")
+    )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["can_publish"] is False

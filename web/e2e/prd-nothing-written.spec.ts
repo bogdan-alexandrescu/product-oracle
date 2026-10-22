@@ -8,7 +8,10 @@ import { login } from "./helpers";
 async function newPrd(page: Page, title: string) {
   await login(page);
   await page.getByRole("link", { name: "New PRD" }).click();
-  await page.getByRole("textbox", { name: "Title" }).fill(title);
+  await expect(page.getByTestId("recommended-template")).toBeVisible();
+  const box = page.getByRole("textbox", { name: "Title" });
+  await box.fill(title);
+  await expect(box).toHaveValue(title);
   await page.getByRole("button", { name: "Start from an empty skeleton instead" }).click();
   await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
 }
@@ -51,17 +54,18 @@ test("a PRD with a few sections reviewed: Publish names how many are not", async
   await page.goto("/documents/visit-reminders/publish");
   await page.getByTestId("publish-button").click();
   const dialog = page.getByRole("dialog", { name: "Publish v1?" });
-  if (reviewed === all) await expect(dialog.getByTestId("unreviewed-sections")).toHaveCount(0);
-  else await expect(dialog.getByTestId("unreviewed-sections")).toHaveText(`${all - reviewed} of ${all} sections ${all - reviewed === 1 ? "is" : "are"} not reviewed`);
+  expect(reviewed).toBeLessThan(all);
+  await expect(dialog.getByTestId("unreviewed-sections")).toHaveText(`${all - reviewed} of ${all} sections ${all - reviewed === 1 ? "is" : "are"} not reviewed`);
 });
 
 test("Build roadmap refuses a template-only PRD approved before the refusal", async ({ page }) => {
   await newPrd(page, "Lantern trial PRD");
   await approvedBeforeTheFix(page, "lantern-trial-prd");
-  await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Roadmap" }).click();
+  await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Plan", exact: true }).click();
+  await page.getByTestId("plan-tabs").filter({ visible: true }).getByRole("link", { name: "Roadmap documents" }).click();
   await page.getByTestId("approved-prd").filter({ hasText: "Lantern trial PRD" }).getByRole("button", { name: "Build roadmap" }).click();
   const dialog = page.getByRole("dialog", { name: "Build roadmap" });
   await dialog.getByRole("button", { name: "Estimate" }).click();
   await expect(dialog).toContainText("Nothing is written yet");
-  await expect(dialog.getByRole("button", { name: "Start run" })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Start run" })).toBeDisabled();
 });

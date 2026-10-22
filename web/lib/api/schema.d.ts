@@ -20208,7 +20208,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "version_not_approved" | "version_approval_lapsed" | "decider_not_current" | "approval_not_by_decider" | "missing_required_section" | "stale_approval" | "missing_approval" | "mandatory_reviewer_pending" | "readiness_critical" | "source_permission_revoked" | "already_published" | "superseded_version" | "template_unresolved" | "open_critical_change_request" | "open_change_request" | "readiness_warning" | "approval_stale_optional" | "review_overdue";
+            code: "version_not_approved" | "version_approval_lapsed" | "decider_not_current" | "approval_not_by_decider" | "missing_required_section" | "stale_approval" | "missing_approval" | "mandatory_reviewer_pending" | "readiness_critical" | "source_permission_revoked" | "already_published" | "superseded_version" | "nothing_written" | "template_unresolved" | "open_critical_change_request" | "open_change_request" | "readiness_warning" | "approval_stale_optional" | "review_overdue";
             /** Message */
             message: string;
             /**
