@@ -10225,11 +10225,11 @@
             "description": "The item is locked: the change became a proposal"
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Goal fields rejected (B5), every problem",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/YamlImportError"
                 }
               }
             }
@@ -10338,11 +10338,11 @@
             "description": "The item is locked: the change became a proposal"
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Goal fields rejected (B5), every problem",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/YamlImportError"
                 }
               }
             }
@@ -10620,6 +10620,196 @@
             }
           }
         }
+      }
+    },
+    "/v1/baseline/entities/{entity_id}/measurements": {
+      "get": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "List Goal Measurements",
+        "description": "A goal's dated values, latest day first.",
+        "operationId": "list_goal_measurements",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MeasurementOut"
+                  },
+                  "title": "Response List Goal Measurements"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Record Goal Measurement",
+        "description": "Record a goal's value on a day (a second on the same day replaces it); the latest\nby day becomes the goal's ``current``. 422 when the entity is not a goal, the goal has\nno unit yet, or the day is in the future.",
+        "operationId": "record_goal_measurement",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeasurementCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeasurementOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/baseline/measurements/{measurement_id}": {
+      "delete": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Delete Goal Measurement",
+        "operationId": "delete_goal_measurement",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "measurement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Measurement Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/baseline/goals/fill-from-text": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Fill Goals From Text",
+        "description": "Read each goal's ``*_text`` values (Home's rules, no model call) and write what they\nsay as an Oracle write: applied to an unlocked goal, a proposal on a locked one.",
+        "operationId": "fill_goals_from_text",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FillFromTextResult"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
       }
     },
     "/v1/baseline/entities/{entity_id}/revisions": {
@@ -45346,6 +45536,16 @@
             "format": "date-time",
             "title": "Updated At"
           },
+          "goal_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "evidence": {
             "items": {
               "$ref": "#/components/schemas/EvidenceOut"
@@ -45523,6 +45723,16 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "goal_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -48096,6 +48306,56 @@
         ],
         "title": "FieldProblem"
       },
+      "FillFromTextResult": {
+        "properties": {
+          "applied": {
+            "type": "integer",
+            "title": "Applied"
+          },
+          "proposed": {
+            "type": "integer",
+            "title": "Proposed"
+          },
+          "left_as_text": {
+            "items": {
+              "$ref": "#/components/schemas/FilledText"
+            },
+            "type": "array",
+            "title": "Left As Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "applied",
+          "proposed",
+          "left_as_text"
+        ],
+        "title": "FillFromTextResult"
+      },
+      "FilledText": {
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_id",
+          "field",
+          "text"
+        ],
+        "title": "FilledText"
+      },
       "FindingCount": {
         "properties": {
           "kind": {
@@ -49264,6 +49524,35 @@
           "next_cursor"
         ],
         "title": "GithubRepoPage"
+      },
+      "GoalCheck": {
+        "properties": {
+          "measurable": {
+            "type": "boolean",
+            "title": "Measurable"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "measurable",
+          "missing",
+          "warnings"
+        ],
+        "title": "GoalCheck"
       },
       "GoalLink": {
         "properties": {
@@ -56076,6 +56365,121 @@
           "role"
         ],
         "title": "Me"
+      },
+      "MeasurementCreate": {
+        "properties": {
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "measured_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Measured On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "evidence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "measured_on"
+        ],
+        "title": "MeasurementCreate"
+      },
+      "MeasurementOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "measured_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Measured On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "evidence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Id"
+          },
+          "recorded_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "entity_id",
+          "value",
+          "measured_on",
+          "created_at"
+        ],
+        "title": "MeasurementOut"
       },
       "MemberOut": {
         "properties": {
@@ -82268,6 +82672,163 @@
           "url"
         ],
         "title": "AuthorizeOut"
+      },
+      "GoalAttrs": {
+        "description": "The typed fields of a goal's ``attrs`` (published so MCP clients see the shape).",
+        "properties": {
+          "metric": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Metric"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unit"
+          },
+          "comparison": {
+            "anyOf": [
+              {
+                "enum": [
+                  "at_least",
+                  "above",
+                  "at_most",
+                  "below"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Comparison"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Start"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Current"
+          },
+          "current_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Current As Of"
+          },
+          "horizon": {
+            "anyOf": [
+              {
+                "enum": [
+                  "short",
+                  "medium",
+                  "long"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Horizon"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Due"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Owner"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 10,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Weight"
+          }
+        },
+        "title": "GoalAttrs",
+        "type": "object"
       }
     },
     "securitySchemes": {
