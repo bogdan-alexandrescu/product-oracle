@@ -85,7 +85,9 @@ def _tables() -> list[str]:
 # or a number that skips main's; no_claim=what the table holds.
 def test_the_chain_ends_here_after_segment_skipped():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == [REVISION]
+    # H2 Cadence engine's 0026_rituals chains on it; one head.
+    assert script.get_heads() == ["0026_rituals"]
+    assert script.get_revision("0026_rituals").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
