@@ -9,6 +9,10 @@ assumption, its risk accepted, validated). A private critical gap its author has
 shared gates nothing (S6). There is no "start anyway". A research run (``intake_gap_ids``)
 is how a gap gets looked into, so it is not held.
 
+Converting: the intake becomes ``converted`` when its draft run starts, not when the run
+is made or estimated (C4): until then the brief keeps Draft with Oracle, stays in PRDs ›
+Ideas and its fields stay editable, and reopening the sheet updates that same draft run.
+
 Answers pinned to a run: when a run started from an intake starts, Oracle stores the ids
 of the intake's answers that exist then (``knobs.intake_answer_ids``). The run's own reads
 (``/v1/answers``, the question batch and the summary) leave out the others, so every
@@ -24,6 +28,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import audit
 from oracle.auth.deps import Principal
 from oracle.intake.schemas import DraftGateClosedOut
 from oracle.runs.models import Run
@@ -82,16 +87,35 @@ async def answer_ids(db: AsyncSession, intake_id: uuid.UUID) -> list[uuid.UUID]:
     )
 
 
-async def on_start(db: AsyncSession, run: Run) -> dict[str, Any] | None:
-    """A run started from an intake: hold a draft run at the gate, then the knob that
-    pins the answers it reads (None for any other run)."""
+async def on_start(
+    db: AsyncSession, run: Run, principal: Principal | str | None = None
+) -> dict[str, Any] | None:
+    """A run started from an intake: hold a draft run at the gate and convert its intake
+    (C4: making or estimating the draft run converts nothing), then the knob that pins the
+    answers it reads (None for any other run)."""
     intake_id = _intake_id(run)
     if intake_id is None:
         return None
     intake = await db.get(ProductIntake, intake_id)
     if intake is not None and not (run.knobs or {}).get("intake_gap_ids"):
         await check(db, intake)
+        await _convert(db, intake, run, principal)
     return {ANSWER_IDS: [str(a) for a in await answer_ids(db, intake_id)]}
+
+
+async def _convert(
+    db: AsyncSession, intake: ProductIntake, run: Run, principal: Principal | str | None
+) -> None:
+    """The intake's draft run starts: the brief is converted and links the run's PRD."""
+    if intake.status in ("converted", "archived"):
+        return
+    changes: dict[str, Any] = {"status": [intake.status, "converted"], "run_id": str(run.id)}
+    if run.document_id is not None and intake.document_id is None:
+        intake.document_id = run.document_id
+        changes["document_id"] = [None, str(run.document_id)]
+    intake.status = "converted"
+    await db.flush()
+    await audit.record(db, principal, "intake.converted", "intake", intake.id, changes)
 
 
 @dataclass(frozen=True)

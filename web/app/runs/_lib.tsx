@@ -94,6 +94,8 @@ export const SEGMENT_STATUS_KIND: Record<SegmentOut["status"], ChipKind> = {
   succeeded: "pass",
   failed: "crit",
   cancelled: "na",
+  // C4: a reused baseline segment runs no step.
+  skipped: "na",
 };
 
 export const SEGMENT_STATUS_LABEL: Record<SegmentOut["status"], string> = {
@@ -102,6 +104,7 @@ export const SEGMENT_STATUS_LABEL: Record<SegmentOut["status"], string> = {
   succeeded: "Succeeded",
   failed: "Failed",
   cancelled: "Cancelled",
+  skipped: "Skipped",
 };
 
 /**

@@ -3055,6 +3055,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/baseline/review-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Baseline Review Status
+         * @description Whether a new PRD run may use the current baseline instead of rebuilding it: the
+         *     last baseline review, its age, whether a baseline build is under way, and the
+         *     baseline segment's estimate per depth (B1 "Reuse base").
+         */
+        get: operations["get_baseline_review_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/baseline/entities": {
         parameters: {
             query?: never;
@@ -5848,7 +5870,9 @@ export interface paths {
         /**
          * Start Intake Run
          * @description Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs
-         *     until an approver estimates and starts it. Drafting waits until decided (C5): 409
+         *     until an approver estimates and starts it; while that run is a draft, posting again
+         *     updates it (no second run), and the intake stays open until it starts (then it is
+         *     converted). Drafting waits until decided (C5): 409
          *     with ``blocking_gap_ids`` while a critical question everyone may see is neither
          *     answered nor decided (a private one gates nothing until shared, S6).
          */
@@ -9676,6 +9700,15 @@ export interface components {
             updated_by?: string | null;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /** BaselineSegmentUsd */
+        BaselineSegmentUsd: {
+            /** Quick */
+            quick: number;
+            /** Standard */
+            standard: number;
+            /** Deep */
+            deep: number;
         };
         /**
          * Basis
@@ -16560,6 +16593,21 @@ export interface components {
              * @default 5
              */
             batch_size: number;
+            /**
+             * Goal Ids
+             * @default []
+             */
+            goal_ids: string[];
+            /**
+             * Out Of Scope
+             * @default []
+             */
+            out_of_scope: string[];
+            /** Template */
+            template?: string | null;
+            /** Theme */
+            theme?: string | null;
+            prd_answers?: components["schemas"]["PrdAnswers"] | null;
         };
         /** IntakeOut */
         IntakeOut: {
@@ -16601,6 +16649,26 @@ export interface components {
              * @default []
              */
             source_ids: string[];
+            /**
+             * Goal Ids
+             * @default []
+             */
+            goal_ids: string[];
+            /**
+             * Out Of Scope
+             * @default []
+             */
+            out_of_scope: string[];
+            /** Template */
+            template?: string | null;
+            /** Theme */
+            theme?: string | null;
+            prd_answers?: components["schemas"]["PrdAnswers"] | null;
+            /**
+             * Run Ids
+             * @default []
+             */
+            run_ids: string[];
         };
         /** IntakePatch */
         IntakePatch: {
@@ -16612,6 +16680,15 @@ export interface components {
             document?: string | null;
             /** Status */
             status?: ("archived" | "awaiting_answers") | null;
+            /** Goal Ids */
+            goal_ids?: string[] | null;
+            /** Out Of Scope */
+            out_of_scope?: string[] | null;
+            /** Template */
+            template?: string | null;
+            /** Theme */
+            theme?: string | null;
+            prd_answers?: components["schemas"]["PrdAnswers"] | null;
         };
         /** IntakeProposalOut */
         IntakeProposalOut: {
@@ -16682,6 +16759,12 @@ export interface components {
              *     }
              */
             knobs: components["schemas"]["KnobsIn"];
+            /** Template */
+            template?: string | null;
+            /** Theme */
+            theme?: string | null;
+            /** Reuse Baseline */
+            reuse_baseline?: boolean | null;
         };
         /** IntakeSubject */
         IntakeSubject: {
@@ -17187,6 +17270,8 @@ export interface components {
             };
             /** Budget Usd */
             budget_usd?: number | null;
+            /** Reuse Baseline */
+            reuse_baseline?: boolean | null;
         };
         /** KnobsOut */
         KnobsOut: {
@@ -17205,6 +17290,7 @@ export interface components {
             };
             /** Budget Usd */
             budget_usd?: number | null;
+            reuse_baseline?: components["schemas"]["ReusedBaseline"] | null;
         };
         /** KnowledgeGapOut */
         KnowledgeGapOut: {
@@ -21576,6 +21662,22 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /**
+         * ReusedBaseline
+         * @description The baseline review a run reuses: its Confirm the baseline checkpoint.
+         */
+        ReusedBaseline: {
+            /**
+             * Checkpoint Id
+             * Format: uuid
+             */
+            checkpoint_id: string;
+            /**
+             * Approved At
+             * Format: date-time
+             */
+            approved_at: string;
+        };
         /** ReviewAction */
         ReviewAction: {
             /**
@@ -21835,6 +21937,29 @@ export interface components {
              * @default false
              */
             overdue: boolean;
+        };
+        /**
+         * ReviewStatusOut
+         * @description Whether a new PRD run may use the current baseline (B1 "Reuse base"): the last
+         *     baseline review (the newest approved Confirm the baseline) was approved in the past
+         *     30 days and no baseline build is under way.
+         */
+        ReviewStatusOut: {
+            /** Last Approved At */
+            last_approved_at?: string | null;
+            /** Checkpoint Id */
+            checkpoint_id?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+            /** Age Days */
+            age_days?: number | null;
+            /** Build Under Way */
+            build_under_way: boolean;
+            /** Reusable */
+            reusable: boolean;
+            /** Reason */
+            reason?: ("too_old" | "never_reviewed" | "build_under_way") | null;
+            baseline_segment_usd: components["schemas"]["BaselineSegmentUsd"];
         };
         /** ReviewTally */
         ReviewTally: {
@@ -22420,7 +22545,11 @@ export interface components {
              */
             open_proposals: number;
         };
-        /** RunPatch */
+        /**
+         * RunPatch
+         * @description A draft run's new choices. ``template``/``theme``: as on RunCreate (prd_to_roadmap
+         *     and, since C4, baseline_to_prd).
+         */
         RunPatch: {
             /** Document */
             document?: string | null;
@@ -23510,6 +23639,13 @@ export interface components {
             roles: string[];
             /** Estimate Usd */
             estimate_usd: number;
+            /**
+             * Reused
+             * @default false
+             */
+            reused: boolean;
+            /** Note */
+            note?: string | null;
         };
         /** SegmentOut */
         SegmentOut: {
@@ -23528,7 +23664,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "pending" | "running" | "succeeded" | "failed" | "cancelled";
+            status: "pending" | "running" | "succeeded" | "failed" | "cancelled" | "skipped";
             /** Roles */
             roles: string[];
             /** Scopes */
@@ -23553,6 +23689,9 @@ export interface components {
              * @default false
              */
             sent_back: boolean;
+            reused?: components["schemas"]["ReusedBaseline"] | null;
+            /** Note */
+            note?: string | null;
             /**
              * Can Retry Draft Import
              * @default false
@@ -33075,6 +33214,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GraphOut"];
+                };
+            };
+        };
+    };
+    get_baseline_review_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewStatusOut"];
                 };
             };
         };

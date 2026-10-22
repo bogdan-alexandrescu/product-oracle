@@ -23,15 +23,18 @@ from oracle import audit
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.models import Entity
 from oracle.docs import service as docs_service
 from oracle.intake import categories as cats
 from oracle.intake import engine, sharing
 from oracle.intake import evidence as ev
-from oracle.intake.schemas import IntakeCreate, IntakePatch, IntakeRunIn
+from oracle.intake.schemas import AnswerIn, IntakeCreate, IntakePatch, IntakeRunIn
 from oracle.jobs.models import LlmJob
 from oracle.runs import service as runs_service
-from oracle.runs.schemas import RunCreate
+from oracle.runs.schemas import RunCreate, RunPatch
 from oracle.sources.models import Snapshot, Source
+from oracle.templates.builtins import ensure_builtins
+from oracle.templates.models import Template, Theme
 from oracle.v2.concurrency import expect_version, flush_or_conflict
 from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderQuestion
 
@@ -109,9 +112,52 @@ async def pin_snapshot(db: AsyncSession, label: str, created_by: uuid.UUID | Non
     return snapshot
 
 
+async def confirmed_goals(db: AsyncSession, goal_ids: list[uuid.UUID]) -> list[Entity]:
+    """The goals, in the order given; 422 if one is not a confirmed goal (C4)."""
+    if not goal_ids:
+        return []
+    rows = {
+        e.id: e
+        for e in await db.scalars(
+            select(Entity).where(
+                Entity.id.in_(goal_ids), Entity.type == "goal", Entity.status == "confirmed"
+            )
+        )
+    }
+    missing = [g for g in goal_ids if g not in rows]
+    if missing:
+        raise IntakeError(422, f"{missing[0]} is not a confirmed goal")
+    return [rows[g] for g in goal_ids]
+
+
+async def check_template(db: AsyncSession, template: str | None, theme: str | None) -> None:
+    """422 unless the template and theme are live PRD ones (C4)."""
+    if template is None and theme is None:
+        return
+    await ensure_builtins(db)
+    if template is not None:
+        row = await db.scalar(select(Template).where(Template.key == template))
+        if row is None:
+            raise IntakeError(422, f"template '{template}' not found")
+        if row.kind != "prd":
+            raise IntakeError(422, f"template '{template}' is a {row.kind} template, not a PRD one")
+        if row.archived_at is not None:
+            raise IntakeError(422, f"template '{template}' is archived")
+    if theme is not None:
+        trow = await db.scalar(select(Theme).where(Theme.key == theme))
+        if trow is None:
+            raise IntakeError(422, f"theme '{theme}' not found")
+        if trow.kind not in ("prd", "any"):
+            raise IntakeError(422, f"theme '{theme}' is for {trow.kind} documents, not PRDs")
+        if trow.archived_at is not None:
+            raise IntakeError(422, f"theme '{theme}' is archived")
+
+
 async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> ProductIntake:
     if body.document is not None and not has_role(principal.role, "approver"):
         raise IntakeError(403, "Linking an intake to a PRD needs an approver")
+    await confirmed_goals(db, body.goal_ids)
+    await check_template(db, body.template, body.theme)
     document_id = await resolve_document(db, body.document)
     if body.snapshot_id is not None:
         snapshot = await db.scalar(
@@ -144,10 +190,18 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
             "extraction": {"ai": body.ai_extraction},
         },
         document_id=document_id,
+        goal_ids=list(body.goal_ids),
+        out_of_scope=list(body.out_of_scope),
+        draft_template=body.template,
+        draft_theme=body.theme,
+        prd_answers=body.prd_answers.model_dump() if body.prd_answers else {},
     )
     db.add(intake)
     await db.flush()
     await engine.analyze(db, intake)
+    # Before the first batch: the brief's goals and out-of-scope lines answer their
+    # questions, so neither is asked.
+    await apply_brief_fields(db, principal, intake)
     await audit.record(
         db,
         principal,
@@ -164,6 +218,74 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
     if body.ai_extraction:
         await queue_extraction(db, principal, intake)
     return intake
+
+
+async def apply_brief_fields(
+    db: AsyncSession,
+    principal: Principal,
+    intake: ProductIntake,
+    *,
+    goals: bool = True,
+    scope: bool = True,
+) -> None:
+    """The brief's goals answer the rule-made goal_alignment gap's question, and its
+    out-of-scope lines the non_goals gap's, through ``answers.answer`` as ``principal``
+    (kind answer, knowledge state user_decision): B4 applies unchanged, so a critical gap
+    answered below the owner role waits for review. Each call adds a new answer (the
+    latest wins). A category the baseline already covers (no rule-made gap) is left as
+    the baseline says."""
+    gaps = await engine.intake_gaps(db, intake.id)
+    if goals and intake.goal_ids:
+        entities = await confirmed_goals(db, list(intake.goal_ids))
+        gap = engine.rules_gap(gaps, "goal_alignment")
+        if gap is not None:
+            body = "Serves: " + ", ".join(e.title for e in entities)
+            await _answer_gap(db, principal, intake, gap, body)
+            if gap.status not in engine.FROZEN:
+                gap.entity_ids = [e.id for e in entities]
+    if scope and intake.out_of_scope:
+        gap = engine.rules_gap(gaps, "non_goals")
+        if gap is not None:
+            body = "Out of scope: " + "; ".join(intake.out_of_scope)
+            await _answer_gap(db, principal, intake, gap, body)
+    await db.flush()
+
+
+async def _answer_gap(
+    db: AsyncSession, principal: Principal, intake: ProductIntake, gap: KnowledgeGap, body: str
+) -> None:
+    # Here, not at the top: oracle.intake.answers reads this module.
+    from oracle.intake import answers
+
+    live = [
+        q
+        for q in await engine.intake_questions(db, intake.id)
+        if q.gap_id == gap.id and q.status != "withdrawn"
+    ]
+    question = live[-1] if live else None
+    if question is None:
+        question = StakeholderQuestion(
+            gap_id=gap.id,
+            intake_id=intake.id,
+            document_id=intake.document_id,
+            category=gap.category,
+            prompt=engine.question_prompt(gap),
+            priority=0,
+            module_key=(gap.related_modules or [None])[0],
+            status="draft",
+        )
+        db.add(question)
+        await db.flush()
+    if question.status == "answered":
+        # The brief changed: its line answers the question again, as the brief did the
+        # first time (a new answer; the latest wins).
+        question.status = "asked"
+    await answers.answer(
+        db,
+        principal,
+        question,
+        AnswerIn(kind="answer", body=body[:4000], knowledge_state="user_decision"),
+    )
 
 
 async def queue_extraction(db: AsyncSession, principal: Principal | None, intake: ProductIntake):
@@ -280,10 +402,55 @@ async def patch(
             raise IntakeError(409, "A converted intake keeps its status")
         changes["status"] = [intake.status, body.status]
         intake.status = body.status
+    reanswer = await _patch_brief_fields(db, intake, body, changes)
     await flush_or_conflict(db)
+    if reanswer:
+        await apply_brief_fields(
+            db, principal, intake, goals="goal_ids" in reanswer, scope="out_of_scope" in reanswer
+        )
+        await flush_or_conflict(db)
     if changes:
         await audit.record(db, principal, "intake.updated", "intake", intake.id, changes)
     return intake
+
+
+BRIEF_FIELDS = ("goal_ids", "out_of_scope", "template", "theme", "prd_answers")
+
+
+async def _patch_brief_fields(
+    db: AsyncSession, intake: ProductIntake, body: IntakePatch, changes: dict[str, Any]
+) -> set[str]:
+    """Set the brief's fields a PATCH gives (C4); returns those whose questions are
+    answered again (goal_ids, out_of_scope). 409 once the intake is converted."""
+    if not any(getattr(body, k) is not None for k in BRIEF_FIELDS):
+        return set()
+    if intake.status == "converted":
+        raise IntakeError(409, "A converted intake keeps its brief; its draft run reads it")
+    reanswer: set[str] = set()
+    if body.goal_ids is not None:
+        await confirmed_goals(db, body.goal_ids)
+        if list(intake.goal_ids or []) != body.goal_ids:
+            changes["goal_ids"] = [[str(g) for g in intake.goal_ids or []],
+                                   [str(g) for g in body.goal_ids]]  # fmt: skip
+            intake.goal_ids = list(body.goal_ids)
+            reanswer.add("goal_ids")
+    if body.out_of_scope is not None and list(intake.out_of_scope or []) != body.out_of_scope:
+        changes["out_of_scope"] = {"count": len(body.out_of_scope)}
+        intake.out_of_scope = list(body.out_of_scope)
+        reanswer.add("out_of_scope")
+    await check_template(db, body.template, body.theme)
+    if body.template is not None and body.template != intake.draft_template:
+        changes["template"] = [intake.draft_template, body.template]
+        intake.draft_template = body.template
+    if body.theme is not None and body.theme != intake.draft_theme:
+        changes["theme"] = [intake.draft_theme, body.theme]
+        intake.draft_theme = body.theme
+    if body.prd_answers is not None:
+        answers = body.prd_answers.model_dump()
+        if answers != (intake.prd_answers or {}):
+            changes["prd_answers"] = answers
+            intake.prd_answers = answers
+    return reanswer
 
 
 async def open_hard_blockers(db: AsyncSession, intake: ProductIntake) -> list[KnowledgeGap]:
@@ -447,6 +614,20 @@ def run_knobs(intake: ProductIntake, gap_ids: list[uuid.UUID] | None = None) -> 
     return knobs
 
 
+async def _run_knobs_in(db: AsyncSession, body: IntakeRunIn, depth: str | None = None):
+    """The knobs of the intake's draft run, as created or updated."""
+    knobs = body.knobs.model_copy(update={"depth": depth}) if depth else body.knobs
+    reuse_wanted = body.reuse_baseline
+    if reuse_wanted is None:
+        reuse_wanted = knobs.reuse_baseline
+    if reuse_wanted is None:
+        # The door's default: use the current baseline when it is reusable (C4).
+        from oracle.runs import reuse
+
+        reuse_wanted = (await reuse.review_status(db)).reusable
+    return knobs.model_copy(update={"reuse_baseline": reuse_wanted})
+
+
 async def create_run(
     db: AsyncSession,
     principal: Principal,
@@ -465,12 +646,18 @@ async def create_run(
         document = str(intake.document_id)
     if document is None:
         document = slug_for(intake.title)
-    knobs = body.knobs.model_copy(update={"depth": depth}) if depth else body.knobs
+    knobs = await _run_knobs_in(db, body, depth)
     try:
         run_id = await runs_service.create_run(
             db,
             principal,
-            RunCreate(flow="baseline_to_prd", document=document, knobs=knobs),
+            RunCreate(
+                flow="baseline_to_prd",
+                document=document,
+                knobs=knobs,
+                template=body.template or intake.draft_template,
+                theme=body.theme or intake.draft_theme,
+            ),
             oracle_knobs=run_knobs(intake, gap_ids),
             commit=False,
         )
@@ -486,15 +673,36 @@ async def convert(
     from oracle.intake import drafting
 
     await drafting.check(db, intake)
+    existing = await drafting.draft_run(db, intake)
+    if existing is not None and existing.status == "draft":
+        # Reopening the sheet after an estimate (C4): the intake's one draft run takes
+        # the new choices; no second run is made.
+        return await _update_draft_run(db, principal, intake, existing.id, body)
+    # The brief stays open (Draft with Oracle, PRDs > Ideas, its fields editable) until
+    # the run starts: ``drafting.on_start`` converts it then (C4).
     run_id = await create_run(db, principal, intake, body)
-    from oracle.runs.models import Run
-
-    run = await db.get(Run, run_id)
-    if run is not None and run.document_id is not None and intake.document_id is None:
-        intake.document_id = run.document_id
-    intake.status = "converted"
-    await db.flush()
     await audit.record(
         db, principal, "intake.run_created", "intake", intake.id, {"run_id": str(run_id)}
     )
+    return run_id
+
+
+async def _update_draft_run(
+    db: AsyncSession,
+    principal: Principal,
+    intake: ProductIntake,
+    run_id: uuid.UUID,
+    body: IntakeRunIn,
+) -> uuid.UUID:
+    """The intake's draft run, not started yet, takes the sheet's new choices."""
+    patch_body = RunPatch(
+        document=body.document,
+        template=body.template or intake.draft_template,
+        theme=body.theme or intake.draft_theme,
+        knobs=await _run_knobs_in(db, body),
+    )
+    try:
+        await runs_service.update_run(db, principal, run_id, patch_body)
+    except runs_service.RunError as e:
+        raise IntakeError(e.status, str(e)) from e
     return run_id

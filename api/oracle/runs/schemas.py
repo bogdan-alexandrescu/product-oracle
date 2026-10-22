@@ -33,7 +33,8 @@ RunStatus = Literal[
     "failed",
     "cancelled",
 ]
-SegmentStatus = Literal["pending", "running", "succeeded", "failed", "cancelled"]
+# skipped: a Baseline to PRD run that used the current baseline (C4) never ran it.
+SegmentStatus = Literal["pending", "running", "succeeded", "failed", "cancelled", "skipped"]
 CheckpointKind = Literal[
     "baseline_confirm",
     "feature_set",
@@ -58,6 +59,18 @@ class KnobsIn(BaseModel):
     # Checkpoint kind -> on; omitted checkpoints are on.
     checkpoints: dict[str, bool] = {}
     budget_usd: float | None = Field(default=None, gt=0)
+    # Baseline to PRD only (C4, B1 "Reuse base"): true skips the baseline segment and its
+    # Confirm the baseline stop, reusing the last baseline review (409
+    # ``baseline_not_reusable`` when it is not reusable). Omitted on create: false; on
+    # PATCH: unchanged.
+    reuse_baseline: bool | None = None
+
+
+class ReusedBaseline(BaseModel):
+    """The baseline review a run reuses: its Confirm the baseline checkpoint."""
+
+    checkpoint_id: uuid.UUID
+    approved_at: datetime
 
 
 class KnobsOut(BaseModel):
@@ -65,6 +78,8 @@ class KnobsOut(BaseModel):
     roles: dict[str, list[str]]
     checkpoints: dict[str, bool]
     budget_usd: float | None = None
+    # Set when the run reuses the current baseline (C4).
+    reuse_baseline: ReusedBaseline | None = None
 
 
 class StrategyBriefIn(BaseModel):
@@ -100,6 +115,9 @@ class RunCreate(BaseModel):
     source_version: int | None = Field(default=None, ge=1)
     # prd_to_roadmap: the roadmap template (default now-next-later, or the existing
     # roadmap's) and theme (default roadmap-board, or the existing roadmap's).
+    # baseline_to_prd (C4): the PRD template and theme (default: the existing PRD's, else
+    # the company's new-draft default, else oracle-default and clean-document); the
+    # draft prompt pastes the template's skeleton. Other flows refuse both (422).
     template: str | None = Field(default=None, min_length=1, max_length=100)
     theme: str | None = Field(default=None, min_length=1, max_length=100)
     knobs: KnobsIn = KnobsIn()
@@ -108,6 +126,9 @@ class RunCreate(BaseModel):
 
 
 class RunPatch(BaseModel):
+    """A draft run's new choices. ``template``/``theme``: as on RunCreate (prd_to_roadmap
+    and, since C4, baseline_to_prd)."""
+
     document: str | None = Field(default=None, min_length=1, max_length=200)
     source: str | None = Field(default=None, min_length=1, max_length=200)
     source_version: int | None = Field(default=None, ge=1)
@@ -176,6 +197,10 @@ class SegmentEstimate(BaseModel):
     title: str
     roles: list[str]
     estimate_usd: float
+    # C4: the baseline segment of a run that uses the current baseline: $0.00, with the
+    # note "Current baseline, approved Oct 12".
+    reused: bool = False
+    note: str | None = None
 
 
 class EstimateOut(BaseModel):
@@ -401,6 +426,10 @@ class SegmentOut(BaseModel):
     # person. Cleared once the revision is imported, or still refused (then its review
     # waits in the Inbox), or the run ends.
     sent_back: bool = False
+    # C4: a baseline segment the run skipped, reusing this review; ``note`` reads
+    # "Reused the baseline approved Oct 12".
+    reused: ReusedBaseline | None = None
+    note: str | None = None
     # Retry import (owner, 2026-10-20): the draft's import was refused and its file is
     # kept, and either its review is still open and I have the review's approver role or
     # above, or the run finished with no version imported and I am an owner.
@@ -538,7 +567,7 @@ class RunSummary(BaseModel):
     # The kind of document the run writes (feedback loop: the document's kind).
     document_kind: DocumentKind | None = None
     # prd_to_roadmap: the approved PRD version it reads, and the roadmap's template and
-    # theme.
+    # theme; baseline_to_prd: the PRD's template and theme (C4).
     source: VersionSource | None = None
     template: str | None = None
     theme: str | None = None

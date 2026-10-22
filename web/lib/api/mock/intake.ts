@@ -21,12 +21,24 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { displayName } from "@/lib/names";
+import { baselineReviewStatus } from "./baseline";
 import type { V2Db } from "./v2";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Gap = Schemas["KnowledgeGapOut"];
 type Question = Schemas["StakeholderQuestionOut"];
-type Intake = Schemas["ProductIntakeOut"];
+/** C4: an intake row with the brief's fields (goals, out of scope, PRD template and theme, O1d answers). */
+type Intake = Schemas["ProductIntakeOut"] & Partial<BriefFields>;
+interface BriefFields {
+  goal_ids: string[];
+  out_of_scope: string[];
+  template: string | null;
+  theme: string | null;
+  prd_answers: Schemas["PrdAnswers"] | null;
+}
+type IntakeCreate = Schemas["IntakeCreate"] & Partial<BriefFields>;
+type IntakePatch = Schemas["IntakePatch"] & Partial<BriefFields>;
+type IntakeRunIn = Partial<Schemas["IntakeRunIn"]> & { template?: string | null; theme?: string | null; reuse_baseline?: boolean | null };
 type Proposal = Schemas["IntakeProposalOut"];
 type Category = Gap["category"];
 type Impact = Gap["impact"][number];
@@ -50,8 +62,12 @@ export interface SubjectLookup {
 export interface IntakeContext {
   userId: string;
   role: Role;
+  /** C4: the confirmed goals' titles by id (the brief's goals must be confirmed goals). */
+  confirmedGoals?: () => Map<string, string>;
   /** Creates a draft run through the runs mock (POST /v1/runs). */
   createRun: (body: Schemas["RunCreate"]) => Promise<Response>;
+  /** C4: changes the intake's draft run, not started yet (PATCH /v1/runs/{id}); null when it is no longer a draft. */
+  updateRun?: (id: string, body: Schemas["RunPatch"]) => Promise<Response | null>;
   /** The company's members (C2); without them nobody can be asked a teammate's question. */
   people?: MockPerson[];
   subjects?: SubjectLookup;
@@ -133,9 +149,82 @@ function nextActions(g: Gap): Schemas["NextAction"][] {
   ];
 }
 
-function intakeOut(i: Intake): Schemas["IntakeOut"] {
+function intakeOut(i: Intake, db?: V2Db): Schemas["IntakeOut"] {
   const ids = (i.analysis as { source_ids?: string[] }).source_ids;
-  return { ...i, source_ids: Array.isArray(ids) ? ids : [] };
+  const run = db?.intake_runs?.[i.id];
+  return {
+    ...i,
+    source_ids: Array.isArray(ids) ? ids : [],
+    goal_ids: i.goal_ids ?? [],
+    out_of_scope: i.out_of_scope ?? [],
+    template: i.template ?? null,
+    theme: i.theme ?? null,
+    prd_answers: i.prd_answers ?? null,
+    run_ids: run ? [run.run_id] : [],
+  } as Schemas["IntakeOut"];
+}
+
+/**
+ * C4: the brief's goals and out-of-scope lines answer their questions as the author's
+ * decision (kind answer, user_decision), as the API's apply_brief_fields does; B4 holds (a
+ * non-owner's answer leaves the critical goal gap waiting for review). Asked again on PATCH:
+ * a new answer, the latest wins.
+ */
+function applyBriefFields(db: V2Db, ctx: IntakeContext, intake: Intake, at = now()) {
+  const goals = ctx.confirmedGoals?.() ?? new Map<string, string>();
+  const lines: [Category, string | null, string[]][] = [
+    ["goal_alignment", intake.goal_ids?.length ? `Serves: ${intake.goal_ids.map((id) => goals.get(id) ?? id).join("; ")}` : null, intake.goal_ids ?? []],
+    ["non_goals", intake.out_of_scope?.length ? `Out of scope: ${intake.out_of_scope.join("; ")}` : null, []],
+  ];
+  for (const [category, body, entityIds] of lines) {
+    if (!body) continue;
+    const gap = db.gaps.find((g) => g.intake_id === intake.id && g.category === category);
+    if (!gap || FROZEN.has(gap.status)) continue;
+    let question = db.questions.find((q) => q.gap_id === gap.id && q.status !== "withdrawn");
+    if (!question) {
+      question = {
+        id: uuid(), gap_id: gap.id, intake_id: intake.id, document_id: intake.document_id, category, prompt: CATEGORIES.find((c) => c[0] === category)?.[4] ?? gap.statement,
+        rationale: `${LABEL[category]} gap, ${gap.importance}.`, priority: 0, batch: null, asked_to: intake.author_id, asked_by: null,
+        module_key: gap.related_modules[0] ?? null, section_key: null, status: "draft", created_at: at, updated_at: at,
+      };
+      db.questions.push(question);
+    }
+    question.status = "answered";
+    question.asked_to ??= intake.author_id;
+    question.updated_at = at;
+    db.answers.push({
+      id: uuid(), question_id: question.id, kind: "answer", body, answered_by: ctx.userId, delegated_to: null, evidence_ids: [],
+      knowledge_state: "user_decision", created_at: at,
+    });
+    gap.status = gap.importance === "critical" && !atLeast(ctx.role, "owner") ? "answered_pending_review" : "answered";
+    gap.knowledge_state = "user_decision";
+    if (entityIds.length) gap.entity_ids = [...entityIds];
+    gap.lock_version += 1;
+    gap.updated_at = at;
+  }
+  syncQuestions(db, intake, at);
+}
+
+/** C4: the brief's fields as given (422 for a goal that is not a confirmed goal, or too many lines). */
+function briefFields(ctx: IntakeContext, input: Partial<BriefFields>): Partial<BriefFields> | string {
+  const out: Partial<BriefFields> = {};
+  if (input.goal_ids != null) {
+    const goals = ctx.confirmedGoals?.() ?? new Map<string, string>();
+    const ids = [...new Set(input.goal_ids)];
+    if (ids.length > 10) return "At most 10 goals";
+    const unknown = ids.find((id) => !goals.has(id));
+    if (unknown) return `Goal ${unknown} is not a confirmed goal`;
+    out.goal_ids = ids;
+  }
+  if (input.out_of_scope != null) {
+    const lines = input.out_of_scope.map((l) => l.trim());
+    if (lines.length > 20 || lines.some((l) => !l || l.length > 300)) return "Up to 20 out-of-scope lines of 1 to 300 characters";
+    out.out_of_scope = lines;
+  }
+  if (input.template !== undefined) out.template = input.template;
+  if (input.theme !== undefined) out.theme = input.theme;
+  if (input.prd_answers !== undefined) out.prd_answers = input.prd_answers;
+  return out;
 }
 
 function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSummary"] {
@@ -176,7 +265,7 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
   });
   const scope = ((intake.analysis as { scope?: string[] }).scope ?? []).filter((s) => typeof s === "string");
   return {
-    intake: intakeOut(intake),
+    intake: intakeOut(intake, db),
     pinned: { version: versions.length, snapshot_id: last?.snapshot_id ?? null, as_of: last?.as_of ?? null, versions },
     new_evidence: { since_version: versions.length, as_of: last?.as_of ?? null, count: intake.author_id === userId ? 0 : null, visible: intake.author_id === userId, items: [] },
     extracted: [
@@ -359,9 +448,13 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
 
   if (p[1] === "intakes" && p.length === 2 && m === "POST") {
     if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
-    const input = await body<Schemas["IntakeCreate"]>();
+    const input = await body<IntakeCreate>();
     if (!input?.title || !input.brief || input.brief.trim().length < 20 || input.brief.length > 4000) return fail(422, "a brief needs at least a sentence");
+    const fields = briefFields(ctx, input);
+    if (typeof fields === "string") return fail(422, fields);
     const intake = addIntake(db, ctx.userId, input.title, input.brief, input.source_ids ?? []);
+    Object.assign(intake, fields);
+    applyBriefFields(db, ctx, intake);
     askBatch(db, ctx, intake, input.batch_size ?? 5);
     return json(201, summary(db, intake, ctx.userId));
   }
@@ -373,14 +466,21 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     if (p.length === 3 && m === "PATCH") {
       if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
       if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver can do this");
-      const patch = await body<Schemas["IntakePatch"]>();
+      const patch = await body<IntakePatch>();
       if (patch.lock_version !== intake.lock_version) return fail(409, "Someone else changed this since you loaded it; reload and try again");
+      const fields = briefFields(ctx, patch);
+      if (typeof fields === "string") return fail(422, fields);
+      if (Object.keys(fields).length) {
+        if (intake.status === "converted") return fail(409, "This brief is drafting; its fields no longer change");
+        Object.assign(intake, fields);
+        if (fields.goal_ids || fields.out_of_scope) applyBriefFields(db, ctx, intake);
+      }
       if ("document" in patch && !atLeast(ctx.role, "approver")) return fail(403, "Linking an intake to a PRD needs an approver");
       if (patch.title) intake.title = patch.title;
       if (patch.status) intake.status = patch.status;
       intake.lock_version += 1;
       intake.updated_at = now();
-      return json(200, intakeOut(intake));
+      return json(200, intakeOut(intake, db));
     }
     if (leaf === "summary" && m === "GET") return json(200, summary(db, intake, ctx.userId));
     if (leaf === "new-evidence" && m === "GET") return json(200, summary(db, intake, ctx.userId).new_evidence);
@@ -450,14 +550,31 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
         const n = blocking.length;
         return json(409, { detail: `${n} critical question${n === 1 ? " is" : "s are"} open on this brief`, blocking_gap_ids: blocking } satisfies Schemas["DraftGateClosedOut"]);
       }
-      const input = (await body<Schemas["IntakeRunIn"]>()) ?? {};
+      const input = (await body<IntakeRunIn>()) ?? {};
       const document = input.document ?? intake.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      const resp = await ctx.createRun({ flow: "baseline_to_prd", document, knobs: input.knobs ?? { depth: "standard", roles: {}, checkpoints: {} } });
+      // C4: the intake's template and theme unless the sheet names others; reuse_baseline null
+      // (or absent) reuses the baseline when it is reusable.
+      const knobs = { ...(input.knobs ?? { depth: "standard", roles: {}, checkpoints: {} }) } as Schemas["KnobsIn"] & { reuse_baseline?: boolean | null };
+      const wanted = input.reuse_baseline ?? knobs.reuse_baseline ?? null;
+      const review = baselineReviewStatus();
+      if (wanted === true && !review.reusable) return json(409, { detail: { code: "baseline_not_reusable", reason: review.reason } });
+      knobs.reuse_baseline = wanted ?? review.reusable;
+      // Reopening the sheet after an estimate (C4): the intake's one draft run takes the new
+      // choices; no second run is made.
+      const existing = db.intake_runs?.[intake.id];
+      if (existing && ctx.updateRun) {
+        const updated = await ctx.updateRun(existing.run_id, {
+          knobs, template: input.template ?? (intake as Intake).template ?? null, theme: input.theme ?? (intake as Intake).theme ?? null,
+        });
+        if (updated) return updated.ok ? new Response(updated.body, { status: 201, headers: updated.headers }) : updated;
+      }
+      const resp = await ctx.createRun({
+        flow: "baseline_to_prd", document, knobs, template: input.template ?? (intake as Intake).template ?? null, theme: input.theme ?? (intake as Intake).theme ?? null,
+      });
       if (resp.ok) {
-        intake.status = "converted";
+        // The brief stays open until its run starts (startedIntakeRun converts it, C4).
         const run = (await resp.clone().json()) as { id: string };
-        const mine = new Set(db.questions.filter((x) => x.intake_id === intake.id).map((x) => x.id));
-        db.intake_runs = { ...db.intake_runs, [intake.id]: { run_id: run.id, answer_ids: db.answers.filter((a) => mine.has(a.question_id)).map((a) => a.id) } };
+        db.intake_runs = { ...db.intake_runs, [intake.id]: { run_id: run.id, answer_ids: [] } };
       }
       return resp;
     }
@@ -748,6 +865,19 @@ export const BEFORE_DRAFTING = { intakeId: "c5000000-0000-4000-8000-000000000001
  * approver. Batch 2 (21 Oct): Success metric and Company-goal alignment asked of the author.
  * The other twelve are not asked yet.
  */
+/**
+ * C4: an intake's draft run started (POST /v1/runs/{id}/start), as the API's
+ * drafting.on_start: the brief is converted and the run reads the answers given before now.
+ */
+export function startedIntakeRun(db: V2Db, runId: string) {
+  const [intakeId, run] = Object.entries(db.intake_runs ?? {}).find(([, r]) => r.run_id === runId) ?? [];
+  const intake = intakeId ? db.intakes.find((i) => i.id === intakeId) : undefined;
+  if (!intake || !run || intake.status === "converted" || intake.status === "archived") return;
+  intake.status = "converted";
+  const mine = new Set(db.questions.filter((x) => x.intake_id === intake.id).map((x) => x.id));
+  run.answer_ids = db.answers.filter((a) => mine.has(a.question_id)).map((a) => a.id);
+}
+
 export function seedBeforeDrafting(db: V2Db, authorId: string, approverId: string) {
   const at = "2026-10-19T09:00:00Z";
   const intake = addIntake(

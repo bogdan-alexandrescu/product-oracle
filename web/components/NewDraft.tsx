@@ -22,7 +22,8 @@ import { ThemeThumbnail } from "@/components/ThemePreview";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { unwrapProblems, ProblemsError } from "@/lib/api/problems";
-import { useMe } from "@/lib/me";
+import { assess, goalViews } from "@/app/home/_goals";
+import { hasRole, useMe } from "@/lib/me";
 import { useLive } from "@/lib/use-live";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -220,10 +221,11 @@ const recommend = (body: Schemas["RecommendIn"]) => unwrap(api.POST("/v1/drafts/
  * The recommended template and theme for `input`, with the user's overrides: shared by
  * the new-draft picker and Build roadmap (O4b). Before any answer the last choice wins.
  */
-export function useDraftChoice(input: Schemas["RecommendIn"]) {
+export function useDraftChoice(input: Schemas["RecommendIn"], initial?: { template: string | null; theme: string | null }) {
   const kind = input.kind;
-  const [templatePick, setTemplatePick] = useState<Pick | null>(null);
-  const [themePick, setThemePick] = useState<Pick | null>(null);
+  // A choice made earlier (the brief's, C4's Draft with Oracle sheet) starts as the user's pick.
+  const [templatePick, setTemplatePick] = useState<Pick | null>(initial?.template ? { key: initial.template, source: "user" } : null);
+  const [themePick, setThemePick] = useState<Pick | null>(initial?.template ? { key: initial.theme, source: "user" } : null);
   const last = useLastChoice(kind);
 
   const live = useLive(input, recommend, 250);
@@ -371,28 +373,27 @@ function saveLastChoice(kind: Kind, template: string, theme: string | null) {
   localStorage.setItem(storageKey(kind), JSON.stringify({ template, theme }));
 }
 
-// ---------------------------------------------------------------- picker
+// ---------------------------------------------------------------- recommendation inspector
 
-/** New-draft picker: a few questions, the recommended template and theme, overrides, create. */
-export function NewDraft({ kind }: { kind: Kind }) {
-  const router = useRouter();
+/** The recommendation, the selected template and theme, and the company default (owners set it). */
+function RecommendationInspector({
+  kind,
+  choice,
+  onError,
+  onNotice,
+}: {
+  kind: Kind;
+  choice: DraftChoice;
+  onError: (e: string | null) => void;
+  onNotice: (n: string | null) => void;
+}) {
   const { role } = useMe();
   const isOwner = role === "owner";
   const label = kind === "prd" ? "PRD" : "roadmap";
-  const [prd, setPrd] = useState<PrdAnswers>({});
-  const [roadmap, setRoadmap] = useState<RoadmapAnswers>({});
-  const [title, setTitle] = useState("");
-  const [busy, setBusy] = useState<"create" | "default" | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const choice = useDraftChoice(kind === "prd" ? { kind, prd } : { kind, roadmap });
+  const [busy, setBusy] = useState(false);
   const { live, rec, themes, templates, template, templateKey, themeKey, setTemplatePick, setThemePick } = choice;
   const defaults = useQuery("draft-defaults", () => unwrap(api.GET("/v1/drafts/defaults")));
   const company = defaults.data?.[kind] ?? null;
-
-  const setAnswer = <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) => setPrd((a) => ({ ...a, [k]: v }));
-  const setRoad = <K extends keyof RoadmapAnswers>(k: K, v: RoadmapAnswers[K]) => setRoadmap((a) => ({ ...a, [k]: v }));
 
   function applyCompany() {
     if (!company) return;
@@ -402,9 +403,9 @@ export function NewDraft({ kind }: { kind: Kind }) {
 
   async function makeDefault() {
     if (!templateKey) return;
-    setBusy("default");
-    setError(null);
-    setNotice(null);
+    setBusy(true);
+    onError(null);
+    onNotice(null);
     try {
       const next = await unwrapProblems(
         api.PUT("/v1/drafts/defaults", {
@@ -412,39 +413,19 @@ export function NewDraft({ kind }: { kind: Kind }) {
         }),
       );
       defaults.setData(() => next);
-      setNotice(`Company default for new ${label}s saved.`);
+      onNotice(`Company default for new ${label}s saved.`);
     } catch (e) {
-      setError(e instanceof ProblemsError ? e.problems.map((p) => p.message).join(" ") : e instanceof Error && e.message ? e.message : errorMessage(e));
+      onError(e instanceof ProblemsError ? e.problems.map((p) => p.message).join(" ") : e instanceof Error && e.message ? e.message : errorMessage(e));
     } finally {
-      setBusy(null);
-    }
-  }
-
-  async function create(e: FormEvent) {
-    e.preventDefault();
-    if (!templateKey || !title.trim()) return;
-    setBusy("create");
-    setError(null);
-    setNotice(null);
-    try {
-      const out = await unwrapProblems(
-        api.POST("/v1/drafts", { body: { kind, title: title.trim(), template: templateKey, theme: themeKey } }),
-      );
-      saveLastChoice(kind, templateKey, themeKey);
-      router.push(`/documents/${out.slug}`);
-    } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : errorMessage(err));
-      setBusy(null);
+      setBusy(false);
     }
   }
 
   const companyTemplateName = company && templates.find((t) => t.key === company.template)?.name;
   const companyThemeName = company?.theme && themes.data?.find((t) => t.key === company.theme)?.name;
-
   const themeName = themeKey ? (themes.data?.find((t) => t.key === themeKey)?.name ?? themeKey) : null;
-  const formId = `new-draft-${kind}`;
 
-  const inspector = (
+  return (
     <div data-testid="recommendation-panel" aria-live="polite" className={live.pending ? "opacity-70" : ""}>
       <Inspector
         label="Recommendation"
@@ -511,8 +492,8 @@ export function NewDraft({ kind }: { kind: Kind }) {
             )}
             {isOwner && (
               <div className={`flex items-center gap-2 ${company ? "mt-2.5" : ""}`}>
-                <Button onClick={makeDefault} disabled={busy !== null || !templateKey}>
-                  {busy === "default" ? "Saving…" : "Make company default"}
+                <Button onClick={makeDefault} disabled={busy || !templateKey}>
+                  {busy ? "Saving…" : "Make company default"}
                 </Button>
                 <InfoTip label="company default" align="start" side="bottom">
                   New {label}s start with this template and theme unless someone picks another.
@@ -524,6 +505,47 @@ export function NewDraft({ kind }: { kind: Kind }) {
       </Inspector>
     </div>
   );
+}
+
+// ---------------------------------------------------------------- picker
+
+/** New-draft picker: a few questions, the recommended template and theme, overrides, create. */
+export function NewDraft({ kind }: { kind: Kind }) {
+  const router = useRouter();
+  const label = kind === "prd" ? "PRD" : "roadmap";
+  const [prd, setPrd] = useState<PrdAnswers>({});
+  const [roadmap, setRoadmap] = useState<RoadmapAnswers>({});
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const choice = useDraftChoice(kind === "prd" ? { kind, prd } : { kind, roadmap });
+  const { rec, templateKey, themeKey } = choice;
+
+  const setAnswer = <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) => setPrd((a) => ({ ...a, [k]: v }));
+  const setRoad = <K extends keyof RoadmapAnswers>(k: K, v: RoadmapAnswers[K]) => setRoadmap((a) => ({ ...a, [k]: v }));
+
+  async function create(e: FormEvent) {
+    e.preventDefault();
+    if (!templateKey || !title.trim()) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const out = await unwrapProblems(
+        api.POST("/v1/drafts", { body: { kind, title: title.trim(), template: templateKey, theme: themeKey } }),
+      );
+      saveLastChoice(kind, templateKey, themeKey);
+      router.push(`/documents/${out.slug}`);
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : errorMessage(err));
+      setBusy(false);
+    }
+  }
+
+  const formId = `new-draft-${kind}`;
+  const inspector = <RecommendationInspector kind={kind} choice={choice} onError={setError} onNotice={setNotice} />;
 
   return (
     <Page>
@@ -545,8 +567,8 @@ export function NewDraft({ kind }: { kind: Kind }) {
           </InfoTip>
         }
         action={
-          <Button form={formId} type="submit" variant="primary" icon="plus" disabled={busy !== null || !templateKey || !title.trim()}>
-            {busy === "create" ? "Creating…" : "Create draft"}
+          <Button form={formId} type="submit" variant="primary" icon="plus" disabled={busy || !templateKey || !title.trim()}>
+            {busy ? "Creating…" : "Create draft"}
           </Button>
         }
       />
@@ -615,6 +637,264 @@ export function NewDraft({ kind }: { kind: Kind }) {
           <Panel as="div" bodyClassName="flex flex-col gap-6 p-4">
             <TemplateThemePicker choice={choice} />
           </Panel>
+        </Split>
+      </form>
+    </Page>
+  );
+}
+
+// ---------------------------------------------------------------- New PRD door (C4)
+
+/** POST /v1/intakes with the brief's fields (C4). */
+type BriefIn = Schemas["IntakeCreate"];
+
+const MAX_OUT_OF_SCOPE = 20;
+const PROBLEM_MIN = 20;
+const PROBLEM_MAX = 4000;
+
+/** The confirmed goals a brief may serve, each with its distance to go (Home's reading). */
+function GoalPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
+  const goals = useQuery("door-goals", () =>
+    unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } })),
+  );
+  const views = goalViews(goals.data ?? []);
+  return (
+    <fieldset className="min-w-0">
+      <legend className="mb-2 text-[15px] font-semibold text-text">
+        Which goals does it serve? <span className="font-normal text-text2">Optional</span>
+      </legend>
+      {goals.error && <ErrorNote>{goals.error}</ErrorNote>}
+      {goals.loading && <Loading />}
+      {goals.data && views.length === 0 && <p className="text-sm text-text2">No confirmed goals yet. Oracle will ask.</p>}
+      <div className="flex flex-col gap-1.5">
+        {views.map((g) => {
+          const checked = value.includes(g.id);
+          const p = assess(g);
+          return (
+            <label
+              key={g.id}
+              className={`flex min-w-0 cursor-pointer items-center gap-2.5 rounded-button border px-3 py-2 ${
+                checked ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong"
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="size-4 flex-none accent-[var(--accent)]"
+                checked={checked}
+                onChange={(e) => onChange(e.target.checked ? [...value, g.id] : value.filter((id) => id !== g.id))}
+              />
+              <span className="min-w-0 flex-1 font-semibold text-text [overflow-wrap:anywhere]">{g.title}</span>
+              {p.text && <span className="flex-none text-sm text-text2">{p.text}</span>}
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+/**
+ * New PRD (C4 One New PRD door): title, the problem, the goals it serves, what is out of
+ * scope, the four questions and the template and theme. Continue (commenter and up) creates
+ * the brief and opens Before drafting, where Oracle asks its questions; approvers may still
+ * start from an empty skeleton (POST /v1/drafts, unchanged).
+ */
+export function NewPrd() {
+  const kind = "prd" as const;
+  const router = useRouter();
+  const { role } = useMe();
+  const canWrite = hasRole(role, "commenter");
+  const canSkeleton = hasRole(role, "approver");
+  const [prd, setPrd] = useState<PrdAnswers>({});
+  const [title, setTitle] = useState("");
+  const [problem, setProblem] = useState("");
+  const [goalIds, setGoalIds] = useState<string[]>([]);
+  const [outOfScope, setOutOfScope] = useState<string[]>([""]);
+  const [busy, setBusy] = useState<"continue" | "skeleton" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const id = useId();
+
+  const choice = useDraftChoice({ kind, prd });
+  const { templateKey, themeKey } = choice;
+  const setAnswer = <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) => setPrd((a) => ({ ...a, [k]: v }));
+
+  const problemLength = problem.trim().length;
+  const ready = !!title.trim() && problemLength >= PROBLEM_MIN && problem.length <= PROBLEM_MAX;
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!ready || !canWrite) return;
+    setBusy("continue");
+    setError(null);
+    setNotice(null);
+    const answers = Object.fromEntries(Object.entries(prd).filter(([, v]) => v != null)) as PrdAnswers;
+    const body: BriefIn = {
+      title: title.trim(),
+      brief: problem.trim(),
+      source_ids: [],
+      ai_extraction: true,
+      batch_size: 5,
+      goal_ids: goalIds,
+      out_of_scope: outOfScope.map((l) => l.trim()).filter(Boolean),
+      template: templateKey,
+      theme: themeKey,
+      prd_answers: Object.keys(answers).length ? answers : null,
+    };
+    try {
+      const out = await unwrap(api.POST("/v1/intakes", { body }));
+      if (templateKey) saveLastChoice(kind, templateKey, themeKey);
+      router.push(`/intakes/${out.intake.id}`);
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : errorMessage(err));
+      setBusy(null);
+    }
+  }
+
+  async function skeleton() {
+    if (!templateKey || !title.trim()) {
+      setError("Give the PRD a title first.");
+      return;
+    }
+    setBusy("skeleton");
+    setError(null);
+    setNotice(null);
+    try {
+      const out = await unwrapProblems(api.POST("/v1/drafts", { body: { kind, title: title.trim(), template: templateKey, theme: themeKey } }));
+      saveLastChoice(kind, templateKey, themeKey);
+      router.push(`/documents/${out.slug}`);
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : errorMessage(err));
+      setBusy(null);
+    }
+  }
+
+  const formId = "new-prd";
+  const inspector = <RecommendationInspector kind={kind} choice={choice} onError={setError} onNotice={setNotice} />;
+
+  return (
+    <Page>
+      <PageHeader
+        back={
+          <Link href="/documents" className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text">
+            <Icon name="back" size={16} />
+            PRDs
+          </Link>
+        }
+        title="New PRD"
+        status={
+          <InfoTip label="new PRDs" align="start" side="bottom">
+            Say what problem it solves; the rest is optional. Continue and Oracle asks what it still needs to know before
+            it drafts.
+          </InfoTip>
+        }
+        action={
+          canWrite && (
+            <Button form={formId} type="submit" variant="primary" disabled={busy !== null || !ready}>
+              {busy === "continue" ? "Saving…" : "Continue"}
+            </Button>
+          )
+        }
+      />
+
+      <form id={formId} onSubmit={submit} className="min-w-0">
+        <Split inspector={inspector}>
+          {notice && <Notice tone="pass">{notice}</Notice>}
+          {error && <ErrorNote>{error}</ErrorNote>}
+          <Panel bodyClassName="flex flex-col gap-4 p-4">
+            <label className="block">
+              <span className="mb-1.5 block text-[15px] font-semibold text-text">Title</span>
+              <input
+                className={INPUT}
+                value={title}
+                maxLength={200}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Saved addresses at checkout"
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-[15px] font-semibold text-text">What problem does it solve?</span>
+              <textarea
+                className={`${INPUT} h-auto min-h-24 py-2`}
+                rows={4}
+                value={problem}
+                maxLength={PROBLEM_MAX}
+                onChange={(e) => setProblem(e.target.value)}
+                placeholder="Returning buyers retype their address at every checkout…"
+                aria-describedby={`${id}-problem-hint`}
+                required
+              />
+              <span id={`${id}-problem-hint`} className="mt-1 block text-sm text-text2">
+                A couple of sentences is enough.
+                {problemLength > 0 && problemLength < PROBLEM_MIN && ` At least ${PROBLEM_MIN} characters.`}
+              </span>
+            </label>
+          </Panel>
+
+          <Panel as="div" bodyClassName="flex flex-col gap-5 p-4">
+            <GoalPicker value={goalIds} onChange={setGoalIds} />
+            <fieldset className="min-w-0">
+              <legend className="mb-2 text-[15px] font-semibold text-text">
+                What is out of scope? <span className="font-normal text-text2">Optional</span>
+              </legend>
+              <div className="flex flex-col gap-1.5">
+                {outOfScope.map((line, i) => (
+                  <input
+                    key={i}
+                    className={INPUT}
+                    value={line}
+                    maxLength={300}
+                    aria-label={`Out of scope ${i + 1}`}
+                    placeholder={i === 0 ? "Address book sharing between accounts" : undefined}
+                    onChange={(e) => setOutOfScope((all) => all.map((l, j) => (j === i ? e.target.value : l)))}
+                  />
+                ))}
+              </div>
+              {outOfScope.length < MAX_OUT_OF_SCOPE && (
+                <Button variant="ghost" icon="plus" className="mt-1.5" onClick={() => setOutOfScope((all) => [...all, ""])}>
+                  Add another
+                </Button>
+              )}
+            </fieldset>
+          </Panel>
+
+          <Panel as="div" bodyClassName="p-4">
+            <section aria-labelledby={`${id}-questions`}>
+              <h2 id={`${id}-questions`} className="mb-3 font-display text-lg leading-6 font-bold tracking-heading">
+                About this PRD
+              </h2>
+              <div className="flex flex-col gap-4">
+                {PRD_QUESTIONS.map((q) => (
+                  <Question
+                    key={q.field}
+                    name={`${id}-${q.field}`}
+                    question={q.question}
+                    options={q.options as readonly Option<string | boolean>[]}
+                    value={prd[q.field]}
+                    onChange={(v) => setAnswer(q.field, v as never)}
+                  />
+                ))}
+              </div>
+            </section>
+          </Panel>
+
+          <Panel as="div" bodyClassName="flex flex-col gap-6 p-4">
+            <TemplateThemePicker choice={choice} />
+          </Panel>
+
+          {canSkeleton && (
+            <p className="text-sm text-text2">
+              <button
+                type="button"
+                onClick={skeleton}
+                disabled={busy !== null}
+                className="font-semibold text-accent-ink underline-offset-2 hover:underline disabled:text-text2"
+              >
+                {busy === "skeleton" ? "Creating…" : "Start from an empty skeleton instead"}
+              </button>
+            </p>
+          )}
         </Split>
       </form>
     </Page>

@@ -17,11 +17,13 @@ import {
   Page,
   PageHeader,
   Panel,
+  SegmentedControl,
   Split,
   type Column,
 } from "@/components/ds";
+import { peopleByIds } from "@/components/PersonPicker";
 import { ErrorNote } from "@/components/ui";
-import { api, unwrap, type DocumentSummary } from "@/lib/api/client";
+import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -67,6 +69,55 @@ const COLUMNS: Column<DocumentSummary>[] = [
     align: "right",
     className: "tnum text-text2",
     cell: (d) => <span title={formatDateTime(d.updated_at)}>{formatDate(d.updated_at)}</span>,
+  },
+];
+
+/** A brief waiting to be drafted (C4 "Ideas"): no PRD yet, not converted or archived. */
+type Idea = { intake: Schemas["ProductIntakeOut"]; author: string; open: number };
+
+const OPEN_INTAKE = new Set<Schemas["ProductIntakeOut"]["status"]>(["draft", "analyzing", "awaiting_answers", "ready"]);
+
+async function loadIdeas(): Promise<Idea[]> {
+  const [intakes, asked, delegated] = await Promise.all([
+    unwrap(api.GET("/v1/intakes", { params: { query: { limit: 500 } } })),
+    unwrap(api.GET("/v1/questions", { params: { query: { status: "asked", limit: 500 } } })),
+    unwrap(api.GET("/v1/questions", { params: { query: { status: "delegated", limit: 500 } } })),
+  ]);
+  const ideas = intakes.filter((i) => OPEN_INTAKE.has(i.status) && !i.document_id);
+  const people = await peopleByIds(ideas.map((i) => i.author_id)).catch(() => new Map());
+  const open = new Map<string, number>();
+  for (const q of [...asked, ...delegated]) if (q.intake_id) open.set(q.intake_id, (open.get(q.intake_id) ?? 0) + 1);
+  return ideas
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .map((intake) => ({ intake, author: (intake.author_id && people.get(intake.author_id)?.name) || "Someone", open: open.get(intake.id) ?? 0 }));
+}
+
+const IDEA_COLUMNS: Column<Idea>[] = [
+  {
+    key: "title",
+    header: "Idea",
+    cell: (d) => (
+      <Link href={`/intakes/${d.intake.id}`} className="font-medium text-text hover:underline">
+        {d.intake.title}
+      </Link>
+    ),
+  },
+  { key: "author", header: "Author", width: "160px", hideOnPhone: true, className: "text-text2", cell: (d) => d.author },
+  {
+    key: "questions",
+    header: "Questions",
+    width: "150px",
+    cell: (d) =>
+      d.open > 0 ? <Chip kind="warn">{`${d.open} question${d.open === 1 ? "" : "s"} open`}</Chip> : <Chip kind="pass">Ready to draft</Chip>,
+  },
+  {
+    key: "created",
+    header: "Created",
+    width: "120px",
+    hideOnPhone: true,
+    align: "right",
+    className: "tnum text-text2",
+    cell: (d) => <span title={formatDateTime(d.intake.created_at)}>{formatDate(d.intake.created_at)}</span>,
   },
 ];
 
@@ -134,6 +185,9 @@ export default function DocumentsPage() {
   const [picked, setPicked] = useState<string | null>(null);
   const selected = documents.find((d) => d.slug === picked) ?? documents[0] ?? null;
   const inReview = documents.filter((d) => d.status === "in_review").length;
+  // C4: briefs waiting to be drafted, so an approver finds the one a commenter wrote.
+  const ideasQ = useQuery("documents|ideas", loadIdeas);
+  const [view, setView] = useState<"prds" | "ideas">("prds");
 
   return (
     <Page>
@@ -154,6 +208,34 @@ export default function DocumentsPage() {
         }
       />
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
+      <div className="mb-3">
+        <SegmentedControl
+          label="Show"
+          size="sm"
+          value={view}
+          onChange={setView}
+          items={[
+            { value: "prds", label: "PRDs", count: q.data ? documents.length : null },
+            { value: "ideas", label: "Ideas", count: ideasQ.data?.length ?? 0, title: "Briefs waiting to be drafted" },
+          ]}
+        />
+      </div>
+      {view === "ideas" ? (
+        <Panel title="Ideas" count={ideasQ.data?.length}>
+          {ideasQ.error && <ErrorNote>{ideasQ.error}</ErrorNote>}
+          <DataTable
+            label="Ideas"
+            testId="ideas-table"
+            columns={IDEA_COLUMNS}
+            rows={ideasQ.data}
+            loading={ideasQ.loading}
+            rowKey={(d) => d.intake.id}
+            onActivate={(k) => router.push(`/intakes/${k}`)}
+            empty="No ideas waiting to be drafted"
+            rowProps={() => ({ "data-testid": "idea-row" })}
+          />
+        </Panel>
+      ) : (
       <Split inspector={selected ? <DocInspector d={selected} canPublish={hasRole(role, "approver")} /> : undefined}>
         <Panel
           title="PRDs"
@@ -180,6 +262,7 @@ export default function DocumentsPage() {
           />
         </Panel>
       </Split>
+      )}
     </Page>
   );
 }

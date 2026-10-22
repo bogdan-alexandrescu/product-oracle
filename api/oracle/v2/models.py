@@ -359,6 +359,13 @@ class ProductIntake(TenantScoped, Base):
     # IntakeAnalysis: users, problem, outcomes, goal links, scope, blockers, category.
     analysis: Mapped[dict[str, Any]] = _json()
     document_id: Mapped[uuid.UUID | None] = _fk("documents", "SET NULL")
+    # C4 One New PRD door: the goals the brief serves (confirmed goals), what is out of
+    # scope, the PRD template and theme picked at the door, and the O1d answers.
+    goal_ids: Mapped[list[uuid.UUID]] = _uuids()
+    out_of_scope: Mapped[list[str]] = _texts()
+    draft_template: Mapped[str | None] = mapped_column(Text)
+    draft_theme: Mapped[str | None] = mapped_column(Text)
+    prd_answers: Mapped[dict[str, Any]] = _json()
     lock_version: Mapped[int] = _lock_version()
     __mapper_args__ = {"version_id_col": lock_version}
     updated_at: Mapped[datetime] = _updated_at()

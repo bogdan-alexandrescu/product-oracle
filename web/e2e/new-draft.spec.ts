@@ -6,7 +6,7 @@ function answer(page: Page, question: string, option: string) {
   return page.getByRole("group", { name: question }).getByText(option, { exact: true }).click();
 }
 
-test("new PRD: answers give a recommendation; override template and theme; create the draft", async ({ page }) => {
+test("new PRD: answers give a recommendation; override template and theme; start from an empty skeleton", async ({ page }) => {
   await login(page);
   await page.getByRole("link", { name: "New PRD" }).click();
   await expect(page).toHaveURL(/\/documents\/new\?kind=prd$/);
@@ -35,7 +35,8 @@ test("new PRD: answers give a recommendation; override template and theme; creat
   await expect(themes.getByRole("radio", { name: "Editorial memo" })).toBeChecked();
 
   await page.getByRole("textbox", { name: "Title" }).fill("Address lookup PRD");
-  await page.getByRole("button", { name: "Create draft" }).click();
+  // C4: the empty skeleton (POST /v1/drafts) moved under a quiet link of the New PRD door.
+  await page.getByRole("button", { name: "Start from an empty skeleton instead" }).click();
   await expect(page).toHaveURL(/\/documents\/address-lookup-prd$/);
   await expect(page.getByRole("heading", { level: 1, name: "Address lookup PRD" })).toBeVisible();
   await expect(page.getByText("template prd-rfc v1")).toBeVisible();

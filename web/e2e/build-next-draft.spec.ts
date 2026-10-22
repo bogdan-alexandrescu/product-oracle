@@ -98,12 +98,13 @@ test("the New run dialog no longer offers the feedback loop and points at where 
   await login(page);
   await page.goto("/runs");
   await page.getByRole("button", { name: "New run" }).click();
-  const dialog = page.getByRole("dialog", { name: "New run" });
-  await expect(dialog.getByRole("radio")).toHaveCount(1);
-  await expect(dialog.getByRole("radio", { name: "Baseline to PRD" })).toBeChecked();
+  const dialog = page.getByRole("dialog", { name: "Start a run" });
+  // C4: Baseline to PRD starts at New PRD too, so the dialog offers no flow.
+  await expect(dialog.getByRole("radio")).toHaveCount(0);
   await expect(dialog.getByText("Feedback loop")).toHaveCount(0);
   const pointers = dialog.getByTestId("flow-pointer");
   await expect(pointers).toHaveText([
+    "New PRD · PRDs",
     "Build next draft · open a PRD or roadmap and use Build next draft",
     "PRD to roadmap · Plan › Roadmap documents",
     "Vision or strategy · Company › Strategy, New vision or Draft next version",

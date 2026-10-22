@@ -26,7 +26,7 @@ import {
 import { DiscussSubject } from "@/components/discuss/StartDiscussion";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatDayUtc } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -695,6 +695,13 @@ function SegmentItem({
             // The segment ran, but Oracle refused the draft it left: not "Succeeded".
             <Chip kind="crit">
               <span data-testid="segment-state">Draft rejected</span>
+            </Chip>
+          ) : s.reused ? (
+            // C4 (B1 "Reuse base"): the run used the current baseline; this segment ran no step.
+            <Chip kind="na" className={WRAP_CHIP}>
+              <span data-testid="segment-state">
+                Reused (approved {formatDayUtc(s.reused.approved_at)})
+              </span>
             </Chip>
           ) : (
             <Chip kind={SEGMENT_STATUS_KIND[s.status]}>

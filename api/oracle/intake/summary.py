@@ -55,6 +55,7 @@ from oracle.intake.schemas import (
     StaleEvidence,
     TemplateHint,
 )
+from oracle.runs.models import Run
 from oracle.sources.models import Snapshot
 from oracle.templates import service as templates_service
 from oracle.templates.schemas import PrdAnswers, RecommendIn
@@ -84,7 +85,24 @@ async def intake_out(
     out.status = await engine.status_for(db, intake, v)  # type: ignore[assignment]
     out.source_ids = ev.source_ids_of(intake)
     out.analysis = IntakeAnalysis.model_validate(sharing.analysis_view(intake, v))
+    out.goal_ids = list(intake.goal_ids or [])
+    out.out_of_scope = list(intake.out_of_scope or [])
+    out.template = intake.draft_template
+    out.theme = intake.draft_theme
+    out.prd_answers = PrdAnswers.model_validate(intake.prd_answers) if intake.prd_answers else None
+    out.run_ids = await run_ids(db, intake.id)
     return out
+
+
+async def run_ids(db: AsyncSession, intake_id: uuid.UUID) -> list[uuid.UUID]:
+    """Runs started from the intake (``knobs.intake_id``), newest first (C4)."""
+    return list(
+        await db.scalars(
+            select(Run.id)
+            .where(Run.knobs["intake_id"].astext == str(intake_id))
+            .order_by(Run.created_at.desc(), Run.id)
+        )
+    )
 
 
 async def pinned_snapshot(db: AsyncSession, pin: Pinned) -> Snapshot | None:

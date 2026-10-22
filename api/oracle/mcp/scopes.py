@@ -62,6 +62,9 @@ SOURCE_READS = {
     # A launch's requester notes: what people asked, in their words.
     ("launches", "notes"),
 }
+# Reads for people's clients only, refused to run tokens like the runs reads: whether a
+# new PRD run may reuse the baseline (C4) is about runs, not baseline knowledge.
+PEOPLE_READS = {("baseline", "review-status")}
 # Creating a proposal or a piece of evidence; deciding one stays with people.
 PROPOSAL_WRITES = {"proposals", "evidence"}
 
@@ -80,6 +83,8 @@ def required_scope(method: str, path: str) -> str | None:
         return None
     area = parts[0]
     if method == "GET":
+        if tuple(parts) in PEOPLE_READS:
+            return None
         if (area, parts[-1]) in SOURCE_READS and len(parts) == 3:
             return "read:sources"
         for scope, areas in READ_AREAS.items():

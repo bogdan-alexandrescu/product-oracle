@@ -164,7 +164,7 @@ from oracle.review.models import FeedbackItem
 from oracle.review.schemas import Resolution
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import doc_dates, schedule
-from oracle.runs import extensions, feature_set, flows, reasons, rejection, roadmap, workflow
+from oracle.runs import extensions, feature_set, flows, reasons, rejection, reuse, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -265,6 +265,9 @@ ORACLE_KNOBS = (
     "launch_id",
     # strategy_draft (oracle.strategy.brief): the owner's brief from Company › Strategy.
     "strategy_brief",
+    # C4 (B1 "Reuse base"): a Baseline to PRD run that uses the current baseline: the
+    # review it reuses, {"checkpoint_id", "approved_at"} (oracle.runs.reuse).
+    "reuse_baseline",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -470,7 +473,7 @@ def _progress(run: Run, segments: list[RunSegment]) -> RunProgress:
         (s for s in segments if s.status == "pending"), None
     )
     return RunProgress(
-        done=sum(1 for s in segments if s.status == "succeeded"),
+        done=sum(1 for s in segments if s.status in ("succeeded", "skipped")),
         total=len(segments),
         now=flow.segment(now.name).title if now else None,
     )
@@ -830,6 +833,8 @@ def _segment_out(
         attempts=[SegmentAttempt(**a) for a in art.get("attempts") or []],
         draft_import=DraftImport(**imp) if imp else None,
         sent_back=_sent_back(run, segment),
+        reused=art.get("reused") if segment.status == "skipped" else None,
+        note=art.get("note") if segment.status == "skipped" else None,
         can_retry_draft_import=can_retry_draft_import,
         items_check=ItemsCheck(**check) if check else None,
         previous_attempt=PreviousAttempt(
@@ -983,6 +988,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
             roles=knobs.roles,
             checkpoints=knobs.checkpoints,
             budget_usd=_usd(knobs.budget_usd),
+            reuse_baseline=(run.knobs or {}).get("reuse_baseline") or None,
         ),
         snapshot_id=run.snapshot_id,
         snapshot_as_of=snapshot.as_of if snapshot else None,
@@ -1529,6 +1535,11 @@ async def _free_slug(db: AsyncSession, base: str) -> str:
     return await templates_service._free_slug(db, base)
 
 
+# Flows whose target kind takes a template and theme at the run: roadmaps (prd_to_roadmap)
+# and, since C4 One New PRD door, PRDs (baseline_to_prd). The feedback loop refuses them.
+TEMPLATED_KINDS = ("roadmap", "prd")
+
+
 @dataclass
 class _Inputs:
     document: str | None = None
@@ -1554,7 +1565,7 @@ async def _resolve_inputs(
         if any(v is not None for v in named):
             raise Invalid(f"the {flow.title} flow writes no document")
         return None, {}
-    if flow.target_kind != "roadmap" and (inputs.template or inputs.theme):
+    if flow.target_kind not in TEMPLATED_KINDS and (inputs.template or inputs.theme):
         raise Invalid(f"the {flow.title} flow takes no template or theme")
     source = await _resolve_source(db, flow, inputs.source, inputs.source_version)
     default_slug = None
@@ -1573,9 +1584,9 @@ async def _resolve_inputs(
         oracle["document_slug"] = new_slug
     if source is not None:
         oracle["source_version_id"] = str(source[1].id)
-    if flow.target_kind == "roadmap":
+    if flow.target_kind in TEMPLATED_KINDS:
         oracle.update(
-            await _resolve_template(db, "roadmap", inputs.template, inputs.theme, document)
+            await _resolve_template(db, flow.target_kind, inputs.template, inputs.theme, document)
         )
     return (document.id if document else None), oracle
 
@@ -1613,6 +1624,33 @@ async def _one_build_at_a_time(db: AsyncSession, flow: flows.FlowDef) -> None:
     )
     if under_way is not None:
         raise RunError(f"A baseline build is already under way (run {under_way})")
+
+
+class NotReusable(RunError):
+    """409 ``baseline_not_reusable``: the current baseline may not be reused (C4)."""
+
+    def __init__(self, reason: str | None) -> None:
+        super().__init__(f"the current baseline is not reusable ({reason})")
+        self.detail = {"code": "baseline_not_reusable", "reason": reason}
+
+
+async def _reuse_knob(db: AsyncSession, flow: flows.FlowDef) -> dict[str, Any]:
+    """The ``reuse_baseline`` knob for a run asking to reuse the current baseline: the
+    review it reuses. 422 off Baseline to PRD; 409 when not reusable."""
+    if flow.key != "baseline_to_prd":
+        raise Invalid(f"the {flow.title} flow does not reuse the baseline")
+    st = await reuse.review_status(db)
+    if not st.reusable:
+        raise NotReusable(st.reason)
+    return st.knob()
+
+
+async def _recheck_reuse(db: AsyncSession, run: Run) -> None:
+    """A run reusing the baseline: still reusable (else 409, nothing changed); the knob
+    follows the current review."""
+    if not (run.knobs or {}).get("reuse_baseline"):
+        return
+    _set_knob(run, "reuse_baseline", await _reuse_knob(db, _flow(run)))
 
 
 async def create_run(
@@ -1659,6 +1697,9 @@ async def create_run(
         depth = "standard" if template == "board-product" else "quick"
         knobs = _resolve_knobs(flow, body.knobs.model_copy(update={"depth": depth}))
     extra = {k: v for k, v in (oracle_knobs or {}).items() if k in ORACLE_KNOBS}
+    extra.pop("reuse_baseline", None)
+    if body.knobs.reuse_baseline:
+        extra["reuse_baseline"] = await _reuse_knob(db, flow)
     if body.strategy_brief is not None:
         if flow.key != "strategy_draft":
             raise Invalid("only a Vision or strategy draft run takes a brief")
@@ -1730,9 +1771,15 @@ async def update_run(
         for k in ("document", "source_version", "template", "theme"):
             if getattr(body, k) is not None:
                 setattr(current, k, getattr(body, k))
-        intake = {k: v for k, v in oracle.items() if k.startswith("intake_")}
+        intake = {
+            k: v for k, v in oracle.items() if k.startswith("intake_") or k == "reuse_baseline"
+        }
         run.document_id, oracle = await _resolve_inputs(db, flow, current)
         oracle.update(intake)
+    if body.knobs is not None and body.knobs.reuse_baseline is not None:
+        oracle.pop("reuse_baseline", None)
+        if body.knobs.reuse_baseline:
+            oracle["reuse_baseline"] = await _reuse_knob(db, flow)
     run.knobs = {**stored, **oracle}
     await _reset_segments(db, run, flow)
     await audit.record(db, principal, "run.updated", "run", run.id, {})
@@ -1743,11 +1790,16 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
     run = await _get_run(db, run_id, lock=True)
     if run.status != "draft":
         raise RunError("only a draft run can be estimated")
+    await _recheck_reuse(db, run)
     flow, knobs = _flow(run), _knobs(run)
+    reused = (run.knobs or {}).get("reuse_baseline")
     segments = {s.name: s for s in await _segments(db, run.id)}
     rows = []
     for i, sdef in enumerate(flow.segments, start=1):
         amount = flows.segment_estimate(sdef, knobs)
+        skip = bool(reused) and sdef.name == "baseline"
+        if skip:
+            amount = Decimal("0.00")
         segments[sdef.name].estimate_usd = amount
         rows.append(
             SegmentEstimate(
@@ -1756,6 +1808,10 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
                 title=sdef.title,
                 roles=knobs.roles[sdef.name],
                 estimate_usd=float(amount),
+                reused=skip,
+                note=f"Current baseline, approved {reuse.short_date(reused['approved_at'])}"
+                if skip
+                else None,
             )
         )
     total = sum((Decimal(str(r.estimate_usd)) for r in rows), Decimal(0))
@@ -1783,6 +1839,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
         raise RunError(f"run is {run.status}, not a draft")
     if run.estimate_usd is None:
         raise RunError("estimate the run first: POST /v1/runs/{id}/estimate")
+    await _recheck_reuse(db, run)
     await _one_build_at_a_time(db, _flow(run))
     knobs = _knobs(run)
     source_id = _source_id(run)
@@ -1792,7 +1849,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
     # the intake's answers given before now, whichever segment asks.
     from oracle.intake import drafting
 
-    pinned = await drafting.on_start(db, run)
+    pinned = await drafting.on_start(db, run, principal)
     if knobs.budget_usd is not None and run.estimate_usd > knobs.budget_usd:
         raise Invalid(
             f"the estimate (${run.estimate_usd:.2f}) is over the budget "
@@ -1831,7 +1888,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
         await db.commit()
         return
     await audit.record(db, principal, "run.started", "run", run.id, {})
-    await _launch(db, run)
+    await _launch(db, run, principal)
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
 
@@ -1849,20 +1906,73 @@ async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> 
     run = await _get_run(db, run_id, lock=True)
     if run.status != "awaiting_approval":
         raise RunError(f"run is {run.status}, not awaiting approval")
+    # A run reusing the baseline: still reusable now (else 409, nothing changed, C4).
+    await _recheck_reuse(db, run)
     run.approved_by = principal.id
     run.approved_at = _now()
     await audit.record(db, principal, "run.approved", "run", run.id, {"usd": str(run.estimate_usd)})
-    await _launch(db, run)
+    await _launch(db, run, principal)
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
 
-async def _launch(db: AsyncSession, run: Run) -> None:
+async def _launch(db: AsyncSession, run: Run, principal: Principal | str | None = None) -> None:
     run.status = "running"
     run.started_at = _now()
     ceiling = (run.estimate_usd * flows.OVERRUN_FACTOR).quantize(Decimal("0.0001"))
     _set_knob(run, "spend_ceiling_usd", str(ceiling))
     segments = await _segments(db, run.id)
-    await _submit(db, run, segments[0], segments)
+    first = segments[0]
+    reused = (run.knobs or {}).get("reuse_baseline")
+    if reused and first.name == "baseline" and len(segments) > 1:
+        await _skip_reused_baseline(db, run, first, reused, principal)
+        first = segments[1]
+    # Workflow mode covers the segments from ``first`` on: no baseline step is submitted.
+    await _submit(db, run, first, segments)
+
+
+async def _skip_reused_baseline(
+    db: AsyncSession,
+    run: Run,
+    segment: RunSegment,
+    reused: dict[str, Any],
+    principal: Principal | str | None,
+) -> None:
+    """C4: the run uses the current baseline. Its baseline segment is recorded skipped at
+    no cost and its Confirm the baseline stop skipped; nothing runs for them."""
+    note = f"Reused the baseline approved {reuse.short_date(reused['approved_at'])}"
+    now = _now()
+    art = _art(segment)
+    art["reused"] = reused
+    art["note"] = note
+    _set_art(segment, art)
+    segment.status = "skipped"
+    segment.estimate_usd = Decimal("0.00")
+    segment.cost_usd = Decimal("0")
+    segment.finished_at = now
+    segment.error = None
+    db.add(
+        Checkpoint(
+            run_id=run.id,
+            kind="baseline_confirm",
+            status="skipped",
+            approver_role=_flow(run).segment(segment.name).approver_role,
+            note=note,
+            payload={
+                "segment_seq": segment.seq,
+                "segment": segment.name,
+                "reused_checkpoint_id": reused.get("checkpoint_id"),
+            },
+            decided_at=now,
+        )
+    )
+    await audit.record(
+        db,
+        principal if principal is not None else audit.ORACLE,
+        "run.baseline_reused",
+        "run",
+        run.id,
+        {"checkpoint_id": reused.get("checkpoint_id"), "approved_at": reused.get("approved_at")},
+    )
 
 
 # --------------------------------------------------------------------------- segments
@@ -1929,10 +2039,21 @@ async def _prompt_context(
     document = document or run.knobs.get("document_slug")
     kind = await _target_kind(db, run)
     source = await _source_context(db, run) if _flow(run).source_prompt else None
-    roadmap_ctx = None
-    if source is not None and _flow(run).segment(segment.name).imports_draft:
-        title = doc.title if doc is not None else f"{source.title} roadmap"
-        roadmap_ctx = await _roadmap_context(db, run, document or "", title)
+    draft_ctx = None
+    # A roadmap draft is built from its source PRD (as before C4); a PRD draft from the
+    # baseline, with the template picked at New PRD.
+    if (
+        _flow(run).segment(segment.name).imports_draft
+        and run.knobs.get("template")
+        and (source is not None or kind != "roadmap")
+    ):
+        if doc is not None:
+            title = doc.title
+        elif source is not None:
+            title = f"{source.title} {flows.KIND_NAMES[kind]}"
+        else:
+            title = await _intake_title(db, run) or (document or "")
+        draft_ctx = await _draft_context(db, run, kind, document or "", title)
     prior: dict[str, str] = {}
     prior_files: list[tuple[int, str, list[str]]] = []
     in_workflow = {seq for seq, _, _ in planned or []}
@@ -2015,12 +2136,15 @@ async def _prompt_context(
         prior_files=prior_files,
         kind=kind,
         source=source,
-        roadmap=roadmap_ctx,
+        draft=draft_ctx,
         extra_lines=await extensions.prompt_lines(db, run),
         intake_id=run.knobs.get("intake_id"),
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
         scope_yaml=scope_yaml,
         launch_id=run.knobs.get("launch_id"),
+        baseline_reused=reuse.short_date(reused["approved_at"])
+        if (reused := run.knobs.get("reuse_baseline")) and segment.name != "baseline"
+        else None,
     )
 
 
@@ -2146,11 +2270,26 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
     )
 
 
-async def _roadmap_context(
-    db: AsyncSession, run: Run, slug: str, title: str
-) -> flows.RoadmapContext | None:
-    """The roadmap draft's template, theme and skeleton (the template's body as a first
-    draft of this document, front matter included)."""
+async def _intake_title(db: AsyncSession, run: Run) -> str | None:
+    """The title of the intake a run started from (a new PRD takes it, C4)."""
+    raw = run.knobs.get("intake_id")
+    if not raw:
+        return None
+    from oracle.v2.models import ProductIntake
+
+    try:
+        intake = await db.get(ProductIntake, uuid.UUID(str(raw)))
+    except ValueError:
+        return None
+    return intake.title if intake is not None else None
+
+
+async def _draft_context(
+    db: AsyncSession, run: Run, kind: str, slug: str, title: str
+) -> flows.DraftContext | None:
+    """The draft's template, theme and skeleton (the template's body as a first draft of
+    this ``kind`` document, front matter included): a roadmap's (prd_to_roadmap) and a
+    PRD's (baseline_to_prd, C4)."""
     key, number = run.knobs.get("template"), run.knobs.get("template_version")
     if not key or not number:
         return None
@@ -2162,13 +2301,18 @@ async def _roadmap_context(
         body,
         slug=slug,
         title=title,
-        kind="roadmap",
+        kind=kind,
         template=key,
         version=int(number),
         theme=theme,
     )
-    return flows.RoadmapContext(
-        slug=slug, template=key, template_version=int(number), theme=theme, skeleton=skeleton
+    return flows.DraftContext(
+        kind=kind,
+        slug=slug,
+        template=key,
+        template_version=int(number),
+        theme=theme,
+        skeleton=skeleton,
     )
 
 

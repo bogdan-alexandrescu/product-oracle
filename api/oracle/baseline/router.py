@@ -57,6 +57,7 @@ from oracle.baseline.schemas import (
     ProposalOut,
     ProposalStatus,
     RescoreResult,
+    ReviewStatusOut,
     RevisionOut,
     TraceReport,
     WriteOrigin,
@@ -193,6 +194,26 @@ async def get_graph(principal: Reader, db: TenantDB) -> GraphOut:
     return GraphOut(
         entities=await _entities_out(db, await service.list_entities(db), principal),
         edges=await _edges_out(db, await service.list_edges(db), principal),
+    )
+
+
+@router.get("/review-status", response_model=ReviewStatusOut)
+async def get_baseline_review_status(principal: Reader, db: TenantDB) -> ReviewStatusOut:
+    """Whether a new PRD run may use the current baseline instead of rebuilding it: the
+    last baseline review, its age, whether a baseline build is under way, and the
+    baseline segment's estimate per depth (B1 "Reuse base")."""
+    from oracle.runs import reuse
+
+    st = await reuse.review_status(db)
+    return ReviewStatusOut(
+        last_approved_at=st.last_approved_at,
+        checkpoint_id=st.checkpoint_id,
+        run_id=st.run_id,
+        age_days=st.age_days,
+        build_under_way=st.build_under_way,
+        reusable=st.reusable,
+        reason=st.reason,  # type: ignore[arg-type]
+        baseline_segment_usd=st.baseline_segment_usd,  # type: ignore[arg-type]
     )
 
 

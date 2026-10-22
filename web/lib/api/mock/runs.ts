@@ -7,7 +7,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { displayName } from "@/lib/names";
 
-import { AGENT_RUN } from "./baseline";
+import { AGENT_RUN, baselineReviewStatus } from "./baseline";
 import { ranking } from "./lane-f";
 
 type RunOut = Schemas["RunOut"];
@@ -146,8 +146,9 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       requires_document: false,
       target_kind: "prd",
       source_kind: null,
-      in_new_run_dialog: true,
-      starts_from: null,
+      // C4: a PRD starts at New PRD (the brief, then Draft with Oracle); the API and MCP keep the flow.
+      in_new_run_dialog: false,
+      starts_from: { label: "New PRD · PRDs", href: "/documents/new?kind=prd" },
       writes_document: true,
       segments: [
         BASELINE_SEGMENT,
@@ -250,6 +251,8 @@ const KIND_NAME: Record<Kind, string> = {
 };
 // O4: a roadmap starts from Now / Next / Later on the roadmap board unless a run names others.
 const ROADMAP_DEFAULTS = { template: "now-next-later", theme: "roadmap-board" };
+// C4: a Baseline to PRD run with no template gets the built-in goal-traced PRD.
+const PRD_DEFAULT_TEMPLATE = "oracle-default";
 const FACTOR = 1.5;
 const FINAL = ["succeeded", "failed", "cancelled"];
 // B1: a Build the baseline run in these states is under way; another is refused.
@@ -264,6 +267,22 @@ function buildUnderWay(ctx: RunsContext, flowKey: string): Response | null {
   return first ? fail(409, `A baseline build is already under way (run ${first.id})`) : null;
 }
 const round2 = (n: number) => Math.round(n * 100) / 100;
+const monthDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+/**
+ * The "new-run-prd" scenario keeps Baseline to PRD in the New run dialog, as a catalog from
+ * before C4 did: the dialog's PRD document field (#257) stays reachable for its spec.
+ */
+export const NEW_RUN_PRD_SCENARIO = "new-run-prd";
+
+function flowCatalog(): Schemas["FlowCatalog"] {
+  const inDialog = typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === NEW_RUN_PRD_SCENARIO;
+  if (!inDialog) return FLOW_CATALOG;
+  return {
+    ...FLOW_CATALOG,
+    flows: FLOW_CATALOG.flows.map((f) => (f.key === "baseline_to_prd" ? { ...f, in_new_run_dialog: true, starts_from: null } : f)),
+  };
+}
 
 function flowOf(key: string) {
   return FLOW_CATALOG.flows.find((f) => f.key === key)!;
@@ -315,7 +334,30 @@ function summary(r: RunOut): Schemas["RunSummary"] {
   };
 }
 
-type KnobsIn = Partial<Schemas["KnobsIn"]>;
+/** C4: `reuse_baseline` (B1 "Reuse base"): true asks to reuse; stored as the review it reuses. */
+type Reuse = Schemas["ReusedBaseline"];
+type KnobsIn = Partial<Omit<Schemas["KnobsIn"], "reuse_baseline">> & { reuse_baseline?: boolean | Reuse | null };
+type Knobs = RunOut["knobs"];
+
+/** The review a Baseline to PRD run reuses, or false (C4). */
+export function reusedReview(r: Pick<RunOut, "flow" | "knobs">): Reuse | false {
+  if (r.flow !== "baseline_to_prd") return false;
+  return r.knobs.reuse_baseline ?? false;
+}
+
+/** As the API: reusing the baseline is re-checked at estimate and start (409 when it no longer holds). */
+function notReusable(r: RunOut): Response | null {
+  if (!reusedReview(r)) return null;
+  const status = baselineReviewStatus();
+  return status.reusable ? null : json(409, { detail: { code: "baseline_not_reusable", reason: status.reason } });
+}
+
+function reuseKnob(raw: KnobsIn["reuse_baseline"]): Reuse | null {
+  if (!raw) return null;
+  if (typeof raw === "object") return raw;
+  const status = baselineReviewStatus();
+  return status.checkpoint_id && status.last_approved_at ? { checkpoint_id: status.checkpoint_id, approved_at: status.last_approved_at } : null;
+}
 
 function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut["knobs"] | string {
   const flow = flowOf(flowKey);
@@ -328,7 +370,9 @@ function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut["knobs"
   }
   const checkpoints: Record<string, boolean> = {};
   for (const s of flow.segments) if (s.checkpoint) checkpoints[s.checkpoint] = raw?.checkpoints?.[s.checkpoint] ?? true;
-  return { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null };
+  const knobs: Knobs = { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null };
+  if (flowKey === "baseline_to_prd" && raw?.reuse_baseline) knobs.reuse_baseline = reuseKnob(raw.reuse_baseline);
+  return knobs;
 }
 
 function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string): SegmentOut[] {
@@ -890,7 +934,21 @@ function finishRunning(ctx: RunsContext, r: RunOut): "none" | "paused" | "advanc
 function launch(ctx: RunsContext, r: RunOut) {
   r.started_at = ctx.now();
   r.overrun_ceiling_usd = round2((r.estimate_usd ?? 0) * FACTOR);
-  submit(ctx, r, r.segments[0]);
+  const reused = reusedReview(r);
+  const first = r.segments[0];
+  if (reused && first?.name === "baseline") {
+    // C4: the reused baseline segment runs no step and costs nothing; its stop is skipped.
+    const on = monthDay(reused.approved_at);
+    Object.assign(first, { status: "skipped", cost_usd: 0, estimate_usd: 0, reused, note: `Reused the baseline approved ${on}`, started_at: ctx.now(), finished_at: ctx.now() });
+    r.checkpoints.push({
+      id: ctx.uuid(), run_id: r.id, kind: "baseline_confirm", status: "skipped", approver_role: "approver",
+      segment_seq: first.seq, decided_by: null, decided_at: ctx.now(), note: `Reused the baseline approved ${on}`, payload: {},
+      created_at: ctx.now(), can_decide: false, cannot_approve: null,
+    });
+    submit(ctx, r, r.segments[1]);
+    return;
+  }
+  submit(ctx, r, first);
 }
 
 function inbox(ctx: RunsContext): Schemas["InboxOut"] {
@@ -1011,7 +1069,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
-  if (p[1] === "flows" && m === "GET") return json(200, FLOW_CATALOG);
+  if (p[1] === "flows" && m === "GET") return json(200, flowCatalog());
   if (p[1] === "inbox" && m === "GET") return json(200, inbox(ctx));
   if (p[1] === "internal" && p[2] === "tick" && m === "POST") return json(200, tick(ctx));
   // C6: the document's approved PRD scope, by id or slug (a new PRD's run names it by slug).
@@ -1054,7 +1112,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       return fail(422, `the ${flow.title} flow writes no document`);
     }
     const find = (ref: string) => ctx.documents.find((d) => d.slug === ref || d.id === ref);
-    if (flow.target_kind !== "roadmap" && (input.template || input.theme)) return fail(422, `the ${flow.title} flow takes no template or theme`);
+    // C4: a Baseline to PRD run takes a PRD template; the feedback loop still refuses one.
+    const templated = flow.target_kind === "roadmap" || input.flow === "baseline_to_prd";
+    if (!templated && (input.template || input.theme)) return fail(422, `the ${flow.title} flow takes no template or theme`);
     // prd_to_roadmap reads an approved PRD version (422 when there is none).
     let source: VersionSource | null = null;
     if (flow.source_kind) {
@@ -1106,8 +1166,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       document_slug: doc?.slug ?? ref ?? null,
       document_kind: doc?.kind ?? flow.target_kind ?? null,
       source,
-      template: roadmap ? (input.template ?? doc?.template ?? ROADMAP_DEFAULTS.template) : null,
-      theme: roadmap ? (input.theme ?? doc?.theme ?? ROADMAP_DEFAULTS.theme) : null,
+      template: roadmap ? (input.template ?? doc?.template ?? ROADMAP_DEFAULTS.template) : templated ? (input.template ?? doc?.template ?? PRD_DEFAULT_TEMPLATE) : null,
+      theme: roadmap ? (input.theme ?? doc?.theme ?? ROADMAP_DEFAULTS.theme) : templated ? (input.theme ?? doc?.theme ?? null) : null,
       estimate_usd: null,
       spent_usd: 0,
       created_by: ctx.userId,
@@ -1174,7 +1234,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       r.document_id = doc?.id ?? null;
       r.document_slug = doc?.slug ?? patch.document;
     }
-    if (r.document_kind === "roadmap") {
+    if (r.document_kind === "roadmap" || r.flow === "baseline_to_prd") {
       if (patch.template) r.template = patch.template;
       if (patch.theme) r.theme = patch.theme;
     }
@@ -1187,7 +1247,11 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   const action = p[3];
   if (action === "estimate" && m === "POST") {
     if (r.status !== "draft") return fail(409, "only a draft run can be estimated");
-    for (const s of r.segments) s.estimate_usd = segEstimate(s.roles, r.knobs.depth);
+    const stale = notReusable(r);
+    if (stale) return stale;
+    // C4: a reused baseline segment does not run, so it costs nothing.
+    const reused = reusedReview(r);
+    for (const s of r.segments) s.estimate_usd = reused && s.name === "baseline" ? 0 : segEstimate(s.roles, r.knobs.depth);
     const total = round2(r.segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
     r.estimate_usd = total;
     r.needs_approval = total > THRESHOLD;
@@ -1196,7 +1260,13 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       run_id: r.id,
       depth: r.knobs.depth,
       total_usd: total,
-      segments: r.segments.map((s) => ({ seq: s.seq, name: s.name, title: s.title, roles: s.roles, estimate_usd: s.estimate_usd ?? 0 })),
+      segments: r.segments.map((s) => {
+        const skip = !!reused && s.name === "baseline";
+        return {
+          seq: s.seq, name: s.name, title: s.title, roles: s.roles, estimate_usd: s.estimate_usd ?? 0, reused: skip,
+          note: skip && reused ? `Current baseline, approved ${monthDay(reused.approved_at)}` : null,
+        };
+      }),
       approval_threshold_usd: THRESHOLD,
       needs_approval: total > THRESHOLD,
       budget_usd: budget,
@@ -1206,6 +1276,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (action === "start" && m === "POST") {
     if (r.status !== "draft") return fail(409, `run is ${r.status}, not a draft`);
     if (r.estimate_usd == null) return fail(409, "estimate the run first");
+    const stale = notReusable(r);
+    if (stale) return stale;
     const refused = buildUnderWay(ctx, r.flow);
     if (refused) return refused;
     if (r.knobs.budget_usd != null && r.estimate_usd > r.knobs.budget_usd) return fail(422, "the estimate is over the budget");

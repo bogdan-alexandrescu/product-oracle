@@ -28,7 +28,7 @@ import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngRe
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
-import { routeIntake, seedBeforeDrafting, type SubjectLookup } from "./intake";
+import { routeIntake, seedBeforeDrafting, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
@@ -2491,7 +2491,14 @@ async function route(db: Db, req: Request): Promise<Response> {
         return null;
       },
     };
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, people: db.members, subjects }, req, p, q);
+    const updateRun = async (id: string, body: Schemas["RunPatch"]) => {
+      const run = db.runs?.runs.find((r) => r.id === id);
+      if (!run || run.status !== "draft") return null;
+      const patch = new Request(new URL(`/v1/runs/${id}`, req.url), { method: "PATCH", body: JSON.stringify(body) });
+      return routeRuns({ ...runsContext(db), db: db.runs! }, patch, ["v1", "runs", id]).then((r) => r ?? notFound("Route"));
+    };
+    const confirmedGoals = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
+    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals }, req, p, q);
     if (intake) return intake;
   }
   // Requests and their themes (C1) check roles themselves: commenters add, approvers decide.
@@ -2610,6 +2617,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (decided) return decided;
   const seenBefore = db.inbox_seen?.[me.id] ?? null;
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
+  // C4: an intake's draft run that starts converts its brief (the API's drafting.on_start).
+  if (runs?.ok && req.method === "POST" && p[1] === "runs" && p[3] === "start" && p.length === 4) startedIntakeRun(ensureV2(db), p[2]);
   if (runs && p[1] === "inbox") {
     tick(llm);
     const withStates = withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true");

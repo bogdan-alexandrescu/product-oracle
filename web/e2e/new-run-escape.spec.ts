@@ -2,7 +2,15 @@ import { expect, test } from "@playwright/test";
 
 import { login } from "./helpers";
 
-/** #257: Escape in the PRD document field closes its suggestions, not the New run dialog. */
+/**
+ * #257: Escape in the PRD document field closes its suggestions, not the New run dialog.
+ * Since C4 a PRD starts at New PRD, so the dialog offers Baseline to PRD only in the mock's
+ * "new-run-prd" scenario (a catalog that still lists it there).
+ */
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "new-run-prd"));
+});
+
 test("new run: Escape closes the document suggestions first, then the dialog", async ({ page }) => {
   await login(page);
   await page.getByTestId("nav-runs").click();

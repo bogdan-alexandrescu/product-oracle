@@ -8,9 +8,10 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 
 from oracle.runs.schemas import KnobsIn
+from oracle.templates.schemas import PrdAnswers
 from oracle.v2.schemas import (
     ORM,
     AnswerKind,
@@ -43,6 +44,17 @@ ANSWER_PATHS: list[AnswerPath] = ["answer", "dont_know", "defer", "delegate", "r
 # --- requests ----------------------------------------------------------------------------
 
 
+def _line(value: str) -> str:
+    value = value.strip()
+    if not value:
+        raise ValueError("an out-of-scope line needs some words")
+    return value
+
+
+# One out-of-scope line of a brief (C4).
+OutOfScopeLine = Annotated[str, Field(min_length=1, max_length=300), AfterValidator(_line)]
+
+
 class IntakeCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     # A couple of sentences is enough (§5).
@@ -57,6 +69,17 @@ class IntakeCreate(BaseModel):
     ai_extraction: bool = True
     # Questions in the first batch, asked at once.
     batch_size: int = Field(default=5, ge=1, le=10)
+    # C4 One New PRD door. The confirmed goals the idea serves (422 if one is not a
+    # confirmed goal): they answer the goal_alignment question as yours.
+    goal_ids: list[uuid.UUID] = Field(default=[], max_length=10)
+    # What is out of scope, one line each: they answer the non_goals question as yours.
+    out_of_scope: list[OutOfScopeLine] = Field(default=[], max_length=20)
+    # The PRD template and theme the draft uses (422 if unknown, archived or not for a
+    # PRD); omitted: the company default, else Oracle's built-in default, at the run.
+    template: str | None = Field(default=None, min_length=1, max_length=100)
+    theme: str | None = Field(default=None, min_length=1, max_length=100)
+    # The O1d answers that suggested the template (as POST /v1/drafts/recommend).
+    prd_answers: PrdAnswers | None = None
 
     @field_validator("brief")
     @classmethod
@@ -66,12 +89,30 @@ class IntakeCreate(BaseModel):
             raise ValueError("a brief needs at least a sentence")
         return value
 
+    @field_validator("goal_ids")
+    @classmethod
+    def _unique_goals(cls, value: list[uuid.UUID]) -> list[uuid.UUID]:
+        return list(dict.fromkeys(value))
+
 
 class IntakePatch(BaseModel):
     lock_version: int
     title: str | None = Field(default=None, min_length=1, max_length=200)
     document: str | None = Field(default=None, min_length=1, max_length=200)
     status: Literal["archived", "awaiting_answers"] | None = None
+    # C4: the brief's fields (the author or an approver; 409 once converted, that is once
+    # its draft run started). Goals and out-of-scope lines answer their questions again
+    # (a new answer; the latest wins).
+    goal_ids: list[uuid.UUID] | None = Field(default=None, max_length=10)
+    out_of_scope: list[OutOfScopeLine] | None = Field(default=None, max_length=20)
+    template: str | None = Field(default=None, min_length=1, max_length=100)
+    theme: str | None = Field(default=None, min_length=1, max_length=100)
+    prd_answers: PrdAnswers | None = None
+
+    @field_validator("goal_ids")
+    @classmethod
+    def _unique_goals(cls, value: list[uuid.UUID] | None) -> list[uuid.UUID] | None:
+        return list(dict.fromkeys(value)) if value is not None else None
 
 
 class GapCreate(BaseModel):
@@ -117,6 +158,14 @@ class IntakeRunIn(BaseModel):
     # The PRD the run writes: an existing slug or id, or a new slug.
     document: str | None = Field(default=None, min_length=1, max_length=200)
     knobs: KnobsIn = KnobsIn()
+    # C4: the PRD template and theme; omitted: the intake's (then the company default,
+    # else Oracle's built-in default).
+    template: str | None = Field(default=None, min_length=1, max_length=100)
+    theme: str | None = Field(default=None, min_length=1, max_length=100)
+    # C4 (B1 "Reuse base"): use the current baseline (skip the baseline segment and its
+    # Confirm the baseline stop) or rebuild it; null: use it when it is reusable
+    # (GET /v1/baseline/review-status). Overrides ``knobs.reuse_baseline``.
+    reuse_baseline: bool | None = None
 
 
 # --- responses ---------------------------------------------------------------------------
@@ -144,6 +193,14 @@ class EvidenceRef(BaseModel):
 class IntakeOut(ProductIntakeOut):
     # The sources it reads (empty: all of the author's).
     source_ids: list[uuid.UUID] = []
+    # C4: the brief's goals, out-of-scope lines, PRD template and theme, O1d answers.
+    goal_ids: list[uuid.UUID] = []
+    out_of_scope: list[str] = []
+    template: str | None = None
+    theme: str | None = None
+    prd_answers: PrdAnswers | None = None
+    # Runs started from the intake (knobs.intake_id), newest first.
+    run_ids: list[uuid.UUID] = []
 
 
 class PinnedVersion(BaseModel):

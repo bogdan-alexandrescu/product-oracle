@@ -9,10 +9,13 @@ const dateTimeFmt = new Intl.DateTimeFormat("en", {
 });
 
 const dayFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" });
+const utcDayFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
 
 export const formatDate = (iso: string) => dateFmt.format(new Date(iso));
 /** "Oct 16". */
 export const formatDay = (iso: string) => dayFmt.format(new Date(iso));
+/** "Oct 12" in UTC, the date the API's notes give (runs/reuse.py short_date). */
+export const formatDayUtc = (iso: string) => utcDayFmt.format(new Date(iso));
 export const formatDateTime = (iso: string) => dateTimeFmt.format(new Date(iso));
 
 export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
