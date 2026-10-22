@@ -9,6 +9,7 @@ export type PlanTab = { key: string; label: string; href: string; testId: string
 export const PLAN_TABS: PlanTab[] = [
   { key: "plan", label: "Plan", href: "/plan", testId: "plan-tab-plan" },
   { key: "documents", label: "Roadmap documents", href: "/plan/documents", testId: "plan-tab-documents" },
+  { key: "outcomes", label: "Outcomes", href: "/plan/outcomes", testId: "plan-tab-outcomes" },
 ];
 
 /** In the mock build only: tests register extra entries here (a JSON list of PlanTab). */

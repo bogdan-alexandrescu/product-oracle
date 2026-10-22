@@ -32,7 +32,16 @@ import { routeIntake, seedBeforeDrafting, startedIntakeRun, type SubjectLookup }
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
-import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
+import {
+  calibration,
+  outcomeInboxRows,
+  publishRefusal,
+  routeQuality,
+  seedOutcomes,
+  seedQuality,
+  type QualityContext,
+  type QualityDb,
+} from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
@@ -233,6 +242,12 @@ function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Respo
     return json(200, { ...out("done"), outcome: "revoked", last_error: null });
   }
   return notFound("Route");
+}
+
+/** The track record over the mock's outcomes (H3), goals named from the baseline. */
+export function trackRecord(db: Db): Schemas["CalibrationOut"] {
+  const titles = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "goal").map((e) => [e.id, e.title]));
+  return calibration(db.quality, titles);
 }
 
 /** The launches' context: the signed-in member, the commenter who asked, the first track. */
@@ -1432,6 +1447,11 @@ function load(): Db {
   // Launches (H6): three synthetic launches in the "launches" scenario; none otherwise, so
   // other specs' Inbox counts stay as they were.
   if (scenario === "launches") db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
+  // Outcomes (H3): synthetic predictions, one due for its check, in the "outcomes" scenario.
+  if (scenario === "outcomes") {
+    const goal = db.baseline.entities.find((e) => e.type === "goal" && e.title === "Raise activation");
+    if (goal) db.quality = { outcomes: seedOutcomes(db.user_id, goal.id, null), learnings: [] };
+  }
   db.autonomy = emptyAutonomy();
   // Discussions (G1): one private discussion in the "discussions" scenario; none otherwise,
   // so other specs' counts stay as they were.
@@ -2599,6 +2619,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const input = (await req.clone().json()) as Schemas["StartDraftIn"] | null;
     if (input?.kind === "update") return startUpdate(db, me, input);
   }
+  if (p[1] === "priorities" && p[2] === "calibration" && p.length === 3 && m === "GET") return json(200, trackRecord(db));
   const handled = await laneF(db, req, p, m, me.role);
   if (handled) return handled;
 
@@ -2630,6 +2651,10 @@ async function route(db: Db, req: Request): Promise<Response> {
     const launchRows = launchInboxRows(launchesContext(db, me), ensureLaunches(db));
     inbox.launches = launchRows;
     inbox.total += launchRows.filter((r) => r.counted).length;
+    // Outcome rows (H3): Add predictions and Outcome check due count; Oracle recorded is shown.
+    const outcomeRows = outcomeInboxRows(db.quality, me.id, "Checkout roadmap");
+    inbox.outcomes = outcomeRows;
+    inbox.total += outcomeRows.filter((r) => r.counts).length;
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")

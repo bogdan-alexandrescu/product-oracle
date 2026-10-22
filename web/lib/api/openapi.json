@@ -12490,6 +12490,36 @@
         }
       }
     },
+    "/v1/priorities/calibration": {
+      "get": {
+        "tags": [
+          "priorities"
+        ],
+        "summary": "Get Priority Calibration",
+        "description": "The track record (H3): how well assessed predictions held, per goal and company-wide,\nand the factor (0.5 to 1.0) it puts on priority confidence. ``setting`` show: the\nfactor is displayed, not applied.",
+        "operationId": "get_priority_calibration",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalibrationOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
     "/v1/priorities/overrides": {
       "post": {
         "tags": [
@@ -22274,6 +22304,7 @@
               "anyOf": [
                 {
                   "enum": [
+                    "predicted",
                     "tracking",
                     "held",
                     "partially_held",
@@ -22287,6 +22318,80 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "predicted",
+                    "tracking",
+                    "due",
+                    "assessed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "predicted, tracking (measuring), due (a proposal waits), assessed",
+              "title": "State"
+            },
+            "description": "predicted, tracking (measuring), due (a proposal waits), assessed"
+          },
+          {
+            "name": "needs_prediction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Needs Prediction"
+            }
+          },
+          {
+            "name": "track_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Track Id"
+            }
+          },
+          {
+            "name": "roadmap_item_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Roadmap Item Id"
             }
           },
           {
@@ -22368,6 +22473,128 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutcomeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Update Outcome",
+        "description": "Edit the prediction while the item is predicted (audited); once shipped it is\nfrozen (409). The owner can change any time.",
+        "operationId": "update_outcome",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "outcome_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Outcome Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutcomeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutcomeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/outcomes/{outcome_id}/shipped": {
+      "post": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Mark Outcome Shipped",
+        "description": "Say a predicted item shipped (signal ``manual``): it starts measuring.",
+        "operationId": "mark_outcome_shipped",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "outcome_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Outcome Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShippedIn"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -32704,6 +32931,38 @@
             "type": "string",
             "format": "date-time",
             "title": "Assessed At"
+          },
+          "actual_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Value"
+          },
+          "measured_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured At"
+          },
+          "actor": {
+            "type": "string",
+            "enum": [
+              "person",
+              "oracle"
+            ],
+            "title": "Actor",
+            "default": "person"
           }
         },
         "type": "object",
@@ -32753,6 +33012,29 @@
             "maxItems": 50,
             "title": "Evidence Ids",
             "default": []
+          },
+          "actual_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Value"
+          },
+          "measured_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured At"
           }
         },
         "type": "object",
@@ -35800,6 +36082,130 @@
           "files"
         ],
         "title": "Body_upload_files"
+      },
+      "CalibrationFigures": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "expected": {
+            "type": "number",
+            "title": "Expected"
+          },
+          "factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factor"
+          },
+          "held": {
+            "type": "integer",
+            "title": "Held",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "n",
+          "score",
+          "expected"
+        ],
+        "title": "CalibrationFigures"
+      },
+      "CalibrationOut": {
+        "properties": {
+          "setting": {
+            "type": "string",
+            "enum": [
+              "apply",
+              "show"
+            ],
+            "title": "Setting"
+          },
+          "min_outcomes": {
+            "type": "integer",
+            "title": "Min Outcomes"
+          },
+          "floor": {
+            "type": "number",
+            "title": "Floor"
+          },
+          "ceiling": {
+            "type": "number",
+            "title": "Ceiling"
+          },
+          "company": {
+            "$ref": "#/components/schemas/CalibrationFigures"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/GoalCalibration"
+            },
+            "type": "array",
+            "title": "Goals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "setting",
+          "min_outcomes",
+          "floor",
+          "ceiling",
+          "company",
+          "goals"
+        ],
+        "title": "CalibrationOut"
+      },
+      "CalibrationUsed": {
+        "properties": {
+          "factor": {
+            "type": "number",
+            "title": "Factor"
+          },
+          "applied": {
+            "type": "boolean",
+            "title": "Applied"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          }
+        },
+        "type": "object",
+        "required": [
+          "factor",
+          "applied"
+        ],
+        "title": "CalibrationUsed",
+        "description": "The track record factor (oracle.quality.calibration) and whether it was applied."
       },
       "CampaignCreate": {
         "properties": {
@@ -39925,6 +40331,17 @@
             },
             "type": "array",
             "title": "Evidence"
+          },
+          "before_track_record": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Track Record"
           }
         },
         "type": "object",
@@ -41013,7 +41430,7 @@
           "prediction": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PredictionIn"
+                "$ref": "#/components/schemas/oracle__decisions__schemas__PredictionIn"
               },
               {
                 "type": "null"
@@ -41890,7 +42307,7 @@
           "prediction": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PredictionIn"
+                "$ref": "#/components/schemas/oracle__decisions__schemas__PredictionIn"
               },
               {
                 "type": "null"
@@ -47218,6 +47635,16 @@
           "confidence": {
             "$ref": "#/components/schemas/ConfidenceUsed"
           },
+          "calibration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CalibrationUsed"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "goals": {
             "items": {
               "$ref": "#/components/schemas/GoalTerm"
@@ -49525,6 +49952,56 @@
         ],
         "title": "GithubRepoPage"
       },
+      "GoalCalibration": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "expected": {
+            "type": "number",
+            "title": "Expected"
+          },
+          "factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factor"
+          },
+          "held": {
+            "type": "integer",
+            "title": "Held",
+            "default": 0
+          },
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n",
+          "score",
+          "expected",
+          "goal_id",
+          "title"
+        ],
+        "title": "GoalCalibration"
+      },
       "GoalCheck": {
         "properties": {
           "measurable": {
@@ -51305,6 +51782,14 @@
             "title": "Launches",
             "default": []
           },
+          "outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/InboxOutcome"
+            },
+            "type": "array",
+            "title": "Outcomes",
+            "default": []
+          },
           "last_seen_at": {
             "anyOf": [
               {
@@ -51327,6 +51812,80 @@
           "total"
         ],
         "title": "InboxOut"
+      },
+      "InboxOutcome": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "needs_prediction",
+              "check_due",
+              "oracle_recorded"
+            ],
+            "title": "Reason"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "predicted",
+              "due",
+              "assessed"
+            ],
+            "title": "State"
+          },
+          "counts": {
+            "type": "boolean",
+            "title": "Counts"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "default": 1
+          },
+          "roadmap_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "reason",
+          "state",
+          "counts"
+        ],
+        "title": "InboxOutcome",
+        "description": "An outcome row of the Inbox (H3): Add predictions (the roadmap's approver, one per\nroadmap, counted), Outcome check due (the owner, counted), Oracle recorded (shown)."
       },
       "InboxQuestion": {
         "properties": {
@@ -58727,8 +59286,20 @@
             ],
             "title": "Experiment Id"
           },
+          "roadmap_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Item Id"
+          },
           "prediction": {
-            "$ref": "#/components/schemas/Prediction"
+            "$ref": "#/components/schemas/oracle__quality__schemas__PredictionIn"
           },
           "module_keys": {
             "items": {
@@ -58895,6 +59466,7 @@
           "status": {
             "type": "string",
             "enum": [
+              "predicted",
               "tracking",
               "held",
               "partially_held",
@@ -58902,6 +59474,102 @@
               "inconclusive"
             ],
             "title": "Status"
+          },
+          "roadmap_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Item Id"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "needs_prediction": {
+            "type": "boolean",
+            "title": "Needs Prediction",
+            "default": false
+          },
+          "confidence_at_prediction": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence At Prediction"
+          },
+          "shipped_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipped At"
+          },
+          "ship_signal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShipSignal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assess_due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assess Due On"
+          },
+          "proposed_assessment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProposedAssessment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Id"
           },
           "observed": {
             "anyOf": [
@@ -58987,6 +59655,42 @@
           "updated_at"
         ],
         "title": "OutcomeOut"
+      },
+      "OutcomeUpdate": {
+        "properties": {
+          "prediction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/oracle__quality__schemas__PredictionIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "OutcomeUpdate",
+        "description": "PATCH /v1/outcomes/{id}: the prediction (while predicted) and the owner."
       },
       "OutlineEntry": {
         "properties": {
@@ -60668,6 +61372,66 @@
               }
             ],
             "title": "By"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "increase",
+                  "decrease"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "baseline_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Value"
+          },
+          "predicted_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Value"
+          },
+          "threshold_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Value"
           }
         },
         "type": "object",
@@ -60677,71 +61441,6 @@
         ],
         "title": "Prediction",
         "description": "What the PRD predicted for the goal, in its own words and numbers."
-      },
-      "PredictionIn": {
-        "properties": {
-          "metric": {
-            "type": "string",
-            "maxLength": 300,
-            "minLength": 1,
-            "title": "Metric"
-          },
-          "baseline": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 300
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Baseline"
-          },
-          "predicted": {
-            "type": "string",
-            "maxLength": 300,
-            "minLength": 1,
-            "title": "Predicted"
-          },
-          "threshold": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 300
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Threshold"
-          },
-          "by": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "By"
-          },
-          "goal_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Goal Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "metric",
-          "predicted",
-          "goal_id"
-        ],
-        "title": "PredictionIn",
-        "description": "A measurable version of the expected outcome: deciding creates its outcome record."
       },
       "Preferences": {
         "properties": {
@@ -61826,6 +62525,86 @@
         ],
         "title": "ProposalRun",
         "description": "The run that made a proposal, enough to name it and link to it."
+      },
+      "ProposedAssessment": {
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "held",
+              "partially_held",
+              "not_held",
+              "inconclusive"
+            ],
+            "title": "Verdict"
+          },
+          "observed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed"
+          },
+          "actual_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Value"
+          },
+          "measured_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured At"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "goal_history",
+                  "measurement"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "verdict"
+        ],
+        "title": "ProposedAssessment",
+        "description": "Oracle's reading on the due date; a person confirms, edits or marks it inconclusive."
       },
       "ProtectedResourceMetadata": {
         "properties": {
@@ -72928,6 +73707,80 @@
         ],
         "title": "SharingIn"
       },
+      "ShipSignal": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "tracker",
+              "milestone",
+              "launch",
+              "manual"
+            ],
+            "title": "Kind"
+          },
+          "refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Refs",
+            "default": []
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "at"
+        ],
+        "title": "ShipSignal"
+      },
+      "ShippedIn": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "ShippedIn"
+      },
       "SignedOutEverywhere": {
         "properties": {
           "sessions_valid_after": {
@@ -82672,6 +83525,250 @@
           "url"
         ],
         "title": "AuthorizeOut"
+      },
+      "oracle__decisions__schemas__PredictionIn": {
+        "properties": {
+          "metric": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Metric"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "predicted": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Predicted"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "increase",
+                  "decrease"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "baseline_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Value"
+          },
+          "predicted_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Value"
+          },
+          "threshold_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Value"
+          },
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric",
+          "predicted",
+          "goal_id"
+        ],
+        "title": "PredictionIn",
+        "description": "A measurable version of the expected outcome: deciding creates its outcome record."
+      },
+      "oracle__quality__schemas__PredictionIn": {
+        "properties": {
+          "metric": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Metric"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "predicted": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Predicted"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "increase",
+                  "decrease"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "baseline_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Value"
+          },
+          "predicted_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Value"
+          },
+          "threshold_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric",
+          "predicted"
+        ],
+        "title": "PredictionIn",
+        "description": "A prediction a person writes: its typed figures must agree with each other."
       },
       "GoalAttrs": {
         "description": "The typed fields of a goal's ``attrs`` (published so MCP clients see the shape).",

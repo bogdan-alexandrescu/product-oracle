@@ -1034,8 +1034,9 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   // shown only (nothing to decide, not in the total).
   const revising = ctx.db.runs.filter((r) => r.segments.some((s) => sentBack(r, s))).map(bare);
   return {
-    // Launch rows (H6) are added by the server (./launches.ts).
+    // Launch rows (H6) and outcome rows (H3) are added by the server (./launches.ts, ./quality.ts).
     launches: [],
+    outcomes: [],
     checkpoints,
     deliveries,
     approvals,
