@@ -54,6 +54,10 @@ class NotFoundError(LookupError):
     pass
 
 
+class VisibilityKindError(ValueError):
+    """Only an update's visibility changes (H8): every other document stays company-wide."""
+
+
 class ImportConflictError(RuntimeError):
     """A concurrent import won the race for the version number or slug."""
 
@@ -307,11 +311,17 @@ async def read_document(db: AsyncSession, doc: str) -> DocumentOut:
 async def set_visibility(
     db: AsyncSession, doc: str, visibility: str, reason: str, principal: Principal
 ) -> DocumentOut:
-    """H8: an owner opens a document to the company, or back to owners and approvers,
-    with a reason (audited ``document.visibility``, before and after)."""
+    """H8: an owner opens an update to the company, or back to owners and approvers, with
+    a reason (audited ``document.visibility``, before and after). Any other kind is a
+    :class:`VisibilityKindError`."""
     document = await find_document(db, doc, for_update=True)
     if document is None:
         raise NotFoundError(f"document '{doc}' not found")
+    if document.kind != "update":
+        raise VisibilityKindError(
+            "Only an update can be limited to owners and approvers; every other document "
+            "is visible to the whole company"
+        )
     before = document.visibility
     if before != visibility:
         document.visibility = visibility

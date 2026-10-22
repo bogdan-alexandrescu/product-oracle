@@ -609,6 +609,7 @@ FLOWS: dict[str, FlowDef] = {
                         "search",
                         "get_source_item",
                         "push_draft",
+                        "get_checkpoint_review",
                     ),
                 ),
             ),

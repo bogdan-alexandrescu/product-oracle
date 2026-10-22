@@ -25,7 +25,7 @@ from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.fixtures import draft
-from tests.test_mcp import mcp_client, text_of
+from tests.test_mcp import api_token, mcp_client, text_of
 from tests.update_helpers import drafted_by_run, import_md, investor_md, started
 
 WORD = "Larkspur"  # in the seeded update only
@@ -263,6 +263,91 @@ async def test_an_owner_opens_it_to_the_company_with_a_reason(client, ctx):
     assert (
         await client.get(f"/v1/documents/{slug}", headers=ctx.as_("commenter"))
     ).status_code == 404
+
+
+async def test_only_updates_change_visibility(client, ctx):
+    """protects=PATCH visibility by an owner on a PRD or a roadmap is refused (422) and the
+    document stays company-wide, readable by a commenter, with no audit event; an update
+    switches (the test above); fails_when=an owner hides a PRD or a roadmap (out of scope:
+    everything but an update stays company); no_claim=the web menu (shown on updates only)."""
+    owner = ctx.as_("owner")
+    resp = await import_md(client, owner, "checkout-redesign", draft("prd_v1.md"))
+    assert resp.status_code == 201, resp.text
+    resp = await client.post(
+        "/v1/drafts",
+        json={"kind": "roadmap", "title": "Next year", "template": "now-next-later"},
+        headers=owner,
+    )
+    assert resp.status_code == 201, resp.text
+    for slug in ("checkout-redesign", resp.json()["slug"]):
+        resp = await client.patch(
+            f"/v1/documents/{slug}/visibility",
+            json={"visibility": "approvers", "reason": "Board only"},
+            headers=owner,
+        )
+        assert resp.status_code == 422, (slug, resp.text)
+        assert "update" in resp.text, resp.text
+        got = await client.get(f"/v1/documents/{slug}", headers=ctx.as_("commenter"))
+        assert got.status_code == 200 and got.json()["visibility"] == "company", slug
+    async with tenant_session(ctx.tenant_id) as s:
+        events = list(
+            await s.scalars(select(AuditEvent).where(AuditEvent.action == "document.visibility"))
+        )
+    assert events == []
+
+
+@pytest.mark.parametrize(
+    ("who", "sees"),
+    [("owner", True), ("approver", True), ("commenter", False), ("viewer", False)],
+)
+async def test_the_run_that_drafts_an_update_follows_it(client, ctx, runtime, who, sees):
+    """protects=the update_draft run of an approvers update, and its update.md, are in an
+    owner's and an approver's GET /v1/runs, GET /v1/runs/{id} and artifact route, and
+    absent for a commenter and a viewer (no row, 404, 404); fails_when=a commenter or viewer
+    reads the hidden draft through the run or its artifact; no_claim=MCP (next test)."""
+    slug, doc_id = await _update(client, ctx)
+    run = await drafted_by_run(client, ctx, runtime, slug, investor_md(slug))
+    seq = run["segments"][0]["seq"]
+    artifact = f"/v1/runs/{run['id']}/segments/{seq}/artifacts/update.md"
+    owned = await client.get(artifact, headers=ctx.as_("owner"))
+    assert owned.status_code == 200 and WORD in owned.text, owned.text
+    me = ctx.as_(who)
+    listed = await client.get("/v1/runs", headers=me)
+    assert listed.status_code == 200, listed.text
+    assert (run["id"] in {r["id"] for r in listed.json()}) is sees, listed.text
+    if not sees:
+        assert not _leaks(listed.text, slug, doc_id), listed.text
+    got = await client.get(f"/v1/runs/{run['id']}", headers=me)
+    assert got.status_code == (200 if sees else 404), got.text
+    got = await client.get(artifact, headers=me)
+    assert got.status_code == (200 if sees else 404), got.text
+    assert (WORD in got.text) is sees
+
+
+async def test_the_update_run_is_absent_over_mcp_for_a_commenter(client, ctx, runtime):
+    """protects=over MCP a commenter's client gets no row for the update_draft run from
+    list_runs and an error (404) from get_run and get_run_artifact, while an approver's
+    client reads them; fails_when=a person's MCP client reads the hidden draft through a
+    run; no_claim=run tokens (tested above)."""
+    slug, doc_id = await _update(client, ctx)
+    run = await drafted_by_run(client, ctx, runtime, slug, investor_md(slug))
+    seq = run["segments"][0]["seq"]
+    args = {"run_id": run["id"], "seq": seq, "name": "update.md"}
+    for role, sees in (("approver", True), ("commenter", False)):
+        async with mcp_client(await api_token(ctx.tenant_id, role)) as c:
+            listed = await c.call_tool("list_runs", {})
+            got = await c.call_tool("get_run", {"run_id": run["id"]})
+            art = await c.call_tool("get_run_artifact", args)
+        assert not listed.is_error, text_of(listed)
+        assert (run["id"] in text_of(listed)) is sees, role
+        if sees:
+            assert not got.is_error and not art.is_error, role
+            assert WORD in text_of(art)
+        else:
+            assert not _leaks(text_of(listed), slug, doc_id)
+            assert got.is_error and "HTTP 404" in text_of(got), text_of(got)
+            assert art.is_error and "HTTP 404" in text_of(art), text_of(art)
+            assert WORD not in text_of(art)
 
 
 # --------------------------------------------------------------------------- every route

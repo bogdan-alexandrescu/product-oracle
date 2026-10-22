@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     SmallInteger,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     Uuid,
     false,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -49,6 +51,13 @@ class Document(TenantScoped, Base):
         CheckConstraint(_in("status", DOCUMENT_STATUSES), name="status"),
         CheckConstraint(_in("kind", DOCUMENT_KINDS), name="kind"),
         CheckConstraint(_in("visibility", DOCUMENT_VISIBILITIES), name="visibility"),
+        # The few documents that are not company-wide (oracle.docs.visibility).
+        Index(
+            "ix_documents_visibility",
+            "tenant_id",
+            "visibility",
+            postgresql_where=text("visibility <> 'company'"),
+        ),
     )
 
     slug: Mapped[str] = mapped_column(Text, nullable=False)

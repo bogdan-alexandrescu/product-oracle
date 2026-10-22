@@ -73,13 +73,15 @@ async def set_document_visibility(
     principal: Annotated[Principal, Depends(require_role_now("owner"))],
     db: TenantDB,
 ) -> DocumentOut:
-    """Who sees the document (H8): ``company`` (every member) or ``approvers`` (owners and
-    approvers only, an update's default). Owners only, with a reason; audited as
-    ``document.visibility`` with the values before and after."""
+    """Who sees an update (H8): ``company`` (every member) or ``approvers`` (owners and
+    approvers only, an update's default); any other kind is a 422. Owners only, with a
+    reason; audited as ``document.visibility`` with the values before and after."""
     try:
         return await service.set_visibility(db, doc, data.visibility, data.reason, principal)
     except service.NotFoundError as exc:
         raise _not_found(exc) from exc
+    except service.VisibilityKindError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 @router.post(

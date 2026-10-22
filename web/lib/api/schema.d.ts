@@ -146,9 +146,9 @@ export interface paths {
         head?: never;
         /**
          * Set Document Visibility
-         * @description Who sees the document (H8): ``company`` (every member) or ``approvers`` (owners and
-         *     approvers only, an update's default). Owners only, with a reason; audited as
-         *     ``document.visibility`` with the values before and after.
+         * @description Who sees an update (H8): ``company`` (every member) or ``approvers`` (owners and
+         *     approvers only, an update's default); any other kind is a 422. Owners only, with a
+         *     reason; audited as ``document.visibility`` with the values before and after.
          */
         patch: operations["set_document_visibility"];
         trace?: never;

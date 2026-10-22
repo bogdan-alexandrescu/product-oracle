@@ -138,6 +138,7 @@ from oracle.baseline import yaml_io
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.decisions import capture as decisions_capture
 from oracle.docs import service as docs_service
+from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
@@ -382,7 +383,11 @@ async def _get_run(db: AsyncSession, run_id: uuid.UUID, *, lock: bool = False) -
         # Read again as it is now: the caller may have read it unlocked before.
         stmt = stmt.with_for_update().execution_options(populate_existing=True)
     run = await db.scalar(stmt)
-    if run is None:
+    # H8: a run on a document the principal may not see (an update, for a commenter or a
+    # viewer) is as absent as its document, with its segments and files.
+    if run is None or (
+        run.document_id is not None and await visibility.hidden_document_ids(db, [run.document_id])
+    ):
         raise NotFound(f"run {run_id} not found")
     return run
 
@@ -1277,6 +1282,9 @@ async def list_runs(db: AsyncSession, status: str | None = None) -> list[RunSumm
     stmt = select(Run).order_by(Run.created_at.desc(), Run.id)
     if status:
         stmt = stmt.where(Run.status == status)
+    if hidden := await visibility.hidden_document_ids(db):
+        # H8: no row for a run on a document the principal may not see.
+        stmt = stmt.where(or_(Run.document_id.is_(None), Run.document_id.not_in(hidden)))
     runs = list(await db.scalars(stmt))
     refs = await _refs(db, runs)
     ids = [r.id for r in runs]
