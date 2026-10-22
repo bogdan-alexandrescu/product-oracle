@@ -292,3 +292,34 @@ test("fireflies picker: at the most series a source takes, no more can be picked
   await expect(list.getByLabel("AI Agents daily standup")).toBeEnabled();
   await expect(row.getByRole("button", { name: "Save meetings" })).toBeEnabled();
 });
+
+test("fireflies picker: tick all results of a search, pages not loaded yet included, then undo", async ({ page }) => {
+  const { picker } = await openAdd(page);
+  await picker.getByRole("button", { name: "Choose" }).click();
+  const summary = picker.getByTestId("fireflies-summary");
+  const meetings = picker.getByRole("group", { name: "Meetings" });
+
+  // 34 standups, 12 a page: the first page is all that is loaded.
+  await picker.getByLabel("Search meetings").fill("standup");
+  await expect(meetings.getByRole("checkbox")).toHaveCount(12);
+  await picker.getByRole("button", { name: "Tick all 12+ results" }).click();
+  await expect(summary).toHaveText("34 meetings");
+  await expect(meetings.getByRole("checkbox")).toHaveCount(34);
+  for (const box of await meetings.getByRole("checkbox").all()) await expect(box).toBeChecked();
+  await expect(picker.getByRole("button", { name: "Load more" })).toHaveCount(0);
+
+  // One click undoes it.
+  await picker.getByRole("button", { name: "Undo tick all" }).click();
+  await expect(summary).toHaveText("Nothing picked yet");
+  await expect(meetings.getByLabel("AI Agents daily standup").first()).not.toBeChecked();
+  await expect(picker.getByRole("button", { name: "Tick all 34 results" })).toBeVisible();
+
+  // Meetings already included with a picked series are left out.
+  await picker.getByRole("list", { name: "Series" }).getByLabel("AI agents sprint planning").check();
+  await picker.getByLabel("Search meetings").fill("sprint planning");
+  await expect(meetings.getByRole("checkbox")).toHaveCount(5);
+  await picker.getByRole("button", { name: "Tick all 1 result" }).click();
+  await expect(summary).toHaveText("1 series, 1 meeting");
+  await expect(meetings.getByLabel("AI agents sprint planning", { exact: true })).toBeChecked();
+  await expect(picker.getByRole("button", { name: "Undo tick all" })).toBeVisible();
+});
