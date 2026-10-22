@@ -70,7 +70,7 @@ def test_the_chain_ends_here_after_feedback_authors():
     # 0022_discussions (G1), 0022_priority_snapshot_runs (C8), C9 Move and pin's
     # 0022_priority_overrides, 0022_code_maps (F5-2), 0022_checkpoint_actions (D8) and
     # 0022_updates (H8); one head.
-    assert script.get_heads() == ["0023_intake_brief_fields"]
+    assert script.get_heads() == ["0024_segment_skipped"]
     assert script.get_revision("0022_baseline_flow").down_revision == REVISION
     assert script.get_revision("0022_engineering_lead").down_revision == "0022_baseline_flow"
     assert script.get_revision("0022_discussions").down_revision == "0022_engineering_lead"

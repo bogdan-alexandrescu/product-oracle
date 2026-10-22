@@ -87,7 +87,7 @@ def test_chains_on_mains_head():
     fixed number; no_claim=later lanes' re-chaining."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0023_intake_brief_fields"]
+    assert script.get_heads() == ["0024_segment_skipped"]
 
 
 def test_upgrade_adds_the_kind_and_visibility_and_downgrade_removes_them(scratch_db, monkeypatch):
