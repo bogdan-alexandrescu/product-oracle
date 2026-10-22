@@ -197,6 +197,42 @@ test("strategy: an owner waives a finding with a reason; it moves to Waived and 
   );
 });
 
+/** The mock company with no approved strategy: one open `no_strategy` finding, on no stack row. */
+const withoutStrategy = (page: Page) => page.addInitScript((key) => localStorage.setItem(key, "strategy-none"), MOCK_SCENARIO_KEY);
+
+// protects=each Drift chip counts the findings its list shows, the `no_strategy` finding
+// (on no stack row) included: Open 1 with the "No approved strategy" row listed, and
+// after a waiver Open 0 · Waived 1 · Resolved 0 (#244); fails_when=a chip counts from the
+// stack (Open 0 beside an open row) or Resolved shows no count; no_claim=the real API's
+// lists (pytest covers the findings endpoint).
+test("strategy: with no approved strategy, the Open chip counts the listed finding, and a waiver moves it to Waived", async ({ page }) => {
+  await withoutStrategy(page);
+  await login(page);
+  await page.goto("/company/strategy");
+  const drift = strategyPage(page).getByTestId("drift-list");
+  const chips = drift.getByRole("group", { name: "Finding state" });
+  const row = drift.getByTestId("finding-row");
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("No approved strategy");
+  await expect(row).toContainText("Product strategy");
+  await expect(chips.getByRole("button", { name: /^Open/ })).toHaveText(/^Open\s*1$/);
+  await expect(chips.getByRole("button", { name: /^Waived/ })).toHaveText(/^Waived\s*0$/);
+  await expect(chips.getByRole("button", { name: /^Resolved/ })).toHaveText(/^Resolved\s*0$/);
+
+  await row.getByRole("button", { name: "Waive" }).click();
+  const form = row.getByRole("group", { name: "Waive finding" });
+  await form.getByLabel("Why waive it?").fill("The strategy is drafted next week.");
+  await form.getByRole("button", { name: "Waive finding" }).click();
+
+  await expect(drift.getByTestId("drift-empty")).toHaveText("No open findings");
+  await expect(chips.getByRole("button", { name: /^Open/ })).toHaveText(/^Open\s*0$/);
+  await expect(chips.getByRole("button", { name: /^Waived/ })).toHaveText(/^Waived\s*1$/);
+  await chips.getByRole("button", { name: /^Waived/ }).click();
+  await expect(drift.getByTestId("finding-row").filter({ hasText: "No approved strategy" })).toContainText(
+    "The strategy is drafted next week.",
+  );
+});
+
 // protects=an owner's Draft next version opens the sheet (what changed, the horizon, start
 // from the last approved version) and Draft with Oracle starts the strategy_draft run;
 // fails_when=the button or a field is missing, or no run starts; no_claim=what the agents

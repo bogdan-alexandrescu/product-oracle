@@ -35,7 +35,7 @@ import { publishRefusal, routeQuality, seedQuality, type QualityContext, type Qu
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
-import { inboxStrategy, routeStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
+import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
@@ -434,6 +434,13 @@ function seedManyPeople(): Db {
   });
   for (let i = 0; i < 20; i++) db.members.push(join(`member.${String(i).padStart(2, "0")}@example.com`, i));
   db.members.push(join("zoe.zimmer@example.com", 20));
+  return db;
+}
+
+/** The default company with no approved strategy: one open `no_strategy` finding (H4, #244). */
+function seedNoStrategyScenario(): Db {
+  const db = seed();
+  db.strategy = seedNoStrategy(uuid);
   return db;
 }
 
@@ -1217,7 +1224,9 @@ function load(): Db {
                 ? seedManyPeople
                 : scenario === "strategy" || scenario === "strategy-no-vision"
                   ? () => seedStrategyScenario(scenario === "strategy")
-                  : seed,
+                  : scenario === "strategy-none"
+                    ? seedNoStrategyScenario
+                    : seed,
   );
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
