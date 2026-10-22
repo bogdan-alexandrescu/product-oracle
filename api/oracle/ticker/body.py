@@ -34,6 +34,7 @@ class CompanyTick:
     sweep: dict[str, Any] | None = None
     swept: bool = False
     follow_ups: int = 0
+    invite_emails: int = 0
     # What raised, step by step (logged); the other steps still ran.
     errors: list[BaseException] = field(default_factory=list)
 
@@ -71,7 +72,8 @@ async def settle_company(
 ) -> CompanyTick:
     """Last: the follow-ups a member's disable or a run's cancel still owes that are due
     (``oracle.members.service.run_follow_ups``, within its own budget, or
-    ``budget_seconds`` when less)."""
+    ``budget_seconds`` when less), then the invite emails a lost process left queued
+    (``oracle.members.delivery.send_queued``)."""
     from oracle.members import service as members_service
 
     try:
@@ -81,6 +83,15 @@ async def settle_company(
         )
     except Exception as exc:
         log.exception("tick: member follow-ups failed for company %s", tenant_id)
+        await db.rollback()
+        out.errors.append(exc)
+    # Invite emails a lost process left queued (#242).
+    from oracle.members import delivery
+
+    try:
+        out.invite_emails = await delivery.send_queued(db, tenant_id)
+    except Exception as exc:
+        log.exception("tick: queued invite emails failed for company %s", tenant_id)
         await db.rollback()
         out.errors.append(exc)
     return out

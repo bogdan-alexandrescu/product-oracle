@@ -1379,9 +1379,10 @@ export interface paths {
          *     grants are revoked, their runs cancelled, the open invite for their email revoked;
          *     their approvals lapse for good; every session they signed is ended. The calls at
          *     the providers and the runtime are made after the disable commits, outside the
-         *     review gate, and retried by the tick when they fail. The member stays in the list
-         *     (history keeps the name); an owner can restore them, and they sign in fresh. A
-         *     no-op for a disabled member.
+         *     review gate, and retried by the tick when they fail. Their Google IAP access is
+         *     taken away, and that of the invites revoked with them (audited). The member stays
+         *     in the list (history keeps the name); an owner can restore them, and they sign in
+         *     fresh. A no-op for a disabled member.
          */
         post: operations["disable_member"];
         delete?: never;
@@ -1403,6 +1404,7 @@ export interface paths {
          * Restore Member
          * @description Let a disabled member sign in again, with their role. Their approvals stay
          *     lapsed, their tokens revoked and their connections gone: nothing else comes back.
+         *     Their Google IAP access is granted again (audited).
          */
         post: operations["restore_member"];
         delete?: never;
@@ -1496,8 +1498,58 @@ export interface paths {
         /**
          * Create Invite
          * @description Pre-assign a role to an email: its first Google sign-in lands with that role.
+         *
+         *     The invitee is granted Google IAP access on Oracle's backend services
+         *     (``access``: ``granted``; ``skipped`` with no backends configured; ``pending`` with
+         *     ``access_error`` when the grant failed: the invite is kept, and
+         *     ``POST /v1/invites/{invite_id}/access`` retries it). Oracle emails them the sign-in
+         *     link in the background (``email_status``: ``queued``, then ``sent`` or ``failed``;
+         *     ``not_sent`` with no sender configured: send them ``sign_in_url``). Refused (422)
+         *     for an address outside the domains that can sign in.
          */
         post: operations["create_invite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invites/{invite_id}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Invite Access
+         * @description Grant an open invite's Google IAP access again (Retry on "Access not granted
+         *     yet"). Each attempt is audited; ``access`` says how it went.
+         */
+        post: operations["retry_invite_access"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invites/{invite_id}/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend Invite Email
+         * @description Email an open invite again (Resend): queued and sent in the background
+         *     (``email_status``), or ``not_sent`` with no sender configured.
+         */
+        post: operations["resend_invite_email"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1517,6 +1569,8 @@ export interface paths {
         /**
          * Revoke Invite
          * @description Revoke an open invite. Revoking twice is a no-op; an accepted invite is a 409.
+         *     The invitee's Google IAP access is taken away, unless they are an active member or
+         *     have another open invite (audited).
          */
         delete: operations["revoke_invite"];
         options?: never;
@@ -15118,6 +15172,28 @@ export interface components {
             accepted_at?: string | null;
             /** Revoked At */
             revoked_at?: string | null;
+            /**
+             * Access
+             * @default pending
+             * @enum {string}
+             */
+            access: "granted" | "pending" | "skipped";
+            /** Access Error */
+            access_error?: string | null;
+            /** Access At */
+            access_at?: string | null;
+            /**
+             * Email Status
+             * @default not_sent
+             * @enum {string}
+             */
+            email_status: "queued" | "sent" | "failed" | "not_sent";
+            /** Email Error */
+            email_error?: string | null;
+            /** Email At */
+            email_at?: string | null;
+            /** Sign In Url */
+            sign_in_url: string;
         };
         /**
          * ItemChange
@@ -27670,6 +27746,94 @@ export interface operations {
                 };
             };
             /** @description Already a member, or an open invite exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not an address that can sign in (ORACLE_IAP_ALLOWED_DOMAINS) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    retry_invite_access: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteOut"];
+                };
+            };
+            /** @description No such invite */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not open */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resend_invite_email: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteOut"];
+                };
+            };
+            /** @description No such invite */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not open, or its email is being sent */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes
 from oracle.auth.models import ROLES, ApiToken, Role, User
+from oracle.config import get_settings
 from oracle.members.models import Invite, MemberFollowUp
 from oracle.members.schemas import InviteOut, InviteStatus, MemberOut
 from oracle.tenant_settings import TenantSetting
@@ -47,6 +48,8 @@ def invite_status(invite: Invite) -> InviteStatus:
 
 
 def invite_out(invite: Invite) -> InviteOut:
+    from oracle.members.delivery import sign_in_url
+
     return InviteOut(
         id=invite.id,
         email=invite.email,
@@ -56,6 +59,13 @@ def invite_out(invite: Invite) -> InviteOut:
         created_at=invite.created_at,
         accepted_at=invite.accepted_at,
         revoked_at=invite.revoked_at,
+        access=invite.access,
+        access_error=invite.access_error,
+        access_at=invite.access_at,
+        email_status=invite.email_status,
+        email_error=invite.email_error,
+        email_at=invite.email_at,
+        sign_in_url=sign_in_url(),
     )
 
 
@@ -1215,6 +1225,7 @@ async def create_invite(
         check_email_allowed(email)
     except ReservedEmailError as e:
         raise MemberError("invalid", str(e)) from None
+    check_invite_domain(email)
     await _gate(session, principal, shared=True)
     member = await session.scalar(select(User).where(User.email == email))
     if member is not None and member.disabled_at is not None:
@@ -1233,6 +1244,26 @@ async def create_invite(
     await audit.record(
         session, principal, "invite.create", "invite", invite.id, {"email": email, "role": role}
     )
+    return invite
+
+
+def check_invite_domain(email: str) -> None:
+    """Refuse an address Google sign-in would refuse: one outside ORACLE_IAP_ALLOWED_DOMAINS
+    (when set; with none set every domain is let through, as sign-in has no IAP then)."""
+    domains = [d.strip().lower().lstrip("@") for d in get_settings().iap_allowed_domains]
+    domains = [d for d in domains if d]
+    if domains and email.rsplit("@", 1)[-1] not in domains:
+        named = domains[0] if len(domains) == 1 else ", ".join(domains[:-1]) + " or " + domains[-1]
+        raise MemberError("invalid", f"Only addresses at {named} can sign in to Oracle")
+
+
+async def get_open_invite(session: AsyncSession, invite_id: uuid.UUID) -> Invite:
+    """The open invite ``invite_id``, locked: Retry access and Resend act on it."""
+    invite = await session.get(Invite, invite_id, with_for_update=True)
+    if invite is None:
+        raise MemberError("not_found", f"Invite {invite_id} not found")
+    if invite_status(invite) != "open":
+        raise MemberError("conflict", f"This invite was {invite_status(invite)}; invite them again")
     return invite
 
 

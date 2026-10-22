@@ -7,6 +7,12 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validat
 from oracle.auth.models import Role
 
 InviteStatus = Literal["open", "accepted", "revoked"]
+# granted: the invitee may pass Google IAP; pending: not granted yet (access_error says
+# why; Retry grants it); skipped: this Oracle has no IAP backends to grant (local, dev).
+InviteAccess = Literal["granted", "pending", "skipped"]
+# queued: Oracle sends it in the background; sent; failed (after one retry; Resend);
+# not_sent: no sender is configured, so the owner sends the sign-in link.
+InviteEmailStatus = Literal["queued", "sent", "failed", "not_sent"]
 
 
 MemberStatus = Literal["active", "disabled"]
@@ -63,6 +69,16 @@ class InviteOut(BaseModel):
     created_at: datetime
     accepted_at: datetime | None = None
     revoked_at: datetime | None = None
+    access: InviteAccess = "pending"
+    access_error: str | None = None
+    # The last grant attempt.
+    access_at: datetime | None = None
+    email_status: InviteEmailStatus = "not_sent"
+    email_error: str | None = None
+    # When the email got its status (queued: when it was owed; sent: when it went out).
+    email_at: datetime | None = None
+    # Where the invitee signs in with Google (the link the email carries).
+    sign_in_url: str
 
 
 # personal: an API token acting as a member (po_); service: an API token acting with its

@@ -31,6 +31,19 @@ class Settings(BaseSettings):
     # Email domains (e.g. ["example.com"]) whose IAP users are created on first visit.
     iap_allowed_domains: list[str] = []
     iap_auto_provision: bool = True
+    # The IAP backend services an invite grants its invitee access to (#242): their ids
+    # (e.g. ["oracle-api-be", "oracle-web-be"]) in ORACLE_GCP_PROJECT. Creating an invite
+    # grants user:<email> roles/iap.httpsResourceAccessor on each; revoking it, or
+    # removing the member, takes it away. Empty (local and dev): no grant, recorded.
+    iap_backends: list[str] = []
+    gcp_project: str = ""
+    # The invite email (#242): "gmail_api" sends as ORACLE_MAIL_SENDER (one company
+    # mailbox) through domain-wide delegation (oracle.members.mailer). Either unset:
+    # nothing is sent and the invite records it. A failed send is retried once, after
+    # mail_retry_seconds.
+    mail_provider: Literal["", "gmail_api"] = ""
+    mail_sender: str = ""
+    mail_retry_seconds: float = 5.0
     # The run ticker (POST /internal/scheduler/tick, docs/ops-run-ticker.md): Cloud
     # Scheduler calls it every minute with a Google ID token minted for this audience
     # (https://<host>/internal/scheduler/tick) by this service account's email

@@ -8,6 +8,14 @@ from oracle.auth.models import ROLES
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
+# granted: the invitee holds IAP's accessor role on Oracle's backend services; pending:
+# not yet (the grant failed, or the invite predates per-invite access; Retry grants it);
+# skipped: no backend services configured (ORACLE_IAP_BACKENDS empty: local and dev).
+INVITE_ACCESS = ("granted", "pending", "skipped")
+# queued: a background send owes it; sent; failed (after its one retry); not_sent: no
+# sender configured (ORACLE_MAIL_PROVIDER, ORACLE_MAIL_SENDER).
+INVITE_EMAIL = ("queued", "sent", "failed", "not_sent")
+
 
 class Invite(TenantScoped, Base):
     """Pre-assigns a role to an email; the first sign-in with that email takes it."""
@@ -16,6 +24,8 @@ class Invite(TenantScoped, Base):
     __table_args__ = (
         CheckConstraint(_in("role", ROLES), name="role"),
         CheckConstraint("email = lower(email)", name="email_lowercase"),
+        CheckConstraint(_in("access", INVITE_ACCESS), name="access"),
+        CheckConstraint(_in("email_status", INVITE_EMAIL), name="email_status"),
         # One open invite per email; accepted and revoked ones are history.
         Index(
             "uq_invites_tenant_id_email_open",
@@ -32,6 +42,14 @@ class Invite(TenantScoped, Base):
     invited_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # What happened to it (#242): its IAP access and its email (oracle.members.delivery).
+    access: Mapped[str] = mapped_column(Text, nullable=False, server_default="pending")
+    access_error: Mapped[str | None] = mapped_column(Text)
+    access_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    email_status: Mapped[str] = mapped_column(Text, nullable=False, server_default="not_sent")
+    email_error: Mapped[str | None] = mapped_column(Text)
+    # When it got its email status (queued: when the send was owed).
+    email_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 FOLLOW_UP_KINDS = ("provider_revoke", "run_cancel")
