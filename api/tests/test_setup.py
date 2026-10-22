@@ -23,7 +23,7 @@ from oracle.tenancy import tenant_session
 from tests.conftest import make_tenant
 from tests.connection_helpers import add_connection, make_person
 
-OWNER_KEYS = ["connect", "sources", "invite", "domains", "horizons"]
+OWNER_KEYS = ["connect", "sources", "invite", "domains", "horizons", "build_baseline"]
 DEFAULT_HORIZONS = {
     "short_quarters": 1,
     "medium_quarters": 2,
@@ -63,8 +63,8 @@ async def test_a_new_companys_owner_has_every_step_open(client, owner):
     # is not merged, so five owner steps).
     body = await _setup(client, owner)
     assert [s["key"] for s in body["steps"]] == OWNER_KEYS
-    assert [s["done"] for s in body["steps"]] == [False] * 5
-    assert body["done"] == 0 and body["total"] == 5 and body["hidden"] is False
+    assert [s["done"] for s in body["steps"]] == [False] * 6
+    assert body["done"] == 0 and body["total"] == 6 and body["hidden"] is False
     assert _step(body, "connect")["count"] == 0
     assert _step(body, "sources")["count"] == 0
     assert _step(body, "invite")["count"] == 1
@@ -233,7 +233,7 @@ async def test_a_second_company_sees_only_its_own_counts(client, tenant_id, owne
     other = await make_person(await make_tenant("Second Co"), "second-owner@example.com")
     body = await _setup(client, other)
     assert [s["key"] for s in body["steps"]] == OWNER_KEYS
-    assert [s["done"] for s in body["steps"]] == [False] * 5
+    assert [s["done"] for s in body["steps"]] == [False] * 6
     assert _step(body, "connect")["count"] == 0
     assert _step(body, "sources")["count"] == 0
     assert _step(body, "invite")["count"] == 1
@@ -294,3 +294,37 @@ def test_step_keys_are_checked_against_the_registry():
     assert setup.SetupStep(key="connect", done=False).key == "connect"
     with pytest.raises(ValueError):
         setup.SetupStep(key="nope", done=False)
+
+
+async def test_build_baseline_is_the_owners_last_step(client, tenant_id, owner):
+    # protects=B1's Build baseline step: owners only, last, done once a baseline run
+    # succeeded, dated by its finish; fails_when=a draft, failed or Baseline to PRD run
+    # makes it done, or an approver sees it; no_claim=the web's "Built Oct 20" copy.
+    approver = await make_person(tenant_id, "approver@example.com", "approver")
+    assert "build_baseline" not in [s["key"] for s in (await _setup(client, approver))["steps"]]
+    body = await _setup(client, owner)
+    assert body["steps"][-1] == {
+        "key": "build_baseline",
+        "done": False,
+        "count": None,
+        "detail": None,
+    }
+    async with tenant_session(tenant_id) as s:
+        s.add(Run(flow="baseline", status="failed", created_by=owner.id))
+        s.add(Run(flow="baseline", status="draft", created_by=owner.id))
+        s.add(Run(flow="baseline_to_prd", status="succeeded", created_by=owner.id))
+        await s.commit()
+    assert _step(await _setup(client, owner), "build_baseline")["done"] is False
+    async with tenant_session(tenant_id) as s:
+        for day in (19, 20):
+            finished = datetime(2026, 10, day, 15, tzinfo=UTC)
+            s.add(
+                Run(flow="baseline", status="succeeded", finished_at=finished, created_by=owner.id)
+            )
+        await s.commit()
+    assert _step(await _setup(client, owner), "build_baseline") == {
+        "key": "build_baseline",
+        "done": True,
+        "count": None,
+        "detail": "2026-10-20T15:00:00+00:00",
+    }

@@ -23,7 +23,7 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
-import { enlargeRuns, routeRuns, seedFeatureSetRun, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { enlargeRuns, lastBaselineBuild, routeRuns, seedFeatureSetRun, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
@@ -1564,6 +1564,7 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
   const sources = sourceCount();
   const people = db.members.filter((x) => x.status !== "disabled").length;
   const invites = db.invites.filter((i) => i.status === "open").length;
+  const built = lastBaselineBuild(db.runs);
   const personal: Schemas["SetupStep"][] = [
     { key: "connect", done: facts.connections > 0, count: facts.connections, detail: null },
     { key: "sources", done: sources > 0, count: sources, detail: null },
@@ -1577,6 +1578,7 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
       detail: facts.domains.length === 1 ? facts.domains[0] : null,
     },
     { key: "horizons", done: facts.horizons, count: null, detail: null },
+    { key: "build_baseline", done: built != null, count: null, detail: built },
   ];
   const steps = me.role === "owner" ? [...personal, ...owner] : me.role === "viewer" ? [] : personal;
   return {

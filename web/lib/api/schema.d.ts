@@ -13585,7 +13585,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit" | "baseline";
             /** Title */
             title: string;
             /** Description */
@@ -13606,6 +13606,11 @@ export interface components {
              */
             in_new_run_dialog: boolean;
             starts_from?: components["schemas"]["FlowStart"] | null;
+            /**
+             * Writes Document
+             * @default true
+             */
+            writes_document: boolean;
         };
         /** FlowSegmentOut */
         FlowSegmentOut: {
@@ -14089,7 +14094,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit" | "baseline";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -20039,7 +20044,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit" | "baseline";
             /** Document */
             document?: string | null;
             /** Source */
@@ -20128,7 +20133,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit" | "baseline";
             /** Flow Title */
             flow_title: string;
             /**
@@ -20278,7 +20283,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit" | "baseline";
             /** Flow Title */
             flow_title: string;
             /**
