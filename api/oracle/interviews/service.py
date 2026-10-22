@@ -141,6 +141,10 @@ async def out(db: AsyncSession, principal: Principal, row: Interview) -> Intervi
             .order_by(InterviewMessage.created_at, InterviewMessage.id)
         )
     )
+    if row.kind == "team" and principal.id != row.interviewee_user_id:
+        from oracle.interviews.team import visible
+
+        messages = await visible(db, principal, messages)
     jobs = await _jobs(db, [row.guide_job_id, row.snapshot_job_id])
     request_ids = list(
         await db.scalars(
@@ -177,6 +181,7 @@ async def out(db: AsyncSession, principal: Principal, row: Interview) -> Intervi
                 kind=m.kind,
                 body=m.body,
                 guide_item=m.guide_item,
+                question_id=m.question_id,
                 created_at=m.created_at,
             )
             for m in messages

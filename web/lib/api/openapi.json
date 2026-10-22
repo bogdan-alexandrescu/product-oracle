@@ -29132,6 +29132,120 @@
         }
       }
     },
+    "/v1/intakes/{intake_id}/interview": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Open Team Interview",
+        "description": "My team interview for this intake (created on first call): Oracle's follow-ups\nand my replies on the intake's questions.",
+        "operationId": "open_team_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interviews/{interview_id}/turns": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Take Team Turn",
+        "description": "Answer one of the intake's questions in my team interview. Oracle follows up once\nwhen the answer does not meet the gap's stop condition; the reply, or with\n``skip_follow_up`` the answer as written, is recorded as my decision. A turn past 25\nseconds records the answer as written.",
+        "operationId": "take_team_turn",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamTurnIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamTurnOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/public/interviews/{token}": {
       "get": {
         "tags": [
@@ -53666,6 +53780,18 @@
             ],
             "title": "Guide Item"
           },
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -78023,6 +78149,77 @@
           "lock_version"
         ],
         "title": "TaskPatch"
+      },
+      "TeamTurnIn": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Question Id"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "skip_follow_up": {
+            "type": "boolean",
+            "title": "Skip Follow Up",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "question_id"
+        ],
+        "title": "TeamTurnIn",
+        "description": "An answer to one of the intake's questions, a reply to Oracle's follow-up, or (with\n``skip_follow_up`` and no body) \"Skip, record my answer\"."
+      },
+      "TeamTurnOut": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/InterviewMessageOut"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "recorded": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_question_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Question Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "messages"
+        ],
+        "title": "TeamTurnOut"
       },
       "TechBriefAnswer": {
         "properties": {

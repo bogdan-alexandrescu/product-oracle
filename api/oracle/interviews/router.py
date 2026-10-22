@@ -1,8 +1,10 @@
-"""Interviews for members (C3 lane 1: customer interviews). Every route is an MCP tool.
+"""Interviews for members (C3 lane 1: customer interviews; lane 2: team interviews).
+Every route is an MCP tool.
 
 Viewers read; commenters create; the interview's creator or an approver edits a Draft,
 redrafts its guide, creates its private link (shown once) and withdraws it. The
-customer's own routes are in :mod:`oracle.interviews.public`.
+customer's own routes are in :mod:`oracle.interviews.public`. A member's team interview
+on an intake (:mod:`oracle.interviews.team`) is theirs alone to answer in.
 """
 
 import uuid
@@ -12,15 +14,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role
-from oracle.interviews import service
+from oracle.intake.router import answer_result
+from oracle.interviews import service, team
 from oracle.interviews.schemas import (
     InterviewCreate,
     InterviewLinkOut,
+    InterviewMessageOut,
     InterviewOut,
     InterviewPatch,
     InterviewSummary,
     Kind,
     Status,
+    TeamTurnIn,
+    TeamTurnOut,
 )
 
 router = APIRouter(prefix="/v1", tags=["interviews"])
@@ -139,3 +145,57 @@ async def revoke_interview(
     out = await service.out(db, principal, row)
     await db.commit()
     return out
+
+
+@router.post(
+    "/intakes/{intake_id}/interview",
+    response_model=InterviewOut,
+    dependencies=[Depends(same_origin)],
+)
+async def open_team_interview(
+    intake_id: uuid.UUID, db: TenantDB, principal: Commenter
+) -> InterviewOut:
+    """My team interview for this intake (created on first call): Oracle's follow-ups
+    and my replies on the intake's questions."""
+    try:
+        row = await team.open_for(db, principal, intake_id)
+    except service.InterviewError as e:
+        raise _http(e) from e
+    out = await service.out(db, principal, row)
+    await db.commit()
+    return out
+
+
+@router.post("/interviews/{interview_id}/turns", response_model=TeamTurnOut)
+async def take_team_turn(
+    interview_id: uuid.UUID, body: TeamTurnIn, db: TenantDB, principal: Commenter
+) -> TeamTurnOut:
+    """Answer one of the intake's questions in my team interview. Oracle follows up once
+    when the answer does not meet the gap's stop condition; the reply, or with
+    ``skip_follow_up`` the answer as written, is recorded as my decision. A turn past 25
+    seconds records the answer as written."""
+    try:
+        added, result = await team.take_turn(
+            db, principal, interview_id, body.question_id, body.body, body.skip_follow_up
+        )
+    except service.InterviewError as e:
+        raise _http(e) from e
+    messages = [
+        InterviewMessageOut(
+            id=m.id,
+            role=m.role,  # type: ignore[arg-type]
+            kind=m.kind,
+            body=m.body,
+            question_id=m.question_id,
+            created_at=m.created_at,
+        )
+        for m in added
+    ]
+    row = await service.get_row(db, interview_id)
+    following = await team.next_question(db, principal, row, body.question_id) if result else None
+    await db.commit()
+    return TeamTurnOut(
+        messages=messages,
+        recorded=await answer_result(db, principal, result) if result else None,
+        next_question_id=following,
+    )

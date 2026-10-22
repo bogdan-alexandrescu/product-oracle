@@ -36,6 +36,8 @@ CURRENT = {
     "decision_options": "decision_options.v1",
     "interview_guide": "interview_guide.v1",
     "interview_turn": "interview_turn.v1",
+    # A team member's turn runs as the interview_turn job with its own prompt.
+    "interview_team_turn": "interview_team_turn.v1",
     "interview_snapshot": "interview_snapshot.v1",
 }
 

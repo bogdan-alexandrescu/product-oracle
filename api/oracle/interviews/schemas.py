@@ -7,6 +7,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
+from oracle.intake.schemas import AnswerResult
+
 Status = Literal["draft", "invited", "in_progress", "finished", "expired", "revoked"]
 Kind = Literal["team", "customer"]
 
@@ -16,6 +18,8 @@ PROMPT_MAX = 300
 INTRO_MAX = 300
 GUIDE_MAX = 8
 MESSAGE_MAX = 2000
+# A recorded answer (oracle.intake.schemas.AnswerIn).
+ANSWER_MAX = 4000
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=NAME_MAX)]
 Prompt = Annotated[
@@ -91,6 +95,8 @@ class InterviewMessageOut(BaseModel):
     kind: str
     body: str
     guide_item: str | None = None
+    # Team interviews: the intake question it is about.
+    question_id: uuid.UUID | None = None
     created_at: datetime
 
 
@@ -143,6 +149,29 @@ class InterviewLinkOut(BaseModel):
 
     url: str
     expires_at: datetime
+
+
+# --- team turns (lane 2) ------------------------------------------------------------
+
+
+class TeamTurnIn(BaseModel):
+    """An answer to one of the intake's questions, a reply to Oracle's follow-up, or (with
+    ``skip_follow_up`` and no body) "Skip, record my answer"."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question_id: uuid.UUID
+    body: str | None = Field(default=None, max_length=ANSWER_MAX)
+    skip_follow_up: bool = False
+
+
+class TeamTurnOut(BaseModel):
+    # The messages this turn added: the member's, and Oracle's follow-up or note.
+    messages: list[InterviewMessageOut]
+    # The answer recorded through the answer path, or null while Oracle waits for a reply.
+    recorded: AnswerResult | None = None
+    # The next open question asked of the member on this intake, once recorded.
+    next_question_id: uuid.UUID | None = None
 
 
 # --- the customer's routes --------------------------------------------------------------

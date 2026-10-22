@@ -112,11 +112,12 @@ class Spent:
 
 
 async def customer_turn(
-    db: AsyncSession, payload: dict[str, Any]
+    db: AsyncSession, payload: dict[str, Any], prompt: str = JOB
 ) -> tuple[Reply | None, Spent | None]:
     """One customer-facing call: the checked reply, or None (the reply failed the checks,
-    the call failed or ran out of time) with what the call spent, if it ran."""
-    name, system = prompting.current(JOB)
+    the call failed or ran out of time) with what the call spent, if it ran. A team turn
+    (oracle.interviews.team) runs the same job with its own ``prompt``."""
+    name, system = prompting.current(prompt)
     from oracle.jobs.kinds import MAX_TOKENS
 
     try:

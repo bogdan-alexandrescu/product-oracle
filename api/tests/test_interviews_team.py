@@ -183,9 +183,7 @@ async def test_answer_meeting_the_stop_condition_records_at_once(client, ctx, fa
     assert out["next_question_id"] in {a["id"] for a in asked[1:]}
 
 
-async def test_turn_past_the_deadline_records_the_answer_as_written(
-    client, ctx, fake, monkeypatch
-):
+async def test_turn_past_the_deadline_records_the_answer_as_written(client, ctx, fake, monkeypatch):
     """protects=criterion 10: a slow model never loses the answer; fails_when=the turn
     hangs, errors or records nothing, or the note is missing; no_claim=the real
     25-second figure (the deadline is shortened here)."""

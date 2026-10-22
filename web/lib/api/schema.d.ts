@@ -8341,6 +8341,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/intakes/{intake_id}/interview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Team Interview
+         * @description My team interview for this intake (created on first call): Oracle's follow-ups
+         *     and my replies on the intake's questions.
+         */
+        post: operations["open_team_interview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take Team Turn
+         * @description Answer one of the intake's questions in my team interview. Oracle follows up once
+         *     when the answer does not meet the gap's stop condition; the reply, or with
+         *     ``skip_follow_up`` the answer as written, is recorded as my decision. A turn past 25
+         *     seconds records the answer as written.
+         */
+        post: operations["take_team_turn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/public/interviews/{token}": {
         parameters: {
             query?: never;
@@ -17098,6 +17142,8 @@ export interface components {
             body: string;
             /** Guide Item */
             guide_item?: string | null;
+            /** Question Id */
+            question_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -25614,6 +25660,33 @@ export interface components {
             skip_reason?: string | null;
             /** Lock Version */
             lock_version: number;
+        };
+        /**
+         * TeamTurnIn
+         * @description An answer to one of the intake's questions, a reply to Oracle's follow-up, or (with
+         *     ``skip_follow_up`` and no body) "Skip, record my answer".
+         */
+        TeamTurnIn: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Body */
+            body?: string | null;
+            /**
+             * Skip Follow Up
+             * @default false
+             */
+            skip_follow_up: boolean;
+        };
+        /** TeamTurnOut */
+        TeamTurnOut: {
+            /** Messages */
+            messages: components["schemas"]["InterviewMessageOut"][];
+            recorded?: components["schemas"]["AnswerResult"] | null;
+            /** Next Question Id */
+            next_question_id?: string | null;
         };
         /** TechBriefAnswer */
         TechBriefAnswer: {
@@ -43709,6 +43782,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_team_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    take_team_turn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamTurnIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamTurnOut"];
                 };
             };
             /** @description Validation Error */
