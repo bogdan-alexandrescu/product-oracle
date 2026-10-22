@@ -944,3 +944,17 @@ export function attributeCommenterProposal(s: BaselineState, userId: string) {
   const p = s.proposals.find((x) => x.id === COMMENTER_PROPOSAL);
   if (p) p.actor = `user:${userId}`;
 }
+
+/**
+ * The "named-codes" scenario (#304): the company writes its own code before each goal's
+ * name ("G-B Growth"), the way it numbers goals in its plans. One name is long, so narrow
+ * cells cut it.
+ */
+export function addGoalCodes(s: BaselineState) {
+  const titles: Record<string, string> = {
+    "g.activation": "G-A Activation",
+    "g.paid-conversion": "G-B Growth",
+    "g.early-churn": "G-C Fewer accounts leaving in their first ninety days",
+  };
+  for (const e of s.entities) if (e.type === "goal" && titles[e.key]) e.title = titles[e.key];
+}

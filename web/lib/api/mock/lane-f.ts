@@ -85,15 +85,16 @@ type FeatureSeed = {
   depends_on: string[];
 };
 
-const G1 = "Raise first-order completion";
-const G2 = "Keep teams active after the first month";
+// The baseline's goals (./baseline.ts), by key: the lookup behind the code chips finds them.
+const G1 = "Raise activation";
+const G2 = "Grow paid conversion";
 
 const FEATURES: FeatureSeed[] = [
   {
     key: "F-1",
     title: "Saved addresses at checkout",
     status: "confirmed",
-    goals: [{ goal: "G1", title: G1, weight: 3, contribution: 2 }],
+    goals: [{ goal: "g.activation", title: G1, weight: 3, contribution: 2 }],
     attrs: { effort: 2, reach: 4000, impact: 2, business_value: 8, time_criticality: 5, risk_reduction: 3, job_size: 3, moscow: "must" },
     evidence: [
       { id: "ev-1", confidence: 0.8, ref: "https://example.com/research/interview-07", title: "Interview 07", source_kind: "upload", date: "2026-09-12" },
@@ -111,7 +112,7 @@ const FEATURES: FeatureSeed[] = [
     key: "F-2",
     title: "Shipping cost shown in the cart",
     status: "confirmed",
-    goals: [{ goal: "G1", title: G1, weight: 3, contribution: 3 }],
+    goals: [{ goal: "g.activation", title: G1, weight: 3, contribution: 3 }],
     attrs: { effort: 1, reach: 6000, impact: 1, business_value: 5, time_criticality: 8, risk_reduction: 2, job_size: 2, moscow: "should" },
     evidence: [{ id: "ev-3", confidence: 0.9, ref: "https://example.com/research/survey-q3", title: "Survey Q3", source_kind: "notion", date: "2026-09-15" }],
     depends_on: ["F-5"],
@@ -120,7 +121,7 @@ const FEATURES: FeatureSeed[] = [
     key: "F-3",
     title: "Shared projects",
     status: "proposed",
-    goals: [{ goal: "G2", title: G2, weight: null, contribution: null }],
+    goals: [{ goal: "g.paid-conversion", title: G2, weight: null, contribution: null }],
     attrs: { effort: 4, reach: 1500, impact: 3, business_value: 9, time_criticality: 3, risk_reduction: 5, job_size: 8, moscow: "could" },
     evidence: [],
     depends_on: [],
@@ -129,7 +130,7 @@ const FEATURES: FeatureSeed[] = [
     key: "F-4",
     title: "Usage alerts",
     status: "proposed",
-    goals: [{ goal: "G2", title: G2, weight: 2, contribution: 1 }],
+    goals: [{ goal: "g.paid-conversion", title: G2, weight: 2, contribution: 1 }],
     attrs: { effort: 1, impact: 1, confidence: "low", business_value: 3, time_criticality: 2, risk_reduction: 1, job_size: 1, moscow: "should" },
     evidence: [],
     depends_on: [],
@@ -138,7 +139,7 @@ const FEATURES: FeatureSeed[] = [
     key: "F-5",
     title: "Address lookup service",
     status: "confirmed",
-    goals: [{ goal: "G1", title: G1, weight: 3, contribution: 1 }],
+    goals: [{ goal: "g.activation", title: G1, weight: 3, contribution: 1 }],
     attrs: { effort: 3, reach: 6000, impact: 0.5, business_value: 3, time_criticality: 3, risk_reduction: 3, job_size: 5, moscow: "could" },
     evidence: [{ id: "ev-4", confidence: 0.6, ref: "https://example.com/tracker/issue-412", title: "Issue 412", source_kind: "github", date: "2026-08-30" }],
     depends_on: [],
@@ -156,7 +157,7 @@ const FEATURES: FeatureSeed[] = [
     key: "F-7",
     title: "Bulk export",
     status: "proposed",
-    goals: [{ goal: "G2", title: G2, weight: 2, contribution: 2 }],
+    goals: [{ goal: "g.paid-conversion", title: G2, weight: 2, contribution: 2 }],
     attrs: { effort: 2, reach: 800, impact: 2, confidence: 0.5, business_value: 4, time_criticality: 2, risk_reduction: 2, job_size: 3, moscow: "should" },
     evidence: [],
     depends_on: ["F-8"],
@@ -165,7 +166,7 @@ const FEATURES: FeatureSeed[] = [
     key: "F-8",
     title: "Scheduled exports",
     status: "proposed",
-    goals: [{ goal: "G2", title: G2, weight: 2, contribution: 1 }],
+    goals: [{ goal: "g.paid-conversion", title: G2, weight: 2, contribution: 1 }],
     attrs: { effort: 3, reach: 500, impact: 1, confidence: 0.5, business_value: 3, time_criticality: 1, risk_reduction: 1, job_size: 3, moscow: "could" },
     evidence: [],
     depends_on: ["F-7"],

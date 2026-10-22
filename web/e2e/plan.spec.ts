@@ -137,13 +137,13 @@ test("roadmap table: grouped by horizon, goal or PRD; draft items are dashed Pro
     "/documents/checkout-redesign/v/2",
   );
   await expect(row(page, "Spend forecast for the month").getByTestId("plan-goal")).toHaveText("No goal");
-  await expect(row(page, "Threshold alerts on spend").getByTestId("plan-goal")).toHaveText("G1");
+  await expect(row(page, "Threshold alerts on spend").getByTestId("plan-goal")).toHaveText("Raise activation");
   await expect(row(page, "Threshold alerts on spend").getByTestId("plan-prd")).toHaveText("Usage alerts PRD v1");
   await expect(row(page, "One-page checkout").getByTestId("plan-prd")).toHaveText("Checkout redesign PRD draft 2");
 
   const group = page.getByRole("group", { name: "Group by" });
   await group.getByRole("button", { name: "Goal" }).click();
-  await expect(groups(page)).toHaveText(["G1 4", "G2 3", "G3 1", "No goal 2"]);
+  await expect(groups(page)).toHaveText(["Raise activation 4", "Grow paid conversion 3", "Cut early churn 1", "No goal 2"]);
   await group.getByRole("button", { name: "PRD" }).click();
   await expect(groups(page)).toHaveText(["Usage alerts PRD 7", "Checkout redesign PRD 3"]);
   await group.getByRole("button", { name: "Horizon" }).click();
@@ -194,7 +194,7 @@ test("selecting a row opens the inspector with its links", async ({ page }) => {
   await expect(tracker).toHaveAttribute("rel", "noopener noreferrer");
   await expect(inspector.getByTestId("plan-why")).toContainText("ENG-405 targets 2026-12-09");
   await expect(inspector.getByTestId("plan-history")).toContainText("PRD v1 Now · approved Oct 18");
-  await expect(inspector.getByTestId("plan-item-goal")).toContainText("G2");
+  await expect(inspector.getByTestId("plan-item-goal")).toContainText("Grow paid conversion");
   await expect(inspector.getByTestId("plan-item-goal")).toContainText("to go");
 });
 
