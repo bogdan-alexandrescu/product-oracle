@@ -68,6 +68,7 @@ const KIND_LABEL: Record<ThemeKind, string> = {
   roadmap: "Roadmap",
   vision: "Vision",
   strategy: "Product strategy",
+  update: "Update",
   any: "Any document",
 };
 

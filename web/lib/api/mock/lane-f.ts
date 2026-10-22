@@ -20,12 +20,27 @@ type Problem = Schemas["Problem"];
 type TemplateRow = Omit<Schemas["TemplateOut"], "latest_version" | "suggested_theme" | "suggest_when">;
 type ThemeRow = Schemas["ThemeOut"];
 type SnapshotRow = Schemas["PrioritySnapshotOut"];
+type OverrideRow = Schemas["OverrideOut"];
+type PushbackMessage = Schemas["PushbackMessage"];
+/** One reading of a reason, as the API's priority_override.reason_checked audit event. */
+type ReasonCheckRow = {
+  by: string;
+  feature: string;
+  reason: string;
+  status: Schemas["ReasonCheckOut"]["status"];
+  ms: number;
+  evidence: Schemas["EvidenceChip"][];
+  at: string;
+};
 
 export interface LaneFState {
   templates: TemplateRow[];
   themes: ThemeRow[];
   snapshots: SnapshotRow[];
   defaults: Schemas["DraftDefaults"];
+  /** People's moves and pins (C9), newest last; absent in data saved before them. */
+  overrides?: OverrideRow[];
+  reason_checks?: ReasonCheckRow[];
 }
 
 const SEEDED_AT = "2026-10-01T09:00:00Z";
@@ -66,7 +81,7 @@ type FeatureSeed = {
   status: string;
   goals: GoalLink[];
   attrs: Record<string, number | string>;
-  evidence: { id: string; confidence: number; ref: string }[];
+  evidence: { id: string; confidence: number; ref: string; title: string; source_kind: string; date: string }[];
   depends_on: string[];
 };
 
@@ -81,8 +96,14 @@ const FEATURES: FeatureSeed[] = [
     goals: [{ goal: "G1", title: G1, weight: 3, contribution: 2 }],
     attrs: { effort: 2, reach: 4000, impact: 2, business_value: 8, time_criticality: 5, risk_reduction: 3, job_size: 3, moscow: "must" },
     evidence: [
-      { id: "ev-1", confidence: 0.8, ref: "https://example.com/research/interview-07" },
-      { id: "ev-2", confidence: 0.7, ref: "https://example.com/analytics/funnel-september" },
+      { id: "ev-1", confidence: 0.8, ref: "https://example.com/research/interview-07", title: "Interview 07", source_kind: "upload", date: "2026-09-12" },
+      { id: "ev-2", confidence: 0.7, ref: "https://example.com/analytics/funnel-september", title: "Funnel, September", source_kind: "google_docs", date: "2026-10-01" },
+      // Five more at the mean (0.75), so the feature's confidence stays as it was.
+      { id: "ev-5", confidence: 0.75, ref: "https://example.com/support/thread-1182", title: "Support thread 1182", source_kind: "slack", date: "2026-09-20" },
+      { id: "ev-6", confidence: 0.75, ref: "https://example.com/research/interview-11", title: "Interview 11", source_kind: "upload", date: "2026-09-25" },
+      { id: "ev-7", confidence: 0.75, ref: "https://example.com/tracker/issue-388", title: "Issue 388", source_kind: "github", date: "2026-09-28" },
+      { id: "ev-8", confidence: 0.75, ref: "https://example.com/calls/review-0930", title: "Call review, 30 September", source_kind: "fireflies", date: "2026-09-30" },
+      { id: "ev-9", confidence: 0.75, ref: "https://example.com/research/survey-q3-open", title: "Survey Q3, open answers", source_kind: "notion", date: "2026-10-03" },
     ],
     depends_on: [],
   },
@@ -92,7 +113,7 @@ const FEATURES: FeatureSeed[] = [
     status: "confirmed",
     goals: [{ goal: "G1", title: G1, weight: 3, contribution: 3 }],
     attrs: { effort: 1, reach: 6000, impact: 1, business_value: 5, time_criticality: 8, risk_reduction: 2, job_size: 2, moscow: "should" },
-    evidence: [{ id: "ev-3", confidence: 0.9, ref: "https://example.com/research/survey-q3" }],
+    evidence: [{ id: "ev-3", confidence: 0.9, ref: "https://example.com/research/survey-q3", title: "Survey Q3", source_kind: "notion", date: "2026-09-15" }],
     depends_on: ["F-5"],
   },
   {
@@ -119,7 +140,7 @@ const FEATURES: FeatureSeed[] = [
     status: "confirmed",
     goals: [{ goal: "G1", title: G1, weight: 3, contribution: 1 }],
     attrs: { effort: 3, reach: 6000, impact: 0.5, business_value: 3, time_criticality: 3, risk_reduction: 3, job_size: 5, moscow: "could" },
-    evidence: [{ id: "ev-4", confidence: 0.6, ref: "https://example.com/tracker/issue-412" }],
+    evidence: [{ id: "ev-4", confidence: 0.6, ref: "https://example.com/tracker/issue-412", title: "Issue 412", source_kind: "github", date: "2026-08-30" }],
     depends_on: [],
   },
   {
@@ -390,6 +411,333 @@ export function ranking(method: Method): Schemas["PriorityRanking"] {
       in_cycles: inCycle.size,
     },
   };
+}
+
+// ---------------------------------------------------------------- overrides (C9 Move and pin)
+
+const entityId = (key: string) => `00000000-0000-4000-8000-${hash(key).padStart(12, "0")}`;
+const featureById = (id: string) => FEATURES.find((f) => entityId(f.key) === id);
+type OverrideInput = {
+  id: string;
+  feature: string;
+  kind: "move" | "pin";
+  above: string | null;
+  position: number | null;
+  info: Omit<Schemas["RowOverride"], "id" | "kind"> | null;
+};
+
+/**
+ * People's overrides after the formula, as the API's apply_overrides: in creation order a
+ * move goes directly above its anchor and a pin at its rank (clamped); then a feature above
+ * a prerequisite (outside its cycle) moves just below its lowest one, flagged
+ * held_by_dependency. formula_rank keeps the rank before overrides.
+ */
+export function applyOverrides(r: Schemas["PriorityRanking"], overrides: OverrideInput[]): Schemas["PriorityRanking"] {
+  const rows = new Map(r.features.map((f) => [f.key, f]));
+  const order = r.features.map((f) => f.key);
+  const applied = new Map<string, OverrideInput>();
+  for (const o of overrides) {
+    if (!rows.has(o.feature) || (o.kind === "move" && (!o.above || !rows.has(o.above) || o.above === o.feature))) continue;
+    order.splice(order.indexOf(o.feature), 1);
+    if (o.kind === "move") order.splice(order.indexOf(o.above!), 0, o.feature);
+    else order.splice(Math.min(Math.max((o.position ?? 1) - 1, 0), order.length), 0, o.feature);
+    applied.set(o.feature, o);
+  }
+  const cycleOf = new Map<string, number>();
+  r.cycles.forEach((c, i) => c.forEach((k) => cycleOf.set(k, i)));
+  const prerequisites = (k: string) =>
+    rows.get(k)!.depends_on.filter((d) => rows.has(d) && !(cycleOf.has(k) && cycleOf.get(d) === cycleOf.get(k)));
+  const held = new Map<string, string>();
+  for (let pass = 0; pass <= order.length; pass++) {
+    let moved = false;
+    for (const k of [...order]) {
+      const at = order.indexOf(k);
+      const below = prerequisites(k).filter((d) => order.indexOf(d) > at);
+      if (!below.length) continue;
+      const lowest = below.reduce((a, b) => (order.indexOf(a) > order.indexOf(b) ? a : b));
+      order.splice(order.indexOf(k), 1);
+      order.splice(order.indexOf(lowest) + 1, 0, k);
+      held.set(k, lowest);
+      moved = true;
+    }
+    if (!moved) break;
+  }
+  const features = order.map((k, i) => {
+    const row = rows.get(k)!;
+    const o = applied.get(k);
+    const hold = held.get(k);
+    return {
+      ...row,
+      rank: i + 1,
+      formula_rank: row.rank,
+      flags: [...new Set([...row.flags, ...(hold ? ["held_by_dependency"] : [])])].sort(),
+      explanation: hold
+        ? { ...row.explanation, order: [...(row.explanation.order ?? []), `held below ${hold}: it depends on it`] }
+        : row.explanation,
+      override: o?.info ? { id: o.id, kind: o.kind, ...o.info } : null,
+      held_below: hold ?? null,
+    };
+  });
+  return { ...r, features };
+}
+
+function overrideInputs(list: OverrideRow[]): OverrideInput[] {
+  return list
+    .filter((o) => !o.removed_at && !o.snapshot_id)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map((o) => ({
+      id: o.id,
+      feature: o.feature.key,
+      kind: o.kind,
+      above: o.above?.key ?? null,
+      position: o.position ?? null,
+      info: {
+        by: o.created_by.name,
+        reason: o.reason,
+        kept_after_pushback: o.kept_after_pushback,
+        above: o.above?.key ?? null,
+        position: o.position ?? null,
+        created_at: o.created_at,
+      },
+    }));
+}
+
+const LOW = 0.4;
+const n2 = (x: number | null | undefined) => (x == null ? "—" : String(Math.round(x * 100) / 100));
+const confOf = (f: Schemas["RankedFeature"]) => f.explanation.confidence.value;
+
+/** The four rules on the numbers (the API's pushback.rules), on the order the change makes. */
+function pushbackRules(
+  before: Schemas["RankedFeature"][],
+  after: Schemas["RankedFeature"][],
+  key: string,
+): PushbackMessage[] {
+  const was = new Map(before.map((f) => [f.key, f.rank]));
+  const row = after.find((f) => f.key === key);
+  if (!row) return [];
+  const passed = after.filter(
+    (f) => f.key !== key && (was.get(f.key) ?? 0) < (was.get(key) ?? 0) && f.rank > row.rank,
+  );
+  const out: PushbackMessage[] = [];
+  if (!row.serves_goal) {
+    const p = passed.find((f) => f.serves_goal);
+    if (p) {
+      const g = [...p.explanation.goals].sort((a, b) => (b.term ?? 0) - (a.term ?? 0))[0];
+      out.push({
+        code: "no_confirmed_goal",
+        message: `${row.title} serves no confirmed goal. Features that serve none sink (score ${n2(row.score)}); ${p.title} serves ${g?.title ?? "a confirmed goal"} (weight ${g?.weight}, contribution ${g?.contribution}).`,
+        numbers: { score: row.score, passes: p.key, passes_score: p.score, goal: g?.goal ?? null },
+      });
+    }
+  }
+  const c = confOf(row);
+  if (c < LOW) {
+    const p = passed.find((f) => confOf(f) >= LOW);
+    if (p) {
+      const count = p.explanation.confidence.evidence.length;
+      out.push({
+        code: "low_confidence",
+        message: `Confidence ${n2(c)} is below ${LOW}; ${p.title} has ${n2(confOf(p))}${count ? ` from ${count} source${count === 1 ? "" : "s"}` : ""}.`,
+        numbers: { confidence: c, threshold: LOW, passes: p.key, passes_confidence: confOf(p) },
+      });
+    }
+  }
+  const formulaRank = row.formula_rank ?? row.rank;
+  if (formulaRank - row.rank >= 3 && row.score != null) {
+    const own = row.score;
+    const higher = passed.filter((f) => f.score != null && f.score > 0 && f.score >= 2 * own);
+    if (higher.length) {
+      const p = higher.reduce((a, b) => ((a.score ?? 0) >= (b.score ?? 0) ? a : b));
+      const times = own > 0 ? p.score! / own : null;
+      const ratio = times == null ? "" : ` (${times >= 10 ? Math.round(times) : Math.round(times * 10) / 10}× higher)`;
+      out.push({
+        code: "against_score",
+        message: `Score ${n2(own)} against ${n2(p.score)} for ${p.title}${ratio}.`,
+        numbers: { score: own, formula_rank: formulaRank, rank: row.rank, passes: p.key, passes_score: p.score },
+      });
+    }
+  }
+  return out;
+}
+
+const chipOf = (f: FeatureSeed, id: string): Schemas["EvidenceChip"] | null => {
+  const e = f.evidence.find((x) => x.id === id);
+  return e ? { id: e.id, title: e.title, source_kind: e.source_kind, confidence: e.confidence, date: e.date } : null;
+};
+
+/**
+ * Oracle's reading of the reason, with the mock's two hooks: a reason with "keep asking"
+ * is contradicted by the feature's evidence; one with "slow-check" runs out of time.
+ */
+function readReason(
+  f: FeatureSeed,
+  reason: string,
+  cited: string[],
+): { status: ReasonCheckRow["status"]; ms: number; message: PushbackMessage | null } {
+  if (reason.trim().length < 10) return { status: "skipped", ms: 0, message: null };
+  if (/slow-check/i.test(reason)) return { status: "timed_out", ms: 10000, message: null };
+  if (/keep asking/i.test(reason)) {
+    const ids = cited.length ? cited.slice(0, 1) : f.evidence.slice(0, 1).map((e) => e.id);
+    const evidence = ids.map((id) => chipOf(f, id)).filter((x): x is Schemas["EvidenceChip"] => !!x);
+    if (evidence.length) {
+      return {
+        status: "contradiction",
+        ms: 4800,
+        message: {
+          code: "reason_contradicts_evidence",
+          claim: "customers keep asking",
+          message: "You wrote 'customers keep asking'; the evidence shows 1 request from 1 source in the last 90 days.",
+          evidence,
+        },
+      };
+    }
+  }
+  return { status: "no_contradiction", ms: 3100, message: null };
+}
+
+/** POST /v1/priorities/overrides: check, push back once, or store (replacing the feature's active one). */
+function createOverride(st: LaneFState, me: string, input: Schemas["OverrideCreate"]): Response {
+  st.overrides ??= [];
+  st.reason_checks ??= [];
+  const reason = (input.reason ?? "").trim();
+  const f = featureById(input.feature_id);
+  const above = input.above_feature_id ? featureById(input.above_feature_id) : undefined;
+  if (!reason || reason.length > 500) return json(422, { detail: "a reason of 1-500 characters is required" });
+  if (!f) return json(422, { detail: "feature_id must be a feature of the baseline that is not rejected" });
+  if (input.kind === "move" && (!above || above.key === f.key)) {
+    return json(422, { detail: "a move needs another feature to go above" });
+  }
+  if (input.kind === "pin" && !(input.position && input.position >= 1)) {
+    return json(422, { detail: "a pin needs a rank of 1 or more" });
+  }
+  const cited = [...new Set(input.evidence_ids ?? [])];
+  if (cited.length > 5 || cited.some((id) => !f.evidence.some((e) => e.id === id))) {
+    return json(422, { detail: "evidence_ids must each be evidence of the feature, at most 5" });
+  }
+  if (input.snapshot_id) {
+    return json(409, {
+      detail: "Only a run's proposed priority order, while its stop is waiting, takes changes; this snapshot is saved",
+    });
+  }
+
+  const base = ranking("goal_weighted");
+  const inputs = overrideInputs(st.overrides);
+  const before = applyOverrides(base, inputs);
+  const change: OverrideInput = {
+    id: "new",
+    feature: f.key,
+    kind: input.kind,
+    above: above?.key ?? null,
+    position: input.position ?? null,
+    info: null,
+  };
+  const after = applyOverrides(base, [...inputs.filter((i) => i.feature !== f.key), change]);
+  const row = after.features.find((x) => x.key === f.key)!;
+  const messages = pushbackRules(before.features, after.features, f.key);
+  let check: { status: ReasonCheckRow["status"]; ms: number | null };
+  if (!input.confirm) {
+    const read = readReason(f, reason, cited);
+    if (read.status !== "skipped") {
+      st.reason_checks.push({
+        by: me,
+        feature: f.key,
+        reason,
+        status: read.status,
+        ms: read.ms,
+        evidence: read.message?.evidence ?? [],
+        at: now(),
+      });
+    }
+    if (read.message) messages.push(read.message);
+    check = { status: read.status, ms: read.status === "skipped" ? null : read.ms };
+    if (messages.length) {
+      return json(409, {
+        detail: "Oracle disagrees with this change",
+        pushback: messages,
+        reason_check: check,
+        preview_rank: row.rank,
+        held_below: row.held_below ?? null,
+      } satisfies Schemas["PushbackOut"]);
+    }
+  } else {
+    // As the API: the check the person saw is the server's record, never the request's.
+    const seen = [...st.reason_checks].reverse().find((c) => c.by === me && c.feature === f.key && c.reason === reason);
+    check = seen ? { status: seen.status, ms: seen.ms } : { status: "skipped", ms: null };
+    if (seen?.status === "contradiction") {
+      messages.push({
+        code: "reason_contradicts_evidence",
+        message: "Oracle read your reason against the evidence and found that the evidence contradicts it.",
+        evidence: seen.evidence,
+      });
+    }
+  }
+  const at = now();
+  const id = uuid();
+  const old = st.overrides.find((o) => o.feature.key === f.key && !o.removed_at && !o.snapshot_id);
+  if (old) {
+    Object.assign(old, {
+      removed_at: at,
+      removed_by: { id: me, name: me },
+      removed_reason: "Replaced by a new change",
+      replaced_by: id,
+    });
+  }
+  const out: OverrideRow = {
+    id,
+    feature: { id: entityId(f.key), key: f.key, title: f.title },
+    kind: input.kind,
+    above: above ? { id: entityId(above.key), key: above.key, title: above.title } : null,
+    position: input.kind === "pin" ? (input.position ?? null) : null,
+    reason,
+    evidence_ids: cited,
+    evidence: cited.map((c) => chipOf(f, c)).filter((x): x is Schemas["EvidenceChip"] => !!x),
+    pushback: messages,
+    kept_after_pushback: !!input.confirm && messages.length > 0,
+    reason_check: check,
+    snapshot_id: null,
+    created_by: { id: me, name: me },
+    created_at: at,
+    removed_at: null,
+    removed_by: null,
+    removed_reason: null,
+    replaced_by: null,
+    no_longer_applies: false,
+  };
+  st.overrides.push(out);
+  return json(201, { ...out, preview_rank: row.rank, held_below: row.held_below ?? null });
+}
+
+/** Handles /v1/priorities/overrides[/{id}]. */
+async function overridesRoute(st: LaneFState, me: string, req: Request, p: string[], m: string): Promise<Response> {
+  st.overrides ??= [];
+  const q = new URL(req.url).searchParams;
+  if (p.length === 3 && m === "GET") {
+    const all = q.get("include_removed") === "true";
+    const limit = Math.min(Number(q.get("limit") ?? 50) || 50, 200);
+    return json(
+      200,
+      st.overrides
+        .filter((o) => all || !o.removed_at)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .slice(0, limit),
+    );
+  }
+  if (p.length === 3 && m === "POST") {
+    return createOverride(st, me, JSON.parse((await req.text()) || "{}") as Schemas["OverrideCreate"]);
+  }
+  if (p.length === 4 && m === "DELETE") {
+    const o = st.overrides.find((x) => x.id === p[3]);
+    if (!o) return notFound("Priority override");
+    if (o.removed_at) return json(409, { detail: "This change was already removed or replaced" });
+    const input = JSON.parse((await req.text()) || "null") as Schemas["OverrideRemove"] | null;
+    Object.assign(o, {
+      removed_at: now(),
+      removed_by: { id: me, name: me },
+      removed_reason: input?.reason?.trim() || null,
+    });
+    return json(200, o);
+  }
+  return notFound("Route");
 }
 
 // ---------------------------------------------------------------- templates
@@ -1519,8 +1867,10 @@ export async function laneF(db: Db, req: Request, p: string[], m: string, role?:
     if (p.length === 2 && m === "GET") {
       const method = q.get("method") ?? "goal_weighted";
       if (!isMethod(method)) return json(422, { detail: `unknown method '${method}'` });
-      return json(200, ranking(method));
+      const people = q.get("overrides") !== "false";
+      return json(200, applyOverrides(ranking(method), people ? overrideInputs(st.overrides ?? []) : []));
     }
+    if (p[2] === "overrides") return overridesRoute(st, db.session ?? "someone", req, p, m);
     if (p[2] === "snapshots") {
       // C8: people's snapshots and the runs' orders; readers see saved ones unless they ask.
       const all = () => [...st.snapshots, ...(db.runs?.priority_snapshots ?? [])];
@@ -1540,7 +1890,8 @@ export async function laneF(db: Db, req: Request, p: string[], m: string, role?:
         const input = (await body<Schemas["PrioritySnapshotCreate"]>()) ?? { method: "goal_weighted" };
         const method = input.method ?? "goal_weighted";
         if (!isMethod(method)) return json(422, { detail: `unknown method '${method}'` });
-        const r = ranking(method);
+        const active = overrideInputs(st.overrides ?? []);
+        const r = applyOverrides(ranking(method), active);
         const snap: SnapshotRow = {
           id: uuid(),
           method,
@@ -1552,7 +1903,7 @@ export async function laneF(db: Db, req: Request, p: string[], m: string, role?:
           status: "saved",
           run_id: null,
           document: null,
-          params: {},
+          params: { overrides: r.features.flatMap((f) => (f.override ? [f.override.id] : [])) },
           ranking: r.features,
         };
         st.snapshots.push(snap);

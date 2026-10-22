@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { Suspense, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 
 import {
   Button,
@@ -29,6 +29,17 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
+
+import {
+  ChangesPanel,
+  NUMBERS_ONLY,
+  OverrideSheet,
+  RadioSwitch,
+  RowActions,
+  RowChips,
+  YourChange,
+  type Draft,
+} from "./_components/overrides";
 
 type Method = Schemas["PriorityRanking"]["method"];
 type RankedFeature = Schemas["RankedFeature"];
@@ -62,6 +73,11 @@ const FLAGS: Record<string, { label: string; kind: ChipKind; title: string }> = 
     label: "Moved for a dependency",
     kind: "acc",
     title: "Placed earlier than its score because a higher-ranked feature depends on it.",
+  },
+  held_by_dependency: {
+    label: "Held by a dependency",
+    kind: "warn",
+    title: "A person's change could not place it above a feature it depends on.",
   },
 };
 
@@ -183,7 +199,7 @@ function MethodSwitch({ value, onChange, locked = false }: { value: Method; onCh
 }
 
 /** The selected feature: rank, confidence, score, then how the score was worked out. */
-function FeatureInspector({ f, id, run }: { f: RankedFeature; id: string; run?: CompareRow }) {
+function FeatureInspector({ f, id, run, change }: { f: RankedFeature; id: string; run?: CompareRow; change?: ReactNode }) {
   const e = f.explanation;
   // A feature the run ranks that Oracle's live ranking lacks (a proposal of the run): its own line only.
   const live = !run || run.live_rank != null || f.entity_id !== "";
@@ -206,7 +222,10 @@ function FeatureInspector({ f, id, run }: { f: RankedFeature; id: string; run?: 
           </>
         }
         stats={[
-          { label: "Rank", value: `#${f.rank}` },
+          {
+            label: "Rank",
+            value: f.formula_rank != null && f.formula_rank !== f.rank ? `#${f.rank} · Oracle #${f.formula_rank}` : `#${f.rank}`,
+          },
           ...(run ? [{ label: "Live", value: run.live_rank == null ? "—" : `#${run.live_rank}` }] : []),
           { label: "Confidence", figure: <Ring value={pct(e.confidence.value)} size={46} /> },
           { label: "Score", value: fmt(f.score) },
@@ -230,6 +249,7 @@ function FeatureInspector({ f, id, run }: { f: RankedFeature; id: string; run?: 
             )}
           </InspectorSection>
         )}
+        {change}
         {live && <div data-testid={`explanation-${f.key}`}>
           <InspectorSection
             label="Score"
@@ -613,11 +633,23 @@ function Priorities() {
   const [saved, setSaved] = useState<Schemas["PrioritySnapshotOut"] | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [snapshotsKey, setSnapshotsKey] = useState(0);
+  const [order, setOrder] = useState<"changes" | "oracle">("changes");
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [changed, setChanged] = useState<string | null>(null);
+  const [changeError, setChangeError] = useState<string | null>(null);
+  const [changesKey, setChangesKey] = useState(0);
   const { role } = useMe();
   const canSnapshot = hasRole(role, "approver");
+  // C9: approvers and owners move and pin features; everyone sees the changes. Not in run
+  // mode (C8): a move or pin changes the live ranking, never a run's order.
+  const canChange = hasRole(role, "approver") && !snapshotId;
+  const withChanges = order === "changes";
 
-  const q = useQuery(`priorities|${method}`, () =>
-    unwrap(api.GET("/v1/priorities", { params: { query: { method } } })),
+  const q = useQuery(`priorities|${method}|${order}`, () =>
+    unwrap(api.GET("/v1/priorities", { params: { query: { method, overrides: withChanges } } })),
+  );
+  const active = useQuery(`priority-overrides|live|${changesKey}`, () =>
+    unwrap(api.GET("/v1/priorities/overrides", { params: { query: { limit: 200 } } })),
   );
   const r = q.data;
   const byKey = new Map(cmp?.rows.map((c) => [c.key, c]) ?? []);
@@ -629,6 +661,34 @@ function Priorities() {
   // The selected feature, else the top of the ranking.
   const current = features.find((f) => f.key === selected) ?? features[0];
   const inspectorId = "priority-inspector";
+  const anyOverride = withChanges && features.some((f) => f.override);
+
+  async function afterChange(notice: string | null) {
+    setChanged(notice);
+    setChangeError(null);
+    setChangesKey((k) => k + 1);
+    await q.reload();
+  }
+
+  async function removeChange(id: string) {
+    try {
+      await unwrap(
+        api.DELETE("/v1/priorities/overrides/{override_id}", { params: { path: { override_id: id } }, body: {} }),
+      );
+      await afterChange(null);
+    } catch (e) {
+      setChangeError(errorMessage(e));
+    }
+  }
+
+  /** "Move <prerequisite> too": the same change on what holds the feature, its reason prefilled. */
+  function moveToo(prerequisite: string) {
+    const f = current;
+    const p = features.find((x) => x.key === prerequisite);
+    if (!f?.override || !p) return;
+    const above = f.override.above ? (features.find((x) => x.key === f.override!.above) ?? null) : null;
+    setDraft({ feature: p, kind: f.override.kind, above, position: f.override.position ?? null, reason: f.override.reason });
+  }
 
   async function saveSnapshot() {
     setSaving(true);
@@ -697,6 +757,21 @@ function Priorities() {
       ),
     },
     ...runColumns,
+    ...(anyOverride
+      ? [
+          {
+            key: "formula_rank",
+            header: "Oracle #",
+            width: "64px",
+            phoneLabel: "Oracle #",
+            cell: (f: RankedFeature) => (
+              <span data-testid="formula-rank" className="tnum text-text2">
+                {f.formula_rank ?? f.rank}
+              </span>
+            ),
+          } satisfies Column<RankedFeature>,
+        ]
+      : []),
     {
       key: "feature",
       header: "Feature",
@@ -772,23 +847,43 @@ function Priorities() {
       key: "flags",
       header: "Flags",
       width: "240px",
-      cell: (f) => (
-        <span className="flex items-center gap-1.5 overflow-hidden max-[600px]:flex-wrap">
-          {/* Run mode: the check's problems first (blocking red, advisory amber). */}
-          {byKey.get(f.key)?.problems.map((p) => (
-            <ProblemChip key={p.code} p={p} />
-          ))}
-          {f.flags.slice(0, cmp ? 0 : 1).map((flag) => (
-            <FlagChip key={flag} flag={flag} />
-          ))}
-          {f.flags.length > (cmp ? 0 : 1) && (
-            <Chip kind="na" title={f.flags.slice(cmp ? 0 : 1).map((x) => flagOf(x).label).join(", ")}>
-              +{f.flags.length - (cmp ? 0 : 1)}
-              <span className="sr-only">{f.flags.slice(cmp ? 0 : 1).map((x) => flagOf(x).label).join(", ")}</span>
-            </Chip>
-          )}
-        </span>
-      ),
+      // ▲ ▼ ⋯ float over the cell's right end (in the flow on a phone).
+      className: "relative max-[600px]:static",
+      cell: (f) => {
+        // A person's change leads; the flags fold into the count after it. Run mode: the
+        // check's problems first (blocking red, advisory amber), every flag in the count.
+        const changed = withChanges && (!!f.override || !!f.held_below);
+        const shown = changed || cmp ? 0 : 1;
+        const rest = f.flags.slice(shown);
+        return (
+          <>
+            <span className="flex items-center gap-1.5 overflow-hidden max-[600px]:flex-wrap">
+              {byKey.get(f.key)?.problems.map((p) => (
+                <ProblemChip key={p.code} p={p} />
+              ))}
+              {changed && <RowChips f={f} />}
+              {f.flags.slice(0, shown).map((flag) => (
+                <FlagChip key={flag} flag={flag} />
+              ))}
+              {rest.length > 0 && (changed || !!cmp || f.flags.length > 1) && (
+                <Chip kind="na" title={rest.map((x) => flagOf(x).label).join(", ")}>
+                  +{rest.length}
+                  <span className="sr-only">{rest.map((x) => flagOf(x).label).join(", ")}</span>
+                </Chip>
+              )}
+            </span>
+            {canChange && withChanges && (
+              <RowActions
+                f={f}
+                index={features.findIndex((x) => x.key === f.key)}
+                features={features}
+                onDraft={setDraft}
+                onRemove={(id) => void removeChange(id)}
+              />
+            )}
+          </>
+        );
+      },
     },
   ];
 
@@ -832,6 +927,8 @@ function Priorities() {
           </Notice>
         )}
         {saveError && <Notice tone="error">{saveError}</Notice>}
+        {changed && <Notice tone="info">{changed}</Notice>}
+        {changeError && <Notice tone="error">{changeError}</Notice>}
         {q.error && <Notice tone="error">{q.error}</Notice>}
         {snapshotId && cq.error && <Notice tone="error">{cq.error}</Notice>}
         {cmp && (
@@ -846,7 +943,25 @@ function Priorities() {
 
         <Split
           inspector={
-            current && <FeatureInspector key={current.key} f={current} id={inspectorId} run={cmp ? byKey.get(current.key) : undefined} />
+            current && (
+              <FeatureInspector
+                key={current.key}
+                f={current}
+                id={inspectorId}
+                run={cmp ? byKey.get(current.key) : undefined}
+                change={
+                  withChanges && (
+                    <YourChange
+                      f={current}
+                      o={active.data?.find((o) => o.id === current.override?.id)}
+                      canChange={canChange}
+                      onRemove={(id) => void removeChange(id)}
+                      onMoveToo={moveToo}
+                    />
+                  )
+                }
+              />
+            )
           }
         >
           <Panel>
@@ -858,6 +973,15 @@ function Priorities() {
                   setMethod(m);
                   setSaved(null);
                 }}
+              />
+              <RadioSwitch
+                label="Order"
+                items={[
+                  { value: "changes", label: "With your changes" },
+                  { value: "oracle", label: "Oracle's order" },
+                ]}
+                value={order}
+                onChange={setOrder}
               />
               <span className="flex-1" />
               {r && (
@@ -930,7 +1054,23 @@ function Priorities() {
           )}
 
           <Snapshots reloadKey={snapshotsKey} note={note} onNote={setNote} canSnapshot={canSnapshot} />
+
+          <ChangesPanel reloadKey={changesKey} features={features} />
         </Split>
+        {draft && (
+          <OverrideSheet
+            key={`${draft.feature.key}|${draft.kind}|${draft.above?.key ?? draft.position ?? ""}`}
+            draft={draft}
+            features={features}
+            onClose={() => setDraft(null)}
+            onStored={(o) => {
+              setDraft(null);
+              const quiet = !["contradiction", "no_contradiction"].includes(o.reason_check.status);
+              const held = o.held_below ? `Held below ${o.held_below}: it depends on it.` : null;
+              void afterChange([quiet ? NUMBERS_ONLY : null, held].filter(Boolean).join(" ") || null);
+            }}
+          />
+        )}
       </div>
     </Page>
   );

@@ -120,6 +120,7 @@ const DECK_CSS = `
 .deck .slide-body table { border-collapse: collapse; width: 100%; font-size: 17px; }
 .deck .slide-body th, .deck .slide-body td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--color-rule); }
 .deck .slide-body th { color: var(--color-muted); font-size: 14px; text-transform: uppercase; }
+.deck .slide-body .slide-subheading { color: var(--color-heading); font-size: 20px; margin: 10px 0 6px; }
 .deck .slide-body a { color: var(--color-accent); text-decoration: none; }
 .deck .expand { margin-left: 6px; font: 600 12px/1 var(--font-body); color: var(--color-accent); background: transparent;
   border: 1px solid var(--color-rule); border-radius: 4px; padding: 3px 6px; cursor: pointer; }
@@ -143,6 +144,12 @@ type DeckInput = {
   source?: Schemas["VersionSource"] | null;
   sections: Section[];
   citations: { cite_key: string; title?: string | null; ref: string; source: string }[];
+  /**
+   * H8: front matter `slides`, groups of brief section keys; a group is one slide (its first
+   * section's heading and body, then each further section as a sub-heading and body). Brief
+   * sections in no group keep a slide each, after the groups.
+   */
+  slides?: string[][];
 };
 
 export function deckOut(d: DeckInput): Schemas["DeckOut"] {
@@ -175,14 +182,27 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
       inner: `<p class="slide-kicker">Brief</p><h1 class="slide-title">${esc(d.title)}</h1><p class="slide-subtitle">Version ${d.number} · ${esc(d.status.replace("_", " "))}</p>${sourceLabel ? `<p class="slide-source">${esc(sourceLabel)}</p>` : ""}`,
     },
   ];
-  for (const s of brief) {
+  const grouped = new Set<string>();
+  const groups: Section[][] = [];
+  for (const keys of d.slides ?? []) {
+    const group = keys.map((k) => brief.find((s) => s.section_key === k)).filter((s): s is Section => !!s && !grouped.has(s.section_key));
+    group.forEach((s) => grouped.add(s.section_key));
+    if (group.length) groups.push(group);
+  }
+  for (const s of brief) if (!grouped.has(s.section_key)) groups.push([s]);
+  // In document order: a group sits where its first section does.
+  const order = new Map(brief.map((s, i) => [s.section_key, i]));
+  if (d.slides?.length) groups.sort((a, b) => order.get(a[0].section_key)! - order.get(b[0].section_key)!);
+  for (const [s, ...rest] of groups) {
+    const all = [s, ...rest];
+    const notes = all.map((x) => presenterNotes(x.body_md)).filter(Boolean);
     raw.push({
       index: raw.length + 1,
       kind: "section",
       heading: s.heading,
       section_key: s.section_key,
-      notes: presenterNotes(s.body_md),
-      expand: linked(s.body_md)
+      notes: notes.length ? notes.join("\n\n") : null,
+      expand: [...new Set(all.flatMap((x) => linked(x.body_md)))]
         .filter((k) => detail.has(k))
         .map((k) => ({
           section_key: k,
@@ -191,7 +211,9 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
             .map((x) => `<section class="expand-section" data-section-key="${esc(x.section_key)}"><h3>${esc(x.heading)}</h3>${toHtml(x.body_md, plainLinks)}</section>`)
             .join(""),
         })),
-      inner: `<h2 class="slide-title">${esc(s.heading)}</h2><div class="slide-body">${toHtml(s.body_md, slideLinks)}</div>`,
+      inner: `<h2 class="slide-title">${esc(s.heading)}</h2><div class="slide-body">${toHtml(s.body_md, slideLinks)}${rest
+        .map((x) => `<h3 class="slide-subheading" data-section-key="${esc(x.section_key)}">${esc(x.heading)}</h3>${toHtml(x.body_md, slideLinks)}`)
+        .join("")}</div>`,
     });
   }
   if (d.citations.length) {

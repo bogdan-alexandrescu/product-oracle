@@ -271,6 +271,22 @@ def _issue_item(repo: _Repo, issue: dict[str, Any]) -> ItemUpsert:
     )
 
 
+_MERGED = re.compile(r"^- Merged: (\S+)$", re.M)
+
+
+def merged_pull(item: ItemUpsert) -> tuple[str, datetime] | None:
+    """(repo, merged at) of a merged pull request item :func:`_issue_item` wrote, else
+    None (F5-2: a merge makes the repo's code map stale). The issues list GitHub answers
+    does not name a pull request's base branch, so every merge counts."""
+    if item.kind != "pull_request" or ":pull:" not in item.external_id:
+        return None
+    found = _MERGED.search(item.content)
+    merged = _ts(found.group(1)) if found and found.group(1) != "no" else None
+    if merged is None:
+        return None
+    return item.external_id.rsplit(":pull:", 1)[0], merged
+
+
 def _release_item(repo: _Repo, release: dict[str, Any]) -> ItemUpsert:
     title = release.get("name") or release["tag_name"]
     facts = [

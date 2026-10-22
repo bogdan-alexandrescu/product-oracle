@@ -62,6 +62,7 @@ from oracle.discussions.models import (  # noqa: E402
     DiscussionParticipant,
 )
 from oracle.docs.models import Citation, Document, DocumentVersion, Section  # noqa: E402
+from oracle.engineering.models import CodeMap  # noqa: E402
 from oracle.intake.models import IntakeProposal, IntakeWithheldItem  # noqa: E402
 from oracle.integrations.models import CompanyIntegration  # noqa: E402
 from oracle.jobs.models import LlmJob, LlmSuggestion  # noqa: E402
@@ -74,7 +75,7 @@ from oracle.launches.models import (  # noqa: E402
 from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken  # noqa: E402
 from oracle.members.models import Invite, MemberFollowUp  # noqa: E402
 from oracle.preferences.models import UserPreference  # noqa: E402
-from oracle.priorities.models import PrioritySnapshot  # noqa: E402
+from oracle.priorities.models import PriorityOverride, PrioritySnapshot  # noqa: E402
 from oracle.quality.models import OutcomeRecord, QualityLearning  # noqa: E402
 from oracle.reports.models import AlignmentReport, AlignmentReportRead  # noqa: E402
 from oracle.requests.models import (  # noqa: E402
@@ -100,7 +101,7 @@ from oracle.roadmap.models import (  # noqa: E402
     TrackerRecord,
     TrackMilestone,
 )
-from oracle.runs.models import Checkpoint, Run, RunSegment  # noqa: E402
+from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment  # noqa: E402
 from oracle.runs.scope_models import PrdScope, PrdScopeItem  # noqa: E402
 from oracle.runtokens import RunToken  # noqa: E402
 from oracle.sources.models import (  # noqa: E402
@@ -154,6 +155,7 @@ __all__ = [
     "BlockerResolutionEvent",
     "ChangeEvent",
     "Checkpoint",
+    "CheckpointAction",
     "Decision",
     "DecisionReview",
     "Discussion",
@@ -161,6 +163,7 @@ __all__ = [
     "DiscussionMessage",
     "DiscussionParticipant",
     "Citation",
+    "CodeMap",
     "ClaudeAccount",
     "ClaudeAccountHold",
     "ClaudeAccountSignin",
@@ -201,6 +204,7 @@ __all__ = [
     "OAuthCode",
     "OAuthToken",
     "OutcomeRecord",
+    "PriorityOverride",
     "PrioritySnapshot",
     "ProductRequest",
     "ProductIntake",

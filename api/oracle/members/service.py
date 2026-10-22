@@ -169,6 +169,7 @@ async def set_role(
         if has_role(before, "owner"):
             await _void_spend_approvals(session, principal, acted_as, None, via)
         await _void_checkpoint_decisions(session, principal, acted_as, via, keep_role=role)
+        await _unstage_checkpoint_actions(session, principal, acted_as, via, keep_role=role)
         # A decision they recorded that is not delivered to its run yet, on a checkpoint
         # the new role may not decide: never delivered now.
         await void_owed_decisions(
@@ -359,6 +360,7 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
     jobs = await _cancel_llm_jobs(session, acted_as, at)
     voided = await _void_spend_approvals(session, principal, acted_as, user.id, via)
     decisions = await _void_checkpoint_decisions(session, principal, acted_as, via)
+    await _unstage_checkpoint_actions(session, principal, acted_as, via)
     # Decisions recorded and not delivered to their run yet (SwarmCloud did not take the
     # post): never delivered now.
     decisions += await void_owed_decisions(
@@ -602,6 +604,51 @@ async def _void_checkpoint_decisions(
         await void_decision(session, principal, run, segment, cp, via)
         voided.append(cp.id)
     return voided
+
+
+async def _unstage_checkpoint_actions(
+    session: AsyncSession,
+    principal: "Principal",
+    stagers: set[uuid.UUID],
+    via: dict[str, str],
+    *,
+    keep_role: Role | None = None,
+) -> None:
+    """D8: what the member staged on a pending checkpoint's shared draft becomes a
+    suggestion again (it needs an approver); each checkpoint's draft revision is bumped
+    once. With ``keep_role`` (a demotion), actions on a checkpoint that role may still
+    stage stand."""
+    from oracle.authz import has_role
+    from oracle.runs.models import Checkpoint, CheckpointAction
+
+    rows = (
+        await session.execute(
+            select(CheckpointAction, Checkpoint)
+            .join(Checkpoint, Checkpoint.id == CheckpointAction.checkpoint_id)
+            .where(
+                Checkpoint.status == "pending",
+                CheckpointAction.state == "staged",
+                CheckpointAction.updated_by.in_(stagers),
+            )
+            .with_for_update(of=Checkpoint)
+        )
+    ).all()
+    touched: dict[uuid.UUID, Checkpoint] = {}
+    for action, cp in rows:
+        if keep_role is not None and has_role(keep_role, cp.approver_role):  # type: ignore[arg-type]
+            continue
+        action.state = "suggested"
+        touched[cp.id] = cp
+        await audit.record(
+            session, principal, "checkpoint.action_suggested", "checkpoint", cp.id,
+            {"run_id": str(cp.run_id), "kind": cp.kind, "item_key": action.item_key,
+             "action": {"id": str(action.id), "kind": action.kind, "field": action.field,
+                        "value": action.value, "state": "suggested"},
+             "revision": (cp.draft_revision or 0) + 1, "unstaged": via},
+        )  # fmt: skip
+    for cp in touched.values():
+        cp.draft_revision = (cp.draft_revision or 0) + 1
+    await session.flush()
 
 
 async def _disconnect_all(

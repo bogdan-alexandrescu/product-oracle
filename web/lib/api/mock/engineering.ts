@@ -1,15 +1,35 @@
 /**
- * Mock of the tech brief reads (api/oracle/engineering/router.py) for NEXT_PUBLIC_API_MOCKS=1:
- * `GET /v1/tech-briefs?prd=&feature=` and `GET /v1/tech-briefs/{id}`. The seed stands for
- * what an approved Engineering check registered on the checkout PRD: one brief per feature,
- * one resting on a shared code map and one written without a map. Synthetic placeholders
- * only; every member reads (viewer+), as in the API.
+ * Mock of api/oracle/engineering/router.py for NEXT_PUBLIC_API_MOCKS=1.
+ *
+ * Tech briefs (F5-1): `GET /v1/tech-briefs?prd=&feature=` and `GET /v1/tech-briefs/{id}`.
+ * The seed stands for what an approved Engineering check registered on the checkout PRD:
+ * one brief per feature, one resting on a shared (docs-only) code map and one written
+ * without a map. Every member reads (viewer+), as in the API.
+ *
+ * Code maps (F5-2): `GET/POST /v1/code-maps`, `GET /v1/code-maps/{id}` and
+ * `POST /v1/code-maps/{id}/sharing`. A map starts building; the mock's code_map run
+ * finishes on the next read, docs only (the checkout is not available yet). Private maps
+ * are their source owner's only; shared ones everyone's. Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
 
 import { stableUuid } from "./ids";
+import { sourceRepos } from "./sources";
 
 type TechBrief = Schemas["TechBriefOut"];
+type CodeMap = Schemas["CodeMapDetail"];
+/** A stored map: who owns its source, and how many reads it has been building. */
+export type CodeMapRow = CodeMap & { owner_email: string; reads?: number };
+
+export interface EngineeringContext {
+  documents: { id: string; slug: string }[];
+  /** The mock's code maps, kept in the db (created on first use). */
+  maps: () => CodeMapRow[];
+  /** canWrite: commenter and up (mapping and sharing are the source's writes, as in the API). */
+  me: { id: string; email: string; canWrite: boolean };
+  now: () => string;
+  uuid: () => string;
+}
 
 const PRD = "checkout-redesign";
 const LEAD = stableUuid("member/approver@example.com");
@@ -26,7 +46,8 @@ function seedBriefs(): TechBrief[] {
       status: "approved",
       code_map: {
         used: true,
-        repos: [{ repo: "example/shop-app", commit: "3f2c9a1", as_of: "2026-10-18T10:00:00Z" }],
+        // A shared map built from the synced docs only (F5-2, until the checkout exists).
+        repos: [{ repo: "example/shop-app", commit: "3f2c9a1", as_of: "2026-10-18T10:00:00Z", partial: true }],
       },
       approach:
         "Compute the total in the pricing module as soon as the cart changes, and show it in the checkout summary from the first step.",
@@ -81,13 +102,122 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-/** The tech brief routes, or null for any other path. `documents`: the PRDs' slugs and ids. */
-export function routeEngineering(
-  req: Request,
-  p: string[],
-  q: URLSearchParams,
-  documents: { id: string; slug: string }[],
-): Response | null {
+/** What the mock's indexer writes: a docs-only map of the repository. */
+function docsOnlyMap(repo: string, at: string): Record<string, unknown> {
+  return {
+    version: 1,
+    repo,
+    commit: null,
+    generated_at: at,
+    partial: true,
+    modules: [{ id: "module:app", path: "app", summary: "The application (from its README)", depends_on: [] }],
+    apis: [],
+    data_models: [],
+    flags: [],
+    jobs: [],
+  };
+}
+
+function mapOut(m: CodeMapRow, me: EngineeringContext["me"], detail: boolean): Schemas["CodeMapOut"] | CodeMap {
+  const { owner_email, reads, content, ...out } = m;
+  void reads;
+  const view = { ...out, mine: owner_email === me.email };
+  return detail ? { ...view, content } : view;
+}
+
+/** A building map's run finishes on its first read after the request. */
+function advance(m: CodeMapRow, ctx: EngineeringContext) {
+  if (m.status !== "building") return;
+  m.reads = (m.reads ?? 0) + 1;
+  if (m.reads < 2) return;
+  const at = ctx.now();
+  m.status = "ready";
+  m.run_status = "succeeded";
+  m.content = docsOnlyMap(m.repo, at);
+  m.partial = true;
+  m.as_of = at;
+  m.size_bytes = JSON.stringify(m.content).length;
+  m.counts = { modules: 1, apis: 0, data_models: 0, flags: 0, jobs: 0 };
+}
+
+async function routeCodeMaps(req: Request, p: string[], q: URLSearchParams, ctx: EngineeringContext): Promise<Response> {
+  const maps = ctx.maps();
+  const visible = (m: CodeMapRow) => m.sharing === "full" || m.owner_email === ctx.me.email;
+  if (!p[2] && req.method === "GET") {
+    maps.forEach((m) => advance(m, ctx));
+    const repo = q.get("repo")?.toLowerCase();
+    const status = q.get("status");
+    const out = maps
+      .filter(visible)
+      .filter((m) => !repo || m.repo.toLowerCase() === repo)
+      .filter((m) => !status || m.status === status)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return json(200, out.map((m) => mapOut(m, ctx.me, false)));
+  }
+  const refused = () => json(403, { detail: "Requires the commenter role" });
+  if (!p[2] && req.method === "POST") {
+    if (!ctx.me.canWrite) return refused();
+    const body = (await req.json()) as { source_id?: string; repo?: string };
+    const source = body.source_id ? sourceRepos(body.source_id) : null;
+    if (!source) return json(404, { detail: "Source not found" });
+    if (source.kind !== "github") return json(422, { detail: "Only a GitHub source's repositories have a code map" });
+    const repo = source.repos.find((r) => r.toLowerCase() === (body.repo ?? "").trim().toLowerCase());
+    if (!repo) return json(422, { detail: `${body.repo} is not a repository of this source` });
+    const mine = maps.filter((m) => m.source_id === body.source_id && m.repo === repo);
+    if (mine.some((m) => m.status === "building")) return json(409, { detail: `A code map of ${repo} is already being built` });
+    const latest = mine.sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+    const row: CodeMapRow = {
+      id: ctx.uuid(),
+      source_id: body.source_id!,
+      repo,
+      commit_sha: null,
+      status: "building",
+      sharing: latest?.sharing ?? "private",
+      shared_by: latest?.shared_by ?? null,
+      shared_at: latest?.shared_at ?? null,
+      partial: false,
+      as_of: null,
+      size_bytes: null,
+      counts: { modules: 0, apis: 0, data_models: 0, flags: 0, jobs: 0 },
+      run_id: ctx.uuid(),
+      run_status: "running",
+      error: null,
+      stale_at: null,
+      mine: true,
+      created_at: ctx.now(),
+      content: null,
+      owner_email: ctx.me.email,
+      reads: 0,
+    };
+    maps.push(row);
+    return json(201, mapOut(row, ctx.me, false));
+  }
+  const row = maps.find((m) => m.id === p[2] && visible(m));
+  if (!row) return json(404, { detail: "Code map not found" });
+  if (!p[3] && req.method === "GET") {
+    advance(row, ctx);
+    return json(200, mapOut(row, ctx.me, true));
+  }
+  if (p[3] === "sharing" && req.method === "POST") {
+    if (!ctx.me.canWrite) return refused();
+    if (row.owner_email !== ctx.me.email) return json(404, { detail: "Code map not found" });
+    const { sharing } = (await req.json()) as { sharing: CodeMap["sharing"] };
+    if (sharing !== "full" && sharing !== "private") return json(422, { detail: "sharing must be private or full" });
+    const at = ctx.now();
+    for (const m of maps.filter((x) => x.source_id === row.source_id && x.repo === row.repo)) {
+      m.sharing = sharing;
+      m.shared_by = sharing === "full" ? ctx.me.id : null;
+      m.shared_at = sharing === "full" ? at : null;
+    }
+    return json(200, mapOut(row, ctx.me, false));
+  }
+  return json(405, { detail: "Method not allowed" });
+}
+
+/** The tech brief and code map routes, or null for any other path. */
+export async function routeEngineering(req: Request, p: string[], q: URLSearchParams, ctx: EngineeringContext): Promise<Response | null> {
+  if (p[1] === "code-maps") return routeCodeMaps(req, p, q, ctx);
+  const documents = ctx.documents;
   if (p[1] !== "tech-briefs" || req.method !== "GET") return null;
   const briefs = seedBriefs();
   if (p[2]) {

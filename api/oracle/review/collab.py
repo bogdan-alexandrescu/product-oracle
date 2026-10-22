@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import (
     Comment,
@@ -68,9 +69,18 @@ async def notify(
     ids = list(dict.fromkeys(r for r in recipients if r is not None))
     if not ids:
         return 0
-    users = set(
-        await db.scalars(select(User.id).where(User.id.in_(ids), User.disabled_at.is_(None)))
-    )
+    stmt = select(User.id).where(User.id.in_(ids), User.disabled_at.is_(None))
+    if document_id is not None:
+        # H8: nobody hears about a document they may not see (an update reaches owners
+        # and approvers only).
+        visible = await db.scalar(
+            select(Document.visibility)
+            .where(Document.id == document_id)
+            .execution_options(oracle_all_documents=True)
+        )
+        if visible is not None and visible != visibility.COMPANY:
+            stmt = stmt.where(User.role.in_(("approver", "owner")))
+    users = set(await db.scalars(stmt))
     written = 0
     for uid in ids:
         if uid not in users or actor == f"user:{uid}":
@@ -141,6 +151,13 @@ async def list_notifications(
     if principal.user_id is None:
         return []
     stmt = select(Notification).where(Notification.user_id == principal.user_id)
+    # H8: none about a document the caller may not see now (it may have been closed to
+    # owners and approvers since).
+    hidden = await visibility.hidden_document_ids(db)
+    if hidden:
+        stmt = stmt.where(
+            Notification.document_id.is_(None) | Notification.document_id.not_in(hidden)
+        )
     if unread:
         stmt = stmt.where(Notification.read_at.is_(None))
     return list(
@@ -155,7 +172,12 @@ async def mark_read(
 ) -> Notification:
     row = await db.get(Notification, notification_id)
     # Another user's notification is not found, not forbidden.
-    if row is None or principal.user_id is None or row.user_id != principal.user_id:
+    if (
+        row is None
+        or principal.user_id is None
+        or row.user_id != principal.user_id
+        or row.document_id in await visibility.hidden_document_ids(db, [row.document_id])
+    ):
         raise CollabError("not_found", f"Notification {notification_id} not found")
     if row.read_at is None:
         row.read_at = now()
@@ -461,7 +483,13 @@ async def list_campaigns(db: AsyncSession, document: Document) -> list[CampaignO
 
 
 async def get_campaign(db: AsyncSession, campaign_id: uuid.UUID) -> ReviewCampaign:
-    row = await db.get(ReviewCampaign, campaign_id)
+    # Joined to its document: a campaign on a document the caller may not see is not
+    # found (H8, oracle.docs.visibility).
+    row = await db.scalar(
+        select(ReviewCampaign)
+        .join(Document, Document.id == ReviewCampaign.document_id)
+        .where(ReviewCampaign.id == campaign_id)
+    )
     if row is None:
         raise CollabError("not_found", f"Campaign {campaign_id} not found")
     return row

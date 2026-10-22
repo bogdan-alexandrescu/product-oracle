@@ -2,9 +2,11 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 Method = Literal["goal_weighted", "rice", "moscow", "wsjf"]
+OverrideKind = Literal["move", "pin"]
+ReasonCheckStatus = Literal["contradiction", "no_contradiction", "skipped", "failed", "timed_out"]
 
 
 class GoalTerm(BaseModel):
@@ -25,6 +27,11 @@ class EvidenceUsed(BaseModel):
     ref: str | None
     # From a source item since removed (a narrowed source, or deleted upstream: S5).
     source_removed: bool = False
+    # What a person picks it by when citing it (C9): its source item's title, else its
+    # link; the kind of source; the date it is from.
+    title: str | None = None
+    source_kind: str | None = None
+    date: str | None = None
 
 
 class ConfidenceUsed(BaseModel):
@@ -49,10 +56,27 @@ class Explanation(BaseModel):
     order: list[str] = Field(default_factory=list)
 
 
+class RowOverride(BaseModel):
+    """The active move or pin that placed a row (C9)."""
+
+    id: str
+    kind: OverrideKind
+    # Who made it: a member's email or an API token's name.
+    by: str
+    reason: str
+    kept_after_pushback: bool = False
+    # The anchor's key (a move) or the rank held (a pin).
+    above: str | None = None
+    position: int | None = None
+    created_at: datetime | None = None
+
+
 class RankedFeature(BaseModel):
     rank: int
     # Position by score alone, before dependency order.
     score_rank: int
+    # Rank in Oracle's order (the formula and dependencies), before people's overrides.
+    formula_rank: int | None = None
     entity_id: str
     key: str
     title: str
@@ -60,7 +84,7 @@ class RankedFeature(BaseModel):
     score: float | None
     serves_goal: bool
     # no_confirmed_goal, missing_inputs, no_confidence, low_confidence,
-    # dependency_cycle, moved_for_dependency
+    # dependency_cycle, moved_for_dependency, held_by_dependency
     flags: list[str]
     depends_on: list[str]
     dependents: list[str]
@@ -69,6 +93,10 @@ class RankedFeature(BaseModel):
     # features the run ranks, and the run's own explanation (priority.yaml).
     live_rank: int | None = None
     run_explanation: str | None = None
+    # The move or pin that placed it, if any.
+    override: RowOverride | None = None
+    # A prerequisite an override could not pass: the row sits just below it.
+    held_below: str | None = None
 
 
 class RankingCounts(BaseModel):
@@ -195,3 +223,121 @@ class CompareOut(BaseModel):
     live_generated_at: datetime
     run: CompareRun | None = None
     checkpoint: CompareCheckpoint | None = None
+
+
+# --- overrides (C9 Move and pin) ---------------------------------------------------------
+
+
+class OverrideCreate(BaseModel):
+    feature_id: uuid.UUID
+    kind: OverrideKind
+    # A move: directly above this feature.
+    above_feature_id: uuid.UUID | None = None
+    # A pin: at this rank (1 is the top).
+    position: int | None = Field(default=None, ge=1)
+    reason: str = Field(min_length=1, max_length=500)
+    # Evidence of the feature the person cites, at most 5.
+    evidence_ids: list[uuid.UUID] = Field(default_factory=list, max_length=5)
+    # Null: the live ranking; else a proposed run snapshot (pick C8 Priority order snapshot).
+    snapshot_id: uuid.UUID | None = None
+    # True: keep the change after Oracle's pushback (no second check).
+    confirm: bool = False
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("a reason is required")
+        return v
+
+    @model_validator(mode="after")
+    def _target(self) -> "OverrideCreate":
+        if self.kind == "move":
+            if self.above_feature_id is None or self.position is not None:
+                raise ValueError("a move needs above_feature_id and no position")
+            if self.above_feature_id == self.feature_id:
+                raise ValueError("a feature cannot move above itself")
+        elif self.position is None or self.above_feature_id is not None:
+            raise ValueError("a pin needs position and no above_feature_id")
+        return self
+
+
+class OverrideRemove(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class EvidenceChip(BaseModel):
+    """A piece of evidence as a citation chip shows it."""
+
+    id: str
+    title: str
+    source_kind: str
+    confidence: float | None = None
+    date: str | None = None
+
+
+class PushbackMessage(BaseModel):
+    # no_confirmed_goal, low_confidence, against_score, open_blocker (the rules), or
+    # reason_contradicts_evidence (Oracle's reading of the reason).
+    code: str
+    message: str
+    # The numbers behind a rule message.
+    numbers: dict[str, Any] | None = None
+    # Oracle's reading of the reason: the claim it read and the evidence it rests on.
+    claim: str | None = None
+    evidence: list[EvidenceChip] | None = None
+
+
+class ReasonCheckOut(BaseModel):
+    status: ReasonCheckStatus
+    ms: int | None = None
+
+
+class PushbackOut(BaseModel):
+    """409: Oracle disagrees. Nothing is stored; ``confirm: true`` keeps the change."""
+
+    detail: str
+    pushback: list[PushbackMessage]
+    reason_check: ReasonCheckOut
+    # Where the feature would rank, and the prerequisite holding it, if any.
+    preview_rank: int | None
+    held_below: str | None
+
+
+class FeatureRef(BaseModel):
+    id: uuid.UUID
+    key: str
+    title: str
+
+
+class PersonRef(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class OverrideOut(BaseModel):
+    id: uuid.UUID
+    feature: FeatureRef
+    kind: OverrideKind
+    above: FeatureRef | None
+    position: int | None
+    reason: str
+    evidence_ids: list[uuid.UUID]
+    # The cited evidence, as chips.
+    evidence: list[EvidenceChip] = Field(default_factory=list)
+    pushback: list[PushbackMessage]
+    kept_after_pushback: bool
+    reason_check: ReasonCheckOut
+    snapshot_id: uuid.UUID | None
+    created_by: PersonRef
+    created_at: datetime
+    removed_at: datetime | None
+    removed_by: PersonRef | None
+    removed_reason: str | None
+    replaced_by: uuid.UUID | None
+    # Active, but its feature or anchor is no longer ranked (rejected): it does nothing.
+    no_longer_applies: bool = False
+    # On create: where the feature ranks now, and the prerequisite holding it, if any.
+    preview_rank: int | None = None
+    held_below: str | None = None

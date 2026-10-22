@@ -50,6 +50,7 @@ export const SectionView = memo(function SectionView({
   headTools,
   dateMarks,
   onDiscuss,
+  placeholder = false,
 }: {
   section: SectionOut;
   blocks: Block[];
@@ -80,6 +81,8 @@ export const SectionView = memo(function SectionView({
   dateMarks?: DateMarkOut[];
   /** Commenters and above: "Discuss this section" (G1). */
   onDiscuss?: (section: SectionOut) => void;
+  /** H8: the section still holds the template's "Owner to fill" text (an update's Asks). */
+  placeholder?: boolean;
 }) {
   const Heading = (`h${Math.min(section.level, 3)}` as "h1" | "h2" | "h3");
   // E1: a spec's part states; the acceptance criteria's proposed half starts at a block.
@@ -239,7 +242,16 @@ export const SectionView = memo(function SectionView({
           ))}
         </p>
       )}
-      <div className="doc-body" data-section-body={section.section_key}>
+      {placeholder && (
+        <p className="mb-2" data-testid="asks-placeholder-label">
+          <Chip kind="warn">Owner to fill</Chip>
+        </p>
+      )}
+      <div
+        className={`doc-body${placeholder ? " rounded-button border-2 border-warn bg-warn-bg px-4 py-3" : ""}`}
+        data-section-body={section.section_key}
+        data-testid={placeholder ? "asks-placeholder" : undefined}
+      >
         <MarkdownBody
           blocks={blocks}
           highlights={highlights}

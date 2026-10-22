@@ -41,7 +41,7 @@ const TABS = ["Home", "PRDs", "Plan", "Inbox"];
 /*
  * The destination a document belongs to (UI test finding E2): every kind's pages are
  * /documents/<slug>/…, so the URL alone says PRDs. A document page names its list once it
- * knows the document's kind (Plan for a roadmap), per slug; a slug's kind never changes,
+ * knows the document's kind (Plan for a roadmap, Company › Updates for an update), per slug; a slug's kind never changes,
  * so later pages of the same document highlight the right item from their first paint.
  */
 const documentHomes = new Map<string, string>();
@@ -77,7 +77,7 @@ function useDocumentHome(pathname: string): string | undefined {
 }
 
 function isActive(pathname: string, d: Dest, home?: string): boolean {
-  // A document page: the list its document belongs to (Company for /company/strategy).
+  // A document page: the list its document belongs to (Company for /company/strategy and for an update's, /company/updates).
   if (home) return d.href === home || home.startsWith(`${d.href}/`);
   const base = d.match ?? d.href;
   // /sources (evidence search) lives under Settings › Sources.

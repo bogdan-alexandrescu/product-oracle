@@ -117,6 +117,23 @@ per intake, and are turned off per intake (`ai_extraction: false` on `POST
 `untrusted_data`; what comes back is validated and labelled an AI inference. See
 [product-oracle-v2/03-discovery-and-quality.md](product-oracle-v2/03-discovery-and-quality.md).
 
+## Override reason check
+
+`override_reason_check` (C9 Move and pin, decided 2026-10-21 "Pushback") is not a queued
+job: it is one call made inside `POST /v1/priorities/overrides` while the person waits.
+When an approver moves or pins a feature on the Priorities screen, Oracle first checks
+four rules on the ranking's numbers, then reads the written reason against the evidence
+the person cited and the feature's top 20 evidence items (each cut to 600 characters,
+sent as quoted data), and may add one message when the evidence contradicts the reason.
+600 output tokens, 10 seconds, at most 200 checks per company per UTC day (counted from
+the `priority_override.reason_checked` audit events, one per call, holding status, ms,
+token usage and the account, never the reason or evidence text). No Claude account, an
+error, the time limit, an unreadable answer or the daily cap leave the rules to decide
+alone: saving is never refused because of it, and the screen says "Oracle checked the
+numbers only this time." Keep my change after a pushback makes no second call. Prompt:
+`api/oracle/priorities/prompts/override_reason_check.md`; code:
+`api/oracle/priorities/reason_check.py`.
+
 ## Prompts
 
 `api/oracle/jobs/prompts/<kind>.v<N>.md`, one system prompt per kind, versioned by file

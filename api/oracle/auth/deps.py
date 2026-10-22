@@ -296,7 +296,12 @@ async def same_origin(request: Request) -> None:
 
 
 async def get_db(principal: CurrentPrincipal) -> AsyncIterator[AsyncSession]:
+    # H8: the request's reads follow the principal's view of documents (an update is
+    # absent for a commenter or viewer).
+    from oracle.docs import visibility
+
     async with tenant_session(principal.tenant_id) as session:
+        visibility.bind(session, principal)
         yield session
 
 

@@ -87,8 +87,8 @@ function readSelection(): Selection | null {
   };
 }
 
-/** Document kinds only an owner approves (H4), in the words the page uses. */
-const OWNER_APPROVES: Partial<Record<string, string>> = { vision: "a vision", strategy: "a product strategy" };
+/** Document kinds only an owner approves (H4, H8), in the words the page uses. */
+const OWNER_APPROVES: Partial<Record<string, string>> = { vision: "a vision", strategy: "a product strategy", update: "an update" };
 
 /**
  * A version under review, ONE SECTION AT A TIME (I3, 2026-10-19), with the navigation the
@@ -614,8 +614,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const flaggedDates = [
     ...new Map((version?.date_marks ?? []).filter((m) => m.label).map((m) => [`${m.text}|${m.label}`, m])).values(),
   ];
+  const isUpdate = document_?.kind === "update";
   const approveBlocked =
-    flaggedDates.length > 0
+    flaggedDates.length > 0 && isUpdate
+      ? // H8: an update's Approve names what is left to resolve.
+        `Resolve ${flaggedDates.length} unverified date${flaggedDates.length === 1 ? "" : "s"}`
+      : flaggedDates.length > 0
       ? `${flaggedDates.length} date${flaggedDates.length === 1 ? " rests" : "s rest"} on no verified schedule basis: ${flaggedDates
           .map((m) => `${m.text} (${m.label})`)
           .join(", ")}. Record a basis or import a draft without ${flaggedDates.length === 1 ? "it" : "them"}.`
@@ -671,13 +675,17 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       <DiscussionThread key={discussion.id} id={discussion.id} onBack={closeDiscussion} onChanged={() => setDiscussionsKey((k) => k + 1)} />
     ));
 
+  // H8: on an update, approvers comment and suggest; owners also set section verdicts.
+  const canVerdict = canDecide && (!isUpdate || hasRole(role, "owner"));
   const sectionProps = (s: SectionOut) => ({
     section: s,
     blocks: parsed.get(s.section_key)!.blocks,
     citations,
     highlights: highlights.get(s.section_key) ?? NO_HIGHLIGHTS,
     activeCommentId: activeId,
-    readOnly: readOnly || !canDecide,
+    readOnly: readOnly || !canVerdict,
+    // H8: an update's Asks section is the owner's to write; highlighted until it is.
+    placeholder: isUpdate && s.section_key === "asks" && /^\s*Owner to fill/m.test(s.body_md),
     changedLock: changedLocks.has(s.section_key),
     evidenceTargets: canComment ? graphQ.data?.entities : undefined,
     refine: canDecide && !readOnly && n === latest ? refine : undefined,
