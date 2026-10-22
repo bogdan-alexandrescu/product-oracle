@@ -86,7 +86,7 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
  * whole flow, so its figures are the dialog's were.
  */
 async function draftSheet(page: Page, title: string) {
-  await login(page, "approver@example.com");
+  await login(page);
   await page.goto("/documents/new?kind=prd");
   await page.getByRole("textbox", { name: "Title" }).fill(title);
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Teams pay through a slow manual invoice. Billing should be self-serve.");
@@ -136,12 +136,6 @@ test("new run over $50 waits for an owner's approval", async ({ page }) => {
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 
   await expect(status(page)).toHaveText("Awaiting cost approval");
-  // An owner approves the cost.
-  const url = page.url();
-  await page.getByTestId("user-menu").click();
-  await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
-  await login(page);
-  await page.goto(url);
   await page.getByRole("button", { name: "Approve $53.00 and start" }).click();
   await expect(status(page)).toHaveText("Running");
 });

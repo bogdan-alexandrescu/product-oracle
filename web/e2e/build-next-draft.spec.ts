@@ -98,7 +98,7 @@ test("the New run dialog no longer offers the feedback loop and points at where 
   await login(page);
   await page.goto("/runs");
   await page.getByRole("button", { name: "New run" }).click();
-  const dialog = page.getByRole("dialog", { name: "New run" });
+  const dialog = page.getByRole("dialog", { name: "Start a run" });
   // C4: Baseline to PRD starts at New PRD too, so the dialog offers no flow.
   await expect(dialog.getByRole("radio")).toHaveCount(0);
   await expect(dialog.getByText("Feedback loop")).toHaveCount(0);

@@ -186,7 +186,8 @@ test("New run no longer offers Baseline to PRD and points at New PRD", async ({ 
   await login(page);
   await page.goto("/runs");
   await page.getByRole("button", { name: "New run" }).click();
-  const dialog = page.getByRole("dialog", { name: "New run" });
+  // With no flow left to offer, the dialog is "Start a run": only the pointer lines (D12).
+  const dialog = page.getByRole("dialog", { name: "Start a run" });
   await expect(dialog.getByTestId("flow-pointers")).toBeVisible();
   await expect(dialog.getByRole("radio", { name: "Baseline to PRD" })).toHaveCount(0);
   const pointer = dialog.getByRole("link", { name: "New PRD · PRDs" });
