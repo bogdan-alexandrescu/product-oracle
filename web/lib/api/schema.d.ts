@@ -1547,7 +1547,8 @@ export interface paths {
         /**
          * Resend Invite Email
          * @description Email an open invite again (Resend): queued and sent in the background
-         *     (``email_status``), or ``not_sent`` with no sender configured.
+         *     (``email_status``), or ``not_sent`` with no sender configured. Refused (429) under
+         *     a minute after its last send.
          */
         post: operations["resend_invite_email"];
         delete?: never;
@@ -13693,7 +13694,8 @@ export interface components {
         };
         /**
          * FollowUpOut
-         * @description A call a member's disable owes (a provider revoke, a runtime cancel) and how it
+         * @description A call a member's disable owes (a provider revoke, a runtime cancel), or a change
+         *     to a person's Google IAP access that failed (an IAP revoke or grant), and how it
          *     stands: pending (retried by the tick), failed (no more automatic retries; Retry or
          *     Dismiss), done, or dismissed by an owner.
          */
@@ -13712,9 +13714,11 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "provider_revoke" | "run_cancel";
+            kind: "provider_revoke" | "run_cancel" | "iap_revoke" | "iap_grant";
             /** Provider */
             provider?: string | null;
+            /** Email */
+            email?: string | null;
             /**
              * Status
              * @enum {string}
@@ -16325,6 +16329,8 @@ export interface components {
              * @default 0
              */
             open_tokens: number;
+            /** Access Pending */
+            access_pending?: ("revoke" | "grant") | null;
             /**
              * Status
              * @enum {string}
@@ -27848,6 +27854,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Its email went out under a minute ago (Retry-After: seconds) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

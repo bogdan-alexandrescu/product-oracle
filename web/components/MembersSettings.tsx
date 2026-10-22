@@ -193,17 +193,24 @@ const tokensPhrase = (n: number) => (n === 0 ? "nothing else is" : n === 1 ? "th
 
 /** "Removed Oct 18, 2026" */
 function StatusChip({ m }: { m: Member }) {
-  if (!removed(m)) {
-    return (
-      <Chip kind="pass" dot>
-        Active
-      </Chip>
-    );
-  }
-  return (
+  const status = !removed(m) ? (
+    <Chip kind="pass" dot>
+      Active
+    </Chip>
+  ) : (
     <Chip kind="na" dot title={m.disabled_at ? `Removed ${formatDateTime(m.disabled_at)}` : undefined}>
       Removed{m.disabled_at ? ` ${shortDate(m.disabled_at)}` : ""}
     </Chip>
+  );
+  if (!m.access_pending) return status;
+  // A Google IAP access change that failed; Oracle retries it on its own.
+  return (
+    <span className="flex flex-col items-start gap-1">
+      {status}
+      <Chip kind="warn" data-testid="member-access" title="Google refused the change; Oracle retries it for a day">
+        {m.access_pending === "revoke" ? "Access not removed yet" : "Access not granted yet"}
+      </Chip>
+    </span>
   );
 }
 
@@ -421,7 +428,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
       ),
     },
     { key: "role", header: "Role", width: "128px", wrap: true, cell: roleCell },
-    { key: "status", header: "Status", width: "146px", cell: (m) => <StatusChip m={m} /> },
+    { key: "status", header: "Status", width: "146px", wrap: true, cell: (m) => <StatusChip m={m} /> },
     {
       key: "signin",
       header: "Last sign-in",

@@ -6,7 +6,9 @@ services (:mod:`oracle.members.iap_access`) after the invite commits, so a faile
 never loses it: the invite stays ``pending`` with the reason, and Retry
 (``POST /v1/invites/{id}/access``) grants again. Revoking an open invite, or removing a
 member, takes the binding away unless the person is still an active member or has
-another open invite; restoring a member grants it again.
+another open invite; restoring a member grants it again. A revoke, or a restore's grant,
+that fails is owed as a follow-up the tick retries. Changes for one address are
+serialised (:func:`lock_address`).
 
 Email: queued with the invite (or Resend) and sent in the background
 (:func:`schedule`), never on the request; one retry, then ``failed``. A send a dead
@@ -17,20 +19,22 @@ Every function here commits: each runs after the request's own change committed.
 """
 
 import asyncio
+import hashlib
 import logging
+import math
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.models import ApiToken, User
 from oracle.config import get_settings
 from oracle.members import iap_access, mailer
-from oracle.members.models import Invite
+from oracle.members.models import Invite, MemberFollowUp
 from oracle.models import Tenant
 from oracle.tenancy import tenant_session
 
@@ -41,6 +45,8 @@ log = logging.getLogger(__name__)
 
 # A queued send older than this was lost with its process: the tick sends it.
 STALE_QUEUED = timedelta(minutes=5)
+# Resend waits this long after the invite's last send.
+RESEND_COOLDOWN = timedelta(seconds=60)
 MAX_ERROR_CHARS = 500
 
 
@@ -57,6 +63,39 @@ def _open(invite: Invite) -> bool:
 
 
 # --- IAP access ----------------------------------------------------------------------------
+#
+# Every change to one address's access, and the check of whether the person still needs
+# it, runs under a transaction-scoped Postgres advisory lock on that address
+# (:func:`lock_address`), held across the check and the IAP calls: a revoke never runs
+# during a grant for the same person, nor a grant during a revoke. A change that fails
+# is owed as a ``MemberFollowUp`` (``iap_revoke``, ``iap_grant``) the tick retries,
+# re-checking first (:func:`follow_up_access`).
+
+
+def _lock_key(address: str) -> int:
+    digest = hashlib.sha256(f"iap-access:{address.strip().lower()}".encode()).digest()
+    return int.from_bytes(digest[:8], "big", signed=True)
+
+
+async def lock_address(session: AsyncSession, address: str) -> None:
+    """Serialise IAP access changes for ``address`` until the transaction ends (the IAP
+    policies are Oracle-wide, so the lock is not per company)."""
+    await session.execute(select(func.pg_advisory_xact_lock(_lock_key(address))))
+
+
+async def _still_needed(session: AsyncSession, address: str) -> str | None:
+    """Why ``address`` keeps its access: an active member, or an open invite; or None."""
+    member = await session.scalar(
+        select(User.id).where(User.email == address, User.disabled_at.is_(None))
+    )
+    if member is not None:
+        return "an active member"
+    invited = await session.scalar(
+        select(Invite.id).where(
+            Invite.email == address, Invite.accepted_at.is_(None), Invite.revoked_at.is_(None)
+        )
+    )
+    return "another open invite" if invited is not None else None
 
 
 async def _grant(email: str) -> tuple[str, str | None]:
@@ -75,25 +114,69 @@ async def _grant(email: str) -> tuple[str, str | None]:
     return "granted", None
 
 
+async def _revoke(email: str) -> tuple[str, str | None]:
+    """Take ``email``'s access away: (``removed`` | ``failed``, the error)."""
+    client = iap_access.get_client()
+    if client is None:
+        return "failed", "ORACLE_GCP_PROJECT is not set"
+    try:
+        await iap_access.revoke(client, get_settings().iap_backends, email)
+    except iap_access.IapError as exc:
+        log.warning("IAP access for %s not removed: %s", email, exc)
+        return "failed", str(exc)[:MAX_ERROR_CHARS]
+    return "removed", None
+
+
+def _owe(session: AsyncSession, kind: str, target_id: uuid.UUID, address: str, error) -> None:
+    """A failed access change, owed: the tick retries it after the first backoff."""
+    from oracle.members.service import follow_up_backoff
+
+    session.add(
+        MemberFollowUp(
+            member_id=target_id,
+            kind=kind,
+            target_id=target_id,
+            email=address,
+            status="pending",
+            attempts=1,
+            outcome="failed",
+            last_error=error,
+            next_attempt_at=datetime.now(UTC) + follow_up_backoff(1),
+        )
+    )
+
+
+async def _reread(session: AsyncSession, invite_id: uuid.UUID) -> Invite | None:
+    return await session.scalar(
+        select(Invite).where(Invite.id == invite_id).execution_options(populate_existing=True)
+    )
+
+
 async def grant_invite_access(
     session: AsyncSession, principal: "Principal", invite: Invite
 ) -> Invite:
-    """Grant the invitee IAP access and record the outcome on the invite (commits)."""
-    address = invite.email
-    await session.rollback()  # no transaction held open across the IAP calls
-    outcome, error = await _grant(address)
-    await session.refresh(invite)
-    if not _open(invite):
+    """Grant the invitee IAP access and record the outcome on the invite (commits).
+    Under the address's lock; an invite closed meanwhile is left alone, and one closed
+    while the grant was under way has the binding taken away again (audited)."""
+    invite_id, address = invite.id, invite.email
+    await session.rollback()  # no row lock held across the IAP calls
+    await lock_address(session, address)
+    current = await _reread(session, invite_id)
+    if current is None or not _open(current):
+        await session.rollback()
         return invite
-    invite.access = outcome
-    invite.access_error = error
-    invite.access_at = datetime.now(UTC)
+    outcome, error = await _grant(address)
+    current = await _reread(session, invite_id)
+    if current is not None and _open(current):
+        current.access = outcome
+        current.access_error = error
+        current.access_at = datetime.now(UTC)
     await audit.record(
         session,
         principal,
         "invite_access.grant",
         "invite",
-        invite.id,
+        invite_id,
         {
             "email": address,
             "outcome": "failed" if outcome == "pending" else outcome,
@@ -101,15 +184,25 @@ async def grant_invite_access(
             **({"error": error} if error else {}),
         },
     )
+    if outcome == "granted" and (current is None or not _open(current)):
+        # Closed while Google was granting it: take it away again, unless still needed.
+        await _release_one(session, principal, address, invite_id, "invite_access.remove")
     await session.commit()
-    return invite
+    return current or invite
 
 
 async def grant_member_access(session: AsyncSession, principal: "Principal", user: User) -> None:
-    """A restored member gets their IAP access back (commits). A failure is logged and
-    audited; the owner sees it in the audit log."""
+    """A restored member gets their IAP access back (commits), under the address's lock;
+    a failure is audited and owed as an ``iap_grant`` follow-up the tick retries."""
     address, user_id = user.email, user.id
     await session.rollback()
+    await lock_address(session, address)
+    active = await session.scalar(
+        select(User.id).where(User.id == user_id, User.disabled_at.is_(None))
+    )
+    if active is None:  # removed again meanwhile: that removal took the access
+        await session.rollback()
+        return
     outcome, error = await _grant(address)
     await audit.record(
         session,
@@ -123,57 +216,101 @@ async def grant_member_access(session: AsyncSession, principal: "Principal", use
             **({"error": error} if error else {}),
         },
     )
+    if outcome == "pending":
+        _owe(session, "iap_grant", user_id, address, error)
     await session.commit()
 
 
-async def release_access(
-    session: AsyncSession, principal: "Principal", emails: list[str], action: str
+async def _release_one(
+    session: AsyncSession,
+    principal: "Principal | None",
+    address: str,
+    target_id: uuid.UUID,
+    action: str,
 ) -> None:
-    """Take IAP access away from each of ``emails``, unless the person is still an active
-    member or has another open invite (commits). Audited as ``action``; a failure is
-    logged and audited, never raised: the change that called it has committed."""
-    backends = get_settings().iap_backends
-    if not backends:
+    """Under the address's lock (the caller's transaction): take its access away unless
+    still needed; audited as ``action``; a failure owed as an ``iap_revoke``."""
+    data: dict = {"email": address, "backends": list(get_settings().iap_backends)}
+    reason = await _still_needed(session, address)
+    if reason is not None:
+        data["outcome"], data["reason"] = "kept", reason
+    else:
+        data["outcome"], error = await _revoke(address)
+        if error:
+            data["error"] = error
+            _owe(session, "iap_revoke", target_id, address, error)
+    entity = "invite" if action.startswith("invite") else "user"
+    await audit.record(session, principal, action, entity, target_id, data)
+
+
+async def release_access(
+    session: AsyncSession,
+    principal: "Principal",
+    targets: dict[str, uuid.UUID],
+    action: str,
+) -> None:
+    """Take IAP access away from each address of ``targets`` (address: the invite or the
+    member it is for), unless the person is still an active member or has another open
+    invite (commits each). Audited as ``action``; a failure is owed as a follow-up the
+    tick retries, never raised: the change that called it has committed."""
+    if not get_settings().iap_backends:
         return
-    for address in sorted(set(emails)):
-        member = await session.scalar(
-            select(User.id).where(User.email == address, User.disabled_at.is_(None))
-        )
-        invited = await session.scalar(
-            select(Invite.id).where(
-                Invite.email == address, Invite.accepted_at.is_(None), Invite.revoked_at.is_(None)
-            )
-        )
-        data: dict = {"email": address, "backends": list(backends)}
-        if member is not None or invited is not None:
-            data["outcome"] = "kept"
-            data["reason"] = "an active member" if member is not None else "another open invite"
-        else:
-            await session.rollback()
-            client = iap_access.get_client()
-            try:
-                if client is None:
-                    raise iap_access.IapError("ORACLE_GCP_PROJECT is not set")
-                await iap_access.revoke(client, backends, address)
-                data["outcome"] = "removed"
-            except iap_access.IapError as exc:
-                log.warning("IAP access for %s not removed: %s", address, exc)
-                data["outcome"] = "failed"
-                data["error"] = str(exc)[:MAX_ERROR_CHARS]
-        entity = "invite" if action.startswith("invite") else "user"
-        await audit.record(session, principal, action, entity, None, data)
+    for address in sorted(targets):
+        await session.rollback()
+        await lock_address(session, address)
+        await _release_one(session, principal, address, targets[address], action)
         await session.commit()
 
 
 async def release_disabled(session: AsyncSession, principal: "Principal", user: User) -> None:
     """After a disable commits: the member's access, and that of the open invites the
     disable revoked with it (theirs, and the ones they created)."""
-    emails = [user.email]
+    targets: dict[str, uuid.UUID] = {}
     if user.disabled_at is not None:
-        emails += list(
-            await session.scalars(select(Invite.email).where(Invite.revoked_at == user.disabled_at))
+        revoked = await session.execute(
+            select(Invite.email, Invite.id).where(Invite.revoked_at == user.disabled_at)
         )
-    await release_access(session, principal, emails, "member_access.remove")
+        targets.update({address: invite_id for address, invite_id in revoked})
+    targets[user.email] = user.id
+    await release_access(session, principal, targets, "member_access.remove")
+
+
+async def follow_up_access(
+    session: AsyncSession, row: MemberFollowUp, timed
+) -> tuple[bool, str, str | None]:
+    """The tick's retry of an owed access change (``oracle.members.service._follow_up``),
+    in its transaction, under the address's lock, re-checked first: a revoke of someone
+    who needs the access again is ``kept``; a grant for someone removed again is
+    ``not_needed``. ``timed()``: the call's deadline. (succeeded, outcome, error)."""
+    address = row.email or ""
+    if not get_settings().iap_backends:
+        return True, "skipped", None
+    await lock_address(session, address)
+    try:
+        if row.kind == "iap_revoke":
+            if await _still_needed(session, address) is not None:
+                return True, "kept", None
+            async with timed():
+                outcome, error = await _revoke(address)
+            return outcome == "removed", outcome, error
+        active = await session.scalar(
+            select(User.id).where(User.email == address, User.disabled_at.is_(None))
+        )
+        if active is None:
+            return True, "not_needed", None
+        async with timed():
+            outcome, error = await _grant(address)
+        return outcome == "granted", "granted" if outcome == "granted" else "failed", error
+    except TimeoutError:
+        return False, "failed", "Google did not answer in time"
+
+
+async def follow_up_audit(session: AsyncSession, row: MemberFollowUp) -> tuple[str, str]:
+    """The audit action and entity of an access follow-up: a member's, or an invite's."""
+    verb = "remove" if row.kind == "iap_revoke" else "grant"
+    if row.kind == "iap_grant" or await session.get(User, row.member_id) is not None:
+        return f"member_access.{verb}", "user"
+    return f"invite_access.{verb}", "invite"
 
 
 # --- The invite email ----------------------------------------------------------------------
@@ -189,6 +326,16 @@ def queue_email(invite: Invite) -> bool:
         return False
     invite.email_status = "queued"
     return True
+
+
+def resend_wait(invite: Invite) -> int:
+    """How many seconds Resend still waits: the invite's email went out (``email_at``)
+    under :data:`RESEND_COOLDOWN` ago; 0 when it may send now (a failed send may be
+    resent at once: nothing reached the person)."""
+    if invite.email_at is None or invite.email_status != "sent":
+        return 0
+    left = RESEND_COOLDOWN - (datetime.now(UTC) - invite.email_at)
+    return max(0, math.ceil(left.total_seconds()))
 
 
 _tasks: set[asyncio.Task] = set()
@@ -278,7 +425,10 @@ async def deliver(
                     await sender.send(http, message)
                     status, error = "sent", None
                 except Exception as exc:
-                    error = str(exc)[:MAX_ERROR_CHARS] or type(exc).__name__
+                    # Only Oracle's own short reason, never a body from Google.
+                    error = (
+                        str(exc)[:MAX_ERROR_CHARS] if isinstance(exc, mailer.MailError) else ""
+                    ) or type(exc).__name__
                     log.warning("invite email to %s failed (try %d): %s", address, attempt, error)
                 await audit.record(
                     s,

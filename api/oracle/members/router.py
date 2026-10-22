@@ -228,6 +228,7 @@ async def create_invite(body: InviteCreate, principal: Owner, db: TenantDB) -> I
     "/invites/{invite_id}/access",
     response_model=InviteOut,
     responses={404: {"description": "No such invite"}, 409: {"description": "Not open"}},
+    dependencies=[Depends(same_origin)],
 )
 async def retry_invite_access(invite_id: uuid.UUID, principal: Owner, db: TenantDB) -> InviteOut:
     """Grant an open invite's Google IAP access again (Retry on "Access not granted
@@ -244,14 +245,24 @@ async def retry_invite_access(invite_id: uuid.UUID, principal: Owner, db: Tenant
     responses={
         404: {"description": "No such invite"},
         409: {"description": "Not open, or its email is being sent"},
+        429: {"description": "Its email went out under a minute ago (Retry-After: seconds)"},
     },
+    dependencies=[Depends(same_origin)],
 )
 async def resend_invite_email(invite_id: uuid.UUID, principal: Owner, db: TenantDB) -> InviteOut:
     """Email an open invite again (Resend): queued and sent in the background
-    (``email_status``), or ``not_sent`` with no sender configured."""
+    (``email_status``), or ``not_sent`` with no sender configured. Refused (429) under
+    a minute after its last send."""
     invite = await _call(service.get_open_invite(db, invite_id))
     if invite.email_status == "queued":
         raise HTTPException(status.HTTP_409_CONFLICT, "Oracle is sending this invite's email")
+    wait = delivery.resend_wait(invite)
+    if wait:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"Oracle emailed this invite under a minute ago; resend it in {wait} seconds",
+            headers={"Retry-After": str(wait)},
+        )
     send = delivery.queue_email(invite)
     await audit.record(
         db, principal, "invite_email.resend", "invite", invite.id, {"email": invite.email}
@@ -269,9 +280,9 @@ async def revoke_invite(invite_id: uuid.UUID, principal: Owner, db: TenantDB) ->
     The invitee's Google IAP access is taken away, unless they are an active member or
     have another open invite (audited)."""
     invite = await _call(service.revoke_invite(db, principal, invite_id))
-    address = invite.email
+    targets = {invite.email: invite.id}
     await db.commit()
-    await delivery.release_access(db, principal, [address], "invite_access.remove")
+    await delivery.release_access(db, principal, targets, "invite_access.remove")
 
 
 # --- Follow-ups a disable owes (Inbox: Retry, Dismiss) ------------------------------------

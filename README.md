@@ -149,8 +149,13 @@ IAP session.
 Settings › Members invites someone by email. Oracle then lets their Google account
 through IAP and emails them the sign-in link; the Members page says what happened to
 each invite (access granted or not yet, with Retry; email sent, not sent or failed, with
-Resend). An address outside `ORACLE_IAP_ALLOWED_DOMAINS` (when set) is refused, because
-Google sign-in would refuse it.
+Resend, which waits a minute after an email went out). An invite takes exactly one plain
+address (no name, list or comment); one outside `ORACLE_IAP_ALLOWED_DOMAINS` (when set) is
+refused, because Google sign-in would refuse it. Taking access away, or granting it
+again on a restore, that fails is retried by the tick until it is done; the member's row
+says "Access not removed yet" (or "not granted yet") meanwhile. Oracle records only a
+short reason for a failure ("Google returned 403 (permission denied)"), never Google's
+answer.
 
 | Variable | Meaning |
 |----------|---------|

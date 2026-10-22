@@ -11,10 +11,13 @@ Additive. ``invites`` gains:
   its one retry) or ``not_sent`` (no sender configured), with ``email_error`` and
   ``email_at`` (when it got that status).
 
+``member_follow_ups`` gains two kinds, ``iap_revoke`` and ``iap_grant`` (an IAP access
+change that failed, retried by the tick), and ``email`` (the address it is for).
+
 Live-safe: the two NOT NULL columns have constant server defaults (a catalog-only
 change in Postgres 11+); existing invites read ``pending`` and ``not_sent``.
 
-The downgrade drops the columns.
+The downgrade drops the columns, and the IAP follow-ups with the kinds.
 
 Revision ID: 0022_invite_delivery
 Revises: 0021_feedback_agent_staging
@@ -50,12 +53,27 @@ def upgrade() -> None:
         "invites",
         "email_status IN ('queued', 'sent', 'failed', 'not_sent')",
     )
+    op.add_column("member_follow_ups", sa.Column("email", sa.Text(), nullable=True))
+    op.drop_constraint(op.f("ck_member_follow_ups_kind"), "member_follow_ups", type_="check")
+    op.create_check_constraint(
+        op.f("ck_member_follow_ups_kind"),
+        "member_follow_ups",
+        "kind IN ('provider_revoke', 'run_cancel', 'iap_revoke', 'iap_grant')",
+    )
 
 
 COLUMNS = ("email_at", "email_error", "email_status", "access_at", "access_error", "access")
 
 
 def downgrade() -> None:
+    op.execute("DELETE FROM member_follow_ups WHERE kind IN ('iap_revoke', 'iap_grant')")
+    op.drop_constraint(op.f("ck_member_follow_ups_kind"), "member_follow_ups", type_="check")
+    op.create_check_constraint(
+        op.f("ck_member_follow_ups_kind"),
+        "member_follow_ups",
+        "kind IN ('provider_revoke', 'run_cancel')",
+    )
+    op.drop_column("member_follow_ups", "email")
     op.drop_constraint(op.f("ck_invites_email_status"), "invites", type_="check")
     op.drop_constraint(op.f("ck_invites_access"), "invites", type_="check")
     for column in COLUMNS:

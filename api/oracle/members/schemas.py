@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from email.utils import getaddresses
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
@@ -16,6 +17,29 @@ InviteEmailStatus = Literal["queued", "sent", "failed", "not_sent"]
 
 
 MemberStatus = Literal["active", "disabled"]
+# A follow-up still owed on a member's Google IAP access (the tick retries it): revoke
+# (removed, and the binding not taken away yet) or grant (restored, not granted yet).
+MemberAccessPending = Literal["revoke", "grant"]
+
+# Never in a plain address: each could make one "address" a list, a display name, a
+# group or a comment in the To header or the IAM member built from it.
+_NOT_IN_AN_ADDRESS = frozenset(',;<>"():')
+
+
+def plain_address(value: str) -> str:
+    """``value`` as exactly one plain address, ``local@domain``, lowercased: no display
+    name, no list, no comment, no quoting and no whitespace. Raises ValueError otherwise.
+    The invite's To header and its IAM member are only ever built from this."""
+    v = value.strip().lower()
+    if not v.isprintable() or any(c.isspace() or c in _NOT_IN_AN_ADDRESS for c in v):
+        raise ValueError("not an email address")
+    local, _, domain = v.partition("@")
+    labels = domain.split(".")
+    if not local or "@" in domain or len(labels) < 2 or not all(labels):
+        raise ValueError("not an email address")
+    if getaddresses([v]) != [("", v)]:
+        raise ValueError("not an email address")
+    return v
 
 
 class MemberOut(BaseModel):
@@ -33,6 +57,9 @@ class MemberOut(BaseModel):
     # Credentials still acting for them: unrevoked personal API tokens and live MCP
     # client grants (a disable revokes them all).
     open_tokens: int = 0
+    # Their Google IAP access is still being changed (a failed revoke or grant the tick
+    # retries): revoke while removed, grant while active; None when nothing is owed.
+    access_pending: MemberAccessPending | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -51,11 +78,7 @@ class InviteCreate(BaseModel):
     @field_validator("email")
     @classmethod
     def _normalise(cls, v: str) -> str:
-        v = v.strip().lower()
-        local, _, domain = v.partition("@")
-        if not local or "." not in domain or any(c.isspace() for c in v):
-            raise ValueError("not an email address")
-        return v
+        return plain_address(v)
 
 
 class InviteOut(BaseModel):
@@ -134,7 +157,8 @@ FollowUpStatus = Literal["pending", "done", "failed", "dismissed"]
 
 
 class FollowUpOut(BaseModel):
-    """A call a member's disable owes (a provider revoke, a runtime cancel) and how it
+    """A call a member's disable owes (a provider revoke, a runtime cancel), or a change
+    to a person's Google IAP access that failed (an IAP revoke or grant), and how it
     stands: pending (retried by the tick), failed (no more automatic retries; Retry or
     Dismiss), done, or dismissed by an owner."""
 
@@ -142,8 +166,10 @@ class FollowUpOut(BaseModel):
 
     id: uuid.UUID
     member_id: uuid.UUID
-    kind: Literal["provider_revoke", "run_cancel"]
+    kind: Literal["provider_revoke", "run_cancel", "iap_revoke", "iap_grant"]
     provider: str | None = None
+    # iap_revoke, iap_grant: the address whose access it changes.
+    email: str | None = None
     status: FollowUpStatus
     attempts: int
     outcome: str | None = None

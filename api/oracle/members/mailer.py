@@ -21,6 +21,8 @@ from typing import Protocol
 import httpx
 
 from oracle.config import get_settings
+from oracle.members.iap_access import google_refusal
+from oracle.members.schemas import plain_address
 from oracle.swarm.swarmcloud import GoogleAccessToken
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -31,7 +33,6 @@ JWT_BEARER = "urn:ietf:params:oauth:grant-type:jwt-bearer"
 TIMEOUT = httpx.Timeout(15.0)
 # A delegated token is used until this many seconds before it expires.
 EXPIRY_MARGIN = 300
-MAX_ERROR_CHARS = 300
 
 
 class MailError(Exception):
@@ -127,15 +128,14 @@ class DelegatedTokenMinter:
                 timeout=TIMEOUT,
             )
             if signed.status_code != 200:
-                raise MailError(f"signJwt answered {signed.status_code}: {_short(signed)}")
+                raise MailError(google_refusal(signed.status_code))
             exchanged = await http.post(
                 TOKEN_URL,
                 data={"grant_type": JWT_BEARER, "assertion": signed.json()["signedJwt"]},
                 timeout=TIMEOUT,
             )
             if exchanged.status_code != 200:
-                code = exchanged.status_code
-                raise MailError(f"the token exchange answered {code}: {_short(exchanged)}")
+                raise MailError(google_refusal(exchanged.status_code))
             body = exchanged.json()
             token, ttl = body["access_token"], float(body.get("expires_in", 3600))
         except MailError:
@@ -144,8 +144,8 @@ class DelegatedTokenMinter:
             raise MailError(f"Google could not be reached: {type(exc).__name__}") from None
         except (ValueError, KeyError, TypeError):
             raise MailError("Google answered with no token") from None
-        except Exception as exc:  # the service account's own token (metadata server)
-            raise MailError(f"no access token for Oracle's service account: {exc}") from None
+        except Exception:  # the service account's own token (metadata server)
+            raise MailError("Oracle has no access token for its service account") from None
         self._token, self._expires_at = token, time.time() + ttl
         return token
 
@@ -162,31 +162,32 @@ class GmailApiMailer:
         self.minter = minter or DelegatedTokenMinter(sender)
 
     def _raw(self, message: InviteEmail) -> str:
+        try:
+            to = plain_address(message.to)
+        except ValueError:
+            raise MailError("not one plain email address") from None
         msg = EmailMessage()
         msg["From"] = self.sender
-        msg["To"] = message.to
+        msg["To"] = to
         msg["Subject"] = message.subject
         msg.set_content(message.text)
         msg.add_alternative(message.html, subtype="html")
         return base64.urlsafe_b64encode(msg.as_bytes()).decode()
 
     async def send(self, http: httpx.AsyncClient, message: InviteEmail) -> None:
+        raw = self._raw(message)
         token = await self.minter.token(http)
         try:
             resp = await http.post(
                 GMAIL_SEND_URL,
-                json={"raw": self._raw(message)},
+                json={"raw": raw},
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=TIMEOUT,
             )
         except httpx.HTTPError as exc:
-            raise MailError(f"the Gmail API could not be reached: {type(exc).__name__}") from None
+            raise MailError(f"Google could not be reached ({type(exc).__name__})") from None
         if resp.status_code != 200:
-            raise MailError(f"the Gmail API answered {resp.status_code}: {_short(resp)}")
-
-
-def _short(resp: httpx.Response) -> str:
-    return resp.text[:MAX_ERROR_CHARS]
+            raise MailError(google_refusal(resp.status_code))
 
 
 _mailers: dict[str, GmailApiMailer] = {}

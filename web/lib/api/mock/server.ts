@@ -230,7 +230,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * problem (C6, saved-addresses);
  * "mail-off" as the default company with no invite sender configured (invites are not
  * emailed); "mail-fails" where every first invite email fails (Resend sends it);
- * "iap-pending" where an invite's Google IAP access is not granted until Retry (#242).
+ * "iap-pending" where an invite's Google IAP access is not granted until Retry (#242);
+ * "iap-revoke-fails" where removing a member leaves their Google IAP access to remove (the
+ * tick retries it).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -1646,6 +1648,9 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
           return json(409, { detail: "Cannot remove the last owner; make someone else owner" });
         }
         Object.assign(target, { status: "disabled", disabled_at: now(), disabled_by: me.id });
+        // Their Google IAP access is taken away; in "iap-revoke-fails" Google refuses, and
+        // the revoke is owed (the tick retries it).
+        if (localStorage.getItem(MOCK_SCENARIO_KEY) === "iap-revoke-fails") target.access_pending = "revoke";
         // Every credential acting for them is revoked with the disable.
         revokeMemberTokens(account, target.id, target.disabled_at!);
         for (const i of db.invites) {
@@ -1655,7 +1660,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       return m === "DELETE" ? json(204, undefined) : json(200, out(target));
     }
     if (m === "POST" && p[3] === "restore") {
-      Object.assign(target, { status: "active", disabled_at: null, disabled_by: null });
+      Object.assign(target, { status: "active", disabled_at: null, disabled_by: null, access_pending: null });
       return json(200, out(target));
     }
   }
@@ -1690,7 +1695,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         accepted_at: null,
         revoked_at: null,
         ...(scenario === "iap-pending"
-          ? { access: "pending", access_error: "oracle-api-be: IAP answered 403: the caller does not have permission" }
+          ? { access: "pending", access_error: "oracle-api-be: Google returned 403 (permission denied)" }
           : { access: "granted", access_error: null }),
         access_at: now(),
         email_status: scenario === "mail-off" ? "not_sent" : "queued",
@@ -1706,7 +1711,10 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
       if (p[3] === "access") Object.assign(invite, { access: "granted", access_error: null, access_at: now() });
       else if (invite.email_status === "queued") return json(409, { detail: "Oracle is sending this invite's email" });
-      else {
+      else if (invite.email_status === "sent" && invite.email_at && Date.now() - Date.parse(invite.email_at) < 60_000) {
+        const wait = Math.ceil((60_000 - (Date.now() - Date.parse(invite.email_at))) / 1000);
+        return json(429, { detail: `Oracle emailed this invite under a minute ago; resend it in ${wait} seconds` });
+      } else {
         (db.invites_resent ??= []).push(invite.id);
         Object.assign(invite, { email_status: scenario === "mail-off" ? "not_sent" : "queued", email_error: null, email_at: now() });
       }

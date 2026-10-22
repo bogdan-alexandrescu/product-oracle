@@ -52,7 +52,7 @@ class Invite(TenantScoped, Base):
     email_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-FOLLOW_UP_KINDS = ("provider_revoke", "run_cancel")
+FOLLOW_UP_KINDS = ("provider_revoke", "run_cancel", "iap_revoke", "iap_grant")
 # pending: retried by the tick, by time; failed: still not done after the retry window,
 # no more automatic retries (an owner's Retry or Dismiss in the Inbox); done; dismissed:
 # an owner gave up on it.
@@ -61,9 +61,11 @@ FOLLOW_UP_STATUSES = ("pending", "done", "failed", "dismissed")
 
 class MemberFollowUp(TenantScoped, Base):
     """An outbound call a disable owes, made after the disable commits (C2): revoking a
-    connection's grant at its provider, cancelling a run segment at the runtime. Kept
-    out of the disable's transaction so the company-wide review gate is never held
-    across a network call; its outcome is recorded here and retried from the tick
+    connection's grant at its provider, cancelling a run segment at the runtime; or a
+    change to a person's Google IAP access that failed (#242: a revoke, a removal or a
+    restore; ``oracle.members.delivery``). Kept out of the disable's transaction so the
+    company-wide review gate is never held across a network call; its outcome is
+    recorded here and retried from the tick
     (``oracle.members.service.run_follow_ups``), with a backoff, for 24 hours; a provider
     revoke still not done keeps its copy of the credential and is shown to owners in the
     Inbox (Retry, Dismiss) until it succeeds or an owner dismisses it."""
@@ -87,6 +89,10 @@ class MemberFollowUp(TenantScoped, Base):
     key_version: Mapped[int | None] = mapped_column(Integer)
     # run_cancel: the runtime's workflow id.
     workflow_id: Mapped[str | None] = mapped_column(Text)
+    # iap_revoke, iap_grant (#242): the address whose Google IAP access a revoke, a
+    # removal or a restore failed to change (oracle.members.delivery); member_id and
+    # target_id are the member's id, or the revoked invite's.
+    email: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # The last attempt's outcome ("revoked", "failed", "cancelled", ...).

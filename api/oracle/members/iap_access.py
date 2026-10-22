@@ -15,13 +15,33 @@ from typing import Protocol
 import httpx
 
 from oracle.config import get_settings
+from oracle.members.schemas import plain_address
 from oracle.swarm.swarmcloud import GoogleAccessToken
 
 ROLE = "roles/iap.httpsResourceAccessor"
 IAP_API = "https://iap.googleapis.com/v1"
 TIMEOUT = httpx.Timeout(10.0)
-# What Oracle keeps of an error body.
-MAX_ERROR_CHARS = 300
+# What an error from Google is recorded as: its status and a short generic reason, never
+# its body (it can name projects, accounts and policies).
+REASONS = {
+    400: "bad request",
+    401: "not authenticated",
+    403: "permission denied",
+    404: "not found",
+    409: "conflict",
+    429: "rate limited",
+}
+
+
+def google_refusal(code: int) -> str:
+    """``Google returned 403 (permission denied)``: what Oracle records of a refusal."""
+    reason = REASONS.get(code)
+    if reason is None:
+        if code in (502, 503, 504):
+            reason = "unavailable"
+        else:
+            reason = "server error" if code >= 500 else "refused"
+    return f"Google returned {code} ({reason})"
 
 
 class IapError(Exception):
@@ -58,17 +78,17 @@ class GoogleIapClient:
             headers = {"Authorization": await self.auth.header(http)}
             resp = await http.post(url, json=body, headers=headers, timeout=TIMEOUT)
         except httpx.HTTPError as exc:
-            raise IapError(f"IAP could not be reached: {type(exc).__name__}") from None
-        except Exception as exc:  # the token: RuntimeUnavailable from the metadata server
-            raise IapError(f"no access token for IAP: {exc}") from None
+            raise IapError(f"Google could not be reached ({type(exc).__name__})") from None
+        except Exception:  # the token: RuntimeUnavailable from the metadata server
+            raise IapError("Oracle has no access token for Google") from None
         if resp.status_code == 409:
-            raise EtagConflict("IAP answered 409: the policy's etag changed")
+            raise EtagConflict("Google returned 409 (the policy's etag changed)")
         if resp.status_code != 200:
-            raise IapError(f"IAP answered {resp.status_code}: {resp.text[:MAX_ERROR_CHARS]}")
+            raise IapError(google_refusal(resp.status_code))
         try:
             return resp.json()
         except ValueError:
-            raise IapError("IAP answered with no policy") from None
+            raise IapError("Google answered with no policy") from None
 
     async def get_policy(self, http: httpx.AsyncClient, backend: str) -> dict:
         return await self._post(http, self._url(backend, "getIamPolicy"), {})
@@ -139,10 +159,18 @@ async def _change(client: IapPolicyClient, http: httpx.AsyncClient, backend: str
                 raise
 
 
+def _member(email: str) -> str:
+    """The IAM member of ``email``: ``user:`` and one plain address, or IapError."""
+    try:
+        return f"user:{plain_address(email)}"
+    except ValueError:
+        raise IapError("not one plain email address") from None
+
+
 async def grant(client: IapPolicyClient, backends: list[str], email: str) -> None:
     """Give ``user:<email>`` the accessor role on each backend; already there is fine.
     Raises :class:`IapError` naming the backend that failed."""
-    member = f"user:{email}"
+    member = _member(email)
     async with httpx.AsyncClient() as http:
         for backend in backends:
             try:
@@ -153,7 +181,7 @@ async def grant(client: IapPolicyClient, backends: list[str], email: str) -> Non
 
 async def revoke(client: IapPolicyClient, backends: list[str], email: str) -> None:
     """Take ``user:<email>``'s accessor role away on each backend; not there is fine."""
-    member = f"user:{email}"
+    member = _member(email)
     async with httpx.AsyncClient() as http:
         for backend in backends:
             try:

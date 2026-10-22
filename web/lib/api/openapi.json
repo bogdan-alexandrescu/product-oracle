@@ -5220,7 +5220,7 @@
           "members"
         ],
         "summary": "Resend Invite Email",
-        "description": "Email an open invite again (Resend): queued and sent in the background\n(``email_status``), or ``not_sent`` with no sender configured.",
+        "description": "Email an open invite again (Resend): queued and sent in the background\n(``email_status``), or ``not_sent`` with no sender configured. Refused (429) under\na minute after its last send.",
         "operationId": "resend_invite_email",
         "security": [
           {
@@ -5258,6 +5258,9 @@
           },
           "409": {
             "description": "Not open, or its email is being sent"
+          },
+          "429": {
+            "description": "Its email went out under a minute ago (Retry-After: seconds)"
           },
           "422": {
             "description": "Validation Error",
@@ -43941,7 +43944,9 @@
             "type": "string",
             "enum": [
               "provider_revoke",
-              "run_cancel"
+              "run_cancel",
+              "iap_revoke",
+              "iap_grant"
             ],
             "title": "Kind"
           },
@@ -43955,6 +43960,17 @@
               }
             ],
             "title": "Provider"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
           },
           "status": {
             "type": "string",
@@ -44056,7 +44072,7 @@
           "created_at"
         ],
         "title": "FollowUpOut",
-        "description": "A call a member's disable owes (a provider revoke, a runtime cancel) and how it\nstands: pending (retried by the tick), failed (no more automatic retries; Retry or\nDismiss), done, or dismissed by an owner."
+        "description": "A call a member's disable owes (a provider revoke, a runtime cancel), or a change\nto a person's Google IAP access that failed (an IAP revoke or grant), and how it\nstands: pending (retried by the tick), failed (no more automatic retries; Retry or\nDismiss), done, or dismissed by an owner."
       },
       "FreshnessCounts": {
         "properties": {
@@ -50896,6 +50912,21 @@
             "type": "integer",
             "title": "Open Tokens",
             "default": 0
+          },
+          "access_pending": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "revoke",
+                  "grant"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Pending"
           },
           "status": {
             "type": "string",
