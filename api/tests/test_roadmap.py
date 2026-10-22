@@ -332,7 +332,8 @@ def test_segment_prompts_carry_the_prd_version_priorities_and_edges():
         ],
         goals=[{"key": "activation", "title": "Raise activation", "horizon": "short"}],
     )
-    rm = flows.RoadmapContext(
+    rm = flows.DraftContext(
+        kind="roadmap",
         slug=ROADMAP,
         template="now-next-later",
         template_version=1,
@@ -362,7 +363,7 @@ def test_segment_prompts_carry_the_prd_version_priorities_and_edges():
     assert "- activation: Raise activation (horizon short)" in prompt
     assert "roadmap_items.yaml" in prompt and "get_priorities" in prompt
     assert "--- PRD checkout-redesign v3 ---" in prompt
-    draft_ctx = flows.PromptContext(**{**ctx.__dict__, "roadmap": rm})
+    draft_ctx = flows.PromptContext(**{**ctx.__dict__, "draft": rm})
     steps = flows.build_steps(flow, flow.segment("roadmap_draft"), knobs, draft_ctx)
     prompt = steps[-1][2]
     assert "Write these files as artifacts: roadmap.md." in prompt

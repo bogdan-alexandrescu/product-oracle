@@ -473,7 +473,8 @@ async def test_the_new_run_dialog_offers_only_its_flows_and_points_at_the_others
     ids = await setup(client)
     auth = ids["auth"]
     flows_out = {f["key"]: f for f in (await client.get("/v1/flows", headers=auth)).json()["flows"]}
-    assert [k for k, f in flows_out.items() if f["in_new_run_dialog"]] == ["baseline_to_prd"]
+    # C4: Baseline to PRD starts from New PRD now; the dialog offers no flow.
+    assert [k for k, f in flows_out.items() if f["in_new_run_dialog"]] == []
     assert flows_out["feedback_loop"]["starts_from"] == {
         "label": "Build next draft · open a PRD or roadmap and use Build next draft",
         "href": None,
@@ -482,7 +483,10 @@ async def test_the_new_run_dialog_offers_only_its_flows_and_points_at_the_others
         "label": "PRD to roadmap · Plan › Roadmap documents",
         "href": "/plan/documents",
     }
-    assert flows_out["baseline_to_prd"]["starts_from"] is None
+    assert flows_out["baseline_to_prd"]["starts_from"] == {
+        "label": "New PRD · PRDs",
+        "href": "/documents/new?kind=prd",
+    }
 
     # The flow stays in the API; started directly it still reads every open item.
     resp = await client.post(
