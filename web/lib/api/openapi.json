@@ -13701,6 +13701,898 @@
         }
       }
     },
+    "/v1/rituals/summaries": {
+      "get": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Get Ritual Summary Settings",
+        "description": "The summaries mode (on_demand or always) and the monthly estimate of Every\npre-read over the active rituals it would cover.",
+        "operationId": "get_ritual_summary_settings",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummarySettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Put Ritual Summary Settings",
+        "description": "Owners: On demand, or Every pre-read (Oracle summarises each covered pre-read).",
+        "operationId": "put_ritual_summary_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummarySettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummarySettingsOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/rituals": {
+      "get": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "List Rituals",
+        "description": "The company's rituals: built-ins first.",
+        "operationId": "list_rituals",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RitualOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Rituals"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Create Ritual",
+        "description": "Owners: a custom ritual, or a built-in kind the company does not have.",
+        "operationId": "create_ritual",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RitualCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RitualOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/rituals/{ritual_id}": {
+      "get": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Get Ritual",
+        "operationId": "get_ritual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RitualOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Update Ritual",
+        "description": "Owners: schedule, length, lead time, owner, attendees or title.",
+        "operationId": "update_ritual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RitualPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RitualOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Delete Ritual",
+        "description": "Owners: custom rituals only; built-ins pause (409).",
+        "operationId": "delete_ritual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/rituals/{ritual_id}/pause": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Pause Ritual",
+        "operationId": "pause_ritual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RitualOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/rituals/{ritual_id}/resume": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Resume Ritual",
+        "operationId": "resume_ritual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RitualOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/rituals/{ritual_id}/prepare": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Prepare Ritual",
+        "description": "Owners: Prepare now (builds the next pre-read at once), or Retry a failed one.",
+        "operationId": "prepare_ritual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/rituals/{ritual_id}/occurrences": {
+      "get": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "List Ritual Occurrences",
+        "description": "The ritual's recent occurrences, newest first.",
+        "operationId": "list_ritual_occurrences",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OccurrenceSummary"
+                  },
+                  "title": "Response List Ritual Occurrences"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/ritual-occurrences/{occurrence_id}": {
+      "get": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Get Ritual Occurrence",
+        "description": "One occurrence: its pre-read blocks, state, notes and summary.",
+        "operationId": "get_ritual_occurrence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/ritual-occurrences/{occurrence_id}/pre-read.md": {
+      "get": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Get Ritual Occurrence Pre Read",
+        "description": "The pre-read as markdown, for agents and export.",
+        "operationId": "get_ritual_occurrence_pre_read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/markdown": {}
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/ritual-occurrences/{occurrence_id}/read": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Read Ritual Occurrence",
+        "description": "Marks the pre-read read for me: its Inbox row is done.",
+        "operationId": "read_ritual_occurrence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/ritual-occurrences/{occurrence_id}/held": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Hold Ritual Occurrence",
+        "description": "The ritual's owner: Mark held, with the notes and the decisions recorded.",
+        "operationId": "hold_ritual_occurrence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HeldIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/ritual-occurrences/{occurrence_id}/skip": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Skip Ritual Occurrence",
+        "description": "The ritual's owner: Skip, with a reason.",
+        "operationId": "skip_ritual_occurrence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkipIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/ritual-occurrences/{occurrence_id}/summary": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Summarize Ritual Occurrence",
+        "description": "Summarize with Oracle: one ritual_summary run ($3.00 at quick depth); 409 while\nthis occurrence's summary run is under way.",
+        "operationId": "summarize_ritual_occurrence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
     "/v1/templates": {
       "get": {
         "tags": [
@@ -46014,6 +46906,37 @@
         "title": "EntityWriteOut",
         "description": "A write either applied (``entity``) or became a proposal (the item is locked)."
       },
+      "Estimate": {
+        "properties": {
+          "per_summary_usd": {
+            "type": "number",
+            "title": "Per Summary Usd"
+          },
+          "runs_per_month": {
+            "type": "number",
+            "title": "Runs Per Month"
+          },
+          "usd_per_month": {
+            "type": "number",
+            "title": "Usd Per Month"
+          },
+          "rituals": {
+            "items": {
+              "$ref": "#/components/schemas/EstimateRitual"
+            },
+            "type": "array",
+            "title": "Rituals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "per_summary_usd",
+          "runs_per_month",
+          "usd_per_month",
+          "rituals"
+        ],
+        "title": "Estimate"
+      },
       "EstimateOut": {
         "properties": {
           "run_id": {
@@ -46076,6 +46999,30 @@
           "within_budget"
         ],
         "title": "EstimateOut"
+      },
+      "EstimateRitual": {
+        "properties": {
+          "ritual_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ritual Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "runs_per_month": {
+            "type": "number",
+            "title": "Runs Per Month"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ritual_id",
+          "title",
+          "runs_per_month"
+        ],
+        "title": "EstimateRitual"
       },
       "EvaluationFindingOut": {
         "properties": {
@@ -48819,7 +49766,8 @@
               "launch_kit",
               "baseline",
               "code_map",
-              "update_draft"
+              "update_draft",
+              "ritual_summary"
             ],
             "title": "Key"
           },
@@ -49714,6 +50662,27 @@
         ],
         "title": "Health"
       },
+      "HeldIn": {
+        "properties": {
+          "notes": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Notes",
+            "default": ""
+          },
+          "decision_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Decision Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "HeldIn"
+      },
       "HiddenDiscussion": {
         "properties": {
           "id": {
@@ -50498,7 +51467,8 @@
               "launch_kit",
               "baseline",
               "code_map",
-              "update_draft"
+              "update_draft",
+              "ritual_summary"
             ],
             "title": "Flow"
           },
@@ -51297,6 +52267,14 @@
             "title": "Needs Me",
             "default": 0
           },
+          "rituals": {
+            "items": {
+              "$ref": "#/components/schemas/InboxRitual"
+            },
+            "type": "array",
+            "title": "Rituals",
+            "default": []
+          },
           "launches": {
             "items": {
               "$ref": "#/components/schemas/InboxLaunch"
@@ -51625,6 +52603,63 @@
         ],
         "title": "InboxRevokeFailure",
         "description": "A provider revoke a member's disable still owes, whose last attempt did not\nrevoke (C2): retried by the tick for 24 hours, then waiting for an owner."
+      },
+      "InboxRitual": {
+        "properties": {
+          "occurrence_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Occurrence Id"
+          },
+          "ritual_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ritual Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due At"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "pre_read",
+              "record_notes",
+              "failed"
+            ],
+            "title": "Reason"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open",
+              "done"
+            ],
+            "title": "State"
+          },
+          "counts": {
+            "type": "boolean",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "occurrence_id",
+          "ritual_id",
+          "title",
+          "due_at",
+          "reason",
+          "state",
+          "counts"
+        ],
+        "title": "InboxRitual",
+        "description": "A ritual row of the Inbox: Pre-read ready (owner and attendees, until opened),\nRecord notes (the ritual's owner, after the end) and Ritual failed to prepare\n(owners). ``counts``: in needs_me and the badge."
       },
       "InboxStaged": {
         "properties": {
@@ -58641,6 +59676,243 @@
         ],
         "title": "OAuthErrorOut"
       },
+      "OccurrenceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ritual_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ritual Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due At"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ends At"
+          },
+          "duration_min": {
+            "type": "integer",
+            "title": "Duration Min"
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Owner Id"
+          },
+          "attendee_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Attendee Ids"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "ready",
+              "held",
+              "skipped",
+              "missed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "period": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "pre_read": {
+            "$ref": "#/components/schemas/PreRead"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "skip_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Reason"
+          },
+          "decision_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Decision Ids"
+          },
+          "summary_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Run Id"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "summary_state": {
+            "type": "string",
+            "enum": [
+              "none",
+              "running",
+              "ready",
+              "failed",
+              "not_started"
+            ],
+            "title": "Summary State"
+          },
+          "summary_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Note"
+          },
+          "read_by_me": {
+            "type": "boolean",
+            "title": "Read By Me"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ritual_id",
+          "kind",
+          "title",
+          "due_at",
+          "ends_at",
+          "duration_min",
+          "owner_id",
+          "attendee_ids",
+          "timezone",
+          "status",
+          "period",
+          "pre_read",
+          "attempts",
+          "error",
+          "notes",
+          "skip_reason",
+          "decision_ids",
+          "summary_run_id",
+          "summary",
+          "summary_state",
+          "summary_note",
+          "read_by_me"
+        ],
+        "title": "OccurrenceOut"
+      },
+      "OccurrenceSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ritual_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ritual Id"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due At"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ends At"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "ready",
+              "held",
+              "skipped",
+              "missed",
+              "failed"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ritual_id",
+          "due_at",
+          "ends_at",
+          "status"
+        ],
+        "title": "OccurrenceSummary"
+      },
       "OracleAsker": {
         "properties": {
           "kind": {
@@ -59418,6 +60690,36 @@
           "new_password"
         ],
         "title": "PasswordChange"
+      },
+      "Period": {
+        "properties": {
+          "from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          }
+        },
+        "type": "object",
+        "title": "Period"
       },
       "PersonAsker": {
         "properties": {
@@ -60618,6 +61920,33 @@
         ],
         "title": "PrdScopeOut",
         "description": "A PRD scope (C6): the features and requirements a feature-set stop approves for one\nPRD, in file order. Later segments and the document's next drafts read the approved\none."
+      },
+      "PreRead": {
+        "properties": {
+          "built_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Built At"
+          },
+          "blocks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Blocks",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "PreRead"
       },
       "Prediction": {
         "properties": {
@@ -68104,6 +69433,269 @@
         ],
         "title": "Risk"
       },
+      "RitualCreate": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "custom"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "duration_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 480.0,
+                "minimum": 5.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Min"
+          },
+          "prep_hours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 168.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prep Hours"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "attendee_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Attendee Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "RitualCreate"
+      },
+      "RitualOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "builtin": {
+            "type": "boolean",
+            "title": "Builtin"
+          },
+          "schedule": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Schedule"
+          },
+          "duration_min": {
+            "type": "integer",
+            "title": "Duration Min"
+          },
+          "prep_hours": {
+            "type": "integer",
+            "title": "Prep Hours"
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Owner Id"
+          },
+          "attendee_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Attendee Ids"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused"
+            ],
+            "title": "Status"
+          },
+          "next_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Due At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "last_pre_read": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OccurrenceSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "builtin",
+          "schedule",
+          "duration_min",
+          "prep_hours",
+          "owner_id",
+          "attendee_ids",
+          "status",
+          "next_due_at",
+          "lock_version"
+        ],
+        "title": "RitualOut"
+      },
+      "RitualPatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "duration_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 480.0,
+                "minimum": 5.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Min"
+          },
+          "prep_hours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 168.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prep Hours"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "attendee_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attendee Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "RitualPatch"
+      },
       "RoadmapAnswers": {
         "properties": {
           "audience": {
@@ -68592,7 +70184,8 @@
               "launch_kit",
               "baseline",
               "code_map",
-              "update_draft"
+              "update_draft",
+              "ritual_summary"
             ],
             "title": "Flow"
           },
@@ -68863,7 +70456,8 @@
               "launch_kit",
               "baseline",
               "code_map",
-              "update_draft"
+              "update_draft",
+              "ritual_summary"
             ],
             "title": "Flow"
           },
@@ -69421,7 +71015,8 @@
               "launch_kit",
               "baseline",
               "code_map",
-              "update_draft"
+              "update_draft",
+              "ritual_summary"
             ],
             "title": "Flow"
           },
@@ -69859,6 +71454,62 @@
         ],
         "title": "RuntimeStatusOut",
         "description": "Whether Oracle reaches its agent runtime, and as which tenant (owner only)."
+      },
+      "Schedule": {
+        "properties": {
+          "freq": {
+            "type": "string",
+            "enum": [
+              "weekly",
+              "monthly",
+              "quarterly",
+              "yearly",
+              "every_n_weeks"
+            ],
+            "title": "Freq"
+          },
+          "interval": {
+            "type": "integer",
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Interval",
+            "default": 1
+          },
+          "weekday": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Weekday",
+            "default": 0
+          },
+          "week_of_month": {
+            "type": "integer",
+            "title": "Week Of Month",
+            "default": 1
+          },
+          "month": {
+            "type": "integer",
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Month",
+            "default": 1
+          },
+          "time": {
+            "type": "string",
+            "title": "Time",
+            "default": "09:00"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone",
+            "default": "UTC"
+          }
+        },
+        "type": "object",
+        "required": [
+          "freq"
+        ],
+        "title": "Schedule"
       },
       "ScheduleBasisCreate": {
         "properties": {
@@ -72957,6 +74608,21 @@
         ],
         "title": "SignedOutEverywhere",
         "description": "Every session signed before ``sessions_valid_after`` is refused, this one too;\nevery personal API token, every MCP client (refresh tokens included) and the run\ntokens of the runs you started that are still going are revoked (AC1)."
+      },
+      "SkipIn": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "SkipIn"
       },
       "SkippedSection": {
         "properties": {
@@ -76531,6 +78197,44 @@
           "text"
         ],
         "title": "SuggestionPatch"
+      },
+      "SummarySettingsIn": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "on_demand",
+              "always"
+            ],
+            "title": "Mode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "title": "SummarySettingsIn"
+      },
+      "SummarySettingsOut": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "on_demand",
+              "always"
+            ],
+            "title": "Mode"
+          },
+          "estimate": {
+            "$ref": "#/components/schemas/Estimate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "estimate"
+        ],
+        "title": "SummarySettingsOut"
       },
       "SweepOut": {
         "properties": {
