@@ -115,6 +115,7 @@ export function DriftList({
   rows,
   loading,
   error,
+  counts,
   stack,
   onWaived,
 }: {
@@ -123,10 +124,11 @@ export function DriftList({
   rows: Finding[] | undefined;
   loading: boolean;
   error: string | null;
+  /** How many findings each state's list holds, so a chip counts what its list shows. */
+  counts: Partial<Record<FindingState, number>>;
   stack: Stack | undefined;
   onWaived: (f: Finding) => void;
 }) {
-  const counts: Partial<Record<FindingState, number>> = { open: stack?.counts.open, waived: stack?.counts.waived };
   return (
     <Panel
       title="Drift"

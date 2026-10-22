@@ -30,12 +30,12 @@ export default function StrategyPage() {
   const [drafting, setDrafting] = useState<DocKind | null>(null);
 
   const stackQ = useQuery("strategy|stack", () => unwrap(api.GET("/v1/strategy/stack")));
-  const openQ = useQuery("strategy|findings|open", () => unwrap(api.GET("/v1/strategy/findings", { params: { query: { status: "open" } } })));
-  const listQ = useQuery(
-    `strategy|findings|${state}`,
-    () => (state === "open" ? Promise.resolve(undefined) : unwrap(api.GET("/v1/strategy/findings", { params: { query: { status: state } } }))),
-    { keepPrevious: true },
-  );
+  // Every state's list, so each chip counts the findings its list shows (the API does not page).
+  const findings = (status: FindingState) => () => unwrap(api.GET("/v1/strategy/findings", { params: { query: { status } } }));
+  const openQ = useQuery("strategy|findings|open", findings("open"));
+  const waivedQ = useQuery("strategy|findings|waived", findings("waived"));
+  const resolvedQ = useQuery("strategy|findings|resolved", findings("resolved"));
+  const listQ = { open: openQ, waived: waivedQ, resolved: resolvedQ }[state];
   const docsQ = useQuery("strategy|documents", async () => {
     const [vision, strategy] = await Promise.all(
       (["vision", "strategy"] as const).map((kind) => unwrap(api.GET("/v1/documents", { params: { query: { kind } } }))),
@@ -61,7 +61,7 @@ export default function StrategyPage() {
 
   async function waived() {
     invalidateWaiting();
-    await Promise.all([stackQ.reload(), openQ.reload(), listQ.reload()]);
+    await Promise.all([stackQ.reload(), openQ.reload(), waivedQ.reload(), resolvedQ.reload()]);
     waitingChanged();
   }
 
@@ -96,9 +96,10 @@ export default function StrategyPage() {
         <DriftList
           state={state}
           onState={setState}
-          rows={state === "open" ? openQ.data : listQ.data}
-          loading={state === "open" ? openQ.loading : listQ.loading}
-          error={state === "open" ? openQ.error : listQ.error}
+          rows={listQ.data}
+          loading={listQ.loading}
+          error={listQ.error}
+          counts={{ open: openQ.data?.length, waived: waivedQ.data?.length, resolved: resolvedQ.data?.length }}
           stack={stack}
           onWaived={waived}
         />

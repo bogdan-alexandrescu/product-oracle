@@ -14,8 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes
 from oracle.auth.models import ROLES, ApiToken, Role, User
+from oracle.config import get_settings
 from oracle.members.models import Invite, MemberFollowUp
-from oracle.members.schemas import InviteOut, InviteStatus, MemberOut
+from oracle.members.schemas import InviteOut, InviteStatus, MemberOut, plain_address
 from oracle.tenant_settings import TenantSetting
 
 if TYPE_CHECKING:
@@ -47,6 +48,8 @@ def invite_status(invite: Invite) -> InviteStatus:
 
 
 def invite_out(invite: Invite) -> InviteOut:
+    from oracle.members.delivery import sign_in_url
+
     return InviteOut(
         id=invite.id,
         email=invite.email,
@@ -57,6 +60,13 @@ def invite_out(invite: Invite) -> InviteOut:
         created_at=invite.created_at,
         accepted_at=invite.accepted_at,
         revoked_at=invite.revoked_at,
+        access=invite.access,
+        access_error=invite.access_error,
+        access_at=invite.access_at,
+        email_status=invite.email_status,
+        email_error=invite.email_error,
+        email_at=invite.email_at,
+        sign_in_url=sign_in_url(),
     )
 
 
@@ -77,10 +87,32 @@ async def members_out(session: AsyncSession, users: list[User]) -> list[MemberOu
     from oracle.members.tokens import open_token_counts
 
     counts = await open_token_counts(session)
-    return [
-        MemberOut.model_validate(u).model_copy(update={"open_tokens": counts.get(u.id, 0)})
-        for u in users
-    ]
+    owed = await _access_owed(session, [u.id for u in users])
+    out = []
+    for u in users:
+        # What is owed on their access now: a revoke while removed, a grant while active.
+        pending = "revoke" if u.disabled_at is not None else "grant"
+        update_ = {"open_tokens": counts.get(u.id, 0)}
+        if (u.id, f"iap_{pending}") in owed:
+            update_["access_pending"] = pending
+        out.append(MemberOut.model_validate(u).model_copy(update=update_))
+    return out
+
+
+async def _access_owed(
+    session: AsyncSession, user_ids: list[uuid.UUID]
+) -> set[tuple[uuid.UUID, str]]:
+    """(member, kind) of the IAP access changes still owed for ``user_ids``."""
+    if not user_ids:
+        return set()
+    rows = await session.execute(
+        select(MemberFollowUp.member_id, MemberFollowUp.kind).where(
+            MemberFollowUp.member_id.in_(user_ids),
+            MemberFollowUp.kind.in_(ACCESS_KINDS),
+            MemberFollowUp.status.in_(FOLLOW_UP_OPEN),
+        )
+    )
+    return {(member_id, kind) for member_id, kind in rows}
 
 
 async def _other_active_owner(session: AsyncSession, user_id: uuid.UUID) -> bool:
@@ -967,14 +999,16 @@ async def _record_attempt(
     else:
         row.status = "pending"
         row.next_attempt_at = now + follow_up_backoff(row.attempts)
+    action, entity = await _follow_up_audit(session, row)
     await audit.record(
         session,
         principal,
-        "connection.provider_revoke" if row.kind == "provider_revoke" else "run.runtime_cancel",
-        "connection" if row.kind == "provider_revoke" else "run_segment",
+        action,
+        entity,
         row.target_id,
         {
             "member_id": str(row.member_id),
+            **({"email": row.email} if row.email else {}),
             "outcome": outcome,
             "attempt": row.attempts,
             "status": row.status,
@@ -1032,13 +1066,12 @@ async def dismiss_follow_up(
     row.next_attempt_at = None
     row.ciphertext = None
     await session.flush()
+    action, entity = await _follow_up_audit(session, row)
     await audit.record(
         session,
         principal,
-        "connection.provider_revoke_dismissed"
-        if row.kind == "provider_revoke"
-        else "run.runtime_cancel_dismissed",
-        "connection" if row.kind == "provider_revoke" else "run_segment",
+        f"{action}_dismissed",
+        entity,
         row.target_id,
         {
             "member_id": str(row.member_id),
@@ -1049,6 +1082,21 @@ async def dismiss_follow_up(
         },
     )
     return row
+
+
+# A change to a person's Google IAP access that failed (oracle.members.delivery).
+ACCESS_KINDS = ("iap_revoke", "iap_grant")
+
+
+async def _follow_up_audit(session: AsyncSession, row: MemberFollowUp) -> tuple[str, str]:
+    """The audit action and entity of a follow-up's attempt."""
+    if row.kind in ACCESS_KINDS:
+        from oracle.members import delivery
+
+        return await delivery.follow_up_audit(session, row)
+    if row.kind == "provider_revoke":
+        return "connection.provider_revoke", "connection"
+    return "run.runtime_cancel", "run_segment"
 
 
 # A pending follow-up whose call succeeded but whose success failed to save (_attempt).
@@ -1082,6 +1130,10 @@ async def _follow_up(
     """Make one follow-up call: (succeeded, outcome, error)."""
     if row.outcome in CALL_DONE:
         return True, row.outcome, None  # made before; only its saving failed
+    if row.kind in ACCESS_KINDS:
+        from oracle.members import delivery
+
+        return await delivery.follow_up_access(session, row, lambda: _call_deadline(deadline))
     if row.kind == "provider_revoke":
         from oracle.connections import service as connections
         from oracle.connections.models import Connection
@@ -1360,9 +1412,15 @@ async def create_invite(
     if engineering_lead and role == "viewer":
         raise MemberError("invalid", VIEWER_REFUSED)
     try:
+        # One plain address only: the To header and the IAM member are built from it.
+        email = plain_address(email)
+    except ValueError:
+        raise MemberError("invalid", "Not an email address") from None
+    try:
         check_email_allowed(email)
     except ReservedEmailError as e:
         raise MemberError("invalid", str(e)) from None
+    check_invite_domain(email)
     await _gate(session, principal, shared=True)
     member = await session.scalar(select(User).where(User.email == email))
     if member is not None and member.disabled_at is not None:
@@ -1384,6 +1442,26 @@ async def create_invite(
     if engineering_lead:
         data["engineering_lead"] = True
     await audit.record(session, principal, "invite.create", "invite", invite.id, data)
+    return invite
+
+
+def check_invite_domain(email: str) -> None:
+    """Refuse an address Google sign-in would refuse: one outside ORACLE_IAP_ALLOWED_DOMAINS
+    (when set; with none set every domain is let through, as sign-in has no IAP then)."""
+    domains = [d.strip().lower().lstrip("@") for d in get_settings().iap_allowed_domains]
+    domains = [d for d in domains if d]
+    if domains and email.partition("@")[2] not in domains:
+        named = domains[0] if len(domains) == 1 else ", ".join(domains[:-1]) + " or " + domains[-1]
+        raise MemberError("invalid", f"Only addresses at {named} can sign in to Oracle")
+
+
+async def get_open_invite(session: AsyncSession, invite_id: uuid.UUID) -> Invite:
+    """The open invite ``invite_id``, locked: Retry access and Resend act on it."""
+    invite = await session.get(Invite, invite_id, with_for_update=True)
+    if invite is None:
+        raise MemberError("not_found", f"Invite {invite_id} not found")
+    if invite_status(invite) != "open":
+        raise MemberError("conflict", f"This invite was {invite_status(invite)}; invite them again")
     return invite
 
 

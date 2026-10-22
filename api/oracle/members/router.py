@@ -11,11 +11,12 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
+from oracle import audit
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.auth.models import User
 from oracle.authz import has_role, not_for_runs, require_role
 from oracle.connections.router import ProviderHttp
-from oracle.members import service, tokens
+from oracle.members import delivery, service, tokens
 from oracle.members.names import display_name
 from oracle.members.schemas import (
     ApiTokenOut,
@@ -47,6 +48,7 @@ _STATUS = {
     # that committed while their request waited (re-read under the gate).
     "forbidden": status.HTTP_403_FORBIDDEN,
     # An invite to a reserved example domain outside the mock/test build.
+    # or to an address outside the domains that can sign in (ORACLE_IAP_ALLOWED_DOMAINS).
     "invalid": status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
@@ -100,13 +102,16 @@ async def disable_member(
     grants are revoked, their runs cancelled, the open invite for their email revoked;
     their approvals lapse for good; every session they signed is ended. The calls at
     the providers and the runtime are made after the disable commits, outside the
-    review gate, and retried by the tick when they fail. The member stays in the list
-    (history keeps the name); an owner can restore them, and they sign in fresh. A
-    no-op for a disabled member."""
+    review gate, and retried by the tick when they fail. Their Google IAP access is
+    taken away, and that of the invites revoked with them (audited). The member stays
+    in the list (history keeps the name); an owner can restore them, and they sign in
+    fresh. A no-op for a disabled member."""
     user = await _call(service.disable_member(db, principal, user_id))
     await db.commit()
     # The provider and runtime calls it owes, outside the review gate (retried by the tick).
     await service.after_disable(db, principal, user.id, http)
+    await delivery.release_disabled(db, principal, user)
+    await db.refresh(user)
     return (await service.members_out(db, [user]))[0]
 
 
@@ -117,9 +122,12 @@ async def disable_member(
 )
 async def restore_member(user_id: uuid.UUID, principal: Owner, db: TenantDB) -> MemberOut:
     """Let a disabled member sign in again, with their role. Their approvals stay
-    lapsed, their tokens revoked and their connections gone: nothing else comes back."""
+    lapsed, their tokens revoked and their connections gone: nothing else comes back.
+    Their Google IAP access is granted again (audited)."""
     user = await _call(service.restore_member(db, principal, user_id))
     await db.commit()
+    await delivery.grant_member_access(db, principal, user)
+    await db.refresh(user)
     return (await service.members_out(db, [user]))[0]
 
 
@@ -137,6 +145,7 @@ async def remove_member(
     user = await _call(service.disable_member(db, principal, user_id))
     await db.commit()
     await service.after_disable(db, principal, user.id, http)
+    await delivery.release_disabled(db, principal, user)
 
 
 @router.get("/api-tokens", response_model=list[ApiTokenOut])
@@ -196,24 +205,93 @@ async def list_invites(
     "/invites",
     response_model=InviteOut,
     status_code=status.HTTP_201_CREATED,
-    responses={409: {"description": "Already a member, or an open invite exists"}},
+    responses={
+        409: {"description": "Already a member, or an open invite exists"},
+        422: {"description": "Not an address that can sign in (ORACLE_IAP_ALLOWED_DOMAINS)"},
+    },
 )
 async def create_invite(body: InviteCreate, principal: Owner, db: TenantDB) -> InviteOut:
     """Pre-assign a role to an email: its first Google sign-in lands with that role, and as
-    an engineering lead when ``engineering_lead`` (never with role viewer: 422)."""
+    an engineering lead when ``engineering_lead`` (never with role viewer: 422).
+
+    The invitee is granted Google IAP access on Oracle's backend services
+    (``access``: ``granted``; ``skipped`` with no backends configured; ``pending`` with
+    ``access_error`` when the grant failed: the invite is kept, and
+    ``POST /v1/invites/{invite_id}/access`` retries it). Oracle emails them the sign-in
+    link in the background (``email_status``: ``queued``, then ``sent`` or ``failed``;
+    ``not_sent`` with no sender configured: send them ``sign_in_url``). Refused (422)
+    for an address outside the domains that can sign in."""
     invite = await _call(
         service.create_invite(db, principal, body.email, body.role, body.engineering_lead)
     )
+    send = delivery.queue_email(invite)
     await db.commit()
+    await delivery.grant_invite_access(db, principal, invite)
+    if send:
+        delivery.schedule(principal.tenant_id, invite.id)
+    await db.refresh(invite)
+    return service.invite_out(invite)
+
+
+@router.post(
+    "/invites/{invite_id}/access",
+    response_model=InviteOut,
+    responses={404: {"description": "No such invite"}, 409: {"description": "Not open"}},
+    dependencies=[Depends(same_origin)],
+)
+async def retry_invite_access(invite_id: uuid.UUID, principal: Owner, db: TenantDB) -> InviteOut:
+    """Grant an open invite's Google IAP access again (Retry on "Access not granted
+    yet"). Each attempt is audited; ``access`` says how it went."""
+    invite = await _call(service.get_open_invite(db, invite_id))
+    await delivery.grant_invite_access(db, principal, invite)
+    await db.refresh(invite)
+    return service.invite_out(invite)
+
+
+@router.post(
+    "/invites/{invite_id}/email",
+    response_model=InviteOut,
+    responses={
+        404: {"description": "No such invite"},
+        409: {"description": "Not open, or its email is being sent"},
+        429: {"description": "Its email went out under a minute ago (Retry-After: seconds)"},
+    },
+    dependencies=[Depends(same_origin)],
+)
+async def resend_invite_email(invite_id: uuid.UUID, principal: Owner, db: TenantDB) -> InviteOut:
+    """Email an open invite again (Resend): queued and sent in the background
+    (``email_status``), or ``not_sent`` with no sender configured. Refused (429) under
+    a minute after its last send."""
+    invite = await _call(service.get_open_invite(db, invite_id))
+    if invite.email_status == "queued":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Oracle is sending this invite's email")
+    wait = delivery.resend_wait(invite)
+    if wait:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"Oracle emailed this invite under a minute ago; resend it in {wait} seconds",
+            headers={"Retry-After": str(wait)},
+        )
+    send = delivery.queue_email(invite)
+    await audit.record(
+        db, principal, "invite_email.resend", "invite", invite.id, {"email": invite.email}
+    )
+    await db.commit()
+    if send:
+        delivery.schedule(principal.tenant_id, invite.id)
     await db.refresh(invite)
     return service.invite_out(invite)
 
 
 @router.delete("/invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_invite(invite_id: uuid.UUID, principal: Owner, db: TenantDB) -> None:
-    """Revoke an open invite. Revoking twice is a no-op; an accepted invite is a 409."""
-    await _call(service.revoke_invite(db, principal, invite_id))
+    """Revoke an open invite. Revoking twice is a no-op; an accepted invite is a 409.
+    The invitee's Google IAP access is taken away, unless they are an active member or
+    have another open invite (audited)."""
+    invite = await _call(service.revoke_invite(db, principal, invite_id))
+    targets = {invite.email: invite.id}
     await db.commit()
+    await delivery.release_access(db, principal, targets, "invite_access.remove")
 
 
 # --- Follow-ups a disable owes (Inbox: Retry, Dismiss) ------------------------------------

@@ -236,6 +236,8 @@ MATRIX: list[tuple[str, str, str, dict]] = [
     ("GET", "/v1/invites", "owner", {}),
     ("POST", "/v1/invites", "owner", {"json": {"email": "x@example.com", "role": "viewer"}}),
     ("DELETE", "/v1/invites/{invite_id}", "owner", {}),
+    ("POST", "/v1/invites/{invite_id}/access", "owner", {}),
+    ("POST", "/v1/invites/{invite_id}/email", "owner", {}),
     ("POST", "/v1/member-follow-ups/{follow_up_id}/retry", "owner", {}),
     ("POST", "/v1/member-follow-ups/{follow_up_id}/dismiss", "owner", {}),
 ]
@@ -364,6 +366,7 @@ async def test_list_members(client, world):
         "status",
         "last_sign_in_at",
         "open_tokens",
+        "access_pending",
     }
     assert resp.json()[0]["status"] == "active"
 
