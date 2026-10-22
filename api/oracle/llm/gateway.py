@@ -31,7 +31,7 @@ import asyncio
 import logging
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -53,6 +53,7 @@ from oracle.llm.transports import (
     LlmRequest,
     MessagesApiTransport,
     NoClaudeAccount,
+    OnText,
     Transport,
     TransportResult,
     get_llm_settings,
@@ -72,6 +73,8 @@ JOBS = (
     "decision_options",
     # C9: Oracle reads a person's reason for a move or pin against the evidence.
     "override_reason_check",
+    # G2 Live replies: what a person waits for in a discussion.
+    "discussion_reply",
 )
 
 #: Accounts one call may try before giving up (the first plus two swaps).
@@ -152,6 +155,10 @@ def _time_for_a_call(deadline: float | None) -> None:
         raise LlmOutOfTime("No time left for a whole model call before the deadline")
 
 
+#: One call on one transport with one token.
+Call = Callable[[Transport, str], Awaitable[TransportResult]]
+
+
 async def complete(
     session: AsyncSession,
     system: str,
@@ -165,15 +172,71 @@ async def complete(
     on_call: Callable[[str | None, str], None] | None = None,
 ) -> Completion:
     """Run one built-in model call for the session's company."""
+    request = _request(system, messages, max_tokens, job, model)
+
+    async def call(transport: Transport, token: str) -> TransportResult:
+        return await transport.complete(token, request)
+
+    return await _run(session, job, call, transports, deadline, on_call, lambda: False)
+
+
+async def stream(
+    session: AsyncSession,
+    system: str,
+    messages: list[dict[str, Any]],
+    max_tokens: int,
+    *,
+    job: str,
+    on_text: OnText,
+    model: str | None = None,
+    transports: Transports | None = None,
+    deadline: float | None = None,
+    on_call: Callable[[str | None, str], None] | None = None,
+) -> Completion:
+    """As :func:`complete`, telling ``on_text`` each piece of the answer as it arrives.
+
+    The same assignment, hold, swap and release. A swap happens only before the first
+    piece of text: once text was sent, a rate limit or a refused credential ends the
+    call (:class:`LlmRateLimited`, :class:`LlmAuthError`), so no answer repeats text."""
+    request = _request(system, messages, max_tokens, job, model)
+    sent = False
+
+    async def told(text: str) -> None:
+        nonlocal sent
+        sent = True
+        await on_text(text)
+
+    async def call(transport: Transport, token: str) -> TransportResult:
+        return await transport.stream(token, request, told)
+
+    return await _run(session, job, call, transports, deadline, on_call, lambda: sent)
+
+
+def _request(
+    system: str, messages: list[dict[str, Any]], max_tokens: int, job: str, model: str | None
+) -> LlmRequest:
     if job not in JOBS:
         raise ValueError(f"unknown built-in job {job!r}; known: {', '.join(JOBS)}")
-    tenant_id = current_tenant(session)
-    request = LlmRequest(
+    return LlmRequest(
         system=system,
         messages=messages,
         max_tokens=max_tokens,
         model=model or get_llm_settings().model,
     )
+
+
+async def _run(
+    session: AsyncSession,
+    job: str,
+    call: Call,
+    transports: Transports | None,
+    deadline: float | None,
+    on_call: Callable[[str | None, str], None] | None,
+    sent: Callable[[], bool],
+) -> Completion:
+    """The account loop ``complete`` and ``stream`` share. ``sent``: whether text has
+    reached the caller already, after which nothing moves to another account."""
+    tenant_id = current_tenant(session)
     ts = transports or get_transports()
     attempt_id = uuid.uuid4().hex
 
@@ -192,7 +255,7 @@ async def complete(
         _time_for_a_call(deadline)
         if on_call is not None:
             on_call(None, via)
-        result = await ts.for_kind(spare.kind).complete(spare.token, request)
+        result = await call(ts.for_kind(spare.kind), spare.token)
         return Completion(
             text=result.text,
             model=result.model,
@@ -226,17 +289,17 @@ async def complete(
             if on_call is not None:
                 on_call(assignment.account.label, "account")
             try:
-                result: TransportResult = await ts.plan.complete(token, request)
+                result: TransportResult = await call(ts.plan, token)
             except LlmRateLimited as e:
                 await _record(tenant_id, assignment.account_id, e.readings)
-                if attempt == MAX_ATTEMPTS - 1:
+                if attempt == MAX_ATTEMPTS - 1 or sent():
                     raise
                 _time_for_a_call(deadline)
                 assignment = await _swap(tenant_id, assignment, SWAP_EXHAUSTED, swaps)
                 continue
             except LlmAuthError:
                 # The access token was refused: the sweep refreshes it; this call moves.
-                if attempt == MAX_ATTEMPTS - 1:
+                if attempt == MAX_ATTEMPTS - 1 or sent():
                     unusable = "the access token was refused"
                     raise
                 try:

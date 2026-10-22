@@ -548,8 +548,80 @@ export interface paths {
          *     text with Markdown links, at most 8,000 characters. ``mentions`` (member ids from
          *     ``GET /v1/people``) add people to an open discussion; in a private one only the
          *     starter adds people.
+         *
+         *     Oracle replies to every message while only one person is in the discussion, and
+         *     after that when addressed (``@Oracle`` or ``mention_oracle``): ``reply`` is its
+         *     ``pending`` reply, whose text streams from ``GET …/messages/{reply_id}/stream``.
+         *     ``wait``: the reply runs here, without streaming, for at most 120 s, and comes back
+         *     ``complete`` or ``failed``. 429 when Oracle has answered a lot here in a short time
+         *     (the message is stored).
          */
         post: operations["create_discussion_message"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/messages/{reply_id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Discussion Reply
+         * @description Oracle's reply as it is written (``text/event-stream``): ``delta`` events with
+         *     the new text, then ``citations`` and ``done`` (the message), or ``error``
+         *     (``reason``, ``message``, ``retry``); ``: ping`` every 15 s. The first reader runs
+         *     the reply; every other reader (another tab, another person, a reload) tails it.
+         */
+        get: operations["stream_discussion_reply"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/messages/{reply_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Discussion Reply
+         * @description Stop Oracle's reply (the person who asked, or an approver): it ends ``cancelled``
+         *     with the text written so far, within a second.
+         */
+        post: operations["cancel_discussion_reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/messages/{reply_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Discussion Reply
+         * @description Ask again for a failed or stopped reply (the person who asked, or an approver):
+         *     it is ``pending`` again, with no text; open its stream to run it.
+         */
+        post: operations["retry_discussion_reply"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13149,6 +13221,7 @@ export interface components {
             unread: number;
             /** Can Manage */
             can_manage: boolean;
+            private_findings?: components["schemas"]["PrivateFindings"] | null;
         };
         /** DiscussionMeSummary */
         DiscussionMeSummary: {
@@ -13227,6 +13300,15 @@ export interface components {
             edited_at: string | null;
             /** Deleted */
             deleted: boolean;
+            /** Error Reason */
+            error_reason?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Pushback */
+            pushback?: {
+                [key: string]: unknown;
+            } | null;
+            usage?: components["schemas"]["ReplyUsage"] | null;
         };
         /** DiscussionMessagePage */
         DiscussionMessagePage: {
@@ -13234,6 +13316,15 @@ export interface components {
             items: components["schemas"]["DiscussionMessageOut"][];
             /** Has More */
             has_more: boolean;
+        };
+        /**
+         * DiscussionMessagePosted
+         * @description A person's message, and Oracle's ``pending`` reply when the rule calls for one
+         *     (``complete`` or ``failed`` with ``wait``).
+         */
+        DiscussionMessagePosted: {
+            message: components["schemas"]["DiscussionMessageOut"];
+            reply?: components["schemas"]["DiscussionMessageOut"] | null;
         };
         /** DiscussionOut */
         DiscussionOut: {
@@ -19807,6 +19898,19 @@ export interface components {
             /** Decided At */
             decided_at?: string | null;
         };
+        /**
+         * PrivateFindings
+         * @description G1 §3.4.6: the caller's own findings below Summary that bear on the subject.
+         */
+        PrivateFindings: {
+            /** Count */
+            count: number;
+            /**
+             * Intake Id
+             * Format: uuid
+             */
+            intake_id: string;
+        };
         /** Problem */
         Problem: {
             /** Code */
@@ -20945,6 +21049,23 @@ export interface components {
         ReplyCreate: {
             /** Body */
             body: string;
+        };
+        /** ReplyUsage */
+        ReplyUsage: {
+            /** Model */
+            model: string | null;
+            /** Input Tokens */
+            input_tokens: number | null;
+            /** Output Tokens */
+            output_tokens: number | null;
+            /** Cost Usd */
+            cost_usd: number | null;
+            /** Account Label */
+            account_label: string | null;
+            /** Llm Via */
+            llm_via: string | null;
+            /** Attempts */
+            attempts: number;
         };
         /** RepoRef */
         RepoRef: {
@@ -28399,7 +28520,9 @@ export interface operations {
     };
     create_discussion_message: {
         parameters: {
-            query?: never;
+            query?: {
+                wait?: boolean;
+            };
             header?: never;
             path: {
                 discussion_id: string;
@@ -28414,6 +28537,112 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionMessagePosted"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This discussion is closed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Oracle has answered a lot here; the message is still stored */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stream_discussion_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The reply's events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_discussion_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -28435,7 +28664,53 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description This discussion is closed */
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_discussion_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionMessageOut"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not failed or stopped */
             409: {
                 headers: {
                     [name: string]: unknown;

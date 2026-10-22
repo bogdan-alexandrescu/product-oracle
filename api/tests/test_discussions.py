@@ -69,7 +69,8 @@ async def post(client, ctx, d_id, who, body, expect=201, **extra) -> dict:
         f"/v1/discussions/{d_id}/messages", json={"body": body, **extra}, headers=ctx.as_(who)
     )
     assert resp.status_code == expect, resp.text
-    return resp.json()
+    # G2 Live replies: a 201 answers {message, reply}.
+    return resp.json()["message"] if resp.status_code == 201 else resp.json()
 
 
 async def get(client, ctx, d_id, who, expect=200) -> dict:
