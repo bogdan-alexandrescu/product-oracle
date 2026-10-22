@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
-import { Button, Chip, GoalTag, InfoTip, Inspector, InspectorSection, Notice } from "@/components/ds";
+import { Button, Chip, CodeChip, InfoTip, Inspector, InspectorSection, Notice } from "@/components/ds";
 import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type GraphOut, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { named } from "@/lib/codes";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
@@ -106,7 +107,7 @@ export function EntityDrawer({
   const [notice, setNotice] = useState<string | null>(null);
   const d = q.data;
   const title = d?.title ?? entity.title;
-  const tag = tags.get(entity.id);
+  const code = named(title, d?.key ?? entity.key).code;
   const root = useRef<HTMLDivElement>(null);
 
   // Below the tables (narrow screens), bring the inspector into view when it opens.
@@ -185,13 +186,18 @@ export function EntityDrawer({
         label={title}
         eyebrow={
           <>
-            {TYPE_LABEL[entity.type]} · <span className="font-mono">{d?.key ?? entity.key}</span>
+            {TYPE_LABEL[entity.type]}
+            {code && (
+              <>
+                {" · "}
+                <span className="font-mono">{code}</span>
+              </>
+            )}
           </>
         }
         title={title}
         chips={
           <>
-            {tag && <GoalTag id={tag} proposed={(d ?? entity).status === "proposed"} />}
             <NodeStatusBadge status={(d ?? entity).status} hero />
             <DeliveryChip value={(d ?? entity).type === "feature" ? (d ?? entity).attrs?.status : undefined} hero />
             <LockBadge entity={d ?? entity} meId={meId} hero />
@@ -417,9 +423,9 @@ function Links({
   const inn = (t: EdgeOut["type"]) => detail.edges_in.filter((e) => e.type === t && e.status !== "rejected");
   const link = (id: string) => (
     <span className="flex min-w-0 items-center gap-2">
-      {tags.get(id) && <GoalTag id={tags.get(id)!} />}
+      {tags.has(id) && <CodeChip kind="goal" entityId={id} title={titleOf(graph, id)} codeOnly />}
       <button type="button" className="min-w-0 truncate text-left hover:underline" onClick={() => onOpen(id)}>
-        {titleOf(graph, id)}
+        {tags.get(id) ?? titleOf(graph, id)}
       </button>
     </span>
   );

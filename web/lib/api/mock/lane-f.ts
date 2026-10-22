@@ -85,7 +85,7 @@ type FeatureSeed = {
   depends_on: string[];
 };
 
-// The baseline's goals (./baseline.ts), by key: the lookup behind the code chips finds them.
+// The baseline's goals (./baseline.ts), by key; GET /v1/priorities titles them as the baseline does now.
 const G1 = "Raise activation";
 const G2 = "Grow paid conversion";
 
@@ -1854,6 +1854,13 @@ function state(db: Db): LaneFState {
 const isMethod = (m: string | null): m is Method => !!m && (METHODS as string[]).includes(m);
 const KEY_RE = /^[a-z0-9][a-z0-9-]{1,62}$/;
 
+/** Each goal term titled as the baseline titles the goal now, as the API reads it. */
+function goalTitles(db: Db, r: Schemas["PriorityRanking"]): Schemas["PriorityRanking"] {
+  const titles = new Map((db.baseline.entities).filter((e) => e.type === "goal").map((e) => [e.key, e.title]));
+  for (const f of r.features) for (const g of f.explanation.goals) g.title = titles.get(g.goal) ?? g.title;
+  return r;
+}
+
 /**
  * Handles /v1/priorities, /v1/templates, /v1/themes and /v1/drafts; returns null for
  * any other route so server.ts carries on.
@@ -1870,7 +1877,7 @@ export async function laneF(db: Db, req: Request, p: string[], m: string, role?:
       const method = q.get("method") ?? "goal_weighted";
       if (!isMethod(method)) return json(422, { detail: `unknown method '${method}'` });
       const people = q.get("overrides") !== "false";
-      return json(200, applyOverrides(ranking(method), people ? overrideInputs(st.overrides ?? []) : []));
+      return json(200, goalTitles(db, applyOverrides(ranking(method), people ? overrideInputs(st.overrides ?? []) : [])));
     }
     if (p[2] === "overrides") return overridesRoute(st, db.session ?? "someone", req, p, m);
     if (p[2] === "snapshots") {

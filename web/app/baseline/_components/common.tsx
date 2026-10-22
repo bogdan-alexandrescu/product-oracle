@@ -1,4 +1,5 @@
 import { Chip, Ring, type ChipKind } from "@/components/ds";
+import { named } from "@/lib/codes";
 import { LockIcon } from "@/components/ui";
 import type { EntityOut, GraphOut, NodeStatus } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
@@ -204,9 +205,9 @@ export function sortedGoals(graph: GraphOut | undefined): EntityOut[] {
     .sort((a, b) => Number(b.attrs?.weight ?? 0) - Number(a.attrs?.weight ?? 0) || byTitle(a, b));
 }
 
-/** Goal id -> "G1", "G2"… in ledger order. */
+/** Goal id -> the goal's name without its company code ("G-B Growth" -> "Growth"), in ledger order (#304). */
 export function goalTags(graph: GraphOut | undefined): Map<string, string> {
-  return new Map(sortedGoals(graph).map((g, i) => [g.id, `G${i + 1}`]));
+  return new Map(sortedGoals(graph).map((g) => [g.id, named(g.title, g.key).name]));
 }
 
 /** Contribution of a supports edge, 0 (none) to 3 (strong). */

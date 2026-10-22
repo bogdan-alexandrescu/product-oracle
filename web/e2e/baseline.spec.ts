@@ -81,7 +81,7 @@ test("baseline: the feature drawer shows links, evidence and the lock", async ({
   await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
   const d = drawer(page, "Guided setup");
   await expect(d).toBeVisible();
-  await expect(d).toContainText("f.guided-setup");
+  await expect(d).not.toContainText("f.guided-setup");
   await expect(d).toContainText("Feature");
   await expect(d).toContainText("A short checklist that walks a new account");
   await expect(d.locator('[data-attr="effort"]')).toHaveText("M");

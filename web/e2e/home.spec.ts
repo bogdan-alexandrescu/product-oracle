@@ -73,7 +73,7 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
 
   const inspector = page.getByTestId("home-inspector");
   // Goal tags load for the selected row only, in the inspector (no trace call per row).
-  await expect(inspector.getByTestId("row-goals")).toHaveText("G1G2");
+  await expect(inspector.getByTestId("row-goals")).toHaveText("Raise activationGrow paid conversion");
   await expect(inspector).toContainText("PRD · selected");
   await expect(inspector.getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
   await expect(inspector.getByTestId("stat-sections")).toContainText("Sections done");
