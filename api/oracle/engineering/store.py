@@ -189,11 +189,16 @@ REFUSING = ("unknown_feature", "unknown_ref")
 
 
 def _prepare(
-    text: str, decided: Decided | None, skip: Collection[str] = (), against: Against | None = None
+    text: str,
+    decided: Decided | None,
+    skip: Collection[str] = (),
+    against: Against | None = None,
+    partial: Collection[str] = (),
 ) -> tuple[briefs.TechBriefs, list[Prepared]]:
     """Parse ``text`` once and render the briefs of the features not in ``skip``; with
-    ``against``, also not those :data:`REFUSING` refuses. Untrusted text: :func:`prepare`
-    runs this on the parse pool."""
+    ``against``, also not those :data:`REFUSING` refuses. ``partial``: the repos (lower
+    case) whose map the run used was built from the docs only. Untrusted text:
+    :func:`prepare` runs this on the parse pool."""
     if against is None:
         parsed = briefs.parse(text)
     else:
@@ -203,6 +208,8 @@ def _prepare(
             log.warning("%s: briefs refused: %s", briefs.FILE, "; ".join(
                 p.message for p in problems if p.code in REFUSING))  # fmt: skip
         skip = {*skip, *refused}
+    for repo in parsed.code_map.repos:
+        repo.partial = parsed.code_map.used and repo.repo.lower() in partial
     out = []
     for entry in parsed.features:
         if entry.feature in skip:
@@ -223,27 +230,43 @@ def _prepare(
 
 
 async def prepare(
-    text: str, decided: Decided | None, skip: Collection[str] = (), against: Against | None = None
+    text: str,
+    decided: Decided | None,
+    skip: Collection[str] = (),
+    against: Against | None = None,
+    partial: Collection[str] = (),
 ) -> tuple[briefs.TechBriefs, list[Prepared]]:
     """:func:`_prepare` on the parse pool (:func:`oracle.safe_yaml.run_parse_within`), at
     most ``PARSE_SECONDS``: the event loop never parses or renders the briefs. Raises
     :class:`briefs.BriefsInvalid` or :class:`oracle.safe_yaml.ParseTimeout`."""
     return await safe_yaml.run_parse_within(
-        _prepare, text, decided, skip, against, name=briefs.FILE
+        _prepare, text, decided, skip, against, frozenset(partial), name=briefs.FILE
     )
 
 
-async def _against(db: AsyncSession, cp: Checkpoint | None) -> Against | None:
+async def _against(db: AsyncSession, run: Run, cp: Checkpoint | None) -> Against | None:
     """What to check the briefs against when the Engineering check was turned off, else
     None (the lead checked them). The feature set: the baseline's features not rejected.
-    The code map: none until the run records the one it used (F5-2), so any ref of an
-    unchecked brief is unknown_ref."""
+    The code map: the ids of the shared maps the run recorded as it started (F5-2,
+    :func:`oracle.engineering.codemaps.recorded_ids`); None when it recorded none, so any
+    ref of an unchecked brief is unknown_ref."""
+    from oracle.engineering import codemaps
+
     if cp is None or cp.status != "skipped":
         return None
     keys = await db.scalars(
         select(Entity.key).where(Entity.type == "feature", Entity.status != "rejected")
     )
-    return Against(frozenset(keys), None)
+    return Against(frozenset(keys), await codemaps.recorded_ids(db, run))
+
+
+async def _partial(db: AsyncSession, run: Run) -> frozenset[str]:
+    """The repos (lower case) whose map the run used was built from the docs only."""
+    from oracle.engineering import codemaps
+
+    return frozenset(
+        m.repo.lower() for m in await codemaps.recorded(db, run) if (m.content or {}).get("partial")
+    )
 
 
 async def _existing(db: AsyncSession, run_id: uuid.UUID, seq: int) -> dict[str, ArtifactRequest]:
@@ -277,7 +300,11 @@ async def _register(
     existing = await _existing(db, run.id, segment.seq)
     try:
         parsed, fresh = await prepare(
-            text, _decided(cp), frozenset(existing), await _against(db, cp)
+            text,
+            _decided(cp),
+            frozenset(existing),
+            await _against(db, run, cp),
+            await _partial(db, run),
         )
     except (briefs.BriefsInvalid, safe_yaml.ParseTimeout) as exc:
         # The Engineering check shows the file's problems; nothing is registered.

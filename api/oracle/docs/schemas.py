@@ -41,7 +41,8 @@ Verdict = Literal["approved", "changes_requested", "rejected"]
 # O1f: brief sections make up the brief layer; the full layer is every section.
 Layer = Literal["brief", "detail"]
 BriefSource = Literal["draft", "template", "full_heading", "none"]
-DocumentKind = Literal["prd", "roadmap", "spec", "vision", "strategy"]
+DocumentKind = Literal["prd", "roadmap", "spec", "vision", "strategy", "update"]
+DocumentVisibility = Literal["company", "approvers"]
 
 
 class ORM(BaseModel):
@@ -84,6 +85,15 @@ class VersionSource(BaseModel):
     approved_at: datetime | None = None
 
 
+class UpdatePeriod(BaseModel):
+    """The period an update covers (its latest version's front matter ``period``)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_: date = Field(alias="from")
+    to: date
+
+
 class DocumentSummary(ORM):
     id: uuid.UUID
     slug: str
@@ -93,6 +103,10 @@ class DocumentSummary(ORM):
     template: str | None = None
     template_version: str | None = None
     theme: str | None = None
+    # H8: "approvers": owners and approvers only (an update, unless an owner opened it).
+    visibility: DocumentVisibility = "company"
+    # H8: an update's period, from its latest version's front matter.
+    period: UpdatePeriod | None = None
     latest_version: int | None = None
     # The latest approved version's number, if any (a PRD a roadmap can be built from).
     approved_version: int | None = None
@@ -272,3 +286,12 @@ class DiffOut(BaseModel):
     from_version: int
     to_version: int
     sections: list[SectionDiff]
+
+
+class VisibilityIn(BaseModel):
+    """An owner's switch of who sees a document, with the reason (audited)."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    visibility: DocumentVisibility
+    reason: str = Field(min_length=1, max_length=2000)

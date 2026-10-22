@@ -43,6 +43,7 @@ SEGMENT_FILES: dict[str, tuple[str, ...]] = {
     "roadmap_items": ("roadmap_items.yaml",),
     "roadmap_draft": ("roadmap.md",),
     "spec_draft": ("spec.md", "design.json"),
+    "index": ("code_map.json",),
 }
 # The machine-readable line a spec prompt carries (oracle.specs.service.prompt_lines).
 _SPEC_INPUTS = re.compile(r"^Spec inputs \(JSON\): (\{.*\})$", re.M)
@@ -165,6 +166,8 @@ def _default_files(
     files = {}
     if segment == "spec_draft":
         return {"spec.md": _spec_md(attempt), "design.json": _design_json(_spec_inputs(prompt))}
+    if segment == "index":
+        return {"code_map.json": _code_map_json(prompt)}
     names = SEGMENT_FILES.get(segment, ("summary.md",))
     # A segment whose draft file depends on the document's kind (the feedback loop on a
     # roadmap writes roadmap.md): the spec's outputs say which.
@@ -174,6 +177,31 @@ def _default_files(
     for name in names:
         files[name] = _default_content(name, segment, attempt, document)
     return files
+
+
+_REPO_LINE = re.compile(r"^Repository: (\S+?)[ .]", re.M)
+
+
+def _code_map_json(prompt: str) -> str:
+    """A docs-only code map of the repo the code_map prompt names (F5-2)."""
+    found = _REPO_LINE.search(prompt)
+    return json.dumps(
+        {
+            "version": 1,
+            "repo": found.group(1) if found else "example-org/app",
+            "commit": None,
+            "generated_at": "2026-10-18T10:00:00Z",
+            "partial": True,
+            "modules": [
+                {"id": "module:app", "path": "app", "summary": "The application (from its "
+                 "README)", "depends_on": []},
+            ],
+            "apis": [],
+            "data_models": [],
+            "flags": [],
+            "jobs": [],
+        }
+    )  # fmt: skip
 
 
 def _default_content(name: str, segment: str, attempt: int, document: str | None = None) -> str:

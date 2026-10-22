@@ -316,8 +316,10 @@ async def test_existing_prd_briefs_are_registered_when_the_engineering_check_is_
         assert av.approved_by == lead_id and av.approved_at is not None
         assert av.provenance["run_id"] == run["id"]
         assert av.provenance["code_map"] == [
-            {"repo": "org/app", "commit": "3f2c9a1", "as_of": "2026-10-18T10:00:00Z"}
-        ]
+            # partial: F5-2, set by Oracle from the map the run recorded (none here).
+            {"repo": "org/app", "commit": "3f2c9a1", "as_of": "2026-10-18T10:00:00Z",
+             "partial": False}
+        ]  # fmt: skip
     (req_a, av_a), (req_b, av_b) = rows
     assert req_a.params["feature_key"] == "feature-a"
     assert set(req_a.requirement_ids) == {ids["req-a1"], ids["req-a2"]}

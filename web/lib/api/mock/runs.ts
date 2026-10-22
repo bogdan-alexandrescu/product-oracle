@@ -5,6 +5,7 @@
  * estimate, as the API's FakeRuntime does.
  */
 import type { Schemas } from "@/lib/api/client";
+import { displayName } from "@/lib/names";
 
 import { AGENT_RUN } from "./baseline";
 
@@ -23,12 +24,27 @@ type DocumentRow = Pick<Schemas["DocumentSummary"], "id" | "slug" | "title" | "k
 type VersionSource = Schemas["VersionSource"];
 type Kind = DocumentRow["kind"];
 
+/** D8: one stored action of a checkpoint's shared draft (people by member id). */
+type DraftActionRow = Omit<Schemas["ReviewAction"], "created_by" | "updated_by" | "question"> & {
+  created_by: string | null;
+  updated_by: string | null;
+};
+/** D8: a checkpoint's shared draft; `log` says who made each revision (the 409's names). */
+export interface DraftRow {
+  revision: number;
+  note: string | null;
+  actions: DraftActionRow[];
+  log: { revision: number; by: string }[];
+}
+
 export interface RunsDb {
   runs: RunOut[];
   /** `${runId}|${seq}|${name}` -> content; a send-back's previous attempt: `${runId}|${seq}|${name}|${attempt}` */
   artifacts: Record<string, string>;
   /** C6: run id -> its PRD scopes, oldest first (a mock db saved before C6 has none). */
   scopes?: Record<string, PrdScopeOut[]>;
+  /** D8: checkpoint id -> its shared draft (absent until someone writes it). */
+  drafts?: Record<string, DraftRow>;
 }
 
 export interface RunsContext {
@@ -38,6 +54,15 @@ export interface RunsContext {
   userName?: string | null;
   /** The signed-in member's role: who decided, as the run's agents read it (D11). */
   userRole?: Schemas["Me"]["role"] | null;
+  /** D8: the signed-in member (who stages or suggests), and every member by id (names). */
+  member?: { id: string; email: string; role: Schemas["Me"]["role"] } | null;
+  members?: { id: string; email: string; role: Schemas["Me"]["role"] }[];
+  /**
+   * D8: a test's "another reviewer changed the draft" (MOCK_REVIEW_CHANGE_KEY): the email of
+   * who changed it, read once (the key is cleared). The next decide bumps the draft by one
+   * change of theirs before it checks the revision.
+   */
+  reviewChange?: () => string | null;
   /**
    * The "undelivered" scenario: SwarmCloud does not take a checkpoint decision until the
    * next tick. The decision is recorded (and final) but the decide call answers 503, as the
@@ -136,6 +161,21 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
         { name: "strategy_draft", title: "Vision or strategy draft", roles: ["researcher", "writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["{draft}"], checkpoint: "strategy_review", approver_role: "owner" },
       ],
     },
+    {
+      // H8: an owner drafts a board or investor update from Company › Updates (New update).
+      key: "update_draft",
+      title: "Update draft",
+      description: "Draft a board or investor update for its period: metrics first, verified dates only, Asks left to the owner.",
+      requires_document: true,
+      target_kind: null,
+      source_kind: null,
+      in_new_run_dialog: false,
+      // Started from New update on Company › Updates only (owners); the New run dialog does not point at it.
+      starts_from: null,
+      segments: [
+        { name: "update_draft", title: "Update draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["update.md"], checkpoint: "update_review", approver_role: "owner" },
+      ],
+    },
   ],
   roles: ROLES,
   depths: { quick: 0.5, standard: 1, deep: 2 },
@@ -152,6 +192,7 @@ const KIND_NAME: Record<Kind, string> = {
   spec: "engineering spec",
   vision: "vision",
   strategy: "product strategy",
+  update: "update",
 };
 // O4: a roadmap starts from Now / Next / Later on the roadmap board unless a run names others.
 const ROADMAP_DEFAULTS = { template: "now-next-later", theme: "roadmap-board" };
@@ -221,7 +262,7 @@ function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut["knobs"
     roles[s.name] = [...chosen];
   }
   const checkpoints: Record<string, boolean> = {};
-  for (const s of flow.segments) checkpoints[s.checkpoint] = raw?.checkpoints?.[s.checkpoint] ?? true;
+  for (const s of flow.segments) if (s.checkpoint) checkpoints[s.checkpoint] = raw?.checkpoints?.[s.checkpoint] ?? true;
   return { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null };
 }
 
@@ -235,7 +276,7 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     roles: knobs.roles[s.name],
     scopes: s.scopes,
     checkpoint: s.checkpoint,
-    checkpoint_on: knobs.checkpoints[s.checkpoint] ?? true,
+    checkpoint_on: s.checkpoint ? (knobs.checkpoints[s.checkpoint] ?? true) : false,
     estimate_usd: null,
     cost_usd: 0,
     workflow_id: null,
@@ -536,7 +577,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     s.feature_set_check = checkOf(LOCAL_FEATURE_SET);
     proposeScope(ctx, r, s.seq, attempt, LOCAL_FEATURE_SET, s.feature_set_check);
   }
-  if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md")) && r.document_slug) {
+  if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md") || def.outputs.includes("update.md")) && r.document_slug) {
     const imp = ctx.importDraft(r.document_slug, r);
     s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], summary: null };
     r.document_id = imp.document_id ?? null;
@@ -550,6 +591,11 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     artifacts: s.artifacts,
     ...(s.feature_set_check ? { feature_set_check: s.feature_set_check } : {}),
   };
+  if (!def.checkpoint) {
+    // No stop (F5-2's code_map index): the run goes on, or ends.
+    next(ctx, r, s);
+    return;
+  }
   const on = r.knobs.checkpoints[def.checkpoint] ?? true;
   if (!on && s.feature_set_check) decideScope(ctx, r, "approved", null);
   const cp: CheckpointOut = {
@@ -601,26 +647,33 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
   for (const r of ctx.db.runs) {
     if (r.status !== "running" || delivered.has(r.id)) continue;
     out.runs_checked += 1;
-    const s = r.segments.find((x) => x.status === "running");
-    if (!s) continue;
-    const a = s.attempts[s.attempts.length - 1];
-    a.cost_usd = round2((s.estimate_usd ?? 0) * 0.9);
-    a.state = "succeeded";
-    s.cost_usd = round2(s.attempts.reduce((sum, x) => sum + x.cost_usd, 0));
-    s.status = "succeeded";
-    s.finished_at = ctx.now();
+    const done = finishRunning(ctx, r);
+    if (done === "none") continue;
     out.segments_finished += 1;
-    refresh(r);
-    if (r.overrun_ceiling_usd != null && r.spent_usd > r.overrun_ceiling_usd) {
-      r.status = "paused_overrun";
-      out.runs_paused += 1;
-      continue;
-    }
-    advance(ctx, r, s);
-    out.runs_advanced += 1;
-    refresh(r);
+    if (done === "paused") out.runs_paused += 1;
+    else out.runs_advanced += 1;
   }
   return out;
+}
+
+/** The agents finish the run's running segment (at 90% of its estimate), and the run goes on. */
+function finishRunning(ctx: RunsContext, r: RunOut): "none" | "paused" | "advanced" {
+  const s = r.segments.find((x) => x.status === "running");
+  if (!s) return "none";
+  const a = s.attempts[s.attempts.length - 1];
+  a.cost_usd = round2((s.estimate_usd ?? 0) * 0.9);
+  a.state = "succeeded";
+  s.cost_usd = round2(s.attempts.reduce((sum, x) => sum + x.cost_usd, 0));
+  s.status = "succeeded";
+  s.finished_at = ctx.now();
+  refresh(r);
+  if (r.overrun_ceiling_usd != null && r.spent_usd > r.overrun_ceiling_usd) {
+    r.status = "paused_overrun";
+    return "paused";
+  }
+  advance(ctx, r, s);
+  refresh(r);
+  return "advanced";
 }
 
 function launch(ctx: RunsContext, r: RunOut) {
@@ -776,6 +829,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (p.length === 2 && m === "POST") {
     const input = await body<Schemas["RunCreate"]>();
     const flow = flowOf(input.flow);
+    // H8: only an owner drafts an update.
+    if (input.flow === "update_draft" && ctx.userRole !== "owner") return fail(403, "Only an owner can draft an update");
     const knobs = resolveKnobs(input.flow, input.knobs);
     if (typeof knobs === "string") return fail(422, knobs);
     const find = (ref: string) => ctx.documents.find((d) => d.slug === ref || d.id === ref);
@@ -869,7 +924,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (!r) return fail(404, `run ${p[2]} not found`);
   const done = (status = 200) => {
     refresh(r);
-    return json(status, { ...r, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
+    // As the API: a checkpoint is decided by its approver role or above.
+    const checkpoints = r.checkpoints.map((c) => ({ ...c, can_decide: c.can_decide && atLeast(ctx.userRole, c.approver_role) }));
+    return json(status, { ...r, checkpoints, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
   };
 
   if (p.length === 3 && m === "GET") return done();
@@ -928,6 +985,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     r.snapshot_as_of = ctx.now();
     if (r.estimate_usd > THRESHOLD) r.status = "awaiting_approval";
     else launch(ctx, r);
+    // H8: the local runtime writes an update draft at once, so the new update opens on it.
+    if (r.flow === "update_draft" && (r.status as RunOut["status"]) === "running") finishRunning(ctx, r);
     return done();
   }
   if (action === "approve" && m === "POST") {
@@ -1001,6 +1060,11 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     Object.assign(r, { can_dismiss_overrun: false, stuck: null });
     return done();
   }
+  if (action === "checkpoints" && p[4] && p[5] !== "decide") {
+    const cp = r.checkpoints.find((c) => c.id === p[4]);
+    if (!cp) return fail(404, `checkpoint ${p[4]} not found`);
+    return routeDraft(ctx, r, cp, req, p.slice(5));
+  }
   if (action === "checkpoints" && p[5] === "decide" && m === "POST") {
     const cp = r.checkpoints.find((c) => c.id === p[4]);
     if (!cp) return fail(404, "checkpoint not found");
@@ -1009,10 +1073,17 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       return fail(409, `already decided: this checkpoint is ${cp.status.replace("_", " ")}; a recorded decision is final`);
     }
     if (cp.status !== "pending" || r.status !== "awaiting_checkpoint") return fail(409, `checkpoint is ${cp.status}`);
-    const { decision, note } = await body<Schemas["CheckpointDecision"]>();
+    // H8: an update's review stop is an owner's to decide.
+    if (cp.approver_role === "owner" && ctx.userRole !== "owner") return fail(403, "Only an owner can decide this stop");
+    const { decision, note, expected_revision } = await body<Schemas["CheckpointDecision"]>();
+    const draft = draftOf(ctx, cp.id);
+    const changedBy = ctx.reviewChange?.();
+    if (changedBy) bump(draft, displayName(changedBy));
+    if (expected_revision != null && expected_revision !== draft.revision) return json(409, { detail: reviewChanged(draft, expected_revision) });
     const blocked = cannotApprove(cp);
     if (decision === "approved" && blocked) return fail(409, blocked);
-    const text = note?.trim() || null;
+    // D8: the note defaults to the shared draft's.
+    const text = (note ?? draft.note)?.trim() || null;
     if (decision === "changes_requested" && !text) return fail(422, "say what to change: a note is required to request changes");
     Object.assign(cp, { status: decision, note: text, decided_by: ctx.userId, decided_at: ctx.now() });
     if (cp.kind === "feature_set" && (decision === "approved" || decision === "changes_requested")) decideScope(ctx, r, decision, ctx.userId);
@@ -1142,6 +1213,7 @@ const CHECKPOINT_TITLES: Record<CheckpointOut["kind"], string> = {
   roadmap_review: "Roadmap review",
   strategy_review: "Vision or strategy review",
   launch_review: "Launch kit review",
+  update_review: "Update review",
 };
 
 function decisionSummary(d: Omit<RunDecision, "summary">): string {
@@ -1606,7 +1678,15 @@ function roadmapReviewRun(): RunOut {
         decided_by: null,
         decided_at: null,
         note: null,
-        payload: { segment_seq: 1, segment: "roadmap_items", attempt: 1, artifacts: ["roadmap_items.yaml"], items_check: items.items_check },
+        payload: {
+          segment_seq: 1,
+          segment: "roadmap_items",
+          attempt: 1,
+          artifacts: ["roadmap_items.yaml"],
+          items_check: items.items_check,
+          // D8: the step waits in SwarmCloud, 19 h 30 min left when seeded (the header's time chip).
+          wait: { workflow_id: "mock-wf-roadmap-items", expires_at: new Date(Date.now() + (19 * 60 + 30) * 60_000).toISOString() },
+        },
         created_at: "2026-10-20T09:04:00Z",
         can_decide: true,
         cannot_approve: null,
@@ -1624,3 +1704,167 @@ export const ROADMAP_REVIEW_RUN: { run: RunOut; artifacts: Record<string, string
   run: roadmapReviewRun(),
   artifacts: { [`${ROADMAP_REVIEW_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS },
 };
+
+
+// ---------------------------------------------------------------- D8 shared draft decision
+
+const RANK: Record<Schemas["Me"]["role"], number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
+/** `role` is `min` or above (lib/me hasRole); an unknown caller has every role (the seed owner). */
+function atLeast(role: Schemas["Me"]["role"] | null | undefined, min: string): boolean {
+  return role == null || RANK[role] >= (RANK[min as Schemas["Me"]["role"]] ?? 0);
+}
+
+function draftOf(ctx: RunsContext, cpId: string): DraftRow {
+  ctx.db.drafts ??= {};
+  return (ctx.db.drafts[cpId] ??= { revision: 0, note: null, actions: [], log: [] });
+}
+
+function bump(draft: DraftRow, by: string) {
+  draft.revision += 1;
+  draft.log.push({ revision: draft.revision, by });
+}
+
+function reviewChanged(draft: DraftRow, expected: number) {
+  const since = draft.log.filter((l) => l.revision > expected);
+  const by = [...new Set(since.map((l) => l.by))];
+  const changes = Math.max(draft.revision - expected, 0) || since.length;
+  const who = by.length < 2 ? by.join("") : `${by.slice(0, -1).join(", ")} and ${by[by.length - 1]}`;
+  const message = `The review changed since you loaded it (${changes} change${changes === 1 ? "" : "s"}${who ? ` by ${who}` : ""}): look again, then decide.`;
+  return { code: "review_changed", revision: draft.revision, changes, by, message };
+}
+
+/** As oracle.runs.actions.wait_info: the SwarmCloud wait the checkpoint's step is parked in. */
+function waitOf(payload: CheckpointOut["payload"]): Schemas["WaitInfo"] {
+  const wait = (payload?.wait ?? {}) as { workflow_id?: string; expires_at?: string; ended?: string };
+  if (!wait.workflow_id && !wait.expires_at && !wait.ended) return { state: "none", ends_at: null, seconds_left: null };
+  if (wait.ended) return { state: "ended", ends_at: null, seconds_left: null };
+  if (!wait.expires_at) return { state: "open", ends_at: null, seconds_left: null };
+  const left = Math.floor((Date.parse(wait.expires_at) - Date.now()) / 1000);
+  if (left <= 0) return { state: "ended", ends_at: null, seconds_left: null };
+  return { state: "open", ends_at: wait.expires_at, seconds_left: left };
+}
+
+const KINDS = ["accept", "edit", "drop", "restore", "split", "merge", "question", "waive", "look_again", "add"];
+
+/** GET .../review and the four writes (oracle.runs.actions), over the stored items check. */
+async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: Request, rest: string[]): Promise<Response> {
+  const m = req.method;
+  const me = ctx.member ?? null;
+  const role = me?.role ?? ctx.userRole ?? null;
+  const draft = draftOf(ctx, cp.id);
+  const out = () => json(200, reviewOut(ctx, r, cp, draft, role));
+  if (rest[0] === "review" && rest.length === 1 && m === "GET") return out();
+  const stage = (rest[0] === "actions" && rest[2] === "stage") || rest[0] === "note";
+  const need = stage ? cp.approver_role : "commenter";
+  if (!atLeast(role, need)) return fail(403, `Requires the ${need} role`);
+  if (cp.status !== "pending") return fail(409, "this checkpoint is decided");
+  const who = me?.id ?? ctx.userId;
+  const name = displayName(me?.email ?? ctx.userName ?? "admin@example.com");
+  const stages = atLeast(role, cp.approver_role);
+  const body = async <T,>() => JSON.parse((await req.text()) || "null") as T;
+  if (rest[0] === "note" && m === "PUT") {
+    const { note } = await body<Schemas["DraftNoteIn"]>();
+    if (note != null && note.length > 10_000) return fail(422, "note: at most 10,000 characters");
+    const next = note?.trim() ? note : null;
+    if (next !== draft.note) {
+      draft.note = next;
+      bump(draft, name);
+    }
+    return out();
+  }
+  if (rest[0] === "actions" && rest.length === 1 && m === "POST") {
+    const a = await body<Schemas["ActionIn"]>();
+    if (!KINDS.includes(a.kind)) return fail(422, `unknown action kind ${a.kind}: one of ${KINDS.join(", ")}`);
+    const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (a.field ?? ""));
+    if (existing && !stages && existing.created_by !== who) return fail(403, "Only its author or an approver can change this action");
+    const row: DraftActionRow = {
+      id: existing?.id ?? ctx.uuid(),
+      item_key: a.item_key,
+      kind: a.kind,
+      field: a.field ?? null,
+      value: a.value ?? null,
+      answers: a.answers ?? [],
+      note: a.note ?? null,
+      state: stages ? "staged" : "suggested",
+      created_by: who,
+      updated_by: who,
+      updated_at: ctx.now(),
+    };
+    draft.actions = existing ? draft.actions.map((x) => (x === existing ? row : x)) : [...draft.actions, row];
+    bump(draft, name);
+    return out();
+  }
+  const action = draft.actions.find((x) => x.id === rest[1]);
+  if (rest[0] === "actions" && !action) return fail(404, `action ${rest[1]} not found`);
+  if (action && rest[2] === "stage" && m === "POST") {
+    if (action.state !== "staged") {
+      Object.assign(action, { state: "staged", updated_by: who, updated_at: ctx.now() });
+      bump(draft, name);
+    }
+    return out();
+  }
+  if (action && rest.length === 2 && m === "DELETE") {
+    if (action.created_by !== who && !stages) return fail(403, "Only its author or an approver can undo this action");
+    draft.actions = draft.actions.filter((x) => x !== action);
+    bump(draft, name);
+    return out();
+  }
+  return fail(404, "Route not found");
+}
+
+function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftRow, role: Schemas["Me"]["role"] | null): Schemas["CheckpointReview"] {
+  const people = new Map((ctx.members ?? []).map((x) => [x.id, x]));
+  const person = (id: string | null): Schemas["ReviewPerson"] | null => {
+    if (!id) return null;
+    const found = people.get(id);
+    return { id, name: found ? displayName(found.email) : "Someone", role: found?.role ?? null };
+  };
+  const seg = r.segments.find((s) => s.seq === cp.segment_seq);
+  const check = cp.kind === "roadmap_items" ? (seg?.items_check ?? null) : null;
+  const reasons = check?.reasons ?? [];
+  const keys = [...new Set([...reasons.map((x) => x.item), ...draft.actions.map((a) => a.item_key)])];
+  const tally: Schemas["ReviewTally"] = { need_you: 0, handled: 0, blocking_open: 0, to_confirm_open: 0, waiting_on: [], suggested: 0 };
+  const items: Schemas["ReviewItem"][] = keys.map((key, n) => {
+    const mine = draft.actions.filter((a) => a.item_key === key);
+    const theirs = reasons.filter((x) => x.item === key);
+    const answered = (x: (typeof reasons)[number]) =>
+      mine.some((a) => a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers?.length || a.answers.includes(x.code)));
+    const open = theirs.filter((x) => !answered(x));
+    const state = theirs.length === 0 ? "fine" : open.length === 0 ? "handled" : "needs_you";
+    tally.need_you += state === "needs_you" ? 1 : 0;
+    tally.handled += state === "handled" ? 1 : 0;
+    tally.blocking_open += open.filter((x) => x.severity === "blocking").length;
+    tally.to_confirm_open += open.filter((x) => x.severity === "confirm").length;
+    tally.suggested += mine.filter((a) => a.state === "suggested").length;
+    return {
+      key,
+      position: n + 1,
+      title: theirs[0]?.item_title ?? key,
+      depends_on: [],
+      reasons: theirs,
+      actions: mine.map((a) => ({ ...a, created_by: person(a.created_by), updated_by: person(a.updated_by), question: null })),
+      state,
+    };
+  });
+  const pending = cp.status === "pending";
+  const stages = pending && atLeast(role, cp.approver_role);
+  return {
+    checkpoint_id: cp.id,
+    run_id: r.id,
+    kind: cp.kind,
+    status: cp.status,
+    approver_role: cp.approver_role,
+    attempt: (cp.payload?.attempt as number | undefined) ?? null,
+    revision: draft.revision,
+    wait: waitOf(cp.payload),
+    file: check ? { name: "roadmap_items.yaml", seq: cp.segment_seq ?? 1 } : null,
+    file_problems: (check?.problems ?? []).filter((x) => !x.item),
+    items,
+    tally,
+    note: draft.note,
+    can_read: true,
+    can_suggest: pending && atLeast(role, "commenter"),
+    can_stage: stages,
+    can_decide: stages,
+  };
+}

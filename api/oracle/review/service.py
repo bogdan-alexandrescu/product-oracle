@@ -65,8 +65,11 @@ class ReviewError(Exception):
 
 
 # H4: the lowest role that approves a version of these kinds.
-MIN_APPROVER_ROLE = {"vision": "owner", "strategy": "owner"}
-KIND_WORDS = {"vision": "a vision", "strategy": "a product strategy"}
+MIN_APPROVER_ROLE = {"vision": "owner", "strategy": "owner", "update": "owner"}
+KIND_WORDS = {"vision": "a vision", "strategy": "a product strategy", "update": "an update"}
+# H8: the lowest role that sets a section verdict on these kinds (approvers comment and
+# suggest; owners set verdicts and approve).
+MIN_VERDICT_ROLE = {"update": "owner"}
 
 
 def _now() -> datetime:
@@ -113,7 +116,14 @@ async def _get_section(session: AsyncSession, version: DocumentVersion, key: str
 
 
 async def _get_comment(session: AsyncSession, comment_id: uuid.UUID) -> Comment:
-    comment = await session.get(Comment, comment_id)
+    # Joined to its document: a comment on a document the caller may not see is not found
+    # (H8, oracle.docs.visibility).
+    comment = await session.scalar(
+        select(Comment)
+        .join(DocumentVersion, DocumentVersion.id == Comment.version_id)
+        .join(Document, Document.id == DocumentVersion.document_id)
+        .where(Comment.id == comment_id)
+    )
     if comment is None:
         raise ReviewError("not_found", f"Comment {comment_id} not found")
     return comment
@@ -596,7 +606,13 @@ async def review_section(
     # The review gate, then the publish lock (publish's order): a verdict never commits
     # while a publish renders, nor lands after a role change that ended it.
     await _still_an_approver(session, principal)
-    await lock_document(session, version.document_id)
+    document = await lock_document(session, version.document_id)
+    needed = MIN_VERDICT_ROLE.get(document.kind) if document is not None else None
+    if needed is not None and not has_role(principal.role, needed):  # type: ignore[arg-type]
+        raise ReviewError(
+            "forbidden",
+            f"Only an {needed} can set a section verdict on {KIND_WORDS[document.kind]}",
+        )
     section = await _get_section(session, version, section_key)
     if revision is not None:
         await _check_revision(session, version, section, revision)
@@ -1008,7 +1024,7 @@ async def approve_version(
 
     version = await get_version(session, doc, n)
     kind = await session.scalar(select(Document.kind).where(Document.id == version.document_id))
-    if kind == "roadmap" and version.approved_at is None:
+    if kind in ("roadmap", "update") and version.approved_at is None:
         # A roadmap's dates are found before the gate and the lock, never waited for under
         # them (up to WAIT_SECONDS, then 503): the publish gate under the lock reads them
         # kept.

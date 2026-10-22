@@ -20,8 +20,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
-TEMPLATE_KINDS = ("prd", "roadmap", "vision", "strategy")
-THEME_KINDS = ("prd", "roadmap", "vision", "strategy", "any")
+TEMPLATE_KINDS = ("prd", "roadmap", "vision", "strategy", "update")
+THEME_KINDS = ("prd", "roadmap", "vision", "strategy", "update", "any")
 
 
 class Template(TenantScoped, Base):

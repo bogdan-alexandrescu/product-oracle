@@ -28,6 +28,7 @@ import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
 import { labelsOf, type PickerProps } from "./_browse-list";
+import { CodeMaps } from "./_code-maps";
 import { GithubPicker } from "./_github-picker";
 import { SlackPicker } from "./_slack-picker";
 import { CompanyDriveSettings } from "./CompanyDrive";
@@ -614,6 +615,7 @@ function SourceRow({
           </span>
         )}
       </div>
+      {source.kind === "github" && <CodeMaps source={source} />}
       {source.reconnect_reason && <ReconnectToChoose className="mt-2" />}
       {drive && <DriveNotes notes={unavailable} picked={picked} sourceName={source.name} />}
       {!drive && unavailable.length > 0 && (

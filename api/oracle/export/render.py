@@ -342,7 +342,7 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
     )
     stored = sorted(version.sections, key=lambda s: s.ordinal)
     ordered, marks = stored, []
-    if document.kind == "roadmap":
+    if document.kind in ("roadmap", "update"):
         ordered, marks = await _marked_dates(db, version, stored)
     ev = ExportVersion(
         document=document,

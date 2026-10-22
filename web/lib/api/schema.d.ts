@@ -131,6 +131,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{doc}/visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Document Visibility
+         * @description Who sees an update (H8): ``company`` (every member) or ``approvers`` (owners and
+         *     approvers only, an update's default); any other kind is a 422. Owners only, with a
+         *     reason; audited as ``document.visibility`` with the values before and after.
+         */
+        patch: operations["set_document_visibility"];
+        trace?: never;
+    };
     "/v1/documents/{doc}/versions": {
         parameters: {
             query?: never;
@@ -3269,12 +3291,66 @@ export interface paths {
          * @description Rank the baseline's features by ``method``, in dependency order.
          *
          *     Features that serve no confirmed goal sink to the bottom and are flagged;
-         *     dependency cycles are listed in ``cycles`` and their members flagged.
+         *     dependency cycles are listed in ``cycles`` and their members flagged. People's
+         *     active moves and pins apply after the formula (``overrides=false`` leaves them out):
+         *     each row carries ``formula_rank`` (Oracle's rank) and the ``override`` that placed it.
          */
         get: operations["get_priorities"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/priorities/overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Priority Overrides
+         * @description People's moves and pins, newest first: active ones, or all ever made
+         *     (``include_removed``), with Oracle's pushback and whether each was kept.
+         */
+        get: operations["list_priority_overrides"];
+        put?: never;
+        /**
+         * Create Priority Override
+         * @description Move a feature directly above another, or pin it at a rank, with a reason.
+         *
+         *     Oracle checks the change first: four rules on the ranking's numbers, then its own
+         *     model reads the reason against the evidence (at most one more message). When any
+         *     message results, nothing is stored and the answer is 409 with Oracle's pushback;
+         *     the same body with ``confirm: true`` keeps the change (no second check). A move or
+         *     pin never puts a feature above one it depends on (``held_below``). A new change on a
+         *     feature replaces its active one.
+         */
+        post: operations["create_priority_override"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/priorities/overrides/{override_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Priority Override
+         * @description End a move or pin: the feature returns to Oracle's order. The log keeps it.
+         */
+        delete: operations["remove_priority_override"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4163,6 +4239,115 @@ export interface paths {
          *     is not imported (``cannot_approve``): retry the import, or request changes.
          */
         post: operations["decide_checkpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Checkpoint Draft
+         * @description A checkpoint's shared draft decision (D8), any member: the items of the file it
+         *     reviews with their reasons (recomputed on every read) and the actions people staged or
+         *     suggested, the tally, the note to the agents, the revision to decide with, the time
+         *     the SwarmCloud wait has left and what I may do. Kinds with no item file: ``items: []``.
+         */
+        get: operations["get_checkpoint_draft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Checkpoint Action
+         * @description Stage (the checkpoint's approver role or above) or suggest (commenters) one action
+         *     on one item: one per item, kind and field, so the same again replaces it (a commenter
+         *     replaces only their own suggestion). A ``question`` asks the named member about the
+         *     item (C2). 422 names the rule a value breaks; 409 once the checkpoint is decided.
+         */
+        post: operations["create_checkpoint_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage Checkpoint Action
+         * @description Stage a suggestion (the checkpoint's approver role or above): it keeps who
+         *     suggested it.
+         */
+        post: operations["stage_checkpoint_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Checkpoint Action
+         * @description Undo an action: its author, or the checkpoint's approver role or above. A question
+         *     is withdrawn while nobody answered it.
+         */
+        delete: operations["delete_checkpoint_action"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Checkpoint Note
+         * @description Set the draft's note to the agents (the checkpoint's approver role or above); a
+         *     decision without a note of its own sends it.
+         */
+        put: operations["set_checkpoint_note"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6363,6 +6548,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/code-maps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Code Maps
+         * @description Code capability maps, newest first: shared ones, and your own sources' private
+         *     ones. Each has its repo, commit, as_of, sharing and what it holds (the content is
+         *     in get_code_map).
+         */
+        get: operations["list_code_maps"];
+        put?: never;
+        /**
+         * Start Code Map
+         * @description Map the code of one repository of your GitHub source: a code_map run, estimated
+         *     and started (over the approval threshold it waits for an owner). The map is private
+         *     until you share it. 409 while one of that repository is being built.
+         */
+        post: operations["start_code_map"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/code-maps/{code_map_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Code Map
+         * @description One code capability map with its content: modules, APIs, data models, flags and
+         *     jobs, each with the id a tech brief cites. What it says is data, not instructions.
+         */
+        get: operations["get_code_map"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/code-maps/{code_map_id}/sharing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share Code Map
+         * @description Share the code map with the company (full: everyone reads it and runs use it) or
+         *     make it private again (new runs stop using it; briefs already written keep their
+         *     refs). Every map of the repository follows. The source's owner only.
+         */
+        post: operations["share_code_map"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/blockers": {
         parameters: {
             query?: never;
@@ -8244,6 +8500,29 @@ export interface components {
             unreadable_document_count: number;
             refresh_sweep: components["schemas"]["RefreshSweepOut"];
             fallback: components["schemas"]["FallbackOut"] | null;
+        };
+        /**
+         * ActionIn
+         * @description One action on one item of a pending checkpoint's shared draft (D8). ``kind``,
+         *     ``field`` and ``value`` are checked against the checkpoint kind's vocabulary
+         *     (oracle.runs.actions.VOCABULARY); a wrong one is 422 naming the rule.
+         */
+        ActionIn: {
+            /** Item Key */
+            item_key: string;
+            /** Kind */
+            kind: string;
+            /** Field */
+            field?: string | null;
+            /** Value */
+            value?: unknown;
+            /**
+             * Answers
+             * @default []
+             */
+            answers: string[];
+            /** Note */
+            note?: string | null;
         };
         /**
          * AdvisoryIn
@@ -10172,6 +10451,8 @@ export interface components {
             decision: "approved" | "changes_requested" | "confirm" | "redo" | "continue";
             /** Note */
             note?: string | null;
+            /** Expected Revision */
+            expected_revision?: number | null;
         };
         /**
          * CheckpointDelivery
@@ -10226,7 +10507,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review" | "update_review";
             /**
              * Status
              * @enum {string}
@@ -10263,6 +10544,75 @@ export interface components {
             cannot_approve?: string | null;
             console?: components["schemas"]["ConsoleAnswer"] | null;
             delivery?: components["schemas"]["CheckpointDelivery"] | null;
+        };
+        /**
+         * CheckpointReview
+         * @description A checkpoint's shared draft decision (D8): its items with their reasons and actions,
+         *     the note to the agents, the revision a decision is sent with, the wait's time left and
+         *     what the reader may do. Checkpoint kinds with no item file serve ``items: []``.
+         */
+        CheckpointReview: {
+            /**
+             * Checkpoint Id
+             * Format: uuid
+             */
+            checkpoint_id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review" | "update_review";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "changes_requested" | "skipped";
+            /** Approver Role */
+            approver_role: string;
+            /** Attempt */
+            attempt?: number | null;
+            /** Revision */
+            revision: number;
+            wait: components["schemas"]["WaitInfo"];
+            file?: components["schemas"]["ReviewFile"] | null;
+            /**
+             * File Problems
+             * @default []
+             */
+            file_problems: components["schemas"]["ItemsProblem"][];
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ReviewItem"][];
+            tally: components["schemas"]["ReviewTally"];
+            /** Note */
+            note?: string | null;
+            /**
+             * Can Read
+             * @default true
+             */
+            can_read: boolean;
+            /**
+             * Can Suggest
+             * @default false
+             */
+            can_suggest: boolean;
+            /**
+             * Can Stage
+             * @default false
+             */
+            can_stage: boolean;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
         };
         /** Choice */
         Choice: {
@@ -10421,6 +10771,171 @@ export interface components {
             token_endpoint_auth_method: "none";
             /** Scope */
             scope: string;
+        };
+        /** CodeMapCounts */
+        CodeMapCounts: {
+            /**
+             * Modules
+             * @default 0
+             */
+            modules: number;
+            /**
+             * Apis
+             * @default 0
+             */
+            apis: number;
+            /**
+             * Data Models
+             * @default 0
+             */
+            data_models: number;
+            /**
+             * Flags
+             * @default 0
+             */
+            flags: number;
+            /**
+             * Jobs
+             * @default 0
+             */
+            jobs: number;
+        };
+        /** CodeMapCreate */
+        CodeMapCreate: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Repo */
+            repo: string;
+        };
+        /** CodeMapDetail */
+        CodeMapDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Repo */
+            repo: string;
+            /** Commit Sha */
+            commit_sha?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "building" | "ready" | "stale" | "failed";
+            /**
+             * Sharing
+             * @enum {string}
+             */
+            sharing: "private" | "full";
+            /** Shared By */
+            shared_by?: string | null;
+            /** Shared At */
+            shared_at?: string | null;
+            /**
+             * Partial
+             * @default false
+             */
+            partial: boolean;
+            /** As Of */
+            as_of?: string | null;
+            /** Size Bytes */
+            size_bytes?: number | null;
+            counts: components["schemas"]["CodeMapCounts"];
+            /** Run Id */
+            run_id?: string | null;
+            /** Run Status */
+            run_status?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Stale At */
+            stale_at?: string | null;
+            /** Mine */
+            mine: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Content */
+            content?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * CodeMapOut
+         * @description One code capability map of one repo of a GitHub source (F5-2).
+         */
+        CodeMapOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Repo */
+            repo: string;
+            /** Commit Sha */
+            commit_sha?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "building" | "ready" | "stale" | "failed";
+            /**
+             * Sharing
+             * @enum {string}
+             */
+            sharing: "private" | "full";
+            /** Shared By */
+            shared_by?: string | null;
+            /** Shared At */
+            shared_at?: string | null;
+            /**
+             * Partial
+             * @default false
+             */
+            partial: boolean;
+            /** As Of */
+            as_of?: string | null;
+            /** Size Bytes */
+            size_bytes?: number | null;
+            counts: components["schemas"]["CodeMapCounts"];
+            /** Run Id */
+            run_id?: string | null;
+            /** Run Status */
+            run_status?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Stale At */
+            stale_at?: string | null;
+            /** Mine */
+            mine: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** CodeMapSharingIn */
+        CodeMapSharingIn: {
+            /**
+             * Sharing
+             * @enum {string}
+             */
+            sharing: "private" | "full";
         };
         /** CodeMapUse */
         CodeMapUse: {
@@ -12000,13 +12515,20 @@ export interface components {
              * @default prd
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy";
+            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update";
             /** Template */
             template?: string | null;
             /** Template Version */
             template_version?: string | null;
             /** Theme */
             theme?: string | null;
+            /**
+             * Visibility
+             * @default company
+             * @enum {string}
+             */
+            visibility: "company" | "approvers";
+            period?: components["schemas"]["UpdatePeriod"] | null;
             /** Latest Version */
             latest_version?: number | null;
             /** Approved Version */
@@ -12138,13 +12660,20 @@ export interface components {
              * @default prd
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy";
+            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update";
             /** Template */
             template?: string | null;
             /** Template Version */
             template_version?: string | null;
             /** Theme */
             theme?: string | null;
+            /**
+             * Visibility
+             * @default company
+             * @enum {string}
+             */
+            visibility: "company" | "approvers";
+            period?: components["schemas"]["UpdatePeriod"] | null;
             /** Latest Version */
             latest_version?: number | null;
             /** Approved Version */
@@ -12186,7 +12715,7 @@ export interface components {
             /** Slug */
             slug?: string | null;
             /** Kind */
-            kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy") | null;
+            kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
             /** Version */
             version?: number | null;
             /** Created */
@@ -12207,6 +12736,11 @@ export interface components {
             summary?: string | null;
             source?: components["schemas"]["VersionSource"] | null;
             prd_links?: components["schemas"]["PrdLinks"] | null;
+        };
+        /** DraftNoteIn */
+        DraftNoteIn: {
+            /** Note */
+            note?: string | null;
         };
         /** DriftEntry */
         DriftEntry: {
@@ -12845,6 +13379,22 @@ export interface components {
             created_at: string;
         };
         /**
+         * EvidenceChip
+         * @description A piece of evidence as a citation chip shows it.
+         */
+        EvidenceChip: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Source Kind */
+            source_kind: string;
+            /** Confidence */
+            confidence?: number | null;
+            /** Date */
+            date?: string | null;
+        };
+        /**
          * EvidenceCitation
          * @description A ``[c:id]`` marker the stored draft carries in this section (its per-claim link).
          */
@@ -13066,6 +13616,12 @@ export interface components {
              * @default false
              */
             source_removed: boolean;
+            /** Title */
+            title?: string | null;
+            /** Source Kind */
+            source_kind?: string | null;
+            /** Date */
+            date?: string | null;
         };
         /** ExchangeIn */
         ExchangeIn: {
@@ -13261,6 +13817,18 @@ export interface components {
             experiment_id: string;
             /** Reason */
             reason: string;
+        };
+        /** FeatureRef */
+        FeatureRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
         };
         /**
          * FeatureSetCheck
@@ -13621,7 +14189,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit" | "code_map" | "update_draft";
             /** Title */
             title: string;
             /** Description */
@@ -13629,9 +14197,9 @@ export interface components {
             /** Requires Document */
             requires_document: boolean;
             /** Target Kind */
-            target_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy") | null;
+            target_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
             /** Source Kind */
-            source_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy") | null;
+            source_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
             /** Entry */
             entry?: string | null;
             /** Segments */
@@ -13655,11 +14223,8 @@ export interface components {
             scopes: string[];
             /** Outputs */
             outputs: string[];
-            /**
-             * Checkpoint
-             * @enum {string}
-             */
-            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review";
+            /** Checkpoint */
+            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review" | "update_review") | null;
             /**
              * Approver Role
              * @enum {string}
@@ -14084,7 +14649,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review" | "update_review";
             /**
              * Status
              * @enum {string}
@@ -14125,7 +14690,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit" | "code_map" | "update_draft";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -17268,6 +17833,91 @@ export interface components {
              */
             origin: "template" | "module";
         };
+        /** OverrideCreate */
+        OverrideCreate: {
+            /**
+             * Feature Id
+             * Format: uuid
+             */
+            feature_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "move" | "pin";
+            /** Above Feature Id */
+            above_feature_id?: string | null;
+            /** Position */
+            position?: number | null;
+            /** Reason */
+            reason: string;
+            /** Evidence Ids */
+            evidence_ids?: string[];
+            /** Snapshot Id */
+            snapshot_id?: string | null;
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: boolean;
+        };
+        /** OverrideOut */
+        OverrideOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            feature: components["schemas"]["FeatureRef"];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "move" | "pin";
+            above: components["schemas"]["FeatureRef"] | null;
+            /** Position */
+            position: number | null;
+            /** Reason */
+            reason: string;
+            /** Evidence Ids */
+            evidence_ids: string[];
+            /** Evidence */
+            evidence?: components["schemas"]["EvidenceChip"][];
+            /** Pushback */
+            pushback: components["schemas"]["PushbackMessage"][];
+            /** Kept After Pushback */
+            kept_after_pushback: boolean;
+            reason_check: components["schemas"]["ReasonCheckOut"];
+            /** Snapshot Id */
+            snapshot_id: string | null;
+            created_by: components["schemas"]["PersonRef"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Removed At */
+            removed_at: string | null;
+            removed_by: components["schemas"]["PersonRef"] | null;
+            /** Removed Reason */
+            removed_reason: string | null;
+            /** Replaced By */
+            replaced_by: string | null;
+            /**
+             * No Longer Applies
+             * @default false
+             */
+            no_longer_applies: boolean;
+            /** Preview Rank */
+            preview_rank?: number | null;
+            /** Held Below */
+            held_below?: string | null;
+        };
+        /** OverrideRemove */
+        OverrideRemove: {
+            /** Reason */
+            reason?: string | null;
+        };
         /** PackModuleOut */
         PackModuleOut: {
             /** Key */
@@ -17342,6 +17992,16 @@ export interface components {
             role: "viewer" | "commenter" | "approver" | "owner";
             /** Can Write */
             can_write: boolean;
+        };
+        /** PersonRef */
+        PersonRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** PersonalTokenCreate */
         PersonalTokenCreate: {
@@ -18305,6 +18965,36 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["PushbackSource"][];
         };
+        /** PushbackMessage */
+        PushbackMessage: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Numbers */
+            numbers?: {
+                [key: string]: unknown;
+            } | null;
+            /** Claim */
+            claim?: string | null;
+            /** Evidence */
+            evidence?: components["schemas"]["EvidenceChip"][] | null;
+        };
+        /**
+         * PushbackOut
+         * @description 409: Oracle disagrees. Nothing is stored; ``confirm: true`` keeps the change.
+         */
+        PushbackOut: {
+            /** Detail */
+            detail: string;
+            /** Pushback */
+            pushback: components["schemas"]["PushbackMessage"][];
+            reason_check: components["schemas"]["ReasonCheckOut"];
+            /** Preview Rank */
+            preview_rank: number | null;
+            /** Held Below */
+            held_below: string | null;
+        };
         /** PushbackSource */
         PushbackSource: {
             /** Ref */
@@ -18439,6 +19129,8 @@ export interface components {
             rank: number;
             /** Score Rank */
             score_rank: number;
+            /** Formula Rank */
+            formula_rank?: number | null;
             /** Entity Id */
             entity_id: string;
             /** Key */
@@ -18458,6 +19150,9 @@ export interface components {
             /** Dependents */
             dependents: string[];
             explanation: components["schemas"]["Explanation"];
+            override?: components["schemas"]["RowOverride"] | null;
+            /** Held Below */
+            held_below?: string | null;
         };
         /** RankedGap */
         RankedGap: {
@@ -18687,6 +19382,16 @@ export interface components {
             /** Attempt */
             attempt?: number | null;
         };
+        /** ReasonCheckOut */
+        ReasonCheckOut: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "contradiction" | "no_contradiction" | "skipped" | "failed" | "timed_out";
+            /** Ms */
+            ms?: number | null;
+        };
         /** ReasonFix */
         ReasonFix: {
             /** Label */
@@ -18719,7 +19424,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
             template: components["schemas"]["TemplateOption"];
             /** Reason */
             reason: string;
@@ -18970,6 +19675,11 @@ export interface components {
             commit?: string | null;
             /** As Of */
             as_of?: string | null;
+            /**
+             * Partial
+             * @default false
+             */
+            partial: boolean;
         };
         /** ReportAlignmentCounts */
         ReportAlignmentCounts: {
@@ -19673,6 +20383,64 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** ReviewAction */
+        ReviewAction: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Item Key */
+            item_key: string;
+            /** Kind */
+            kind: string;
+            /** Field */
+            field?: string | null;
+            /** Value */
+            value?: unknown;
+            /**
+             * Answers
+             * @default []
+             */
+            answers: string[];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "staged" | "suggested";
+            /** Note */
+            note?: string | null;
+            created_by?: components["schemas"]["ReviewPerson"] | null;
+            updated_by?: components["schemas"]["ReviewPerson"] | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            question?: components["schemas"]["ReviewQuestion"] | null;
+        };
+        /** ReviewAnswer */
+        ReviewAnswer: {
+            /** Kind */
+            kind: string;
+            /** Body */
+            body?: string | null;
+            answered_by?: components["schemas"]["ReviewAnswerer"] | null;
+        };
+        /** ReviewAnswerer */
+        ReviewAnswerer: {
+            /** Id */
+            id?: string | null;
+            /** Name */
+            name: string;
+        };
+        /** ReviewFile */
+        ReviewFile: {
+            /** Name */
+            name: string;
+            /** Seq */
+            seq: number;
+        };
         /** ReviewIn */
         ReviewIn: {
             /**
@@ -19684,6 +20452,69 @@ export interface components {
             note: string;
             /** Next Review At */
             next_review_at?: string | null;
+        };
+        /**
+         * ReviewItem
+         * @description One item of the reviewed file, its reasons (recomputed on every read) and its
+         *     actions. ``state``: ``needs_you`` (an open reason no staged action answers),
+         *     ``handled`` (every reason answered by a staged action), ``waiting`` (only open
+         *     questions) or ``fine`` (no reasons). An item only the reasons or the actions name (a
+         *     dropped item, the whole file "*") has no ``position``.
+         */
+        ReviewItem: {
+            /** Key */
+            key: string;
+            /** Position */
+            position?: number | null;
+            /** Title */
+            title?: string | null;
+            /** Horizon */
+            horizon?: string | null;
+            milestone?: components["schemas"]["ReviewMilestone"] | null;
+            /** Confidence */
+            confidence?: string | null;
+            /** Rank */
+            rank?: number | null;
+            /** Outcome */
+            outcome?: string | null;
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /** Prd Section */
+            prd_section?: string | null;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ItemReason"][];
+            /**
+             * Actions
+             * @default []
+             */
+            actions: components["schemas"]["ReviewAction"][];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "needs_you" | "handled" | "waiting" | "fine";
+        };
+        /** ReviewMilestone */
+        ReviewMilestone: {
+            /** Name */
+            name?: string | null;
+            /** Date */
+            date?: string | null;
+        };
+        /** ReviewPerson */
+        ReviewPerson: {
+            /** Id */
+            id?: string | null;
+            /** Name */
+            name: string;
+            /** Role */
+            role?: string | null;
         };
         /** ReviewPolicyIn */
         ReviewPolicyIn: {
@@ -19753,6 +20584,23 @@ export interface components {
             lock_version?: number | null;
         };
         /**
+         * ReviewQuestion
+         * @description The stakeholder question a ``question`` action asked (C2), with its latest answer.
+         */
+        ReviewQuestion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+            /** Text */
+            text: string;
+            asked_to?: components["schemas"]["ReviewAnswerer"] | null;
+            answer?: components["schemas"]["ReviewAnswer"] | null;
+        };
+        /**
          * ReviewQueueItem
          * @description A section the caller owns or reviews, in the latest version of its document.
          */
@@ -19794,6 +20642,39 @@ export interface components {
              * @default false
              */
             overdue: boolean;
+        };
+        /** ReviewTally */
+        ReviewTally: {
+            /**
+             * Need You
+             * @default 0
+             */
+            need_you: number;
+            /**
+             * Handled
+             * @default 0
+             */
+            handled: number;
+            /**
+             * Blocking Open
+             * @default 0
+             */
+            blocking_open: number;
+            /**
+             * To Confirm Open
+             * @default 0
+             */
+            to_confirm_open: number;
+            /**
+             * Waiting On
+             * @default []
+             */
+            waiting_on: components["schemas"]["WaitingOn"][];
+            /**
+             * Suggested
+             * @default 0
+             */
+            suggested: number;
         };
         /** RevisionDetail */
         RevisionDetail: {
@@ -20110,13 +20991,41 @@ export interface components {
             /** Items */
             items: components["schemas"]["RoadmapItemOut"][];
         };
+        /**
+         * RowOverride
+         * @description The active move or pin that placed a row (C9).
+         */
+        RowOverride: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "move" | "pin";
+            /** By */
+            by: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Kept After Pushback
+             * @default false
+             */
+            kept_after_pushback: boolean;
+            /** Above */
+            above?: string | null;
+            /** Position */
+            position?: number | null;
+            /** Created At */
+            created_at?: string | null;
+        };
         /** RunCreate */
         RunCreate: {
             /**
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit" | "code_map" | "update_draft";
             /** Document */
             document?: string | null;
             /** Source */
@@ -20154,7 +21063,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review" | "update_review";
             /** Segment Seq */
             segment_seq?: number | null;
             /** Segment Title */
@@ -20205,7 +21114,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit" | "code_map" | "update_draft";
             /** Flow Title */
             flow_title: string;
             /**
@@ -20218,7 +21127,7 @@ export interface components {
             /** Document Slug */
             document_slug?: string | null;
             /** Document Kind */
-            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy") | null;
+            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
             source?: components["schemas"]["VersionSource"] | null;
             /** Template */
             template?: string | null;
@@ -20240,7 +21149,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review" | "update_review") | null;
             /** Error */
             error?: string | null;
             /** Stuck */
@@ -20282,7 +21191,7 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review" | "update_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
@@ -20355,7 +21264,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "strategy_draft" | "launch_kit" | "code_map" | "update_draft";
             /** Flow Title */
             flow_title: string;
             /**
@@ -20368,7 +21277,7 @@ export interface components {
             /** Document Slug */
             document_slug?: string | null;
             /** Document Kind */
-            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy") | null;
+            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
             source?: components["schemas"]["VersionSource"] | null;
             /** Template */
             template?: string | null;
@@ -20390,7 +21299,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review" | "update_review") | null;
             /** Error */
             error?: string | null;
             /** Stuck */
@@ -20432,7 +21341,7 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review" | "update_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
@@ -21431,11 +22340,8 @@ export interface components {
             roles: string[];
             /** Scopes */
             scopes: string[];
-            /**
-             * Checkpoint
-             * @enum {string}
-             */
-            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review";
+            /** Checkpoint */
+            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "strategy_review" | "launch_review" | "update_review") | null;
             /** Checkpoint On */
             checkpoint_on: boolean;
             /** Estimate Usd */
@@ -22451,7 +23357,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
             /** Title */
             title: string;
             /** Slug */
@@ -22462,6 +23368,7 @@ export interface components {
             template_version?: number | null;
             /** Theme */
             theme?: string | null;
+            period?: components["schemas"]["UpdatePeriod"] | null;
         };
         /** StartDraftOut */
         StartDraftOut: {
@@ -22478,7 +23385,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
             /** Template */
             template: string;
             /** Template Version */
@@ -23018,7 +23925,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
             /** Description */
             description?: string | null;
             /** Body */
@@ -23111,7 +24018,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
             /** Description */
             description: string | null;
             /** Builtin */
@@ -23147,7 +24054,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
             /** Description */
             description: string | null;
             /** Builtin */
@@ -23270,7 +24177,7 @@ export interface components {
              * @default any
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "any";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "any";
             /** Description */
             description?: string | null;
             tokens?: components["schemas"]["ThemeTokens"];
@@ -23333,7 +24240,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "any";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "any";
         };
         /** ThemeOut */
         ThemeOut: {
@@ -23350,7 +24257,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "any";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "any";
             /** Description */
             description: string | null;
             tokens: components["schemas"]["ThemeTokens"];
@@ -23440,7 +24347,7 @@ export interface components {
             /** Name */
             name?: string | null;
             /** Kind */
-            kind?: ("prd" | "roadmap" | "vision" | "strategy" | "any") | null;
+            kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update" | "any") | null;
             /** Description */
             description?: string | null;
             tokens?: components["schemas"]["ThemeTokens"] | null;
@@ -24400,6 +25307,22 @@ export interface components {
              */
             status: "unavailable" | "skipped" | "flagged" | "limited";
         };
+        /**
+         * UpdatePeriod
+         * @description The period an update covers (its latest version's front matter ``period``).
+         */
+        UpdatePeriod: {
+            /**
+             * From
+             * Format: date
+             */
+            from: string;
+            /**
+             * To
+             * Format: date
+             */
+            to: string;
+        };
         /** UploadResult */
         UploadResult: {
             /** Items */
@@ -24664,7 +25587,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy";
+            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update";
             /** Version */
             version: number;
             /**
@@ -24752,6 +25675,48 @@ export interface components {
              * @default []
              */
             section_keys: string[];
+        };
+        /**
+         * VisibilityIn
+         * @description An owner's switch of who sees a document, with the reason (audited).
+         */
+        VisibilityIn: {
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "company" | "approvers";
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * WaitInfo
+         * @description The SwarmCloud wait of the checkpoint: ``open`` (``ends_at``, ``seconds_left``),
+         *     ``ended`` (deciding continues the run as a new workflow) or ``none`` (one workflow per
+         *     segment: the checkpoint waits in the Inbox with no end).
+         */
+        WaitInfo: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "open" | "ended" | "none";
+            /** Ends At */
+            ends_at?: string | null;
+            /** Seconds Left */
+            seconds_left?: number | null;
+        };
+        /** WaitingOn */
+        WaitingOn: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+            /** Count */
+            count: number;
         };
         /** WaiveIn */
         WaiveIn: {
@@ -25003,7 +25968,7 @@ export interface operations {
     list_documents: {
         parameters: {
             query?: {
-                kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy") | null;
+                kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
             };
             header?: never;
             path?: never;
@@ -25050,6 +26015,55 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DocumentOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_document_visibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisibilityIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Not an owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -31332,6 +32346,8 @@ export interface operations {
         parameters: {
             query?: {
                 method?: "goal_weighted" | "rice" | "moscow" | "wsjf";
+                /** @description false: Oracle's order only, without people's moves and pins */
+                overrides?: boolean;
             };
             header?: never;
             path?: never;
@@ -31346,6 +32362,116 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PriorityRanking"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_priority_overrides: {
+        parameters: {
+            query?: {
+                snapshot_id?: string | null;
+                include_removed?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverrideOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_priority_override: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverrideCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverrideOut"];
+                };
+            };
+            /** @description Oracle disagrees: nothing stored */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushbackOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_priority_override: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                override_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OverrideRemove"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverrideOut"];
                 };
             };
             /** @description Validation Error */
@@ -31945,7 +33071,7 @@ export interface operations {
     list_templates: {
         parameters: {
             query?: {
-                kind?: ("prd" | "roadmap" | "vision" | "strategy") | null;
+                kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update") | null;
                 include_archived?: boolean;
             };
             header?: never;
@@ -32210,7 +33336,7 @@ export interface operations {
     list_themes: {
         parameters: {
             query?: {
-                kind?: ("prd" | "roadmap" | "vision" | "strategy" | "any") | null;
+                kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update" | "any") | null;
                 include_archived?: boolean;
             };
             header?: never;
@@ -33220,6 +34346,176 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_checkpoint_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckpointReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_checkpoint_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckpointReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stage_checkpoint_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckpointReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_checkpoint_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckpointReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_checkpoint_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftNoteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckpointReview"];
                 };
             };
             /** @description Validation Error */
@@ -37012,6 +38308,139 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TechBriefOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_code_maps: {
+        parameters: {
+            query?: {
+                /** @description A repository, owner/name */
+                repo?: string | null;
+                /** @description building | ready | stale | failed */
+                status?: ("building" | "ready" | "stale" | "failed") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeMapOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_code_map: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeMapCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_code_map: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code_map_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeMapDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_code_map: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code_map_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeMapSharingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeMapOut"];
                 };
             };
             /** @description Validation Error */

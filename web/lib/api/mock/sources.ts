@@ -370,6 +370,14 @@ function load(scenario: string | null = localStorage.getItem("po-mock-scenario")
   return seeded("sources", seed);
 }
 
+/** A source's kind and repositories (the code map mock, ./engineering.ts); null when there is none. */
+export function sourceRepos(id: string): { kind: Source["kind"]; repos: string[] } | null {
+  const s = load().sources.find((x) => x.id === id);
+  if (!s) return null;
+  const repos = (s.config as Record<string, unknown>).repos;
+  return { kind: s.kind, repos: Array.isArray(repos) ? repos.map(String) : [] };
+}
+
 /** How many sources there are (A1's Pick sources step). */
 export function sourceCount(): number {
   return load().sources.length;
