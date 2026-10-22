@@ -18,8 +18,8 @@ const pad = (n: number) => String(n).padStart(2, "0");
 /** Company › Updates from the rail, as a person gets there. */
 async function openUpdates(page: Page) {
   await page.getByTestId("app-nav").getByTestId("nav-company").click();
-  // Company opens on its first tab.
-  await expect(page).toHaveURL(/\/company\/decisions$/);
+  // Company opens on its first tab (Strategy since H4).
+  await expect(page).toHaveURL(/\/company\/strategy$/);
   await page.getByRole("navigation", { name: "Company" }).getByTestId("company-tab-updates").click();
   await expect(page).toHaveURL(/\/company\/updates$/);
 }
@@ -226,7 +226,7 @@ test("10e: at 390 px an update reads one section at a time, with no sideways scr
   await login(page);
   await page.getByTestId("tab-bar").getByTestId("tab-more").click();
   await page.getByRole("dialog", { name: "More" }).getByRole("link", { name: "Company" }).click();
-  await expect(page).toHaveURL(/\/company\/decisions$/);
+  await expect(page).toHaveURL(/\/company\/strategy$/);
   await page.getByRole("navigation", { name: "Company" }).getByTestId("company-tab-updates").click();
   await expect(page.getByTestId("update-row")).toHaveCount(2);
   const width = () => page.evaluate(() => ({ sw: document.scrollingElement!.scrollWidth, iw: window.innerWidth }));
