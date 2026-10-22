@@ -19,7 +19,7 @@ import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type De
 import { emptyDiscussions, routeDiscussions, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
 import { routeEngineering, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
-import { laneF, type LaneFState } from "./lane-f";
+import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
@@ -1302,9 +1302,11 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
         const v = vs.find((x) => x.number === number);
         if (!v) return `version ${number} of '${doc.slug}' not found`;
         if (!v.approved_at) return `version ${number} of '${doc.slug}' is not approved: a roadmap is built from an approved PRD version`;
+        if (nothingWritten(db, doc, v.sections)) return `version ${number} of '${doc.slug}': ${NOTHING_WRITTEN}`;
         return versionSource(doc, v);
       }
       const v = vs.filter((x) => x.approved_at).pop();
+      if (v && nothingWritten(db, doc, v.sections)) return `version ${v.number} of '${doc.slug}': ${NOTHING_WRITTEN}`;
       return v ? versionSource(doc, v) : `'${doc.slug}' has no approved version: approve a version of the PRD before building its roadmap`;
     },
     // A run's draft becomes the next version: a copy of the latest one (or of the first
@@ -2819,6 +2821,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (words && me.role !== "owner") return json(403, { detail: `Only an owner can approve ${words}` });
     // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
     if (doc.kind === "prd") {
+      // #254: a version that is still only its template's text is never approved.
+      if (!v.approved_at && nothingWritten(db, doc, v.sections)) return json(409, { detail: NOTHING_WRITTEN, blocking: [], dates: [] });
       const latest = docVersions(db, doc).pop()!.number;
       const refusal = publishRefusal(qualityCtx, { documentId: doc.id, slug: doc.slug, versionId: v.id }, v.number, latest, (id) =>
         ensureBlockers(db).blockers.find((b) => b.id === id)?.statement,

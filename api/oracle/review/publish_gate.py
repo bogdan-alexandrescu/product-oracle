@@ -3,7 +3,8 @@
 Approving a PRD version publishes it, so :func:`check` runs in the approve transaction,
 after the document row is locked and before anything is written: the version must be the
 document's latest (C5: to publish older text, restore it as a new version first), and
-the readiness verdict for purpose ``publish`` must not be blocked. A refusal is
+the readiness verdict for purpose ``publish`` must not be blocked, and something must be
+written (#254: a version whose sections all hold only the template's text is refused). A refusal is
 :class:`PublishBlocked`, which the router turns into a 409 naming the blocks. Every path
 that approves (the UI, REST, the MCP ``approve_version`` tool) goes through it.
 
@@ -20,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import readiness
 from oracle.baseline.models import Entity
+from oracle.docs import written
 from oracle.docs.models import Document, DocumentVersion
 from oracle.quality import criteria
 from oracle.readiness import ReadinessContext
@@ -80,6 +82,9 @@ async def check(
     )
     if latest is not None and latest != version.number:
         raise PublishBlocked(f"v{latest} exists: only the latest version can be published", [])
+    if version.approved_at is None and await written.nothing_written(db, document, version):
+        # #254: a version that is still only its template's text is never published.
+        raise PublishBlocked(written.NOTHING_WRITTEN, [])
     from oracle.review.publish import REVIEW_CHECK_KEY
 
     # The review invariants are what this approval gives (the publish check computes
