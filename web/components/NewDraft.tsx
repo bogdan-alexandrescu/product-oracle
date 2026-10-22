@@ -652,16 +652,29 @@ const MAX_OUT_OF_SCOPE = 20;
 const PROBLEM_MIN = 20;
 const PROBLEM_MAX = 4000;
 
-/** The confirmed goals a brief may serve, each with its distance to go (Home's reading). */
-function GoalPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
-  const goals = useQuery("door-goals", () =>
+/** The company's confirmed goals, as the goal pickers read them. */
+export function useConfirmedGoals() {
+  return useQuery("door-goals", () =>
     unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } })),
   );
+}
+
+/** The confirmed goals a brief (or its PRD run, #260) may serve, each with its distance to go (Home's reading). */
+export function GoalPicker({
+  value,
+  onChange,
+  legend = "Which goals does it serve?",
+}: {
+  value: string[];
+  onChange: (ids: string[]) => void;
+  legend?: string;
+}) {
+  const goals = useConfirmedGoals();
   const views = goalViews(goals.data ?? []);
   return (
     <fieldset className="min-w-0">
       <legend className="mb-2 text-[15px] font-semibold text-text">
-        Which goals does it serve? <span className="font-normal text-text2">Optional</span>
+        {legend} <span className="font-normal text-text2">Optional</span>
       </legend>
       {goals.error && <ErrorNote>{goals.error}</ErrorNote>}
       {goals.loading && <Loading />}

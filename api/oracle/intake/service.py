@@ -614,7 +614,9 @@ def run_knobs(intake: ProductIntake, gap_ids: list[uuid.UUID] | None = None) -> 
     return knobs
 
 
-async def _run_knobs_in(db: AsyncSession, body: IntakeRunIn, depth: str | None = None):
+async def _run_knobs_in(
+    db: AsyncSession, intake: ProductIntake, body: IntakeRunIn, depth: str | None = None
+):
     """The knobs of the intake's draft run, as created or updated."""
     knobs = body.knobs.model_copy(update={"depth": depth}) if depth else body.knobs
     reuse_wanted = body.reuse_baseline
@@ -625,7 +627,21 @@ async def _run_knobs_in(db: AsyncSession, body: IntakeRunIn, depth: str | None =
         from oracle.runs import reuse
 
         reuse_wanted = (await reuse.review_status(db)).reusable
-    return knobs.model_copy(update={"reuse_baseline": reuse_wanted})
+    update: dict[str, Any] = {"reuse_baseline": reuse_wanted}
+    brief = [str(g) for g in intake.goal_ids or []]
+    # #260: the run serves the brief's goals unless the sheet names others.
+    goals = brief if knobs.goals is None else knobs.goals
+    if brief:
+        # A goal of the brief rejected since is left out (the sheet says so), not refused.
+        confirmed = await db.scalars(
+            select(Entity.id).where(
+                Entity.id.in_(intake.goal_ids), Entity.type == "goal", Entity.status == "confirmed"
+            )
+        )
+        stale = set(brief) - {str(g) for g in confirmed}
+        goals = [g for g in goals if g not in stale]
+    update["goals"] = goals
+    return knobs.model_copy(update=update)
 
 
 async def create_run(
@@ -646,7 +662,7 @@ async def create_run(
         document = str(intake.document_id)
     if document is None:
         document = slug_for(intake.title)
-    knobs = await _run_knobs_in(db, body, depth)
+    knobs = await _run_knobs_in(db, intake, body, depth)
     try:
         run_id = await runs_service.create_run(
             db,
@@ -699,7 +715,7 @@ async def _update_draft_run(
         document=body.document,
         template=body.template or intake.draft_template,
         theme=body.theme or intake.draft_theme,
-        knobs=await _run_knobs_in(db, body),
+        knobs=await _run_knobs_in(db, intake, body),
     )
     try:
         await runs_service.update_run(db, principal, run_id, patch_body)

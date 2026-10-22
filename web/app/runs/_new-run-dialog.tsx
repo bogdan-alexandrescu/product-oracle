@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { Button, Icon, InfoTip } from "@/components/ds";
+import { GoalPicker } from "@/components/NewDraft";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
@@ -28,6 +29,8 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
   const [roles, setRoles] = useState<Record<string, string[]>>({});
   const [checkpoints, setCheckpoints] = useState<Record<string, boolean>>({});
   const [budget, setBudget] = useState("");
+  // #260: the confirmed goals a Baseline to PRD run serves.
+  const [goals, setGoals] = useState<string[]>([]);
   const [draft, setDraft] = useState<{ id: string; flow: Flow["key"] } | null>(null);
   const [estimate, setEstimate] = useState<EstimateOut | null>(null);
   const [busy, setBusy] = useState(false);
@@ -62,8 +65,9 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
       roles: Object.fromEntries((flow?.segments ?? []).map((s) => [s.name, roles[s.name] ?? s.roles])),
       checkpoints: Object.fromEntries((flow?.segments ?? []).flatMap((s) => (s.checkpoint ? [[s.checkpoint, checkpoints[s.checkpoint] ?? true]] : []))),
       budget_usd: budget.trim() ? Number(budget) : null,
+      ...(flow?.key === "baseline_to_prd" ? { goals } : {}),
     }),
-    [flow, depth, roles, checkpoints, budget],
+    [flow, depth, roles, checkpoints, budget, goals],
   );
 
   const change = <T,>(set: (v: T) => void) => (v: T) => {
@@ -206,6 +210,8 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                   />
                 )}
               </div>
+
+              {flow.key === "baseline_to_prd" && <GoalPicker value={goals} onChange={change(setGoals)} legend="Goals this PRD serves" />}
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">

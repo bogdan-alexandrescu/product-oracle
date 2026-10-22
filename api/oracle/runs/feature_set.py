@@ -32,7 +32,8 @@ one), ``duplicate_key``, ``unknown_feature``, ``unknown_requirement``, ``unknown
 ``serves_no_goal``, ``low_confidence`` (below the company's low threshold),
 ``linked_blocker`` (a listed blocker that is open and gates publishing), ``new_feature``
 (a proposal of this run, not in the baseline yet) and ``duplicate_of_existing`` (its
-title, lower-cased and without punctuation, is another feature's).
+title, lower-cased and without punctuation, is another feature's). A problem that does not
+block (#260): ``target_goal_unserved``, a target goal of the run no included feature serves.
 
 The file is agent output. It is read by :func:`load_feature_set` through the one safe
 loader (:func:`oracle.safe_yaml.load`: no anchors, aliases, tags or duplicate keys,
@@ -166,6 +167,8 @@ class Known:
     titles: list[tuple[str, str]] = field(default_factory=list)
     # The company's low-confidence threshold.
     low: float = 0.4
+    # The run's target goals (#260), key to title.
+    targets: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -492,6 +495,14 @@ def _check_sets(
             "the included features depend on each other in a cycle: " + " -> ".join(cycle),
             cycle[0],
         )
+    served = {g["key"] for f in out.features for g in f["goals"] if g.get("contribution") != 0}
+    for key, title in known.targets.items():
+        if key not in served:
+            out.add(
+                "target_goal_unserved",
+                f"no included feature serves the target goal {key} ({title})",
+                blocking=False,
+            )
     out.flags = _flags(out.features, known)
 
 
@@ -684,10 +695,14 @@ async def low_threshold(db: AsyncSession) -> float:
 async def known_for_run(db: AsyncSession, run_id: uuid.UUID) -> Known:
     """What the check reads: the baseline's features, requirements, confirmed goals and
     constraints (rejected ones never count), this run's open create-proposals of features
-    and requirements, the blockers that gate publishing, and the low threshold."""
+    and requirements, the blockers that gate publishing, the low threshold and the run's
+    target goals (#260)."""
     from oracle.blockers import service as blockers
+    from oracle.runs.models import Run
 
-    known = Known(low=await low_threshold(db))
+    run = await db.get(Run, run_id)
+    targets = (run.knobs or {}).get("target_goals") or [] if run is not None else []
+    known = Known(low=await low_threshold(db), targets={g["key"]: g["title"] for g in targets})
     entities = list(
         await db.scalars(
             select(Entity).where(

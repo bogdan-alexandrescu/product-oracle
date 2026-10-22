@@ -28,7 +28,7 @@ import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngRe
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
-import { routeIntake, seedBeforeDrafting, startedIntakeRun, type SubjectLookup } from "./intake";
+import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
@@ -282,6 +282,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * problem (C6, saved-addresses);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
+ * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
+ * activation and Cut early churn, a goal rejected since (#260, ./intake.ts seedBriefGoalRejected);
  * "discussions" as the default company plus one private discussion the commenter started
  * with the approver on team-workspaces v2's Problem, 3 messages from the 2 of them (G1,
  * ./discussions.ts);
@@ -498,6 +500,16 @@ function seedBeforeDraftingScenario(): Db {
   const db = seed();
   const approver = db.members.find((m) => m.email === "approver@example.com")!;
   seedBeforeDrafting(ensureV2(db), db.user_id, approver.id);
+  return db;
+}
+
+/** The default company plus a brief whose second goal was rejected since (#260). */
+function seedBriefGoalRejectedScenario(): Db {
+  const db = seed();
+  const approver = db.members.find((m) => m.email === "approver@example.com")!;
+  const goal = (key: string) => db.baseline.entities.find((e) => e.type === "goal" && e.key === key)!;
+  seedBriefGoalRejected(ensureV2(db), approver.id, [goal("g.activation").id, goal("g.early-churn").id]);
+  goal("g.early-churn").status = "rejected";
   return db;
 }
 
@@ -1285,6 +1297,8 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     feedback: db.feedback,
     documents: db.documents,
+    confirmedGoals: () =>
+      db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title })),
     suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
     staged: (id) => isStaged(withSuggestion(db.llm, { id } as FeedbackRow).suggestion),
     openProposals: (runId) => db.baseline.proposals.filter((p) => p.run_id === runId && p.status === "open").length,
@@ -1414,6 +1428,8 @@ function load(): Db {
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "before-drafting"
             ? seedBeforeDraftingScenario
+          : scenario === "brief-goal-rejected"
+            ? seedBriefGoalRejectedScenario
           : scenario === "questions"
             ? seedQuestions
             : scenario === "private-finding"
