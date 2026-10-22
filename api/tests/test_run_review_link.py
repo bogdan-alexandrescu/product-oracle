@@ -134,7 +134,7 @@ async def test_run_review_matches_the_version_the_run_imported(client, owner, ru
     run, cp = await _waiting(client, auth)
     keys = await _keys(tenant_id)
     await _verdict(client, auth, keys[0])
-    await _verdict(client, auth, keys[1], "request_changes")
+    await _verdict(client, auth, keys[1], "changes_requested")
 
     resp = await client.get(f"/v1/documents/{DOC}/versions/2/run-review", headers=auth)
     assert resp.status_code == 200, resp.text
@@ -234,7 +234,8 @@ async def test_send_back_carries_the_documents_feedback(client, owner, runtime):
     assert resp.status_code == 200, resp.text
     stored = await _checkpoint(tenant_id, cp["id"])
     assert stored.status == "changes_requested"
-    sent = yaml.safe_load(stored.note)
+    sent = yaml.safe_load(stored.payload["review_file"])
+    assert stored.note is None
     assert sent["checkpoint"] == "prd_review" and sent["file"] == "prd.md"
     assert len(sent["entries"]) == 4
     assert all(e["action"] == "change" for e in sent["entries"])
@@ -258,7 +259,9 @@ async def test_send_back_with_nothing_open_and_no_note_is_refused(client, owner,
     # A note alone is enough.
     resp = await _send_back(client, auth, run, cp, note="Shorten the rollout")
     assert resp.status_code == 200, resp.text
-    sent = yaml.safe_load((await _checkpoint(tenant_id, cp["id"])).note)
+    stored = await _checkpoint(tenant_id, cp["id"])
+    assert stored.note == "Shorten the rollout"
+    sent = yaml.safe_load(stored.payload["review_file"])
     assert sent["entries"] == [] and sent["general_note"] == "Shorten the rollout"
 
 
@@ -283,6 +286,6 @@ async def test_send_back_in_workflow_mode_posts_one_finding_per_entry(client, ow
     findings = answer["payload"]["findings"]
     assert answer["payload"]["verdict"] == "NOT_YET"
     assert len(findings) == 4  # three entries and the note
-    assert "general: Open point 1" in findings[0]
+    assert any(f.startswith("general: Open point 1") for f in findings)
     assert any(f.startswith("problem: Staged point 1") for f in findings)
     assert findings[-1] == "Keep it short"

@@ -518,6 +518,9 @@ class CheckpointOut(BaseModel):
     console: ConsoleAnswer | None = None
     # A decided checkpoint whose decision Oracle has not delivered to the run yet.
     delivery: CheckpointDelivery | None = None
+    # D10: a PRD or roadmap review whose draft was imported is decided in its version:
+    # "/documents/{slug}/v/{n}?run_review={id}", the same place for every client.
+    review_link: str | None = None
 
 
 class RunDecision(BaseModel):
@@ -662,6 +665,21 @@ class CheckpointDecision(BaseModel):
     # D8: the draft revision the decider saw (``GET .../review``). When given and the draft
     # changed since, the decision is refused (409 ``review_changed``) and nothing changes.
     expected_revision: int | None = None
+
+
+class RunReviewSections(BaseModel):
+    total: int
+    # A section with a verdict of any kind (the outline's "N of M reviewed").
+    reviewed: int
+    # Approved on its current revision.
+    approved: int
+
+
+class RunReviewFeedback(BaseModel):
+    # Open feedback items, staged changes, sections with Request changes or Reject.
+    open: int
+    staged: int
+    verdicts: int
 
 
 class ClaudeSweepSummary(BaseModel):
@@ -1116,4 +1134,21 @@ class CheckpointReview(BaseModel):
     can_read: bool = True
     can_suggest: bool = False
     can_stage: bool = False
+    can_decide: bool = False
+
+
+class RunReviewOut(BaseModel):
+    """D10: the run checkpoint a version's review decides (the version view's run review
+    bar): the latest ``prd_review``/``roadmap_review`` whose import made the version."""
+
+    checkpoint_id: uuid.UUID
+    run_id: uuid.UUID
+    kind: CheckpointKind
+    status: CheckpointStatus
+    flow_title: str
+    approver_role: Role
+    sections: RunReviewSections
+    feedback: RunReviewFeedback
+    wait: WaitInfo
+    # The caller may Approve draft or Send back now.
     can_decide: bool = False
