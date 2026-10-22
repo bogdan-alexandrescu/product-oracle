@@ -8,6 +8,7 @@ import { TemplateThemePicker, useDraftChoice } from "@/components/NewDraft";
 import { ErrorNote, Loading } from "@/components/ui";
 import { CHECKPOINT_LABEL } from "@/app/runs/_lib";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
+import { formatDayUtc } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import type { Summary } from "./_lib";
@@ -17,6 +18,7 @@ type Depth = Schemas["KnobsIn"]["depth"];
 type ReviewStatus = Schemas["ReviewStatusOut"];
 /** The knobs the sheet sets; `reuse_baseline` is the B1 knob of a Baseline to PRD run. */
 type SheetKnobs = Schemas["KnobsIn"];
+type Run = Schemas["RunOut"];
 
 const DEPTHS: { value: Depth; label: string }[] = [
   { value: "quick", label: "Quick" },
@@ -25,7 +27,6 @@ const DEPTHS: { value: Depth; label: string }[] = [
 ];
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
-const monthDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 /** Why the baseline is rebuilt first, as its tooltip says it. */
 function reasonText(status: ReviewStatus): string {
@@ -43,14 +44,35 @@ const getReviewStatus = () => unwrap(api.GET("/v1/baseline/review-status"));
  * the flow's stops (each on by default, W2), one estimate line (P3d), and Start drafting.
  * The first estimate makes the intake's draft run (POST /v1/intakes/{id}/runs); every later
  * change goes through the same route, which updates that run, and re-estimates it, so the
- * intake never gets a second one.
+ * intake never gets a second one. Nothing starts until Start drafting: reopened, the sheet
+ * takes up that draft run with its choices and its estimate.
  */
 export function DraftSheet({ summary, onClose }: { summary: Summary; onClose: () => void }) {
+  const runId = summary.draft_run_id ?? null;
+  const draft = useQuery(`draft-run|${runId}`, () =>
+    runId ? unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: runId } } })) : Promise.resolve(null),
+  );
+  if (runId && draft.loading && draft.data === undefined) {
+    return (
+      <Sheet open title="Draft with Oracle" onClose={onClose} testId="draft-sheet">
+        <Loading />
+      </Sheet>
+    );
+  }
+  // A run that started (or could not be read) is not taken up: the sheet starts afresh.
+  const run = draft.data?.status === "draft" ? draft.data : null;
+  return <DraftSheetBody summary={summary} run={run} onClose={onClose} />;
+}
+
+function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run | null; onClose: () => void }) {
   const router = useRouter();
   const id = useId();
   const intake = summary.intake;
   const prd = useMemo(() => intake.prd_answers ?? {}, [intake.prd_answers]);
-  const choice = useDraftChoice({ kind: "prd", prd }, { template: intake.template ?? null, theme: intake.theme ?? null });
+  const choice = useDraftChoice(
+    { kind: "prd", prd },
+    run ? { template: run.template ?? null, theme: run.theme ?? null } : { template: intake.template ?? null, theme: intake.theme ?? null },
+  );
   const { template, templateKey, themeKey, themes } = choice;
   const themeName = themeKey ? (themes.data?.find((t) => t.key === themeKey)?.name ?? themeKey) : "No theme";
 
@@ -59,10 +81,10 @@ export function DraftSheet({ summary, onClose }: { summary: Summary; onClose: ()
   const flow = flows.data?.flows.find((f) => f.key === "baseline_to_prd");
 
   const [changing, setChanging] = useState(false);
-  const [reuse, setReuse] = useState<boolean | null>(null);
-  const [depth, setDepth] = useState<Depth>("standard");
-  const [stops, setStops] = useState<Record<string, boolean>>({});
-  const [runId, setRunId] = useState<string | null>(null);
+  const [reuse, setReuse] = useState<boolean | null>(run ? !!run.knobs.reuse_baseline : null);
+  const [depth, setDepth] = useState<Depth>(run?.knobs.depth ?? "standard");
+  const [stops, setStops] = useState<Record<string, boolean>>(run?.knobs.checkpoints ?? {});
+  const [runId, setRunId] = useState<string | null>(run?.id ?? null);
   const [estimate, setEstimate] = useState<Schemas["EstimateOut"] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,6 +161,18 @@ export function DraftSheet({ summary, onClose }: { summary: Summary; onClose: ()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [choiceKey]);
 
+  // Reopened on an estimated draft run: estimate it again (the same run), so the figure and
+  // the baseline check are current.
+  const resumed = useRef(run?.estimate_usd == null);
+  const ready = !!flow && !!status && !!templateKey;
+  useEffect(() => {
+    if (resumed.current || !ready) return;
+    resumed.current = true;
+    void runEstimate(knobs);
+    // Once, when the sheet's inputs have loaded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+
   async function start() {
     if (!runId) return;
     setBusy(true);
@@ -196,7 +230,7 @@ export function DraftSheet({ summary, onClose }: { summary: Summary; onClose: ()
                   checked={reusing}
                   onChange={() => setReuse(true)}
                 />
-                Use the current baseline (approved {status.last_approved_at ? monthDay(status.last_approved_at) : "recently"})
+                Use the current baseline (approved {status.last_approved_at ? formatDayUtc(status.last_approved_at) : "recently"})
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-text">
                 <input

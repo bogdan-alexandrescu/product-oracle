@@ -1848,7 +1848,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
     # the intake's answers given before now, whichever segment asks.
     from oracle.intake import drafting
 
-    pinned = await drafting.on_start(db, run)
+    pinned = await drafting.on_start(db, run, principal)
     if knobs.budget_usd is not None and run.estimate_usd > knobs.budget_usd:
         raise Invalid(
             f"the estimate (${run.estimate_usd:.2f}) is over the budget "
@@ -1905,6 +1905,8 @@ async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> 
     run = await _get_run(db, run_id, lock=True)
     if run.status != "awaiting_approval":
         raise RunError(f"run is {run.status}, not awaiting approval")
+    # A run reusing the baseline: still reusable now (else 409, nothing changed, C4).
+    await _recheck_reuse(db, run)
     run.approved_by = principal.id
     run.approved_at = _now()
     await audit.record(db, principal, "run.approved", "run", run.id, {"usd": str(run.estimate_usd)})

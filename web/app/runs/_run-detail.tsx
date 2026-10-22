@@ -26,7 +26,7 @@ import {
 import { DiscussSubject } from "@/components/discuss/StartDiscussion";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatDayUtc } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -700,7 +700,7 @@ function SegmentItem({
             // C4 (B1 "Reuse base"): the run used the current baseline; this segment ran no step.
             <Chip kind="na" className={WRAP_CHIP}>
               <span data-testid="segment-state">
-                Reused (approved {new Date(s.reused.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })})
+                Reused (approved {formatDayUtc(s.reused.approved_at)})
               </span>
             </Chip>
           ) : (

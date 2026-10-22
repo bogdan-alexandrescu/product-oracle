@@ -5813,7 +5813,9 @@ export interface paths {
         /**
          * Start Intake Run
          * @description Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs
-         *     until an approver estimates and starts it. Drafting waits until decided (C5): 409
+         *     until an approver estimates and starts it; while that run is a draft, posting again
+         *     updates it (no second run), and the intake stays open until it starts (then it is
+         *     converted). Drafting waits until decided (C5): 409
          *     with ``blocking_gap_ids`` while a critical question everyone may see is neither
          *     answered nor decided (a private one gates nothing until shared, S6).
          */

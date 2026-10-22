@@ -572,10 +572,9 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
         flow: "baseline_to_prd", document, knobs, template: input.template ?? (intake as Intake).template ?? null, theme: input.theme ?? (intake as Intake).theme ?? null,
       });
       if (resp.ok) {
-        intake.status = "converted";
+        // The brief stays open until its run starts (startedIntakeRun converts it, C4).
         const run = (await resp.clone().json()) as { id: string };
-        const mine = new Set(db.questions.filter((x) => x.intake_id === intake.id).map((x) => x.id));
-        db.intake_runs = { ...db.intake_runs, [intake.id]: { run_id: run.id, answer_ids: db.answers.filter((a) => mine.has(a.question_id)).map((a) => a.id) } };
+        db.intake_runs = { ...db.intake_runs, [intake.id]: { run_id: run.id, answer_ids: [] } };
       }
       return resp;
     }
@@ -866,6 +865,19 @@ export const BEFORE_DRAFTING = { intakeId: "c5000000-0000-4000-8000-000000000001
  * approver. Batch 2 (21 Oct): Success metric and Company-goal alignment asked of the author.
  * The other twelve are not asked yet.
  */
+/**
+ * C4: an intake's draft run started (POST /v1/runs/{id}/start), as the API's
+ * drafting.on_start: the brief is converted and the run reads the answers given before now.
+ */
+export function startedIntakeRun(db: V2Db, runId: string) {
+  const [intakeId, run] = Object.entries(db.intake_runs ?? {}).find(([, r]) => r.run_id === runId) ?? [];
+  const intake = intakeId ? db.intakes.find((i) => i.id === intakeId) : undefined;
+  if (!intake || !run || intake.status === "converted" || intake.status === "archived") return;
+  intake.status = "converted";
+  const mine = new Set(db.questions.filter((x) => x.intake_id === intake.id).map((x) => x.id));
+  run.answer_ids = db.answers.filter((a) => mine.has(a.question_id)).map((a) => a.id);
+}
+
 export function seedBeforeDrafting(db: V2Db, authorId: string, approverId: string) {
   const at = "2026-10-19T09:00:00Z";
   const intake = addIntake(

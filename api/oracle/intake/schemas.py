@@ -100,8 +100,9 @@ class IntakePatch(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     document: str | None = Field(default=None, min_length=1, max_length=200)
     status: Literal["archived", "awaiting_answers"] | None = None
-    # C4: the brief's fields (the author or an approver; 409 once converted). Goals and
-    # out-of-scope lines answer their questions again (a new answer; the latest wins).
+    # C4: the brief's fields (the author or an approver; 409 once converted, that is once
+    # its draft run started). Goals and out-of-scope lines answer their questions again
+    # (a new answer; the latest wins).
     goal_ids: list[uuid.UUID] | None = Field(default=None, max_length=10)
     out_of_scope: list[OutOfScopeLine] | None = Field(default=None, max_length=20)
     template: str | None = Field(default=None, min_length=1, max_length=100)

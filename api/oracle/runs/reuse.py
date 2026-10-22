@@ -13,7 +13,9 @@ when the current baseline is reusable: the last baseline review was approved in 
   Baseline to PRD run in one of those states whose baseline segment is not yet
   approved: it has no ``baseline_confirm`` checkpoint ``approved`` or ``skipped`` (a
   pending or sent-back review, or the segment still working). A draft run has not
-  started and builds nothing.
+  started and builds nothing, and neither does a run reusing the baseline (its
+  ``reuse_baseline`` knob), even while it waits for an owner's cost approval with no
+  checkpoint yet.
 """
 
 import uuid
@@ -91,7 +93,12 @@ async def build_under_way(db: AsyncSession) -> bool:
             Run.status.in_(UNDER_WAY),
             or_(
                 Run.flow == "baseline",
-                and_(Run.flow == "baseline_to_prd", ~ended),
+                and_(
+                    Run.flow == "baseline_to_prd",
+                    ~ended,
+                    # A run reusing the baseline builds none (it skips its segment at start).
+                    ~Run.knobs.has_key("reuse_baseline"),
+                ),
             ),
         )
         .limit(1)

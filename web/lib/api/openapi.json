@@ -20788,7 +20788,7 @@
           "intake"
         ],
         "summary": "Start Intake Run",
-        "description": "Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs\nuntil an approver estimates and starts it. Drafting waits until decided (C5): 409\nwith ``blocking_gap_ids`` while a critical question everyone may see is neither\nanswered nor decided (a private one gates nothing until shared, S6).",
+        "description": "Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs\nuntil an approver estimates and starts it; while that run is a draft, posting again\nupdates it (no second run), and the intake stays open until it starts (then it is\nconverted). Drafting waits until decided (C5): 409\nwith ``blocking_gap_ids`` while a critical question everyone may see is neither\nanswered nor decided (a private one gates nothing until shared, S6).",
         "operationId": "start_intake_run",
         "security": [
           {

@@ -191,8 +191,9 @@ export function BeforeDrafting({ id }: { id: string }) {
           )}
         </div>
       </Split>
-      {/* C4: Draft with Oracle opens its sheet (template, baseline, depth, stops, estimate). */}
-      {drafting && <DraftSheet summary={s} onClose={() => setDrafting(false)} />}
+      {/* C4: Draft with Oracle opens its sheet (template, baseline, depth, stops, estimate). Closed,
+          the summary is read again: the brief's draft run, if the sheet made one, is taken up next time. */}
+      {drafting && <DraftSheet summary={s} onClose={() => (setDrafting(false), changed())} />}
       {phone && (
         <Sheet open={sheet} title="Before drafting" onClose={() => setSheet(false)} testId="intake-sheet">
           <div className="p-2">{inspector}</div>

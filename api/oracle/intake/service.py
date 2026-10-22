@@ -678,14 +678,9 @@ async def convert(
         # Reopening the sheet after an estimate (C4): the intake's one draft run takes
         # the new choices; no second run is made.
         return await _update_draft_run(db, principal, intake, existing.id, body)
+    # The brief stays open (Draft with Oracle, PRDs > Ideas, its fields editable) until
+    # the run starts: ``drafting.on_start`` converts it then (C4).
     run_id = await create_run(db, principal, intake, body)
-    from oracle.runs.models import Run
-
-    run = await db.get(Run, run_id)
-    if run is not None and run.document_id is not None and intake.document_id is None:
-        intake.document_id = run.document_id
-    intake.status = "converted"
-    await db.flush()
     await audit.record(
         db, principal, "intake.run_created", "intake", intake.id, {"run_id": str(run_id)}
     )

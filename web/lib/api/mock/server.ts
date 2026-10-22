@@ -28,7 +28,7 @@ import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngRe
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
-import { routeIntake, seedBeforeDrafting, type SubjectLookup } from "./intake";
+import { routeIntake, seedBeforeDrafting, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
@@ -2504,6 +2504,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (decided) return decided;
   const seenBefore = db.inbox_seen?.[me.id] ?? null;
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
+  // C4: an intake's draft run that starts converts its brief (the API's drafting.on_start).
+  if (runs?.ok && req.method === "POST" && p[1] === "runs" && p[3] === "start" && p.length === 4) startedIntakeRun(ensureV2(db), p[2]);
   if (runs && p[1] === "inbox") {
     tick(llm);
     const withStates = withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true");
