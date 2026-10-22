@@ -1,3 +1,4 @@
+# ruff: noqa: F811 - the ritual fixtures are imported
 """H2 Cadence engine API: rituals and their occurrences (``/v1/rituals``,
 ``/v1/ritual-occurrences``), the pre-read, Inbox rows, summaries and their estimate.
 Oracle's ritual clock is set by the tests; made-up people and goals only.
@@ -24,7 +25,7 @@ from tests.ritual_helpers import (  # noqa: F401 - fixtures
     rituals_of,
     tick,
 )
-from tests.test_mcp import run_token
+from tests.test_mcp import mcp_client, run_token, text_of
 
 CUSTOM = {
     "kind": "custom",
@@ -204,7 +205,9 @@ async def test_skip_needs_a_reason(client, ctx, at):
     skips; no_claim=the screen's wording."""
     occ = await ready_occurrence(client, ctx, at)
     url = f"/v1/ritual-occurrences/{occ['id']}/skip"
-    assert (await client.post(url, json={"reason": ""}, headers=ctx.as_("owner"))).status_code == 422
+    assert (
+        await client.post(url, json={"reason": ""}, headers=ctx.as_("owner"))
+    ).status_code == 422
     resp = await client.post(url, json={"reason": "Team offsite"}, headers=ctx.as_("owner"))
     assert resp.status_code == 200 and resp.json()["status"] == "skipped"
 
@@ -286,14 +289,19 @@ async def test_a_run_token_reads_the_pre_read_and_cannot_write(client, ctx, at):
     """protects=criterion 10: a run token with read:baseline reads pre-read.md; writes are
     403; fails_when=the read is refused or a write lands; no_claim=MCP tool listing."""
     occ = await ready_occurrence(client, ctx, at)
-    raw = await run_token(ctx.tenant_id, ["read:baseline"], ctx.users["owner"].id)
-    auth = {"Authorization": f"Bearer {raw}"}
-    resp = await client.get(f"/v1/ritual-occurrences/{occ['id']}/pre-read.md", headers=auth)
-    assert resp.status_code == 200, resp.text
-    resp = await client.post(f"/v1/ritual-occurrences/{occ['id']}/read", headers=auth)
-    assert resp.status_code == 403
-    resp = await client.post("/v1/rituals", json=CUSTOM, headers=auth)
-    assert resp.status_code == 403
+    # The local runtime: run tokens from any address (test_mcp's local_runtime).
+    set_runtime(FakeRuntime())
+    try:
+        raw = await run_token(ctx.tenant_id, ["read:baseline"], ctx.users["owner"].id)
+        async with mcp_client(raw) as c:
+            names = {t.name for t in (await c.list_tools()).tools}
+            assert "get_ritual_occurrence_pre_read" in names
+            got = await c.call_tool("get_ritual_occurrence_pre_read", {"occurrence_id": occ["id"]})
+            assert not got.is_error and "# Monthly roadmap refresh" in text_of(got)
+            refused = await c.call_tool("read_ritual_occurrence", {"occurrence_id": occ["id"]})
+            assert refused.is_error
+    finally:
+        set_runtime(None)
 
 
 async def test_another_companys_ids_are_404(client, ctx, at):

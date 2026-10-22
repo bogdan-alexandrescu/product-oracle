@@ -1,3 +1,4 @@
+# ruff: noqa: F811 - the ritual fixtures are imported
 """H2 Cadence engine on the ticker: seeding the built-in rituals, creating each
 occurrence once, failure isolation, missed occurrences, and the Every pre-read summary
 start. Oracle's ritual clock is set by the tests; the fake runtime stands in for
@@ -36,9 +37,7 @@ async def summary_runs(tenant_id: uuid.UUID) -> list[Run]:
 
 
 async def set_mode(client, ctx, mode: str) -> None:
-    resp = await client.put(
-        "/v1/rituals/summaries", json={"mode": mode}, headers=ctx.as_("owner")
-    )
+    resp = await client.put("/v1/rituals/summaries", json={"mode": mode}, headers=ctx.as_("owner"))
     assert resp.status_code == 200, resp.text
 
 
@@ -109,8 +108,10 @@ async def test_a_failing_builder_retries_three_times_then_fails_into_the_inbox(
     by_ritual = {o.ritual_id: o for o in await occurrences_of(ctx.tenant_id)}
     refresh = by_ritual[seeded["roadmap_refresh"].id]
     assert refresh.status == "scheduled" and refresh.attempts == 1
-    assert by_ritual[seeded["goals_checkin"].id].status == "ready"
-    assert by_ritual[seeded["goals_review"].id].status == "ready"
+    # The other rituals were prepared in the same tick (the check-in's has since ended).
+    for kind in ("goals_checkin", "goals_review"):
+        other = by_ritual[seeded[kind].id]
+        assert other.pre_read_built_at is not None and other.attempts == 0
     await tick(ctx.tenant_id)
     await tick(ctx.tenant_id)
     by_ritual = {o.ritual_id: o for o in await occurrences_of(ctx.tenant_id)}
@@ -129,9 +130,7 @@ async def test_a_failing_builder_retries_three_times_then_fails_into_the_inbox(
     assert resp.json()["id"] == str(refresh.id) and resp.json()["status"] == "ready"
 
 
-async def test_a_ready_occurrence_with_nothing_recorded_is_missed_after_seven_days(
-    client, ctx, at
-):
+async def test_a_ready_occurrence_with_nothing_recorded_is_missed_after_seven_days(client, ctx, at):
     """protects=criterion 7: ready and nothing recorded 7 days after its end is missed,
     and its rows leave the Inbox; fails_when=it stays ready or keeps an Inbox row;
     no_claim=held or skipped ones (never missed)."""
@@ -143,7 +142,7 @@ async def test_a_ready_occurrence_with_nothing_recorded_is_missed_after_seven_da
     assert any(r["occurrence_id"] == occ["id"] for r in inbox["rituals"])
     at(ends + timedelta(days=7))
     await tick(ctx.tenant_id)
-    got = (await client.get(f"/v1/ritual-occurrences/{occ['id']}", headers=ctx.as_("owner")))
+    got = await client.get(f"/v1/ritual-occurrences/{occ['id']}", headers=ctx.as_("owner"))
     assert got.json()["status"] == "missed"
     inbox = (await client.get("/v1/inbox", headers=ctx.as_("owner"))).json()
     assert not any(r["occurrence_id"] == occ["id"] for r in inbox["rituals"])
@@ -182,7 +181,7 @@ async def test_every_pre_read_starts_one_summary_per_covered_occurrence(
     ten more ticks start no second; fails_when=none starts, two start, or it is created
     as someone else; no_claim=the run's content."""
     await set_mode(client, ctx, "always")
-    occ = await ready_occurrence(client, ctx, at)
+    occ = await ready_occurrence(client, ctx, at, "goals_checkin")
     runs = await summary_runs(ctx.tenant_id)
     assert len(runs) == 1
     assert runs[0].created_by == ctx.users["owner"].id
@@ -197,7 +196,7 @@ async def test_every_pre_read_starts_one_summary_per_covered_occurrence(
 async def test_on_demand_starts_no_summary_on_the_tick(client, ctx, at, summary_runtime):
     """protects=criterion 9b: with On demand (the default) no tick starts a summary run;
     fails_when=a run starts anyway; no_claim=the button (test_rituals.py)."""
-    await ready_occurrence(client, ctx, at)
+    await ready_occurrence(client, ctx, at, "goals_checkin")
     for _ in range(3):
         await tick(ctx.tenant_id)
     assert await summary_runs(ctx.tenant_id) == []
@@ -213,7 +212,7 @@ async def test_an_owner_who_cannot_start_runs_gets_not_started(client, ctx, at, 
         await tick(ctx.tenant_id)
         user.role = "commenter"
         await db.commit()
-    ritual = (await rituals_of(ctx.tenant_id))["roadmap_refresh"]
+    ritual = (await rituals_of(ctx.tenant_id))["goals_checkin"]
     at(ritual.next_due_at)
     await tick(ctx.tenant_id)
     assert await summary_runs(ctx.tenant_id) == []
@@ -230,7 +229,7 @@ async def test_a_failed_summary_run_leaves_the_pre_read_and_can_be_retried(clien
     set_runtime(FakeRuntime({"summary": [Outcome(state="failed", error="runtime down")]}))
     try:
         await set_mode(client, ctx, "always")
-        occ = await ready_occurrence(client, ctx, at)
+        occ = await ready_occurrence(client, ctx, at, "goals_checkin")
         resp = await client.post("/v1/internal/tick", headers=ctx.as_("owner"))
         assert resp.status_code == 200, resp.text
         await client.post("/v1/internal/tick", headers=ctx.as_("owner"))
