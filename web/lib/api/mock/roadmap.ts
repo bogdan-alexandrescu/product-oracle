@@ -52,6 +52,8 @@ export interface RoadmapDb {
 export interface RoadmapContext {
   userId: string;
   role: Role;
+  /** A3: the caller carries the engineering lead flag (they may record and withdraw date bases). */
+  engineeringLead?: boolean;
   documents: Doc[];
   versions: Version[];
 }
@@ -325,6 +327,9 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
   const can = (role: Role) => RANK[ctx.role] >= RANK[role];
   const forbidden = () => json(403, { detail: "Requires the approver role" });
+  // A3: date bases are recorded and withdrawn by approvers, owners and engineering leads.
+  const verifies = () => can("approver") || (!!ctx.engineeringLead && can("commenter"));
+  const notVerifier = () => json(403, { detail: "Requires the approver role or the engineering lead" });
   const findDoc = (ref: string) => ctx.documents.find((d) => d.id === ref || d.slug === ref);
   const findTrack = (id: string) => db.tracks.find((t) => t.id === id);
 
@@ -397,7 +402,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
       return json(200, db.bases.filter((b) => (!prd || b.prd_document_id === prd.id) && (!q.get("status") || b.status === q.get("status"))));
     }
     if (!p[2] && m === "POST") {
-      if (!can("approver")) return forbidden();
+      if (!verifies()) return notVerifier();
       const b = await body<Schemas["ScheduleBasisCreate"]>();
       // O4: a basis is recorded for one PRD, optionally one item or one tracker issue.
       if (!b.prd) return json(422, { detail: "prd: a schedule basis is recorded for one PRD" });
@@ -413,7 +418,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
       return json(201, row);
     }
     if (p[2] && p[3] === "withdraw" && m === "POST") {
-      if (!can("approver")) return forbidden();
+      if (!verifies()) return notVerifier();
       const row = db.bases.find((b) => b.id === p[2]);
       if (!row) return notFound("Schedule basis");
       if (row.status === "withdrawn") return json(409, { detail: "This schedule basis is already withdrawn" });

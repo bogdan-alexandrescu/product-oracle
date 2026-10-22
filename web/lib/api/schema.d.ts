@@ -1358,7 +1358,13 @@ export interface paths {
         delete: operations["remove_member"];
         options?: never;
         head?: never;
-        /** Update Member */
+        /**
+         * Update Member
+         * @description Change a member's role, name them engineering lead or clear it (A3), or both in
+         *     one change, role first. A viewer is never the engineering lead: naming one is a 422,
+         *     and a demotion to viewer clears the flag. Clearing it returns the engineering-stop
+         *     decisions they gave that are not delivered yet to the Inbox.
+         */
         patch: operations["update_member"];
         trace?: never;
     };
@@ -1495,7 +1501,8 @@ export interface paths {
         put?: never;
         /**
          * Create Invite
-         * @description Pre-assign a role to an email: its first Google sign-in lands with that role.
+         * @description Pre-assign a role to an email: its first Google sign-in lands with that role, and as
+         *     an engineering lead when ``engineering_lead`` (never with role viewer: 422).
          */
         post: operations["create_invite"];
         delete?: never;
@@ -6842,7 +6849,8 @@ export interface paths {
          * Create Schedule Basis
          * @description Record a verified estimate, capacity figure or commitment supporting a date for
          *     one PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a
-         *     tracker issue is matched to (``tracker_key``). The approver recording it verifies it.
+         *     tracker issue is matched to (``tracker_key``). The approver or engineering lead
+         *     recording it verifies it.
          *     From a tracker record, the record's own target date must be that date, and the record
          *     must be this PRD's.
          */
@@ -15092,6 +15100,11 @@ export interface components {
              * @enum {string}
              */
             role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Engineering Lead
+             * @default false
+             */
+            engineering_lead: boolean;
         };
         /** InviteOut */
         InviteOut: {
@@ -15107,6 +15120,11 @@ export interface components {
              * @enum {string}
              */
             role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Engineering Lead
+             * @default false
+             */
+            engineering_lead: boolean;
             /**
              * Status
              * @enum {string}
@@ -16219,6 +16237,11 @@ export interface components {
             user_id?: string | null;
             /** Email */
             email?: string | null;
+            /**
+             * Engineering Lead
+             * @default false
+             */
+            engineering_lead: boolean;
             /** Token Id */
             token_id?: string | null;
             /** Token Name */
@@ -16238,6 +16261,11 @@ export interface components {
              * @enum {string}
              */
             role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Engineering Lead
+             * @default false
+             */
+            engineering_lead: boolean;
             /**
              * Created At
              * Format: date-time
@@ -16260,13 +16288,15 @@ export interface components {
              */
             readonly status: "active" | "disabled";
         };
-        /** MemberPatch */
+        /**
+         * MemberPatch
+         * @description A role, the engineering lead flag, or both (applied in one change, role first).
+         */
         MemberPatch: {
-            /**
-             * Role
-             * @enum {string}
-             */
-            role: "viewer" | "commenter" | "approver" | "owner";
+            /** Role */
+            role?: ("viewer" | "commenter" | "approver" | "owner") | null;
+            /** Engineering Lead */
+            engineering_lead?: boolean | null;
         };
         /** MergeIn */
         MergeIn: {

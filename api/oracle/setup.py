@@ -41,8 +41,8 @@ def known_step(key: str) -> str:
     return key
 
 
-# A1's keys: connect, sources, invite, domains, horizons (A3 adds eng_lead, B1
-# build_baseline). Later picks add more through STEPS, so the type is a str checked
+# A1's keys: connect, sources, invite, domains, horizons, A3's eng_lead and B1's
+# build_baseline. Later picks add more through STEPS, so the type is a str checked
 # against the registry.
 SetupKey = Annotated[str, AfterValidator(known_step)]
 
@@ -50,7 +50,7 @@ SetupKey = Annotated[str, AfterValidator(known_step)]
 class SetupStep(BaseModel):
     key: SetupKey
     done: bool
-    # Connections, sources, people, domains; None for horizons.
+    # Connections, sources, people, domains, engineering leads; None for horizons.
     count: int | None = None
     # The single domain when there is exactly one; build_baseline: when the last build
     # finished (ISO 8601).
@@ -115,6 +115,16 @@ async def _domains(db: AsyncSession, principal: Principal) -> SetupStep:
     )
 
 
+async def _eng_lead(db: AsyncSession, principal: Principal) -> SetupStep:
+    """Done once an owner named an engineering lead (A3): active members flagged."""
+    n = await db.scalar(
+        select(func.count())
+        .select_from(User)
+        .where(User.engineering_lead.is_(True), User.disabled_at.is_(None))
+    )
+    return SetupStep(key="eng_lead", done=bool(n), count=n)
+
+
 async def _horizons(db: AsyncSession, principal: Principal) -> SetupStep:
     """Done once an owner confirmed or changed them: a stored planning_horizons row."""
     stored = await db.scalar(
@@ -142,6 +152,7 @@ STEPS: list[Step] = [
     Step("sources", PERSONAL, _sources),
     Step("invite", OWNERS, _invite),
     Step("domains", OWNERS, _domains),
+    Step("eng_lead", OWNERS, _eng_lead),
     Step("horizons", OWNERS, _horizons),
     Step("build_baseline", OWNERS, _build_baseline),
 ]

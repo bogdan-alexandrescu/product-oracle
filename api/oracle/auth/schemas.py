@@ -17,5 +17,8 @@ class Me(BaseModel):
     role: Role
     user_id: uuid.UUID | None = None
     email: str | None = None
+    # A3: whether the caller acts for an engineering lead (false for a token acting for
+    # no member).
+    engineering_lead: bool = False
     token_id: uuid.UUID | None = None
     token_name: str | None = None

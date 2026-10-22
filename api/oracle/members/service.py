@@ -51,6 +51,7 @@ def invite_out(invite: Invite) -> InviteOut:
         id=invite.id,
         email=invite.email,
         role=invite.role,
+        engineering_lead=invite.engineering_lead,
         status=invite_status(invite),
         invited_by=invite.invited_by,
         created_at=invite.created_at,
@@ -134,11 +135,25 @@ async def set_role(
         if not await _other_active_owner(session, user.id):
             raise MemberError("conflict", "Cannot demote the last owner; make someone else owner")
     before = user.role
+    # A3: a viewer never carries the engineering lead flag: a demotion to viewer clears it
+    # in this change.
+    cleared = role == "viewer" and user.engineering_lead
+    if cleared:
+        user.engineering_lead = False
     user.role = role
     await session.flush()
     await audit.record(
         session, principal, "member.role", "user", user.id, {"before": before, "after": role}
     )
+    if cleared:
+        await audit.record(
+            session,
+            principal,
+            "member.engineering_lead",
+            "user",
+            user.id,
+            {"before": True, "after": False, "reason": "role viewer"},
+        )
     if has_role(before, "approver") and not has_role(role, "approver"):
         await lapse_approvals(
             session, principal, reviewer_id=user.id, reason=f"approver demoted to {role}"
@@ -169,6 +184,76 @@ async def set_role(
         subject_ref=f"member:{user.id}",
         data={"before": before, "after": role},
     )
+    return user
+
+
+async def set_engineering_lead(
+    session: AsyncSession, principal: "Principal", user_id: uuid.UUID, value: bool
+) -> User:
+    """Name a member engineering lead, or clear the flag (A3). A viewer is never named.
+    Clearing it voids the engineering-stop decisions they gave that are not delivered to
+    their run yet and that they may no longer give (C2, as for a demotion): those stops go
+    back to the Inbox. An owner keeps deciding every stop, so an owner's are kept."""
+    from oracle.members.leads import ENGINEERING_KINDS, VIEWER_REFUSED, engineering_leads
+    from oracle.runs.service import void_owed_decisions
+
+    await _gate(session, principal)
+    user = await session.get(User, user_id, with_for_update=True)
+    if user is None:
+        raise MemberError("not_found", f"Member {user_id} not found")
+    if value and user.role == "viewer":
+        raise MemberError("invalid", VIEWER_REFUSED)
+    if user.engineering_lead == value:
+        return user
+    user.engineering_lead = value
+    await session.flush()
+    await audit.record(
+        session,
+        principal,
+        "member.engineering_lead",
+        "user",
+        user.id,
+        {"before": not value, "after": value},
+    )
+    if not value and user.role != "owner":
+        # With other leads named, the engineering stops are theirs (and owners'); with none
+        # left, the member decides them by role again.
+        keep: Role | None = None if await engineering_leads(session) else user.role  # type: ignore[assignment]
+        via = {"via": "member.engineering_lead", "member_id": str(user.id)}
+        tokens = set(await session.scalars(select(ApiToken.id).where(ApiToken.user_id == user.id)))
+        acted_as = {user.id, *tokens}
+        await _void_checkpoint_decisions(
+            session, principal, acted_as, via, keep_role=keep, kinds=ENGINEERING_KINDS
+        )
+        await void_owed_decisions(
+            session,
+            principal,
+            acted_as,
+            "its decider is no longer an engineering lead",
+            via,
+            role=keep,
+            kinds=ENGINEERING_KINDS,
+        )
+    return user
+
+
+async def update_member(
+    session: AsyncSession,
+    principal: "Principal",
+    user_id: uuid.UUID,
+    role: Role | None,
+    engineering_lead: bool | None,
+) -> User:
+    """``PATCH /v1/members/{user_id}``: the role, the engineering lead flag, or both, in
+    one change, role first (so a viewer made commenter can be named at once)."""
+    if role is None and engineering_lead is None:
+        raise MemberError("invalid", "Send role, engineering_lead or both")
+    user: User | None = None
+    if role is not None:
+        user = await set_role(session, principal, user_id, role)
+    if engineering_lead is not None:
+        user = await set_engineering_lead(session, principal, user_id, engineering_lead)
+    assert user is not None
     return user
 
 
@@ -463,14 +548,17 @@ async def _void_checkpoint_decisions(
     via: dict[str, str],
     *,
     keep_role: Role | None = None,
+    kinds: tuple[str, ...] | None = None,
 ) -> list[uuid.UUID]:
     """A checkpoint decision the removed member gave whose segment has not been
     submitted yet (the submission is under way, or waits for the tick's retry) is void,
     as a spend approval is: the checkpoint waits for a decision again, nothing runs for
     it. A decision whose workflow was submitted stands (it is running). With
     ``keep_role`` (a demotion), a decision on a checkpoint that role may still decide
-    stands."""
+    stands. With ``kinds`` (an engineering lead unflagged, A3), only checkpoints of those
+    kinds that the lead rule governs (oracle.members.leads.lead_stop) are voided."""
     from oracle.authz import has_role
+    from oracle.members.leads import SPEC_FLOW
     from oracle.runs.models import Checkpoint, Run, RunSegment
     from oracle.runs.service import void_decision
 
@@ -502,6 +590,8 @@ async def _void_checkpoint_decisions(
             continue
         cp = await session.get(Checkpoint, uuid.UUID(decision["checkpoint_id"]))
         if cp is None or cp.run_id != run.id:
+            continue
+        if kinds is not None and (cp.kind not in kinds or run.flow == SPEC_FLOW):
             continue
         if keep_role is not None and has_role(keep_role, cp.approver_role):  # type: ignore[arg-type]
             continue
@@ -1207,10 +1297,17 @@ async def list_invites(session: AsyncSession, status: str) -> list[Invite]:
 
 
 async def create_invite(
-    session: AsyncSession, principal: "Principal", email: str, role: Role
+    session: AsyncSession,
+    principal: "Principal",
+    email: str,
+    role: Role,
+    engineering_lead: bool = False,
 ) -> Invite:
     from oracle.auth.service import ReservedEmailError, check_email_allowed
+    from oracle.members.leads import VIEWER_REFUSED
 
+    if engineering_lead and role == "viewer":
+        raise MemberError("invalid", VIEWER_REFUSED)
     try:
         check_email_allowed(email)
     except ReservedEmailError as e:
@@ -1223,16 +1320,19 @@ async def create_invite(
         raise MemberError("conflict", f"{email} is already a member")
     if await session.scalar(select(Invite.id).where(Invite.email == email, *_open())) is not None:
         raise MemberError("conflict", f"{email} already has an open invite; revoke it first")
-    invite = Invite(email=email, role=role, invited_by=principal.id)
+    invite = Invite(
+        email=email, role=role, engineering_lead=engineering_lead, invited_by=principal.id
+    )
     session.add(invite)
     try:
         await session.flush()
     except IntegrityError:
         # A concurrent request invited the same email first; nothing is committed.
         raise MemberError("conflict", f"{email} already has an open invite") from None
-    await audit.record(
-        session, principal, "invite.create", "invite", invite.id, {"email": email, "role": role}
-    )
+    data: dict[str, object] = {"email": email, "role": role}
+    if engineering_lead:
+        data["engineering_lead"] = True
+    await audit.record(session, principal, "invite.create", "invite", invite.id, data)
     return invite
 
 

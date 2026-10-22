@@ -125,6 +125,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, or_, select
@@ -142,6 +143,17 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
 from oracle.jobs.models import LlmSuggestion
+from oracle.members.leads import (
+    ENGINEERING_KINDS,
+    LEAD_ONLY,
+    SPEC_FLOW,
+    decides,
+    engineering_leads,
+    lead_now,
+    lead_refusal,
+    lead_stop,
+    may_decide,
+)
 from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
 from oracle.review import inbox as inbox_states
@@ -745,9 +757,15 @@ def _delivery(
 
 
 def _checkpoint_out(
-    cp: Checkpoint, principal: Principal | None, names: dict[uuid.UUID, str] | None = None
+    cp: Checkpoint,
+    principal: Principal | None,
+    names: dict[uuid.UUID, str] | None = None,
+    *,
+    flow: str,
+    leads: frozenset[uuid.UUID],
 ) -> CheckpointOut:
-    """``names``: :func:`_decider_names` of the checkpoints read."""
+    """``names``: :func:`_decider_names` of the checkpoints read; ``flow``: the run's;
+    ``leads``: :func:`oracle.members.leads.engineering_leads`, read once per request."""
     console = ((cp.payload or {}).get("wait") or {}).get("console")
     payload, delivery = _delivery(cp, names or {})
     return CheckpointOut(
@@ -767,7 +785,7 @@ def _checkpoint_out(
         else None,
         can_decide=cp.status == "pending"
         and principal is not None
-        and has_role(principal.role, cp.approver_role),  # type: ignore[arg-type]
+        and may_decide(principal, cp, flow, leads),
         cannot_approve=_cannot_approve(cp),
         delivery=delivery,
     )
@@ -928,6 +946,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     segments = await _segments(db, run.id)
     checkpoints = await _checkpoints(db, [run.id])
     names = await _decider_names(db, checkpoints)
+    leads = await engineering_leads(db)
     refs = await _refs(db, [run])
     knobs = _knobs(run)
     kind = await _target_kind(db, run)
@@ -963,7 +982,9 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         runtime=runtime.name,
         notes=notes,
         segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
-        checkpoints=[_checkpoint_out(c, principal, names) for c in checkpoints],
+        checkpoints=[
+            _checkpoint_out(c, principal, names, flow=run.flow, leads=leads) for c in checkpoints
+        ],
         token_read_only=await token_hold(db, run.id, live=False) is not None,
         open_proposals=await db.scalar(
             select(func.count())
@@ -5381,7 +5402,9 @@ async def _take_answer(
         member, reason = (
             (None, None)
             if ours
-            else await _console_member(db, cp, by, altered=record.answered_by_altered)
+            else await _console_member(
+                db, cp, by, flow=run.flow, altered=record.answered_by_altered
+            )
         )
     counted = ours or reason is None
     if counted and approved and not ours and cp.kind == "feature_set":
@@ -5498,12 +5521,19 @@ async def _take_answer(
 
 
 async def _console_member(
-    db: AsyncSession, cp: Checkpoint, answered_by: str | None, *, altered: bool = False
+    db: AsyncSession,
+    cp: Checkpoint,
+    answered_by: str | None,
+    *,
+    flow: str = "",
+    altered: bool = False,
 ) -> tuple[User | None, str | None]:
     """The Oracle member who answered in SwarmCloud, and why their answer does not count
     (None when it does): matched by ``answered_by`` only, never one that redaction
     altered. Emails match case-insensitively; an exact match wins, and two members that
-    differ only by case with neither exact is no match (the same answer every time)."""
+    differ only by case with neither exact is no match (the same answer every time). An
+    engineering stop with a lead named counts only a lead's or an owner's (A3); ``flow``
+    is the run's (prd_to_spec keeps its own rule)."""
     if not answered_by:
         return None, "SwarmCloud recorded no answerer"
     if altered:
@@ -5524,6 +5554,11 @@ async def _console_member(
         return None, f"{answered_by} matches more than one Oracle member (by case)"
     else:
         return None, f"{answered_by} is not an Oracle member"
+    leads = await engineering_leads(db)
+    if lead_stop(cp.kind, flow, leads):
+        if user.disabled_at is not None or not decides(user.role, user.id, cp, flow, leads):
+            return user, f"{answered_by} is not an engineering lead"
+        return user, None
     if not has_role(user.role, cp.approver_role):  # type: ignore[arg-type]
         return user, (
             f"{answered_by} is an Oracle {user.role}, below the checkpoint's "
@@ -5876,9 +5911,17 @@ async def decide_checkpoint(
     )
     if cp is None:
         raise NotFound(f"checkpoint {checkpoint_id} not found")
-    if not has_role(principal.role, cp.approver_role):  # type: ignore[arg-type]
-        raise Forbidden(f"Requires the {cp.approver_role} role")
-    refusal = await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+    # A3: an engineering stop waits for the engineering leads and owners once a lead is
+    # named (C2 Multiple reviewers); the flag is re-read here, under the run's lock.
+    leads = await engineering_leads(db)
+    by_lead = lead_stop(cp.kind, run.flow, leads)
+    if not may_decide(principal, cp, run.flow, leads):
+        raise Forbidden(LEAD_ONLY if by_lead else f"Requires the {cp.approver_role} role")
+    refusal = (
+        await lead_refusal(db, principal)
+        if by_lead
+        else await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+    )
     if refusal is not None:
         raise Forbidden(refusal)
     if cp.status in DECIDED:
@@ -5950,14 +5993,11 @@ async def decide_checkpoint(
     cp.decided_at = _now()
     cp.note = note
     _record_decider(cp, *decider)
-    await audit.record(
-        db,
-        principal,
-        f"checkpoint.{decision}",
-        "checkpoint",
-        cp.id,
-        {"run_id": str(run.id), "kind": cp.kind},
-    )
+    data: dict[str, Any] = {"run_id": str(run.id), "kind": cp.kind}
+    if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW:
+        # F4 Engineering review stop reads whether a lead was named when it was decided.
+        data["engineering_lead_named"] = bool(leads)
+    await audit.record(db, principal, f"checkpoint.{decision}", "checkpoint", cp.id, data)
     # H1: the stop's decision is a checkpoint record, in this transaction.
     await decisions_capture.checkpoint(db, principal, run, cp, decided_via=via)
     await _scope_decided(db, principal, run, cp)
@@ -6201,7 +6241,14 @@ async def _finish_decision_now(
         # delivered once an owner resumes the run (resume: awaiting_checkpoint again).
         await db.rollback()
         return
-    refusal = await _decider_refusal(db, posting, cp.approver_role)
+    role = cp.approver_role
+    lead = _posting_id(posting, "user_id")
+    if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW and lead is not None:
+        # A3: an engineering lead decided it (any commenter or above may carry the flag);
+        # an unflagged lead's owed decision was voided with the flag (set_engineering_lead).
+        if await lead_now(db, lead):
+            role = "commenter"
+    refusal = await _decider_refusal(db, posting, role)
     if refusal is not None:
         await _void_owed(db, None, run, cp, refusal, {"via": "decision.recheck"})
         await db.commit()
@@ -6345,10 +6392,12 @@ async def void_owed_decisions(
     via: dict[str, str],
     *,
     role: str | None = None,
+    kinds: tuple[str, ...] | None = None,
 ) -> list[uuid.UUID]:
     """Void the decisions ``deciders`` recorded that are not delivered to their run yet
     (``wait.posting``): a disable (every one), or a demotion to ``role`` (those whose
-    checkpoint needs more than ``role``). The caller holds the gate exclusively and
+    checkpoint needs more than ``role``). With ``kinds`` (an engineering lead unflagged,
+    A3), only those kinds outside prd_to_spec. The caller holds the gate exclusively and
     commits; a delivery under way re-reads the checkpoint under the gate and finds nothing
     owed (:func:`_finish_decision_now`). Returns the checkpoints voided."""
     if not deciders:
@@ -6381,6 +6430,8 @@ async def void_owed_decisions(
         if not isinstance(((cp.payload or {}).get("wait") or {}).get("posting"), dict):
             continue
         if cp.decided_by not in deciders:
+            continue
+        if kinds is not None and (cp.kind not in kinds or run.flow == SPEC_FLOW):
             continue
         if role is not None and has_role(role, cp.approver_role):  # type: ignore[arg-type]
             continue  # the new role still decides this checkpoint
@@ -8064,9 +8115,11 @@ async def _revising(db: AsyncSession, principal: Principal) -> list[RunSummary]:
         )
     ).all()
     runs: dict[uuid.UUID, Run] = {}
+    leads = await engineering_leads(db) if rows else frozenset()
     for run, segment in rows:
-        role = _flow(run).segment(segment.name).approver_role
-        if _sent_back(run, segment) and has_role(principal.role, role):  # type: ignore[arg-type]
+        sdef = _flow(run).segment(segment.name)
+        stop = SimpleNamespace(kind=sdef.checkpoint, approver_role=sdef.approver_role)
+        if _sent_back(run, segment) and may_decide(principal, stop, run.flow, leads):
             runs.setdefault(run.id, run)
     if not runs:
         return []
@@ -8092,19 +8145,26 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
             .order_by(Checkpoint.created_at, Checkpoint.id)
         )
     )
-    mine = [c for c in pending if has_role(principal.role, c.approver_role)]  # type: ignore[arg-type]
     # Decisions recorded and not delivered to the run yet (shown, nothing to decide).
-    owed = [
+    owing = [
         c
         for c in await db.scalars(
             select(Checkpoint)
             .where(Checkpoint.status.in_(DECIDED), Checkpoint.payload["wait"].has_key("posting"))
             .order_by(Checkpoint.decided_at, Checkpoint.id)
         )
-        if _owes(c) and has_role(principal.role, c.approver_role)  # type: ignore[arg-type]
+        if _owes(c)
     ]
+    run_ids = {c.run_id for c in [*pending, *owing]}
+    runs: dict[uuid.UUID, Run] = {}
+    if run_ids:
+        runs = {r.id: r for r in await db.scalars(select(Run).where(Run.id.in_(run_ids)))}
+    # Who decides each (A3): the engineering stops go to the leads and owners once one is
+    # named; the runs' flows come from the query above, the leads in one more.
+    leads = await engineering_leads(db)
+    mine = [c for c in pending if may_decide(principal, c, runs[c.run_id].flow, leads)]
+    owed = [c for c in owing if may_decide(principal, c, runs[c.run_id].flow, leads)]
     names = await _decider_names(db, owed)
-    run_ids = {c.run_id for c in [*mine, *owed]}
     owner = principal.role == "owner"
     waiting_runs: list[Run] = []
     if owner:
@@ -8115,17 +8175,15 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
                 .order_by(Run.created_at)
             )
         )
-    runs: dict[uuid.UUID, Run] = {}
-    if run_ids:
-        runs = {r.id: r for r in await db.scalars(select(Run).where(Run.id.in_(run_ids)))}
-    refs = await _refs(db, [*runs.values(), *waiting_runs])
+    shown = {c.run_id for c in [*mine, *owed]}
+    refs = await _refs(db, [*(r for r in runs.values() if r.id in shown), *waiting_runs])
 
     def item(c: Checkpoint) -> InboxCheckpoint:
         run = runs[c.run_id]
         seq = (c.payload or {}).get("segment_seq")
         sdef = _flow(run).segments[seq - 1] if seq else None
         return InboxCheckpoint(
-            **_checkpoint_out(c, principal, names).model_dump(),
+            **_checkpoint_out(c, principal, names, flow=run.flow, leads=leads).model_dump(),
             flow=run.flow,  # type: ignore[arg-type]
             flow_title=_flow(run).title,
             document_slug=refs.get(run.document_id),
