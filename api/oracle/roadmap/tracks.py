@@ -26,6 +26,7 @@ from oracle import audit
 from oracle.auth.deps import Principal
 from oracle.docs.models import Document, DocumentVersion
 from oracle.models import AuditEvent
+from oracle.roadmap import links
 from oracle.roadmap.models import ProductTrack, ScheduleBasis, TrackMilestone
 
 
@@ -122,6 +123,8 @@ async def ensure_track(
             track.roadmap_document_id = roadmap_document_id
     await db.flush()
     if created:
+        # F7: issues linked to this PRD's items before it had a track join it.
+        await links.adopt(db, track)
         data = {"prd": prd.slug, "version": version.number, "cause": cause}
         if isinstance(actor, Principal):
             await audit.record(db, actor, "track.started", "product_track", track.id, data)

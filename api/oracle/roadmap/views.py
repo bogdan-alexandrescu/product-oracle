@@ -161,6 +161,8 @@ class ItemContext:
         self.docs: dict[uuid.UUID, Document] = {}
         self.versions: dict[uuid.UUID, DocumentVersion] = {}
         self.records: dict[tuple[uuid.UUID | None, str], list[TrackerRecord]] = {}
+        # Records on no track, by (PRD, item key).
+        self.prd_records: dict[tuple[uuid.UUID | None, str], list[TrackerRecord]] = {}
         # Each item's milestone with its date re-checked now (items.live_milestones).
         self.milestones: dict[uuid.UUID, Any] = {}
 
@@ -207,11 +209,22 @@ class ItemContext:
             ):
                 if r.item_key:
                     ctx.records.setdefault((r.track_id, r.item_key), []).append(r)
+        if doc_ids:
+            # A record with no track is matched by its PRD and item key (F7).
+            for r in await db.scalars(
+                select(TrackerRecord).where(
+                    TrackerRecord.track_id.is_(None),
+                    TrackerRecord.prd_document_id.in_(doc_ids),
+                    TrackerRecord.item_key.is_not(None),
+                )
+            ):
+                ctx.prd_records.setdefault((r.prd_document_id, r.item_key), []).append(r)
         ctx.milestones = await items_mod.live_milestones(db, rows)
         return ctx
 
     def records_of(self, item: RoadmapItem) -> list[TrackerRecord]:
-        return self.records.get((item.track_id, item.item_key), [])
+        on_track = self.records.get((item.track_id, item.item_key), []) if item.track_id else []
+        return on_track + self.prd_records.get((item.prd_document_id, item.item_key), [])
 
     def milestone_of(self, item: RoadmapItem) -> Any:
         return self.milestones.get(item.id, item.milestone)
@@ -334,6 +347,20 @@ async def alignment(
             select(ProductTrack.id).where(ProductTrack.roadmap_document_id == document.id)
         )
     records = await tracker.records_for_track(db, track_id)
+    prd_ids = {i.prd_document_id for i in rows if i.prd_document_id}
+    if prd_ids:
+        # Records on no track count by their PRD (F7).
+        records += list(
+            await db.scalars(
+                select(TrackerRecord)
+                .where(
+                    TrackerRecord.track_id.is_(None),
+                    TrackerRecord.prd_document_id.in_(prd_ids),
+                    TrackerRecord.item_key.is_not(None),
+                )
+                .order_by(TrackerRecord.tracker, TrackerRecord.external_ref)
+            )
+        )
     by_key: dict[str, list[TrackerRecord]] = {}
     for r in records:
         if r.item_key:

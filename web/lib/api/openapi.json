@@ -26234,6 +26234,176 @@
         }
       }
     },
+    "/v1/tracker/issues": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Search Tracker Issues",
+        "description": "Your own synced GitHub issues matching ``q`` (\"#412\", \"org/app#412\", an issue URL\nor words of the title), with the item each is linked to. Reads nothing from GitHub.",
+        "operationId": "search_tracker_issues",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 2000,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackerIssueOut"
+                  },
+                  "title": "Response Search Tracker Issues"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tracker/links": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Link Tracker Issue",
+        "description": "Link one of your synced GitHub issues to a roadmap item of a PRD (F7): a tracker\nrecord kept fresh from the sync, read-only toward GitHub. Everyone who can see the\nPlan sees its number, title, state and link. 409 when it is linked to another item\nand ``move`` is false.",
+        "operationId": "link_tracker_issue",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackerLinkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackerRecordOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/tracker/links/{record_id}": {
+      "delete": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Unlink Tracker Issue",
+        "description": "Unlink a tracker record from its item: it stays (with its history) and counts for\nno item.",
+        "operationId": "unlink_tracker_issue",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Record Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/tracks": {
       "get": {
         "tags": [
@@ -80199,6 +80369,216 @@
         ],
         "title": "TrackerImportOut"
       },
+      "TrackerIssueLinked": {
+        "properties": {
+          "prd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "record_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Record Id"
+          },
+          "item_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "item_key",
+          "record_id"
+        ],
+        "title": "TrackerIssueLinked"
+      },
+      "TrackerIssueMilestone": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "TrackerIssueMilestone"
+      },
+      "TrackerIssueOut": {
+        "properties": {
+          "source_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Item Id"
+          },
+          "external_ref": {
+            "type": "string",
+            "title": "External Ref"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "in_progress",
+              "done",
+              "cancelled",
+              "unknown"
+            ],
+            "title": "State"
+          },
+          "raw_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Status"
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrackerIssueMilestone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "linked": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrackerIssueLinked"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_item_id",
+          "external_ref",
+          "title",
+          "url",
+          "state",
+          "raw_status",
+          "milestone",
+          "linked"
+        ],
+        "title": "TrackerIssueOut",
+        "description": "One of the caller's own synced GitHub issues, as a link would read it (F7)."
+      },
+      "TrackerLinkIn": {
+        "properties": {
+          "prd": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Prd"
+          },
+          "item_key": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Item Key"
+          },
+          "source_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Item Id"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "move": {
+            "type": "boolean",
+            "title": "Move",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prd",
+          "item_key"
+        ],
+        "title": "TrackerLinkIn",
+        "description": "Link one of the caller's synced GitHub issues to a roadmap item of a PRD, by its\nsource item or its issue URL. ``move``: take it from the item it is linked to."
+      },
       "TrackerPlanEpic": {
         "properties": {
           "item_key": {
@@ -80596,6 +80976,66 @@
             ],
             "title": "Recorded By"
           },
+          "prd_document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Document Id"
+          },
+          "source_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Item Id"
+          },
+          "linked_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked By"
+          },
+          "linked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked At"
+          },
+          "refresh_lost_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Lost At"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -80630,6 +81070,18 @@
       },
       "TrackerRecordRef": {
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
           "tracker": {
             "type": "string",
             "enum": [
@@ -80699,6 +81151,18 @@
               }
             ],
             "title": "Url"
+          },
+          "refresh_lost_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Lost At"
           }
         },
         "type": "object",

@@ -103,8 +103,12 @@ def milestone_event(title: str = "Beta", due: str | None = BETA_DUE, number: int
 async def github_source(ctx: Ctx, who: str, events: list | None = None) -> uuid.UUID:
     """A GitHub source of ``who`` with the issue #412 and the Beta milestone synced."""
     async with tenant_session(ctx.tenant_id) as s:
-        source = Source(owner_user_id=ctx.users[who].id, kind="github",
-                        name=f"github-{uuid.uuid4().hex[:6]}", config={"repos": [REPO]})  # fmt: skip
+        source = Source(
+            owner_user_id=ctx.users[who].id,
+            kind="github",
+            name=f"github-{uuid.uuid4().hex[:6]}",
+            config={"repos": [REPO]},
+        )
         s.add(source)
         await s.flush()
         for event in events if events is not None else [issue_event(), milestone_event()]:
@@ -242,13 +246,15 @@ async def test_link_by_url_and_refusals(client):
     out = await link(client, ctx, prd="prd-a", item_key="a1",
                      url=f"https://github.com/{REPO}/issues/412")  # fmt: skip
     assert out["source_item_id"] == await item_id(ctx, source)
-    await link(client, ctx, 422, prd="prd-a", item_key="nope", source_item_id=out["source_item_id"])
+    await link(
+        client, ctx, status=422, prd="prd-a", item_key="nope", source_item_id=out["source_item_id"]
+    )
     pr = await item_id(ctx, source, 9)
-    await link(client, ctx, 422, prd="prd-a", item_key="a2", source_item_id=pr)
-    await link(client, ctx, 422, prd="prd-a", item_key="a2", url="https://example.com/x/412")
-    await link(client, ctx, 404, prd="prd-a", item_key="a2",
+    await link(client, ctx, status=422, prd="prd-a", item_key="a2", source_item_id=pr)
+    await link(client, ctx, status=422, prd="prd-a", item_key="a2", url="https://example.com/x/412")
+    await link(client, ctx, status=404, prd="prd-a", item_key="a2",
                url=f"https://github.com/{REPO}/issues/999")  # fmt: skip
-    await link(client, ctx, 404, prd="no-such-prd", item_key="a2",
+    await link(client, ctx, status=404, prd="no-such-prd", item_key="a2",
                source_item_id=out["source_item_id"])  # fmt: skip
 
 
@@ -283,7 +289,7 @@ async def test_a_second_link_conflicts_then_moves(client):
     first = await link(client, ctx, prd="prd-a", item_key="a1", source_item_id=si)
     # The same item again is no conflict.
     await link(client, ctx, prd="prd-a", item_key="a1", source_item_id=si)
-    conflict = await link(client, ctx, 409, prd="prd-a", item_key="a2", source_item_id=si)
+    conflict = await link(client, ctx, status=409, prd="prd-a", item_key="a2", source_item_id=si)
     assert conflict["detail"]["linked"] == {"prd": "prd-a", "item_key": "a1", "item_title": "A1"}
     assert "A1" in conflict["detail"]["message"]
     moved = await link(client, ctx, prd="prd-a", item_key="a2", source_item_id=si, move=True)
@@ -299,9 +305,9 @@ async def test_another_members_issue_is_not_found(client):
     theirs = await item_id(ctx, await github_source(ctx, "owner"))
     resp = await client.get("/v1/tracker/issues", params={"q": "412"}, headers=ctx.as_("approver"))
     assert resp.status_code == 200 and resp.json() == []
-    body = await link(client, ctx, 404, prd="prd-a", item_key="a1", source_item_id=theirs)
+    body = await link(client, ctx, status=404, prd="prd-a", item_key="a1", source_item_id=theirs)
     assert "412" not in str(body) and "Saved cards" not in str(body)
-    await link(client, ctx, 404, prd="prd-a", item_key="a1",
+    await link(client, ctx, status=404, prd="prd-a", item_key="a1",
                url=f"https://github.com/{REPO}/issues/412")  # fmt: skip
 
 
@@ -415,14 +421,14 @@ async def test_scoping_and_roles(client):
     out = await link(client, ctx, "commenter", prd="prd-a", item_key="a1", source_item_id=si)
 
     other = await make_ctx("Other Co")
-    await link(client, other, "owner", 404, prd="prd-a", item_key="a1", source_item_id=si)
+    await link(client, other, "owner", status=404, prd="prd-a", item_key="a1", source_item_id=si)
     resp = await client.delete(f"/v1/tracker/links/{out['id']}", headers=other.as_("owner"))
     assert resp.status_code == 404
     resp = await client.delete(f"/v1/tracker/links/{uuid.uuid4()}", headers=ctx.as_("owner"))
     assert resp.status_code == 404
 
     async with tenant_session(ctx.tenant_id) as s:
-        run = Run(flow="baseline_to_prd", status="running")
+        run = Run(flow="baseline_to_prd", created_by=ctx.users["owner"].id, status="running")
         s.add(run)
         await s.flush()
         raw = await mint_run_token(s, run.id, ["read:documents", "read:baseline",
@@ -431,8 +437,8 @@ async def test_scoping_and_roles(client):
     run_headers = {**ctx.as_("owner"), RUN_TOKEN_HEADER: raw}
     resp = await client.get("/v1/tracker/issues", params={"q": "412"}, headers=run_headers)
     assert resp.status_code == 403
-    resp = await client.post("/v1/tracker/links", headers=run_headers,
-                             json={"prd": "prd-a", "item_key": "a1", "source_item_id": si})  # fmt: skip
+    body = {"prd": "prd-a", "item_key": "a1", "source_item_id": si}
+    resp = await client.post("/v1/tracker/links", headers=run_headers, json=body)
     assert resp.status_code == 403
     assert scopes.required_scope("GET", "/v1/tracker/issues") is None
     from oracle.main import app

@@ -27,7 +27,7 @@ from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.leads import engineering_leads, may_verify_dates
 from oracle.roadmap import items as items_mod
-from oracle.roadmap import schedule, staleness, tracker, tracks, views
+from oracle.roadmap import links, schedule, staleness, tracker, tracks, views
 from oracle.roadmap.models import (
     ProductTrack,
     RoadmapItem,
@@ -56,6 +56,8 @@ from oracle.roadmap.schemas import (
     TrackCreate,
     TrackerConnectorOut,
     TrackerImportOut,
+    TrackerIssueOut,
+    TrackerLinkIn,
     TrackerPlanEpic,
     TrackerPlanIssue,
     TrackerPlanOut,
@@ -89,6 +91,22 @@ async def date_verifier(principal: CurrentPrincipal, db: TenantDB) -> Principal:
 
 
 DateVerifier = Annotated[Principal, Depends(date_verifier)]
+
+
+async def issue_linker(principal: CurrentPrincipal, db: TenantDB) -> Principal:
+    """Who links tracker issues to roadmap items (F7): approvers, owners and engineering
+    leads (A3). Commenters and viewers see the links. A run's token is refused: the
+    ``tracker`` area is in no run-token scope."""
+    if principal.run_id is not None or principal.run_token_id is not None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Linking tracker issues is for people")
+    if not may_verify_dates(principal, await engineering_leads(db)):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Requires the approver role or the engineering lead"
+        )
+    return principal
+
+
+IssueLinker = Annotated[Principal, Depends(issue_linker)]
 
 changes.register_handler(staleness.HANDLER, staleness.mark_items, subjects=staleness.SUBJECTS)
 changes.register_handler("roadmap.start_track", tracks.on_published, subjects={"document_version"})
@@ -412,6 +430,68 @@ async def import_tracker_records(
         updated=updated,
         records=[TrackerRecordOut.model_validate(r) for r in rows],
     )
+
+
+def _link_fail(exc: links.LinkError) -> HTTPException:
+    if isinstance(exc, links.Conflict):
+        return HTTPException(exc.status_code, {"message": str(exc), "linked": exc.linked})
+    return HTTPException(exc.status_code, str(exc))
+
+
+async def _monitor_tracks(db, track_ids: set[uuid.UUID], principal: Principal) -> None:
+    for track_id in sorted(track_ids):
+        await views.monitor(db, await tracks.get_track(db, track_id), principal)
+
+
+@router.get("/tracker/issues", response_model=list[TrackerIssueOut])
+async def search_tracker_issues(
+    principal: IssueLinker,
+    db: TenantDB,
+    q: Annotated[str, Query(max_length=2000)] = "",
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+) -> list[TrackerIssueOut]:
+    """Your own synced GitHub issues matching ``q`` ("#412", "org/app#412", an issue URL
+    or words of the title), with the item each is linked to. Reads nothing from GitHub."""
+    return await links.search(db, principal, q, limit)
+
+
+@router.post(
+    "/tracker/links",
+    response_model=TrackerRecordOut,
+    status_code=201,
+    responses={404: {}, 409: {}},
+)
+async def link_tracker_issue(
+    body: TrackerLinkIn, principal: IssueLinker, db: TenantDB
+) -> TrackerRecord:
+    """Link one of your synced GitHub issues to a roadmap item of a PRD (F7): a tracker
+    record kept fresh from the sync, read-only toward GitHub. Everyone who can see the
+    Plan sees its number, title, state and link. 409 when it is linked to another item
+    and ``move`` is false."""
+    prd = await _document(db, body.prd, "prd")
+    try:
+        record, touched = await links.link(db, principal, prd, body)
+    except links.LinkError as e:
+        raise _link_fail(e) from e
+    await _monitor_tracks(db, touched, principal)
+    await db.commit()
+    await db.refresh(record)
+    return record
+
+
+@router.delete("/tracker/links/{record_id}", status_code=204)
+async def unlink_tracker_issue(
+    record_id: uuid.UUID, principal: IssueLinker, db: TenantDB
+) -> Response:
+    """Unlink a tracker record from its item: it stays (with its history) and counts for
+    no item."""
+    try:
+        _, touched = await links.unlink(db, principal, record_id)
+    except links.LinkError as e:
+        raise _link_fail(e) from e
+    await _monitor_tracks(db, touched, principal)
+    await db.commit()
+    return Response(status_code=204)
 
 
 # --- product tracks ---------------------------------------------------------------------------

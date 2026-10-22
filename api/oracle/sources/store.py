@@ -74,6 +74,11 @@ async def upsert_item(
     await db.flush()
     item.current_version_id = version.id
     await db.flush()
+    if item.kind in ("issue", "milestone"):
+        # F7: tracker records linked to this issue (or naming this milestone) follow it.
+        from oracle.roadmap import links
+
+        await links.refresh_from_item(db, item)
     return item, True
 
 
@@ -82,6 +87,7 @@ async def delete_item(db: AsyncSession, source: Source, event: ItemDelete) -> bo
     item = await _item(db, source, event.external_id)
     if item is None or item.deleted_at is not None:
         return False
+    await release_links(db, {item.id})
     item.deleted_at = func.clock_timestamp()
     item.deleted_xid = current_xid()
     await db.flush()
@@ -124,6 +130,16 @@ async def delete_out_of_scope(db: AsyncSession, source: Source, scope: Scope) ->
             not_(and_(*keep)),
         )
         .values(deleted_at=func.clock_timestamp())
+        .returning(SourceItem.id)
         .execution_options(synchronize_session=False)
     )
-    return result.rowcount or 0
+    gone = set(result.scalars())
+    await release_links(db, gone)
+    return len(gone)
+
+
+async def release_links(db: AsyncSession, item_ids: set[uuid.UUID]) -> None:
+    """F7: tracker records linked to items going away relink or are marked lost."""
+    from oracle.roadmap import links
+
+    await links.items_gone(db, item_ids)

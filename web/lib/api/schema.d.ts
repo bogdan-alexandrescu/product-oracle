@@ -7505,6 +7505,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tracker/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Tracker Issues
+         * @description Your own synced GitHub issues matching ``q`` ("#412", "org/app#412", an issue URL
+         *     or words of the title), with the item each is linked to. Reads nothing from GitHub.
+         */
+        get: operations["search_tracker_issues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracker/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link Tracker Issue
+         * @description Link one of your synced GitHub issues to a roadmap item of a PRD (F7): a tracker
+         *     record kept fresh from the sync, read-only toward GitHub. Everyone who can see the
+         *     Plan sees its number, title, state and link. 409 when it is linked to another item
+         *     and ``move`` is false.
+         */
+        post: operations["link_tracker_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracker/links/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unlink Tracker Issue
+         * @description Unlink a tracker record from its item: it stays (with its history) and counts for
+         *     no item.
+         */
+        delete: operations["unlink_tracker_issue"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tracks": {
         parameters: {
             query?: never;
@@ -26451,6 +26516,73 @@ export interface components {
             /** Records */
             records: components["schemas"]["TrackerRecordOut"][];
         };
+        /** TrackerIssueLinked */
+        TrackerIssueLinked: {
+            /** Prd */
+            prd: string | null;
+            /** Item Key */
+            item_key: string;
+            /**
+             * Record Id
+             * Format: uuid
+             */
+            record_id: string;
+            /** Item Title */
+            item_title?: string | null;
+        };
+        /** TrackerIssueMilestone */
+        TrackerIssueMilestone: {
+            /** Title */
+            title: string;
+            /** Due */
+            due?: string | null;
+        };
+        /**
+         * TrackerIssueOut
+         * @description One of the caller's own synced GitHub issues, as a link would read it (F7).
+         */
+        TrackerIssueOut: {
+            /**
+             * Source Item Id
+             * Format: uuid
+             */
+            source_item_id: string;
+            /** External Ref */
+            external_ref: string;
+            /** Title */
+            title: string | null;
+            /** Url */
+            url: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "todo" | "in_progress" | "done" | "cancelled" | "unknown";
+            /** Raw Status */
+            raw_status: string | null;
+            milestone: components["schemas"]["TrackerIssueMilestone"] | null;
+            linked: components["schemas"]["TrackerIssueLinked"] | null;
+        };
+        /**
+         * TrackerLinkIn
+         * @description Link one of the caller's synced GitHub issues to a roadmap item of a PRD, by its
+         *     source item or its issue URL. ``move``: take it from the item it is linked to.
+         */
+        TrackerLinkIn: {
+            /** Prd */
+            prd: string;
+            /** Item Key */
+            item_key: string;
+            /** Source Item Id */
+            source_item_id?: string | null;
+            /** Url */
+            url?: string | null;
+            /**
+             * Move
+             * @default false
+             */
+            move: boolean;
+        };
         /** TrackerPlanEpic */
         TrackerPlanEpic: {
             /** Item Key */
@@ -26566,6 +26698,16 @@ export interface components {
             observed_at: string;
             /** Recorded By */
             recorded_by: string | null;
+            /** Prd Document Id */
+            prd_document_id?: string | null;
+            /** Source Item Id */
+            source_item_id?: string | null;
+            /** Linked By */
+            linked_by?: string | null;
+            /** Linked At */
+            linked_at?: string | null;
+            /** Refresh Lost At */
+            refresh_lost_at?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -26579,6 +26721,8 @@ export interface components {
         };
         /** TrackerRecordRef */
         TrackerRecordRef: {
+            /** Id */
+            id?: string | null;
             /**
              * Tracker
              * @enum {string}
@@ -26599,6 +26743,8 @@ export interface components {
             estimate?: string | null;
             /** Url */
             url?: string | null;
+            /** Refresh Lost At */
+            refresh_lost_at?: string | null;
         };
         /**
          * TrackerRecordsImport
@@ -41601,6 +41747,114 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TrackerImportOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_tracker_issues: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerIssueOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    link_tracker_issue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrackerLinkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerRecordOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlink_tracker_issue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
