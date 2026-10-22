@@ -12,7 +12,7 @@ import json
 import re
 import unicodedata
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from typing import Any
 
@@ -25,8 +25,9 @@ from oracle.auth.deps import Principal
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.docs import service as docs_service
-from oracle.docs.models import Document
+from oracle.docs.models import Document, DocumentVersion
 from oracle.docs.parser import DraftError, split_front_matter
+from oracle.docs.schemas import UpdatePeriod
 from oracle.templates import validation
 from oracle.templates.builtins import (
     BUILTIN_TEMPLATES_BY_KEY,
@@ -76,8 +77,8 @@ class ForbiddenError(PermissionError):
 
 
 # H4: who may start a document of a kind (an owner's vision and product strategy).
-MIN_STARTER_ROLE = {"vision": "owner", "strategy": "owner"}
-KIND_WORDS = {"vision": "a vision", "strategy": "a product strategy"}
+MIN_STARTER_ROLE = {"vision": "owner", "strategy": "owner", "update": "owner"}
+KIND_WORDS = {"vision": "a vision", "strategy": "a product strategy", "update": "an update"}
 
 
 class InvalidError(ValueError):
@@ -836,13 +837,16 @@ def draft_skeleton(
     template: str,
     version: int,
     theme: str | None,
+    extra: list[str] | None = None,
 ) -> str:
     """The template body as a first draft: front matter rewritten for this document,
-    template metadata dropped except the brief markers (O1f), the level-1 heading set
-    to the title."""
+    template metadata dropped except the brief markers (O1f) and slide groups, the
+    level-1 heading set to the title. ``extra``: more front matter lines (an update's
+    period and previous update)."""
     yaml_text, rest, _ = split_front_matter(body.replace("\r\n", "\n"))
     # The template's own front matter is replaced, not merged; its brief carries over.
     brief = version_meta(body).marked_brief
+    slides = slide_groups_of(yaml_text)
     lines = [
         "---",
         f"document: {slug}",
@@ -855,10 +859,64 @@ def draft_skeleton(
         lines.append(f"theme: {theme}")
     if brief:
         lines.append("brief: [" + ", ".join(json.dumps(k) for k in brief) + "]")
+    if slides:
+        lines.append(f"slides: {json.dumps(slides)}")
+    lines += extra or []
     lines.append("---")
     safe_title = title.replace("{", "(").replace("}", ")").replace("\n", " ")
     rest = _retitle(rest, safe_title)
     return "\n".join(lines) + "\n" + rest.lstrip("\n")
+
+
+def slide_groups_of(yaml_text: str | None) -> list[list[str]] | None:
+    """A template's ``slides`` (brief sections grouped per slide, oracle.export.deck)."""
+    if not yaml_text:
+        return None
+    try:
+        meta = safe_yaml.load(yaml_text)
+    except Exception:  # noqa: BLE001 - a template's metadata is checked when it is saved
+        return None
+    groups = meta.get("slides") if isinstance(meta, dict) else None
+    if isinstance(groups, list) and all(
+        isinstance(g, list) and all(isinstance(k, str) for k in g) for g in groups
+    ):
+        return groups
+    return None
+
+
+async def _update_front_matter(
+    db: AsyncSession, template: str, period: UpdatePeriod | None
+) -> list[str]:
+    """H8: an update's ``period`` (given, else the day after the period of the last
+    approved update of the same template, else the first of this month, through today)
+    and ``previous``, that last approved update and its version."""
+    from oracle.updates.frontmatter import parse_period
+
+    rows = await db.execute(
+        select(Document.slug, DocumentVersion.number, DocumentVersion.front_matter)
+        .join(DocumentVersion, DocumentVersion.document_id == Document.id)
+        .where(
+            Document.kind == "update",
+            Document.template == template,
+            DocumentVersion.approved_at.is_not(None),
+        )
+    )
+    last: tuple[date, str, int] | None = None
+    for slug, number, fm in rows.all():
+        parsed = parse_period((fm or {}).get("period"))
+        if parsed is not None and (last is None or parsed[1] > last[0]):
+            last = (parsed[1], slug, number)
+    today = date.today()
+    if period is not None:
+        start, end = period.from_, period.to
+    else:
+        start = last[0] + timedelta(days=1) if last else today.replace(day=1)
+        end = today
+        start = min(start, end)
+    lines = [f"period: {{from: {start.isoformat()}, to: {end.isoformat()}}}"]
+    if last is not None:
+        lines.append(f"previous: {{document: {last[1]}, version: {last[2]}}}")
+    return lines
 
 
 async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal) -> StartDraftOut:
@@ -919,6 +977,8 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
         template=template.key,
         template_version=str(version.version),
         theme=theme_key,
+        # H8: an update is for owners and approvers until an owner opens it.
+        visibility="approvers" if data.kind == "update" else "company",
     )
     db.add(document)
     try:
@@ -935,6 +995,11 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
         template=template.key,
         version=version.version,
         theme=theme_key,
+        extra=(
+            await _update_front_matter(db, template.key, data.period)
+            if data.kind == "update"
+            else None
+        ),
     )
     await audit.record(
         db,

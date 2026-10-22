@@ -42,6 +42,11 @@ READ_AREAS = {
         "changelog",
         # H11: how far Oracle may go per responsibility (get_autonomy).
         "autonomy",
+        # H8: product tracks, their milestones and the roadmaps they follow (an update
+        # draft reads what shipped, what slipped and which dates are verified).
+        "tracks",
+        "milestones",
+        "roadmaps",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }

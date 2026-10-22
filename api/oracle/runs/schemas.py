@@ -17,6 +17,7 @@ Flow = Literal[
     "strategy_draft",
     "launch_kit",
     "code_map",
+    "update_draft",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -40,6 +41,7 @@ CheckpointKind = Literal[
     "roadmap_review",
     "strategy_review",
     "launch_review",
+    "update_review",
 ]
 CheckpointStatus = Literal["pending", "approved", "changes_requested", "skipped"]
 Role = Literal["viewer", "commenter", "approver", "owner"]

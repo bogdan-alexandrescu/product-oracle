@@ -216,7 +216,8 @@
                     "roadmap",
                     "spec",
                     "vision",
-                    "strategy"
+                    "strategy",
+                    "update"
                   ],
                   "type": "string"
                 },
@@ -292,6 +293,73 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/visibility": {
+      "patch": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Set Document Visibility",
+        "description": "Who sees an update (H8): ``company`` (every member) or ``approvers`` (owners and\napprovers only, an update's default); any other kind is a 422. Owners only, with a\nreason; audited as ``document.visibility`` with the values before and after.",
+        "operationId": "set_document_visibility",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisibilityIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an owner"
+          },
+          "404": {
+            "description": "No such document"
           },
           "422": {
             "description": "Validation Error",
@@ -12330,7 +12398,8 @@
                     "prd",
                     "roadmap",
                     "vision",
-                    "strategy"
+                    "strategy",
+                    "update"
                   ],
                   "type": "string"
                 },
@@ -12778,6 +12847,7 @@
                     "roadmap",
                     "vision",
                     "strategy",
+                    "update",
                     "any"
                   ],
                   "type": "string"
@@ -35288,7 +35358,8 @@
               "roadmap_items",
               "roadmap_review",
               "strategy_review",
-              "launch_review"
+              "launch_review",
+              "update_review"
             ],
             "title": "Kind"
           },
@@ -35440,7 +35511,8 @@
               "roadmap_items",
               "roadmap_review",
               "strategy_review",
-              "launch_review"
+              "launch_review",
+              "update_review"
             ],
             "title": "Kind"
           },
@@ -40557,7 +40629,8 @@
               "roadmap",
               "spec",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind",
             "default": "prd"
@@ -40594,6 +40667,25 @@
               }
             ],
             "title": "Theme"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "company",
+              "approvers"
+            ],
+            "title": "Visibility",
+            "default": "company"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdatePeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "latest_version": {
             "anyOf": [
@@ -40943,7 +41035,8 @@
               "roadmap",
               "spec",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind",
             "default": "prd"
@@ -40980,6 +41073,25 @@
               }
             ],
             "title": "Theme"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "company",
+              "approvers"
+            ],
+            "title": "Visibility",
+            "default": "company"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdatePeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "latest_version": {
             "anyOf": [
@@ -41119,7 +41231,8 @@
                   "roadmap",
                   "spec",
                   "vision",
-                  "strategy"
+                  "strategy",
+                  "update"
                 ]
               },
               {
@@ -45294,7 +45407,8 @@
               "prd_to_spec",
               "strategy_draft",
               "launch_kit",
-              "code_map"
+              "code_map",
+              "update_draft"
             ],
             "title": "Key"
           },
@@ -45319,7 +45433,8 @@
                   "roadmap",
                   "spec",
                   "vision",
-                  "strategy"
+                  "strategy",
+                  "update"
                 ]
               },
               {
@@ -45337,7 +45452,8 @@
                   "roadmap",
                   "spec",
                   "vision",
-                  "strategy"
+                  "strategy",
+                  "update"
                 ]
               },
               {
@@ -45434,7 +45550,8 @@
                   "roadmap_items",
                   "roadmap_review",
                   "strategy_review",
-                  "launch_review"
+                  "launch_review",
+                  "update_review"
                 ]
               },
               {
@@ -46685,7 +46802,8 @@
               "roadmap_items",
               "roadmap_review",
               "strategy_review",
-              "launch_review"
+              "launch_review",
+              "update_review"
             ],
             "title": "Kind"
           },
@@ -46810,7 +46928,8 @@
               "prd_to_spec",
               "strategy_draft",
               "launch_kit",
-              "code_map"
+              "code_map",
+              "update_draft"
             ],
             "title": "Flow"
           },
@@ -59291,7 +59410,8 @@
               "prd",
               "roadmap",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -64004,7 +64124,8 @@
               "prd_to_spec",
               "strategy_draft",
               "launch_kit",
-              "code_map"
+              "code_map",
+              "update_draft"
             ],
             "title": "Flow"
           },
@@ -64115,7 +64236,8 @@
               "roadmap_items",
               "roadmap_review",
               "strategy_review",
-              "launch_review"
+              "launch_review",
+              "update_review"
             ],
             "title": "Kind"
           },
@@ -64270,7 +64392,8 @@
               "prd_to_spec",
               "strategy_draft",
               "launch_kit",
-              "code_map"
+              "code_map",
+              "update_draft"
             ],
             "title": "Flow"
           },
@@ -64324,7 +64447,8 @@
                   "roadmap",
                   "spec",
                   "vision",
-                  "strategy"
+                  "strategy",
+                  "update"
                 ]
               },
               {
@@ -64434,7 +64558,8 @@
                   "roadmap_items",
                   "roadmap_review",
                   "strategy_review",
-                  "launch_review"
+                  "launch_review",
+                  "update_review"
                 ]
               },
               {
@@ -64544,7 +64669,8 @@
                   "roadmap_items",
                   "roadmap_review",
                   "strategy_review",
-                  "launch_review"
+                  "launch_review",
+                  "update_review"
                 ]
               },
               {
@@ -64819,7 +64945,8 @@
               "prd_to_spec",
               "strategy_draft",
               "launch_kit",
-              "code_map"
+              "code_map",
+              "update_draft"
             ],
             "title": "Flow"
           },
@@ -64873,7 +65000,8 @@
                   "roadmap",
                   "spec",
                   "vision",
-                  "strategy"
+                  "strategy",
+                  "update"
                 ]
               },
               {
@@ -64983,7 +65111,8 @@
                   "roadmap_items",
                   "roadmap_review",
                   "strategy_review",
-                  "launch_review"
+                  "launch_review",
+                  "update_review"
                 ]
               },
               {
@@ -65093,7 +65222,8 @@
                   "roadmap_items",
                   "roadmap_review",
                   "strategy_review",
-                  "launch_review"
+                  "launch_review",
+                  "update_review"
                 ]
               },
               {
@@ -67890,7 +68020,8 @@
                   "roadmap_items",
                   "roadmap_review",
                   "strategy_review",
-                  "launch_review"
+                  "launch_review",
+                  "update_review"
                 ]
               },
               {
@@ -70918,7 +71049,8 @@
               "prd",
               "roadmap",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -70966,6 +71098,16 @@
               }
             ],
             "title": "Theme"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdatePeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -70997,7 +71139,8 @@
               "prd",
               "roadmap",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -72525,7 +72668,8 @@
               "prd",
               "roadmap",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -72792,7 +72936,8 @@
               "prd",
               "roadmap",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -72900,7 +73045,8 @@
               "prd",
               "roadmap",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -73263,6 +73409,7 @@
               "roadmap",
               "vision",
               "strategy",
+              "update",
               "any"
             ],
             "title": "Kind",
@@ -73419,6 +73566,7 @@
               "roadmap",
               "vision",
               "strategy",
+              "update",
               "any"
             ],
             "title": "Kind"
@@ -73455,6 +73603,7 @@
               "roadmap",
               "vision",
               "strategy",
+              "update",
               "any"
             ],
             "title": "Kind"
@@ -73714,6 +73863,7 @@
                   "roadmap",
                   "vision",
                   "strategy",
+                  "update",
                   "any"
                 ]
               },
@@ -76505,6 +76655,27 @@
         ],
         "title": "UnavailableItem"
       },
+      "UpdatePeriod": {
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "title": "To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from",
+          "to"
+        ],
+        "title": "UpdatePeriod",
+        "description": "The period an update covers (its latest version's front matter ``period``)."
+      },
       "UploadResult": {
         "properties": {
           "items": {
@@ -77207,7 +77378,8 @@
               "roadmap",
               "spec",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -77428,6 +77600,31 @@
         ],
         "title": "VersionWarning",
         "description": "A non-fatal import finding stored on the version."
+      },
+      "VisibilityIn": {
+        "properties": {
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "company",
+              "approvers"
+            ],
+            "title": "Visibility"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "visibility",
+          "reason"
+        ],
+        "title": "VisibilityIn",
+        "description": "An owner's switch of who sees a document, with the reason (audited)."
       },
       "WaitInfo": {
         "properties": {

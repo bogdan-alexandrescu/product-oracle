@@ -35,6 +35,7 @@ FLOWS = (
     "launch_kit",
     # F5-2 (migration 0022_code_maps): one repo's code capability map.
     "code_map",
+    "update_draft",
 )
 RUN_STATUSES = (
     "draft",
@@ -58,6 +59,7 @@ CHECKPOINT_KINDS = (
     "request_triage",
     "strategy_review",
     "launch_review",
+    "update_review",
 )
 CHECKPOINT_STATUSES = ("pending", "approved", "changes_requested", "skipped")
 # D8: what a person does to one item of a pending checkpoint's shared draft. Every kind the

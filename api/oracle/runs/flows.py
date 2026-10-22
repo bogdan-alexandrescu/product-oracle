@@ -71,6 +71,10 @@ MCP_TOOLS = {
     "and what each holds",
     "get_code_map": "one code capability map: its modules, APIs, data models, flags and jobs, "
     "each with the id a brief cites",
+    "list_tracks": "the product tracks: each PRD in delivery, its status and monitor snapshot",
+    "list_track_milestones": "a track's milestones, each date with its schedule basis "
+    "(verified, unverified or withdrawn)",
+    "list_launches": "launches: what shipped or is about to, with their items",
 }
 # Stated in the tasks of segments that pick features or items (H4).
 STRATEGY_FLAG = (
@@ -176,6 +180,7 @@ KIND_NAMES = {
     "spec": "engineering spec",
     "vision": "vision",
     "strategy": "product strategy",
+    "update": "update",
 }
 
 
@@ -589,6 +594,55 @@ FLOWS: dict[str, FlowDef] = {
             ),
         ),
         FlowDef(
+            key="update_draft",
+            title="Board or investor update draft",
+            description="Oracle drafts the product section of a board update or a monthly "
+            "investor update, metrics first, from goals, tracks, launches, outcomes and "
+            "decisions; an owner edits and approves it.",
+            requires_document=True,
+            target_kind=None,
+            document_kinds=("update",),
+            # Investor updates are quick by default; a board update's run asks for
+            # standard depth (oracle.runs.service.create_run).
+            default_depth="quick",
+            # D12: started from Company › Updates (New update), never the New run dialog.
+            segments=(
+                SegmentDef(
+                    name="update_draft",
+                    title="Update draft",
+                    roles=("analyst", "writer"),
+                    scopes=(*READ, "read:documents", "write:drafts"),
+                    outputs=("{draft}",),
+                    checkpoint="update_review",
+                    approver_role="owner",
+                    imports_draft=True,
+                    task="Write the {doc} for the period in the front matter as {draft}, in "
+                    "the template below. Metrics first: confirmed goals with their current "
+                    "value, target, distance to go and change since the previous update "
+                    "(get_baseline; the previous update via get_document_markdown). "
+                    "Timeline: only dates a verified schedule basis supports (list_tracks, "
+                    "list_track_milestones); never invent a date. Shipped, slipped and "
+                    "at-risk from tracks, launches and outcomes. Lowlights are candid. Leave "
+                    "Asks as the template placeholder. Every number cites; evidence only in "
+                    "Sources and data points. " + CITATION_CONTRACT,
+                    tools=(
+                        "get_baseline",
+                        "get_document",
+                        "get_document_markdown",
+                        "list_tracks",
+                        "list_track_milestones",
+                        "list_outcomes",
+                        "list_decisions",
+                        "list_launches",
+                        "search",
+                        "get_source_item",
+                        "push_draft",
+                        "get_checkpoint_review",
+                    ),
+                ),
+            ),
+        ),
+        FlowDef(
             key="launch_kit",
             title="Launch kit",
             description="For one launch: changelog entries, release notes, internal "
@@ -958,6 +1012,14 @@ def step_prompt(
         lines += roadmap_lines(ctx.roadmap, ctx.source)
     if ctx.extra_lines:
         lines += ["", *ctx.extra_lines]
+    if flow.key == "update_draft" and ctx.document:
+        lines += [
+            "",
+            "The template: the update's latest version, read with "
+            f"get_document_markdown(doc={ctx.document}). Keep its front matter (document, "
+            "title, kind, template, template_version, brief, slides, period, previous) and "
+            "its section ids and order; the period is the one to report on.",
+        ]
     if flow.key == "strategy_draft" and ctx.document:
         lines += [
             "",

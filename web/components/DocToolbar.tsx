@@ -7,10 +7,11 @@ import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { Icon, useDocumentDestination } from "@/components/ds";
 import type { DocumentOut } from "@/lib/api/client";
 
-/** The list a document belongs to: Plan for roadmaps (c7), Company › Strategy for a vision or strategy (H4), PRDs for the rest. */
+/** The list a document belongs to: Plan for roadmaps (c7), Company › Strategy for a vision or strategy (H4), Company › Updates for updates (H8), PRDs for the rest. */
 function home(doc?: DocumentOut) {
   if (doc?.kind === "roadmap") return { href: "/plan", label: "Plan" };
   if (doc?.kind === "vision" || doc?.kind === "strategy") return { href: "/company/strategy", label: "Company › Strategy" };
+  if (doc?.kind === "update") return { href: "/company/updates", label: "Company › Updates" };
   return { href: "/documents", label: "PRDs" };
 }
 
