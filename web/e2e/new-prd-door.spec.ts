@@ -10,10 +10,11 @@ import { login, signOut } from "./helpers";
  * - "brief to draft" (criteria 7, 8): protects=one door from brief to a started run on the
  *   mock; fails_when=any step needs the Runs page, the brief's goal question is asked again,
  *   the sheet loses the template, or the run's details lack it; no_claim=the real cost estimate.
- * - "baseline choice" (criterion 8d): protects=B1 "Reuse base" in the sheet (reuse preselected,
- *   Rebuild one click away and $7.00 dearer, the Confirm the baseline stop only when rebuilding);
- *   fails_when=reuse is not the default, Rebuild does not raise the estimate by the baseline
- *   segment, or the stop shows while reusing; no_claim=the API's 30-day rule.
+ * - "baseline choice" (criteria 8d, 6): protects=B1 "Reuse base" in the sheet (reuse preselected,
+ *   Rebuild one click away and $7.00 dearer, the Confirm the baseline stop only when rebuilding)
+ *   and one draft run per intake however often it is re-estimated; fails_when=reuse is not the
+ *   default, Rebuild does not raise the estimate by the baseline segment, the stop shows while
+ *   reusing, or re-estimating makes a second run; no_claim=the API's 30-day rule.
  * - "stale baseline" (criterion 8d): protects=a baseline that cannot be reused offers no reuse;
  *   fails_when=the reuse choice shows, or the reason is missing from the tooltip;
  *   no_claim=the other two reasons.
@@ -127,6 +128,14 @@ test("baseline choice: reuse is preselected; Rebuild costs the baseline segment 
   await expect(estimate(page)).toContainText("Estimated $53.00");
   await expect(estimate(page)).toContainText("Needs an owner's approval before it starts");
   await expect(sheet(page).getByRole("radio", { name: "Rebuild it ($14.00)" })).toBeChecked();
+
+  // Three estimates, one draft run (criterion 6): once started, the Runs list has one more
+  // row than seeded, and one for this brief.
+  await sheet(page).getByRole("button", { name: "Start drafting" }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  await page.getByTestId("nav-runs").filter({ visible: true }).first().click();
+  await expect(page.getByTestId("run-row")).toHaveCount(6);
+  await expect(page.getByTestId("run-row").filter({ hasText: "faster-repeat-checkout" })).toHaveCount(1);
 });
 
 test("stale baseline: only 'Oracle rebuilds the baseline first', with the reason in its tooltip", async ({ page }) => {
