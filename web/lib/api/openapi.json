@@ -12152,6 +12152,22 @@
               "default": 50,
               "title": "Limit"
             }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "saved",
+                "proposed",
+                "discarded",
+                "all"
+              ],
+              "type": "string",
+              "default": "saved",
+              "title": "Status"
+            }
           }
         ],
         "responses": {
@@ -12207,6 +12223,22 @@
               "format": "uuid",
               "title": "Snapshot Id"
             }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "saved",
+                "proposed",
+                "discarded",
+                "all"
+              ],
+              "type": "string",
+              "default": "saved",
+              "title": "Status"
+            }
           }
         ],
         "responses": {
@@ -12216,6 +12248,58 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PrioritySnapshotOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/priorities/snapshots/{snapshot_id}/compare": {
+      "get": {
+        "tags": [
+          "priorities"
+        ],
+        "summary": "Compare Priority Snapshot",
+        "description": "A snapshot in any status (a run's proposed order included) next to the live\nranking of its method: each row's run rank, live rank, delta and the check's problems,\nand the run and checkpoint that decide it.",
+        "operationId": "compare_priority_snapshot",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "snapshot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Snapshot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompareOut"
                 }
               }
             }
@@ -36254,6 +36338,207 @@
         ],
         "title": "CompanyMemberCoverage"
       },
+      "CompareCheckpoint": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "approver_role": {
+            "type": "string",
+            "title": "Approver Role"
+          },
+          "cannot_approve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cannot Approve"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "approver_role"
+        ],
+        "title": "CompareCheckpoint"
+      },
+      "CompareOut": {
+        "properties": {
+          "snapshot": {
+            "$ref": "#/components/schemas/PrioritySnapshotOut"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/CompareRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "live_generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Live Generated At"
+          },
+          "run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompareRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checkpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompareCheckpoint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "snapshot",
+          "rows",
+          "live_generated_at"
+        ],
+        "title": "CompareOut",
+        "description": "A snapshot (a run's order) next to Oracle's live ranking of the same method."
+      },
+      "CompareRow": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "run_rank": {
+            "type": "integer",
+            "title": "Run Rank"
+          },
+          "live_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Rank"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "run_explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Explanation"
+          },
+          "live_explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Explanation"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/PriorityProblem"
+            },
+            "type": "array",
+            "title": "Problems"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "run_rank",
+          "live_rank",
+          "delta",
+          "run_explanation",
+          "live_explanation",
+          "problems"
+        ],
+        "title": "CompareRow"
+      },
+      "CompareRun": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "flow_title": {
+            "type": "string",
+            "title": "Flow Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "document_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Slug"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "flow_title",
+          "status"
+        ],
+        "title": "CompareRun"
+      },
       "ComposedModule": {
         "properties": {
           "key": {
@@ -56760,6 +57045,139 @@
         "title": "PreviousAttempt",
         "description": "The attempt before the current one, kept when a person sent the segment back (D5):\nits number and file names (read with ``?attempt=``)."
       },
+      "PriorityCheck": {
+        "properties": {
+          "method": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "goal_weighted",
+                  "rice",
+                  "moscow",
+                  "wsjf"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "features": {
+            "type": "integer",
+            "title": "Features"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/PriorityProblem"
+            },
+            "type": "array",
+            "title": "Problems"
+          },
+          "order": {
+            "items": {
+              "$ref": "#/components/schemas/PriorityOrderRow"
+            },
+            "type": "array",
+            "title": "Order",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "features",
+          "problems"
+        ],
+        "title": "PriorityCheck",
+        "description": "The check of a run's priority.yaml (C8): the file's method, the features ranked,\nevery problem, and the order as the file gives it."
+      },
+      "PriorityOrderRow": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          },
+          "live_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Rank"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "rank"
+        ],
+        "title": "PriorityOrderRow"
+      },
+      "PriorityProblem": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "blocking": {
+            "type": "boolean",
+            "title": "Blocking",
+            "default": true
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "PriorityProblem",
+        "description": "One problem of a run's priority.yaml (oracle.priorities.run_order). A blocking one\nrefuses Approve until the order is sent back (call c3)."
+      },
       "PriorityRanking": {
         "properties": {
           "method": {
@@ -56898,6 +57316,62 @@
             "type": "array",
             "title": "Top"
           },
+          "status": {
+            "type": "string",
+            "enum": [
+              "saved",
+              "proposed",
+              "discarded"
+            ],
+            "title": "Status",
+            "default": "saved"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "document": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SnapshotDocument"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
           "params": {
             "additionalProperties": true,
             "type": "object",
@@ -56909,6 +57383,40 @@
             },
             "type": "array",
             "title": "Ranking"
+          },
+          "checkpoint_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Id"
+          },
+          "scope_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Id"
+          },
+          "check_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriorityCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -56980,6 +57488,62 @@
             },
             "type": "array",
             "title": "Top"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "saved",
+              "proposed",
+              "discarded"
+            ],
+            "title": "Status",
+            "default": "saved"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "document": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SnapshotDocument"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
           }
         },
         "type": "object",
@@ -58429,6 +58993,28 @@
           },
           "explanation": {
             "$ref": "#/components/schemas/Explanation"
+          },
+          "live_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Rank"
+          },
+          "run_explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Explanation"
           }
         },
         "type": "object",
@@ -67326,6 +67912,16 @@
               }
             ]
           },
+          "priority_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriorityCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "autonomy_note": {
             "anyOf": [
               {
@@ -67883,6 +68479,43 @@
         },
         "type": "object",
         "title": "SnapshotCreate"
+      },
+      "SnapshotDocument": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug"
+        ],
+        "title": "SnapshotDocument",
+        "description": "The PRD a run's order is for: its document once the draft imported, else the slug\nthe run writes (no id or title yet)."
       },
       "SnapshotOut": {
         "properties": {

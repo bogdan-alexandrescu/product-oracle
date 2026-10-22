@@ -66,12 +66,13 @@ def _columns() -> list[str]:
 
 def test_the_chain_ends_here_after_feedback_authors():
     script = ScriptDirectory.from_config(_cfg())
-    # 0022_baseline_flow (B1) chains on it, then 0022_engineering_lead (A3) and
-    # 0022_discussions (G1); one head.
-    assert script.get_heads() == ["0022_discussions"]
+    # 0022_baseline_flow (B1) chains on it, then 0022_engineering_lead (A3),
+    # 0022_discussions (G1) and 0022_priority_snapshot_runs (C8); one head.
+    assert script.get_heads() == ["0022_priority_snapshot_runs"]
     assert script.get_revision("0022_baseline_flow").down_revision == REVISION
     assert script.get_revision("0022_engineering_lead").down_revision == "0022_baseline_flow"
     assert script.get_revision("0022_discussions").down_revision == "0022_engineering_lead"
+    assert script.get_revision("0022_priority_snapshot_runs").down_revision == "0022_discussions"
     assert script.get_revision(REVISION).down_revision == "0020_prd_scopes"
 
 

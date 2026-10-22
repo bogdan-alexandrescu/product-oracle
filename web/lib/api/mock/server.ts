@@ -24,7 +24,7 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
-import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngReviewRun, seedFeatureSetRun, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngReviewRun, seedFeatureSetRun, seedPriorityRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
@@ -607,6 +607,22 @@ function seedEngReview(): Db {
 function seedFeatureSet(): Db {
   const db = seed();
   seeded("feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db)));
+  return db;
+}
+
+/**
+ * C8 "priority-order" scenario: two runs waiting at the priority stop (./runs.ts
+ * seedPriorityRuns), one for the Saved addresses PRD, and a run order saved for the
+ * Checkout redesign PRD.
+ */
+function seedPriorityOrder(): Db {
+  const db = seed();
+  const at = "2026-10-18T09:00:00Z";
+  db.documents.push({
+    id: uuid(), slug: "saved-addresses", title: "Saved addresses PRD", status: "draft", kind: "prd",
+    template: null, template_version: null, theme: null, created_at: at, updated_at: at,
+  });
+  seeded("priority-order", () => seedPriorityRuns(db.runs!, runsContext(db)));
   return db;
 }
 
@@ -1221,6 +1237,8 @@ function load(): Db {
             ? seedFeatureSet
           : scenario === "eng-review"
             ? seedEngReview
+          : scenario === "priority-order"
+            ? seedPriorityOrder
           : scenario === "next-draft" || scenario === "next-draft-costly"
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "questions"

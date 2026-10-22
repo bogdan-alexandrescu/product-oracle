@@ -3516,6 +3516,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/priorities/snapshots/{snapshot_id}/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare Priority Snapshot
+         * @description A snapshot in any status (a run's proposed order included) next to the live
+         *     ranking of its method: each row's run rank, live rank, delta and the check's problems,
+         *     and the run and checkpoint that decide it.
+         */
+        get: operations["compare_priority_snapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/decisions": {
         parameters: {
             query?: never;
@@ -10762,6 +10784,74 @@ export interface components {
             member: components["schemas"]["CompanyMember"];
             /** Kinds */
             kinds: components["schemas"]["CompanyKindCoverage"][];
+        };
+        /** CompareCheckpoint */
+        CompareCheckpoint: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+            /** Approver Role */
+            approver_role: string;
+            /** Cannot Approve */
+            cannot_approve?: string | null;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+        };
+        /**
+         * CompareOut
+         * @description A snapshot (a run's order) next to Oracle's live ranking of the same method.
+         */
+        CompareOut: {
+            snapshot: components["schemas"]["PrioritySnapshotOut"];
+            /** Rows */
+            rows: components["schemas"]["CompareRow"][];
+            /**
+             * Live Generated At
+             * Format: date-time
+             */
+            live_generated_at: string;
+            run?: components["schemas"]["CompareRun"] | null;
+            checkpoint?: components["schemas"]["CompareCheckpoint"] | null;
+        };
+        /** CompareRow */
+        CompareRow: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Run Rank */
+            run_rank: number;
+            /** Live Rank */
+            live_rank: number | null;
+            /** Delta */
+            delta: number | null;
+            /** Run Explanation */
+            run_explanation: string | null;
+            /** Live Explanation */
+            live_explanation: string | null;
+            /** Problems */
+            problems: components["schemas"]["PriorityProblem"][];
+        };
+        /** CompareRun */
+        CompareRun: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Flow Title */
+            flow_title: string;
+            /** Status */
+            status: string;
+            /** Document Slug */
+            document_slug?: string | null;
         };
         /**
          * ComposedModule
@@ -18420,6 +18510,55 @@ export interface components {
             /** Artifacts */
             artifacts: string[];
         };
+        /**
+         * PriorityCheck
+         * @description The check of a run's priority.yaml (C8): the file's method, the features ranked,
+         *     every problem, and the order as the file gives it.
+         */
+        PriorityCheck: {
+            /** Method */
+            method?: ("goal_weighted" | "rice" | "moscow" | "wsjf") | null;
+            /** Features */
+            features: number;
+            /** Problems */
+            problems: components["schemas"]["PriorityProblem"][];
+            /**
+             * Order
+             * @default []
+             */
+            order: components["schemas"]["PriorityOrderRow"][];
+        };
+        /** PriorityOrderRow */
+        PriorityOrderRow: {
+            /** Key */
+            key: string;
+            /** Rank */
+            rank: number;
+            /** Score */
+            score?: number | null;
+            /** Explanation */
+            explanation?: string | null;
+            /** Live Rank */
+            live_rank?: number | null;
+        };
+        /**
+         * PriorityProblem
+         * @description One problem of a run's priority.yaml (oracle.priorities.run_order). A blocking one
+         *     refuses Approve until the order is sent back (call c3).
+         */
+        PriorityProblem: {
+            /** Code */
+            code: string;
+            /**
+             * Blocking
+             * @default true
+             */
+            blocking: boolean;
+            /** Feature */
+            feature?: string | null;
+            /** Message */
+            message: string;
+        };
         /** PriorityRanking */
         PriorityRanking: {
             /**
@@ -18476,12 +18615,30 @@ export interface components {
             feature_count: number;
             /** Top */
             top: string[];
+            /**
+             * Status
+             * @default saved
+             * @enum {string}
+             */
+            status: "saved" | "proposed" | "discarded";
+            /** Run Id */
+            run_id?: string | null;
+            document?: components["schemas"]["SnapshotDocument"] | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
             /** Params */
             params: {
                 [key: string]: unknown;
             };
             /** Ranking */
             ranking: components["schemas"]["RankedFeature"][];
+            /** Checkpoint Id */
+            checkpoint_id?: string | null;
+            /** Scope Id */
+            scope_id?: string | null;
+            check_result?: components["schemas"]["PriorityCheck"] | null;
         };
         /** PrioritySnapshotSummary */
         PrioritySnapshotSummary: {
@@ -18508,6 +18665,19 @@ export interface components {
             feature_count: number;
             /** Top */
             top: string[];
+            /**
+             * Status
+             * @default saved
+             * @enum {string}
+             */
+            status: "saved" | "proposed" | "discarded";
+            /** Run Id */
+            run_id?: string | null;
+            document?: components["schemas"]["SnapshotDocument"] | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
         };
         /** Problem */
         Problem: {
@@ -19072,6 +19242,10 @@ export interface components {
             /** Dependents */
             dependents: string[];
             explanation: components["schemas"]["Explanation"];
+            /** Live Rank */
+            live_rank?: number | null;
+            /** Run Explanation */
+            run_explanation?: string | null;
         };
         /** RankedGap */
         RankedGap: {
@@ -22076,6 +22250,7 @@ export interface components {
             items_check?: components["schemas"]["ItemsCheck"] | null;
             previous_attempt?: components["schemas"]["PreviousAttempt"] | null;
             feature_set_check?: components["schemas"]["FeatureSetCheck"] | null;
+            priority_check?: components["schemas"]["PriorityCheck"] | null;
             /** Autonomy Note */
             autonomy_note?: string | null;
             /** Started At */
@@ -22265,6 +22440,19 @@ export interface components {
             label?: string | null;
             /** As Of */
             as_of?: string | null;
+        };
+        /**
+         * SnapshotDocument
+         * @description The PRD a run's order is for: its document once the draft imported, else the slug
+         *     the run writes (no id or title yet).
+         */
+        SnapshotDocument: {
+            /** Id */
+            id?: string | null;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title?: string | null;
         };
         /** SnapshotOut */
         SnapshotOut: {
@@ -32542,6 +32730,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                status?: "saved" | "proposed" | "discarded" | "all";
             };
             header?: never;
             path?: never;
@@ -32604,7 +32793,9 @@ export interface operations {
     };
     get_priority_snapshot: {
         parameters: {
-            query?: never;
+            query?: {
+                status?: "saved" | "proposed" | "discarded" | "all";
+            };
             header?: never;
             path: {
                 snapshot_id: string;
@@ -32620,6 +32811,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrioritySnapshotOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_priority_snapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                snapshot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompareOut"];
                 };
             };
             /** @description Validation Error */

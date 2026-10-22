@@ -154,8 +154,10 @@ from oracle.members.leads import (
     lead_stop,
     may_decide,
 )
+from oracle.priorities import run_order
 from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
+from oracle.priorities.schemas import PriorityCheck
 from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.schemas import Resolution
@@ -828,6 +830,7 @@ def _segment_out(
         if isinstance(previous := art.get("previous"), dict)
         else None,
         feature_set_check=FeatureSetCheck(**fs) if (fs := art.get("feature_set_check")) else None,
+        priority_check=PriorityCheck(**pc) if (pc := art.get("priority_check")) else None,
         autonomy_note=(merged.get("autonomy") or {}).get("note"),
         started_at=segment.started_at,
         finished_at=segment.finished_at,
@@ -1027,7 +1030,8 @@ def _holds_token(cp: Checkpoint) -> bool:
 
 
 def console_blocked(cp: Checkpoint) -> bool:
-    """A console approval held because the feature set has blocking problems (C6)."""
+    """A console approval held because the feature set (C6) or the priority order (C8)
+    has blocking problems."""
     return bool((((cp.payload or {}).get("wait") or {}).get("console") or {}).get("blocking"))
 
 
@@ -1036,8 +1040,9 @@ def _hold_reason(cp: Checkpoint) -> str:
     if _owes(cp):
         why = "has a decision recorded in Oracle that is not delivered to the run yet"
     elif needs == "confirm" and console_blocked(cp):
+        what = CHECKPOINT_TITLES.get(cp.kind, cp.kind).lower()
         why = (
-            "was approved in SwarmCloud's console while the feature set has blocking "
+            f"was approved in SwarmCloud's console while the {what} has blocking "
             "problems; an Oracle approver confirms it once they are fixed or waived"
         )
     elif needs == "confirm":
@@ -2024,11 +2029,22 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
             )
         ).all()
     )
-    # The latest stored priority order, else the live goal-weighted ranking.
+    # C8 rule 7: this PRD's approved order, else a person's company-wide snapshot (no
+    # run), else the live goal-weighted ranking. A proposed or discarded order never counts.
+    newest = PrioritySnapshot.created_at.desc()
+    saved = select(PrioritySnapshot).where(PrioritySnapshot.status == "saved")
     stored = await db.scalar(
-        select(PrioritySnapshot).order_by(PrioritySnapshot.created_at.desc()).limit(1)
+        saved.where(PrioritySnapshot.document_id == version.document_id).order_by(newest).limit(1)
     )
     if stored is not None:
+        at = stored.decided_at or stored.created_at
+        method = f"{stored.method}, this PRD's approved order of {at.day} {at:%b}"
+        ranking = list(stored.ranking or [])
+    elif (
+        stored := await db.scalar(
+            saved.where(PrioritySnapshot.run_id.is_(None)).order_by(newest).limit(1)
+        )
+    ) is not None:
         method = f"{stored.method}, priority snapshot of {stored.created_at:%Y-%m-%d}"
         ranking = list(stored.ranking or [])
     else:
@@ -3686,6 +3702,26 @@ async def _advance(
             )
             fs_check = failed.as_json()
         art["feature_set_check"] = fs_check
+    order_check: dict[str, Any] | None = None
+    snapshot_id: uuid.UUID | None = None
+    if run_order.FILE in sdef.outputs:
+        try:
+            # In a savepoint, as the items check: a database error rolls back the check's
+            # own reads and writes only.
+            async with db.begin_nested():
+                order_check, snapshot_id = await _check_priority_order(
+                    db, run, segment, number, art["files"].get(run_order.FILE)
+                )
+        except safe_yaml.ParseBusy:
+            raise  # no worker for it: this tick gives up, the next retries
+        except Exception as exc:  # noqa: BLE001 - a bad file fails the check, never the tick
+            log.exception("checking %s of run %s failed", run_order.FILE, run.id)
+            failed = run_order.OrderCheck()
+            failed.add(
+                "unreadable_yaml", f"{run_order.FILE} could not be checked ({type(exc).__name__})"
+            )
+            order_check = failed.as_json()
+        art["priority_check"] = order_check
     launch_import: dict[str, Any] | None = None
     if flows.LAUNCH_FILE in sdef.outputs:
         from oracle.launches import service as launches_service
@@ -3729,8 +3765,10 @@ async def _advance(
             if imported.get("document_id"):
                 run.document_id = uuid.UUID(imported["document_id"])
                 _set_knob(run, "document_slug", None)
-                # Rule 6 (C6): the run's PRD scope names the document from now on.
+                # Rule 6 (C6, C8): the run's PRD scope and priority order name the
+                # document from now on.
                 await feature_set.fill_document(db, run.id, run.document_id)
+                await run_order.fill_document(db, run.id, run.document_id)
         art["import"] = imported
     if sdef.importer:
         # Committed first: the importer runs in its own transaction.
@@ -3768,6 +3806,10 @@ async def _advance(
         payload["feature_set_check"] = fs_check
         if scope_id is not None:
             payload["scope_id"] = str(scope_id)
+    if order_check is not None:
+        payload["priority_check"] = order_check
+        if snapshot_id is not None:
+            payload["priority_snapshot_id"] = str(snapshot_id)
     if launch_import is not None:
         payload["launch_import"] = launch_import
     if wait is not None:
@@ -3797,6 +3839,7 @@ async def _advance(
             )
         )
         await _link_scope(db, scope_id, checkpoint_id)
+        await _link_order(db, snapshot_id, checkpoint_id)
         run.status = "awaiting_checkpoint"
         return True
     db.add(
@@ -3812,6 +3855,7 @@ async def _advance(
         )
     )
     await _link_scope(db, scope_id, checkpoint_id)
+    await _link_order(db, snapshot_id, checkpoint_id)
     for result in (baseline_import, imported, launch_import):
         if result is not None and result.get("error"):
             await _finish(db, run, "failed", result["error"])
@@ -3838,6 +3882,24 @@ async def _advance(
                 scope.id,
                 {"by": "oracle", "reason": "stop off", "run_id": str(run.id)},
             )
+    if order_check is not None:
+        blocking = [p for p in order_check["problems"] if p.get("blocking", True)]
+        if blocking or snapshot_id is None:
+            problems = "; ".join(f"[{p['code']}] {p['message']}" for p in blocking[:5])
+            await _finish(db, run, "failed", f"{run_order.FILE} was rejected: {problems}")
+            return True
+        # Rule 5 (C8): the stop is off and nothing blocks, so Oracle saves the order.
+        snapshot = await db.get(PrioritySnapshot, snapshot_id)
+        if snapshot is not None:
+            run_order.approve(snapshot, None, run.document_id)
+            await audit.record(
+                db,
+                audit.ORACLE,
+                "priority_snapshot.approved",
+                "priority_snapshot",
+                snapshot.id,
+                {"by": "oracle", "reason": "stop off", "run_id": str(run.id)},
+            )
     await _next(db, run, segment, segments)
     return True
 
@@ -3860,6 +3922,38 @@ async def _check_feature_set(
         db, run, segment_seq=segment.seq, attempt=attempt, check=check, known=known
     )
     return check.as_json(), scope.id
+
+
+async def _check_priority_order(
+    db: AsyncSession, run: Run, segment: RunSegment, attempt: int, text: str | None
+) -> tuple[dict[str, Any], uuid.UUID]:
+    """C8: priority.yaml checked against the baseline, the run's approved PRD scope and the
+    live ranking, and stored as the run's proposed snapshot (even with blocking problems,
+    so they can be seen and sent back)."""
+    known, scope_id = await run_order.known_for_run(db, run)
+    if text is None:
+        check = run_order.OrderCheck()
+        check.add("unreadable_yaml", f"the segment left no {run_order.FILE}")
+    else:
+        # In a worker thread with a time cap: agent output never holds the event loop.
+        check = await run_order.check_order_async(text, known=known)
+    snapshot = await run_order.propose(
+        db, run, segment_seq=segment.seq, attempt=attempt, check=check, known=known,
+        scope_id=scope_id,
+    )  # fmt: skip
+    return check.as_json(), snapshot.id
+
+
+async def _link_order(
+    db: AsyncSession, snapshot_id: uuid.UUID | None, checkpoint_id: uuid.UUID
+) -> None:
+    """The proposed order names the checkpoint that decides it (added in the same flush)."""
+    if snapshot_id is None:
+        return
+    await db.flush()
+    snapshot = await db.get(PrioritySnapshot, snapshot_id)
+    if snapshot is not None:
+        snapshot.checkpoint_id = checkpoint_id
 
 
 async def _link_scope(
@@ -5411,6 +5505,9 @@ async def _take_answer(
         if await _recheck_scope(db, cp):
             await _hold_console_approval(db, run, cp, segment, record, wait, at, revise, member)
             return
+    if counted and approved and not ours and cp.kind == "priority_order" and _order_blocking(cp):
+        await _hold_console_approval(db, run, cp, segment, record, wait, at, revise, member)
+        return
     if not counted or (not approved and not revise):
         console = _console_record(run, segment, record, at, revise)
         console.update(
@@ -7343,7 +7440,9 @@ async def _scope_decided(
 ) -> None:
     """A feature-set checkpoint was decided (any path): approved, its scope is approved
     and supersedes the document's earlier approved one (rule 3); changes requested, the
-    proposed scope is superseded (rule 4) and the re-run writes the next attempt's."""
+    proposed scope is superseded (rule 4) and the re-run writes the next attempt's. A
+    priority-order checkpoint's snapshot likewise (C8, :func:`_order_decided`)."""
+    await _order_decided(db, principal, run, cp)
     scope = await _scope_of(db, cp)
     if scope is None:
         return
@@ -7364,7 +7463,11 @@ async def _scope_decided(
 
 async def _scope_reopened(db: AsyncSession, cp: Checkpoint) -> None:
     """A feature-set decision was voided or not posted: its scope is proposed again (an
-    earlier approved scope it superseded stays superseded until this one is decided)."""
+    earlier approved scope it superseded stays superseded until this one is decided). A
+    priority-order decision's snapshot is proposed again too (C8)."""
+    snapshot = await run_order.snapshot_for(db, cp)
+    if snapshot is not None and snapshot.status != "proposed":
+        run_order.reopen(snapshot)
     scope = await _scope_of(db, cp)
     if scope is None or scope.status == "proposed":
         return
@@ -7372,6 +7475,36 @@ async def _scope_reopened(db: AsyncSession, cp: Checkpoint) -> None:
     scope.approved_by = None
     scope.approved_at = None
     scope.lock_version += 1
+
+
+async def _order_decided(
+    db: AsyncSession, principal: Principal | None, run: Run, cp: Checkpoint
+) -> None:
+    """C8 rules 3 and 4: a priority-order checkpoint approved saves its snapshot for the
+    PRD (audited ``priority_snapshot.approved``); changes requested discards it."""
+    snapshot = await run_order.snapshot_for(db, cp)
+    if snapshot is None or snapshot.status != "proposed":
+        return
+    if cp.status == "approved":
+        run_order.approve(snapshot, cp.decided_by, run.document_id)
+        await audit.record(
+            db,
+            principal if principal is not None else audit.ORACLE,
+            "priority_snapshot.approved",
+            "priority_snapshot",
+            snapshot.id,
+            {"run_id": str(run.id), "checkpoint_id": str(cp.id), "by": str(cp.decided_by)},
+        )
+    elif cp.status == "changes_requested":
+        run_order.discard(snapshot, cp.decided_by)
+
+
+def _order_blocking(cp: Checkpoint) -> int:
+    """Blocking problems of the priority order a checkpoint decides (C8), as checked at
+    segment end: nothing edits the order until pick C9, so it is not re-checked."""
+    if cp.kind != "priority_order":
+        return 0
+    return run_order.blocking_of((cp.payload or {}).get("priority_check"))
 
 
 # What the Inbox says of a console approval held while the feature set has blocking problems
@@ -7390,10 +7523,11 @@ async def _hold_console_approval(
     revise: bool,
     member: User | None,
 ) -> None:
-    """A counted console approval of a feature set with blocking problems open: recorded,
-    not followed. The checkpoint stays pending with ``needs = "confirm"`` (so the run's
-    token stays read-only, :func:`_holds_token`), nothing is posted to the workflow, and
-    Confirm is refused like Approve until the problems are fixed or waived."""
+    """A counted console approval of a feature set or a priority order with blocking
+    problems open: recorded, not followed. The checkpoint stays pending with ``needs =
+    "confirm"`` (so the run's token stays read-only, :func:`_holds_token`), nothing is
+    posted to the workflow, and Confirm is refused like Approve until the problems are
+    fixed or waived."""
     console = _console_record(run, segment, record, at, revise)
     console.update(
         counted=True,
@@ -7423,7 +7557,8 @@ async def _hold_console_approval(
     _note(
         segment,
         f"{cp.kind} was approved in SwarmCloud by {record.answered_by or 'someone'}: "
-        f"{_said(record, at)}. The feature set has blocking problems, so Oracle recorded the "
+        f"{_said(record, at)}. The {CHECKPOINT_TITLES.get(cp.kind, cp.kind).lower()} has "
+        "blocking problems, so Oracle recorded the "
         "approval and did not follow it: the checkpoint stays open in the Inbox, and an "
         "approver confirms it once the problems are fixed or waived, or requests changes.",
     )
@@ -7436,8 +7571,9 @@ NOT_IMPORTED = "the draft was not imported: retry import, or request changes"
 
 def _cannot_approve(cp: Checkpoint) -> str | None:
     """Why approving this checkpoint is refused now (web, Inbox and MCP alike): the draft
-    its segment left was refused at import (until Retry import imports it), or the feature
-    set it stands for has blocking problems (C6, as last checked: :func:`_recheck_scope`)."""
+    its segment left was refused at import (until Retry import imports it), the feature
+    set it stands for has blocking problems (C6, as last checked: :func:`_recheck_scope`),
+    or the priority order does (C8, :func:`_order_blocking`)."""
     imp = (cp.payload or {}).get("import")
     if cp.status == "pending" and isinstance(imp, dict) and imp.get("error"):
         return NOT_IMPORTED
@@ -7447,6 +7583,9 @@ def _cannot_approve(cp: Checkpoint) -> str | None:
         n = feature_set.blocking_of((cp.payload or {}).get("feature_set_check"))
         if n:
             return feature_set.blocking_message(n)
+    if cp.status == "pending" and (n := _order_blocking(cp)):
+        # C8 (call c3): the same for the priority order; pick D3 takes it over too.
+        return run_order.blocking_message(n)
     return None
 
 
@@ -7584,6 +7723,7 @@ async def retry_draft_import(
         run.document_id = uuid.UUID(imported["document_id"])
         _set_knob(run, "document_slug", None)
         await feature_set.fill_document(db, run.id, run.document_id)
+        await run_order.fill_document(db, run.id, run.document_id)
         _note_art(
             art,
             f"{who} retried importing {name}{after}: imported as {imported.get('slug')} "
