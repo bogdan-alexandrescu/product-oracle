@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { Chip, DataTable, GoalTag, type Column } from "@/components/ds";
+import { Button, Chip, DataTable, GoalTag, type Column } from "@/components/ds";
 
 import type { GoalView } from "../home/_goals";
 import { engineeringLine, HORIZON_LABEL, HORIZONS, prdLabel, stateChip, whoLabel, type PlanItem } from "./_lib";
@@ -25,14 +25,24 @@ export function StateChip({ item, hero = false }: { item: PlanItem; hero?: boole
   );
 }
 
-function NextCell({ item, me }: { item: PlanItem; me: string | null | undefined }) {
+function NextCell({ item, me, onLink }: { item: PlanItem; me: string | null | undefined; onLink?: (i: PlanItem) => void }) {
   const n = item.next;
   if (!n.action) return <span data-testid="plan-next" className="text-text2">—</span>;
   const who = whoLabel(n.who, me);
   return (
     <span data-testid="plan-next" className="inline-flex min-w-0 items-center gap-1.5">
-      {/* A decision taken on a page the viewer may act on is a button; the rest name it (F2, F3, F7 add theirs). */}
-      {n.href && n.viewer_may ? (
+      {/* A decision taken on a page the viewer may act on is a button; the rest name it (F2, F3 add theirs). */}
+      {n.action === "link_issue" && onLink && item.prd ? (
+        <Button
+          className="h-7 flex-none px-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            onLink(item);
+          }}
+        >
+          {n.label}
+        </Button>
+      ) : n.href && n.viewer_may ? (
         <Link
           href={n.href}
           onClick={(e) => e.stopPropagation()}
@@ -77,6 +87,7 @@ export function PlanTable({
   onSelect,
   me,
   loading,
+  onLink,
 }: {
   items: PlanItem[] | undefined;
   by: GroupBy;
@@ -86,6 +97,8 @@ export function PlanTable({
   onSelect: (id: string) => void;
   me: string | null | undefined;
   loading: boolean;
+  /** F7: set for those who may link tracker issues; the Next cell's Link issue opens the dialog. */
+  onLink?: (i: PlanItem) => void;
 }) {
   const { rows, group, counts } = grouped(items ?? [], by, tags, prdOrder);
   const columns: Column<PlanItem>[] = [
@@ -149,7 +162,7 @@ export function PlanTable({
         </span>
       ),
     },
-    { key: "next", header: "Next", width: "140px", cell: (i) => <NextCell item={i} me={me} /> },
+    { key: "next", header: "Next", width: "140px", cell: (i) => <NextCell item={i} me={me} onLink={onLink} /> },
   ];
   return (
     <DataTable<PlanItem>

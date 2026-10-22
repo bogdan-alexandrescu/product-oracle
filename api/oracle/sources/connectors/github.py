@@ -27,7 +27,7 @@ import re
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from urllib.parse import quote
 
@@ -272,6 +272,48 @@ def _issue_item(repo: _Repo, issue: dict[str, Any]) -> ItemUpsert:
 
 
 _MERGED = re.compile(r"^- Merged: (\S+)$", re.M)
+_FACT = re.compile(r"^- (Repository|Issue|State|Milestone|Due): (.+)$", re.M)
+# The State line an issue item carries, read back as a tracker state (F7).
+_ISSUE_STATES = {
+    "open": "todo",
+    "closed": "done",
+    "closed (completed)": "done",
+    "closed (not planned)": "cancelled",
+}
+
+
+def _facts(content: str) -> dict[str, str]:
+    """The ``- Name: value`` lines :func:`_issue_item` and :func:`_milestone_item` write
+    (the first of each name: a body's own lines come after them)."""
+    out: dict[str, str] = {}
+    for name, value in _FACT.findall(content):
+        out.setdefault(name, value.strip())
+    return out
+
+
+def github_issue_facts(content: str) -> dict[str, Any]:
+    """What an issue item :func:`_issue_item` wrote says about the issue: repository,
+    number, the State line as written (``raw_status``) and as a tracker state, and its
+    milestone's title (F7 Link tracker issues)."""
+    facts = _facts(content)
+    raw = facts.get("State")
+    number = facts.get("Issue", "").lstrip("#")
+    return {
+        "repository": facts.get("Repository"),
+        "number": int(number) if number.isdigit() else None,
+        "raw_status": raw,
+        "state": _ISSUE_STATES.get(raw or "", "unknown"),
+        "milestone": facts.get("Milestone"),
+    }
+
+
+def github_milestone_due(content: str) -> date | None:
+    """The Due day of a milestone item :func:`_milestone_item` wrote, else None."""
+    due = _facts(content).get("Due")
+    try:
+        return _ts(due).date() if due else None
+    except ValueError:
+        return None
 
 
 def merged_pull(item: ItemUpsert) -> tuple[str, datetime] | None:
