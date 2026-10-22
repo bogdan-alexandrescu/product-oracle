@@ -191,6 +191,32 @@ test("fireflies picker: the limit alert has a Retry that waits out the limit", a
   await expect(alert.getByRole("button", { name: "Retry" })).toBeDisabled();
 });
 
+test("fireflies picker: the Series limit alert has a Retry that waits out the limit", async ({ page }) => {
+  // The clock is faked before the page loads, so every timer runs on it.
+  await page.clock.install();
+  const { picker } = await openAdd(page);
+  await picker.getByRole("button", { name: "Choose" }).click();
+  // The mock's series list from 2000-01-01 answers 429 with Retry-After: 60.
+  await picker.getByLabel("From").fill("2000-01-01");
+  await page.clock.runFor(1000);
+  const region = picker.getByRole("region", { name: "Series" });
+  const alert = region.getByRole("alert");
+  await expect(alert).toContainText("Fireflies limit reached, try later.");
+  const retry = alert.getByRole("button", { name: "Retry" });
+  await expect(retry).toBeDisabled();
+  const calls = () => page.evaluate(() => (window.__firefliesBrowseCalls ?? []).filter((c) => c === "series?from=2000-01-01").length);
+  expect(await calls()).toBe(1);
+
+  await page.clock.runFor(59_000);
+  await expect(retry).toBeDisabled();
+  await page.clock.runFor(1500);
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await expect.poll(calls).toBe(2);
+  await expect(region.getByRole("list", { name: "Series" }).getByRole("listitem")).toHaveCount(2);
+  await expect(region.getByRole("alert")).toHaveCount(0);
+});
+
 test("fireflies picker: phone layout stacks without side scroll", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const { picker } = await openAdd(page);
