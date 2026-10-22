@@ -14,6 +14,7 @@ Flow = Literal[
     "feedback_loop",
     "prd_to_roadmap",
     "prd_to_spec",
+    "request_triage",
     "strategy_draft",
     "launch_kit",
 ]
@@ -37,6 +38,7 @@ CheckpointKind = Literal[
     "eng_review",
     "roadmap_items",
     "roadmap_review",
+    "request_triage",
     "strategy_review",
     "launch_review",
 ]

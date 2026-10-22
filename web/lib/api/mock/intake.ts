@@ -12,6 +12,11 @@
  * someone is named), POST /v1/questions asks a teammate, PATCH /v1/questions/{id}
  * reassigns or withdraws, GET /v1/inbox/questions is what is asked of me, and GET
  * /v1/people is the member directory, with the API's rules.
+ * C5 Pre-draft questions: GET .../next-batch previews the next batch exactly as asking it
+ * would ask it; the draft gate answers POST .../runs with 409 and the blocking gaps while a
+ * critical blocker is open; a draft run keeps the answers that existed when it was made
+ * (answers_since_run counts the later ones); an intake question's Inbox row opens
+ * /intakes/<id>. seedBeforeDrafting adds the "before-drafting" scenario's brief.
  * Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
@@ -207,7 +212,22 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
     proposals: (db.intake_proposals ?? []).filter((p) => p.intake_id === intake.id),
     shared_counts: [],
     is_author: intake.author_id === userId,
+    ...drafting(db, intake),
   };
+}
+
+/** The intake's draft run, and the answers given after it (C5). */
+function drafting(db: V2Db, intake: Intake): Pick<Schemas["IntakeSummary"], "draft_run_id" | "answers_since_run"> {
+  const run = db.intake_runs?.[intake.id];
+  if (!run) return { draft_run_id: null, answers_since_run: 0 };
+  const mine = new Set(db.questions.filter((q) => q.intake_id === intake.id).map((q) => q.id));
+  const since = db.answers.filter((a) => mine.has(a.question_id) && !run.answer_ids.includes(a.id)).length;
+  return { draft_run_id: run.run_id, answers_since_run: intake.status === "converted" ? since : 0 };
+}
+
+/** The draft gate (C5): the critical blockers neither answered nor decided. */
+function blockingGapIds(db: V2Db, intake: Intake): string[] {
+  return summary(db, intake, intake.author_id ?? "").readiness.blocking_gap_ids;
 }
 
 function batchView(db: V2Db, intake: Intake, n: number | null): Schemas["QuestionBatch"] {
@@ -216,22 +236,40 @@ function batchView(db: V2Db, intake: Intake, n: number | null): Schemas["Questio
   return {
     intake_id: intake.id,
     batch,
-    questions: questions
-      .filter((q) => batch != null && q.batch === batch)
-      .sort((a, b) => a.priority - b.priority)
-      .map((q) => ({
-        question: q,
-        gap: db.gaps.find((g) => g.id === q.gap_id) ?? null,
-        evidence: [],
-        answer_paths: PATHS,
-        answers: db.answers.filter((a) => a.question_id === q.id),
-      })),
+    questions: cards(
+      db,
+      questions.filter((q) => batch != null && q.batch === batch).sort((a, b) => a.priority - b.priority),
+    ),
     remaining: questions.filter((q) => q.status === "draft").length,
   };
 }
 
+/** A new brief: one gap per category, its questions drafted in rank order. */
+function addIntake(db: V2Db, authorId: string, title: string, brief: string, sourceIds: string[], at = now(), id = uuid()): Intake {
+  const scope = brief.split(/(?<=[.!?])\s+/)[1]?.replace(/\.$/, "") ?? title;
+  const analysis = {
+    users: [], problem: null, outcomes: [], goal_ids: [], scope: [scope], non_goals: [], dependencies: [],
+    blockers: [], category: "feature", conflicts: [], source_ids: sourceIds, signals: {},
+  };
+  const intake: Intake = {
+    id, title, brief: brief.trim(), author_id: authorId, source_snapshot_ids: [uuid()],
+    status: "awaiting_answers", document_id: null, lock_version: 1, created_at: at, updated_at: at, analysis,
+  };
+  db.intakes.push(intake);
+  for (const [key, , importance, impact, , modules] of CATEGORIES) {
+    db.gaps.push({
+      id: uuid(), intake_id: intake.id, document_id: null, category: key, statement: `${LABEL[key]}: not known yet.`,
+      impact, importance, evidence_ids: [], confidence: null, knowledge_state: "unknown", status: "unknown",
+      owner_id: null, related_modules: modules, stop_condition: null, entity_ids: [], section_keys: [],
+      created_by: null, lock_version: 1, created_at: at, updated_at: at,
+    });
+  }
+  syncQuestions(db, intake, at);
+  return intake;
+}
+
 /** Keep one question per open gap, drafted in rank order. */
-function syncQuestions(db: V2Db, intake: Intake) {
+function syncQuestions(db: V2Db, intake: Intake, at = now()) {
   ranked(db.gaps.filter((g) => g.intake_id === intake.id)).forEach((g, i) => {
     const mine = db.questions.filter((q) => q.gap_id === g.id && q.status !== "withdrawn");
     if (!OPEN.has(g.status)) {
@@ -245,7 +283,7 @@ function syncQuestions(db: V2Db, intake: Intake) {
       id: uuid(), gap_id: g.id, intake_id: intake.id, document_id: intake.document_id, category: g.category,
       prompt, rationale: `${LABEL[g.category]} gap, ${g.importance}.`, priority: (i + 1) * 10, batch: null,
       asked_to: g.owner_id, asked_by: null, module_key: g.related_modules[0] ?? null, section_key: g.section_keys[0] ?? null,
-      status: "draft", created_at: now(), updated_at: now(),
+      status: "draft", created_at: at, updated_at: at,
     });
   });
 }
@@ -259,20 +297,41 @@ function syncQuestions(db: V2Db, intake: Intake) {
 function askBatch(db: V2Db, ctx: IntakeContext, intake: Intake, size: number, assign: Record<string, string> = {}): Question[] {
   const questions = db.questions.filter((q) => q.intake_id === intake.id);
   for (const q of questions) if (q.status === "draft" && assign[q.id]) q.asked_to = assign[q.id];
-  const drafts = questions.filter((q) => q.status === "draft").sort((a, b) => a.priority - b.priority).slice(0, size);
+  const drafts = chooseDrafts(questions, size);
   const n = Math.max(0, ...questions.map((q) => q.batch ?? 0)) + 1;
-  // Without a member list, the mock cannot tell who can answer: anyone named may be asked.
-  const able = (id: string | null | undefined): id is string => !!id && (!ctx.people || canAnswer(ctx, id));
-  const approver = (ctx.people ?? []).find((x) => x.status !== "disabled" && atLeast(x.role, "approver"))?.id;
   for (const q of drafts) {
     const g = db.gaps.find((x) => x.id === q.gap_id);
-    const to = privateGap(db, g)
-      ? intake.author_id
-      : ([q.asked_to, g?.owner_id, intake.author_id, ctx.userId].find(able) ?? approver ?? intake.author_id);
-    Object.assign(q, { status: "asked", batch: n, asked_by: ctx.userId, asked_to: to, updated_at: now() });
+    Object.assign(q, { status: "asked", batch: n, asked_by: ctx.userId, asked_to: personFor(db, ctx, intake, q), updated_at: now() });
     if (g && g.status === "unknown") g.status = "asked";
   }
   return drafts;
+}
+
+/** The next batch's drafts, in the order they are asked (preview and ask share it, C5). */
+function chooseDrafts(questions: Question[], size: number): Question[] {
+  return questions.filter((q) => q.status === "draft").sort((a, b) => a.priority - b.priority).slice(0, size);
+}
+
+/** Who a question is asked of: its own person, else its gap's owner, else the intake's author,
+ * else the asker, else the first approver; a private finding's question, the author. */
+function personFor(db: V2Db, ctx: IntakeContext, intake: Intake, q: Question): string | null {
+  const g = db.gaps.find((x) => x.id === q.gap_id);
+  if (privateGap(db, g)) return intake.author_id ?? null;
+  // Without a member list, the mock cannot tell who can answer: anyone named may be asked.
+  const able = (id: string | null | undefined): id is string => !!id && (!ctx.people || canAnswer(ctx, id));
+  const approver = (ctx.people ?? []).find((x) => x.status !== "disabled" && atLeast(x.role, "approver"))?.id;
+  return [q.asked_to, g?.owner_id, intake.author_id, ctx.userId].find(able) ?? approver ?? intake.author_id ?? null;
+}
+
+/** A batch's cards (GET .../question-batch, .../next-batch). */
+function cards(db: V2Db, questions: Question[]): Schemas["QuestionCard"][] {
+  return questions.map((q) => ({
+    question: q,
+    gap: db.gaps.find((g) => g.id === q.gap_id) ?? null,
+    evidence: [],
+    answer_paths: PATHS,
+    answers: db.answers.filter((a) => a.question_id === q.id),
+  }));
 }
 
 function proposeResearch(db: V2Db, intake: Intake, gap: Gap, userId: string, questionId: string | null, investigate: boolean): Proposal {
@@ -302,25 +361,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
     const input = await body<Schemas["IntakeCreate"]>();
     if (!input?.title || !input.brief || input.brief.trim().length < 20 || input.brief.length > 4000) return fail(422, "a brief needs at least a sentence");
-    const scope = input.brief.split(/(?<=[.!?])\s+/)[1]?.replace(/\.$/, "") ?? input.title;
-    const analysis = {
-      users: [], problem: null, outcomes: [], goal_ids: [], scope: [scope], non_goals: [], dependencies: [],
-      blockers: [], category: "feature", conflicts: [], source_ids: input.source_ids ?? [], signals: {},
-    };
-    const intake: Intake = {
-      id: uuid(), title: input.title, brief: input.brief.trim(), author_id: ctx.userId, source_snapshot_ids: [uuid()],
-      status: "awaiting_answers", document_id: null, lock_version: 1, created_at: now(), updated_at: now(), analysis,
-    };
-    db.intakes.push(intake);
-    for (const [key, , importance, impact, , modules] of CATEGORIES) {
-      db.gaps.push({
-        id: uuid(), intake_id: intake.id, document_id: null, category: key, statement: `${LABEL[key]}: not known yet.`,
-        impact, importance, evidence_ids: [], confidence: null, knowledge_state: "unknown", status: "unknown",
-        owner_id: null, related_modules: modules, stop_condition: null, entity_ids: [], section_keys: [],
-        created_by: null, lock_version: 1, created_at: now(), updated_at: now(),
-      });
-    }
-    syncQuestions(db, intake);
+    const intake = addIntake(db, ctx.userId, input.title, input.brief, input.source_ids ?? []);
     askBatch(db, ctx, intake, input.batch_size ?? 5);
     return json(201, summary(db, intake, ctx.userId));
   }
@@ -350,6 +391,15 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     if (leaf === "question-batch" && m === "GET") {
       const n = q.get("batch");
       return json(200, batchView(db, intake, n ? Number(n) : null));
+    }
+    if (leaf === "next-batch" && m === "GET") {
+      if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver sees the next batch");
+      const size = Number(q.get("size") ?? 5);
+      if (!(size >= 1 && size <= 10)) return fail(422, "size is 1 to 10");
+      const questions = db.questions.filter((x) => x.intake_id === intake.id);
+      // Copies: the stored question keeps its person until the batch is asked.
+      const shown = chooseDrafts(questions, size).map((x) => ({ ...x, asked_to: personFor(db, ctx, intake, x) }));
+      return json(200, { questions: cards(db, shown), remaining: questions.filter((x) => x.status === "draft").length } satisfies Schemas["NextBatch"]);
     }
     if (leaf === "composition-inputs" && m === "GET") {
       const gaps = db.gaps.filter((g) => g.intake_id === intake.id);
@@ -394,10 +444,21 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     }
     if (leaf === "runs" && m === "POST") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
+      // Drafting waits until decided (C5): every open critical blocker is named.
+      const blocking = blockingGapIds(db, intake);
+      if (blocking.length) {
+        const n = blocking.length;
+        return json(409, { detail: `${n} critical question${n === 1 ? " is" : "s are"} open on this brief`, blocking_gap_ids: blocking } satisfies Schemas["DraftGateClosedOut"]);
+      }
       const input = (await body<Schemas["IntakeRunIn"]>()) ?? {};
       const document = input.document ?? intake.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       const resp = await ctx.createRun({ flow: "baseline_to_prd", document, knobs: input.knobs ?? { depth: "standard", roles: {}, checkpoints: {} } });
-      if (resp.ok) intake.status = "converted";
+      if (resp.ok) {
+        intake.status = "converted";
+        const run = (await resp.clone().json()) as { id: string };
+        const mine = new Set(db.questions.filter((x) => x.intake_id === intake.id).map((x) => x.id));
+        db.intake_runs = { ...db.intake_runs, [intake.id]: { run_id: run.id, answer_ids: db.answers.filter((a) => mine.has(a.question_id)).map((a) => a.id) } };
+      }
       return resp;
     }
     return null;
@@ -648,7 +709,7 @@ function subjectOf(db: V2Db, ctx: IntakeContext, q: Question): Schemas["InboxSub
   if (q.entity_id) return { kind: "entity", title: `Baseline · ${ctx.subjects?.entity(q.entity_id) ?? "an entity"}`, href: `/baseline?entity=${q.entity_id}` };
   const doc = q.document_id ? ctx.subjects?.document(q.document_id) : null;
   const intake = q.intake_id ? db.intakes.find((i) => i.id === q.intake_id) : undefined;
-  if (intake) return { kind: "intake", title: `Before drafting · ${intake.title}`, href: doc ? `/documents/${doc.slug}` : null };
+  if (intake) return { kind: "intake", title: `Before drafting · ${intake.title}`, href: `/intakes/${intake.id}` };
   if (!doc) return { kind: "document_section", title: "A document", href: null };
   const heading = q.section_key ? doc.heading(q.section_key) : null;
   return {
@@ -673,4 +734,50 @@ function inboxQuestions(db: V2Db, ctx: IntakeContext): Schemas["InboxQuestion"][
         answer_paths: PATHS.filter((x) => x !== "research" || (q.intake_id && q.gap_id)),
       };
     });
+}
+
+// --- the "before-drafting" scenario (C5) ---------------------------------------------------
+
+/** The brief the "before-drafting" scenario seeds: a fixed id, so a test opens its page. */
+export const BEFORE_DRAFTING = { intakeId: "c5000000-0000-4000-8000-000000000001", title: "Saved shipping addresses" } as const;
+
+/**
+ * The "before-drafting" scenario's brief, by `authorId` (the signed-in owner), with two
+ * batches. Batch 1 (20 Oct): Customer and user answered by the approver; Blockers, raised to
+ * critical, answered by the approver and waiting for review (B4); Pain evidence asked of the
+ * approver. Batch 2 (21 Oct): Success metric and Company-goal alignment asked of the author.
+ * The other twelve are not asked yet.
+ */
+export function seedBeforeDrafting(db: V2Db, authorId: string, approverId: string) {
+  const at = "2026-10-19T09:00:00Z";
+  const intake = addIntake(
+    db, authorId, BEFORE_DRAFTING.title,
+    "Returning buyers retype their shipping address at every checkout. Let them save addresses to check out faster.",
+    [], at, BEFORE_DRAFTING.intakeId,
+  );
+  const gap = (category: Category) => db.gaps.find((g) => g.intake_id === intake.id && g.category === category)!;
+  gap("blockers").importance = "critical";
+  syncQuestions(db, intake, at);
+  const question = (category: Category) => db.questions.find((x) => x.intake_id === intake.id && x.category === category)!;
+  question("blockers").rationale = `${LABEL.blockers} gap, critical.`;
+  const ask = (category: Category, batch: number, to: string, when: string) => {
+    Object.assign(question(category), { status: "asked", batch, asked_by: authorId, asked_to: to, updated_at: when });
+    gap(category).status = "asked";
+  };
+  const reply = (category: Category, body: string, when: string, gapStatus: Gap["status"]) => {
+    const q = question(category);
+    db.answers.push({
+      id: uuid(), question_id: q.id, kind: "answer", body, answered_by: approverId, delegated_to: null, evidence_ids: [],
+      knowledge_state: "user_decision", created_at: when,
+    });
+    q.status = "answered";
+    Object.assign(gap(category), { status: gapStatus, knowledge_state: "user_decision" });
+  };
+  ask("customer_user", 1, approverId, "2026-10-20T09:00:00Z");
+  ask("blockers", 1, approverId, "2026-10-20T09:00:00Z");
+  ask("pain_evidence", 1, approverId, "2026-10-20T09:00:00Z");
+  ask("success_metric", 2, authorId, "2026-10-21T09:00:00Z");
+  ask("goal_alignment", 2, authorId, "2026-10-21T09:00:00Z");
+  reply("customer_user", "Returning buyers on the web shop, signed in.", "2026-10-20T11:00:00Z", "answered");
+  reply("blockers", "The address lookup API has a rate limit that could block pre-fill.", "2026-10-20T12:00:00Z", "answered_pending_review");
 }

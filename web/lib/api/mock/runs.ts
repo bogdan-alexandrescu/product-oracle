@@ -1141,6 +1141,7 @@ const CHECKPOINT_TITLES: Record<CheckpointOut["kind"], string> = {
   roadmap_items: "Roadmap items",
   roadmap_review: "Roadmap review",
   strategy_review: "Vision or strategy review",
+  request_triage: "Request triage",
   launch_review: "Launch kit review",
 };
 

@@ -299,6 +299,19 @@ class ProposalRun(BaseModel):
     created_at: datetime
 
 
+class ProposalProposer(BaseModel):
+    """Who made a proposal, in words (B4): a run, an intake answer (never the person, S6),
+    a member, an API token, or Oracle itself."""
+
+    kind: Literal["run", "intake", "person", "token", "oracle"]
+    # "Baseline to PRD · Oct 16", "From an intake answer", "First Last", "API token “CI”", "Oracle"
+    label: str
+    run_id: uuid.UUID | None = None
+    # A person's: the web says "You" when it is the signed-in member's.
+    user_id: uuid.UUID | None = None
+    email: str | None = None
+
+
 class ProposalOut(ORM):
     id: uuid.UUID
     entity_id: uuid.UUID | None = None
@@ -308,6 +321,9 @@ class ProposalOut(ORM):
     run_id: uuid.UUID | None = None
     # Null when no run made it, or the run was deleted.
     run: ProposalRun | None = None
+    # The change as one plain sentence; a decided proposal keeps the one its decider read.
+    summary: str
+    proposer: ProposalProposer
     actor: str | None = None
     status: ProposalStatus
     decided_by: uuid.UUID | None = None

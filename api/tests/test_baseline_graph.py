@@ -5,6 +5,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
+from oracle.auth.models import User
 from oracle.baseline.models import Entity, Proposal
 from oracle.main import app
 from oracle.models import AuditEvent
@@ -553,3 +554,118 @@ async def test_people_may_still_name_any_run_or_none(client, ctx):
     assert (await _propose(client, ctx, "person-none"))["run_id"] is None
     token = await _propose(client, ctx, "token-run", run_id, who="token")
     assert token["run_id"] == str(run_id)
+
+
+# --- B4: proposal sentences --------------------------------------------------------------
+
+
+async def _member(ctx, email: str, role: str = "commenter") -> str:
+    async with tenant_session(ctx.tenant_id) as s:
+        user = User(email=email, password_hash="x", role=role)
+        s.add(user)
+        await s.commit()
+        ctx.users[email] = user
+        return str(user.id)
+
+
+async def test_proposals_carry_summary_and_proposer(client, ctx):
+    """protects: every proposal reads as one sentence with who made it, on create and list.
+    fails_when: summary or proposer is missing, a person shows as "user:<id>", a token or a
+    run is not named, or the name is not built from the email ("first.last@…" → "First Last").
+    no_claim: the sentence table itself (tests/test_baseline_describe.py)."""
+    uid = await _member(ctx, "first.last@example.com")
+    run_id = await _run(ctx)
+    by_person = await _propose(client, ctx, "by-person", who="first.last@example.com")
+    assert by_person["summary"] == "Add feature “by-person”"
+    assert by_person["proposer"] == {
+        "kind": "person",
+        "label": "First Last",
+        "run_id": None,
+        "user_id": uid,
+        "email": "first.last@example.com",
+    }
+    await _propose(client, ctx, "by-token", who="token")
+    await _propose(client, ctx, "by-run", run_id)
+    async with tenant_session(ctx.tenant_id) as s:
+        started = (await s.get(Run, run_id)).created_at
+    listed = {p["payload"]["fields"]["key"]: p for p in await _listed(client, ctx)}
+    assert listed["by-person"]["proposer"]["label"] == "First Last"
+    assert listed["by-token"]["proposer"]["kind"] == "token"
+    assert listed["by-token"]["proposer"]["label"] == "API token “agent-track”"
+    assert listed["by-run"]["proposer"]["kind"] == "run"
+    assert listed["by-run"]["proposer"]["run_id"] == str(run_id)
+    assert listed["by-run"]["proposer"]["label"] == (
+        f"Baseline to PRD · {started.strftime('%b')} {started.day}"
+    )
+    assert all(p["summary"].startswith("Add feature “") for p in listed.values())
+
+    # A locked item's agent edit: the write's proposal carries them too.
+    feat = await entity(client, ctx, type="feature", key="dark-mode", title="Dark mode",
+                        attrs={"status": "idea"})  # fmt: skip
+    resp = await client.patch(
+        f"{B}/entities/{feat['id']}",
+        json={"attrs": {"status": "planned"}, "origin": "agent"},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 202, resp.text
+    proposal = resp.json()["proposal"]
+    assert proposal["summary"] == "Set Dark mode’s delivery status to planned (was idea)"
+    assert proposal["proposer"]["kind"] == "person"
+    assert proposal["proposer"]["label"] == "Owner"
+
+
+async def test_summary_is_frozen_when_the_proposal_is_decided(client, ctx):
+    """protects: history reads the sentence the decider saw.
+    fails_when: after Accept, the summary is rewritten from the item's later state.
+    no_claim: proposals decided before this change (they are described afresh)."""
+    feat = await entity(client, ctx, type="feature", key="guided", title="Guided setup",
+                        attrs={"effort": "M"})  # fmt: skip
+    resp = await client.patch(
+        f"{B}/entities/{feat['id']}",
+        json={"attrs": {"effort": "L"}, "origin": "agent"},
+        headers=ctx.as_("token"),
+    )
+    proposal = resp.json()["proposal"]
+    shown = "Set Guided setup’s effort to L (was M)"
+    assert proposal["summary"] == shown
+    resp = await client.post(f"{B}/proposals/{proposal['id']}/accept", headers=ctx.as_("approver"))
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["summary"] == shown
+    resp = await client.patch(
+        f"{B}/entities/{feat['id']}", json={"attrs": {"effort": "S"}}, headers=ctx.as_("owner")
+    )
+    assert resp.status_code == 200, resp.text
+    [after] = await _listed(client, ctx, status="accepted")
+    assert after["summary"] == shown
+    assert after["payload"]["summary"] == shown
+
+
+async def test_intake_proposal_hides_person(client, ctx):
+    """protects: decision S6 Private findings (who answered stays with the finding's author).
+    fails_when: proposer.user_id or the answerer's email appears on an intake answer's
+    proposal.
+    no_claim: does not test the sharing levels themselves."""
+    await _member(ctx, "answerer@example.com")
+    body = {
+        "op": "create",
+        "kind": "entity",
+        "fields": {
+            "type": "constraint",
+            "key": "carrier-terms",
+            "title": "Carrier terms",
+            "attrs": {"proposed_blocker": {"type": "unknown", "status": "open"}},
+        },
+    }
+    resp = await client.post(f"{B}/proposals", json=body, headers=ctx.as_("answerer@example.com"))
+    assert resp.status_code == 201, resp.text
+    made = resp.json()
+    assert made["summary"] == "Add constraint “Carrier terms” (suggested blocker)"
+    for p in (made, *await _listed(client, ctx)):
+        assert p["proposer"] == {
+            "kind": "intake",
+            "label": "From an intake answer",
+            "run_id": None,
+            "user_id": None,
+            "email": None,
+        }
+        assert "answerer" not in str(p["proposer"])

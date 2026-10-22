@@ -34,6 +34,9 @@ export interface V2Db {
   /** Gaps hidden from everyone but their intake's author (S6): the mock's only private
    * findings (the "private-finding" scenario); absent elsewhere. */
   private_gap_ids?: string[];
+  /** Each intake's draft run (C5): its id and the answers that existed when it was made
+   * (the mock's stand-in for the run's start); absent before any. */
+  intake_runs?: Record<string, { run_id: string; answer_ids: string[] }>;
 }
 
 /** URL segment after /v1 -> the table it lists. */

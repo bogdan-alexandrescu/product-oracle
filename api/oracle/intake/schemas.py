@@ -406,6 +406,11 @@ class IntakeSummary(BaseModel):
     shared_counts: list[FindingCount] = []
     # Whether the reader is the intake's author (sees every finding, sets sharing).
     is_author: bool = False
+    # The latest draft run made from the intake (C5): what "Drafting" links to.
+    draft_run_id: uuid.UUID | None = None
+    # Answers given after that run started (it reads the ones before, C5); 0 unless
+    # the intake is converted. The next draft takes them as feedback.
+    answers_since_run: int = 0
 
 
 class QuestionCard(BaseModel):
@@ -422,6 +427,22 @@ class QuestionBatch(BaseModel):
     questions: list[QuestionCard]
     # Questions not asked yet.
     remaining: int
+
+
+class NextBatch(BaseModel):
+    """The next batch as it would be asked (C5): each question with the person it would
+    be asked of, in order; asking it asks exactly these."""
+
+    questions: list[QuestionCard]
+    # Questions not asked yet, these included.
+    remaining: int
+
+
+class DraftGateClosedOut(BaseModel):
+    """409: drafting waits until each shared critical question is answered or decided."""
+
+    detail: str
+    blocking_gap_ids: list[uuid.UUID]
 
 
 class AnswerResult(BaseModel):

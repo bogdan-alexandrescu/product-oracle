@@ -1,0 +1,338 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+import { AnswerQuestion, type InboxQuestion } from "@/components/AnswerQuestion";
+import { Avatar, Button, Chip, Empty, InfoTip, Mark, Panel, SegmentedControl } from "@/components/ds";
+import { PersonPicker, findPeople, peopleByIds, type Person } from "@/components/PersonPicker";
+import { InlineError, SELECT } from "@/components/review/parts";
+import { api, unwrap } from "@/lib/api/client";
+import { hasRole, type Role } from "@/lib/me";
+import { errorMessage } from "@/lib/use-query";
+
+import { DecideForm, mayReview } from "./_inspector";
+import { CATEGORY_LABEL, NON_ANSWER, dayMonth, knowledgeLabel, when, type Batch, type Card, type Summary } from "./_lib";
+
+type Me = { id: string | null; role: Role | null };
+type People = ReadonlyMap<string, Person>;
+
+/** A person's name, "you" for the reader. */
+function nameOf(people: People, me: Me, id: string | null | undefined): string {
+  if (!id) return "someone";
+  if (id === me.id) return "you";
+  return people.get(id)?.name ?? "someone";
+}
+
+/** The question as the shared answer form reads it (C2): Oracle asks, about this brief. */
+function asInbox(card: Card, s: Summary): InboxQuestion {
+  return {
+    question: card.question,
+    asked_by: { kind: "oracle" },
+    subject: { kind: "intake", title: `Before drafting · ${s.intake.title}`, href: null },
+    gap: card.gap,
+    answer_paths: card.question.gap_id ? card.answer_paths : card.answer_paths.filter((p) => p !== "research"),
+  };
+}
+
+/** An answer as a bubble from its author: when, and what it is worth (a decision, a fact, a guess). */
+function AnswerBubble({ answer, people, me }: { answer: Card["answers"][number]; people: People; me: Me }) {
+  const mine = answer.answered_by === me.id;
+  const who = mine ? "You" : (people.get(answer.answered_by ?? "")?.name ?? "Someone");
+  const kind = answer.kind === "answer" && answer.knowledge_state !== "unknown" ? (answer.knowledge_state === "user_decision" ? "pass" : "acc") : "na";
+  return (
+    <div data-testid="answer" className="ml-10 flex min-w-0 gap-2.5 max-[600px]:ml-4">
+      <Avatar name={who} tone={mine ? "me" : "default"} />
+      <div className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-accent-soft/40 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-text2">
+          <span className="font-semibold text-text">{who}</span>
+          <time dateTime={answer.created_at}>{when(answer.created_at)}</time>
+          <Chip kind={kind}>{knowledgeLabel(answer, mine, who)}</Chip>
+        </div>
+        <p className="mt-1 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
+          {answer.kind === "answer"
+            ? answer.body
+            : answer.kind === "delegate"
+              ? `Asked ${people.get(answer.delegated_to ?? "")?.name ?? "someone else"} instead`
+              : NON_ANSWER[answer.kind]}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** One of Oracle's questions in the thread, with what can be done about it now. */
+function QuestionBubble({
+  card,
+  summary: s,
+  people,
+  me,
+  onChanged,
+}: {
+  card: Card;
+  summary: Summary;
+  people: People;
+  me: Me;
+  onChanged: () => void;
+}) {
+  const q = card.question;
+  const gap = card.gap;
+  const [mode, setMode] = useState<"answer" | "review" | "reassign" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const open = q.status === "asked" || q.status === "delegated";
+  const mine = q.asked_to === me.id;
+  const approver = hasRole(me.role, "approver");
+  const mayMove = q.asked_by === me.id || s.intake.author_id === me.id || approver;
+  const waitingReview = gap?.status === "answered_pending_review";
+
+  async function reassign(p: Person) {
+    setError(null);
+    try {
+      await unwrap(api.PATCH("/v1/questions/{question_id}", { params: { path: { question_id: q.id } }, body: { asked_to: p.user_id } }));
+      setMode(null);
+      onChanged();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }
+
+  return (
+    <li className="flex min-w-0 flex-col gap-2" data-testid="question">
+      <div className="flex min-w-0 gap-2.5">
+        <span aria-hidden className="grid size-8 flex-none place-items-center rounded-full bg-hero text-hero-text">
+          <Mark size={16} />
+        </span>
+        <article aria-label={q.prompt} className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-surface px-3 py-2.5 shadow-panel">
+          <p className="text-[15px] leading-[22px] font-semibold break-words text-text">{q.prompt}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[13px] text-text2">
+            <Chip kind="line">{q.category === "general" ? "Question" : CATEGORY_LABEL[q.category]}</Chip>
+            {gap?.importance === "critical" && <Chip kind="crit">Critical</Chip>}
+            {q.rationale && (
+              <span className="inline-flex items-center gap-1">
+                Why Oracle asks
+                <InfoTip label="why Oracle asks" align="start">
+                  {q.rationale}
+                </InfoTip>
+              </span>
+            )}
+            <span data-testid="asked-to">{mine ? "Asked you" : `Asked ${nameOf(people, me, q.asked_to)}`}</span>
+            {q.status === "deferred" && <Chip kind="na">Deferred</Chip>}
+            {q.status === "researching" && <Chip kind="acc">Being researched</Chip>}
+          </div>
+        </article>
+      </div>
+      {card.answers.map((a) => (
+        <AnswerBubble key={a.id} answer={a} people={people} me={me} />
+      ))}
+      <div className="ml-10 flex min-w-0 flex-col gap-2 max-[600px]:ml-4">
+        {waitingReview && gap && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Chip kind="warn" dot>
+              Waiting for review
+            </Chip>
+            {mayReview(me.role, gap) && mode !== "review" && <Button onClick={() => setMode("review")}>Review</Button>}
+          </div>
+        )}
+        {mode === "review" && gap && (
+          <DecideForm
+            gap={gap}
+            choices={[{ value: "validate", label: "Validate" }]}
+            submit="Validate"
+            onCancel={() => setMode(null)}
+            onDone={() => {
+              setMode(null);
+              onChanged();
+            }}
+          />
+        )}
+        {open && (
+          <div className="flex flex-wrap items-center gap-2">
+            {!mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
+            {(mine || approver) && mode !== "answer" && (
+              <Button variant={mine ? "solid" : "secondary"} onClick={() => setMode("answer")}>
+                Answer
+              </Button>
+            )}
+            {!mine && mayMove && mode !== "reassign" && <Button onClick={() => setMode("reassign")}>Ask someone else</Button>}
+          </div>
+        )}
+        {open && mode === "answer" && (
+          <div className="rounded-panel border border-line bg-surface p-3">
+            <AnswerQuestion
+              question={asInbox(card, s)}
+              onCancel={() => setMode(null)}
+              onSettled={() => {
+                setMode(null);
+                onChanged();
+              }}
+            />
+          </div>
+        )}
+        {open && mode === "reassign" && (
+          <div className="rounded-button border border-line bg-surface p-2" role="group" aria-label="Ask someone else">
+            <PersonPicker autoFocus exclude={q.asked_to ? [q.asked_to] : []} onPick={reassign} />
+            <Button variant="ghost" onClick={() => setMode(null)}>
+              Cancel
+            </Button>
+          </div>
+        )}
+        {error && <InlineError>{error}</InlineError>}
+      </div>
+    </li>
+  );
+}
+
+/** When a batch was asked: its questions' earliest change (a question changes when it is asked). */
+function askedOn(b: Batch): string | null {
+  const stamps = b.questions.map((c) => c.question.updated_at).sort();
+  return stamps.length ? dayMonth(stamps[0]) : null;
+}
+
+const SIZES = ["3", "5", "10"] as const;
+
+/**
+ * Next questions (the author or an approver): Oracle's next batch exactly as Ask these asks
+ * it (GET .../next-batch), each with a person picker (the gap's owner, else the author).
+ */
+function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; me: Me; version: number; onAsked: () => void }) {
+  const [size, setSize] = useState<(typeof SIZES)[number]>("5");
+  const [preview, setPreview] = useState<{ cards: Card[]; remaining: number } | null>(null);
+  const [writers, setWriters] = useState<Person[]>([]);
+  const [chosen, setChosen] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    unwrap(api.GET("/v1/intakes/{intake_id}/next-batch", { params: { path: { intake_id: intakeId }, query: { size: Number(size) } } }))
+      .then(async (out) => {
+        const defaults = await peopleByIds(out.questions.map((c) => c.question.asked_to));
+        const first = await findPeople("");
+        if (!live) return;
+        const all = new Map(first.filter((p) => p.can_write).map((p) => [p.user_id, p]));
+        for (const p of defaults.values()) all.set(p.user_id, p);
+        setWriters([...all.values()].sort((a, b) => a.name.localeCompare(b.name)));
+        setPreview({ cards: out.questions, remaining: out.remaining });
+        setChosen({});
+        setError(null);
+      })
+      .catch((e) => live && setError(errorMessage(e)));
+    return () => {
+      live = false;
+    };
+  }, [intakeId, size, version]);
+
+  async function ask() {
+    if (!preview) return;
+    setBusy(true);
+    setError(null);
+    const assign = Object.fromEntries(Object.entries(chosen).filter(([qid, uid]) => preview.cards.find((c) => c.question.id === qid)?.question.asked_to !== uid));
+    try {
+      await unwrap(api.POST("/v1/intakes/{intake_id}/question-batches", { params: { path: { intake_id: intakeId } }, body: { size: Number(size), assign } }));
+      onAsked();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const n = preview?.remaining ?? 0;
+  return (
+    <Panel title="Next questions" testId="next-questions" tools={<SegmentedControl label="Batch size" size="sm" items={SIZES.map((v) => ({ value: v, label: v }))} value={size} onChange={setSize} />}>
+      <div className="flex flex-col gap-3 p-4 max-[600px]:p-3">
+        {!preview && !error && <p className="text-sm text-text2">Reading Oracle&apos;s next questions…</p>}
+        {preview && (
+          <p className="text-[15px] font-semibold text-text">
+            {n === 0 ? "Oracle has no more questions." : `Oracle has ${n} more question${n === 1 ? "" : "s"}`}
+          </p>
+        )}
+        {preview && preview.cards.length > 0 && (
+          <>
+            <ol className="flex flex-col divide-y divide-line">
+              {preview.cards.map((c) => (
+                <li key={c.question.id} data-testid="next-question" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 py-2">
+                  <span data-testid="next-prompt" className="min-w-0 flex-[1_1_16rem] text-sm break-words text-text">
+                    {c.question.prompt}
+                  </span>
+                  {c.gap?.importance === "critical" && <Chip kind="crit">Critical</Chip>}
+                  <select
+                    aria-label={`Who answers: ${c.question.prompt}`}
+                    className={`${SELECT} max-w-full`}
+                    value={chosen[c.question.id] ?? c.question.asked_to ?? ""}
+                    onChange={(e) => setChosen((m) => ({ ...m, [c.question.id]: e.target.value }))}
+                  >
+                    {writers.map((p) => (
+                      <option key={p.user_id} value={p.user_id}>
+                        {p.user_id === me.id ? `${p.name} (you)` : p.name}
+                      </option>
+                    ))}
+                  </select>
+                </li>
+              ))}
+            </ol>
+            <div>
+              <Button variant="solid" icon="ask" disabled={busy} onClick={ask}>
+                {busy ? "Asking…" : "Ask these"}
+              </Button>
+            </div>
+          </>
+        )}
+        {error && <InlineError>{error}</InlineError>}
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * The Questions tab: the interview thread, one group per batch ("Batch 1 · 5 questions ·
+ * asked 20 Oct"), each question an Oracle bubble with its answers under it; then Next
+ * questions for the author or an approver.
+ */
+export function QuestionsTab({
+  summary: s,
+  batches,
+  me,
+  version,
+  onChanged,
+}: {
+  summary: Summary;
+  batches: Batch[];
+  me: Me;
+  version: number;
+  onChanged: () => void;
+}) {
+  const [people, setPeople] = useState<People>(new Map());
+  const ids = batches.flatMap((b) => b.questions.flatMap((c) => [c.question.asked_to, ...c.answers.flatMap((a) => [a.answered_by, a.delegated_to])]));
+  const key = [...new Set(ids.filter(Boolean))].sort().join(",");
+  useEffect(() => {
+    let live = true;
+    peopleByIds(key ? key.split(",") : [])
+      .then((m) => live && setPeople(m))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [key]);
+  const asker = s.intake.author_id === me.id || hasRole(me.role, "approver");
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      <div data-testid="intake-thread" className="flex min-w-0 flex-col gap-5">
+        {batches.length === 0 && <Empty>No questions asked yet</Empty>}
+        {batches.map((b) => (
+          <section key={b.batch} data-testid="batch" aria-label={`Batch ${b.batch}`} className="flex min-w-0 flex-col gap-3">
+            <h2 className="text-[13px] font-semibold tracking-[0.02em] text-text2">
+              Batch {b.batch} · {b.questions.length} question{b.questions.length === 1 ? "" : "s"}
+              {askedOn(b) ? ` · asked ${askedOn(b)}` : ""}
+            </h2>
+            <ul className="flex min-w-0 flex-col gap-4">
+              {b.questions.map((c) => (
+                <QuestionBubble key={c.question.id} card={c} summary={s} people={people} me={me} onChanged={onChanged} />
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+      {asker && <NextQuestions intakeId={s.intake.id} me={me} version={version} onAsked={onChanged} />}
+    </div>
+  );
+}

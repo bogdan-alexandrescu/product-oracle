@@ -148,7 +148,7 @@ test("Questions asked of me: rail badge, Home and the Inbox count the same", asy
   const row = questions.locator("tr[data-row]").filter({ hasText: "Which metric" });
   await expect(row).toContainText("Which metric shows repeat checkout got faster?");
   await expect(row).toContainText("Oracle asks");
-  await expect(row.getByRole("link", { name: "Open Before drafting · Saved addresses" })).toHaveAttribute("href", "/documents/checkout-redesign");
+  await expect(row.getByRole("link", { name: "Open Before drafting · Saved addresses" })).toHaveAttribute("href", /^\/intakes\/[0-9a-f-]+$/);
   // A first visit: all ten under New, the questions with them.
   await expect(page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^New/ })).toHaveText("New10");
   await expect(page.getByTestId("inbox-tab-new").getByTestId("inbox-questions")).toBeVisible();

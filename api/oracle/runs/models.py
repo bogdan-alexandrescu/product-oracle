@@ -20,8 +20,7 @@ from oracle.auth.models import ROLES
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
-# request_triage (C1 Requests, migration 0020_requests): its flow definition comes with
-# the triage lane; the database already allows it.
+# request_triage: C1 Requests' triage run (oracle.requests.triage, migration 0020_requests).
 FLOWS = (
     "baseline_to_prd",
     "feedback_loop",
