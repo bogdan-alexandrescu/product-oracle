@@ -138,6 +138,7 @@ from oracle.baseline import yaml_io
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.decisions import capture as decisions_capture
 from oracle.docs import service as docs_service
+from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
@@ -386,7 +387,11 @@ async def _get_run(db: AsyncSession, run_id: uuid.UUID, *, lock: bool = False) -
         # Read again as it is now: the caller may have read it unlocked before.
         stmt = stmt.with_for_update().execution_options(populate_existing=True)
     run = await db.scalar(stmt)
-    if run is None:
+    # H8: a run on a document the principal may not see (an update, for a commenter or a
+    # viewer) is as absent as its document, with its segments and files.
+    if run is None or (
+        run.document_id is not None and await visibility.hidden_document_ids(db, [run.document_id])
+    ):
         raise NotFound(f"run {run_id} not found")
     return run
 
@@ -795,7 +800,7 @@ def _segment_out(
         roles=knobs.roles.get(segment.name, list(sdef.roles)),
         scopes=list(sdef.scopes),
         checkpoint=sdef.checkpoint_for(kind),  # type: ignore[arg-type]
-        checkpoint_on=knobs.checkpoints.get(sdef.checkpoint, True),
+        checkpoint_on=sdef.checkpoint is not None and knobs.checkpoints.get(sdef.checkpoint, True),
         estimate_usd=_usd(segment.estimate_usd),
         cost_usd=float(segment.cost_usd or 0),
         workflow_id=segment.swarm_workflow_id,
@@ -828,7 +833,6 @@ CHECKPOINT_TITLES = {
     "roadmap_items": "Roadmap items",
     "roadmap_review": "Roadmap review",
     "strategy_review": "Vision or strategy review",
-    "request_triage": "Request triage",
     "launch_review": "Launch kit review",
 }
 _LISTED = ("approved", "changes_requested", "skipped")
@@ -1282,6 +1286,9 @@ async def list_runs(db: AsyncSession, status: str | None = None) -> list[RunSumm
     stmt = select(Run).order_by(Run.created_at.desc(), Run.id)
     if status:
         stmt = stmt.where(Run.status == status)
+    if hidden := await visibility.hidden_document_ids(db):
+        # H8: no row for a run on a document the principal may not see.
+        stmt = stmt.where(or_(Run.document_id.is_(None), Run.document_id.not_in(hidden)))
     runs = list(await db.scalars(stmt))
     refs = await _refs(db, runs)
     ids = [r.id for r in runs]
@@ -1555,20 +1562,17 @@ async def _reset_segments(db: AsyncSession, run: Run, flow: flows.FlowDef) -> No
 
 async def create_run(
     db: AsyncSession,
-    principal: Principal | str,
+    principal: Principal,
     body: RunCreate,
     *,
     entry_knobs: dict[str, Any] | None = None,
     oracle_knobs: dict[str, Any] | None = None,
     commit: bool = True,
-    created_by: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """A draft run. A flow with an ``entry`` route is created only through it, which
     passes ``entry_knobs`` (what the run builds, e.g. its spec request) and commits.
     ``oracle_knobs``: knobs Oracle sets (``ORACLE_KNOBS``), e.g. the intake a run starts
-    from; ``commit=False`` leaves the commit to the caller. ``principal`` an actor string
-    (``audit.ORACLE``): a run Oracle starts on its own (the daily request triage), created
-    for the member ``created_by`` it acts as (its run token acts for them)."""
+    from; ``commit=False`` leaves the commit to the caller."""
     flow = flows.FLOWS[body.flow]
     if flow.entry and entry_knobs is None:
         raise Invalid(f"start a {flow.title} run from {flow.entry}")
@@ -1577,12 +1581,24 @@ async def create_run(
             "the Launch kit flow starts from a launch: Draft on the launch "
             "(POST /v1/launches/{id}/draft)"
         )
+    if flow.key == "update_draft" and not has_role(principal.role, "owner"):
+        # H8: the CEO decides what is said to the board and investors.
+        raise Forbidden("Only an owner can draft an update")
     knobs = _resolve_knobs(flow, body.knobs)
     document_id, oracle = await _resolve_inputs(
         db,
         flow,
         _Inputs(body.document, body.source, body.source_version, body.template, body.theme),
     )
+    if flow.key == "update_draft" and "depth" not in body.knobs.model_fields_set:
+        # H8: an investor update is quick by default ($4.50); a board update standard.
+        template = (
+            await db.scalar(select(Document.template).where(Document.id == document_id))
+            if document_id is not None
+            else None
+        )
+        depth = "standard" if template == "board-product" else "quick"
+        knobs = _resolve_knobs(flow, body.knobs.model_copy(update={"depth": depth}))
     extra = {k: v for k, v in (oracle_knobs or {}).items() if k in ORACLE_KNOBS}
     if body.strategy_brief is not None:
         if flow.key != "strategy_draft":
@@ -1600,7 +1616,7 @@ async def create_run(
         status="draft",
         knobs={**knobs.as_json(), **oracle, **extra, **(entry_knobs or {})},
         document_id=document_id,
-        created_by=principal.id if isinstance(principal, Principal) else created_by,
+        created_by=principal.id,
     )
     db.add(run)
     await db.flush()
@@ -1664,7 +1680,7 @@ async def update_run(
     await db.commit()
 
 
-async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID) -> EstimateOut:
+async def estimate(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> EstimateOut:
     run = await _get_run(db, run_id, lock=True)
     if run.status != "draft":
         raise RunError("only a draft run can be estimated")
@@ -1702,7 +1718,7 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
 # --------------------------------------------------------------------------- start
 
 
-async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID) -> None:
+async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
     run = await _get_run(db, run_id, lock=True)
     if run.status != "draft":
         raise RunError(f"run is {run.status}, not a draft")
@@ -1736,6 +1752,14 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
     run.snapshot_id = snapshot.id
     for key, value in (pinned or {}).items():
         _set_knob(run, key, value)
+    if any(flows.BRIEFS_FILE in s.outputs for s in _flow(run).segments):
+        # F5-2: the shared code maps the run's briefs cite, recorded now (S6: a map made
+        # private later stops new uses; this run keeps what it read).
+        from oracle.engineering import codemaps
+
+        used = await codemaps.for_run(db)
+        if used:
+            _set_knob(run, "code_maps", used)
     if source_id is not None:
         # Every segment, attempt and change request of the run reads these (A1).
         _set_knob(run, "planning_horizons", await company_horizons(db))
@@ -2662,9 +2686,6 @@ async def _submit_now(
             )
             scopes = sdef.scopes
             outputs = sdef.outputs_for(kind)
-        if (run.knobs or {}).get("triage_automatic"):
-            # Oracle's daily request triage acts as a member and reads no one's sources.
-            scopes = tuple(sc for sc in scopes if sc != "read:sources")
         if mode.attach:
             agents = sum(1 for s in steps if not s.waits)
             ttl = workflow.credential_seconds(agents, len(steps) - agents, settings)
@@ -3667,23 +3688,6 @@ async def _advance(
             launch_import = {"error": f"{flows.LAUNCH_FILE} could not be imported "
                              f"({type(exc).__name__})"}  # fmt: skip
         art["launch_import"] = launch_import
-    triage_import: dict[str, Any] | None = None
-    if flows.TRIAGE_FILE in sdef.outputs:
-        from oracle.requests import triage
-
-        try:
-            # In a savepoint, as the items check: a bad file never fails the tick.
-            async with db.begin_nested():
-                triage_import = await triage.apply(db, run, art["files"].get(flows.TRIAGE_FILE))
-        except safe_yaml.ParseBusy:
-            raise  # no worker for it: this tick gives up, the next retries
-        except Exception as exc:  # noqa: BLE001
-            log.exception("applying %s of run %s failed", flows.TRIAGE_FILE, run.id)
-            triage_import = {"error": f"{flows.TRIAGE_FILE} could not be applied "
-                             f"({type(exc).__name__})"}  # fmt: skip
-        for note in triage_import.get("notes") or []:
-            _note_art(art, note)
-        art["triage_import"] = triage_import
     if sdef.imports_draft:
         kind = await _target_kind(db, run)
         name = flows.draft_file(kind)
@@ -3753,11 +3757,17 @@ async def _advance(
             payload["scope_id"] = str(scope_id)
     if launch_import is not None:
         payload["launch_import"] = launch_import
-    if triage_import is not None:
-        payload["triage_import"] = triage_import
     if wait is not None:
         payload["wait"] = wait
         _set_knob(run, "opening_wait", None)
+    if sdef.checkpoint is None:
+        # No stop (F5-2's code_map index): a failed import fails the run, else it goes on.
+        for result in (baseline_import, imported, launch_import):
+            if result is not None and result.get("error"):
+                await _finish(db, run, "failed", result["error"])
+                return True
+        await _next(db, run, segment, segments)
+        return True
     checkpoint_kind = sdef.checkpoint_for(await _target_kind(db, run))
     if (
         wait is not None
@@ -3797,7 +3807,7 @@ async def _advance(
         )
     )
     await _link_scope(db, scope_id, checkpoint_id)
-    for result in (baseline_import, imported, launch_import, triage_import):
+    for result in (baseline_import, imported, launch_import):
         if result is not None and result.get("error"):
             await _finish(db, run, "failed", result["error"])
             return True
@@ -4101,6 +4111,26 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
             "problems": [{"code": "missing_file", "message": f"the segment left no {ITEMS_FILE}"}],
         }
         return reasons.summarize(missing, [], None)
+    checked = await checked_items(db, run, text)
+    return reasons.summarize(
+        checked.check.as_json(), checked.reasons, checked.base, checked.partial
+    )
+
+
+@dataclass
+class CheckedItems:
+    """roadmap_items.yaml checked, with its reasons: what :func:`_check_items` stores and
+    the shared draft (oracle.runs.actions) reads again on every read."""
+
+    check: roadmap.ItemsCheck
+    reasons: list[dict[str, Any]]
+    base: dict[str, Any] | None
+    partial: bool
+    # The section keys of the run's PRD version; None without one.
+    prd_sections: set[str] | None
+
+
+async def checked_items(db: AsyncSession, run: Run, text: str) -> CheckedItems:
     slug = version = prd_id = None
     keys: set[str] | None = None
     source_id = _source_id(run)
@@ -4118,7 +4148,7 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
         text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
     )
     if not check.items:
-        return reasons.summarize(check.as_json(), [], None)
+        return CheckedItems(check, [], None, False, keys)
     try:
         # In a savepoint: a database or trace error loses the advisory reasons only; the
         # blocking ones (the check's) are still stored, flagged partial.
@@ -4130,7 +4160,7 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
         context = reasons.ReasonContext(prd_title=slug, prd_version=version, advisory=False)
         partial = True
     found = reasons.reasons_for(check.items, check.problems, context)
-    return reasons.summarize(check.as_json(), found, context.base, partial)
+    return CheckedItems(check, found, context.base, partial, keys)
 
 
 # --------------------------------------------------------------------------- tick
@@ -5867,6 +5897,7 @@ async def decide_checkpoint(
     checkpoint_id: uuid.UUID,
     decision: str,
     note: str | None,
+    expected_revision: int | None = None,
 ) -> None:
     from oracle.auth.service import caller_refusal
     from oracle.review import publish
@@ -5897,7 +5928,14 @@ async def decide_checkpoint(
         )
     if cp.status != "pending" or run.status != "awaiting_checkpoint":
         raise RunError(f"checkpoint is {cp.status}; run is {run.status}")
-    note = (note or "").strip() or None
+    if expected_revision is not None and expected_revision != (cp.draft_revision or 0):
+        # D8: the shared draft changed since the decider loaded it (a console confirm
+        # too): nothing is decided; they look again.
+        from oracle.runs import actions
+
+        raise await actions.review_changed(db, cp, expected_revision)
+    # The note defaults to the shared draft's (D8).
+    note = (note if note is not None else cp.draft_note or "").strip() or None
     wait = (cp.payload or {}).get("wait") or {}
     redo = False
     # A choice about an answer SwarmCloud's console recorded is decided through it (H1).

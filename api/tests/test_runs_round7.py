@@ -246,6 +246,11 @@ WRITE_ROUTES = {
     ("post", "/v1/runs/{run_id}/cancel-again"): "approver",
     ("post", "/v1/runs/{run_id}/dismiss-overrun"): "approver",
     ("post", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide"): "approver",
+    # D8: the checkpoint's shared draft (commenters suggest, the approver role stages).
+    ("post", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions"): "commenter",
+    ("post", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage"): "approver",
+    ("delete", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}"): "commenter",
+    ("put", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note"): "approver",
 }
 
 
@@ -263,6 +268,26 @@ def test_every_run_write_route_is_walked():
     )
 
 
+def _viewer_on_first_gate(monkeypatch, ctx, user_id) -> list[bool]:
+    """As _lose_on_first_gate for a commenter's route (D8 draft writes): one step down from
+    commenter is viewer, made while the request waits on the gate."""
+    from oracle.auth.models import User
+
+    real = publish.gate_lock
+    fired: list[bool] = []
+
+    async def spy(db, *, shared):
+        if not fired:
+            fired.append(True)
+            async with tenant_session(ctx.tenant_id) as s:
+                (await s.get(User, user_id)).role = "viewer"
+                await s.commit()
+        await real(db, shared=shared)
+
+    monkeypatch.setattr(publish, "gate_lock", spy)
+    return fired
+
+
 @pytest.mark.parametrize("route", sorted(WRITE_ROUTES), ids=lambda r: f"{r[0]} {r[1]}")
 @pytest.mark.parametrize("how", ["demoted", "disabled"])
 async def test_a_caller_who_lost_standing_before_the_write_is_refused(
@@ -273,7 +298,7 @@ async def test_a_caller_who_lost_standing_before_the_write_is_refused(
     ctx = await review_setup(client)
     caller = await person(ctx.tenant_id, role, "caller")
     body = None
-    if template.endswith("/decide") or "retry-draft-import" in template:
+    if "{checkpoint_id}" in template or "retry-draft-import" in template:
         run = await _at_checkpoint(client, ctx)
         checkpoint_id = next(c["id"] for c in run["checkpoints"] if c["status"] == "pending")
     elif template == "/v1/runs":
@@ -283,12 +308,24 @@ async def test_a_caller_who_lost_standing_before_the_write_is_refused(
         run, checkpoint_id = await _run(client, ctx), "unused"
     if template.endswith("/decide"):
         body = {"decision": "approved", "note": None}
+    elif template.endswith("/actions"):
+        body = {"item_key": "*", "kind": "accept"}
+    elif template.endswith("/note"):
+        body = {"note": "Caps first"}
+    elif template.endswith("/stage"):
+        body = {}
     elif template.endswith("/cancel-again"):
         body = {"workflow_id": "wf_unused"}
     elif method == "patch":
         body = {"knobs": {}}
-    path = template.format(run_id=run["id"], seq=1, checkpoint_id=checkpoint_id)
-    fired = _lose_on_first_gate(monkeypatch, ctx, how, caller.user_id)
+    # An action that does not exist: the caller is refused before it is looked up.
+    path = template.format(
+        run_id=run["id"], seq=1, checkpoint_id=checkpoint_id, action_id=uuid.uuid4()
+    )
+    if role == "commenter" and how == "demoted":
+        fired = _viewer_on_first_gate(monkeypatch, ctx, caller.user_id)
+    else:
+        fired = _lose_on_first_gate(monkeypatch, ctx, how, caller.user_id)
     resp = await client.request(method.upper(), path, json=body, headers=caller.headers)
     assert fired, f"{method.upper()} {template} did not take the gate"
     assert resp.status_code == 403, resp.text
@@ -355,6 +392,10 @@ NO_CALL = {
     ("post", "/v1/runs/{run_id}/segments/{seq}/retry-draft-import"),
     ("post", "/v1/runs/{run_id}/cancel-again"),
     ("post", "/v1/runs/{run_id}/dismiss-overrun"),
+    ("post", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions"),
+    ("post", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage"),
+    ("delete", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}"),
+    ("put", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note"),
 }
 
 

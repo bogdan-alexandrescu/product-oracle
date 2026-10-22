@@ -54,7 +54,6 @@ from oracle.jobs import worker as llm_jobs
 from oracle.launches import service as launches_service
 from oracle.models import Tenant
 from oracle.reports import alignment as alignment_reports
-from oracle.requests import triage as request_triage
 from oracle.roadmap import views as track_views
 from oracle.strategy import drift as strategy_drift
 from oracle.tenancy import tenant_session, unscoped_session
@@ -173,8 +172,8 @@ def _count_sweep(result: dict[str, Any] | None, out: TickerOut) -> None:
 
 async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failures) -> None:
     """One company's runs and account sweep (``oracle.ticker.body``), its product
-    tracks' monitoring, then its weekly alignment report (oracle.reports), its launches'
-    Ready detection and its daily request triage, each on its own."""
+    tracks' monitoring, then its weekly alignment report (oracle.reports) and its launches'
+    Ready detection, each on its own."""
     async with tenant_session(tenant_id) as db:
         company = await body.tick_company(db, tenant_id)
     if company.runs is not None:
@@ -223,14 +222,6 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
             await launches_service.detect_ready(db, tenant_id)
     except Exception:
         log.exception("run ticker: launch Ready detection failed for company %s", tenant_id)
-        failures.add(tenant_id)
-    try:
-        # Requests (C1 "Triage runs"): once a day at 07:00 Pacific, a quick classify-only
-        # triage run while a New request has no suggestion (the run itself is SwarmCloud's).
-        async with tenant_session(tenant_id) as db:
-            await request_triage.daily(db)
-    except Exception:
-        log.exception("run ticker: the daily request triage failed for company %s", tenant_id)
         failures.add(tenant_id)
 
 

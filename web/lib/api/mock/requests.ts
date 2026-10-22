@@ -5,21 +5,16 @@
  * (to the root, no cycles), disqualify (Other needs a note), reopen, accepting Oracle's
  * suggestion, and themes. It keeps the API's shapes and role rules.
  *
- * It also stands in for Oracle's triage (GET and POST /v1/requests/triage: Classify now
- * starts a run that finishes on its own a few seconds later, suggesting a goal and theme for
- * every New request with none; PUT /v1/requests/triage/daily: the "Daily triage at 07:00 PT"
- * switch, off by default, approver+, and who the daily run acts as while it is on) and for the requests Oracle found in the signed-in person's
- * own sources (GET /v1/request-candidates, file, dismiss). Each found item is its owner's
- * alone; filing one shares the item's title, link and a 400-character excerpt (C1 "Found
- * items"). The mock has no source items: a found item carries that copy itself.
+ * It also stands in for the requests Oracle found in the signed-in person's own sources
+ * (GET /v1/request-candidates, file, dismiss): their API comes with the triage lane, so
+ * their shape is local here. Each is its owner's alone; filing one shares the item's
+ * title, link and a 400-character excerpt (C1 "Found items"). The mock has no source
+ * items: a found item carries that copy itself.
  *
  * Seed: 12 requests over 4 channels, 3 themes, 2 merged, 1 disqualified, 1 with a
- * suggestion, 2 found items for the seed owner. Synthetic placeholders only. The
- * "triage-skipped" scenario (po-mock-scenario) adds the reason Oracle's daily run did not
- * start (no active member to run it as), shown until a run, with the daily triage on.
+ * suggestion, 2 found items for the seed owner. Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
-import { displayName } from "@/lib/names";
 import { mockUuid } from "./ids";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -29,14 +24,25 @@ type Channel = RequestOut["channel"];
 type State = RequestOut["state"];
 type Part = Schemas["AcceptSuggestionIn"]["parts"][number];
 
-export type CandidateOut = Schemas["CandidateOut"];
-
-/** Oracle's latest triage run, as the mock keeps it. */
-interface TriageRun {
+/** A found item (the triage lane's CandidateOut; local until its API lands). */
+export interface CandidateOut {
   id: string;
-  created_by: string;
-  started_at: string;
-  finished_at: string | null;
+  owner_user_id: string;
+  run_id: string | null;
+  title: string;
+  body: string | null;
+  requester_name: string | null;
+  channel: Exclude<Channel, "interview">;
+  theme_title: string | null;
+  goal_ids: string[];
+  confidence: number | null;
+  rationale: string | null;
+  status: "open" | "filed" | "dismissed";
+  request_id: string | null;
+  /** What filing shares: the item's title, link, kind and excerpt (at most 400 characters). */
+  source: { item_id: string; title: string | null; url: string | null; kind: string; excerpt: string | null };
+  created_at: string;
+  updated_at: string;
 }
 
 /** A request as stored: the API's row, before themes, PRDs and mentions are joined. */
@@ -52,17 +58,6 @@ export interface RequestsDb {
   requests: Row[];
   themes: Theme[];
   candidates: CandidateOut[];
-  triage?: TriageRun | null;
-  /** "Daily triage at 07:00 PT": who last turned it on or off, and when; absent is off. */
-  daily?: { on: boolean; by: string; at: string } | null;
-}
-
-interface Person {
-  id: string;
-  email: string;
-  role: Role;
-  disabled_at?: string | null;
-  created_at: string;
 }
 
 interface GoalRef {
@@ -90,8 +85,6 @@ export interface RequestsContext {
   features: () => { id: string; key: string; title: string }[];
   /** PRDs a request may link to, with their review progress. */
   documents: () => DocumentRef[];
-  /** The company's members: whom the daily triage runs as (none when not given). */
-  people?: () => Person[];
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -100,12 +93,7 @@ const STATES: State[] = ["new", "qualified", "merged", "disqualified"];
 const CHANNELS: Channel[] = ["support", "sales", "team", "interview", "slack", "meeting", "doc", "other"];
 const REASONS = ["no_goal", "out_of_scope", "duplicate", "not_a_request", "wont_do", "other"];
 const NEEDS_GOAL = "Link a confirmed goal first, or disqualify it as 'No goal'";
-/** How long the mock's triage run takes. */
-const TRIAGE_MS = 3_000;
 const EXCERPT_MAX = 400;
-const SKIPPED_SCENARIO = "triage-skipped";
-const SKIPPED =
-  "Oracle's daily triage did not run on 2026-10-22: it runs as the approver who turned it on or else an owner, and none of them is an active member";
 
 const now = () => new Date().toISOString();
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
@@ -190,30 +178,6 @@ export function seedRequests(input: { ownerId: string; goals: { id: string }[]; 
       "Two prospects asked whether buyers can choose a delivery slot at check-out. Both said it would decide whether they switch this quarter."),
   );
   return db;
-}
-
-/**
- * The daily triage's switch: off unless someone turned it on (the "triage-skipped" scenario has
- * it on with no one to run as). While on it runs as whoever turned it on, while an active
- * approver or owner, else as the longest-standing active owner.
- */
-function dailyStatus(db: RequestsDb, ctx: RequestsContext, scenario: boolean) {
-  const people = ctx.people?.() ?? [];
-  const name = (id: string | undefined) => {
-    const person = people.find((x) => x.id === id);
-    return person ? displayName(person.email) : null;
-  };
-  if (!db.daily) return { daily_on: scenario, daily_as: null, daily_changed_by: null, daily_changed_at: null };
-  const active = people.filter((x) => !x.disabled_at);
-  const enabler = active.find((x) => x.id === db.daily?.by && atLeast(x.role, "approver"));
-  const owner = active.filter((x) => x.role === "owner").sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
-  const member = enabler ?? owner;
-  return {
-    daily_on: db.daily.on,
-    daily_as: db.daily.on && member ? displayName(member.email) : null,
-    daily_changed_by: name(db.daily.by),
-    daily_changed_at: db.daily.at,
-  };
 }
 
 /** The request mock's routes; null when the path is not one of them. */
@@ -339,57 +303,6 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
     };
     db.requests.push(row);
     return row;
-  }
-
-  // --- triage (Classify now and the header's status line) --------------------------------
-  if (p[1] === "requests" && p[2] === "triage" && p.length === 3) {
-    const run = db.triage ?? null;
-    if (run && !run.finished_at && Date.now() - Date.parse(run.started_at) >= TRIAGE_MS) {
-      // The run ends: a suggestion for every New request with none (data only; nothing decided).
-      const goal = [...confirmed][0];
-      for (const r of db.requests.filter((x) => x.state === "new" && !x.suggestion)) {
-        const theme = db.themes.find((t) => !t.archived_at && goal && t.goal_ids.includes(goal));
-        r.suggestion = {
-          theme_id: theme?.id ?? null, theme_title: theme?.title ?? null, goal_ids: goal ? [goal] : [], duplicate_of: null,
-          feature_id: null, confidence: 0.55, rationale: "Asked for in the same words as this theme's requests",
-          run_id: run.id, at: now(), accepted: [],
-        };
-      }
-      run.finished_at = now();
-    }
-    if (m === "GET") {
-      const scenario = localStorage.getItem("po-mock-scenario") === SKIPPED_SCENARIO;
-      const daily = dailyStatus(db, ctx, scenario);
-      // As the API: no skip reason while the daily triage is off.
-      const skipped = !run && scenario && daily.daily_on ? SKIPPED : null;
-      const status: Schemas["TriageStatus"] = run
-        ? {
-            ...daily,
-            run_id: run.id, status: run.finished_at ? "succeeded" : "running", active: !run.finished_at,
-            automatic: false, started_at: run.started_at, finished_at: run.finished_at,
-            suggestions: db.requests.filter((r) => r.suggestion?.run_id === run.id).length,
-            found: db.candidates.filter((c) => c.run_id === run.id && c.owner_user_id === ctx.userId).length, error: null,
-          }
-        : {
-            ...daily,
-            run_id: null, status: null, active: false, automatic: false, started_at: null, finished_at: null,
-            suggestions: 0, found: 0, error: null, daily_skipped: skipped,
-          };
-      return json(200, status);
-    }
-    if (m === "POST") {
-      if (!atLeast(ctx.role, "approver")) return forbidden("approver");
-      if (run && !run.finished_at) return fail(409, "Oracle is already classifying requests");
-      db.triage = { id: mockUuid(), created_by: ctx.userId, started_at: now(), finished_at: null };
-      return json(201, { id: db.triage.id, flow: "request_triage", status: "running", estimate_usd: 1.5 });
-    }
-  }
-
-  if (p[1] === "requests" && p[2] === "triage" && p[3] === "daily" && p.length === 4 && m === "PUT") {
-    if (!atLeast(ctx.role, "approver")) return forbidden("approver");
-    const body = (await req.json()) as Schemas["TriageDailyIn"];
-    db.daily = { on: body.on, by: ctx.userId, at: now() };
-    return routeRequests(db, ctx, new Request(req.url, { method: "GET" }), p.slice(0, 3), q);
   }
 
   if (p[1] === "requests" && p[2]) {
@@ -572,7 +485,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       const created = createRow(
         {
           title: candidate.title, body: candidate.body, channel: candidate.channel, requester_name: candidate.requester_name,
-          requester_kind: "unknown", goal_ids: candidate.goal_ids.filter((g) => confirmed.has(g)),
+          requester_kind: "customer", goal_ids: candidate.goal_ids.filter((g) => confirmed.has(g)),
           theme_id: candidate.theme_title ? byTitle(candidate.theme_title)?.id ?? null : null, ...input, source_item_id: null,
         },
         { ...candidate.source, removed: false },

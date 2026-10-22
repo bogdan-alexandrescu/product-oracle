@@ -216,7 +216,8 @@
                     "roadmap",
                     "spec",
                     "vision",
-                    "strategy"
+                    "strategy",
+                    "update"
                   ],
                   "type": "string"
                 },
@@ -292,6 +293,73 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/visibility": {
+      "patch": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Set Document Visibility",
+        "description": "Who sees an update (H8): ``company`` (every member) or ``approvers`` (owners and\napprovers only, an update's default); any other kind is a 422. Owners only, with a\nreason; audited as ``document.visibility`` with the values before and after.",
+        "operationId": "set_document_visibility",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisibilityIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an owner"
+          },
+          "404": {
+            "description": "No such document"
           },
           "422": {
             "description": "Validation Error",
@@ -11111,7 +11179,7 @@
           "priorities"
         ],
         "summary": "Get Priorities",
-        "description": "Rank the baseline's features by ``method``, in dependency order.\n\nFeatures that serve no confirmed goal sink to the bottom and are flagged;\ndependency cycles are listed in ``cycles`` and their members flagged.",
+        "description": "Rank the baseline's features by ``method``, in dependency order.\n\nFeatures that serve no confirmed goal sink to the bottom and are flagged;\ndependency cycles are listed in ``cycles`` and their members flagged. People's\nactive moves and pins apply after the formula (``overrides=false`` leaves them out):\neach row carries ``formula_rank`` (Oracle's rank) and the ``override`` that placed it.",
         "operationId": "get_priorities",
         "security": [
           {
@@ -11137,6 +11205,18 @@
               "default": "goal_weighted",
               "title": "Method"
             }
+          },
+          {
+            "name": "overrides",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "false: Oracle's order only, without people's moves and pins",
+              "default": true,
+              "title": "Overrides"
+            },
+            "description": "false: Oracle's order only, without people's moves and pins"
           }
         ],
         "responses": {
@@ -11146,6 +11226,218 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PriorityRanking"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/priorities/overrides": {
+      "post": {
+        "tags": [
+          "priorities"
+        ],
+        "summary": "Create Priority Override",
+        "description": "Move a feature directly above another, or pin it at a rank, with a reason.\n\nOracle checks the change first: four rules on the ranking's numbers, then its own\nmodel reads the reason against the evidence (at most one more message). When any\nmessage results, nothing is stored and the answer is 409 with Oracle's pushback;\nthe same body with ``confirm: true`` keeps the change (no second check). A move or\npin never puts a feature above one it depends on (``held_below``). A new change on a\nfeature replaces its active one.",
+        "operationId": "create_priority_override",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverrideCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverrideOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Oracle disagrees: nothing stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushbackOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "priorities"
+        ],
+        "summary": "List Priority Overrides",
+        "description": "People's moves and pins, newest first: active ones, or all ever made\n(``include_removed``), with Oracle's pushback and whether each was kept.",
+        "operationId": "list_priority_overrides",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "snapshot_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Snapshot Id"
+            }
+          },
+          {
+            "name": "include_removed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Removed"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OverrideOut"
+                  },
+                  "title": "Response List Priority Overrides"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/priorities/overrides/{override_id}": {
+      "delete": {
+        "tags": [
+          "priorities"
+        ],
+        "summary": "Remove Priority Override",
+        "description": "End a move or pin: the feature returns to Oracle's order. The log keeps it.",
+        "operationId": "remove_priority_override",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "override_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Override Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/OverrideRemove"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Data"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverrideOut"
                 }
               }
             }
@@ -12106,7 +12398,8 @@
                     "prd",
                     "roadmap",
                     "vision",
-                    "strategy"
+                    "strategy",
+                    "update"
                   ],
                   "type": "string"
                 },
@@ -12554,6 +12847,7 @@
                     "roadmap",
                     "vision",
                     "strategy",
+                    "update",
                     "any"
                   ],
                   "type": "string"
@@ -14225,6 +14519,356 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Checkpoint Draft",
+        "description": "A checkpoint's shared draft decision (D8), any member: the items of the file it\nreviews with their reasons (recomputed on every read) and the actions people staged or\nsuggested, the tally, the note to the agents, the revision to decide with, the time\nthe SwarmCloud wait has left and what I may do. Kinds with no item file: ``items: []``.",
+        "operationId": "get_checkpoint_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Create Checkpoint Action",
+        "description": "Stage (the checkpoint's approver role or above) or suggest (commenters) one action\non one item: one per item, kind and field, so the same again replaces it (a commenter\nreplaces only their own suggestion). A ``question`` asks the named member about the\nitem (C2). 422 names the rule a value breaks; 409 once the checkpoint is decided.",
+        "operationId": "create_checkpoint_action",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Stage Checkpoint Action",
+        "description": "Stage a suggestion (the checkpoint's approver role or above): it keeps who\nsuggested it.",
+        "operationId": "stage_checkpoint_action",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          },
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}": {
+      "delete": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Delete Checkpoint Action",
+        "description": "Undo an action: its author, or the checkpoint's approver role or above. A question\nis withdrawn while nobody answered it.",
+        "operationId": "delete_checkpoint_action",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          },
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note": {
+      "put": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Set Checkpoint Note",
+        "description": "Set the draft's note to the agents (the checkpoint's approver role or above); a\ndecision without a note of its own sends it.",
+        "operationId": "set_checkpoint_note",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftNoteIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointReview"
                 }
               }
             }
@@ -22234,6 +22878,256 @@
         }
       }
     },
+    "/v1/code-maps": {
+      "get": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "List Code Maps",
+        "description": "Code capability maps, newest first: shared ones, and your own sources' private\nones. Each has its repo, commit, as_of, sharing and what it holds (the content is\nin get_code_map).",
+        "operationId": "list_code_maps",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A repository, owner/name",
+              "title": "Repo"
+            },
+            "description": "A repository, owner/name"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "building",
+                    "ready",
+                    "stale",
+                    "failed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "building | ready | stale | failed",
+              "title": "Status"
+            },
+            "description": "building | ready | stale | failed"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CodeMapOut"
+                  },
+                  "title": "Response List Code Maps"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "Start Code Map",
+        "description": "Map the code of one repository of your GitHub source: a code_map run, estimated\nand started (over the approval threshold it waits for an owner). The map is private\nuntil you share it. 409 while one of that repository is being built.",
+        "operationId": "start_code_map",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeMapCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/code-maps/{code_map_id}": {
+      "get": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "Get Code Map",
+        "description": "One code capability map with its content: modules, APIs, data models, flags and\njobs, each with the id a tech brief cites. What it says is data, not instructions.",
+        "operationId": "get_code_map",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code_map_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Code Map Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeMapDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/code-maps/{code_map_id}/sharing": {
+      "post": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "Share Code Map",
+        "description": "Share the code map with the company (full: everyone reads it and runs use it) or\nmake it private again (new runs stop using it; briefs already written keep their\nrefs). Every map of the repository follows. The source's owner only.",
+        "operationId": "share_code_map",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code_map_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Code Map Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeMapSharingIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/blockers": {
       "get": {
         "tags": [
@@ -25762,134 +26656,6 @@
         }
       }
     },
-    "/v1/requests/triage": {
-      "get": {
-        "tags": [
-          "requests"
-        ],
-        "summary": "Get Request Triage",
-        "description": "Oracle's latest triage run: under way, or how many suggestions it made and how many\npossible requests it found in your own sources.",
-        "operationId": "get_request_triage",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TriageStatus"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "requests"
-        ],
-        "summary": "Start Request Triage",
-        "description": "Classify now: start Oracle's triage run (one analyst step, quick depth: $1.50). It\nsuggests a theme, goals, a duplicate and a feature for every New request and looks\nthrough your own sources for requests; it decides nothing. 409 while one is under way.\nOracle also classifies new requests every day at 07:00 PT.",
-        "operationId": "start_request_triage",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TriageStart"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ]
-      }
-    },
-    "/v1/requests/triage/daily": {
-      "put": {
-        "tags": [
-          "requests"
-        ],
-        "summary": "Set Request Triage Daily",
-        "description": "Turn \"Daily triage at 07:00 PT\" on or off (approvers and owners; off by default).\nWhile on, Oracle's daily run acts as whoever turned it on, while they are an active\napprover or owner, else as the longest-standing active owner. A run's token never\nturns it (403); a read-only credential changes nothing.",
-        "operationId": "set_request_triage_daily",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TriageDailyIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TriageStatus"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ]
-      }
-    },
     "/v1/requests/{request_id}": {
       "get": {
         "tags": [
@@ -26459,187 +27225,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RequestThemeOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/request-candidates": {
-      "get": {
-        "tags": [
-          "requests"
-        ],
-        "summary": "List Request Candidates",
-        "description": "The possible requests Oracle found in your own sources: yours alone (S6).",
-        "operationId": "list_request_candidates",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "open",
-                    "filed",
-                    "dismissed"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Status"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CandidateOut"
-                  },
-                  "title": "Response List Request Candidates"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/request-candidates/{candidate_id}/file": {
-      "post": {
-        "tags": [
-          "requests"
-        ],
-        "summary": "File Request Candidate",
-        "description": "File a found item as a request, in its words unless you change them. Filing shares\nthe item: everyone who can see Requests reads your text, the item's title and link,\nand a 400-character excerpt.",
-        "operationId": "file_request_candidate",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "candidate_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Candidate Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CandidateFile"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RequestOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/request-candidates/{candidate_id}/dismiss": {
-      "post": {
-        "tags": [
-          "requests"
-        ],
-        "summary": "Dismiss Request Candidate",
-        "description": "Dismiss a found item: Oracle does not offer it again.",
-        "operationId": "dismiss_request_candidate",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "candidate_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Candidate Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CandidateOut"
                 }
               }
             }
@@ -28917,6 +29502,65 @@
           "fallback"
         ],
         "title": "AccountsPage"
+      },
+      "ActionIn": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Item Key"
+          },
+          "kind": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Kind"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "value": {
+            "title": "Value"
+          },
+          "answers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Answers",
+            "default": []
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "kind"
+        ],
+        "title": "ActionIn",
+        "description": "One action on one item of a pending checkpoint's shared draft (D8). ``kind``,\n``field`` and ``value`` are checked against the checkpoint kind's vocabulary\n(oracle.runs.actions.VOCABULARY); a wrong one is 422 naming the rule."
       },
       "AdvisoryIn": {
         "properties": {
@@ -33758,340 +34402,6 @@
         ],
         "title": "CancelIn"
       },
-      "CandidateFile": {
-        "properties": {
-          "title": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 200,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title"
-          },
-          "body": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 4000
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Body"
-          },
-          "channel": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "support",
-                  "sales",
-                  "team",
-                  "interview",
-                  "slack",
-                  "meeting",
-                  "doc",
-                  "other"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Channel"
-          },
-          "requester_name": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 200
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Requester Name"
-          },
-          "requester_kind": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "customer",
-                  "team",
-                  "unknown"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Requester Kind"
-          },
-          "goal_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                "type": "array",
-                "maxItems": 20
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Goal Ids"
-          },
-          "theme_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Theme Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "CandidateFile",
-        "description": "Filing a found item: its own words unless these say otherwise."
-      },
-      "CandidateOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "owner_user_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Owner User Id"
-          },
-          "run_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Run Id"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "body": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Body"
-          },
-          "requester_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Requester Name"
-          },
-          "channel": {
-            "type": "string",
-            "enum": [
-              "support",
-              "sales",
-              "team",
-              "slack",
-              "meeting",
-              "doc",
-              "other"
-            ],
-            "title": "Channel"
-          },
-          "theme_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Theme Title"
-          },
-          "goal_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "title": "Goal Ids"
-          },
-          "confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Confidence"
-          },
-          "rationale": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rationale"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "open",
-              "filed",
-              "dismissed"
-            ],
-            "title": "Status"
-          },
-          "request_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Request Id"
-          },
-          "source": {
-            "$ref": "#/components/schemas/CandidateSource"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "owner_user_id",
-          "run_id",
-          "title",
-          "body",
-          "requester_name",
-          "channel",
-          "theme_title",
-          "goal_ids",
-          "confidence",
-          "rationale",
-          "status",
-          "request_id",
-          "source",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "CandidateOut",
-        "description": "A possible request Oracle found in its owner's own source item (theirs alone)."
-      },
-      "CandidateSource": {
-        "properties": {
-          "item_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Item Id"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title"
-          },
-          "url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Url"
-          },
-          "kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Kind"
-          },
-          "excerpt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Excerpt"
-          }
-        },
-        "type": "object",
-        "required": [
-          "item_id",
-          "title",
-          "url",
-          "kind",
-          "excerpt"
-        ],
-        "title": "CandidateSource",
-        "description": "The item, as filing would share it: title, link, kind and excerpt."
-      },
       "CatalogModuleDetail": {
         "properties": {
           "key": {
@@ -34921,6 +35231,17 @@
               }
             ],
             "title": "Note"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Revision"
           }
         },
         "type": "object",
@@ -35036,9 +35357,9 @@
               "eng_review",
               "roadmap_items",
               "roadmap_review",
-              "request_triage",
               "strategy_review",
-              "launch_review"
+              "launch_review",
+              "update_review"
             ],
             "title": "Kind"
           },
@@ -35166,6 +35487,141 @@
           "created_at"
         ],
         "title": "CheckpointOut"
+      },
+      "CheckpointReview": {
+        "properties": {
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checkpoint Id"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "baseline_confirm",
+              "feature_set",
+              "priority_order",
+              "prd_review",
+              "eng_review",
+              "roadmap_items",
+              "roadmap_review",
+              "strategy_review",
+              "launch_review",
+              "update_review"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "changes_requested",
+              "skipped"
+            ],
+            "title": "Status"
+          },
+          "approver_role": {
+            "type": "string",
+            "title": "Approver Role"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "wait": {
+            "$ref": "#/components/schemas/WaitInfo"
+          },
+          "file": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "file_problems": {
+            "items": {
+              "$ref": "#/components/schemas/ItemsProblem"
+            },
+            "type": "array",
+            "title": "File Problems",
+            "default": []
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "tally": {
+            "$ref": "#/components/schemas/ReviewTally"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "can_read": {
+            "type": "boolean",
+            "title": "Can Read",
+            "default": true
+          },
+          "can_suggest": {
+            "type": "boolean",
+            "title": "Can Suggest",
+            "default": false
+          },
+          "can_stage": {
+            "type": "boolean",
+            "title": "Can Stage",
+            "default": false
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkpoint_id",
+          "run_id",
+          "kind",
+          "status",
+          "approver_role",
+          "revision",
+          "wait",
+          "tally"
+        ],
+        "title": "CheckpointReview",
+        "description": "A checkpoint's shared draft decision (D8): its items with their reasons and actions,\nthe note to the agents, the revision a decision is sent with, the wait's time left and\nwhat the reader may do. Checkpoint kinds with no item file serve ``items: []``."
       },
       "Choice": {
         "properties": {
@@ -35615,6 +36071,426 @@
           "scope"
         ],
         "title": "ClientRegistrationOut"
+      },
+      "CodeMapCounts": {
+        "properties": {
+          "modules": {
+            "type": "integer",
+            "title": "Modules",
+            "default": 0
+          },
+          "apis": {
+            "type": "integer",
+            "title": "Apis",
+            "default": 0
+          },
+          "data_models": {
+            "type": "integer",
+            "title": "Data Models",
+            "default": 0
+          },
+          "flags": {
+            "type": "integer",
+            "title": "Flags",
+            "default": 0
+          },
+          "jobs": {
+            "type": "integer",
+            "title": "Jobs",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "CodeMapCounts"
+      },
+      "CodeMapCreate": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "repo": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Repo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "repo"
+        ],
+        "title": "CodeMapCreate"
+      },
+      "CodeMapDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "repo": {
+            "type": "string",
+            "title": "Repo"
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "building",
+              "ready",
+              "stale",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "sharing": {
+            "type": "string",
+            "enum": [
+              "private",
+              "full"
+            ],
+            "title": "Sharing"
+          },
+          "shared_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared By"
+          },
+          "shared_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared At"
+          },
+          "partial": {
+            "type": "boolean",
+            "title": "Partial",
+            "default": false
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/CodeMapCounts"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "run_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "stale_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stale At"
+          },
+          "mine": {
+            "type": "boolean",
+            "title": "Mine"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source_id",
+          "repo",
+          "status",
+          "sharing",
+          "counts",
+          "mine",
+          "created_at"
+        ],
+        "title": "CodeMapDetail"
+      },
+      "CodeMapOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "repo": {
+            "type": "string",
+            "title": "Repo"
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "building",
+              "ready",
+              "stale",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "sharing": {
+            "type": "string",
+            "enum": [
+              "private",
+              "full"
+            ],
+            "title": "Sharing"
+          },
+          "shared_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared By"
+          },
+          "shared_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared At"
+          },
+          "partial": {
+            "type": "boolean",
+            "title": "Partial",
+            "default": false
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/CodeMapCounts"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "run_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "stale_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stale At"
+          },
+          "mine": {
+            "type": "boolean",
+            "title": "Mine"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source_id",
+          "repo",
+          "status",
+          "sharing",
+          "counts",
+          "mine",
+          "created_at"
+        ],
+        "title": "CodeMapOut",
+        "description": "One code capability map of one repo of a GitHub source (F5-2)."
+      },
+      "CodeMapSharingIn": {
+        "properties": {
+          "sharing": {
+            "type": "string",
+            "enum": [
+              "private",
+              "full"
+            ],
+            "title": "Sharing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sharing"
+        ],
+        "title": "CodeMapSharingIn"
       },
       "CodeMapUse": {
         "properties": {
@@ -39753,7 +40629,8 @@
               "roadmap",
               "spec",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind",
             "default": "prd"
@@ -39790,6 +40667,25 @@
               }
             ],
             "title": "Theme"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "company",
+              "approvers"
+            ],
+            "title": "Visibility",
+            "default": "company"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdatePeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "latest_version": {
             "anyOf": [
@@ -40139,7 +41035,8 @@
               "roadmap",
               "spec",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind",
             "default": "prd"
@@ -40176,6 +41073,25 @@
               }
             ],
             "title": "Theme"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "company",
+              "approvers"
+            ],
+            "title": "Visibility",
+            "default": "company"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdatePeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "latest_version": {
             "anyOf": [
@@ -40315,7 +41231,8 @@
                   "roadmap",
                   "spec",
                   "vision",
-                  "strategy"
+                  "strategy",
+                  "update"
                 ]
               },
               {
@@ -40407,6 +41324,24 @@
         },
         "type": "object",
         "title": "DraftImport"
+      },
+      "DraftNoteIn": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "DraftNoteIn"
       },
       "DriftEntry": {
         "properties": {
@@ -42069,6 +43004,52 @@
         ],
         "title": "EvaluationReportOut"
       },
+      "EvidenceChip": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source_kind": {
+            "type": "string",
+            "title": "Source Kind"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "source_kind"
+        ],
+        "title": "EvidenceChip",
+        "description": "A piece of evidence as a citation chip shows it."
+      },
       "EvidenceCitation": {
         "properties": {
           "cite_key": {
@@ -42764,6 +43745,39 @@
             "type": "boolean",
             "title": "Source Removed",
             "default": false
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "source_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Kind"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
           }
         },
         "type": "object",
@@ -43397,6 +44411,30 @@
           "reason"
         ],
         "title": "FeasibilityScopeIn"
+      },
+      "FeatureRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title"
+        ],
+        "title": "FeatureRef"
       },
       "FeatureSetCheck": {
         "properties": {
@@ -44367,9 +45405,10 @@
               "feedback_loop",
               "prd_to_roadmap",
               "prd_to_spec",
-              "request_triage",
               "strategy_draft",
-              "launch_kit"
+              "launch_kit",
+              "code_map",
+              "update_draft"
             ],
             "title": "Key"
           },
@@ -44394,7 +45433,8 @@
                   "roadmap",
                   "spec",
                   "vision",
-                  "strategy"
+                  "strategy",
+                  "update"
                 ]
               },
               {
@@ -44412,7 +45452,8 @@
                   "roadmap",
                   "spec",
                   "vision",
-                  "strategy"
+                  "strategy",
+                  "update"
                 ]
               },
               {
@@ -44497,18 +45538,25 @@
             "title": "Outputs"
           },
           "checkpoint": {
-            "type": "string",
-            "enum": [
-              "baseline_confirm",
-              "feature_set",
-              "priority_order",
-              "prd_review",
-              "eng_review",
-              "roadmap_items",
-              "roadmap_review",
-              "request_triage",
-              "strategy_review",
-              "launch_review"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "baseline_confirm",
+                  "feature_set",
+                  "priority_order",
+                  "prd_review",
+                  "eng_review",
+                  "roadmap_items",
+                  "roadmap_review",
+                  "strategy_review",
+                  "launch_review",
+                  "update_review"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
             "title": "Checkpoint"
           },
@@ -45753,9 +46801,9 @@
               "eng_review",
               "roadmap_items",
               "roadmap_review",
-              "request_triage",
               "strategy_review",
-              "launch_review"
+              "launch_review",
+              "update_review"
             ],
             "title": "Kind"
           },
@@ -45878,9 +46926,10 @@
               "feedback_loop",
               "prd_to_roadmap",
               "prd_to_spec",
-              "request_triage",
               "strategy_draft",
-              "launch_kit"
+              "launch_kit",
+              "code_map",
+              "update_draft"
             ],
             "title": "Flow"
           },
@@ -53934,6 +54983,291 @@
         ],
         "title": "OutlineEntry"
       },
+      "OverrideCreate": {
+        "properties": {
+          "feature_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feature Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "move",
+              "pin"
+            ],
+            "title": "Kind"
+          },
+          "above_feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Above Feature Id"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Evidence Ids"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          },
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature_id",
+          "kind",
+          "reason"
+        ],
+        "title": "OverrideCreate"
+      },
+      "OverrideOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "feature": {
+            "$ref": "#/components/schemas/FeatureRef"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "move",
+              "pin"
+            ],
+            "title": "Kind"
+          },
+          "above": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Evidence Ids"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceChip"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "pushback": {
+            "items": {
+              "$ref": "#/components/schemas/PushbackMessage"
+            },
+            "type": "array",
+            "title": "Pushback"
+          },
+          "kept_after_pushback": {
+            "type": "boolean",
+            "title": "Kept After Pushback"
+          },
+          "reason_check": {
+            "$ref": "#/components/schemas/ReasonCheckOut"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          },
+          "created_by": {
+            "$ref": "#/components/schemas/PersonRef"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "removed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed At"
+          },
+          "removed_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "removed_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed Reason"
+          },
+          "replaced_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaced By"
+          },
+          "no_longer_applies": {
+            "type": "boolean",
+            "title": "No Longer Applies",
+            "default": false
+          },
+          "preview_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Rank"
+          },
+          "held_below": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Below"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "feature",
+          "kind",
+          "above",
+          "position",
+          "reason",
+          "evidence_ids",
+          "pushback",
+          "kept_after_pushback",
+          "reason_check",
+          "snapshot_id",
+          "created_by",
+          "created_at",
+          "removed_at",
+          "removed_by",
+          "removed_reason",
+          "replaced_by"
+        ],
+        "title": "OverrideOut"
+      },
+      "OverrideRemove": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "title": "OverrideRemove"
+      },
       "PackModuleOut": {
         "properties": {
           "key": {
@@ -54094,6 +55428,25 @@
         ],
         "title": "PersonOut",
         "description": "A member as the member directory shows them to everyone (``GET /v1/people``):\nno other field, so a picker never learns more than whom it may name."
+      },
+      "PersonRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "PersonRef"
       },
       "PersonalTokenCreate": {
         "properties": {
@@ -56699,6 +58052,111 @@
         ],
         "title": "Pushback"
       },
+      "PushbackMessage": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "numbers": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numbers"
+          },
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EvidenceChip"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "PushbackMessage"
+      },
+      "PushbackOut": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "pushback": {
+            "items": {
+              "$ref": "#/components/schemas/PushbackMessage"
+            },
+            "type": "array",
+            "title": "Pushback"
+          },
+          "reason_check": {
+            "$ref": "#/components/schemas/ReasonCheckOut"
+          },
+          "preview_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Rank"
+          },
+          "held_below": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Below"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "pushback",
+          "reason_check",
+          "preview_rank",
+          "held_below"
+        ],
+        "title": "PushbackOut",
+        "description": "409: Oracle disagrees. Nothing is stored; ``confirm: true`` keeps the change."
+      },
       "PushbackSource": {
         "properties": {
           "ref": {
@@ -57093,6 +58551,17 @@
             "type": "integer",
             "title": "Score Rank"
           },
+          "formula_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula Rank"
+          },
           "entity_id": {
             "type": "string",
             "title": "Entity Id"
@@ -57147,6 +58616,27 @@
           },
           "explanation": {
             "$ref": "#/components/schemas/Explanation"
+          },
+          "override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowOverride"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "held_below": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Below"
           }
         },
         "type": "object",
@@ -57806,6 +59296,37 @@
         "title": "ReasonBase",
         "description": "What moved, new and dropped compare with: the previous attempt or roadmap version."
       },
+      "ReasonCheckOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "contradiction",
+              "no_contradiction",
+              "skipped",
+              "failed",
+              "timed_out"
+            ],
+            "title": "Status"
+          },
+          "ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "ReasonCheckOut"
+      },
       "ReasonFix": {
         "properties": {
           "label": {
@@ -57889,7 +59410,8 @@
               "prd",
               "roadmap",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -58643,6 +60165,11 @@
               }
             ],
             "title": "As Of"
+          },
+          "partial": {
+            "type": "boolean",
+            "title": "Partial",
+            "default": false
           }
         },
         "type": "object",
@@ -60860,6 +62387,185 @@
         "title": "ResolutionReport",
         "description": "How each feedback item raised on earlier versions was handled, as of ``version``."
       },
+      "ReviewAction": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "value": {
+            "title": "Value"
+          },
+          "answers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Answers",
+            "default": []
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "suggested"
+            ],
+            "title": "State"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewQuestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "item_key",
+          "kind",
+          "state",
+          "updated_at"
+        ],
+        "title": "ReviewAction"
+      },
+      "ReviewAnswer": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "answered_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewAnswerer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "ReviewAnswer"
+      },
+      "ReviewAnswerer": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ReviewAnswerer"
+      },
+      "ReviewFile": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "seq"
+        ],
+        "title": "ReviewFile"
+      },
       "ReviewIn": {
         "properties": {
           "verdict": {
@@ -60896,6 +62602,206 @@
           "note"
         ],
         "title": "ReviewIn"
+      },
+      "ReviewItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "horizon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon"
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewMilestone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On",
+            "default": []
+          },
+          "prd_section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Section"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ItemReason"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewAction"
+            },
+            "type": "array",
+            "title": "Actions",
+            "default": []
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "needs_you",
+              "handled",
+              "waiting",
+              "fine"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "state"
+        ],
+        "title": "ReviewItem",
+        "description": "One item of the reviewed file, its reasons (recomputed on every read) and its\nactions. ``state``: ``needs_you`` (an open reason no staged action answers),\n``handled`` (every reason answered by a staged action), ``waiting`` (only open\nquestions) or ``fine`` (no reasons). An item only the reasons or the actions name (a\ndropped item, the whole file \"*\") has no ``position``."
+      },
+      "ReviewMilestone": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "title": "ReviewMilestone"
+      },
+      "ReviewPerson": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ReviewPerson"
       },
       "ReviewPolicyIn": {
         "properties": {
@@ -61039,6 +62945,51 @@
         ],
         "title": "ReviewPolicyOut"
       },
+      "ReviewQuestion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "asked_to": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewAnswerer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "text"
+        ],
+        "title": "ReviewQuestion",
+        "description": "The stakeholder question a ``question`` action asked (C2), with its latest answer."
+      },
       "ReviewQueueItem": {
         "properties": {
           "document_id": {
@@ -61122,6 +63073,45 @@
         ],
         "title": "ReviewQueueItem",
         "description": "A section the caller owns or reviews, in the latest version of its document."
+      },
+      "ReviewTally": {
+        "properties": {
+          "need_you": {
+            "type": "integer",
+            "title": "Need You",
+            "default": 0
+          },
+          "handled": {
+            "type": "integer",
+            "title": "Handled",
+            "default": 0
+          },
+          "blocking_open": {
+            "type": "integer",
+            "title": "Blocking Open",
+            "default": 0
+          },
+          "to_confirm_open": {
+            "type": "integer",
+            "title": "To Confirm Open",
+            "default": 0
+          },
+          "waiting_on": {
+            "items": {
+              "$ref": "#/components/schemas/WaitingOn"
+            },
+            "type": "array",
+            "title": "Waiting On",
+            "default": []
+          },
+          "suggested": {
+            "type": "integer",
+            "title": "Suggested",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ReviewTally"
       },
       "RevisionDetail": {
         "properties": {
@@ -62051,6 +64041,78 @@
         ],
         "title": "RoadmapItemsOut"
       },
+      "RowOverride": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "move",
+              "pin"
+            ],
+            "title": "Kind"
+          },
+          "by": {
+            "type": "string",
+            "title": "By"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "kept_after_pushback": {
+            "type": "boolean",
+            "title": "Kept After Pushback",
+            "default": false
+          },
+          "above": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Above"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "by",
+          "reason"
+        ],
+        "title": "RowOverride",
+        "description": "The active move or pin that placed a row (C9)."
+      },
       "RunCreate": {
         "properties": {
           "flow": {
@@ -62060,9 +64122,10 @@
               "feedback_loop",
               "prd_to_roadmap",
               "prd_to_spec",
-              "request_triage",
               "strategy_draft",
-              "launch_kit"
+              "launch_kit",
+              "code_map",
+              "update_draft"
             ],
             "title": "Flow"
           },
@@ -62172,9 +64235,9 @@
               "eng_review",
               "roadmap_items",
               "roadmap_review",
-              "request_triage",
               "strategy_review",
-              "launch_review"
+              "launch_review",
+              "update_review"
             ],
             "title": "Kind"
           },
@@ -62327,9 +64390,10 @@
               "feedback_loop",
               "prd_to_roadmap",
               "prd_to_spec",
-              "request_triage",
               "strategy_draft",
-              "launch_kit"
+              "launch_kit",
+              "code_map",
+              "update_draft"
             ],
             "title": "Flow"
           },
@@ -62383,7 +64447,8 @@
                   "roadmap",
                   "spec",
                   "vision",
-                  "strategy"
+                  "strategy",
+                  "update"
                 ]
               },
               {
@@ -62492,9 +64557,9 @@
                   "eng_review",
                   "roadmap_items",
                   "roadmap_review",
-                  "request_triage",
                   "strategy_review",
-                  "launch_review"
+                  "launch_review",
+                  "update_review"
                 ]
               },
               {
@@ -62603,9 +64668,9 @@
                   "eng_review",
                   "roadmap_items",
                   "roadmap_review",
-                  "request_triage",
                   "strategy_review",
-                  "launch_review"
+                  "launch_review",
+                  "update_review"
                 ]
               },
               {
@@ -62878,9 +64943,10 @@
               "feedback_loop",
               "prd_to_roadmap",
               "prd_to_spec",
-              "request_triage",
               "strategy_draft",
-              "launch_kit"
+              "launch_kit",
+              "code_map",
+              "update_draft"
             ],
             "title": "Flow"
           },
@@ -62934,7 +65000,8 @@
                   "roadmap",
                   "spec",
                   "vision",
-                  "strategy"
+                  "strategy",
+                  "update"
                 ]
               },
               {
@@ -63043,9 +65110,9 @@
                   "eng_review",
                   "roadmap_items",
                   "roadmap_review",
-                  "request_triage",
                   "strategy_review",
-                  "launch_review"
+                  "launch_review",
+                  "update_review"
                 ]
               },
               {
@@ -63154,9 +65221,9 @@
                   "eng_review",
                   "roadmap_items",
                   "roadmap_review",
-                  "request_triage",
                   "strategy_review",
-                  "launch_review"
+                  "launch_review",
+                  "update_review"
                 ]
               },
               {
@@ -65941,18 +68008,25 @@
             "title": "Scopes"
           },
           "checkpoint": {
-            "type": "string",
-            "enum": [
-              "baseline_confirm",
-              "feature_set",
-              "priority_order",
-              "prd_review",
-              "eng_review",
-              "roadmap_items",
-              "roadmap_review",
-              "request_triage",
-              "strategy_review",
-              "launch_review"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "baseline_confirm",
+                  "feature_set",
+                  "priority_order",
+                  "prd_review",
+                  "eng_review",
+                  "roadmap_items",
+                  "roadmap_review",
+                  "strategy_review",
+                  "launch_review",
+                  "update_review"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
             "title": "Checkpoint"
           },
@@ -68975,7 +71049,8 @@
               "prd",
               "roadmap",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -69023,6 +71098,16 @@
               }
             ],
             "title": "Theme"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdatePeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -69054,7 +71139,8 @@
               "prd",
               "roadmap",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -70582,7 +72668,8 @@
               "prd",
               "roadmap",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -70849,7 +72936,8 @@
               "prd",
               "roadmap",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -70957,7 +73045,8 @@
               "prd",
               "roadmap",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -71320,6 +73409,7 @@
               "roadmap",
               "vision",
               "strategy",
+              "update",
               "any"
             ],
             "title": "Kind",
@@ -71476,6 +73566,7 @@
               "roadmap",
               "vision",
               "strategy",
+              "update",
               "any"
             ],
             "title": "Kind"
@@ -71512,6 +73603,7 @@
               "roadmap",
               "vision",
               "strategy",
+              "update",
               "any"
             ],
             "title": "Kind"
@@ -71771,6 +73863,7 @@
                   "roadmap",
                   "vision",
                   "strategy",
+                  "update",
                   "any"
                 ]
               },
@@ -74476,188 +76569,6 @@
         "title": "TrackerRecordsImport",
         "description": "Engineering status as read from a tracker, posted by an approver (an export, the\nCLI, an MCP client acting for them; not a run's token). Oracle stores it; it never\nwrites back."
       },
-      "TriageDailyIn": {
-        "properties": {
-          "on": {
-            "type": "boolean",
-            "title": "On"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "on"
-        ],
-        "title": "TriageDailyIn",
-        "description": "Turn \"Daily triage at 07:00 PT\" on or off."
-      },
-      "TriageStart": {
-        "properties": {
-          "depth": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "quick",
-                  "standard"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Depth"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "TriageStart"
-      },
-      "TriageStatus": {
-        "properties": {
-          "run_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Run Id"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "draft",
-                  "awaiting_approval",
-                  "running",
-                  "awaiting_checkpoint",
-                  "paused_overrun",
-                  "succeeded",
-                  "failed",
-                  "cancelled"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
-          },
-          "active": {
-            "type": "boolean",
-            "title": "Active",
-            "default": false
-          },
-          "automatic": {
-            "type": "boolean",
-            "title": "Automatic",
-            "default": false
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
-          },
-          "finished_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Finished At"
-          },
-          "suggestions": {
-            "type": "integer",
-            "title": "Suggestions",
-            "default": 0
-          },
-          "found": {
-            "type": "integer",
-            "title": "Found",
-            "default": 0
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "daily_skipped": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Daily Skipped"
-          },
-          "daily_on": {
-            "type": "boolean",
-            "title": "Daily On",
-            "default": false
-          },
-          "daily_as": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Daily As"
-          },
-          "daily_changed_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Daily Changed By"
-          },
-          "daily_changed_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Daily Changed At"
-          }
-        },
-        "type": "object",
-        "title": "TriageStatus",
-        "description": "The latest triage run, for the Requests header. Empty before the first one."
-      },
       "Unaligned": {
         "properties": {
           "goals": {
@@ -74743,6 +76654,27 @@
           "reason"
         ],
         "title": "UnavailableItem"
+      },
+      "UpdatePeriod": {
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "title": "To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from",
+          "to"
+        ],
+        "title": "UpdatePeriod",
+        "description": "The period an update covers (its latest version's front matter ``period``)."
       },
       "UploadResult": {
         "properties": {
@@ -75446,7 +77378,8 @@
               "roadmap",
               "spec",
               "vision",
-              "strategy"
+              "strategy",
+              "update"
             ],
             "title": "Kind"
           },
@@ -75667,6 +77600,97 @@
         ],
         "title": "VersionWarning",
         "description": "A non-fatal import finding stored on the version."
+      },
+      "VisibilityIn": {
+        "properties": {
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "company",
+              "approvers"
+            ],
+            "title": "Visibility"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "visibility",
+          "reason"
+        ],
+        "title": "VisibilityIn",
+        "description": "An owner's switch of who sees a document, with the reason (audited)."
+      },
+      "WaitInfo": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "ended",
+              "none"
+            ],
+            "title": "State"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "seconds_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds Left"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "WaitInfo",
+        "description": "The SwarmCloud wait of the checkpoint: ``open`` (``ends_at``, ``seconds_left``),\n``ended`` (deciding continues the run as a new workflow) or ``none`` (one workflow per\nsegment: the checkpoint waits in the Inbox with no end)."
+      },
+      "WaitingOn": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "name",
+          "count"
+        ],
+        "title": "WaitingOn"
       },
       "WaiveIn": {
         "properties": {

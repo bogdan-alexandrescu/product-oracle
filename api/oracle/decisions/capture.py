@@ -46,7 +46,6 @@ STOP_LABELS = {
     "roadmap_items": "Roadmap items",
     "roadmap_review": "Roadmap review",
     "strategy_review": "Vision or strategy review",
-    "request_triage": "Request triage",
     "launch_review": "Launch kit review",
 }
 CHECKPOINT_OPTIONS = (("approve", "Approve"), ("request_changes", "Send back"))

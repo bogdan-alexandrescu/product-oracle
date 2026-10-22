@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import recheck_caller, require_role
+from oracle.authz import recheck_caller, require_role, require_role_now
 from oracle.docs import service
 from oracle.docs.parser import DraftError
 from oracle.docs.schemas import (
@@ -21,6 +21,7 @@ from oracle.docs.schemas import (
     ImportProblem,
     VersionOut,
     VersionSummary,
+    VisibilityIn,
 )
 from oracle.http import read_capped_body
 from oracle.jobs import service as jobs_service
@@ -59,6 +60,28 @@ async def get_document(doc: str, db: TenantDB) -> DocumentOut:
         return await service.read_document(db, doc)
     except service.NotFoundError as exc:
         raise _not_found(exc) from exc
+
+
+@router.patch(
+    "/{doc}/visibility",
+    response_model=DocumentOut,
+    responses={403: {"description": "Not an owner"}, 404: {"description": "No such document"}},
+)
+async def set_document_visibility(
+    doc: str,
+    data: VisibilityIn,
+    principal: Annotated[Principal, Depends(require_role_now("owner"))],
+    db: TenantDB,
+) -> DocumentOut:
+    """Who sees an update (H8): ``company`` (every member) or ``approvers`` (owners and
+    approvers only, an update's default); any other kind is a 422. Owners only, with a
+    reason; audited as ``document.visibility`` with the values before and after."""
+    try:
+        return await service.set_visibility(db, doc, data.visibility, data.reason, principal)
+    except service.NotFoundError as exc:
+        raise _not_found(exc) from exc
+    except service.VisibilityKindError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 @router.post(

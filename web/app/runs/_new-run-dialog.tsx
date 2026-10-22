@@ -57,7 +57,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
     () => ({
       depth,
       roles: Object.fromEntries((flow?.segments ?? []).map((s) => [s.name, roles[s.name] ?? s.roles])),
-      checkpoints: Object.fromEntries((flow?.segments ?? []).map((s) => [s.checkpoint, checkpoints[s.checkpoint] ?? true])),
+      checkpoints: Object.fromEntries((flow?.segments ?? []).flatMap((s) => (s.checkpoint ? [[s.checkpoint, checkpoints[s.checkpoint] ?? true]] : []))),
       budget_usd: budget.trim() ? Number(budget) : null,
     }),
     [flow, depth, roles, checkpoints, budget],
@@ -243,17 +243,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                         <span className="min-w-0 truncate font-semibold">
                           <span className="tnum">{i + 1}</span>. {s.title}
                         </span>
-                        <label className="flex items-center gap-1.5 text-sm text-text2">
-                          <input
-                            type="checkbox"
-                            className="size-4 accent-[var(--accent)]"
-                            checked={checkpoints[s.checkpoint] ?? true}
-                            onChange={(e) => change(setCheckpoints)({ ...checkpoints, [s.checkpoint]: e.target.checked })}
-                            aria-label={`Stop for ${CHECKPOINT_LABEL[s.checkpoint]}`}
-                          />
-                          <Icon name="flag" size={16} />
-                          <span className="max-w-56 truncate">{CHECKPOINT_LABEL[s.checkpoint]}</span>
-                        </label>
+                        {s.checkpoint && <StopToggle kind={s.checkpoint} on={checkpoints[s.checkpoint] ?? true} onChange={(on) => change(setCheckpoints)({ ...checkpoints, [s.checkpoint!]: on })} />}
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {catalog.data!.roles.map((r) => {
@@ -320,5 +310,22 @@ function FlowPointers({ flows }: { flows: Flow[] }) {
         );
       })}
     </ul>
+  );
+}
+
+/** A segment's stop, on or off (a segment without a stop shows none). */
+function StopToggle({ kind, on, onChange }: { kind: keyof typeof CHECKPOINT_LABEL; on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-1.5 text-sm text-text2">
+      <input
+        type="checkbox"
+        className="size-4 accent-[var(--accent)]"
+        checked={on}
+        onChange={(e) => onChange(e.target.checked)}
+        aria-label={`Stop for ${CHECKPOINT_LABEL[kind]}`}
+      />
+      <Icon name="flag" size={16} />
+      <span className="max-w-56 truncate">{CHECKPOINT_LABEL[kind]}</span>
+    </label>
   );
 }

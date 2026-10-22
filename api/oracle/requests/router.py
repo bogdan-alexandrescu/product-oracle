@@ -6,24 +6,20 @@ PRD, accept Oracle's suggestions, and create and archive themes. A run token rea
 requests and themes under ``read:baseline`` and writes none (oracle.mcp.scopes).
 Another company's ids are 404 (tenant-scoped session).
 
-Oracle's triage (oracle.requests.triage): Classify now starts a run (approvers), approvers
-turn the daily 07:00 PT run on or off (off by default), and the
-requests it found in a person's own sources are theirs alone until filed (decision S6):
-nobody else, run tokens included, lists, files or dismisses them.
+Oracle's triage run, Classify now and the requests Oracle finds in a person's own
+sources come with the triage lane (issue #150, lane 3).
 """
 
 import uuid
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from oracle.auth.deps import Principal, TenantDB, same_origin
+from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role, require_role_now
-from oracle.requests import service, triage
+from oracle.requests import service
 from oracle.requests.schemas import (
     AcceptSuggestionIn,
-    CandidateFile,
-    CandidateOut,
     Channel,
     DisqualifyIn,
     MergeIn,
@@ -38,12 +34,7 @@ from oracle.requests.schemas import (
     RequestThemeOut,
     RequestThemePatch,
     State,
-    TriageDailyIn,
-    TriageStart,
-    TriageStatus,
 )
-from oracle.runs import service as runs_service
-from oracle.runs.schemas import RunOut
 
 router = APIRouter(prefix="/v1", tags=["requests"])
 
@@ -52,7 +43,7 @@ Commenter = Annotated[Principal, Depends(require_role("commenter"))]
 Approver = Annotated[Principal, Depends(require_role_now("approver"))]
 
 
-def _http(exc: service.RequestError | triage.TriageError) -> HTTPException:
+def _http(exc: service.RequestError) -> HTTPException:
     return HTTPException(exc.status, str(exc))
 
 
@@ -102,47 +93,6 @@ async def create_request(data: RequestCreate, db: TenantDB, principal: Commenter
         raise _http(e) from e
     await db.commit()
     return await service.out_one(db, row)
-
-
-@router.get("/requests/triage", response_model=TriageStatus)
-async def get_request_triage(db: TenantDB, principal: Viewer) -> TriageStatus:
-    """Oracle's latest triage run: under way, or how many suggestions it made and how many
-    possible requests it found in your own sources."""
-    return await triage.status(db, principal)
-
-
-@router.put(
-    "/requests/triage/daily", response_model=TriageStatus, dependencies=[Depends(same_origin)]
-)
-async def set_request_triage_daily(
-    data: TriageDailyIn, db: TenantDB, principal: Approver
-) -> TriageStatus:
-    """Turn "Daily triage at 07:00 PT" on or off (approvers and owners; off by default).
-    While on, Oracle's daily run acts as whoever turned it on, while they are an active
-    approver or owner, else as the longest-standing active owner. A run's token never
-    turns it (403); a read-only credential changes nothing."""
-    if principal.is_run or principal.run_token_id is not None:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "A run's agents cannot turn the daily triage on or off"
-        )
-    await triage.set_daily(db, principal, data.on)
-    return await triage.status(db, principal)
-
-
-@router.post("/requests/triage", response_model=RunOut, status_code=status.HTTP_201_CREATED)
-async def start_request_triage(data: TriageStart, db: TenantDB, principal: Approver) -> RunOut:
-    """Classify now: start Oracle's triage run (one analyst step, quick depth: $1.50). It
-    suggests a theme, goals, a duplicate and a feature for every New request and looks
-    through your own sources for requests; it decides nothing. 409 while one is under way.
-    Oracle also classifies new requests every day at 07:00 PT."""
-    try:
-        run_id = await triage.classify_now(db, principal, data.depth)
-    except triage.TriageError as e:
-        raise _http(e) from e
-    except runs_service.RunError as e:
-        raise HTTPException(e.status, str(e)) from e
-    await runs_service.submit_queued(db, run_id)
-    return await runs_service.read_run(db, run_id, principal)
 
 
 @router.get("/requests/{request_id}", response_model=RequestDetail)
@@ -265,48 +215,3 @@ async def update_request_theme(
     await db.commit()
     await db.refresh(theme)
     return (await service.themes_out(db, [theme]))[0]
-
-
-@router.get("/request-candidates", response_model=list[CandidateOut])
-async def list_request_candidates(
-    db: TenantDB, principal: Commenter, status: Literal["open", "filed", "dismissed"] | None = None
-) -> list[CandidateOut]:
-    """The possible requests Oracle found in your own sources: yours alone (S6)."""
-    try:
-        rows = await triage.list_candidates(db, principal, status)
-    except triage.TriageError as e:
-        raise _http(e) from e
-    return await triage.candidates_out(db, rows)
-
-
-@router.post(
-    "/request-candidates/{candidate_id}/file",
-    response_model=RequestOut,
-    status_code=status.HTTP_201_CREATED,
-)
-async def file_request_candidate(
-    candidate_id: uuid.UUID, data: CandidateFile, db: TenantDB, principal: Commenter
-) -> RequestOut:
-    """File a found item as a request, in its words unless you change them. Filing shares
-    the item: everyone who can see Requests reads your text, the item's title and link,
-    and a 400-character excerpt."""
-    try:
-        row = await triage.file(db, principal, candidate_id, data)
-    except triage.TriageError as e:
-        raise _http(e) from e
-    await db.commit()
-    return await service.out_one(db, row)
-
-
-@router.post("/request-candidates/{candidate_id}/dismiss", response_model=CandidateOut)
-async def dismiss_request_candidate(
-    candidate_id: uuid.UUID, db: TenantDB, principal: Commenter
-) -> CandidateOut:
-    """Dismiss a found item: Oracle does not offer it again."""
-    try:
-        row = await triage.dismiss(db, principal, candidate_id)
-    except triage.TriageError as e:
-        raise _http(e) from e
-    await db.commit()
-    await db.refresh(row)
-    return (await triage.candidates_out(db, [row]))[0]

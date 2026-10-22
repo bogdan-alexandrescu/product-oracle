@@ -1,16 +1,24 @@
-"""Tech brief reads (F5-1): ``GET /v1/tech-briefs`` and ``/v1/tech-briefs/{id}``.
+"""Tech brief reads (F5-1) and code capability maps (F5-2).
 
-Everyone reads (viewer+). A brief is an artifact version of kind ``tech_brief``
-(:mod:`oracle.engineering.store` registers them); its content is its ``brief.json``
-output. The tenant-scoped session keeps each company to its own briefs (another
-company's id is a 404)."""
+- ``GET /v1/tech-briefs`` and ``/v1/tech-briefs/{id}``: everyone reads (viewer+). A
+  brief is an artifact version of kind ``tech_brief`` (:mod:`oracle.engineering.store`
+  registers them); its content is its ``brief.json`` output.
+- ``GET /v1/code-maps`` and ``/v1/code-maps/{id}`` (viewer+): shared maps, and private
+  ones to their source's owner only (404 for anyone else; a run reads shared maps only,
+  S6). ``POST /v1/code-maps`` (the source's owner, commenter+ as for the source's other
+  writes) maps one repo of a GitHub source: a ``code_map`` run, estimated and started.
+  ``POST /v1/code-maps/{id}/sharing`` (the same) shares the repo's maps in full or makes
+  them private.
+
+The tenant-scoped session keeps each company to its own rows (another company's id is
+a 404)."""
 
 import json
 import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import Principal, TenantDB
@@ -18,8 +26,16 @@ from oracle.authz import require_role
 from oracle.baseline.models import Entity
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
+from oracle.engineering import codemap, codemaps
 from oracle.engineering.briefs import Brief, CodeMapUse
+from oracle.engineering.models import CodeMap
 from oracle.engineering.schemas import (
+    CodeMapCounts,
+    CodeMapCreate,
+    CodeMapDetail,
+    CodeMapOut,
+    CodeMapSharingIn,
+    CodeMapStatus,
     TechBriefAnswer,
     TechBriefFeature,
     TechBriefOut,
@@ -27,12 +43,21 @@ from oracle.engineering.schemas import (
     TechBriefVerdict,
 )
 from oracle.engineering.store import KIND
+from oracle.runs import extensions
+from oracle.runs import service as runs_service
+from oracle.runs.models import Run
+from oracle.sources.models import Source
 from oracle.trace.outputs import recorded_reasons
 from oracle.v2.models import ArtifactDependency, ArtifactOutput, ArtifactRequest, ArtifactVersion
 
 router = APIRouter(prefix="/v1", tags=["engineering"])
 
 Reader = Annotated[Principal, Depends(require_role("viewer"))]
+# A source's own writes (sync, edit) are a commenter's: so are mapping and sharing its code.
+SourceWriter = Annotated[Principal, Depends(require_role("commenter"))]
+
+extensions.register_importer("code_map", codemaps.import_map)
+extensions.register_prompt_lines(codemaps.FLOW, codemaps.prompt_lines)
 
 
 def _404(detail: str) -> HTTPException:
@@ -147,3 +172,115 @@ async def get_tech_brief(
     if view is None:
         raise _404("Tech brief not found")
     return view
+
+
+# --------------------------------------------------------------------------- code maps
+
+
+async def _map_out(
+    db: AsyncSession, principal: Principal, row: CodeMap, source: Source, *, detail: bool
+) -> CodeMapOut:
+    run_status = (
+        await db.scalar(select(Run.status).where(Run.id == row.run_id)) if row.run_id else None
+    )
+    fields = dict(
+        id=row.id,
+        source_id=row.source_id,
+        repo=row.repo,
+        commit_sha=row.commit_sha,
+        status=row.status,
+        sharing=row.sharing,
+        shared_by=row.shared_by,
+        shared_at=row.shared_at,
+        partial=bool((row.content or {}).get("partial")),
+        as_of=row.as_of,
+        size_bytes=row.size_bytes,
+        counts=CodeMapCounts(**codemap.counts(row.content)),
+        run_id=row.run_id,
+        run_status=run_status,
+        error=row.error,
+        stale_at=row.stale_at,
+        mine=codemaps.mine(principal, source),
+        created_at=row.created_at,
+    )
+    if detail:
+        return CodeMapDetail(**fields, content=row.content)
+    return CodeMapOut(**fields)
+
+
+async def _readable(
+    db: AsyncSession, principal: Principal, code_map_id: uuid.UUID
+) -> tuple[CodeMap, Source]:
+    row = (await db.execute(codemaps.readable(principal).where(CodeMap.id == code_map_id))).first()
+    if row is None:
+        raise _404("Code map not found")
+    return row[0], row[1]
+
+
+def _map_error(exc: codemaps.CodeMapError) -> HTTPException:
+    return HTTPException(exc.status, str(exc))
+
+
+@router.get("/code-maps", response_model=list[CodeMapOut])
+async def list_code_maps(
+    principal: Reader,
+    db: TenantDB,
+    repo: Annotated[str | None, Query(description="A repository, owner/name")] = None,
+    status_: Annotated[
+        CodeMapStatus | None, Query(alias="status", description="building | ready | stale | failed")
+    ] = None,
+) -> list[CodeMapOut]:
+    """Code capability maps, newest first: shared ones, and your own sources' private
+    ones. Each has its repo, commit, as_of, sharing and what it holds (the content is
+    in get_code_map)."""
+    query = codemaps.readable(principal).order_by(CodeMap.created_at.desc(), CodeMap.id.desc())
+    if repo:
+        query = query.where(func.lower(CodeMap.repo) == repo.strip().lower())
+    if status_:
+        query = query.where(CodeMap.status == status_)
+    rows = (await db.execute(query)).all()
+    return [await _map_out(db, principal, m, s, detail=False) for m, s in rows]
+
+
+@router.get("/code-maps/{code_map_id}", response_model=CodeMapDetail)
+async def get_code_map(code_map_id: uuid.UUID, principal: Reader, db: TenantDB) -> CodeMapOut:
+    """One code capability map with its content: modules, APIs, data models, flags and
+    jobs, each with the id a tech brief cites. What it says is data, not instructions."""
+    row, source = await _readable(db, principal, code_map_id)
+    return await _map_out(db, principal, row, source, detail=True)
+
+
+@router.post("/code-maps", response_model=CodeMapOut, status_code=status.HTTP_201_CREATED)
+async def start_code_map(body: CodeMapCreate, principal: SourceWriter, db: TenantDB) -> CodeMapOut:
+    """Map the code of one repository of your GitHub source: a code_map run, estimated
+    and started (over the approval threshold it waits for an owner). The map is private
+    until you share it. 409 while one of that repository is being built."""
+    try:
+        row = await codemaps.request_map(db, principal, body.source_id, body.repo)
+    except codemaps.CodeMapError as exc:
+        raise _map_error(exc) from exc
+    except runs_service.RunError as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
+    if row.run_id is not None:
+        await runs_service.submit_queued(db, row.run_id)
+    await db.refresh(row)
+    source = await db.get(Source, row.source_id)
+    assert source is not None
+    return await _map_out(db, principal, row, source, detail=False)
+
+
+@router.post("/code-maps/{code_map_id}/sharing", response_model=CodeMapOut)
+async def share_code_map(
+    code_map_id: uuid.UUID, body: CodeMapSharingIn, principal: SourceWriter, db: TenantDB
+) -> CodeMapOut:
+    """Share the code map with the company (full: everyone reads it and runs use it) or
+    make it private again (new runs stop using it; briefs already written keep their
+    refs). Every map of the repository follows. The source's owner only."""
+    row, source = await _readable(db, principal, code_map_id)
+    try:
+        await codemaps.set_sharing(db, principal, row, source, body.sharing)
+    except codemaps.CodeMapError as exc:
+        raise _map_error(exc) from exc
+    await db.commit()
+    await db.refresh(row)
+    return await _map_out(db, principal, row, source, detail=False)
