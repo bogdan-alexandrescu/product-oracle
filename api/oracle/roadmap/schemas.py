@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 from oracle.v2.schemas import Freshness
 
@@ -457,3 +457,90 @@ class TrackChange(BaseModel):
     actor: str
     data: dict[str, Any]
     created_at: datetime
+
+
+# --- roadmap item diff (E3) ------------------------------------------------------------------
+
+ItemsKind = Literal["prd_draft", "roadmap"]
+RoadmapItemChangeKind = Literal["added", "dropped", "moved", "changed", "unchanged"]
+
+
+class ItemsRef(BaseModel):
+    """A set of items: ``<slug>@<n>``, a PRD version's draft items or a roadmap version's."""
+
+    ref: str
+    kind: ItemsKind
+    # "Draft v2" or "Roadmap v3".
+    label: str
+    document: DocumentRef
+
+
+class ItemsOption(BaseModel):
+    ref: str
+    label: str
+
+
+class ItemsOptions(BaseModel):
+    previous: ItemsOption | None
+    approved: ItemsOption | None
+
+
+class ItemFieldChange(BaseModel):
+    # title | outcome | horizon | milestone_name | milestone_date | depends_on |
+    # prd_section | rank | item_key; notes: confidence | rank | prd_section_text | date_state.
+    field: str
+    before: Any = None
+    after: Any = None
+    # depends_on only: the ids added and removed (left out on other fields).
+    added: list[str] | None = None
+    removed: list[str] | None = None
+
+    @model_serializer(mode="wrap")
+    def _drop_unset_lists(self, handler: Any) -> dict[str, Any]:
+        out = handler(self)
+        return {k: v for k, v in out.items() if k not in ("added", "removed") or v is not None}
+
+
+class RoadmapItemChange(BaseModel):
+    item_key: str
+    change: RoadmapItemChangeKind
+    matched_by: Literal["key", "title"] | None
+    title: str
+    base_horizon: str | None
+    head_horizon: str | None
+    base_position: int | None
+    head_position: int | None
+    # What counts as a change (oracle.roadmap.diff.COUNTED_FIELDS); notes do not count.
+    fields: list[ItemFieldChange]
+    notes: list[ItemFieldChange]
+
+
+class ItemsDiffOut(BaseModel):
+    head: ItemsRef
+    # None (with summary None and no items) when there is nothing to compare with.
+    base: ItemsRef | None
+    options: ItemsOptions
+    summary: dict[str, int] | None
+    items: list[RoadmapItemChange]
+
+
+class RoadmapItemHistoryEntry(BaseModel):
+    ref: str
+    kind: ItemsKind
+    label: str
+    approved: bool
+    at: datetime
+    # False on the entry where the item left (change "dropped").
+    present: bool
+    title: str | None
+    horizon: str | None
+    milestone_name: str | None
+    milestone_date: str | None
+    # Against the previous entry.
+    change: RoadmapItemChangeKind
+
+
+class RoadmapItemHistoryOut(BaseModel):
+    prd: DocumentRef
+    item_key: str
+    entries: list[RoadmapItemHistoryEntry]

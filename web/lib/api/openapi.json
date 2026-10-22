@@ -25812,6 +25812,135 @@
         }
       }
     },
+    "/v1/roadmap-items/diff": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Diff Roadmap Items",
+        "description": "What changed, item by item, between two sets of roadmap items: ``head`` and\n``base`` are refs (``<slug>@<n>``, a roadmap version's items); ``base`` is also\n``previous`` (the nearest earlier version with items, the default) or ``approved``\n(the roadmap's latest approved version other than the head). Plan changes count\n(oracle.roadmap.diff.COUNTED_FIELDS); confidence, one-place rank moves and the PRD\nsection's text are notes. Nothing to compare with: ``base`` null and no items. A PRD\nversion's draft items are not stored yet (409).",
+        "operationId": "diff_roadmap_items",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "head",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "title": "Head"
+            }
+          },
+          {
+            "name": "base",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "default": "previous",
+              "title": "Base"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemsDiffOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/roadmap-items/history": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Roadmap Item History",
+        "description": "One item across the roadmap versions whose items trace to the PRD, oldest first\n(the latest 50), each entry against the one before; ``present: false`` where it\nleft. Follows the key only: a rename starts a new history.",
+        "operationId": "get_roadmap_item_history",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "Prd"
+            }
+          },
+          {
+            "name": "item_key",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "Item Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoadmapItemHistoryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/roadmaps/{doc}/alignment": {
       "get": {
         "tags": [
@@ -53217,6 +53346,10 @@
         ],
         "title": "ItemDetail"
       },
+      "ItemFieldChange": {
+        "additionalProperties": true,
+        "type": "object"
+      },
       "ItemHistoryOut": {
         "properties": {
           "roadmap": {
@@ -53689,6 +53822,56 @@
         "title": "ItemsCheck",
         "description": "The check of roadmap_items.yaml (oracle.runs.roadmap) and every item's reasons\n(oracle.runs.reasons). Checks stored before reasons existed read with none."
       },
+      "ItemsDiffOut": {
+        "properties": {
+          "head": {
+            "$ref": "#/components/schemas/ItemsRef"
+          },
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemsRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "options": {
+            "$ref": "#/components/schemas/ItemsOptions"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RoadmapItemChange"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "head",
+          "base",
+          "options",
+          "summary",
+          "items"
+        ],
+        "title": "ItemsDiffOut"
+      },
       "ItemsImport": {
         "properties": {
           "yaml": {
@@ -53775,6 +53958,54 @@
         ],
         "title": "ItemsImportOut"
       },
+      "ItemsOption": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "label"
+        ],
+        "title": "ItemsOption"
+      },
+      "ItemsOptions": {
+        "properties": {
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemsOption"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemsOption"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "previous",
+          "approved"
+        ],
+        "title": "ItemsOptions"
+      },
       "ItemsProblem": {
         "properties": {
           "code": {
@@ -53803,6 +54034,38 @@
           "message"
         ],
         "title": "ItemsProblem"
+      },
+      "ItemsRef": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd_draft",
+              "roadmap"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "document": {
+            "$ref": "#/components/schemas/DocumentRef"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "kind",
+          "label",
+          "document"
+        ],
+        "title": "ItemsRef",
+        "description": "A set of items: ``<slug>@<n>``, a PRD version's draft items or a roadmap version's."
       },
       "JobCreate": {
         "properties": {
@@ -67823,6 +68086,244 @@
         "type": "object",
         "title": "RoadmapAnswers",
         "description": "docs/research/roadmap-formats.md, questions the template picker should ask."
+      },
+      "RoadmapItemChange": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "added",
+              "dropped",
+              "moved",
+              "changed",
+              "unchanged"
+            ],
+            "title": "Change"
+          },
+          "matched_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "key",
+                  "title"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched By"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "base_horizon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Horizon"
+          },
+          "head_horizon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head Horizon"
+          },
+          "base_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Position"
+          },
+          "head_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head Position"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/ItemFieldChange"
+            },
+            "type": "array",
+            "title": "Fields"
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/ItemFieldChange"
+            },
+            "type": "array",
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "change",
+          "matched_by",
+          "title",
+          "base_horizon",
+          "head_horizon",
+          "base_position",
+          "head_position",
+          "fields",
+          "notes"
+        ],
+        "title": "RoadmapItemChange"
+      },
+      "RoadmapItemHistoryEntry": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd_draft",
+              "roadmap"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "present": {
+            "type": "boolean",
+            "title": "Present"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "horizon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon"
+          },
+          "milestone_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Name"
+          },
+          "milestone_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Date"
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "added",
+              "dropped",
+              "moved",
+              "changed",
+              "unchanged"
+            ],
+            "title": "Change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "kind",
+          "label",
+          "approved",
+          "at",
+          "present",
+          "title",
+          "horizon",
+          "milestone_name",
+          "milestone_date",
+          "change"
+        ],
+        "title": "RoadmapItemHistoryEntry"
+      },
+      "RoadmapItemHistoryOut": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/DocumentRef"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/RoadmapItemHistoryEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "item_key",
+          "entries"
+        ],
+        "title": "RoadmapItemHistoryOut"
       },
       "RoadmapItemOut": {
         "properties": {

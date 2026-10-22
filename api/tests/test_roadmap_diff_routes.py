@@ -8,7 +8,7 @@ until its draft items exist.
 
 from oracle.mcp.scopes import required_scope
 from oracle.swarm import Outcome
-from tests.test_mcp import run_token, user_with_role
+from tests.test_mcp import mcp_client, run_token, text_of, user_with_role
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     ITEMS,
     PRD,
@@ -251,7 +251,7 @@ async def test_a_roadmap_run_lists_the_roadmaps_items_as_known(client, owner, ru
 async def test_viewers_read_and_run_tokens_do_not(client, owner, runtime):  # noqa: F811
     """protects: everyone who reads the roadmap reads its diff; agents never do;
     fails_when: a viewer is refused or a run token reaches either route; no_claim: MCP
-    tool listing."""
+    tools for people's tokens."""
     tenant_id, auth = owner
     await two_versions(client, auth, runtime)
     viewer = await as_user(tenant_id, "viewer")
@@ -264,10 +264,9 @@ async def test_viewers_read_and_run_tokens_do_not(client, owner, runtime):  # no
     assert required_scope("GET", DIFF) is None and required_scope("GET", HISTORY) is None
     pm = await user_with_role(tenant_id, "owner", email="pm-diff@example.com")
     token = await run_token(tenant_id, ["read:documents", "read:baseline", "read:sources"], pm.id)
-    bearer = {"Authorization": f"Bearer {token}"}
-    assert (
-        await client.get(DIFF, params={"head": f"{ROADMAP}@2"}, headers=bearer)
-    ).status_code == 403
-    assert (
-        await client.get(HISTORY, params={"prd": PRD, "item_key": "payment-step"}, headers=bearer)
-    ).status_code == 403
+    # A run token reaches neither: no scope names the area, so MCP lists and runs neither.
+    async with mcp_client(token) as c:
+        names = {t.name for t in (await c.list_tools()).tools}
+        assert names.isdisjoint({"diff_roadmap_items", "get_roadmap_item_history"})
+        refused = await c.call_tool("diff_roadmap_items", {"head": f"{ROADMAP}@2"})
+        assert refused.is_error and "not available to run tokens" in text_of(refused)

@@ -7392,6 +7392,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/roadmap-items/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Diff Roadmap Items
+         * @description What changed, item by item, between two sets of roadmap items: ``head`` and
+         *     ``base`` are refs (``<slug>@<n>``, a roadmap version's items); ``base`` is also
+         *     ``previous`` (the nearest earlier version with items, the default) or ``approved``
+         *     (the roadmap's latest approved version other than the head). Plan changes count
+         *     (oracle.roadmap.diff.COUNTED_FIELDS); confidence, one-place rank moves and the PRD
+         *     section's text are notes. Nothing to compare with: ``base`` null and no items. A PRD
+         *     version's draft items are not stored yet (409).
+         */
+        get: operations["diff_roadmap_items"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmap-items/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Roadmap Item History
+         * @description One item across the roadmap versions whose items trace to the PRD, oldest first
+         *     (the latest 50), each entry against the one before; ``present: false`` where it
+         *     left. Follows the key only: a rename starts a new history.
+         */
+        get: operations["get_roadmap_item_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/roadmaps/{doc}/alignment": {
         parameters: {
             query?: never;
@@ -16979,6 +17027,9 @@ export interface components {
             /** Version Count */
             version_count: number;
         };
+        ItemFieldChange: {
+            [key: string]: unknown;
+        };
         /** ItemHistoryOut */
         ItemHistoryOut: {
             /** Roadmap */
@@ -17159,6 +17210,18 @@ export interface components {
              */
             reasons_partial: boolean;
         };
+        /** ItemsDiffOut */
+        ItemsDiffOut: {
+            head: components["schemas"]["ItemsRef"];
+            base: components["schemas"]["ItemsRef"] | null;
+            options: components["schemas"]["ItemsOptions"];
+            /** Summary */
+            summary: {
+                [key: string]: number;
+            } | null;
+            /** Items */
+            items: components["schemas"]["RoadmapItemChange"][];
+        };
         /**
          * ItemsImport
          * @description ``roadmap_items.yaml`` for a roadmap version (the format the run writes).
@@ -17185,6 +17248,18 @@ export interface components {
             /** Refused Dates */
             refused_dates: string[];
         };
+        /** ItemsOption */
+        ItemsOption: {
+            /** Ref */
+            ref: string;
+            /** Label */
+            label: string;
+        };
+        /** ItemsOptions */
+        ItemsOptions: {
+            previous: components["schemas"]["ItemsOption"] | null;
+            approved: components["schemas"]["ItemsOption"] | null;
+        };
         /** ItemsProblem */
         ItemsProblem: {
             /** Code */
@@ -17193,6 +17268,22 @@ export interface components {
             message: string;
             /** Item */
             item?: string | null;
+        };
+        /**
+         * ItemsRef
+         * @description A set of items: ``<slug>@<n>``, a PRD version's draft items or a roadmap version's.
+         */
+        ItemsRef: {
+            /** Ref */
+            ref: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd_draft" | "roadmap";
+            /** Label */
+            label: string;
+            document: components["schemas"]["DocumentRef"];
         };
         /**
          * JobCreate
@@ -22207,6 +22298,74 @@ export interface components {
             show_capacity?: boolean | null;
             /** Public Version */
             public_version?: boolean | null;
+        };
+        /** RoadmapItemChange */
+        RoadmapItemChange: {
+            /** Item Key */
+            item_key: string;
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "added" | "dropped" | "moved" | "changed" | "unchanged";
+            /** Matched By */
+            matched_by: ("key" | "title") | null;
+            /** Title */
+            title: string;
+            /** Base Horizon */
+            base_horizon: string | null;
+            /** Head Horizon */
+            head_horizon: string | null;
+            /** Base Position */
+            base_position: number | null;
+            /** Head Position */
+            head_position: number | null;
+            /** Fields */
+            fields: components["schemas"]["ItemFieldChange"][];
+            /** Notes */
+            notes: components["schemas"]["ItemFieldChange"][];
+        };
+        /** RoadmapItemHistoryEntry */
+        RoadmapItemHistoryEntry: {
+            /** Ref */
+            ref: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd_draft" | "roadmap";
+            /** Label */
+            label: string;
+            /** Approved */
+            approved: boolean;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Present */
+            present: boolean;
+            /** Title */
+            title: string | null;
+            /** Horizon */
+            horizon: string | null;
+            /** Milestone Name */
+            milestone_name: string | null;
+            /** Milestone Date */
+            milestone_date: string | null;
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "added" | "dropped" | "moved" | "changed" | "unchanged";
+        };
+        /** RoadmapItemHistoryOut */
+        RoadmapItemHistoryOut: {
+            prd: components["schemas"]["DocumentRef"];
+            /** Item Key */
+            item_key: string;
+            /** Entries */
+            entries: components["schemas"]["RoadmapItemHistoryEntry"][];
         };
         /** RoadmapItemOut */
         RoadmapItemOut: {
@@ -41381,6 +41540,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemStalenessOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diff_roadmap_items: {
+        parameters: {
+            query: {
+                head: string;
+                base?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemsDiffOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_roadmap_item_history: {
+        parameters: {
+            query: {
+                prd: string;
+                item_key: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoadmapItemHistoryOut"];
                 };
             };
             /** @description Validation Error */
