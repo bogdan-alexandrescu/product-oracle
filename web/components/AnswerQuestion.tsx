@@ -50,10 +50,13 @@ export function AnswerQuestion({
   question: q,
   onSettled,
   onCancel,
+  sendAnswer,
 }: {
   question: InboxQuestion;
   onSettled: (kind: Kind, label: string) => void;
   onCancel?: () => void;
+  /** Send answer goes here instead (C3 team follow-ups); false while Oracle waits for a reply. */
+  sendAnswer?: (body: string) => Promise<boolean>;
 }) {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState<Kind | null>(null);
@@ -70,6 +73,10 @@ export function AnswerQuestion({
     setBusy(kind);
     setError(null);
     try {
+      if (kind === "answer" && sendAnswer) {
+        if (await sendAnswer(body.trim())) onSettled(kind, settledLabel(kind));
+        return;
+      }
       await unwrap(
         api.POST("/v1/questions/{question_id}/answers", {
           params: { path: { question_id: q.question.id } },

@@ -31,7 +31,7 @@ import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake, seedBeforeDrafting, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { addInterviewRequest, routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
-import { MOCK_COMPANY, routeInterviews, routePublicInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
+import { MOCK_COMPANY, routeInterviews, routePublicInterviews, routeTeamInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
@@ -2486,6 +2486,35 @@ async function route(db: Db, req: Request): Promise<Response> {
     q,
   );
   if (modules) return modules;
+  // Team interviews (C3 lane 2): the member's interview on an intake and its turns, which
+  // record answers through the intake mock's answer path.
+  if ((p[1] === "intakes" && p[3] === "interview") || (p[1] === "interviews" && p[3] === "turns")) {
+    const recordAnswer = async (id: string, body: string) => {
+      const answer = new Request(new URL(`/v1/questions/${id}/answers`, req.url), {
+        method: "POST",
+        body: JSON.stringify({ kind: "answer", body, knowledge_state: "user_decision", evidence_ids: [] }),
+      });
+      const ctx = { userId: me.id, role: me.role, people: db.members, createRun: async () => notFound("Route") };
+      return (await routeIntake(v2db, ctx, answer, ["v1", "questions", id, "answers"], new URLSearchParams())) ?? notFound("Route");
+    };
+    const nextQuestion = (intakeId: string, after: string) =>
+      v2db.questions
+        .filter((x) => x.intake_id === intakeId && x.asked_to === me.id && (x.status === "asked" || x.status === "delegated") && x.id !== after)
+        .sort((a, b) => (a.batch ?? 0) - (b.batch ?? 0) || a.created_at.localeCompare(b.created_at))[0]?.id ?? null;
+    const team = await routeTeamInterviews(
+      ensureInterviews(db),
+      {
+        ...interviewsContext(db, me.id, me.role),
+        intakeExists: (id) => v2db.intakes.some((i) => i.id === id),
+        question: (id) => v2db.questions.find((x) => x.id === id) ?? null,
+        nextQuestion,
+        recordAnswer,
+      },
+      req,
+      p,
+    );
+    if (team) return team;
+  }
   // Intake, gaps, questions and answers (CR-03) check roles themselves: commenters
   // answer and propose, approvers decide, owners accept a critical risk.
   // Questions to people (C2): Ask a teammate, reassign or withdraw, the Inbox's questions

@@ -17,6 +17,8 @@ export type InterviewMessage = {
   kind: "intro" | "question" | "ack" | "follow_up" | "answer" | "skip" | "closing";
   body: string;
   guide_item: string | null;
+  /** Team interviews: the intake question it is about. */
+  question_id?: string | null;
   created_at: string;
 };
 export type InterviewSnapshot = {

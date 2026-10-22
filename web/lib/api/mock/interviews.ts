@@ -49,6 +49,8 @@ interface Row extends Omit<InterviewOut, "can_manage" | "created_by_name"> {
   customer_messages: number;
   /** When the queued guide job finishes. */
   guide_ready_at: string | null;
+  /** A team interview's member (lane 2). */
+  interviewee_user_id?: string | null;
 }
 
 export interface InterviewsDb {
@@ -283,18 +285,22 @@ export async function routePublicInterviews(db: InterviewsDb, ctx: InterviewsCon
   return fail(404, "Route not found");
 }
 
+const canManageRow = (r: Row, ctx: InterviewsContext) => r.created_by === ctx.userId || atLeast(ctx.role, "approver");
+
+function outOf(r: Row, ctx: InterviewsContext): InterviewOut {
+  const { token: _t, opener: _o, position: _p, followed_up: _f, customer_messages: _c, guide_ready_at: _g, interviewee_user_id: _u, ...rest } = r;
+  void [_t, _o, _p, _f, _c, _g, _u];
+  const email = ctx.memberEmail(r.created_by);
+  return { ...rest, created_by_name: email ? displayName(email) : null, can_manage: canManageRow(r, ctx) };
+}
+
 /** The members' routes (/v1/interviews...); null when the path is not one of them. */
 export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[0] !== "v1" || p[1] !== "interviews") return null;
   const m = req.method;
   const body = async <T>() => (JSON.parse((await req.text()) || "null") ?? {}) as T;
-  const canManage = (r: Row) => r.created_by === ctx.userId || atLeast(ctx.role, "approver");
-  const out = (r: Row): InterviewOut => {
-    const { token: _t, opener: _o, position: _p, followed_up: _f, customer_messages: _c, guide_ready_at: _g, ...rest } = r;
-    void [_t, _o, _p, _f, _c, _g];
-    const email = ctx.memberEmail(r.created_by);
-    return { ...rest, created_by_name: email ? displayName(email) : null, can_manage: canManage(r) };
-  };
+  const canManage = (r: Row) => canManageRow(r, ctx);
+  const out = (r: Row): InterviewOut => outOf(r, ctx);
   const summary = (r: Row): InterviewSummary => ({
     id: r.id, kind: r.kind, status: r.status, title: r.title, interviewee_name: r.interviewee_name,
     interviewee_company: r.interviewee_company, created_by: r.created_by, created_by_name: out(r).created_by_name,
@@ -397,4 +403,85 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
     return json(200, out(r));
   }
   return fail(404, "Route not found");
+}
+
+// --- team interviews (C3 lane 2) -----------------------------------------------------------
+
+/** What a team turn needs of the intake mock (./intake.ts): its questions and the answer path. */
+export interface TeamContext extends InterviewsContext {
+  intakeExists: (id: string) => boolean;
+  question: (id: string) => { intake_id?: string | null; status: string; asked_to?: string | null } | null;
+  /** The next open question of the intake asked of this member, oldest batch first. */
+  nextQuestion: (intakeId: string, after: string) => string | null;
+  /** Records the answer through POST /v1/questions/{id}/answers. */
+  recordAnswer: (questionId: string, body: string) => Promise<Response>;
+}
+
+export const MOCK_TEAM_FOLLOW_UP = "Could you be more specific? Name the one that matters most, and who confirmed it.";
+const RECORDED = "Answer recorded.";
+
+/**
+ * POST /v1/intakes/{id}/interview (the member's team interview, created on first call) and
+ * POST /v1/interviews/{id}/turns: a follow-up when the answer has fewer than 12 words, once per
+ * question; then the member's messages, joined with a blank line, are recorded as their answer.
+ */
+export async function routeTeamInterviews(db: InterviewsDb, ctx: TeamContext, req: Request, p: string[]): Promise<Response | null> {
+  if (req.method !== "POST" || p.length !== 4) return null;
+  if (p[1] === "intakes" && p[3] === "interview") {
+    if (!atLeast(ctx.role, "commenter")) return fail(403, "Requires the commenter role");
+    if (!ctx.intakeExists(p[2])) return fail(404, "Intake not found");
+    let r = db.interviews.find((x) => x.kind === "team" && x.intake_id === p[2] && x.interviewee_user_id === ctx.userId);
+    if (!r) {
+      r = {
+        id: mockUuid(), kind: "team", status: "in_progress", title: ctx.intakeTitle(p[2]) ?? "", intake_id: p[2], theme_id: null,
+        topic: null, intro: null, guide: [], guide_job: null, interviewee_name: null, interviewee_company: null,
+        link_expires_at: null, link_opened_at: null, created_by: ctx.userId, created_at: now(), finished_at: null,
+        lock_version: 1, messages: [], snapshot: {}, snapshot_job: null, request_ids: [], token: null, opener: null,
+        position: 0, followed_up: false, customer_messages: 0, guide_ready_at: null, interviewee_user_id: ctx.userId,
+      };
+      db.interviews.push(r);
+    }
+    return json(200, outOf(r, ctx));
+  }
+  if (p[1] !== "interviews" || p[3] !== "turns") return null;
+  if (!atLeast(ctx.role, "commenter")) return fail(403, "Requires the commenter role");
+  const r = db.interviews.find((x) => x.id === p[2]);
+  if (!r) return fail(404, "Interview not found");
+  if (r.kind !== "team") return fail(409, "Only a team interview takes team turns");
+  if (r.interviewee_user_id !== ctx.userId) return fail(403, "Only its interviewee answers in this interview");
+  const input = (JSON.parse((await req.text()) || "null") ?? {}) as { question_id?: string; body?: string | null; skip_follow_up?: boolean };
+  const qid = input.question_id ?? "";
+  const question = ctx.question(qid);
+  if (!question || (question.intake_id ?? null) !== r.intake_id) return fail(404, "Question not found");
+  if (!["asked", "delegated", "deferred", "researching", "draft"].includes(question.status)) return fail(409, "This question is answered; it is not asked again");
+  if (question.asked_to && question.asked_to !== ctx.userId) return fail(403, "This question was asked of someone else");
+
+  // This question's messages since Oracle last recorded an answer to it.
+  const mineOf = r.messages.filter((m) => m.question_id === qid);
+  const round = mineOf.slice(mineOf.map((m) => m.kind).lastIndexOf("closing") + 1);
+  const said = round.filter((m) => m.role === "interviewee" && m.kind === "answer").map((m) => m.body);
+  const text = (input.body ?? "").trim();
+  if (!text && !(input.skip_follow_up && said.length)) return fail(422, "An answer needs a body");
+  const added: InterviewMessage[] = [];
+  const add = (role: InterviewMessage["role"], kind: InterviewMessage["kind"], body: string) => {
+    const m = { ...message(role, kind, body, null), question_id: qid };
+    r.messages.push(m);
+    added.push(m);
+  };
+  if (text) {
+    said.push(text);
+    add("interviewee", "answer", text);
+  } else add("interviewee", "skip", "Skip, record my answer");
+  if (!round.some((m) => m.kind === "follow_up") && !input.skip_follow_up && words(text) < THIN_WORDS) {
+    add("oracle", "follow_up", MOCK_TEAM_FOLLOW_UP);
+    return json(200, { messages: added, recorded: null, next_question_id: null });
+  }
+  const res = await ctx.recordAnswer(qid, said.join("\n\n"));
+  if (!res.ok) {
+    r.messages = r.messages.filter((m) => !added.includes(m));
+    return res;
+  }
+  const recorded = await res.json();
+  add("oracle", "closing", RECORDED);
+  return json(200, { messages: added, recorded, next_question_id: ctx.nextQuestion(r.intake_id ?? "", qid) });
 }
