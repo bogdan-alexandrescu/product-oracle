@@ -35,7 +35,8 @@ from oracle import audit
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
-from oracle.docs.models import DocumentVersion
+from oracle.docs import service as docs_service
+from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
 from oracle.runs import reasons, roadmap, service
@@ -43,8 +44,14 @@ from oracle.runs.models import ACTION_KINDS, Checkpoint, CheckpointAction, Run, 
 from oracle.runs.schemas import (
     ActionIn,
     CheckpointReview,
+    ConsoleAnswer,
+    InboxChild,
+    InboxChildReason,
+    InboxSource,
+    InboxSummary,
     ItemReason,
     ItemsProblem,
+    ReasonFix,
     ReviewAction,
     ReviewAnswer,
     ReviewAnswerer,
@@ -670,6 +677,12 @@ async def read(
     )
     if cp is None:
         raise service.NotFound(f"checkpoint {checkpoint_id} not found")
+    return await _read(db, principal, run, cp)
+
+
+async def _read(
+    db: AsyncSession, principal: Principal, run: Run, cp: Checkpoint
+) -> CheckpointReview:
     found = await _file(db, run, cp)
     rows = (
         await db.scalars(
@@ -825,3 +838,141 @@ async def read(
         can_stage=stages,
         can_decide=stages,
     )
+
+
+# --------------------------------------------------------------------------- inbox (D9)
+
+# Child rows under a checkpoint's Inbox row.
+INBOX_CHILDREN = 3
+_SEVERITY = {reasons.BLOCKING: 0, reasons.CONFIRM: 1}
+
+
+def _determined(kind: str, field_: str | None, value: Any) -> bool:
+    """A safe fix (D9): it only stages, needs no text and one click undoes it: accept, a
+    horizon, Remove date, removing dependencies, an order."""
+    if kind == "accept":
+        return True
+    if kind != "edit":
+        return False
+    if field_ == "horizon":
+        return value in HORIZONS
+    if field_ == "milestone_date":
+        return value is None
+    if field_ == "depends_on":
+        return isinstance(value, dict) and set(value) == {"remove"} and bool(_ids(value["remove"]))
+    if field_ == "order":
+        after = value.get("after") if isinstance(value, dict) and set(value) == {"after"} else None
+        return value is None or (isinstance(after, str) and bool(after))
+    return False
+
+
+def safe_fix(item: str, fixes: list[ReasonFix] | list[dict[str, Any]]) -> ReasonFix | None:
+    """The first of a reason's fixes the Inbox offers in one click: safe, and on its item."""
+    for raw in fixes:
+        f = raw if isinstance(raw, ReasonFix) else ReasonFix.model_validate(raw)
+        a = f.action
+        if a.item == item and _determined(a.kind, a.field, a.value):
+            return f
+    return None
+
+
+def _first(found: list[ItemReason]) -> ItemReason:
+    return sorted(found, key=lambda r: _SEVERITY.get(r.severity, 0))[0]
+
+
+def summarize(review: CheckpointReview) -> InboxSummary:
+    """The Inbox's projection of a roadmap items review: its tally and the child rows. A
+    child is an item needing the caller, or one a safe fix staged (the row reads done, with
+    Undo); blocking first (by the item's first reason), then in position order."""
+    rows: list[tuple[tuple[int, int], InboxChild, bool]] = []
+    for it in review.items:
+        if not it.reasons or it.state not in ("needs_you", "handled"):
+            continue
+        first = _first(it.reasons)
+        # A safe fix staged for the item's first reason keeps its row, done (with Undo).
+        staged = next(
+            (
+                a
+                for a in it.actions
+                if _answers(a, first.model_dump()) and _determined(a.kind, a.field, a.value)
+            ),
+            None,
+        )
+        if staged is not None:
+            shown = first
+        elif it.state == "handled":
+            continue
+        else:
+            shown = _first(
+                [r for r in it.reasons if not any(_answers(a, r.model_dump()) for a in it.actions)]
+            )
+        suggested = next(
+            (a for a in it.actions if a.state == "suggested" and a.kind != "question"), None
+        )
+        child = InboxChild(
+            item=it.key,
+            title=it.title,
+            reason=InboxChildReason(
+                code=shown.code, severity=shown.severity, label=shown.label, text=shown.text
+            ),
+            fix=safe_fix(it.key, shown.fixes),
+            staged=staged,
+            suggested=suggested,
+        )
+        order = (_SEVERITY.get(first.severity, 0), it.position or 10**6)
+        rows.append((order, child, it.state == "needs_you"))
+    rows.sort(key=lambda r: r[0])
+    shown_rows = rows[:INBOX_CHILDREN]
+    tally = review.tally
+    return InboxSummary(
+        need_you=tally.need_you,
+        blocking=tally.blocking_open,
+        to_confirm=tally.to_confirm_open,
+        handled=tally.handled,
+        waiting_on=sum(1 for i in review.items if i.state == "waiting"),
+        wait=review.wait,
+        children=[c for _, c, _ in shown_rows],
+        more=tally.need_you - sum(1 for *_, needs in shown_rows if needs),
+    )
+
+
+async def _roadmap_items(
+    db: AsyncSession, principal: Principal, run: Run, cp: Checkpoint
+) -> InboxSummary:
+    summary = summarize(await _read(db, principal, run, cp))
+    if run.document_id is not None:
+        summary.title = await db.scalar(
+            select(Document.title).where(Document.id == run.document_id)
+        )
+    source_id = service._source_id(run)
+    source = (
+        (await docs_service.version_sources(db, [source_id])).get(source_id) if source_id else None
+    )
+    if source is not None:
+        summary.source = InboxSource(title=source.title, version=source.version)
+    return summary
+
+
+Summary = Callable[[AsyncSession, Principal, Run, Checkpoint], Any]
+# checkpoint kind -> its Inbox summary; the spec owning a kind's review registers it here.
+SUMMARIES: dict[str, Summary] = {"roadmap_items": _roadmap_items}
+
+
+async def inbox_summary(
+    db: AsyncSession,
+    cp: Checkpoint,
+    principal: Principal,
+    *,
+    run: Run,
+    console: ConsoleAnswer | None = None,
+) -> InboxSummary | None:
+    """A pending checkpoint's Inbox counts (D9), one review read; None for a kind without a
+    summary. ``console_held``: a console approval waiting for Confirm while blocking reasons
+    are open (D3: recorded, not followed). Until D3's gate lands it is judged by the
+    summary's open blocking reasons, so a kind without a summary is never held."""
+    found = SUMMARIES.get(cp.kind)
+    if found is None:
+        return None
+    summary: InboxSummary = await found(db, principal, run, cp)
+    summary.console_held = bool(console and console.needs == "confirm" and summary.blocking)
+    return summary

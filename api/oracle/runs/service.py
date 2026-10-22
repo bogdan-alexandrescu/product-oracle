@@ -8576,6 +8576,13 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
 
     checkpoints = [item(c) for c in mine]
     deliveries = [item(c) for c in owed]
+    # D9: what each needs of me and how much, one review read each.
+    from oracle.runs import actions
+
+    for c, row in zip(mine, checkpoints, strict=True):
+        row.summary = await actions.inbox_summary(
+            db, c, principal, run=runs[c.run_id], console=row.console
+        )
 
     feedback: list[InboxDocument] = []
     states: list[InboxFeedbackItem] = []
