@@ -23,17 +23,20 @@ from oracle import audit
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.quality import criteria
-from oracle.quality.models import OutcomeRecord, QualityLearning
+from oracle.quality.models import ASSESSED, OutcomeRecord, QualityLearning
 from oracle.quality.schemas import (
     Assessment,
     AssessmentIn,
     AssessmentResult,
+    InboxOutcome,
     LearningCreate,
     LearningDraft,
     LearningOut,
     LearningSignal,
     OutcomeCreate,
     OutcomeOut,
+    OutcomeUpdate,
+    ShippedIn,
 )
 from oracle.v2 import models as m
 from oracle.v2.models import GAP_CATEGORIES
@@ -94,16 +97,30 @@ async def create_outcome(
             )
     if data.experiment_id and await db.get(m.FeasibilityExperiment, data.experiment_id) is None:
         raise OutcomeError(422, f"experiment_id {data.experiment_id} is not an experiment")
+    item = None
+    if data.roadmap_item_id:
+        from oracle.roadmap.models import RoadmapItem
+
+        item = await db.get(RoadmapItem, data.roadmap_item_id)
+        if item is None:
+            raise OutcomeError(422, f"roadmap_item_id {data.roadmap_item_id} is not a roadmap item")
+        if await db.scalar(
+            select(OutcomeRecord.id).where(OutcomeRecord.roadmap_item_id == item.id)
+        ):
+            raise OutcomeError(409, "That roadmap item already has an outcome record")
     row = OutcomeRecord(
         title=data.title,
         goal_id=data.goal_id,
         outcome_entity_id=data.outcome_entity_id,
         document_id=document_id,
         prd_version_id=data.prd_version_id,
-        roadmap_version_id=data.roadmap_version_id,
-        roadmap_item_key=data.roadmap_item_key,
+        roadmap_version_id=data.roadmap_version_id or (item.roadmap_version_id if item else None),
+        roadmap_item_key=data.roadmap_item_key or (item.item_key if item else None),
+        roadmap_item_id=item.id if item else None,
+        track_id=item.track_id if item else None,
         experiment_id=data.experiment_id,
         prediction=data.prediction.model_dump(mode="json"),
+        needs_prediction=data.prediction.predicted_value is None and item is not None,
         module_keys=list(dict.fromkeys(data.module_keys)),
         gap_categories=list(dict.fromkeys(data.gap_categories)),
         status="tracking",
@@ -131,10 +148,32 @@ async def list_outcomes(
     goal_id: uuid.UUID | None = None,
     document_id: uuid.UUID | None = None,
     status: str | None = None,
+    state: str | None = None,
+    needs_prediction: bool | None = None,
+    track_id: uuid.UUID | None = None,
+    roadmap_item_id: uuid.UUID | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[OutcomeOut]:
     stmt = select(OutcomeRecord)
+    if state == "predicted":
+        stmt = stmt.where(OutcomeRecord.status == "predicted")
+    elif state == "tracking":
+        stmt = stmt.where(
+            OutcomeRecord.status == "tracking", OutcomeRecord.proposed_assessment.is_(None)
+        )
+    elif state == "due":
+        stmt = stmt.where(
+            OutcomeRecord.status == "tracking", OutcomeRecord.proposed_assessment.is_not(None)
+        )
+    elif state == "assessed":
+        stmt = stmt.where(OutcomeRecord.status.in_(ASSESSED))
+    if needs_prediction is not None:
+        stmt = stmt.where(OutcomeRecord.needs_prediction.is_(needs_prediction))
+    if track_id:
+        stmt = stmt.where(OutcomeRecord.track_id == track_id)
+    if roadmap_item_id:
+        stmt = stmt.where(OutcomeRecord.roadmap_item_id == roadmap_item_id)
     if goal_id:
         stmt = stmt.where(OutcomeRecord.goal_id == goal_id)
     if document_id:
@@ -205,6 +244,8 @@ async def assess(
     db: AsyncSession, principal: "Principal", outcome_id: uuid.UUID, data: AssessmentIn
 ) -> AssessmentResult:
     row = await get_outcome(db, outcome_id)
+    if row.status == "predicted":
+        raise OutcomeError(409, "Not shipped yet: mark it shipped before assessing it")
     entry = Assessment(
         verdict=data.verdict,
         observed=data.observed,
@@ -212,6 +253,8 @@ async def assess(
         evidence_ids=data.evidence_ids,
         assessed_by=principal.id,
         assessed_at=_now(),
+        actual_value=data.actual_value,
+        measured_at=data.measured_at,
     )
     before = row.status
     row.assessments = [*(row.assessments or []), entry.model_dump(mode="json")]
@@ -234,6 +277,121 @@ async def assess(
         outcome=OutcomeOut.model_validate(row),
         suggested_learnings=draft_learnings(row, data.verdict),
     )
+
+
+async def update_outcome(
+    db: AsyncSession, principal: "Principal", outcome_id: uuid.UUID, data: OutcomeUpdate
+) -> OutcomeOut:
+    """Edit the prediction (only while predicted: shipped, it is frozen) or the owner."""
+    row = await get_outcome(db, outcome_id)
+    if data.lock_version != row.lock_version:
+        raise OutcomeError(409, "This outcome changed since you opened it; reload it")
+    if data.prediction is not None:
+        if row.status != "predicted":
+            raise OutcomeError(409, "Shipped: the prediction is frozen")
+        before = row.prediction
+        row.prediction = data.prediction.model_dump(mode="json")
+        row.needs_prediction = data.prediction.predicted_value is None
+        await audit.record(
+            db, principal, "outcome.prediction_edited", "outcome_record", row.id,
+            {"before": before, "after": row.prediction},
+        )  # fmt: skip
+    if "owner_id" in data.model_fields_set and data.owner_id is not None:
+        row.owner_id = data.owner_id
+    await db.flush()
+    await db.refresh(row)
+    return OutcomeOut.model_validate(row)
+
+
+async def mark_shipped(
+    db: AsyncSession, principal: "Principal", outcome_id: uuid.UUID, data: ShippedIn
+) -> OutcomeOut:
+    """A person says it shipped (signal ``manual``)."""
+    from oracle.quality import shipping
+
+    row = await get_outcome(db, outcome_id)
+    if row.status != "predicted":
+        raise OutcomeError(409, "Already shipped")
+    at = data.at or _now()
+    await shipping.ship(db, row, "manual", at, note=data.note, actor=principal)
+    await db.refresh(row)
+    return OutcomeOut.model_validate(row)
+
+
+VERDICT_WORDS = {
+    "held": "held",
+    "partially_held": "partly held",
+    "not_held": "not held",
+    "inconclusive": "inconclusive",
+}
+
+
+async def inbox_rows(db: AsyncSession, principal: "Principal") -> list[InboxOutcome]:
+    """The caller's outcome rows: Add predictions (per roadmap, counted), Outcome check
+    due (per record, counted) and Oracle recorded (shown, for 14 days)."""
+    from datetime import timedelta
+
+    from oracle.quality.capture import figure_text
+
+    me = principal.user_id or principal.id
+    rows: list[InboxOutcome] = []
+    mine = list(
+        await db.scalars(
+            select(OutcomeRecord)
+            .where(OutcomeRecord.owner_id == me)
+            .order_by(OutcomeRecord.created_at, OutcomeRecord.id)
+        )
+    )
+    waiting: dict[uuid.UUID | None, list[OutcomeRecord]] = {}
+    for r in mine:
+        if r.status == "predicted" and r.needs_prediction:
+            waiting.setdefault(r.roadmap_version_id, []).append(r)
+    for version_id, records in waiting.items():
+        title = "a roadmap"
+        if version_id is not None:
+            version = await db.get(DocumentVersion, version_id)
+            document = await db.get(Document, version.document_id) if version else None
+            title = document.title if document else title
+        n = len(records)
+        rows.append(
+            InboxOutcome(
+                id=records[0].id, title=f"Add predictions · {title} · {n} item{'s' * (n != 1)}",
+                reason="needs_prediction", state="predicted", counts=True, count=n,
+                roadmap_version_id=version_id,
+            )
+        )  # fmt: skip
+    recent = _now() - timedelta(days=14)
+    for r in mine:
+        p = r.prediction or {}
+        if r.status == "tracking" and r.proposed_assessment:
+            prop = r.proposed_assessment
+            now = figure_text(prop.get("actual_value"), p.get("unit")) or "no value"
+            rows.append(
+                InboxOutcome(
+                    id=r.id,
+                    title=(
+                        f"Outcome check due · {r.title} · predicted {p.get('baseline') or '?'}"
+                        f" → {p.get('predicted')}, now {now}"
+                    ),
+                    reason="check_due", state="due", counts=True, due_on=r.assess_due_on,
+                )
+            )  # fmt: skip
+        last = (r.assessments or [])[-1:] or [{}]
+        if (
+            r.status in ASSESSED
+            and last[0].get("actor") == "oracle"
+            and r.assessed_at is not None
+            and r.assessed_at >= recent
+        ):
+            rows.append(
+                InboxOutcome(
+                    id=r.id,
+                    title=f"Oracle recorded: {VERDICT_WORDS[r.status]} · {r.title}",
+                    reason="oracle_recorded", state="assessed", counts=False,
+                    due_on=r.assess_due_on,
+                )
+            )  # fmt: skip
+    return rows
 
 
 def _check_target(applies_to: str, target: str) -> None:

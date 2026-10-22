@@ -118,7 +118,7 @@ async def test_track_record_lowers_priority_and_route_shows_it(client, owner):  
     cal = (await client.get("/v1/priorities/calibration", headers=auth)).json()
     assert cal["setting"] == "apply" and cal["min_outcomes"] == 5
     assert (cal["floor"], cal["ceiling"]) == (0.5, 1.0)
-    assert cal["company"] == {"n": 6, "score": 3.0, "expected": 4.2, "factor": 0.77}
+    assert cal["company"] == {"n": 6, "score": 3.0, "expected": 4.2, "factor": 0.77, "held": 3}
     [goal] = cal["goals"]
     assert (goal["title"], goal["n"], goal["held"], goal["factor"]) == (
         "Raise activation", 6, 3, 0.77,

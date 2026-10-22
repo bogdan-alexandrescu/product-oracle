@@ -116,8 +116,8 @@ def test_upgrade_keeps_old_rows_and_sets_their_due_date(scratch_db):
         r=uuid.uuid4(), t=t, g=goal,
     )  # fmt: skip
     _run(
-        "INSERT INTO tenant_settings (tenant_id, key, value) "
-        "VALUES (:t, 'outcome_measure_days', '45'::jsonb)",
+        "INSERT INTO tenant_settings (id, tenant_id, key, value) "
+        "VALUES (gen_random_uuid(), :t, 'outcome_measure_days', '45'::jsonb)",
         t=t,
     )
     command.downgrade(_cfg(), PREVIOUS)

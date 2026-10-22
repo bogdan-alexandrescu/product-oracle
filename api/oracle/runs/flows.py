@@ -48,6 +48,8 @@ MCP_TOOLS = {
     "get_document_markdown": "a document version as markdown (the latest unless one is given)",
     "get_priorities": "the features ranked by goal-weighted priority, every number explained, "
     "with each feature's depends_on and dependents",
+    "get_priority_calibration": "the track record: how well assessed predictions held, per "
+    "goal and company-wide, and the factor (0.5 to 1.0) it puts on priority confidence",
     "get_feedback_package": "a version's open feedback items and locked sections",
     "propose_change": "propose a baseline change (locked items become proposals)",
     "get_autonomy": "how far Oracle may go on its own, per responsibility (H11)",
@@ -367,10 +369,12 @@ FLOWS: dict[str, FlowDef] = {
                     "Explain every number. Rank every included feature once, 1..N, each "
                     "after the features it depends on. Oracle checks the file when the "
                     "segment ends and compares it with its live ranking; what the approver "
-                    "approves becomes this PRD's priority order. Write the order to "
+                    "approves becomes this PRD's priority order. Explain how the track "
+                    "record changes confidence. Write the order to "
                     "priority.yaml in this format (YAML, version 1):\n" + PRIORITY_FORMAT,
                     tools=(
                         "get_prd_scope",
+                        "get_priority_calibration",
                         "get_baseline",
                         "trace_feature",
                         "propose_change",
@@ -482,9 +486,8 @@ FLOWS: dict[str, FlowDef] = {
                     "and economics (value, cost, effort). List items in an order that respects "
                     "dependencies: an item comes after the items it depends on and is "
                     "never in an earlier horizon than them. Write roadmap_items.yaml: "
-                    "version: 1, prd: {document, version}, items: [...]."
-                    + STRATEGY_FLAG
-                    + DECISIONS_TASK,
+                    "version: 1, prd: {document, version}, items: [...]. Explain how the track "
+                    "record changes confidence." + STRATEGY_FLAG + DECISIONS_TASK,
                     tools=(
                         "get_document",
                         "get_document_markdown",
@@ -492,6 +495,7 @@ FLOWS: dict[str, FlowDef] = {
                         "get_strategy_stack",
                         "trace_feature",
                         "get_priorities",
+                        "get_priority_calibration",
                         "search",
                         "get_source_item",
                         "list_decisions",

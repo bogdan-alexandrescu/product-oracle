@@ -12,7 +12,6 @@ from pydantic import ValidationError
 from sqlalchemy import select
 
 from oracle.models import AuditEvent
-
 from oracle.quality.schemas import PredictionIn
 from oracle.tenancy import tenant_session
 from tests.launch_helpers import approve_roadmap
