@@ -1557,13 +1557,14 @@ async def create_run(
     entry_knobs: dict[str, Any] | None = None,
     oracle_knobs: dict[str, Any] | None = None,
     commit: bool = True,
+    created_by: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """A draft run. A flow with an ``entry`` route is created only through it, which
     passes ``entry_knobs`` (what the run builds, e.g. its spec request) and commits.
     ``oracle_knobs``: knobs Oracle sets (``ORACLE_KNOBS``), e.g. the intake a run starts
     from; ``commit=False`` leaves the commit to the caller. ``principal`` an actor string
-    (``audit.ORACLE``): a run Oracle starts on its own (the daily request triage), with no
-    creator, so it reads no one's sources."""
+    (``audit.ORACLE``): a run Oracle starts on its own (the daily request triage), created
+    for the member ``created_by`` it acts as (its run token acts for them)."""
     flow = flows.FLOWS[body.flow]
     if flow.entry and entry_knobs is None:
         raise Invalid(f"start a {flow.title} run from {flow.entry}")
@@ -1584,7 +1585,7 @@ async def create_run(
         status="draft",
         knobs={**knobs.as_json(), **oracle, **extra, **(entry_knobs or {})},
         document_id=document_id,
-        created_by=principal.id if isinstance(principal, Principal) else None,
+        created_by=principal.id if isinstance(principal, Principal) else created_by,
     )
     db.add(run)
     await db.flush()
@@ -2639,6 +2640,9 @@ async def _submit_now(
             )
             scopes = sdef.scopes
             outputs = sdef.outputs_for(kind)
+        if (run.knobs or {}).get("triage_automatic"):
+            # Oracle's daily request triage acts as a member and reads no one's sources.
+            scopes = tuple(sc for sc in scopes if sc != "read:sources")
         if mode.attach:
             agents = sum(1 for s in steps if not s.waits)
             ttl = workflow.credential_seconds(agents, len(steps) - agents, settings)
@@ -3649,6 +3653,8 @@ async def _advance(
             # In a savepoint, as the items check: a bad file never fails the tick.
             async with db.begin_nested():
                 triage_import = await triage.apply(db, run, art["files"].get(flows.TRIAGE_FILE))
+        except safe_yaml.ParseBusy:
+            raise  # no worker for it: this tick gives up, the next retries
         except Exception as exc:  # noqa: BLE001
             log.exception("applying %s of run %s failed", flows.TRIAGE_FILE, run.id)
             triage_import = {"error": f"{flows.TRIAGE_FILE} could not be applied "

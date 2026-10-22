@@ -85,6 +85,21 @@ test("Classify now: an approver starts triage and sees it finish", async ({ page
   await expect(page.getByRole("button", { name: "Classify now", exact: true })).toBeEnabled();
 });
 
+test("the daily run that could not start says why", async ({ page }) => {
+  // protects=the reason Oracle's daily triage did not start (no active member to run it as),
+  // shown where the triage status is, then replaced by a run's status; fails_when=nothing says
+  // why, or the reason stays after Classify now; no_claim=choosing the member (the API's tests).
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "triage-skipped"));
+  await login(page, "approver@example.com");
+  await openRequests(page);
+  const status = page.getByTestId("triage-status");
+  await expect(status).toContainText("Oracle's daily triage did not run on 2026-10-22");
+  await expect(status).toContainText("none of them is an active member");
+  await page.getByRole("button", { name: "Classify now", exact: true }).click();
+  await expect(status).toContainText(/Oracle is classifying · started/);
+  await expect(status).not.toContainText("did not run");
+});
+
 for (const email of ["commenter@example.com", "viewer@example.com"]) {
   test(`${email.split("@")[0]}s do not start triage`, async ({ page }) => {
     // protects=behaviour rule 2 (approvers and owners start triage); fails_when=Classify now is

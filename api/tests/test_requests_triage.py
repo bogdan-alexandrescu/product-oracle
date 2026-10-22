@@ -8,6 +8,7 @@ fails_when / no_claim. Synthetic placeholders only.
 """
 
 import json
+import threading
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -16,6 +17,8 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy import select
 
+from oracle import safe_yaml
+from oracle.auth.models import User
 from oracle.requests import triage
 from oracle.requests.models import ProductRequest, RequestCandidate
 from oracle.runs import flows
@@ -24,6 +27,7 @@ from oracle.runtokens import mint_run_token
 from oracle.sources.models import SourceItem
 from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
+from oracle.tenant_settings import TenantSetting
 from tests.baseline_helpers import Ctx, entity, make_ctx, make_item
 from tests.launch_helpers import ticker_pass
 from tests.test_mcp import mcp_client, text_of
@@ -84,9 +88,9 @@ async def finish(client, ctx: Ctx, run_id: str) -> dict:
 
 def test_the_flow():
     """protects=the request_triage flow: one analyst segment `triage` at quick depth
-    ($1.50), READ scopes, requests_triage.yaml, its checkpoint off by default, the five
-    tools, not in the New run dialog, started from /requests; fails_when=any drifts;
-    no_claim=the agent's classification quality."""
+    ($1.50), READ scopes, requests_triage.yaml, its checkpoint off by default, its six
+    tools (get_checkpoint_review as every segment), not in the New run dialog, started
+    from /requests; fails_when=any drifts; no_claim=the agent's classification quality."""
     flow = flows.FLOWS["request_triage"]
     assert flow.title == "Request triage"
     (segment,) = flow.segments
@@ -97,6 +101,7 @@ def test_the_flow():
     assert segment.checkpoint == "request_triage"
     assert segment.tools == (
         "search", "get_source_item", "get_baseline", "list_requests", "list_request_themes",
+        "get_checkpoint_review",
     )  # fmt: skip
     assert all(t in flows.MCP_TOOLS for t in segment.tools)
     assert flow.default_checkpoints == {"request_triage": False}
@@ -147,6 +152,30 @@ def test_parse_triage_file():
     ):
         with pytest.raises(triage.TriageFileError):
             triage.parse(bad)
+
+
+async def test_the_file_is_parsed_on_the_parse_pool(client, ctx, monkeypatch):
+    """protects=the event loop: the triage file is parsed on the parse pool
+    (safe_yaml.run_parse_within), as other run imports are; fails_when=apply parses it on
+    the loop; no_claim=the pool's own limits (test_safe_yaml)."""
+    threads: list[str] = []
+    calls: list[str] = []
+    load, within = safe_yaml.load, safe_yaml.run_parse_within
+
+    def spy_load(*a, **kw):
+        threads.append(threading.current_thread().name)
+        return load(*a, **kw)
+
+    async def spy_within(fn, /, *a, name="the text", **kw):
+        calls.append(name)
+        return await within(fn, *a, name=name, **kw)
+
+    monkeypatch.setattr(safe_yaml, "load", spy_load)
+    monkeypatch.setattr(safe_yaml, "run_parse_within", spy_within)
+    run = await triage_run(ctx)
+    assert (await apply(ctx, run, triage_file()))["notes"] == []
+    assert calls == ["requests_triage.yaml"]
+    assert threads and all(t.startswith("safe-yaml") for t in threads)
 
 
 def test_daily_moment():
@@ -581,10 +610,25 @@ async def test_daily_triage(client, ctx, runtime, monkeypatch):  # noqa: F811
     frozen(monkeypatch, day.replace(hour=7, minute=1))
     await ticker_pass(ctx.tenant_id)
     [run] = await triage_runs(ctx)
-    assert run.created_by is None and run.knobs["depth"] == "quick"
+    # No one turned it on: it runs as the company's longest-standing active owner.
+    assert run.created_by == ctx.users["owner"].id and run.knobs["depth"] == "quick"
+    assert run.knobs["triage_automatic"] is True
     assert run.estimate_usd == Decimal("1.50")
     [event] = await audits(ctx, "request.triage_started")
     assert event.data["automatic"] is True and event.actor == "oracle"
+    assert event.data["as_user"] == str(ctx.users["owner"].id)
+    # Its token reads the requests, the themes and the baseline, and no one's sources.
+    mcp = runtime.submitted[-1].mcp
+    assert "read:sources" not in mcp.scopes and "read:baseline" in mcp.scopes
+    async with mcp_client(mcp.token) as m:
+        listed = await m.call_tool("list_requests", {"state": "new"})
+        assert not listed.is_error, text_of(listed)
+        assert [x["id"] for x in listed.structured_content["items"]] == [r["id"]]
+        themes = await m.call_tool("list_request_themes", {})
+        assert not themes.is_error, text_of(themes)
+        base = await m.call_tool("get_baseline", {})
+        assert not base.is_error, text_of(base)
+        assert "activation" in text_of(base)
 
     frozen(monkeypatch, day.replace(hour=9))
     await ticker_pass(ctx.tenant_id)
@@ -608,7 +652,75 @@ async def test_daily_triage(client, ctx, runtime, monkeypatch):  # noqa: F811
     frozen(monkeypatch, (day + timedelta(days=2)).replace(hour=7, minute=5))
     await ticker_pass(ctx.tenant_id)
     runs = await triage_runs(ctx)
-    assert [x.created_by is None for x in runs] == [True, False, True]
+    assert [bool(x.knobs.get("triage_automatic")) for x in runs] == [True, False, True]
+
+
+async def users_disabled(ctx: Ctx, *who: str) -> None:
+    async with tenant_session(ctx.tenant_id) as s:
+        for name in who:
+            (await s.get(User, ctx.users[name].id)).disabled_at = datetime.now(UTC)
+        await s.commit()
+
+
+async def turned_on_by(ctx: Ctx, who: str) -> None:
+    """The daily triage, turned on by ``who`` (the setting it records)."""
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(
+            TenantSetting(
+                key=triage.DAILY_SETTING, value={"on": True}, updated_by=ctx.users[who].id
+            )
+        )
+        await s.commit()
+
+
+async def test_daily_triage_runs_as_its_enabler_else_an_owner(client, ctx, runtime, monkeypatch):  # noqa: F811
+    """protects=the scheduled run acts as a real active member: the one who turned the
+    daily triage on, else the longest-standing active owner; fails_when=it runs with no
+    member (its token is refused), as a disabled enabler, or as a newer owner;
+    no_claim=SwarmCloud scheduling."""
+    day = datetime(2026, 10, 21, tzinfo=PACIFIC)
+    await add(client, ctx)
+    await turned_on_by(ctx, "approver")
+    async with tenant_session(ctx.tenant_id) as s:
+        newer = User(
+            email="second-owner@example.com", password_hash="x", role="owner",
+            created_at=datetime.now(UTC) + timedelta(days=1),
+        )  # fmt: skip
+        s.add(newer)
+        await s.commit()
+    frozen(monkeypatch, day.replace(hour=7, minute=5))
+    await ticker_pass(ctx.tenant_id)
+    [run] = await triage_runs(ctx)
+    assert run.created_by == ctx.users["approver"].id
+
+    # The enabler is disabled: the next day's run is the longest-standing owner's.
+    await finish(client, ctx, str(run.id))
+    await add(client, ctx, title="Dark mode")
+    await users_disabled(ctx, "approver")
+    frozen(monkeypatch, (day + timedelta(days=1)).replace(hour=7, minute=5))
+    await ticker_pass(ctx.tenant_id)
+    runs = await triage_runs(ctx)
+    assert len(runs) == 2 and runs[-1].created_by == ctx.users["owner"].id
+
+
+async def test_daily_triage_with_no_eligible_member_starts_none(client, ctx, runtime, monkeypatch):  # noqa: F811
+    """protects=no run without a member to act as, and the reason shown where the triage
+    status is; fails_when=a run starts with no creator, nothing says why, or each tick
+    records it again; no_claim=the web status line (mock e2e)."""
+    day = datetime(2026, 10, 21, tzinfo=PACIFIC)
+    await add(client, ctx)
+    # The enabler is a commenter now (below what the run needs) and the only owner is gone.
+    await turned_on_by(ctx, "commenter")
+    await users_disabled(ctx, "owner")
+    frozen(monkeypatch, day.replace(hour=7, minute=5))
+    await ticker_pass(ctx.tenant_id)
+    await ticker_pass(ctx.tenant_id)
+    assert await triage_runs(ctx) == []
+    [event] = await audits(ctx, "request.triage_skipped")
+    assert event.actor == "oracle" and event.data["day"] == "2026-10-21"
+    status = (await client.get("/v1/requests/triage", headers=ctx.as_("viewer"))).json()
+    assert status["run_id"] is None
+    assert status["daily_skipped"] == triage.NO_MEMBER.format(day="2026-10-21")
 
 
 async def test_daily_triage_counts_new_requests_without_a_suggestion(client, ctx):

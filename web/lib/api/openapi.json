@@ -74231,6 +74231,17 @@
               }
             ],
             "title": "Error"
+          },
+          "daily_skipped": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Skipped"
           }
         },
         "type": "object",

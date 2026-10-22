@@ -47,9 +47,16 @@ function Started({ at }: { at: string | null | undefined }) {
 
 /**
  * The header's status line (C1 "Classify now"): "Oracle is classifying · started 2 min ago"
- * while a run is under way, then what it suggested and found in your own sources.
+ * while a run is under way, then what it suggested and found in your own sources; or why
+ * Oracle's daily run did not start, until a later run.
  */
 export function TriageStatusLine({ status }: { status: Status | undefined }) {
+  if (status?.daily_skipped)
+    return (
+      <span data-testid="triage-status" className="text-sm text-text2" role="status">
+        {status.daily_skipped}
+      </span>
+    );
   if (!status?.run_id) return null;
   return (
     <span data-testid="triage-status" className="text-sm text-text2" role="status">

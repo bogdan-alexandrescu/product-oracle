@@ -611,6 +611,7 @@ FLOWS: dict[str, FlowDef] = {
                         "get_baseline",
                         "list_requests",
                         "list_request_themes",
+                        "get_checkpoint_review",
                     ),
                 ),
             ),

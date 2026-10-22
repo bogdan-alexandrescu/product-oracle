@@ -243,6 +243,9 @@ class TriageStatus(BaseModel):
     # What it found in the caller's own sources.
     found: int = 0
     error: str | None = None
+    # Why Oracle's daily run did not start (no active member to run it as), until a
+    # later run; None otherwise.
+    daily_skipped: str | None = None
 
 
 class CandidateFile(_In):

@@ -24469,6 +24469,8 @@ export interface components {
             found: number;
             /** Error */
             error?: string | null;
+            /** Daily Skipped */
+            daily_skipped?: string | null;
         };
         /** Unaligned */
         Unaligned: {

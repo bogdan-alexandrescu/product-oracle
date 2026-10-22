@@ -13,7 +13,9 @@
  * items"). The mock has no source items: a found item carries that copy itself.
  *
  * Seed: 12 requests over 4 channels, 3 themes, 2 merged, 1 disqualified, 1 with a
- * suggestion, 2 found items for the seed owner. Synthetic placeholders only.
+ * suggestion, 2 found items for the seed owner. Synthetic placeholders only. The
+ * "triage-skipped" scenario (po-mock-scenario) adds the reason Oracle's daily run did not
+ * start (no active member to run it as), shown until a run.
  */
 import type { Schemas } from "@/lib/api/client";
 import { mockUuid } from "./ids";
@@ -87,6 +89,9 @@ const NEEDS_GOAL = "Link a confirmed goal first, or disqualify it as 'No goal'";
 /** How long the mock's triage run takes. */
 const TRIAGE_MS = 3_000;
 const EXCERPT_MAX = 400;
+const SKIPPED_SCENARIO = "triage-skipped";
+const SKIPPED =
+  "Oracle's daily triage did not run on 2026-10-22: it runs as the approver who turned it on or else an owner, and none of them is an active member";
 
 const now = () => new Date().toISOString();
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
@@ -315,6 +320,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       run.finished_at = now();
     }
     if (m === "GET") {
+      const skipped = !run && localStorage.getItem("po-mock-scenario") === SKIPPED_SCENARIO ? SKIPPED : null;
       const status: Schemas["TriageStatus"] = run
         ? {
             run_id: run.id, status: run.finished_at ? "succeeded" : "running", active: !run.finished_at,
@@ -322,7 +328,10 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
             suggestions: db.requests.filter((r) => r.suggestion?.run_id === run.id).length,
             found: db.candidates.filter((c) => c.run_id === run.id && c.owner_user_id === ctx.userId).length, error: null,
           }
-        : { run_id: null, status: null, active: false, automatic: false, started_at: null, finished_at: null, suggestions: 0, found: 0, error: null };
+        : {
+            run_id: null, status: null, active: false, automatic: false, started_at: null, finished_at: null,
+            suggestions: 0, found: 0, error: null, daily_skipped: skipped,
+          };
       return json(200, status);
     }
     if (m === "POST") {
