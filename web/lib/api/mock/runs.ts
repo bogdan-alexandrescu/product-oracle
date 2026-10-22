@@ -220,6 +220,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       title: "Update draft",
       description: "Draft a board or investor update for its period: metrics first, verified dates only, Asks left to the owner.",
       requires_document: true,
+      writes_document: true,
       target_kind: null,
       source_kind: null,
       in_new_run_dialog: false,
