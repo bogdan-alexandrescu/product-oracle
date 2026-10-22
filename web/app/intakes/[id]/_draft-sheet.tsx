@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button, InfoTip, Notice, SegmentedControl, Sheet } from "@/components/ds";
-import { TemplateThemePicker, useDraftChoice } from "@/components/NewDraft";
+import { GoalPicker, TemplateThemePicker, useDraftChoice } from "@/components/NewDraft";
 import { ErrorNote, Loading } from "@/components/ui";
 import { CHECKPOINT_LABEL } from "@/app/runs/_lib";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
@@ -41,7 +41,8 @@ const getReviewStatus = () => unwrap(api.GET("/v1/baseline/review-status"));
 
 /**
  * Draft with Oracle (C4): the template and theme chosen at the door (Change opens the same
- * picker), whether to reuse the current baseline or rebuild it (B1 "Reuse base"), the depth,
+ * picker), the goals the PRD serves (the brief's until changed, #260), whether to reuse the
+ * current baseline or rebuild it (B1 "Reuse base"), the depth,
  * the flow's stops (each on by default, W2), one estimate line (P3d), and Start drafting.
  * The first estimate makes the intake's draft run (POST /v1/intakes/{id}/runs); every later
  * change goes through the same route, which updates that run, and re-estimates it, so the
@@ -84,6 +85,7 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
 
   const [changing, setChanging] = useState(false);
   const [reuse, setReuse] = useState<boolean | null>(run ? !!run.knobs.reuse_baseline : null);
+  const [goals, setGoals] = useState<string[]>(run ? (run.knobs.goals ?? []).map((g) => g.id) : (intake.goal_ids ?? []));
   const [depth, setDepth] = useState<Depth>(run?.knobs.depth ?? "standard");
   const [stops, setStops] = useState<Record<string, boolean>>(run?.knobs.checkpoints ?? {});
   const [runId, setRunId] = useState<string | null>(run?.id ?? null);
@@ -110,8 +112,9 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
       roles: {},
       checkpoints: Object.fromEntries(checkpoints.map((c) => [c.kind, stops[c.kind] ?? true])),
       reuse_baseline: reusing,
+      goals,
     }),
-    [depth, checkpoints, stops, reusing],
+    [depth, checkpoints, stops, reusing, goals],
   );
 
   async function runEstimate(current: SheetKnobs) {
@@ -218,6 +221,10 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
               <TemplateThemePicker choice={choice} />
             </div>
           )}
+        </section>
+
+        <section className="min-w-0">
+          <GoalPicker value={goals} onChange={setGoals} legend="Goals this PRD serves" />
         </section>
 
         <section aria-labelledby={`${id}-baseline`} className="min-w-0">

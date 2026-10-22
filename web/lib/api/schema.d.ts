@@ -17272,6 +17272,8 @@ export interface components {
             budget_usd?: number | null;
             /** Reuse Baseline */
             reuse_baseline?: boolean | null;
+            /** Goals */
+            goals?: string[] | null;
         };
         /** KnobsOut */
         KnobsOut: {
@@ -17291,6 +17293,11 @@ export interface components {
             /** Budget Usd */
             budget_usd?: number | null;
             reuse_baseline?: components["schemas"]["ReusedBaseline"] | null;
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["TargetGoal"][];
         };
         /** KnowledgeGapOut */
         KnowledgeGapOut: {
@@ -25042,6 +25049,21 @@ export interface components {
             /** Unavailable */
             unavailable?: components["schemas"]["UnavailableItem"][];
             source: components["schemas"]["SourceOut"];
+        };
+        /**
+         * TargetGoal
+         * @description A confirmed goal a PRD run serves (#260).
+         */
+        TargetGoal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
         };
         /** TaskCounts */
         TaskCounts: {

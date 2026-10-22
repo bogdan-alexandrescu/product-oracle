@@ -990,6 +990,21 @@ class PromptContext:
     # C4: a run that uses the current baseline: the day its review was approved ("Oct
     # 12"), named in place of the baseline segment's output.
     baseline_reused: str | None = None
+    # #260: a Baseline to PRD run's target goals, (key, title) in the order named.
+    target_goals: list[tuple[str, str]] = field(default_factory=list)
+
+
+# #260: what each Baseline to PRD segment does with the run's target goals.
+TARGET_GOALS_TASK = {
+    "baseline": "Favour the features that move these goals: propose and evidence them first.",
+    "feature_set": "Favour the features that move these goals; leave out, under excluded, "
+    "a feature that moves none of them unless a kept feature depends on it. Name the goals "
+    "with their keys: every kept feature lists, under goals, the target goals it serves "
+    "(and any other confirmed goal it moves).",
+    "priority": "Weigh the target goals first when you rank.",
+    "prd_draft": "The Goal trace section ({#goal-trace}) covers every target goal: what "
+    "in this PRD moves it and how much, or that nothing does.",
+}
 
 
 MAX_PRIOR_CHARS = 20_000
@@ -1047,6 +1062,13 @@ def step_prompt(
         DEPTH_GUIDANCE[ctx.depth],
         "",
     ]
+    if ctx.target_goals and segment.name in TARGET_GOALS_TASK:
+        lines += [
+            "Target goals: this PRD serves these confirmed goals.",
+            *(f"- {key}: {title}" for key, title in ctx.target_goals),
+            TARGET_GOALS_TASK[segment.name],
+            "",
+        ]
     if ctx.mcp_reachable:
         lines.append(
             "Read Oracle's knowledge through its MCP server (/mcp) with the run token you were "

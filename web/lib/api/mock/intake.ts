@@ -559,6 +559,8 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       const review = baselineReviewStatus();
       if (wanted === true && !review.reusable) return json(409, { detail: { code: "baseline_not_reusable", reason: review.reason } });
       knobs.reuse_baseline = wanted ?? review.reusable;
+      // #260: the run serves the brief's goals unless the sheet names others.
+      knobs.goals ??= (intake as Intake).goal_ids ?? [];
       // Reopening the sheet after an estimate (C4): the intake's one draft run takes the new
       // choices; no second run is made.
       const existing = db.intake_runs?.[intake.id];

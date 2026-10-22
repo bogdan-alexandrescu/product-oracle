@@ -53962,6 +53962,21 @@
               }
             ],
             "title": "Reuse Baseline"
+          },
+          "goals": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goals"
           }
         },
         "type": "object",
@@ -54015,6 +54030,14 @@
                 "type": "null"
               }
             ]
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/TargetGoal"
+            },
+            "type": "array",
+            "title": "Goals",
+            "default": []
           }
         },
         "type": "object",
@@ -76220,6 +76243,31 @@
           "source"
         ],
         "title": "SyncResult"
+      },
+      "TargetGoal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title"
+        ],
+        "title": "TargetGoal",
+        "description": "A confirmed goal a PRD run serves (#260)."
       },
       "TaskCounts": {
         "properties": {
