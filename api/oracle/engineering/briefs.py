@@ -93,6 +93,9 @@ class RepoRef(BaseModel):
     repo: str
     commit: str | None = None
     as_of: str | None = None
+    # Set by Oracle at registration, never read from the file: the run's map of this repo
+    # was built from the synced docs only (F5-2, codemap.PARTIAL_LABEL).
+    partial: bool = False
 
 
 class CodeMapUse(BaseModel):

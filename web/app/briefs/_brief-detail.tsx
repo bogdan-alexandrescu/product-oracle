@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Chip, Icon, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
-import { FRESHNESS, sizeText } from "@/components/tech-brief";
+import { DOCS_ONLY, FRESHNESS, sizeText } from "@/components/tech-brief";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
@@ -47,6 +47,12 @@ function CodeMap({ b }: { b: TechBrief }) {
             <span className="font-mono text-[13px]">{r.repo}</span>
             {r.commit && <span className="text-text2"> at {r.commit}</span>}
             {r.as_of && <span className="text-text2"> · as of {formatDateTime(r.as_of)}</span>}
+            {r.partial && (
+              <>
+                {" "}
+                <Chip kind="warn">{DOCS_ONLY}</Chip>
+              </>
+            )}
           </li>
         ))}
       </ul>

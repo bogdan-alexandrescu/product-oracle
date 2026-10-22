@@ -71,8 +71,8 @@ def test_0016_roadmap_follows_the_wave_1_head():
     # 0018_runtime_features, 0019_citation_confidence, 0014_intake and the PRD review chain
     # (0014_review ... 0014_member_follow_up_retry), on to 0020_requests,
     # 0020_question_subjects ... 0014_account_fixes, then 0020_decisions, 0020_prd_scopes
-    # 0021_feedback_agent_staging and 0022_priority_overrides; one head.
-    assert script.get_heads() == ["0022_priority_overrides"]
+    # 0021_feedback_agent_staging, 0022_priority_overrides and 0022_code_maps; one head.
+    assert script.get_heads() == ["0022_code_maps"]
     assert script.get_revision("0016_refinement_batch").down_revision == REVISION
     assert script.get_revision("0017_citation_source_oracle").down_revision == (
         "0016_refinement_batch"

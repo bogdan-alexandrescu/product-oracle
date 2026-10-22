@@ -795,7 +795,7 @@ def _segment_out(
         roles=knobs.roles.get(segment.name, list(sdef.roles)),
         scopes=list(sdef.scopes),
         checkpoint=sdef.checkpoint_for(kind),  # type: ignore[arg-type]
-        checkpoint_on=knobs.checkpoints.get(sdef.checkpoint, True),
+        checkpoint_on=sdef.checkpoint is not None and knobs.checkpoints.get(sdef.checkpoint, True),
         estimate_usd=_usd(segment.estimate_usd),
         cost_usd=float(segment.cost_usd or 0),
         workflow_id=segment.swarm_workflow_id,
@@ -1732,6 +1732,14 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
     run.snapshot_id = snapshot.id
     for key, value in (pinned or {}).items():
         _set_knob(run, key, value)
+    if any(flows.BRIEFS_FILE in s.outputs for s in _flow(run).segments):
+        # F5-2: the shared code maps the run's briefs cite, recorded now (S6: a map made
+        # private later stops new uses; this run keeps what it read).
+        from oracle.engineering import codemaps
+
+        used = await codemaps.for_run(db)
+        if used:
+            _set_knob(run, "code_maps", used)
     if source_id is not None:
         # Every segment, attempt and change request of the run reads these (A1).
         _set_knob(run, "planning_horizons", await company_horizons(db))
@@ -3732,6 +3740,14 @@ async def _advance(
     if wait is not None:
         payload["wait"] = wait
         _set_knob(run, "opening_wait", None)
+    if sdef.checkpoint is None:
+        # No stop (F5-2's code_map index): a failed import fails the run, else it goes on.
+        for result in (baseline_import, imported, launch_import):
+            if result is not None and result.get("error"):
+                await _finish(db, run, "failed", result["error"])
+                return True
+        await _next(db, run, segment, segments)
+        return True
     checkpoint_kind = sdef.checkpoint_for(await _target_kind(db, run))
     if (
         wait is not None

@@ -56,6 +56,7 @@ from oracle.claude_accounts.models import (  # noqa: E402
 from oracle.connections.models import Connection  # noqa: E402
 from oracle.decisions.models import Decision, DecisionReview  # noqa: E402
 from oracle.docs.models import Citation, Document, DocumentVersion, Section  # noqa: E402
+from oracle.engineering.models import CodeMap  # noqa: E402
 from oracle.intake.models import IntakeProposal, IntakeWithheldItem  # noqa: E402
 from oracle.integrations.models import CompanyIntegration  # noqa: E402
 from oracle.jobs.models import LlmJob, LlmSuggestion  # noqa: E402
@@ -151,6 +152,7 @@ __all__ = [
     "Decision",
     "DecisionReview",
     "Citation",
+    "CodeMap",
     "ClaudeAccount",
     "ClaudeAccountHold",
     "ClaudeAccountSignin",

@@ -16,6 +16,7 @@ Flow = Literal[
     "prd_to_spec",
     "strategy_draft",
     "launch_kit",
+    "code_map",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -122,7 +123,8 @@ class FlowSegmentOut(BaseModel):
     roles: list[str]
     scopes: list[str]
     outputs: list[str]
-    checkpoint: CheckpointKind
+    # None: the segment opens no stop (the code_map flow's index).
+    checkpoint: CheckpointKind | None
     approver_role: Role
 
 
@@ -376,8 +378,8 @@ class SegmentOut(BaseModel):
     status: SegmentStatus
     roles: list[str]
     scopes: list[str]
-    # The checkpoint this segment ends at, and whether it is on.
-    checkpoint: CheckpointKind
+    # The checkpoint this segment ends at (None: it has none), and whether it is on.
+    checkpoint: CheckpointKind | None
     checkpoint_on: bool
     estimate_usd: float | None = None
     cost_usd: float
