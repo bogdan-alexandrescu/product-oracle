@@ -12,7 +12,9 @@ from sqlalchemy import text
 from oracle.account.router import router as account_router
 from oracle.auth.router import router as auth_router
 from oracle.autonomy_router import router as autonomy_router
+from oracle.baseline.goals import GoalAttrs
 from oracle.baseline.router import router as baseline_router
+from oracle.baseline.service import GoalFieldsInvalid
 from oracle.blockers.router import router as blockers_router
 from oracle.claude_accounts.router import router as claude_accounts_router
 from oracle.claude_accounts.sweep import get_pool_settings, run_scheduler
@@ -157,6 +159,11 @@ def create_app() -> FastAPI:
     # 409 names them, on every path that creates or starts such a run.
     app.add_exception_handler(DraftGateClosed, draft_gate_closed)
 
+    @app.exception_handler(GoalFieldsInvalid)
+    async def goal_fields_rejected(_request: Request, exc: GoalFieldsInvalid) -> JSONResponse:
+        # B5: a person's goal write with bad typed fields; every problem with its code.
+        return JSONResponse({"detail": str(exc), "errors": exc.problems}, 422)
+
     @app.exception_handler(ParseBusy)
     async def parse_busy(_request: Request, exc: ParseBusy) -> JSONResponse:
         # The parse pool would not take an import now (owner, 2026-10-20): 429 for a person
@@ -237,6 +244,18 @@ def create_app() -> FastAPI:
     app.include_router(ticker_router)
     # Every REST operation above (and any added later) is also an MCP tool here.
     mount_mcp(app)
+    # B5: MCP clients see a goal's typed attrs shape.
+    base_openapi = app.openapi
+
+    def openapi() -> dict:
+        if app.openapi_schema is None:
+            doc = base_openapi()
+            doc.setdefault("components", {}).setdefault("schemas", {})["GoalAttrs"] = (
+                GoalAttrs.model_json_schema()
+            )
+        return app.openapi_schema
+
+    app.openapi = openapi
     return app
 
 

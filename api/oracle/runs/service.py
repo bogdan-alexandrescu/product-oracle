@@ -136,6 +136,7 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.baseline import yaml_io
+from oracle.baseline.goals import target_words
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.decisions import capture as decisions_capture
 from oracle.docs import service as docs_service
@@ -2250,6 +2251,8 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
             "key": e.key,
             "title": e.title,
             **{k: (e.attrs or {}).get(k) for k in ("metric", "target", "horizon")},
+            # B5: the typed target in words ("at least 45% (...), short horizon").
+            "target_words": target_words(e.attrs or {}),
         }
         for e in sorted(entities.values(), key=lambda e: e.key)
         if e.type == "goal" and e.status == "confirmed"

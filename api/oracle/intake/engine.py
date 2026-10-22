@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.goals import goal_check, target_words
 from oracle.baseline.models import Edge, Entity
 from oracle.intake import categories as cats
 from oracle.intake import evidence as ev
@@ -176,11 +177,12 @@ async def coverage_from_baseline(
             "reason": "Linked to confirmed goal(s): " + ", ".join(g.title for g in goals),
             "entity_ids": [str(g.id) for g in goals],
         }
-        measured = [g for g in goals if (g.attrs or {}).get("metric") and g.attrs.get("target")]
+        # B5: a goal answers the success metric when it is measurable (typed fields).
+        measured = [g for g in goals if goal_check(g.attrs or {})["measurable"]]
         if measured:
             covered["success_metric"] = {
                 "reason": "The confirmed goal has a metric and a target: "
-                + "; ".join(f"{g.attrs['metric']} → {g.attrs['target']}" for g in measured),
+                + "; ".join(target_words(g.attrs) or g.attrs["metric"] for g in measured),
                 "entity_ids": [str(g.id) for g in measured],
             }
     owners = [
