@@ -3269,12 +3269,66 @@ export interface paths {
          * @description Rank the baseline's features by ``method``, in dependency order.
          *
          *     Features that serve no confirmed goal sink to the bottom and are flagged;
-         *     dependency cycles are listed in ``cycles`` and their members flagged.
+         *     dependency cycles are listed in ``cycles`` and their members flagged. People's
+         *     active moves and pins apply after the formula (``overrides=false`` leaves them out):
+         *     each row carries ``formula_rank`` (Oracle's rank) and the ``override`` that placed it.
          */
         get: operations["get_priorities"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/priorities/overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Priority Overrides
+         * @description People's moves and pins, newest first: active ones, or all ever made
+         *     (``include_removed``), with Oracle's pushback and whether each was kept.
+         */
+        get: operations["list_priority_overrides"];
+        put?: never;
+        /**
+         * Create Priority Override
+         * @description Move a feature directly above another, or pin it at a rank, with a reason.
+         *
+         *     Oracle checks the change first: four rules on the ranking's numbers, then its own
+         *     model reads the reason against the evidence (at most one more message). When any
+         *     message results, nothing is stored and the answer is 409 with Oracle's pushback;
+         *     the same body with ``confirm: true`` keeps the change (no second check). A move or
+         *     pin never puts a feature above one it depends on (``held_below``). A new change on a
+         *     feature replaces its active one.
+         */
+        post: operations["create_priority_override"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/priorities/overrides/{override_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Priority Override
+         * @description End a move or pin: the feature returns to Oracle's order. The log keeps it.
+         */
+        delete: operations["remove_priority_override"];
         options?: never;
         head?: never;
         patch?: never;
@@ -12845,6 +12899,22 @@ export interface components {
             created_at: string;
         };
         /**
+         * EvidenceChip
+         * @description A piece of evidence as a citation chip shows it.
+         */
+        EvidenceChip: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Source Kind */
+            source_kind: string;
+            /** Confidence */
+            confidence?: number | null;
+            /** Date */
+            date?: string | null;
+        };
+        /**
          * EvidenceCitation
          * @description A ``[c:id]`` marker the stored draft carries in this section (its per-claim link).
          */
@@ -13066,6 +13136,12 @@ export interface components {
              * @default false
              */
             source_removed: boolean;
+            /** Title */
+            title?: string | null;
+            /** Source Kind */
+            source_kind?: string | null;
+            /** Date */
+            date?: string | null;
         };
         /** ExchangeIn */
         ExchangeIn: {
@@ -13261,6 +13337,18 @@ export interface components {
             experiment_id: string;
             /** Reason */
             reason: string;
+        };
+        /** FeatureRef */
+        FeatureRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
         };
         /**
          * FeatureSetCheck
@@ -17268,6 +17356,91 @@ export interface components {
              */
             origin: "template" | "module";
         };
+        /** OverrideCreate */
+        OverrideCreate: {
+            /**
+             * Feature Id
+             * Format: uuid
+             */
+            feature_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "move" | "pin";
+            /** Above Feature Id */
+            above_feature_id?: string | null;
+            /** Position */
+            position?: number | null;
+            /** Reason */
+            reason: string;
+            /** Evidence Ids */
+            evidence_ids?: string[];
+            /** Snapshot Id */
+            snapshot_id?: string | null;
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: boolean;
+        };
+        /** OverrideOut */
+        OverrideOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            feature: components["schemas"]["FeatureRef"];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "move" | "pin";
+            above: components["schemas"]["FeatureRef"] | null;
+            /** Position */
+            position: number | null;
+            /** Reason */
+            reason: string;
+            /** Evidence Ids */
+            evidence_ids: string[];
+            /** Evidence */
+            evidence?: components["schemas"]["EvidenceChip"][];
+            /** Pushback */
+            pushback: components["schemas"]["PushbackMessage"][];
+            /** Kept After Pushback */
+            kept_after_pushback: boolean;
+            reason_check: components["schemas"]["ReasonCheckOut"];
+            /** Snapshot Id */
+            snapshot_id: string | null;
+            created_by: components["schemas"]["PersonRef"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Removed At */
+            removed_at: string | null;
+            removed_by: components["schemas"]["PersonRef"] | null;
+            /** Removed Reason */
+            removed_reason: string | null;
+            /** Replaced By */
+            replaced_by: string | null;
+            /**
+             * No Longer Applies
+             * @default false
+             */
+            no_longer_applies: boolean;
+            /** Preview Rank */
+            preview_rank?: number | null;
+            /** Held Below */
+            held_below?: string | null;
+        };
+        /** OverrideRemove */
+        OverrideRemove: {
+            /** Reason */
+            reason?: string | null;
+        };
         /** PackModuleOut */
         PackModuleOut: {
             /** Key */
@@ -17342,6 +17515,16 @@ export interface components {
             role: "viewer" | "commenter" | "approver" | "owner";
             /** Can Write */
             can_write: boolean;
+        };
+        /** PersonRef */
+        PersonRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** PersonalTokenCreate */
         PersonalTokenCreate: {
@@ -18305,6 +18488,36 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["PushbackSource"][];
         };
+        /** PushbackMessage */
+        PushbackMessage: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Numbers */
+            numbers?: {
+                [key: string]: unknown;
+            } | null;
+            /** Claim */
+            claim?: string | null;
+            /** Evidence */
+            evidence?: components["schemas"]["EvidenceChip"][] | null;
+        };
+        /**
+         * PushbackOut
+         * @description 409: Oracle disagrees. Nothing is stored; ``confirm: true`` keeps the change.
+         */
+        PushbackOut: {
+            /** Detail */
+            detail: string;
+            /** Pushback */
+            pushback: components["schemas"]["PushbackMessage"][];
+            reason_check: components["schemas"]["ReasonCheckOut"];
+            /** Preview Rank */
+            preview_rank: number | null;
+            /** Held Below */
+            held_below: string | null;
+        };
         /** PushbackSource */
         PushbackSource: {
             /** Ref */
@@ -18439,6 +18652,8 @@ export interface components {
             rank: number;
             /** Score Rank */
             score_rank: number;
+            /** Formula Rank */
+            formula_rank?: number | null;
             /** Entity Id */
             entity_id: string;
             /** Key */
@@ -18458,6 +18673,9 @@ export interface components {
             /** Dependents */
             dependents: string[];
             explanation: components["schemas"]["Explanation"];
+            override?: components["schemas"]["RowOverride"] | null;
+            /** Held Below */
+            held_below?: string | null;
         };
         /** RankedGap */
         RankedGap: {
@@ -18686,6 +18904,16 @@ export interface components {
             version?: number | null;
             /** Attempt */
             attempt?: number | null;
+        };
+        /** ReasonCheckOut */
+        ReasonCheckOut: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "contradiction" | "no_contradiction" | "skipped" | "failed" | "timed_out";
+            /** Ms */
+            ms?: number | null;
         };
         /** ReasonFix */
         ReasonFix: {
@@ -20109,6 +20337,34 @@ export interface components {
             view: "brief" | "full";
             /** Items */
             items: components["schemas"]["RoadmapItemOut"][];
+        };
+        /**
+         * RowOverride
+         * @description The active move or pin that placed a row (C9).
+         */
+        RowOverride: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "move" | "pin";
+            /** By */
+            by: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Kept After Pushback
+             * @default false
+             */
+            kept_after_pushback: boolean;
+            /** Above */
+            above?: string | null;
+            /** Position */
+            position?: number | null;
+            /** Created At */
+            created_at?: string | null;
         };
         /** RunCreate */
         RunCreate: {
@@ -31332,6 +31588,8 @@ export interface operations {
         parameters: {
             query?: {
                 method?: "goal_weighted" | "rice" | "moscow" | "wsjf";
+                /** @description false: Oracle's order only, without people's moves and pins */
+                overrides?: boolean;
             };
             header?: never;
             path?: never;
@@ -31346,6 +31604,116 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PriorityRanking"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_priority_overrides: {
+        parameters: {
+            query?: {
+                snapshot_id?: string | null;
+                include_removed?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverrideOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_priority_override: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverrideCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverrideOut"];
+                };
+            };
+            /** @description Oracle disagrees: nothing stored */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushbackOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_priority_override: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                override_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OverrideRemove"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverrideOut"];
                 };
             };
             /** @description Validation Error */

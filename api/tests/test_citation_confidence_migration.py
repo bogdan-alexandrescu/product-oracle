@@ -123,7 +123,7 @@ def test_chains_on_the_citation_source_oracle_head():
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # The intake lane's 0014_intake chains on it and the PRD review chain (0014_review,
     # 0014_member_disable, 0014_member_follow_up_retry) on that; one head.
-    assert script.get_heads() == ["0021_feedback_agent_staging"]
+    assert script.get_heads() == ["0022_priority_overrides"]
     assert script.get_revision("0014_intake").down_revision == REVISION
     assert script.get_revision("0014_review").down_revision == "0018_source_unavailable_items"
 

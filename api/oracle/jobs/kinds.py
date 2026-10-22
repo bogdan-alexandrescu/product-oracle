@@ -41,6 +41,8 @@ MAX_TOKENS = {
     "quality_review": 4000,
     "refinement_batch": 16000,
     "decision_options": 4000,
+    # A synchronous call inside POST /v1/priorities/overrides (oracle.priorities.reason_check).
+    "override_reason_check": 600,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
