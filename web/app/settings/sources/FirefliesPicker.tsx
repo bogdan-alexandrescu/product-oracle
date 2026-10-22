@@ -130,6 +130,12 @@ function useDebounced<T>(value: T, ms = 300): T {
   return v;
 }
 
+/** When a limit answer (429) may be retried, as Date.now(); null for other errors. */
+function retryAtOf(e: unknown): number | null {
+  const wait = e instanceof ApiError && e.status === 429 ? e.retryAfter : undefined;
+  return wait ? Date.now() + wait * 1000 : null;
+}
+
 type MeetingState = {
   key: string;
   rows: Meeting[];
@@ -161,9 +167,7 @@ function useMeetings(connectionId: string, search: string, from?: string, to?: s
         s.key !== key ? s : { key, rows: reset ? page.meetings : [...s.rows, ...page.meetings], next: page.next_cursor ?? null, loading: false, error: null, retryAt: null },
       );
     } catch (e) {
-      const wait = e instanceof ApiError && e.status === 429 ? e.retryAfter : undefined;
-      const retryAt = wait ? Date.now() + wait * 1000 : null;
-      if (!onAuth(e)) setState((s) => (s.key !== key ? s : { ...s, loading: false, error: errorMessage(e), retryAt }));
+      if (!onAuth(e)) setState((s) => (s.key !== key ? s : { ...s, loading: false, error: errorMessage(e), retryAt: retryAtOf(e) }));
     }
   }
 
@@ -235,13 +239,18 @@ export function FirefliesPicker({
 
   const set = (patch: Partial<FirefliesConfig>) => onChange({ ...value, ...patch });
 
+  // The series list spends the same browse budget: its limit alert waits out the 429 too.
+  const [seriesRetryAt, setSeriesRetryAt] = useState<number | null>(null);
   const series = useQuery(`ff-series|${connectionId}|${from ?? ""}|${to ?? ""}|${choosing}`, () =>
     choosing
       ? unwrap(
           api.GET("/v1/connections/{connection_id}/fireflies/series", {
             params: { path: { connection_id: connectionId }, query: { from: from || undefined, to: to || undefined } },
           }),
-        )
+        ).catch((e: unknown) => {
+          setSeriesRetryAt(retryAtOf(e));
+          throw e;
+        })
       : Promise.resolve(null),
   );
   const meetings = useMeetings(connectionId, query, from, to, choosing);
@@ -374,7 +383,11 @@ export function FirefliesPicker({
       {choosing && (
         <div className="grid min-w-0 gap-4 @[700px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           <Section title="Series" count={series.data ? seriesRows.length : undefined}>
-            {series.error && <Notice tone="error">{series.error}</Notice>}
+            {series.error && (
+              <Notice tone="error" action={<RetryButton key={seriesRetryAt ?? 0} retryAt={seriesRetryAt} onRetry={() => void series.reload()} />}>
+                {series.error}
+              </Notice>
+            )}
             {!series.data && !series.error && <span className="block h-11 animate-pulse rounded-button bg-surface2" aria-busy />}
             {series.data && seriesRows.length === 0 && <p className="px-1 text-[15px] text-text2">No recurring meetings</p>}
             {seriesFull && (
