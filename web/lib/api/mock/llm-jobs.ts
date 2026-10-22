@@ -9,7 +9,7 @@ import { wordDiff } from "@/lib/diff";
 import { turnedOff } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 
-import { KIND as BATCH, nextDraftRoute, runBatch, stageRoute, stateOf, type StartRun } from "./next-draft";
+import { KIND as BATCH, nextDraftRoute, runBatch, stageRoute, stateOf, type NextDraftChangeRow, type StartRun } from "./next-draft";
 
 type Job = Schemas["LlmJobOut"];
 type Suggestion = Schemas["SuggestionOut"];
@@ -27,6 +27,8 @@ type Doc = { id: string; slug: string; title: string };
 export interface LlmDb {
   jobs: Job[];
   suggestions: Suggestion[];
+  /** G4: discussions' section changes staged for the next draft (a mock db saved before G4 has none). */
+  next_draft_changes?: NextDraftChangeRow[];
   /** Job kinds an owner turned off, per document id. */
   disabled: Record<string, Job["kind"][]>;
 }
@@ -58,6 +60,8 @@ export type LlmContext = {
     replace: Record<string, { heading: string; body: string }>,
     resolutions: { feedback_id: string; status: "addressed" | "declined"; note: string | null }[],
   ) => Version;
+  /** G4: a discussion as the caller sees it (a private one they are not in names nothing). */
+  discussion?: (id: string) => Schemas["StagingDiscussion"] | null;
   /** A member's name (their email) for "accepted by". */
   memberName?: (id: string) => string | null;
   /** D12: the mock's override of the agents' run estimate (the "costly" setting). */

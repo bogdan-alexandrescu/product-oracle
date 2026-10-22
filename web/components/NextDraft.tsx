@@ -22,7 +22,7 @@ type PreviewSection = Schemas["NextDraftSection"];
 type AgentItem = Schemas["AgentItem"];
 type Plan = Schemas["NextDraftPlan"];
 /** What Build sends: the ticked text changes and items for the agents, and the engine the plan chose. */
-type Choice = { engine: Plan["engine"]; suggestion_ids: string[]; feedback_ids: string[] };
+type Choice = { engine: Plan["engine"]; suggestion_ids: string[]; feedback_ids: string[]; next_draft_change_ids: string[] };
 
 /** `?build=1` on a document page (the Inbox's "Build draft" action) opens the sheet. */
 export const BUILD_PARAM = "build";
@@ -66,7 +66,7 @@ export function BuildDraftButton({ doc }: { doc: string }) {
   const data = q.data;
   if (!canBuild || !data) return null;
   const job = data.draft_job;
-  const count = data.items.length + data.agent_items.length;
+  const count = data.items.length + data.agent_items.length + (data.next_draft_changes ?? []).length;
   if (!count && !job) return null;
   const label = building(job?.status)
     ? `Building draft ${data.next_version}`
@@ -230,9 +230,9 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
     }
   }
 
-  const build = ({ engine, suggestion_ids, feedback_ids }: Choice) =>
+  const build = ({ engine, suggestion_ids, feedback_ids, next_draft_change_ids }: Choice) =>
     act(async () => {
-      const body = { suggestion_ids, feedback_ids, depth: "standard" as const };
+      const body = { suggestion_ids, feedback_ids, next_draft_change_ids, depth: "standard" as const };
       if (engine === "agents") {
         // D12: the agents write the draft in a feedback-loop run; its page follows it.
         const run = await unwrap(api.POST("/v1/documents/{doc}/next-draft/run", { params: { path: { doc } }, body }));
@@ -433,6 +433,8 @@ function PickStep({
   );
   const items = all.data?.items ?? staged.items;
   const agents: AgentItem[] = all.data?.agent_items ?? staged.agent_items;
+  // G4: the discussions' section changes, ticked by default like the text changes.
+  const discussed = all.data?.next_draft_changes ?? staged.next_draft_changes ?? [];
   // Ids the approver changed from their default (ticked, or unticked for a gone section).
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const flip = (id: string) => {
@@ -444,10 +446,12 @@ function PickStep({
   const ticked = (i: StagedItem) => !i.section_locked && i.section_gone === flipped.has(i.suggestion_id);
   const texts = items.filter(ticked);
   const agentsOn = agents.filter((a) => !flipped.has(a.feedback_id));
-  const chosen = texts.length + agentsOn.length;
+  const discussedOn = discussed.filter((d) => !d.section_locked && d.section_gone === flipped.has(d.id));
+  const chosen = texts.length + agentsOn.length + discussedOn.length;
   const body = {
     suggestion_ids: texts.map((i) => i.suggestion_id),
     feedback_ids: agentsOn.map((a) => a.feedback_id),
+    next_draft_change_ids: discussedOn.map((d) => d.id),
     depth: "standard" as const,
   };
   const live = useLive(
@@ -469,7 +473,7 @@ function PickStep({
             <VersionStep from={staged.latest_version} to={next} />
           </HeroChip>
           <HeroChip tone="accent">
-            <span data-testid="pick-count">{chosen}</span> of {items.length + agents.length} staged
+            <span data-testid="pick-count">{chosen}</span> of {items.length + agents.length + discussed.length} staged
           </HeroChip>
           <InfoTip label="Build draft" align="start" side="bottom" hero>
             Oracle rewrites the sections text changes touch, together, and you review one preview; anything that needs more than a
@@ -494,7 +498,15 @@ function PickStep({
           <Button
             variant="primary"
             disabled={busy || !plan || !!plan.refused}
-            onClick={() => plan && onBuild({ engine: plan.engine, suggestion_ids: body.suggestion_ids, feedback_ids: body.feedback_ids })}
+            onClick={() =>
+              plan &&
+              onBuild({
+                engine: plan.engine,
+                suggestion_ids: body.suggestion_ids,
+                feedback_ids: body.feedback_ids,
+                next_draft_change_ids: body.next_draft_change_ids,
+              })
+            }
           >
             Build draft {next}
           </Button>
@@ -540,6 +552,39 @@ function PickStep({
               </li>
             );
           })}
+        </Group>
+      )}
+      {discussed.length > 0 && (
+        <Group label="From discussions" testId="discussion-list">
+          {discussed.map((d) => (
+            <li key={d.id} className="border-b border-line py-2.5 last:border-b-0" data-testid="discussion-item">
+              <label className={`flex items-start gap-3 ${d.section_locked ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                <Tick
+                  label={`Include ${d.section_heading}: ${d.instruction}`}
+                  checked={!d.section_locked && d.section_gone === flipped.has(d.id)}
+                  disabled={d.section_locked}
+                  onChange={() => flip(d.id)}
+                />
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-text">Section {d.section_heading}</span>
+                    {d.section_locked && (
+                      <Chip kind="warn">
+                        <Icon name="lock" size={16} />
+                        Approved and locked
+                      </Chip>
+                    )}
+                  </span>
+                  <span className="text-[15px] leading-[22px] text-text">{d.instruction}</span>
+                  {d.reason && <span className="text-sm leading-5 text-text2">{d.reason}</span>}
+                  <span className="flex items-center gap-1 text-[13px] text-text2" data-testid="discussion-origin">
+                    <Icon name="comment" size={16} />
+                    {d.origin_line}
+                  </span>
+                </span>
+              </label>
+            </li>
+          ))}
         </Group>
       )}
       {agents.length > 0 && (

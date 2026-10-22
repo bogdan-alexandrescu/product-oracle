@@ -16,6 +16,7 @@ import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from 
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { routeStaging } from "./staging";
 import { emptyDiscussions, routeDiscussions, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
 import { routeEngineering, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
@@ -1133,6 +1134,13 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       importSections(db, doc, base as VersionRow, { [key]: { heading, body } }, resolutions),
     importSections: (doc, base, replace, resolutions) => importSections(db, doc, base as VersionRow, replace, resolutions),
     memberName: (id) => db.members.find((m) => m.id === id)?.email ?? null,
+    discussion: (id) => {
+      const d = db.discussions?.discussions.find((x) => x.id === id);
+      if (!d) return null;
+      const inIt = db.discussions!.participants.some((x) => x.discussion_id === id && x.user_id === userId && !x.left_at);
+      const priv = d.visibility === "private";
+      return priv && !inIt ? { id: null, title: null, private: true } : { id: d.id, title: d.title, private: priv };
+    },
     runEstimateUsd: () => db.next_draft_run_usd ?? null,
     // D12: Build next draft with the agents: a feedback-loop run, estimated and started.
     startRun: async (doc, input) => {
@@ -2415,6 +2423,23 @@ async function route(db: Db, req: Request): Promise<Response> {
   const llm = llmContext(db, me.id, me.role);
   const jobs = await llmJobsRoute(llm, req, p, q);
   if (jobs) return jobs;
+  // G4 One staging list (./staging.ts) checks roles itself.
+  if (p[1] === "staging" || p[1] === "next-draft-changes") {
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    const runs = db.runs;
+    const staged = await routeStaging(
+      {
+        llm,
+        role: me.role,
+        checkpoint: (id) => runs.runs.flatMap((r) => r.checkpoints).find((c) => c.id === id) ?? null,
+        draft: (id) => runs.drafts?.[id] ?? null,
+      },
+      req,
+      p,
+      q,
+    );
+    if (staged) return staged;
+  }
   // PRD quality and readiness, outcomes and learnings (./quality.ts) check roles themselves.
   const v2db = ensureV2(db);
   db.quality ??= seedQuality();
