@@ -1,0 +1,49 @@
+import { expect, test } from "@playwright/test";
+
+import { login, seedRoadmapReview } from "./helpers";
+
+/**
+ * D4 A note is all the agents get: sending a checkpoint back delivers a structured review file
+ * (review.yaml) built from the staged actions, one entry per item. The note is optional once
+ * something is staged, and the decided checkpoint shows what was sent.
+ */
+
+// Card sent-review: protects = a person sends back staged decisions without a note and sees
+// what the agents got; fails_when = Request changes stays disabled with staged actions, no
+// "View review" link, or the review is empty; no_claim = the agents' prompts (the API tests).
+test("send back with staged actions and no note, then view the review that was sent", async ({ page }) => {
+  await login(page);
+  await seedRoadmapReview(page);
+  await page.goto("/runs");
+  await page.getByTestId("run-row").filter({ hasText: "usage-alerts-roadmap" }).getByRole("link").first().click();
+  await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
+
+  const decision = page.getByRole("group", { name: "Decide: Roadmap items" });
+  const requestChanges = decision.getByRole("button", { name: "Request changes" });
+  // Nothing staged and no note: nothing to send.
+  await expect(requestChanges).toBeDisabled();
+
+  const slack = page.getByTestId("item-reasons").filter({ hasText: "Slack alerts" });
+  await slack.getByRole("button", { name: "Remove date", exact: true }).click();
+  await expect(slack.getByTestId("draft-action")).toHaveText(/Staged by/);
+  const push = page.getByTestId("item-reasons").filter({ hasText: "Mobile push" });
+  await push.getByRole("button", { name: "Drop", exact: true }).click();
+  await expect(push.getByTestId("draft-action")).toHaveText(/Staged by/);
+
+  await expect(decision.getByLabel("Note for the agents")).toHaveValue("");
+  await expect(requestChanges).toBeEnabled();
+  await requestChanges.click();
+
+  const items = page.getByTestId("segment-roadmap_items");
+  await expect(items).toContainText("attempt 2");
+  await expect(items).toContainText("Running");
+  await expect(items.getByTestId("checkpoint-roadmap_items")).toContainText("Changes requested");
+  const sent = items.getByTestId("sent-review");
+  await expect(sent).toContainText("Sent back · 2 entries · View review");
+  await sent.getByRole("button", { name: "View review" }).click();
+  const yaml = sent.getByTestId("sent-review-yaml");
+  await expect(yaml).toContainText("# Review of roadmap_items.yaml, attempt 1, at the Roadmap items checkpoint.");
+  await expect(yaml).toContainText("- id: slack-alerts\n  action: change\n  changes:\n    milestone:\n      date: null");
+  await expect(yaml).toContainText("- id: mobile-push\n  action: drop");
+  await expect(yaml).toContainText("general_note: null");
+});

@@ -506,6 +506,9 @@ class CheckpointOut(BaseModel):
     decided_by: uuid.UUID | None = None
     decided_at: datetime | None = None
     note: str | None = None
+    # The structured review a send-back delivered (D4, oracle.runs.review_file); None
+    # otherwise.
+    review: dict[str, Any] | None = None
     payload: dict[str, Any]
     created_at: datetime
     # Whether the caller's role may decide it (pending checkpoints only).
@@ -657,7 +660,8 @@ class CheckpointDecision(BaseModel):
     # redo re-runs the segment as a new workflow with the console's findings (one more
     # segment); continue follows the workflow, which went on regardless.
     decision: Literal["approved", "changes_requested", "confirm", "redo", "continue"]
-    # Required with changes_requested: it goes to the agents re-running the segment.
+    # With changes_requested: required unless the shared draft has a staged action (D4);
+    # it goes to the agents as the review's general_note.
     note: str | None = Field(default=None, max_length=10_000)
     # D8: the draft revision the decider saw (``GET .../review``). When given and the draft
     # changed since, the decision is refused (409 ``review_changed``) and nothing changes.
@@ -1113,6 +1117,9 @@ class CheckpointReview(BaseModel):
     items: list[ReviewItem] = []
     tally: ReviewTally
     note: str | None = None
+    # Once sent back: the structured review the agents got (D4), as stored and as YAML.
+    sent_review: dict[str, Any] | None = None
+    sent_review_yaml: str | None = None
     can_read: bool = True
     can_suggest: bool = False
     can_stage: bool = False

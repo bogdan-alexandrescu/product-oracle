@@ -15739,6 +15739,68 @@
         }
       }
     },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review.yaml": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Checkpoint Review File",
+        "description": "The structured review a send-back delivered to the agents (D4), any member: the\n``review.yaml`` of a decided checkpoint. 404 while pending or when none was sent.",
+        "operationId": "get_checkpoint_review_file",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions": {
       "post": {
         "tags": [
@@ -37366,6 +37428,18 @@
             ],
             "title": "Note"
           },
+          "review": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review"
+          },
           "payload": {
             "additionalProperties": true,
             "type": "object",
@@ -37525,6 +37599,29 @@
               }
             ],
             "title": "Note"
+          },
+          "sent_review": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent Review"
+          },
+          "sent_review_yaml": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent Review Yaml"
           },
           "can_read": {
             "type": "boolean",
@@ -50279,6 +50376,18 @@
               }
             ],
             "title": "Note"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review"
           },
           "payload": {
             "additionalProperties": true,
