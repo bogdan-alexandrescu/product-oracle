@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { Button, Icon, InfoTip } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
@@ -48,7 +48,8 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
   };
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // A field that handled Escape itself (closing its suggestions) marks it handled.
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !e.defaultPrevented && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -171,10 +172,17 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                 <FlowPointers flows={pointers} />
               </fieldset>
 
-              <label className="block">
-                <span className={legendCls}>{flow.requires_document ? "PRD or roadmap to revise" : "PRD document"}</span>
+              <div>
+                <span id="run-document-label" className={legendCls}>
+                  {flow.requires_document ? "PRD or roadmap to revise" : "PRD document"}
+                </span>
                 {flow.requires_document ? (
-                  <select className={inputCls} value={document} onChange={(e) => change(setDocument)(e.target.value)}>
+                  <select
+                    aria-labelledby="run-document-label"
+                    className={inputCls}
+                    value={document}
+                    onChange={(e) => change(setDocument)(e.target.value)}
+                  >
                     <option value="">Choose a document…</option>
                     {docOptions.map((d) => (
                       <option key={d.id} value={d.slug}>
@@ -184,25 +192,14 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                     ))}
                   </select>
                 ) : (
-                  <>
-                    <input
-                      className={inputCls}
-                      list="run-documents"
-                      placeholder="new-prd-slug or an existing document"
-                      value={document}
-                      onChange={(e) => change(setDocument)(e.target.value)}
-                    />
-                    <datalist id="run-documents">
-                      {docOptions.filter((d) => d.kind === "prd").map((d) => (
-                        <option key={d.id} value={d.slug}>
-                          {d.title}
-                        </option>
-                      ))}
-                    </datalist>
-                    <span className="sr-only">A new slug creates the document when the draft is imported.</span>
-                  </>
+                  <DocumentField
+                    className={inputCls}
+                    value={document}
+                    onChange={change(setDocument)}
+                    options={docOptions.filter((d) => d.kind === "prd")}
+                  />
                 )}
-              </label>
+              </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
@@ -320,5 +317,103 @@ function FlowPointers({ flows }: { flows: Flow[] }) {
         );
       })}
     </ul>
+  );
+}
+
+type DocOption = { id: string; slug: string; title: string };
+
+/** A new slug or an existing PRD, with its own suggestion list: Escape closes the list first. */
+function DocumentField({
+  className,
+  value,
+  onChange,
+  options,
+}: {
+  className: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: DocOption[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const q = value.trim().toLowerCase();
+  const matches = options
+    .filter((d) => d.slug !== value && (d.slug.toLowerCase().includes(q) || d.title.toLowerCase().includes(q)))
+    .slice(0, 8);
+  const shown = open && matches.length > 0;
+
+  const pick = (slug: string) => {
+    onChange(slug);
+    setOpen(false);
+    setActive(-1);
+  };
+
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape" && shown) {
+      e.preventDefault();
+      setOpen(false);
+      setActive(-1);
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!shown) return setOpen(true);
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      setActive((a) => (a + step + matches.length) % matches.length);
+    } else if (e.key === "Enter" && shown && active >= 0 && matches[active]) {
+      e.preventDefault();
+      pick(matches[active].slug);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <input
+        role="combobox"
+        aria-labelledby="run-document-label"
+        aria-describedby="run-document-hint"
+        aria-autocomplete="list"
+        aria-expanded={shown}
+        aria-controls="run-documents"
+        aria-activedescendant={shown && active >= 0 ? `run-document-${active}` : undefined}
+        autoComplete="off"
+        className={className}
+        placeholder="new-prd-slug or an existing document"
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+          setActive(-1);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={onKeyDown}
+      />
+      {shown && (
+        <ul
+          id="run-documents"
+          role="listbox"
+          aria-label="Document suggestions"
+          className="absolute inset-x-0 top-full z-10 mt-1 max-h-56 overflow-y-auto rounded-inspector border border-line bg-surface py-1 shadow-tip"
+        >
+          {matches.map((d, i) => (
+            <li
+              key={d.id}
+              id={`run-document-${i}`}
+              role="option"
+              aria-selected={i === active}
+              className={`flex min-w-0 cursor-pointer items-baseline gap-2 px-3 py-1.5 ${i === active ? "bg-surface2" : "hover:bg-surface2"}`}
+              // Keep focus in the field so the click lands before blur closes the list.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pick(d.slug)}
+            >
+              <span className="truncate font-semibold">{d.slug}</span>
+              <span className="truncate text-text2">{d.title}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <span id="run-document-hint" className="sr-only">
+        A new slug creates the document when the draft is imported.
+      </span>
+    </div>
   );
 }
