@@ -107,6 +107,7 @@ test("the New run dialog no longer offers the feedback loop and points at where 
     "Build next draft · open a PRD or roadmap and use Build next draft",
     "PRD to roadmap · Plan › Roadmap documents",
     "Vision or strategy · Company › Strategy, New vision or Draft next version",
+    "Build the baseline · Baseline",
   ]);
   await expect(pointers.getByRole("link", { name: "PRD to roadmap · Plan › Roadmap documents" })).toHaveAttribute("href", "/plan/documents");
   // H4: a vision or strategy draft starts on Company › Strategy.

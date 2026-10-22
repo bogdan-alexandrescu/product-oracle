@@ -16,6 +16,7 @@ import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from 
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { emptyDiscussions, routeDiscussions, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
 import { routeEngineering } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
@@ -23,7 +24,7 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
-import { enlargeRuns, routeRuns, seedFeatureSetRun, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngReviewRun, seedFeatureSetRun, seedPriorityRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
@@ -115,6 +116,8 @@ export interface Db {
   autonomy?: AutonomyDb;
   /** Every credential by kind, changed passwords (./account.ts); seeded on first use. */
   account?: AccountDb;
+  /** Discussions (./discussions.ts, G1); seeded in the "discussions" scenario only. */
+  discussions?: DiscussionsDb;
 }
 
 type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
@@ -225,7 +228,10 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
- * problem (C6, saved-addresses).
+ * problem (C6, saved-addresses);
+ * "discussions" as the default company plus one private discussion the commenter started
+ * with the approver on team-workspaces v2's Problem, 3 messages from the 2 of them (G1,
+ * ./discussions.ts).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -419,7 +425,7 @@ function seedPrivateFinding(): Db {
 function seedManyPeople(): Db {
   const db = seedQuestions();
   const join = (email: string, i: number) => ({
-    email, role: "commenter" as const, created_at: `2026-09-${String(5 + i).padStart(2, "0")}T09:00:00Z`,
+    email, role: "commenter" as const, engineering_lead: false, created_at: `2026-09-${String(5 + i).padStart(2, "0")}T09:00:00Z`,
     id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0,
   });
   for (let i = 0; i < 20; i++) db.members.push(join(`member.${String(i).padStart(2, "0")}@example.com`, i));
@@ -586,10 +592,37 @@ function seedSuggestions(): Db {
   return db;
 }
 
+/**
+ * A3 "eng-review" scenario: the default company with commenter@example.com named engineering
+ * lead, and a run waiting at an Engineering review stop (./runs.ts).
+ */
+function seedEngReview(): Db {
+  const db = seed();
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
+  seeded("eng-review", () => seedEngReviewRun(db.runs!, runsContext(db)));
+  return db;
+}
+
 /** The default seed plus a run waiting at its feature set with a blocking problem (C6, ./runs.ts). */
 function seedFeatureSet(): Db {
   const db = seed();
   seeded("feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db)));
+  return db;
+}
+
+/**
+ * C8 "priority-order" scenario: two runs waiting at the priority stop (./runs.ts
+ * seedPriorityRuns), one for the Saved addresses PRD, and a run order saved for the
+ * Checkout redesign PRD.
+ */
+function seedPriorityOrder(): Db {
+  const db = seed();
+  const at = "2026-10-18T09:00:00Z";
+  db.documents.push({
+    id: uuid(), slug: "saved-addresses", title: "Saved addresses PRD", status: "draft", kind: "prd",
+    template: null, template_version: null, theme: null, created_at: at, updated_at: at,
+  });
+  seeded("priority-order", () => seedPriorityRuns(db.runs!, runsContext(db)));
   return db;
 }
 
@@ -1085,6 +1118,15 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     userId: db.user_id,
     userName: db.session ?? db.members.find((m) => m.id === db.user_id)?.email ?? null,
     userRole: member ? withMockRole(member).role : null,
+    // A3, as oracle.members.leads.may_decide: an engineering stop outside prd_to_spec goes to
+    // the engineering leads and owners once one is named, else to its role and above.
+    mayDecide: (c, flow) => {
+      if (!member || !ENGINEERING_KINDS.includes(c.kind)) return true;
+      const role = withMockRole(member).role;
+      const leads = engineeringLeads(db);
+      if (flow !== "prd_to_spec" && leads.length) return role === "owner" || (leads.includes(member.id) && atLeast(role, "commenter"));
+      return atLeast(role, c.approver_role);
+    },
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     feedback: db.feedback,
     documents: db.documents,
@@ -1193,6 +1235,10 @@ function load(): Db {
           ? seedBigPrd
           : scenario === "feature-set"
             ? seedFeatureSet
+          : scenario === "eng-review"
+            ? seedEngReview
+          : scenario === "priority-order"
+            ? seedPriorityOrder
           : scenario === "next-draft" || scenario === "next-draft-costly"
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "questions"
@@ -1211,9 +1257,60 @@ function load(): Db {
   // other specs' Inbox counts stay as they were.
   if (scenario === "launches") db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
   db.autonomy = emptyAutonomy();
+  // Discussions (G1): one private discussion in the "discussions" scenario; none otherwise,
+  // so other specs' counts stay as they were.
+  db.discussions = scenario === "discussions" ? seedDiscussionsScenario(db) : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   save(db);
   return db;
+}
+
+/** "discussions": the commenter's private discussion with the approver on team-workspaces v2's Problem. */
+function seedDiscussionsScenario(db: Db): DiscussionsDb {
+  const doc = findDocument(db, "team-workspaces")!;
+  const heading = findVersion(db, doc, 2)!.sections.find((s) => s.section_key === "problem")!.heading;
+  return seedDiscussions({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, doc.id, `${doc.title} · ${heading}`, `/documents/${doc.slug}/v/2#problem`);
+}
+
+const CHECKPOINT_NAMES: Record<string, string> = {
+  baseline_confirm: "Confirm the baseline",
+  feature_set: "Feature set",
+  priority_order: "Priority order",
+  prd_review: "PRD review",
+  eng_review: "Engineering review",
+  roadmap_items: "Roadmap items",
+  roadmap_review: "Roadmap review",
+  request_triage: "Request triage",
+};
+
+/** A discussion's subject as the API resolves it (oracle.discussions.service): documents, sections and run checkpoints are checked; other kinds are taken as given. */
+function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): SubjectInfo | { status: number; detail: string } {
+  if (kind === "document" || kind === "section" || kind === "roadmap_item") {
+    const doc = findDocument(db, String(s.document_id));
+    if (!doc) return { status: 404, detail: "Document not found" };
+    const v = findVersion(db, doc, Number(s.version));
+    if (!v) return { status: 404, detail: `Version ${s.version} not found` };
+    const url = `/documents/${doc.slug}/v/${v.number}`;
+    if (kind === "document") return { key: `document:${doc.id}`, label: doc.title, url, document_id: doc.id };
+    if (kind === "roadmap_item")
+      return { key: `roadmap_item:${doc.id}:${s.item_key}`, label: `${doc.title} · ${s.item_key}`, url: `${url}/items`, document_id: doc.id };
+    const section = v.sections.find((x) => x.section_key === s.section_key);
+    if (!section) return { status: 422, detail: `Section ${s.section_key} is not in version ${v.number}` };
+    return { key: `section:${doc.id}:${section.section_key}`, label: `${doc.title} · ${section.heading}`, url: `${url}#${section.section_key}`, document_id: doc.id };
+  }
+  if (kind === "checkpoint" || kind === "checkpoint_item") {
+    const run = db.runs?.runs.find((r) => r.id === s.run_id);
+    if (!run) return { status: 404, detail: "Run not found" };
+    const cp = run.checkpoints.find((c) => c.id === s.checkpoint_id);
+    if (!cp) return { status: 404, detail: "Checkpoint not found" };
+    const label = `${run.flow_title} · ${CHECKPOINT_NAMES[cp.kind] ?? cp.kind}`;
+    if (kind === "checkpoint") return { key: `checkpoint:${run.id}:${cp.kind}`, label, url: `/runs/${run.id}`, run_id: run.id };
+    return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${s.item_key}`, url: `/runs/${run.id}`, run_id: run.id };
+  }
+  if (kind === "priorities") return { key: "priorities", label: "Priority order", url: "/priorities" };
+  if (kind === "screen") return { key: `screen:${s.path}`, label: String(s.path), url: String(s.path) };
+  const id = Object.values(s)[0];
+  return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
 }
 
 function save(db: Db) {
@@ -1552,8 +1649,15 @@ const atLeast = (role: Role, min: Role) => ROLE_ORDER.indexOf(role) >= ROLE_ORDE
 const forbidden = (min: Role) => json(403, { detail: `Requires the ${min} role` });
 
 function meOut(db: Db, m: MemberRow): Schemas["Me"] {
-  return { kind: "user", tenant_id: db.tenant_id, user_id: m.id, email: m.email, role: m.role };
+  return { kind: "user", tenant_id: db.tenant_id, user_id: m.id, email: m.email, role: m.role, engineering_lead: !!m.engineering_lead };
 }
+
+/** A3, as oracle.members.leads: the active members carrying the engineering lead flag. */
+function engineeringLeads(db: Db): string[] {
+  return db.members.filter((x) => x.engineering_lead && x.status !== "disabled").map((x) => x.id);
+}
+
+const VIEWER_REFUSED = "A viewer can't be the engineering lead. Make them a commenter or above first.";
 
 /**
  * GET /v1/setup (A1), as oracle.setup: the caller's steps from the mock's own stores. The
@@ -1564,6 +1668,7 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
   const sources = sourceCount();
   const people = db.members.filter((x) => x.status !== "disabled").length;
   const invites = db.invites.filter((i) => i.status === "open").length;
+  const built = lastBaselineBuild(db.runs);
   const personal: Schemas["SetupStep"][] = [
     { key: "connect", done: facts.connections > 0, count: facts.connections, detail: null },
     { key: "sources", done: sources > 0, count: sources, detail: null },
@@ -1576,7 +1681,9 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
       count: facts.domains.length,
       detail: facts.domains.length === 1 ? facts.domains[0] : null,
     },
+    { key: "eng_lead", done: engineeringLeads(db).length > 0, count: engineeringLeads(db).length, detail: null },
     { key: "horizons", done: facts.horizons, count: null, detail: null },
+    { key: "build_baseline", done: built != null, count: null, detail: built },
   ];
   const steps = me.role === "owner" ? [...personal, ...owner] : me.role === "viewer" ? [] : personal;
   return {
@@ -1601,11 +1708,18 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
     // A disabled owner is not another owner.
     const otherOwner = db.members.some((x) => x.id !== target.id && x.role === "owner" && x.status !== "disabled");
     if (m === "PATCH") {
-      const { role } = await body<Schemas["MemberPatch"]>();
-      if (target.role === "owner" && role !== "owner" && target.status !== "disabled" && !otherOwner) {
+      // A role, the engineering lead flag (A3), or both: role first.
+      const { role, engineering_lead: lead } = await body<Schemas["MemberPatch"]>();
+      if (role == null && lead == null) return json(422, { detail: "Send role, engineering_lead or both" });
+      const nextRole = role ?? target.role;
+      if (role != null && target.role === "owner" && role !== "owner" && target.status !== "disabled" && !otherOwner) {
         return json(409, { detail: "Cannot demote the last owner; make someone else owner" });
       }
-      target.role = role;
+      if (lead && nextRole === "viewer") return json(422, { detail: VIEWER_REFUSED });
+      target.role = nextRole;
+      // A viewer never carries the flag: a demotion to viewer clears it.
+      if (nextRole === "viewer") target.engineering_lead = false;
+      if (lead != null) target.engineering_lead = lead;
       return json(200, out(target));
     }
     // Removing a member disables them (C2): the row stays; an owner can restore them.
@@ -1643,6 +1757,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       const input = await body<Schemas["InviteCreate"]>();
       const email = input.email.trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(422, { detail: "Not an email address" });
+      if (input.engineering_lead && input.role === "viewer") return json(422, { detail: VIEWER_REFUSED });
       if (db.members.some((x) => x.email === email)) return json(409, { detail: `${email} is already a member` });
       if (db.invites.some((i) => i.email === email && i.status === "open")) {
         return json(409, { detail: `${email} already has an open invite; revoke it first` });
@@ -1651,6 +1766,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         id: uuid(),
         email,
         role: input.role,
+        engineering_lead: !!input.engineering_lead,
         status: "open",
         invited_by: me.id,
         created_at: now(),
@@ -1906,6 +2022,19 @@ async function route(db: Db, req: Request): Promise<Response> {
   );
   if (accountOut) return accountOut;
   if (p[1] === "me") return json(200, meOut(db, me));
+  if (p[1] === "discussions") {
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    const discussionsCtx: DiscussionsContext = {
+      db: (db.discussions ??= emptyDiscussions()),
+      members: db.members,
+      me: { id: me.id, role: me.role },
+      resolve: (kind, subject) => discussionSubject(db, kind, subject),
+      uuid,
+      now,
+    };
+    const res = await routeDiscussions(discussionsCtx, req, p, q);
+    if (res) return res;
+  }
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
   // Tech briefs (./engineering.ts): every member reads.
   const briefs = routeEngineering(req, p, q, db.documents);
@@ -2118,7 +2247,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (v2) return v2;
 
   // Roadmap alignment and product tracks (CR-11).
-  const roadmapCtx: RoadmapContext = { userId: me.id, role: me.role, documents: db.documents, versions: db.versions };
+  const roadmapCtx: RoadmapContext = {
+    userId: me.id,
+    role: me.role,
+    engineeringLead: engineeringLeads(db).includes(me.id),
+    documents: db.documents,
+    versions: db.versions,
+  };
   db.roadmap ??= seedRoadmap(roadmapCtx, localStorage.getItem(MOCK_SCENARIO_KEY));
   const roadmapRes = await routeRoadmap(roadmapCtx, db.roadmap, req, p, q);
   if (roadmapRes) return roadmapRes;

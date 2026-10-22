@@ -24,6 +24,7 @@ from oracle.auth.models import User
 from oracle.connections.models import Connection
 from oracle.members.models import Invite
 from oracle.preferences.models import UserPreference
+from oracle.runs.models import Run
 from oracle.sources.models import Source
 from oracle.sources.service import company_domains
 from oracle.tenant_settings import TenantSetting
@@ -40,17 +41,19 @@ def known_step(key: str) -> str:
     return key
 
 
-# A1's keys: connect, sources, invite, domains, horizons (A3 adds eng_lead). Later picks
-# add more through STEPS, so the type is a str checked against the registry.
+# A1's keys: connect, sources, invite, domains, horizons, A3's eng_lead and B1's
+# build_baseline. Later picks add more through STEPS, so the type is a str checked
+# against the registry.
 SetupKey = Annotated[str, AfterValidator(known_step)]
 
 
 class SetupStep(BaseModel):
     key: SetupKey
     done: bool
-    # Connections, sources, people, domains; None for horizons.
+    # Connections, sources, people, domains, engineering leads; None for horizons.
     count: int | None = None
-    # The single domain when there is exactly one.
+    # The single domain when there is exactly one; build_baseline: when the last build
+    # finished (ISO 8601).
     detail: str | None = None
 
 
@@ -112,6 +115,16 @@ async def _domains(db: AsyncSession, principal: Principal) -> SetupStep:
     )
 
 
+async def _eng_lead(db: AsyncSession, principal: Principal) -> SetupStep:
+    """Done once an owner named an engineering lead (A3): active members flagged."""
+    n = await db.scalar(
+        select(func.count())
+        .select_from(User)
+        .where(User.engineering_lead.is_(True), User.disabled_at.is_(None))
+    )
+    return SetupStep(key="eng_lead", done=bool(n), count=n)
+
+
 async def _horizons(db: AsyncSession, principal: Principal) -> SetupStep:
     """Done once an owner confirmed or changed them: a stored planning_horizons row."""
     stored = await db.scalar(
@@ -120,12 +133,28 @@ async def _horizons(db: AsyncSession, principal: Principal) -> SetupStep:
     return SetupStep(key="horizons", done=stored is not None)
 
 
+async def _build_baseline(db: AsyncSession, principal: Principal) -> SetupStep:
+    """Done once a Build the baseline run succeeded (B1); detail: the last one's finish."""
+    finished = await db.scalar(
+        select(func.max(func.coalesce(Run.finished_at, Run.created_at))).where(
+            Run.flow == "baseline", Run.status == "succeeded"
+        )
+    )
+    return SetupStep(
+        key="build_baseline",
+        done=finished is not None,
+        detail=finished.isoformat() if finished else None,
+    )
+
+
 STEPS: list[Step] = [
     Step("connect", PERSONAL, _connect),
     Step("sources", PERSONAL, _sources),
     Step("invite", OWNERS, _invite),
     Step("domains", OWNERS, _domains),
+    Step("eng_lead", OWNERS, _eng_lead),
     Step("horizons", OWNERS, _horizons),
+    Step("build_baseline", OWNERS, _build_baseline),
 ]
 
 

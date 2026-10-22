@@ -232,7 +232,7 @@ test("Home: Enter on an In flight row selects it; the inspector's Open opens it"
   await expect(page.getByTestId("home-inspector").getByTestId("row-goals")).toHaveText("G1G2");
 });
 
-test("Home for a viewer: no New PRD, no Import your baseline", async ({ page }) => {
+test("Home for a viewer: no New PRD, no Build the baseline", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("po-mock-role", "viewer"));
   await openHome(page);
   await expect(page.getByTestId("home-goal-G1")).toBeVisible();
@@ -244,7 +244,7 @@ test("Home for a viewer of a new company: one line per block, no actions they ca
   await page.addInitScript(() => localStorage.setItem("po-mock-role", "viewer"));
   await openHome(page, "empty");
   await expect(page.getByTestId("home-goals-empty")).toContainText("No goals yet");
-  await expect(page.getByRole("link", { name: "Import your baseline" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
   await expect(page.getByTestId("home-in-flight-empty")).toContainText("Nothing in flight");
   await expect(page.getByRole("link", { name: "New PRD" })).toHaveCount(0);
 });

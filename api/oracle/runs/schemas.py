@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from oracle.docs.schemas import DocumentKind, ImportProblem, VersionSource
 from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
+from oracle.priorities.schemas import PriorityCheck
 from oracle.reports.schemas import InboxReport, InboxReportFailure
 from oracle.review.schemas import FeedbackKind
 
@@ -16,6 +17,7 @@ Flow = Literal[
     "prd_to_spec",
     "strategy_draft",
     "launch_kit",
+    "baseline",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -148,6 +150,8 @@ class FlowOut(BaseModel):
     in_new_run_dialog: bool = False
     # Where a flow with its own door starts: a pointer line under the dialog's list.
     starts_from: FlowStart | None = None
+    # False: the run writes no document (launch_kit, baseline).
+    writes_document: bool = True
 
 
 class FlowCatalog(BaseModel):
@@ -399,6 +403,8 @@ class SegmentOut(BaseModel):
     previous_attempt: PreviousAttempt | None = None
     # The feature-set segment's check of feature_set.yaml (C6).
     feature_set_check: FeatureSetCheck | None = None
+    # The priority segment's check of priority.yaml (C8).
+    priority_check: PriorityCheck | None = None
     # H11: the baseline's level changed this segment's merge (skipped at observe, or
     # every change a proposal): one line saying so, else None.
     autonomy_note: str | None = None

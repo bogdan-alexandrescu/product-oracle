@@ -1,6 +1,8 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 
 import {
   Button,
@@ -30,6 +32,9 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Method = Schemas["PriorityRanking"]["method"];
 type RankedFeature = Schemas["RankedFeature"];
+type CompareOut = Schemas["CompareOut"];
+type CompareRow = Schemas["CompareRow"];
+type PriorityProblem = Schemas["PriorityProblem"];
 
 const METHODS: { method: Method; label: string }[] = [
   { method: "goal_weighted", label: "Goal-weighted" },
@@ -66,6 +71,34 @@ const CONFIDENCE_SOURCE: Record<Schemas["ConfidenceUsed"]["source"], string> = {
   attrs: "set on the feature",
   default: "assumed",
 };
+
+/** The check of a run's order (C8, oracle.priorities.run_order): a short label per code; the message is the chip's title. */
+const PROBLEMS: Record<string, string> = {
+  unreadable_yaml: "Unreadable file",
+  wrong_version: "Wrong version",
+  unknown_method: "Unknown method",
+  duplicate_key: "Ranked twice",
+  duplicate_rank: "Shared rank",
+  rank_gap: "Gap in the ranks",
+  unknown_feature: "Unknown feature",
+  not_in_scope: "Not in the PRD scope",
+  missing_feature: "Not ranked",
+  before_prerequisite: "Above its prerequisite",
+  differs_from_live: "Differs from live",
+  no_goal: "No confirmed goal",
+};
+
+function ProblemChip({ p }: { p: PriorityProblem }) {
+  return (
+    <Chip kind={p.blocking ? "crit" : "warn"} title={p.message} data-testid={`problem-${p.code}`}>
+      {PROBLEMS[p.code] ?? p.code.replace(/_/g, " ")}
+      <span className="sr-only">: {p.message}</span>
+    </Chip>
+  );
+}
+
+/** Δ: how far the run ranks a feature above (↑) or below (↓) Oracle's live ranking. */
+const deltaText = (d: number | null | undefined) => (d == null ? "—" : d === 0 ? "=" : d > 0 ? `↑${d}` : `↓${-d}`);
 
 const flagOf = (flag: string) => FLAGS[flag] ?? { label: flag.replace(/_/g, " "), kind: "na" as const, title: flag };
 
@@ -104,10 +137,10 @@ function inputValue(v: unknown): string {
 }
 
 /** The ranking method: a radio group drawn as B1's segmented control. */
-function MethodSwitch({ value, onChange }: { value: Method; onChange: (m: Method) => void }) {
+function MethodSwitch({ value, onChange, locked = false }: { value: Method; onChange: (m: Method) => void; locked?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const onKey = (e: KeyboardEvent) => {
-    if (!["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"].includes(e.key)) return;
+    if (locked || !["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"].includes(e.key)) return;
     e.preventDefault();
     const at = METHODS.findIndex((m) => m.method === value);
     const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
@@ -133,9 +166,12 @@ function MethodSwitch({ value, onChange }: { value: Method; onChange: (m: Method
             aria-checked={on}
             tabIndex={on ? 0 : -1}
             data-testid={`method-${m.method}`}
+            // A run's order is ranked by its own method: the switch is locked to it.
+            disabled={locked && !on}
+            title={locked && !on ? "The run's order is ranked by its own method" : undefined}
             onClick={() => onChange(m.method)}
-            className={`flex h-9 items-center border-r border-line px-3.5 text-[15px] font-medium max-[600px]:px-2.5 max-[600px]:text-sm whitespace-nowrap last:border-r-0 ${
-              on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
+            className={`flex h-9 items-center border-r border-line px-3.5 text-[15px] font-medium max-[600px]:px-2.5 max-[600px]:text-sm whitespace-nowrap last:border-r-0 disabled:cursor-not-allowed disabled:text-text2 ${
+              on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2 disabled:hover:bg-transparent"
             }`}
           >
             {m.label}
@@ -147,8 +183,10 @@ function MethodSwitch({ value, onChange }: { value: Method; onChange: (m: Method
 }
 
 /** The selected feature: rank, confidence, score, then how the score was worked out. */
-function FeatureInspector({ f, id }: { f: RankedFeature; id: string }) {
+function FeatureInspector({ f, id, run }: { f: RankedFeature; id: string; run?: CompareRow }) {
   const e = f.explanation;
+  // A feature the run ranks that Oracle's live ranking lacks (a proposal of the run): its own line only.
+  const live = !run || run.live_rank != null || f.entity_id !== "";
   const inputs = Object.entries(e.inputs ?? {}) as [string, Record<string, unknown> | null][];
   return (
     <div id={id}>
@@ -169,11 +207,30 @@ function FeatureInspector({ f, id }: { f: RankedFeature; id: string }) {
         }
         stats={[
           { label: "Rank", value: `#${f.rank}` },
+          ...(run ? [{ label: "Live", value: run.live_rank == null ? "—" : `#${run.live_rank}` }] : []),
           { label: "Confidence", figure: <Ring value={pct(e.confidence.value)} size={46} /> },
           { label: "Score", value: fmt(f.score) },
         ]}
       >
-        <div data-testid={`explanation-${f.key}`}>
+        {run && (
+          <InspectorSection label={`Why rank ${run.run_rank}`} testId="run-explanation">
+            <p className="text-sm break-words">{run.run_explanation ?? "The run gave no explanation."}</p>
+            <p className="tnum mt-1.5 text-sm text-text2">
+              {run.live_rank == null ? "Not in Oracle's live ranking." : `Oracle's live ranking puts it #${run.live_rank} (${deltaText(run.delta)}).`}
+            </p>
+            {run.problems.length > 0 && (
+              <ul className="mt-2 space-y-1 text-sm">
+                {run.problems.map((p, i) => (
+                  <li key={i} className="flex flex-col items-start gap-1">
+                    <ProblemChip p={p} />
+                    <span className="break-words">{p.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </InspectorSection>
+        )}
+        {live && <div data-testid={`explanation-${f.key}`}>
           <InspectorSection
             label="Score"
             tools={
@@ -302,7 +359,7 @@ function FeatureInspector({ f, id }: { f: RankedFeature; id: string }) {
               </ul>
             )}
           </InspectorSection>
-        </div>
+        </div>}
       </Inspector>
     </div>
   );
@@ -379,6 +436,11 @@ function Snapshots({
             >
               <span className="tnum">{formatDateTime(s.created_at)}</span>
               <Chip kind="acc">{METHOD_LABEL[s.method]}</Chip>
+              {s.run_id && (
+                <span className="min-w-0 truncate font-medium" data-testid="snapshot-prd">
+                  {s.document ? `${s.document.title ?? s.document.slug} · ` : ""}approved order
+                </span>
+              )}
               <span className="tnum text-text2">{s.feature_count} features</span>
               <span className="min-w-0 truncate font-mono text-[13px] text-text2">
                 top {s.top.join(", ") || "—"}
@@ -392,8 +454,159 @@ function Snapshots({
   );
 }
 
+/** A row of a run's order the live ranking lacks: shown with the run's rank and line only. */
+function placeholder(c: CompareRow, method: Method): RankedFeature {
+  return {
+    rank: c.run_rank,
+    score_rank: c.run_rank,
+    entity_id: "",
+    key: c.key,
+    title: c.title,
+    status: "proposed",
+    score: null,
+    serves_goal: false,
+    flags: [],
+    depends_on: [],
+    dependents: [],
+    explanation: {
+      method,
+      formula: "",
+      inputs: {},
+      confidence: { value: 0, source: "default", explain: "", evidence: [] },
+      goals: [],
+      missing: [],
+      steps: [],
+      order: [],
+    },
+    run_explanation: c.run_explanation,
+  };
+}
+
+const STATUS_TEXT = { saved: "Saved", proposed: "Proposed", discarded: "Discarded" } as const;
+
+/**
+ * Run mode's band (C8): whose order this is and where it stands, and the priority stop's
+ * decision (the checkpoint decide route): Approve order, or Request changes with a note.
+ */
+function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { snapshot: snap, run, checkpoint: cp } = c;
+  const doc = snap.document;
+  const prd = doc ? (doc.title ?? doc.slug) : null;
+  const deciding = snap.status === "proposed" && cp?.status === "pending";
+  const blocked = cp?.cannot_approve ? `${cp.cannot_approve.charAt(0).toUpperCase()}${cp.cannot_approve.slice(1)}.` : null;
+
+  async function decide(decision: "approved" | "changes_requested") {
+    if (!run || !cp) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await unwrap(
+        api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide", {
+          params: { path: { run_id: run.id, checkpoint_id: cp.id } },
+          body: { decision, note: note.trim() || null },
+        }),
+      );
+      setNote("");
+      onDecided();
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const line =
+    snap.status === "proposed"
+      ? [
+          `Proposed by ${run?.flow_title ?? "a run"}`,
+          run?.document_slug,
+          deciding && cp?.can_decide ? "waiting for you" : deciding ? `waiting for an ${cp?.approver_role ?? "approver"}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : snap.status === "saved"
+        ? prd
+          ? `Saved for ${prd}`
+          : "Saved"
+        : STATUS_TEXT.discarded;
+  return (
+    <section
+      data-testid="snapshot-band"
+      aria-label="The run's priority order"
+      className="rounded-panel border border-line bg-surface px-4 py-3 max-[600px]:px-3"
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <Icon name="flag" size={16} className="text-accent-ink" />
+        <span className="min-w-0 font-semibold break-words">{line}</span>
+        <Chip kind={snap.status === "saved" ? "pass" : snap.status === "proposed" ? "warn" : "na"}>{STATUS_TEXT[snap.status ?? "saved"]}</Chip>
+        <span className="flex-1" />
+        {run && (
+          <Link href={`/runs/${run.id}`} className="text-sm font-medium text-accent-ink hover:underline">
+            Open the run
+          </Link>
+        )}
+      </div>
+      {deciding && cp?.can_decide && (
+        <div className="mt-2.5">
+          {blocked && (
+            <p className="text-sm text-warn" data-testid="cannot-approve">
+              {blocked}
+            </p>
+          )}
+          <textarea
+            aria-label="Note for the agents"
+            placeholder="Note (required to request changes)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            className={`${INPUT} mt-2 placeholder:text-text2`}
+          />
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button variant="solid" icon="check" disabled={busy || !!blocked} title={blocked ?? undefined} onClick={() => decide("approved")}>
+              Approve order
+            </Button>
+            <Button disabled={busy || !note.trim()} onClick={() => decide("changes_requested")}>
+              Request changes
+            </Button>
+          </div>
+        </div>
+      )}
+      {error && (
+        <div className="mt-2">
+          <Notice tone="error">{error}</Notice>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function PrioritiesPage() {
-  const [method, setMethod] = useState<Method>("goal_weighted");
+  // The query string is read on the client: the page streams in under Suspense.
+  return (
+    <Suspense fallback={null}>
+      <Priorities />
+    </Suspense>
+  );
+}
+
+function Priorities() {
+  // Run mode (C8): /priorities?snapshot=<id> shows a run's order next to the live ranking.
+  const snapshotId = useSearchParams().get("snapshot");
+  const [compareKey, setCompareKey] = useState(0);
+  const cq = useQuery(
+    `priority-compare|${snapshotId}|${compareKey}`,
+    () =>
+      snapshotId
+        ? unwrap(api.GET("/v1/priorities/snapshots/{snapshot_id}/compare", { params: { path: { snapshot_id: snapshotId } } }))
+        : Promise.resolve(null),
+    { keepPrevious: true },
+  );
+  const cmp = snapshotId ? (cq.data ?? null) : null;
+  const [chosen, setMethod] = useState<Method>("goal_weighted");
+  const method: Method = cmp?.snapshot.method ?? chosen;
   const [selected, setSelected] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -407,7 +620,12 @@ export default function PrioritiesPage() {
     unwrap(api.GET("/v1/priorities", { params: { query: { method } } })),
   );
   const r = q.data;
-  const features = r?.features ?? [];
+  const byKey = new Map(cmp?.rows.map((c) => [c.key, c]) ?? []);
+  // Run mode: the run's order, each row its live RankedFeature at the run's rank.
+  const stored = new Map(cmp?.snapshot.ranking.map((f) => [f.key, f]) ?? []);
+  const runRows = cmp?.rows.map((c) => ({ ...(stored.get(c.key) ?? placeholder(c, method)), rank: c.run_rank }));
+  const rows = cmp ? runRows : r?.features;
+  const features = rows ?? [];
   // The selected feature, else the top of the ranking.
   const current = features.find((f) => f.key === selected) ?? features[0];
   const inspectorId = "priority-inspector";
@@ -430,6 +648,41 @@ export default function PrioritiesPage() {
     }
   }
 
+  const runColumns: Column<RankedFeature>[] = cmp
+    ? [
+        {
+          key: "live",
+          header: "Live #",
+          width: "64px",
+          phone: "meta",
+          phoneLabel: "Live",
+          cell: (f) => (
+            <span data-testid="live-rank" className="tnum font-mono" title="Rank in Oracle's live ranking of the same features">
+              {byKey.get(f.key)?.live_rank ?? "—"}
+            </span>
+          ),
+        },
+        {
+          key: "delta",
+          header: "Δ",
+          width: "56px",
+          phone: "meta",
+          phoneLabel: "Δ",
+          cell: (f) => {
+            const d = byKey.get(f.key)?.delta;
+            return (
+              <span
+                data-testid="delta"
+                className={`tnum font-mono ${d == null || d === 0 ? "text-text2" : "text-text"}`}
+                title={d == null ? "Not in the live ranking" : d === 0 ? "Same rank as the live ranking" : `${Math.abs(d)} ${d > 0 ? "above" : "below"} the live ranking`}
+              >
+                {deltaText(d)}
+              </span>
+            );
+          },
+        },
+      ]
+    : [];
   const columns: Column<RankedFeature>[] = [
     {
       key: "rank",
@@ -443,6 +696,7 @@ export default function PrioritiesPage() {
         </b>
       ),
     },
+    ...runColumns,
     {
       key: "feature",
       header: "Feature",
@@ -520,13 +774,17 @@ export default function PrioritiesPage() {
       width: "240px",
       cell: (f) => (
         <span className="flex items-center gap-1.5 overflow-hidden max-[600px]:flex-wrap">
-          {f.flags.slice(0, 1).map((flag) => (
+          {/* Run mode: the check's problems first (blocking red, advisory amber). */}
+          {byKey.get(f.key)?.problems.map((p) => (
+            <ProblemChip key={p.code} p={p} />
+          ))}
+          {f.flags.slice(0, cmp ? 0 : 1).map((flag) => (
             <FlagChip key={flag} flag={flag} />
           ))}
-          {f.flags.length > 1 && (
-            <Chip kind="na" title={f.flags.slice(1).map((x) => flagOf(x).label).join(", ")}>
-              +{f.flags.length - 1}
-              <span className="sr-only">{f.flags.slice(1).map((x) => flagOf(x).label).join(", ")}</span>
+          {f.flags.length > (cmp ? 0 : 1) && (
+            <Chip kind="na" title={f.flags.slice(cmp ? 0 : 1).map((x) => flagOf(x).label).join(", ")}>
+              +{f.flags.length - (cmp ? 0 : 1)}
+              <span className="sr-only">{f.flags.slice(cmp ? 0 : 1).map((x) => flagOf(x).label).join(", ")}</span>
             </Chip>
           )}
         </span>
@@ -552,7 +810,7 @@ export default function PrioritiesPage() {
           )
         }
         action={
-          <>
+          !snapshotId && (
             <Button
               variant="primary"
               icon="check"
@@ -562,7 +820,7 @@ export default function PrioritiesPage() {
             >
               {saving ? "Saving…" : "Save snapshot"}
             </Button>
-          </>
+          )
         }
       />
 
@@ -575,14 +833,27 @@ export default function PrioritiesPage() {
         )}
         {saveError && <Notice tone="error">{saveError}</Notice>}
         {q.error && <Notice tone="error">{q.error}</Notice>}
+        {snapshotId && cq.error && <Notice tone="error">{cq.error}</Notice>}
+        {cmp && (
+          <SnapshotBand
+            c={cmp}
+            onDecided={() => {
+              setCompareKey((k) => k + 1);
+              setSnapshotsKey((k) => k + 1);
+            }}
+          />
+        )}
 
         <Split
-          inspector={current && <FeatureInspector key={current.key} f={current} id={inspectorId} />}
+          inspector={
+            current && <FeatureInspector key={current.key} f={current} id={inspectorId} run={cmp ? byKey.get(current.key) : undefined} />
+          }
         >
           <Panel>
             <div className="flex min-h-14 flex-wrap items-center gap-2.5 border-b border-line px-4 py-2.5 max-[600px]:px-3">
               <MethodSwitch
                 value={method}
+                locked={!!snapshotId}
                 onChange={(m) => {
                   setMethod(m);
                   setSaved(null);
@@ -624,11 +895,11 @@ export default function PrioritiesPage() {
               label="Ranking"
               testId="priority-table"
               columns={columns}
-              rows={r?.features}
+              rows={rows}
               rowKey={(f) => f.key}
               selected={current?.key ?? null}
               onSelect={(k) => setSelected(k)}
-              loading={q.loading}
+              loading={snapshotId ? cq.loading && !cmp : q.loading}
               empty="No features ranked"
               rowProps={(f) => ({ "data-testid": `priority-row-${f.key}` })}
             />

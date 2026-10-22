@@ -12,6 +12,8 @@ export type Segment<V extends string> = {
   href?: string;
   testId?: string;
   disabled?: boolean;
+  /** A short tooltip: what the choice means. */
+  title?: string;
 };
 
 /**
@@ -71,6 +73,7 @@ export function SegmentedControl<V extends string>({
             type="button"
             data-seg
             data-testid={it.testId}
+            title={it.title}
             aria-pressed={on}
             disabled={it.disabled}
             onClick={() => onChange?.(it.value)}

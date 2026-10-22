@@ -166,3 +166,55 @@ def test_migration_template_copy_matches_defaults():
     assert module.DEFAULT_TEMPLATE_NAME == defaults.DEFAULT_TEMPLATE_NAME
     assert module.DEFAULT_TEMPLATE_BODY == defaults.DEFAULT_TEMPLATE_BODY
     assert module.DEFAULT_REQUIRED_SECTIONS == defaults.DEFAULT_REQUIRED_SECTIONS
+
+
+BASELINE_FLOW = "0022_baseline_flow"
+
+
+def _flow_check() -> str:
+    return _run(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_runs_flow'"
+    )[0][0]
+
+
+def test_baseline_flow_check_up_down_up(scratch_db):
+    # protects=the baseline flow value comes and goes with 0022_baseline_flow, other
+    # flows' values survive, and the downgrade deletes only baseline runs (criterion 10);
+    # fails_when=the upgrade misses the value, the downgrade leaves it or deletes another
+    # flow's run, or the chain has two heads; no_claim=the application's use of the flow
+    # (tests/test_baseline_flow.py).
+    from alembic.script import ScriptDirectory
+
+    cfg = _cfg()
+    script = ScriptDirectory.from_config(cfg)
+    previous = script.get_revision(BASELINE_FLOW).down_revision
+    assert script.get_heads() == ["0022_priority_snapshot_runs"]
+
+    command.upgrade(cfg, previous)
+    assert "'baseline'" not in _flow_check()
+    command.upgrade(cfg, BASELINE_FLOW)
+    check = _flow_check()
+    assert "'baseline'" in check and "'launch_kit'" in check and "'prd_to_roadmap'" in check
+
+    tenant = uuid.uuid4()
+    _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
+    for flow in ("baseline", "baseline_to_prd"):
+        _run(
+            "INSERT INTO runs (id, tenant_id, flow, status) "
+            "VALUES (gen_random_uuid(), :t, :f, 'succeeded')",
+            t=tenant,
+            f=flow,
+        )
+
+    command.downgrade(cfg, previous)
+    assert "'baseline'" not in _flow_check() and "'launch_kit'" in _flow_check()
+    assert _run("SELECT flow FROM runs") == [("baseline_to_prd",)]
+    with pytest.raises(Exception, match="ck_runs_flow"):
+        _run(
+            "INSERT INTO runs (id, tenant_id, flow, status) "
+            "VALUES (gen_random_uuid(), :t, 'baseline', 'draft')",
+            t=tenant,
+        )
+
+    command.upgrade(cfg, BASELINE_FLOW)
+    assert "'baseline'" in _flow_check()
