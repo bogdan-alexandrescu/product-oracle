@@ -164,8 +164,18 @@ from oracle.review.models import FeedbackItem
 from oracle.review.schemas import Resolution
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import doc_dates, schedule
-from oracle.runs import extensions, feature_set, flows, reasons, rejection, reuse, roadmap, workflow
-from oracle.runs.models import Checkpoint, Run, RunSegment
+from oracle.runs import (
+    extensions,
+    feature_set,
+    flows,
+    gate,
+    reasons,
+    rejection,
+    reuse,
+    roadmap,
+    workflow,
+)
+from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
     CheckpointDelivery,
@@ -178,6 +188,7 @@ from oracle.runs.schemas import (
     FlowOut,
     FlowSegmentOut,
     FlowStart,
+    Gate,
     InboxAccessFailure,
     InboxCheckpoint,
     InboxCounts,
@@ -776,11 +787,18 @@ def _checkpoint_out(
     *,
     flow: str,
     leads: frozenset[uuid.UUID],
+    staged: dict[uuid.UUID, list[CheckpointAction]] | None = None,
 ) -> CheckpointOut:
     """``names``: :func:`_decider_names` of the checkpoints read; ``flow``: the run's;
-    ``leads``: :func:`oracle.members.leads.engineering_leads`, read once per request."""
+    ``leads``: :func:`oracle.members.leads.engineering_leads`, read once per request;
+    ``staged``: :func:`_staged_actions` of the checkpoints read (the approve gate)."""
     console = ((cp.payload or {}).get("wait") or {}).get("console")
     payload, delivery = _delivery(cp, names or {})
+    shut = (
+        gate.approve_gate(cp, None, (staged or {}).get(cp.id, []))
+        if cp.status == "pending"
+        else None
+    )
     return CheckpointOut(
         id=cp.id,
         run_id=cp.run_id,
@@ -799,9 +817,46 @@ def _checkpoint_out(
         can_decide=cp.status == "pending"
         and principal is not None
         and may_decide(principal, cp, flow, leads),
-        cannot_approve=_cannot_approve(cp),
+        cannot_approve=_cannot_approve(cp)
+        or (gate.message(shut) if shut is not None and not shut.open else None),
+        gate=shut,
         delivery=delivery,
     )
+
+
+async def _staged_actions(
+    db: AsyncSession, checkpoints: list[Checkpoint]
+) -> dict[uuid.UUID, list[CheckpointAction]]:
+    """The staged draft actions (D8) of the pending checkpoints that have an approve gate."""
+    ids = [c.id for c in checkpoints if c.status == "pending" and c.kind in gate.BLOCKING_SOURCES]
+    out: dict[uuid.UUID, list[CheckpointAction]] = {}
+    if not ids:
+        return out
+    for action in await db.scalars(
+        select(CheckpointAction).where(
+            CheckpointAction.checkpoint_id.in_(ids), CheckpointAction.state == "staged"
+        )
+    ):
+        out.setdefault(action.checkpoint_id, []).append(action)
+    return out
+
+
+async def approve_gate_of(db: AsyncSession, cp: Checkpoint) -> Gate | None:
+    """The approve gate of ``cp`` now (D3): its stored blocking reasons and staged actions."""
+    staged = await _staged_actions(db, [cp])
+    return gate.approve_gate(cp, None, staged.get(cp.id, []))
+
+
+def blocking_open(shut: Gate) -> RunError:
+    """The 409 an approval gets while the gate is closed (decide, console confirm)."""
+    message = gate.message(shut)
+    error = RunError(message)
+    error.detail = {  # type: ignore[attr-defined]
+        "code": "blocking_open",
+        "message": message,
+        "left": [x.model_dump() for x in shut.left],
+    }
+    return error
 
 
 def _segment_out(
@@ -964,6 +1019,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     checkpoints = await _checkpoints(db, [run.id])
     names = await _decider_names(db, checkpoints)
     leads = await engineering_leads(db)
+    staged = await _staged_actions(db, checkpoints)
     refs = await _refs(db, [run])
     knobs = _knobs(run)
     kind = await _target_kind(db, run)
@@ -1001,7 +1057,8 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         notes=notes,
         segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
         checkpoints=[
-            _checkpoint_out(c, principal, names, flow=run.flow, leads=leads) for c in checkpoints
+            _checkpoint_out(c, principal, names, flow=run.flow, leads=leads, staged=staged)
+            for c in checkpoints
         ],
         token_read_only=await token_hold(db, run.id, live=False) is not None,
         open_proposals=await db.scalar(
@@ -5744,6 +5801,12 @@ async def _take_answer(
     if counted and approved and not ours and cp.kind == "priority_order" and _order_blocking(cp):
         await _hold_console_approval(db, run, cp, segment, record, wait, at, revise, member)
         return
+    if counted and approved and not ours:
+        # D3 "Console gate": held while a blocking reason is not fixed or waived.
+        shut = await approve_gate_of(db, cp)
+        if shut is not None and not shut.open:
+            await _hold_console_approval(db, run, cp, segment, record, wait, at, revise, member)
+            return
     if not counted or (not approved and not revise):
         console = _console_record(run, segment, record, at, revise)
         console.update(
@@ -6317,6 +6380,9 @@ async def decide_checkpoint(
     if decision == "approved" and (blocked := _cannot_approve(cp)):
         # Approve, a confirmed console approval and Continue alike: nothing is decided.
         raise RunError(blocked)
+    if decision == "approved" and (shut := await approve_gate_of(db, cp)) and not shut.open:
+        # D3: the same for a blocking reason not fixed or waived (one gate for every path).
+        raise blocking_open(shut)
     if decision == "changes_requested" and not note:
         raise Invalid("say what to change: a note is required to request changes")
     segments = await _segments(db, run.id)
@@ -6338,6 +6404,8 @@ async def decide_checkpoint(
     if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW:
         # F4 Engineering review stop reads whether a lead was named when it was decided.
         data["engineering_lead_named"] = bool(leads)
+    if via == "swarmcloud_console":
+        data["via"] = via
     await audit.record(db, principal, f"checkpoint.{decision}", "checkpoint", cp.id, data)
     # H1: the stop's decision is a checkpoint record, in this transaction.
     await decisions_capture.checkpoint(db, principal, run, cp, decided_via=via)
@@ -8549,6 +8617,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     mine = [c for c in pending if may_decide(principal, c, runs[c.run_id].flow, leads)]
     owed = [c for c in owing if may_decide(principal, c, runs[c.run_id].flow, leads)]
     names = await _decider_names(db, owed)
+    staged = await _staged_actions(db, mine)
     owner = principal.role == "owner"
     waiting_runs: list[Run] = []
     if owner:
@@ -8567,7 +8636,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         seq = (c.payload or {}).get("segment_seq")
         sdef = _flow(run).segments[seq - 1] if seq else None
         return InboxCheckpoint(
-            **_checkpoint_out(c, principal, names, flow=run.flow, leads=leads).model_dump(),
+            **_checkpoint_out(
+                c, principal, names, flow=run.flow, leads=leads, staged=staged
+            ).model_dump(),
             flow=run.flow,  # type: ignore[arg-type]
             flow_title=_flow(run).title,
             document_slug=refs.get(run.document_id),

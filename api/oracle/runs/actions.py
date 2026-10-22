@@ -38,7 +38,7 @@ from oracle.authz import has_role
 from oracle.docs.models import DocumentVersion
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
-from oracle.runs import reasons, roadmap, service
+from oracle.runs import gate, reasons, roadmap, service
 from oracle.runs.models import ACTION_KINDS, Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.schemas import (
     ActionIn,
@@ -442,6 +442,8 @@ async def put_action(
     except InvalidAction as exc:
         raise service.Invalid(str(exc)) from None
     stages = _stages(principal, cp)
+    if body.kind == "waive":
+        _waivable(cp, body, found, stages)
     if stages:
         # A staged action counts: the approver role, re-read under the gate.
         refusal = await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
@@ -479,6 +481,22 @@ async def put_action(
     event = STAGED if stages else SUGGESTED
     await _bump(db, principal, run, cp, event, body.item_key, _snapshot(action))
     await db.commit()
+
+
+def _waivable(cp: Checkpoint, body: ActionIn, found: _File | None, stages: bool) -> None:
+    """D3: a waiver is the approver's (a commenter cannot even suggest one), and never of
+    a date reason or a problem of the whole file."""
+    file_codes = {
+        p["code"]
+        for p in (found.checked.check.problems if found and found.checked else [])
+        if not p.get("item")
+    }
+    if body.item_key == WHOLE_FILE or any(a in file_codes for a in body.answers):
+        raise service.Invalid(gate.FILE_NOT_WAIVED)
+    if any(not gate.waivable(cp.kind, a) for a in body.answers):
+        raise service.Invalid(gate.DATE_NOT_WAIVED)
+    if not stages:
+        raise service.Forbidden(f"Only the {cp.approver_role} role or above waives a problem")
 
 
 async def stage_action(
@@ -804,6 +822,7 @@ async def read(
     stages = pending and _stages(principal, cp) and not principal.read_only
     attempt = (cp.payload or {}).get("attempt")
     problems = checked.check.problems if checked else []
+    staged = [r for r in rows if r.state == "staged"]
     return CheckpointReview(
         checkpoint_id=cp.id,
         run_id=run.id,
@@ -824,4 +843,5 @@ async def read(
         and not principal.read_only,
         can_stage=stages,
         can_decide=stages,
+        gate=gate.approve_gate(cp, None, staged) if pending else None,
     )

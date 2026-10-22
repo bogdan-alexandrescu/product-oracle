@@ -181,8 +181,8 @@ async def test_a_manual_import_refuses_unverified_dates_and_pins_approved_versio
 
 
 async def test_a_run_never_stores_an_unverified_date(client, owner, runtime):  # noqa: F811
-    """With the items checkpoint on, a reviewer may approve a file with problems; the
-    stored item keeps the milestone's name and records the refused date, never the date."""
+    """With the items checkpoint on, an unverified date blocks Approve (D3: a date reason
+    is never waived), so the run never stores it."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     guess = ITEMS.replace("date_source: ENG-412 estimate", "date_source: a hunch")
@@ -196,17 +196,15 @@ async def test_a_run_never_stores_an_unverified_date(client, owner, runtime):  #
     await tick(client, auth)
     run = await get(client, auth, run["id"])
     cp = next(c for c in run["checkpoints"] if c["status"] == "pending")
-    await client.post(
+    resp = await client.post(
         f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
         json={"decision": "approved"},
         headers=auth,
     )
+    assert resp.status_code == 409, resp.text
+    assert [x["code"] for x in resp.json()["detail"]["left"]] == ["unverified_date"]
     await tick(client, auth)
-    assert (await get(client, auth, run["id"]))["status"] == "succeeded"
-    pay = (await client.get(URL, headers=auth)).json()["items"][0]
-    assert pay["milestone"]["name"] == "Beta" and pay["milestone"]["date"] is None
-    assert pay["milestone"]["refused_date"] == "2026-11-30"
-    assert "never invents dates" in pay["milestone"]["refused"]
+    assert (await get(client, auth, run["id"]))["status"] == "awaiting_checkpoint"
 
 
 async def test_the_feedback_loop_carries_items_forward(client, owner, runtime):  # noqa: F811
@@ -293,7 +291,7 @@ async def test_odd_yaml_values_never_abort_an_import(client, owner, runtime):  #
     assert resp.json()["items"][1]["economics"]["declared"] == {"review_on": "2026-12-01"}
 
     # A run whose items file has a malformed optional field: the checkpoint shows the
-    # problem, a reviewer approves anyway, and the roadmap version still imports.
+    # problem, a reviewer waives it (D3) and approves, and the roadmap version imports.
     bad = ITEMS.replace(
         "    prd_section: s-5-2\n", "    prd_section: s-5-2\n    validation_gates: 3\n"
     )
@@ -311,6 +309,14 @@ async def test_odd_yaml_values_never_abort_an_import(client, owner, runtime):  #
     assert [p["code"] for p in cp["payload"]["items_check"]["problems"]] == [
         "invalid_validation_gates"
     ]
+    [left] = cp["gate"]["left"]
+    resp = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/actions",
+        json={"item_key": left["item"], "kind": "waive", "answers": [left["code"]],
+              "value": {"reason": "Gates are set in the next review"}},
+        headers=auth,
+    )  # fmt: skip
+    assert resp.status_code == 200, resp.text
     await client.post(
         f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
         json={"decision": "approved"},

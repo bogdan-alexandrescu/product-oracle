@@ -144,11 +144,11 @@ def test_a_kind_without_blocking_reasons_has_no_gate():
 # --- integration: the decide route --------------------------------------------------------
 
 
-async def audit_actions(review: Review) -> list[tuple[str, dict]]:
-    async with tenant_session(review.tenant_id) as s:
+async def audit_actions(rv: Review) -> list[tuple[str, dict]]:
+    async with tenant_session(rv.tenant_id) as s:
         rows = await s.scalars(
             select(AuditEvent)
-            .where(AuditEvent.entity_id == uuid.UUID(review.cp["id"]))
+            .where(AuditEvent.entity_id == uuid.UUID(rv.cp["id"]))
             .order_by(AuditEvent.created_at, AuditEvent.id)
         )
         return [(r.action, r.data) for r in rows]
@@ -195,8 +195,10 @@ async def test_waivers_refuse_dates_file_problems_and_commenters(review):  # noq
     """protects=criterion 3: a date or a file-level problem is never waived (422) and a
     commenter cannot even suggest a waiver (403); fails_when=any is stored;
     no_claim=the reasons' wording."""
-    out = await review.act("approver", expect=422, item_key="payment-step", kind="waive",
-                           answers=["unverified_date"], value={"reason": "We trust it"})  # fmt: skip
+    out = await review.act(
+        "approver", expect=422, item_key="payment-step", kind="waive",
+        answers=["unverified_date"], value={"reason": "We trust it"},
+    )  # fmt: skip
     assert out["detail"] == gate.DATE_NOT_WAIVED
     out = await review.act("approver", expect=422, item_key="*", kind="waive",
                            answers=["no_items"], value={"reason": "Fine"})  # fmt: skip
@@ -225,7 +227,7 @@ async def test_only_to_confirm_reasons_open_the_gate(client, owner, runtime):  #
     assert resp.status_code == 200, resp.text
 
 
-async def test_a_file_problem_is_sent_back_never_approved(review):  # noqa: F811
+async def test_a_file_problem_is_sent_back_never_approved(review):  # noqa: F811 - fixture
     """protects=criterion 5: a file-level problem keeps the gate closed whatever is staged,
     and Request changes still works; fails_when=Approve lands, or a send-back is refused;
     no_claim=the agents' re-run."""
