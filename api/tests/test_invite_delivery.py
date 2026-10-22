@@ -24,7 +24,8 @@ from oracle.auth.models import User
 from oracle.auth.service import hash_password
 from oracle.config import get_settings
 from oracle.members import delivery, iap_access, mailer
-from oracle.members.models import Invite
+from oracle.members import service as members_service
+from oracle.members.models import Invite, MemberFollowUp
 from oracle.models import AuditEvent
 from oracle.seed import seed
 from oracle.swarm.settings import get_runtime_settings
@@ -45,6 +46,9 @@ class FakeIap:
         self.gets = 0
         self.sets: list[str] = []
         self._n = 0
+        # A write that waits for ``hold``: ``holding`` is set once one is waiting.
+        self.hold: asyncio.Event | None = None
+        self.holding = asyncio.Event()
 
     def _policy(self, backend: str) -> dict:
         return self.policies.setdefault(backend, {"version": 1, "etag": "BwE0", "bindings": []})
@@ -56,6 +60,11 @@ class FakeIap:
         return copy.deepcopy(self._policy(backend))
 
     async def set_policy(self, http, backend: str, policy: dict) -> dict:
+        if self.hold is not None and not self.hold.is_set():
+            self.holding.set()
+            await self.hold.wait()
+        if self.fail:
+            raise iap_access.IapError(self.fail)
         current = self._policy(backend)
         if self.conflicts:
             # Someone else wrote the policy between our read and our write.
@@ -378,7 +387,7 @@ async def test_a_failed_send_is_retried_once_then_recorded_failed(client, owner,
         ("sam@example.com", "failed"),
     ]
 
-    # Resend: queued again, and this time it goes out.
+    # Resend (at once: nothing reached them): queued again, and this time it goes out.
     resent = await client.post(f"/v1/invites/{body['id']}/email", headers=headers)
     assert resent.status_code == 200, resent.text
     assert resent.json()["email_status"] == "queued"
@@ -580,3 +589,390 @@ def test_the_jwt_claims_expire_within_an_hour():
     claims = mailer.delegation_claims("sa@p.iam", "oracle@example.com", now=1_000)
     assert claims["exp"] - claims["iat"] <= 3600
     assert claims["iat"] == 1_000
+
+
+# --- Security review of #243 ----------------------------------------------------------------
+
+CRAFTED = [
+    "a@evil.com,b@corp.com",
+    "a@evil.com;b@corp.com",
+    "a@evil.com, b@corp.com",
+    "Pat <b@corp.com>",
+    "<b@corp.com>",
+    '"a@evil.com"@corp.com',
+    '"Pat" <b@corp.com>',
+    "a@evil.com <b@corp.com>",
+    "a(evil.com)@corp.com",
+    "b@corp.com (a@evil.com)",
+    "a:b@corp.com",
+    "group: a@evil.com;@corp.com",
+    "a@evil.com b@corp.com",
+    "a@evil.com\tb@corp.com",
+    "a@evil.com\r\nBcc: b@corp.com",
+    "a@evil.com@corp.com",
+]
+MALFORMED = [
+    "pat",
+    "@corp.com",
+    "pat@",
+    "pat@corp",
+    "pat@@corp.com",
+    "pat@corp..com",
+    "pat@.corp.com",
+]
+
+
+@pytest.mark.parametrize("address", CRAFTED + MALFORMED)
+async def test_a_crafted_or_malformed_address_is_refused_and_nothing_happens(
+    client, owner, iap, mail, monkeypatch, address
+):
+    tenant_id, headers = owner
+    monkeypatch.setattr(get_settings(), "iap_allowed_domains", ["corp.com"])
+    resp = await client.post(
+        "/v1/invites", json={"email": address, "role": "viewer"}, headers=headers
+    )
+    assert resp.status_code == 422, resp.text
+    await delivery.drain()
+    async with tenant_session(tenant_id) as s:
+        assert (await s.scalars(select(Invite))).all() == []
+    assert iap.gets == 0 and iap.sets == []
+    assert mail.attempts == 0
+    assert await _audit(tenant_id, "invite.create") == []
+
+
+async def test_one_plain_address_is_taken_lowercased(client, owner, iap, mail, monkeypatch):
+    _, headers = owner
+    monkeypatch.setattr(get_settings(), "iap_allowed_domains", ["corp.com"])
+    body = await _invite(client, headers, "  Pat.Lee+oracle@Corp.COM ")
+    assert body["email"] == "pat.lee+oracle@corp.com"
+    await delivery.drain()
+    assert iap.bound("pat.lee+oracle@corp.com") == BACKENDS
+    assert [m.to for m in mail.sent] == ["pat.lee+oracle@corp.com"]
+
+
+@pytest.mark.parametrize("address", CRAFTED[:8])
+def test_the_mailer_never_addresses_more_than_one_plain_address(address):
+    sender = mailer.GmailApiMailer("oracle@corp.com", FakeMinter())
+    message = mailer.invite_email(
+        to=address, company="C", role="viewer", inviter="a@corp.com", link="/"
+    )
+    with pytest.raises(mailer.MailError):
+        sender._raw(message)
+
+
+@pytest.mark.parametrize("address", CRAFTED[:8])
+async def test_the_iap_member_is_only_ever_one_plain_address(address):
+    fake = FakeIap()
+    with pytest.raises(iap_access.IapError):
+        await iap_access.grant(fake, BACKENDS, address)
+    assert fake.gets == 0 and fake.sets == []
+
+
+async def _follow_ups(tenant_id, kind: str) -> list[MemberFollowUp]:
+    async with tenant_session(tenant_id) as s:
+        return list(
+            await s.scalars(
+                select(MemberFollowUp)
+                .where(MemberFollowUp.kind == kind)
+                .order_by(MemberFollowUp.created_at)
+            )
+        )
+
+
+async def _tick(tenant_id) -> None:
+    """The tick, with every follow-up due now."""
+    async with tenant_session(tenant_id) as s:
+        for row in await s.scalars(select(MemberFollowUp)):
+            row.next_attempt_at = None
+        await s.commit()
+    async with tenant_session(tenant_id) as s, httpx.AsyncClient() as http:
+        await members_service.run_follow_ups(s, None, http)
+
+
+async def test_a_failed_revoke_is_queued_and_the_tick_removes_the_binding(client, owner, iap, mail):
+    tenant_id, headers = owner
+    body = await _invite(client, headers)
+    assert iap.bound("pat@example.com") == BACKENDS
+    iap.fail = "Google returned 503 (unavailable)"
+    assert (await client.delete(f"/v1/invites/{body['id']}", headers=headers)).status_code == 204
+    assert iap.bound("pat@example.com") == BACKENDS
+    [event] = await _audit(tenant_id, "invite_access.remove")
+    assert event["outcome"] == "failed"
+    [row] = await _follow_ups(tenant_id, "iap_revoke")
+    assert (row.status, row.email) == ("pending", "pat@example.com")
+
+    # Still failing at the next tick: still owed.
+    await _tick(tenant_id)
+    [row] = await _follow_ups(tenant_id, "iap_revoke")
+    assert row.status == "pending"
+    assert iap.bound("pat@example.com") == BACKENDS
+
+    iap.fail = None
+    await _tick(tenant_id)
+    assert iap.bound("pat@example.com") == []
+    [row] = await _follow_ups(tenant_id, "iap_revoke")
+    assert (row.status, row.outcome) == ("done", "removed")
+    outcomes = [e["outcome"] for e in await _audit(tenant_id, "invite_access.remove")]
+    assert outcomes[-1] == "removed"
+
+
+async def test_a_queued_revoke_keeps_the_binding_of_someone_invited_again(client, owner, iap, mail):
+    tenant_id, headers = owner
+    body = await _invite(client, headers)
+    iap.fail = "Google returned 503 (unavailable)"
+    assert (await client.delete(f"/v1/invites/{body['id']}", headers=headers)).status_code == 204
+    iap.fail = None
+    await _invite(client, headers)
+    await _tick(tenant_id)
+    assert iap.bound("pat@example.com") == BACKENDS
+    [row] = await _follow_ups(tenant_id, "iap_revoke")
+    assert (row.status, row.outcome) == ("done", "kept")
+
+
+async def test_a_failed_revoke_on_removal_shows_on_the_member_and_the_tick_retries(
+    client, owner, iap, mail
+):
+    tenant_id, headers = owner
+    async with tenant_session(tenant_id) as s:
+        user = User(email="lee@example.com", password_hash=hash_password("x"), role="commenter")
+        s.add(user)
+        await s.commit()
+        user_id = user.id
+    for b in BACKENDS:
+        iap.policies[b] = {
+            "version": 1,
+            "etag": "BwE0",
+            "bindings": [{"role": ROLE, "members": ["user:lee@example.com"]}],
+        }
+    iap.fail = "Google returned 500 (server error)"
+    resp = await client.post(f"/v1/members/{user_id}/disable", headers=headers)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["access_pending"] == "revoke"
+    members = {m["email"]: m for m in (await client.get("/v1/members", headers=headers)).json()}
+    assert members["lee@example.com"]["access_pending"] == "revoke"
+    assert members["admin@example.com"]["access_pending"] is None
+
+    iap.fail = None
+    await _tick(tenant_id)
+    assert iap.bound("lee@example.com") == []
+    members = {m["email"]: m for m in (await client.get("/v1/members", headers=headers)).json()}
+    assert members["lee@example.com"]["access_pending"] is None
+
+
+async def test_a_failed_grant_on_restore_is_queued_and_the_tick_grants(client, owner, iap, mail):
+    tenant_id, headers = owner
+    async with tenant_session(tenant_id) as s:
+        user = User(
+            email="lee@example.com",
+            password_hash=hash_password("x"),
+            role="commenter",
+            disabled_at=datetime.now(UTC),
+        )
+        s.add(user)
+        await s.commit()
+        user_id = user.id
+    iap.fail = "Google returned 503 (unavailable)"
+    resp = await client.post(f"/v1/members/{user_id}/restore", headers=headers)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["access_pending"] == "grant"
+    [row] = await _follow_ups(tenant_id, "iap_grant")
+    assert (row.status, row.email) == ("pending", "lee@example.com")
+
+    iap.fail = None
+    await _tick(tenant_id)
+    assert iap.bound("lee@example.com") == BACKENDS
+    [row] = await _follow_ups(tenant_id, "iap_grant")
+    assert (row.status, row.outcome) == ("done", "granted")
+    assert [e["outcome"] for e in await _audit(tenant_id, "member_access.grant")] == [
+        "failed",
+        "granted",
+    ]
+
+
+async def _invite_id(tenant_id, address: str) -> str:
+    async with tenant_session(tenant_id) as s:
+        return str(await s.scalar(select(Invite.id).where(Invite.email == address)))
+
+
+async def test_a_revoke_during_an_in_flight_grant_leaves_no_binding(client, owner, iap, mail):
+    tenant_id, headers = owner
+    iap.hold = asyncio.Event()
+    creating = asyncio.create_task(
+        client.post(
+            "/v1/invites", json={"email": "pat@example.com", "role": "viewer"}, headers=headers
+        )
+    )
+    await asyncio.wait_for(iap.holding.wait(), timeout=10)
+    # The grant is under way at Google; the owner revokes the invite meanwhile.
+    invite_id = await _invite_id(tenant_id, "pat@example.com")
+    revoking = asyncio.create_task(client.delete(f"/v1/invites/{invite_id}", headers=headers))
+    await asyncio.sleep(0.5)
+    iap.hold.set()
+    created, revoked = await asyncio.wait_for(asyncio.gather(creating, revoking), timeout=30)
+    assert created.status_code == 201, created.text
+    assert revoked.status_code == 204, revoked.text
+    assert iap.bound("pat@example.com") == []
+    removed = await _audit(tenant_id, "invite_access.remove")
+    assert any(e["outcome"] == "removed" for e in removed), removed
+
+
+async def test_a_revoke_racing_a_new_invite_keeps_the_new_invites_binding(client, owner, iap, mail):
+    tenant_id, headers = owner
+    first = await _invite(client, headers)
+    assert iap.bound("pat@example.com") == BACKENDS
+    iap.hold = asyncio.Event()
+    revoking = asyncio.create_task(client.delete(f"/v1/invites/{first['id']}", headers=headers))
+    await asyncio.wait_for(iap.holding.wait(), timeout=10)
+    # The revoke is writing the policy without them; the owner invites them again.
+    creating = asyncio.create_task(
+        client.post(
+            "/v1/invites", json={"email": "pat@example.com", "role": "viewer"}, headers=headers
+        )
+    )
+    await asyncio.sleep(0.5)
+    iap.hold.set()
+    revoked, created = await asyncio.wait_for(asyncio.gather(revoking, creating), timeout=30)
+    assert revoked.status_code == 204, revoked.text
+    assert created.status_code == 201, created.text
+    assert created.json()["access"] == "granted"
+    assert iap.bound("pat@example.com") == BACKENDS
+
+
+async def test_the_body_less_invite_posts_refuse_another_origin(client, iap, mail):
+    from tests.test_oauth import PASSWORD
+
+    await seed(password=PASSWORD)
+    resp = await client.post(
+        "/v1/auth/login", json={"email": "admin@example.com", "password": PASSWORD}
+    )
+    assert resp.status_code == 200, resp.text
+    body = await _invite(client, {"Origin": "http://localhost:3000"})
+    await delivery.drain()
+    gets, attempts = iap.gets, mail.attempts
+    for path in (f"/v1/invites/{body['id']}/access", f"/v1/invites/{body['id']}/email"):
+        for headers in (
+            {"Origin": "https://evil.example.net"},
+            {"Origin": "null"},
+            {"Sec-Fetch-Site": "cross-site"},
+        ):
+            resp = await client.post(path, headers=headers)
+            assert resp.status_code == 403, (path, headers, resp.text)
+            assert "Cross-site" in resp.json()["detail"]
+    await delivery.drain()
+    assert (iap.gets, mail.attempts) == (gets, attempts)
+    ok = await client.post(
+        f"/v1/invites/{body['id']}/access", headers={"Origin": "http://localhost:3000"}
+    )
+    assert ok.status_code == 200, ok.text
+
+
+async def test_run_and_read_only_tokens_cannot_retry_or_resend(client, iap, monkeypatch):
+    from tests.test_account import _admin_id, _run_token
+    from tests.test_read_only_credentials import _bearer
+
+    # Signed in through Oracle's own OAuth pages at the test app's own URL (an earlier
+    # test's ORACLE_PUBLIC_URL may still be cached).
+    monkeypatch.delenv("ORACLE_PUBLIC_URL", raising=False)
+    get_runtime_settings.cache_clear()
+    read_only = await _bearer(client, "oracle:read")
+    mail = FakeMailer()
+    monkeypatch.setattr(mailer, "get_mailer", lambda: mail)
+    r = await seed()
+    owner_headers = {"Authorization": f"Bearer {r.token}"}
+    body = await _invite(client, owner_headers)
+    await delivery.drain()
+    from oracle.auth.deps import RUN_HEADER, RUN_TOKEN_HEADER
+    from oracle.auth.service import sign_run_binding
+
+    admin_id = await _admin_id(r.tenant_id)
+    run = await _run_token(r.tenant_id, admin_id, ["read:documents"])
+    gets, attempts = iap.gets, mail.attempts
+    for headers in (
+        read_only,
+        {**owner_headers, RUN_TOKEN_HEADER: run},
+        {**owner_headers, RUN_HEADER: sign_run_binding(admin_id, uuid.uuid4())},
+    ):
+        for path in (f"/v1/invites/{body['id']}/access", f"/v1/invites/{body['id']}/email"):
+            resp = await client.post(path, headers=headers)
+            assert resp.status_code == 403, (path, resp.text)
+    await delivery.drain()
+    assert (iap.gets, mail.attempts) == (gets, attempts)
+
+
+async def test_resend_waits_a_minute_after_the_last_send(client, owner, iap, mail):
+    tenant_id, headers = owner
+    body = await _invite(client, headers)
+    await delivery.drain()
+    soon = await client.post(f"/v1/invites/{body['id']}/email", headers=headers)
+    assert soon.status_code == 429, soon.text
+    left = int(soon.headers["Retry-After"])
+    assert 0 < left <= 60
+    assert f"{left} seconds" in soon.json()["detail"]
+    await delivery.drain()
+    assert len(mail.sent) == 1
+    assert await _audit(tenant_id, "invite_email.resend") == []
+
+    async with tenant_session(tenant_id) as s:
+        invite = await s.get(Invite, uuid.UUID(body["id"]))
+        invite.email_at = datetime.now(UTC) - timedelta(seconds=61)
+        await s.commit()
+    later = await client.post(f"/v1/invites/{body['id']}/email", headers=headers)
+    assert later.status_code == 200, later.text
+    await delivery.drain()
+    assert len(mail.sent) == 2
+
+
+GOOGLE_BODY = {"error": {"message": "Project 4815162342 policy for oracle-api-be is denied"}}
+
+
+async def test_the_iap_client_keeps_a_short_generic_reason_never_googles_body():
+    client = iap_access.GoogleIapClient("oracle-prod", FakeAuth())
+    for code, reason in ((403, "permission denied"), (503, "unavailable"), (500, "server error")):
+        transport = httpx.MockTransport(lambda r, code=code: httpx.Response(code, json=GOOGLE_BODY))
+        async with httpx.AsyncClient(transport=transport) as http:
+            with pytest.raises(iap_access.IapError) as raised:
+                await client.get_policy(http, "oracle-api-be")
+        assert str(raised.value) == f"Google returned {code} ({reason})"
+
+
+async def test_the_gmail_mailer_keeps_a_short_generic_reason_never_googles_body():
+    transport = httpx.MockTransport(lambda r: httpx.Response(403, json=GOOGLE_BODY))
+    sender = mailer.GmailApiMailer("oracle@example.com", FakeMinter())
+    message = mailer.invite_email(
+        to="pat@example.com", company="C", role="viewer", inviter="a@example.com", link="/"
+    )
+    async with httpx.AsyncClient(transport=transport) as http:
+        with pytest.raises(mailer.MailError) as raised:
+            await sender.send(http, message)
+    assert str(raised.value) == "Google returned 403 (permission denied)"
+
+    minter = mailer.DelegatedTokenMinter("oracle@example.com", FakeAuth())
+    async with httpx.AsyncClient(transport=transport) as http:
+        with pytest.raises(mailer.MailError) as raised:
+            await minter.token(http)
+    assert str(raised.value) == "Google returned 403 (permission denied)"
+
+
+async def test_the_invite_records_no_more_than_the_generic_reason(
+    client, owner, iap, mail, monkeypatch
+):
+    _, headers = owner
+    real = iap_access.GoogleIapClient("oracle-prod", FakeAuth())
+    transport = httpx.MockTransport(lambda r: httpx.Response(403, json=GOOGLE_BODY))
+    monkeypatch.setattr(iap_access, "get_client", lambda: real)
+    opened = httpx.AsyncClient  # every client Oracle opens meanwhile answers 403
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: opened(transport=transport))
+
+    class Leaky:
+        async def send(self, http, message) -> None:
+            raise RuntimeError(json.dumps(GOOGLE_BODY))
+
+    monkeypatch.setattr(mailer, "get_mailer", lambda: Leaky())
+    body = await _invite(client, headers)
+    await delivery.drain()
+    invite = (await _open_invites(client, headers))["pat@example.com"]
+    assert invite["access"] == "pending"
+    assert invite["access_error"] == "oracle-api-be: Google returned 403 (permission denied)"
+    assert invite["email_status"] == "failed"
+    assert "4815162342" not in invite["email_error"]
+    assert body["id"] == invite["id"]

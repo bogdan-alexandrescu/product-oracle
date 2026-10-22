@@ -95,7 +95,28 @@ def test_upgrade_adds_the_delivery_columns_and_downgrade_drops_them(scratch_db):
     for column, value in (("access", "maybe"), ("email_status", "lost")):
         with pytest.raises(IntegrityError):
             _run(f"UPDATE invites SET {column} = :v", v=value)
+    # A failed IAP access change is owed as a follow-up, with the address it is for.
+    member = uuid.uuid4()
+    _run(
+        "INSERT INTO member_follow_ups (id, tenant_id, member_id, kind, target_id, email, "
+        "status, attempts) VALUES (:i, :t, :m, 'iap_revoke', :m, 'pat@example.com', "
+        "'pending', 1)",
+        i=uuid.uuid4(),
+        t=tenant,
+        m=member,
+    )
+    with pytest.raises(IntegrityError):
+        _run("UPDATE member_follow_ups SET kind = 'iap_maybe'")
 
     command.downgrade(cfg, "0021_feedback_agent_staging")
     assert _columns() == []
     assert _run("SELECT count(*) FROM invites") == [(1,)]
+    assert _run("SELECT count(*) FROM member_follow_ups") == [(0,)]
+    with pytest.raises(IntegrityError):
+        _run(
+            "INSERT INTO member_follow_ups (id, tenant_id, member_id, kind, target_id, status, "
+            "attempts) VALUES (:i, :t, :m, 'iap_grant', :m, 'pending', 0)",
+            i=uuid.uuid4(),
+            t=tenant,
+            m=member,
+        )

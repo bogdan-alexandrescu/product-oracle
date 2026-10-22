@@ -348,6 +348,7 @@ async def test_list_members(client, world):
         "status",
         "last_sign_in_at",
         "open_tokens",
+        "access_pending",
     }
     assert resp.json()[0]["status"] == "active"
 

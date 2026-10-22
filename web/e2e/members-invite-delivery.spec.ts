@@ -85,3 +85,34 @@ test("invite: an address outside the company's domains is refused under the fiel
   await expect(inviteRow(page, "pat@example.org")).toHaveCount(0);
   await expect(page.getByTestId("invite-outcome")).toHaveCount(0);
 });
+
+test("remove: Google access not removed yet shows on the member until it is", async ({ page }) => {
+  await scenario(page, "iap-revoke-fails");
+  await login(page);
+  await page.goto("/settings/members");
+  const row = page.getByTestId("member-row").filter({ hasText: "commenter@example.com" });
+  await expect(row.getByTestId("member-access")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Remove commenter@example.com" }).click();
+  await page.getByRole("dialog", { name: "Remove this member?" }).getByRole("button", { name: "Remove member" }).click();
+  await expect(row).toHaveAttribute("data-status", "disabled");
+  await expect(row.getByTestId("member-access")).toHaveText("Access not removed yet");
+  await page.reload();
+  await expect(row.getByTestId("member-access")).toHaveText("Access not removed yet");
+
+  // Restored: they need the access again, so nothing is owed on it.
+  await row.getByRole("button", { name: "Restore commenter@example.com" }).click();
+  await expect(row).toHaveAttribute("data-status", "active");
+  await expect(row.getByTestId("member-access")).toHaveCount(0);
+});
+
+test("resend: a sent invite email waits a minute before it is sent again", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/members");
+  await invite(page, "pat@example.com");
+  const row = inviteRow(page, "pat@example.com");
+  await expect(row.getByTestId("invite-email")).toContainText("Sent");
+  await row.getByRole("button", { name: "Resend invitation to pat@example.com" }).click();
+  await expect(page.getByText(/resend it in \d+ seconds/)).toBeVisible();
+  await expect(row.getByTestId("invite-email")).toContainText("Sent");
+});
