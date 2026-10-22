@@ -1,7 +1,9 @@
 /**
  * Mock of GET /v1/connections/{id}/notion/pages (mock mode only): what the mock Notion
  * connection shared with Product Oracle. Pages of PAGE_SIZE, most recently edited first;
- * a search for "slow" answers with Notion's rate limit, so the retry message shows.
+ * a search for "slow" answers with Notion's rate limit, so the retry message shows. The
+ * "notion-paged" scenario serves pages of 4 with Research last, so "Load more" brings a
+ * parent after its children.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -9,6 +11,8 @@ type NotionPage = Schemas["NotionPageOut"];
 
 export const MOCK_NOTION_CONNECTION_ID = "c0000000-0000-4000-8000-000000000003";
 const PAGE_SIZE = 10;
+/** Tests set the "po-mock-scenario" localStorage key to this for small pages, a parent last. */
+export const NOTION_PAGED_SCENARIO = "notion-paged";
 
 const id = (n: number) => `a0000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const page = (
@@ -57,9 +61,14 @@ export function notionPages(url: URL): Response {
   if (search === "slow") {
     return json(429, { detail: "Notion is limiting requests right now; try again in 20 seconds" }, { "retry-after": "20" });
   }
-  const matches = MOCK_NOTION_PAGES.filter((p) => !search || p.title.toLowerCase().includes(search));
+  const paged = localStorage.getItem("po-mock-scenario") === NOTION_PAGED_SCENARIO;
+  const size = paged ? 4 : PAGE_SIZE;
+  const all = paged
+    ? [...MOCK_NOTION_PAGES.filter((p) => p.title !== "Research"), ...MOCK_NOTION_PAGES.filter((p) => p.title === "Research")]
+    : MOCK_NOTION_PAGES;
+  const matches = all.filter((p) => !search || p.title.toLowerCase().includes(search));
   const start = Number(url.searchParams.get("cursor") ?? 0) || 0;
-  const items = matches.slice(start, start + PAGE_SIZE);
-  const next = start + PAGE_SIZE < matches.length ? String(start + PAGE_SIZE) : null;
+  const items = matches.slice(start, start + size);
+  const next = start + size < matches.length ? String(start + size) : null;
   return json(200, { items, next_cursor: next } satisfies Schemas["NotionPagesOut"]);
 }
