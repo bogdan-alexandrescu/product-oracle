@@ -10,7 +10,9 @@ import { login } from "./helpers";
 
 async function newSkeletonPrd(page: Page, title: string) {
   await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
+  await expect(page).toHaveURL(/\/documents$/);
   await page.getByRole("link", { name: "New PRD" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
   await page.getByRole("textbox", { name: "Title" }).fill(title);
   await page.getByTestId("template-option-prd-rfc").click();
   await page.getByRole("button", { name: "Start from an empty skeleton instead" }).click();
@@ -23,6 +25,13 @@ test("a skeleton-only PRD: Draft with Oracle is the main action and starts its d
   await login(page, "approver@example.com");
   await newSkeletonPrd(page, "Saved wishlists");
   await expect(page).toHaveURL(/\/documents\/saved-wishlists$/);
+
+  // The overview Create draft lands on, then the document itself.
+  await expect(draftButton(page)).toHaveAttribute("data-variant", "primary");
+  const openLatest = page.getByRole("link", { name: "Open latest (v1)" });
+  await expect(openLatest).toHaveAttribute("data-variant", "secondary");
+  await openLatest.click();
+  await expect(page).toHaveURL(/\/documents\/saved-wishlists\/v\/1$/);
 
   await expect(draftButton(page)).toHaveText("Draft with Oracle");
   await expect(draftButton(page)).toHaveAttribute("data-variant", "primary");
@@ -39,7 +48,7 @@ test("a skeleton-only PRD: Draft with Oracle is the main action and starts its d
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   await expect(page.getByRole("link", { name: "saved-wishlists" }).first()).toBeVisible();
-  await expect(page.getByText("template prd-rfc")).toBeVisible();
+  await expect(page.getByText("template prd-rfc").first()).toBeVisible();
 });
 
 test("a PRD with content keeps Publish as its main action and no Draft with Oracle", async ({ page }) => {

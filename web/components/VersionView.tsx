@@ -25,6 +25,7 @@ import { Kbd } from "@/components/review/parts";
 import { ReviewPanel, type PanelTab } from "@/components/review/ReviewPanel";
 import { RoleNote } from "@/components/RoleNote";
 import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
+import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import { SectionView } from "@/components/SectionView";
 import { BuildDraftButton } from "@/components/NextDraft";
 import { RoadmapItemsPane } from "@/components/roadmap/RoadmapItemsPane";
@@ -248,6 +249,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const versions = useMemo(() => document_?.versions ?? [], [document_]);
   const readOnly = !!version?.approved_at;
   const latest = versions.at(-1)?.number;
+  // #255: a PRD still on its template's skeleton is drafted first, then published.
+  const templateOnly = isTemplateOnly(document_?.kind, versions);
   const refine = useMemo(() => ({ doc, n }), [doc, n]);
 
   const sections = useMemo(() => version?.sections ?? [], [version]);
@@ -935,6 +938,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               )}
               {/* C1e: accepted changes staged for the next draft, built in one job. */}
               {document_?.kind === "prd" && <BuildDraftButton doc={doc} />}
+              {templateOnly && document_ && <DraftWithOracleButton slug={document_.slug} />}
               {version && canDecide && !canApprove && !version.approved_at && (
                 <span className="text-sm font-medium text-text2" data-testid="owner-approves-note">
                   Only an owner approves {ownerApproves}
@@ -945,7 +949,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 (document_?.kind === "prd" && !version.approved_at ? (
                   // T2 publish gate: a PRD is published from the Publish screen, latest version only.
                   <LinkButton
-                    variant="primary"
+                    variant={templateOnly ? "secondary" : "primary"}
                     icon="check"
                     href={`/documents/${doc}/publish`}
                     aria-description={n !== latest && latest != null ? `Publishes v${latest}, the latest version` : undefined}

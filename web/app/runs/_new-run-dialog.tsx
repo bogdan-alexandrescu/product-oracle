@@ -15,15 +15,18 @@ import { CHECKPOINT_LABEL, EstimateSummary, RunsWhere, usd, type EstimateOut, ty
 type Flow = FlowCatalog["flows"][number];
 type Depth = "quick" | "standard" | "deep";
 
+/** Where a page opens the dialog on one flow, with its document filled in (#255). */
+export type RunStart = { flow: Flow["key"]; document: string; title: string };
+
 /** Pick a flow and its knobs, see the estimate, then start the run. */
-export function NewRunDialog({ onClose }: { onClose: () => void }) {
+export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => void; start?: RunStart }) {
   const router = useRouter();
   const { role } = useMe();
   const catalog = useQuery("flows", () => unwrap(api.GET("/v1/flows")));
   const documents = useQuery("documents", () => unwrap(api.GET("/v1/documents")));
 
-  const [flowKey, setFlowKey] = useState<Flow["key"]>("baseline_to_prd");
-  const [document, setDocument] = useState("");
+  const [flowKey, setFlowKey] = useState<Flow["key"]>(startFrom?.flow ?? "baseline_to_prd");
+  const [document, setDocument] = useState(startFrom?.document ?? "");
   const [depth, setDepth] = useState<Depth>("standard");
   const [roles, setRoles] = useState<Record<string, string[]>>({});
   const [checkpoints, setCheckpoints] = useState<Record<string, boolean>>({});
@@ -35,9 +38,13 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
 
   // D12: the catalog's one rule says which flows this dialog offers; a flow with its own
   // door elsewhere (Build next draft, Plan › Roadmap documents, a launch) is a pointer line
-  // instead.
-  const flows = useMemo(() => catalog.data?.flows.filter((f) => f.in_new_run_dialog) ?? [], [catalog.data]);
-  const pointers = useMemo(() => catalog.data?.flows.filter((f) => f.starts_from) ?? [], [catalog.data]);
+  // instead. Opened from a page on one flow, the dialog offers only that flow.
+  const onlyFlow = startFrom?.flow;
+  const flows = useMemo(
+    () => catalog.data?.flows.filter((f) => (onlyFlow ? f.key === onlyFlow : f.in_new_run_dialog)) ?? [],
+    [catalog.data, onlyFlow],
+  );
+  const pointers = useMemo(() => (onlyFlow ? [] : (catalog.data?.flows.filter((f) => f.starts_from) ?? [])), [catalog.data, onlyFlow]);
   const flow = flows.find((f) => f.key === flowKey) ?? flows[0];
 
   // Choices on top of the flow's defaults; a new flow starts from its defaults again.
@@ -129,7 +136,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
       >
         <div className="flex min-h-14 items-center gap-2 border-b border-line px-5 max-[600px]:px-4">
           <h2 id="new-run-title" className="font-display text-xl font-bold tracking-heading">
-            {catalog.data && !flows.length ? "Start a run" : "New run"}
+            {startFrom?.title ?? (catalog.data && !flows.length ? "Start a run" : "New run")}
           </h2>
           {catalog.data && (
             <InfoTip label="where runs execute" align="start" side="bottom">
