@@ -1,12 +1,14 @@
 """The code capability map format (F5-2): ``code_map.json``, one per repo and commit.
 
 The indexer of a ``code_map`` run writes it (:data:`oracle.runs.flows.CODE_MAP_TASK`);
-:mod:`oracle.engineering.codemaps` stores it. :func:`check` lists its problems,
-:func:`parse` reads a file that checks clean, :func:`ids` gives the ids briefs cite and
-:func:`summary` the text a spec's prompt shows (``specs.capabilities``).
+:mod:`oracle.engineering.codemaps` stores it. :func:`read` parses it once (the map or
+its problems), :func:`check` lists its problems, :func:`parse` reads a file that checks
+clean, :func:`ids` gives the ids briefs cite and :func:`summary` the text a spec's prompt
+shows (``specs.capabilities``).
 
 The file is untrusted text: capped at :data:`MAX_BYTES`, and its text fields are data,
-never instructions (build prompt §12).
+never instructions (build prompt §12). It is stored as JSONB, so numbers that are not finite
+(``NaN``, ``Infinity``, ``1e999``) and NUL characters are refused as it is read.
 
 Format (``version: 1``)::
 
@@ -23,6 +25,7 @@ module of the map; module paths are relative, without ``..``.
 """
 
 import json
+import math
 import re
 from typing import Any, Literal
 
@@ -80,17 +83,57 @@ def _bad_path(path: str) -> bool:
     return bool(_ABSOLUTE.match(path)) or ".." in re.split(r"[\\/]", path)
 
 
+class _NotFinite(ValueError):
+    pass
+
+
+def _no_constant(name: str) -> float:
+    raise _NotFinite(name)
+
+
+def _finite(raw: str) -> float:
+    value = float(raw)
+    if not math.isfinite(value):
+        raise _NotFinite(raw)
+    return value
+
+
+def _nul_at(data: Any) -> str | None:
+    """Where ``data`` holds a NUL character (in a key or a text value), or ``None``:
+    JSONB refuses it. Iterative: the nesting is as deep as the parser allowed."""
+    stack: list[tuple[str, Any]] = [("", data)]
+    while stack:
+        where, value = stack.pop()
+        if isinstance(value, str):
+            if "\x00" in value:
+                return where or "the top level"
+        elif isinstance(value, dict):
+            for key, item in value.items():
+                if "\x00" in key:
+                    return f"a key of {where or 'the top level'}"
+                stack.append((f"{where}.{key}" if where else key, item))
+        elif isinstance(value, list):
+            stack.extend((f"{where}[{i}]", item) for i, item in enumerate(value))
+    return None
+
+
 def _load(text: str) -> tuple[dict[str, Any] | None, list[Problem]]:
     if not isinstance(text, str):
         return None, [_p("unreadable", f"{FILE} is not text")]
     if len(text.encode()) > MAX_BYTES:
         return None, [_p("too_large", f"{FILE} is over {MAX_BYTES // (1024 * 1024)} MB")]
     try:
-        data = json.loads(text)
+        # Stored as JSONB, which refuses NaN and Infinity: refused as it is read.
+        data = json.loads(text, parse_constant=_no_constant, parse_float=_finite)
+    except _NotFinite as exc:
+        return None, [_p("unreadable", f"{FILE} has the number {exc}: numbers must be finite")]
     except (ValueError, RecursionError) as exc:
         return None, [_p("unreadable", f"{FILE} is not JSON ({type(exc).__name__})")]
     if not isinstance(data, dict):
         return None, [_p("unreadable", f"{FILE} must be a JSON object")]
+    nul = _nul_at(data)
+    if nul is not None:
+        return None, [_p("unreadable", f"{FILE} has a NUL character (\\u0000) in {nul[:200]!r}")]
     if data.get("version") != VERSION:
         return None, [
             _p("wrong_version", f"version must be {VERSION}, not {data.get('version')!r}")
@@ -155,22 +198,30 @@ def _check(data: dict[str, Any]) -> list[Problem]:
     return out
 
 
+def read(text: str) -> tuple[dict[str, Any] | None, list[Problem]]:
+    """``text`` parsed once: the map (``partial`` filled in) and ``[]``, or ``None`` and
+    its problems. Untrusted and up to :data:`MAX_BYTES`: run it on the parse pool."""
+    data, problems = _load(text)
+    if data is None:
+        return None, problems
+    problems = _check(data)
+    if problems:
+        return None, problems
+    return {**data, "partial": bool(data.get("partial", False))}, []
+
+
 def check(text: str) -> list[Problem]:
     """The problems of ``text``; ``[]`` when it is a valid code map."""
-    data, problems = _load(text)
-    return problems if data is None else _check(data)
+    return read(text)[1]
 
 
 def parse(text: str) -> dict[str, Any]:
     """The map of a file that checks clean (``partial`` filled in); raises
     :class:`CodeMapInvalid` otherwise."""
-    data, problems = _load(text)
+    data, problems = read(text)
     if data is None:
         raise CodeMapInvalid(problems)
-    problems = _check(data)
-    if problems:
-        raise CodeMapInvalid(problems)
-    return {**data, "partial": bool(data.get("partial", False))}
+    return data
 
 
 def ids(content: dict[str, Any]) -> set[str]:

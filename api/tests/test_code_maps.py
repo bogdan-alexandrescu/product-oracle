@@ -123,6 +123,35 @@ def test_unreadable_and_oversized_files_are_refused():
     assert codes(codemap.check(nested)) == {"unreadable"}
 
 
+@pytest.mark.parametrize("number", ["NaN", "Infinity", "-Infinity", "1e999", "-1e999"])
+def test_numbers_that_are_not_finite_are_refused(number):
+    # protects=a map with NaN or Infinity (JSONB refuses them) is refused as it is read,
+    # with a clear reason; fails_when=it checks clean and its store fails.
+    raw = text(MAP).replace('"version": 1', f'"version": 1, "weight": {number}')
+    problems = codemap.check(raw)
+    assert codes(problems) == {"unreadable"}
+    assert "finite" in problems[0].message
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        changed(repo="example-org/a\u0000pp"),
+        changed(modules=[*MAP["modules"], _module(summary="a\u0000b")]),
+        changed(extra={"k\u0000": 1}),
+    ],
+)
+def test_nul_characters_are_refused(data):
+    # protects=a map with a NUL character (JSONB text refuses it), in a value or a key,
+    # is refused as it is read, with a clear reason; fails_when=it checks clean and its
+    # store fails.
+    raw = text(data)
+    assert "\\u0000" in raw
+    problems = codemap.check(raw)
+    assert codes(problems) == {"unreadable"}
+    assert "NUL" in problems[0].message
+
+
 def test_a_docs_only_map_is_marked_partial():
     # protects=the fallback until the checkout is available: a map built from synced
     # docs says so; fails_when=partial is lost or a non-boolean passes.
@@ -278,6 +307,68 @@ async def test_an_invalid_map_is_stored_failed_with_its_problems(client, bad_map
     assert "unresolved_ref" in got["error"] and "module:no" in got["error"]
     async with tenant_session(tenant_id) as s:
         assert (await s.get(Run, uuid.UUID(out["run_id"]))).status == "failed"
+
+
+async def test_the_map_is_read_once_on_the_parse_pool(client, map_runtime, monkeypatch):
+    # protects=the importer reads the untrusted code_map.json once, on the parse pool
+    # (oracle.safe_yaml.run_parse_within); fails_when=it is parsed on the event loop or
+    # twice.
+    import threading
+
+    from oracle import safe_yaml
+
+    loop_thread = threading.get_ident()
+    loads: list[int] = []
+    pooled: list[str] = []
+    real_load, real_within = codemap._load, safe_yaml.run_parse_within
+
+    def load(raw):
+        loads.append(threading.get_ident())
+        return real_load(raw)
+
+    async def within(fn, /, *args, **kwargs):
+        pooled.append(kwargs.get("name", ""))
+        return await real_within(fn, *args, **kwargs)
+
+    monkeypatch.setattr(codemap, "_load", load)
+    monkeypatch.setattr(safe_yaml, "run_parse_within", within)
+    tenant_id = await make_tenant()
+    owner = await make_person(tenant_id, "dev@example.com", "commenter")
+    got = await built_map(client, tenant_id, owner)
+    assert got["status"] == "ready"
+    assert len(loads) == 1 and loads[0] != loop_thread
+    assert codemap.FILE in pooled
+
+
+@pytest.mark.parametrize(
+    ("raw", "reason"),
+    [
+        (text(MAP).replace('"version": 1', '"version": 1, "weight": NaN'), "finite"),
+        (text(MAP).replace('"version": 1', '"version": 1, "weight": Infinity'), "finite"),
+        (text(changed(jobs=[{"id": "job:a\u0000", "module": "module:billing"}])), "NUL"),
+    ],
+    ids=["nan", "infinity", "nul"],
+)
+async def test_a_map_jsonb_refuses_ends_failed_with_the_reason(client, raw, reason):
+    # protects=a map with NaN, Infinity or a NUL character ends failed with that reason
+    # (and its run fails); fails_when=the store raises and the map stays building with a
+    # generic error.
+    fake = FakeRuntime({"index": [Outcome(artifacts={codemap.FILE: raw})]})
+    set_runtime(fake)
+    try:
+        tenant_id = await make_tenant()
+        owner = await make_person(tenant_id, "dev@example.com", "commenter")
+        source_id = await github_source(tenant_id, owner)
+        out = (await request_map(client, owner, source_id)).json()
+        await tick(client, tenant_id)
+    finally:
+        set_runtime(None)
+    got = (await client.get(f"/v1/code-maps/{out['id']}", headers=owner.headers)).json()
+    assert got["status"] == "failed" and got["content"] is None
+    assert "[unreadable]" in got["error"] and reason in got["error"]
+    async with tenant_session(tenant_id) as s:
+        run = await s.get(Run, uuid.UUID(out["run_id"]))
+        assert run.status == "failed"
 
 
 async def test_only_the_sources_owner_maps_its_repos(client, map_runtime):

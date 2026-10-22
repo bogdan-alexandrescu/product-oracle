@@ -32,7 +32,7 @@ from typing import Any
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.engineering import codemap
@@ -184,6 +184,17 @@ def _as_of(value: Any) -> datetime | None:
     return at if at.tzinfo else at.replace(tzinfo=UTC)
 
 
+async def _read(text: str) -> tuple[dict[str, Any] | None, list[codemap.Problem]]:
+    """:func:`codemap.read` on the parse pool (:func:`oracle.safe_yaml.run_parse_within`),
+    at most ``PARSE_SECONDS``: up to 2 MB of a run's untrusted JSON, parsed once, never
+    on the event loop. A busy pool raises :class:`~oracle.safe_yaml.ParseBusy` (the next
+    tick retries); a parse too slow is a problem."""
+    try:
+        return await safe_yaml.run_parse_within(codemap.read, text, name=codemap.FILE)
+    except safe_yaml.ParseTimeout as exc:
+        return None, [codemap.Problem(code="unreadable", message=str(exc))]
+
+
 async def import_map(
     db: AsyncSession, run: Any, files: dict[str, str], principal: Principal
 ) -> dict[str, Any]:
@@ -192,18 +203,18 @@ async def import_map(
     map_id = _map_id(run)
     if map_id is None:
         return {"error": "the run names no code map"}
+    text = files.get(codemap.FILE)
+    # Parsed before the row is locked: no transaction waits on the pool.
+    content, problems = (
+        (None, [codemap.Problem(code="unreadable", message=f"the run left no {codemap.FILE}")])
+        if text is None
+        else await _read(text)
+    )
     async with tenant_session(current_tenant(db)) as s:
         row = await s.get(CodeMap, map_id, with_for_update=True)
         if row is None:
             return {"error": "the run's code map is gone"}
-        text = files.get(codemap.FILE)
-        problems = (
-            [codemap.Problem(code="unreadable", message=f"the run left no {codemap.FILE}")]
-            if text is None
-            else codemap.check(text)
-        )
-        if not problems:
-            content = codemap.parse(text or "")
+        if content is not None:
             if not _same(content["repo"], row.repo):
                 problems = [
                     codemap.Problem(
@@ -211,7 +222,7 @@ async def import_map(
                         message=f"repo is {content['repo']!r}, not {row.repo!r}",
                     )
                 ]
-        if problems:
+        if content is None or problems:
             row.status = "failed"
             row.error = "; ".join(f"[{p.code}] {p.message}" for p in problems)[:4000]
             await s.commit()

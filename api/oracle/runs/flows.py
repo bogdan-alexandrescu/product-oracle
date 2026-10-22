@@ -654,7 +654,7 @@ FLOWS: dict[str, FlowDef] = {
                     checkpoint=None,
                     importer="code_map",
                     task=CODE_MAP_TASK,
-                    tools=("search", "get_source_item"),
+                    tools=("search", "get_source_item", "get_checkpoint_review"),
                 ),
             ),
         ),
