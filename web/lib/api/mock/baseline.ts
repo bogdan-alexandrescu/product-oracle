@@ -270,7 +270,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
   });
   const carts = entity("feature", "f.saved-carts", "Saved carts", {
     body: "Shoppers can keep a cart and come back to it on another device.",
-    attrs: { status: "planned", effort: "L" },
+    attrs: { status: "planned", effort: "L", milestone: "Beta" },
     confidence: 0.3,
   });
   const invites = entity("feature", "f.team-invites", "Team invites", {
