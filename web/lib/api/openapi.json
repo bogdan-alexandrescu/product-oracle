@@ -25762,6 +25762,134 @@
         }
       }
     },
+    "/v1/requests/triage": {
+      "get": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Get Request Triage",
+        "description": "Oracle's latest triage run: under way, or how many suggestions it made and how many\npossible requests it found in your own sources.",
+        "operationId": "get_request_triage",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriageStatus"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Start Request Triage",
+        "description": "Classify now: start Oracle's triage run (one analyst step, quick depth: $1.50). It\nsuggests a theme, goals, a duplicate and a feature for every New request and looks\nthrough your own sources for requests; it decides nothing. 409 while one is under way.\nOracle also classifies new requests every day at 07:00 PT.",
+        "operationId": "start_request_triage",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriageStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/requests/triage/daily": {
+      "put": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Set Request Triage Daily",
+        "description": "Turn \"Daily triage at 07:00 PT\" on or off (approvers and owners; off by default).\nWhile on, Oracle's daily run acts as whoever turned it on, while they are an active\napprover or owner, else as the longest-standing active owner. A run's token never\nturns it (403); a read-only credential changes nothing.",
+        "operationId": "set_request_triage_daily",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriageDailyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriageStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
     "/v1/requests/{request_id}": {
       "get": {
         "tags": [
@@ -26331,6 +26459,187 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RequestThemeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/request-candidates": {
+      "get": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "List Request Candidates",
+        "description": "The possible requests Oracle found in your own sources: yours alone (S6).",
+        "operationId": "list_request_candidates",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "filed",
+                    "dismissed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CandidateOut"
+                  },
+                  "title": "Response List Request Candidates"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/request-candidates/{candidate_id}/file": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "File Request Candidate",
+        "description": "File a found item as a request, in its words unless you change them. Filing shares\nthe item: everyone who can see Requests reads your text, the item's title and link,\nand a 400-character excerpt.",
+        "operationId": "file_request_candidate",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateFile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/request-candidates/{candidate_id}/dismiss": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Dismiss Request Candidate",
+        "description": "Dismiss a found item: Oracle does not offer it again.",
+        "operationId": "dismiss_request_candidate",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateOut"
                 }
               }
             }
@@ -33449,6 +33758,340 @@
         ],
         "title": "CancelIn"
       },
+      "CandidateFile": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "support",
+                  "sales",
+                  "team",
+                  "interview",
+                  "slack",
+                  "meeting",
+                  "doc",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "requester_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requester Name"
+          },
+          "requester_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "customer",
+                  "team",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requester Kind"
+          },
+          "goal_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Ids"
+          },
+          "theme_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CandidateFile",
+        "description": "Filing a found item: its own words unless these say otherwise."
+      },
+      "CandidateOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "owner_user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Owner User Id"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "requester_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requester Name"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "support",
+              "sales",
+              "team",
+              "slack",
+              "meeting",
+              "doc",
+              "other"
+            ],
+            "title": "Channel"
+          },
+          "theme_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Title"
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Goal Ids"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "filed",
+              "dismissed"
+            ],
+            "title": "Status"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "source": {
+            "$ref": "#/components/schemas/CandidateSource"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "owner_user_id",
+          "run_id",
+          "title",
+          "body",
+          "requester_name",
+          "channel",
+          "theme_title",
+          "goal_ids",
+          "confidence",
+          "rationale",
+          "status",
+          "request_id",
+          "source",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CandidateOut",
+        "description": "A possible request Oracle found in its owner's own source item (theirs alone)."
+      },
+      "CandidateSource": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id",
+          "title",
+          "url",
+          "kind",
+          "excerpt"
+        ],
+        "title": "CandidateSource",
+        "description": "The item, as filing would share it: title, link, kind and excerpt."
+      },
       "CatalogModuleDetail": {
         "properties": {
           "key": {
@@ -34393,6 +35036,7 @@
               "eng_review",
               "roadmap_items",
               "roadmap_review",
+              "request_triage",
               "strategy_review",
               "launch_review"
             ],
@@ -43723,6 +44367,7 @@
               "feedback_loop",
               "prd_to_roadmap",
               "prd_to_spec",
+              "request_triage",
               "strategy_draft",
               "launch_kit"
             ],
@@ -43861,6 +44506,7 @@
               "eng_review",
               "roadmap_items",
               "roadmap_review",
+              "request_triage",
               "strategy_review",
               "launch_review"
             ],
@@ -45107,6 +45753,7 @@
               "eng_review",
               "roadmap_items",
               "roadmap_review",
+              "request_triage",
               "strategy_review",
               "launch_review"
             ],
@@ -45231,6 +45878,7 @@
               "feedback_loop",
               "prd_to_roadmap",
               "prd_to_spec",
+              "request_triage",
               "strategy_draft",
               "launch_kit"
             ],
@@ -61412,6 +62060,7 @@
               "feedback_loop",
               "prd_to_roadmap",
               "prd_to_spec",
+              "request_triage",
               "strategy_draft",
               "launch_kit"
             ],
@@ -61523,6 +62172,7 @@
               "eng_review",
               "roadmap_items",
               "roadmap_review",
+              "request_triage",
               "strategy_review",
               "launch_review"
             ],
@@ -61677,6 +62327,7 @@
               "feedback_loop",
               "prd_to_roadmap",
               "prd_to_spec",
+              "request_triage",
               "strategy_draft",
               "launch_kit"
             ],
@@ -61841,6 +62492,7 @@
                   "eng_review",
                   "roadmap_items",
                   "roadmap_review",
+                  "request_triage",
                   "strategy_review",
                   "launch_review"
                 ]
@@ -61951,6 +62603,7 @@
                   "eng_review",
                   "roadmap_items",
                   "roadmap_review",
+                  "request_triage",
                   "strategy_review",
                   "launch_review"
                 ]
@@ -62225,6 +62878,7 @@
               "feedback_loop",
               "prd_to_roadmap",
               "prd_to_spec",
+              "request_triage",
               "strategy_draft",
               "launch_kit"
             ],
@@ -62389,6 +63043,7 @@
                   "eng_review",
                   "roadmap_items",
                   "roadmap_review",
+                  "request_triage",
                   "strategy_review",
                   "launch_review"
                 ]
@@ -62499,6 +63154,7 @@
                   "eng_review",
                   "roadmap_items",
                   "roadmap_review",
+                  "request_triage",
                   "strategy_review",
                   "launch_review"
                 ]
@@ -65294,6 +65950,7 @@
               "eng_review",
               "roadmap_items",
               "roadmap_review",
+              "request_triage",
               "strategy_review",
               "launch_review"
             ],
@@ -73818,6 +74475,188 @@
         ],
         "title": "TrackerRecordsImport",
         "description": "Engineering status as read from a tracker, posted by an approver (an export, the\nCLI, an MCP client acting for them; not a run's token). Oracle stores it; it never\nwrites back."
+      },
+      "TriageDailyIn": {
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "title": "On"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "on"
+        ],
+        "title": "TriageDailyIn",
+        "description": "Turn \"Daily triage at 07:00 PT\" on or off."
+      },
+      "TriageStart": {
+        "properties": {
+          "depth": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "quick",
+                  "standard"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depth"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TriageStart"
+      },
+      "TriageStatus": {
+        "properties": {
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "draft",
+                  "awaiting_approval",
+                  "running",
+                  "awaiting_checkpoint",
+                  "paused_overrun",
+                  "succeeded",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active",
+            "default": false
+          },
+          "automatic": {
+            "type": "boolean",
+            "title": "Automatic",
+            "default": false
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "suggestions": {
+            "type": "integer",
+            "title": "Suggestions",
+            "default": 0
+          },
+          "found": {
+            "type": "integer",
+            "title": "Found",
+            "default": 0
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "daily_skipped": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Skipped"
+          },
+          "daily_on": {
+            "type": "boolean",
+            "title": "Daily On",
+            "default": false
+          },
+          "daily_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily As"
+          },
+          "daily_changed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Changed By"
+          },
+          "daily_changed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Changed At"
+          }
+        },
+        "type": "object",
+        "title": "TriageStatus",
+        "description": "The latest triage run, for the Requests header. Empty before the first one."
       },
       "Unaligned": {
         "properties": {

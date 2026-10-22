@@ -1813,6 +1813,7 @@ function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
     role,
     goals: () => db.baseline.entities.filter((e) => e.type === "goal"),
     features: () => db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
+    people: () => db.members,
     documents: () =>
       db.documents
         .filter((d) => d.kind === "prd")

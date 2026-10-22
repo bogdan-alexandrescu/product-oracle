@@ -828,6 +828,7 @@ CHECKPOINT_TITLES = {
     "roadmap_items": "Roadmap items",
     "roadmap_review": "Roadmap review",
     "strategy_review": "Vision or strategy review",
+    "request_triage": "Request triage",
     "launch_review": "Launch kit review",
 }
 _LISTED = ("approved", "changes_requested", "skipped")
@@ -1554,17 +1555,20 @@ async def _reset_segments(db: AsyncSession, run: Run, flow: flows.FlowDef) -> No
 
 async def create_run(
     db: AsyncSession,
-    principal: Principal,
+    principal: Principal | str,
     body: RunCreate,
     *,
     entry_knobs: dict[str, Any] | None = None,
     oracle_knobs: dict[str, Any] | None = None,
     commit: bool = True,
+    created_by: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """A draft run. A flow with an ``entry`` route is created only through it, which
     passes ``entry_knobs`` (what the run builds, e.g. its spec request) and commits.
     ``oracle_knobs``: knobs Oracle sets (``ORACLE_KNOBS``), e.g. the intake a run starts
-    from; ``commit=False`` leaves the commit to the caller."""
+    from; ``commit=False`` leaves the commit to the caller. ``principal`` an actor string
+    (``audit.ORACLE``): a run Oracle starts on its own (the daily request triage), created
+    for the member ``created_by`` it acts as (its run token acts for them)."""
     flow = flows.FLOWS[body.flow]
     if flow.entry and entry_knobs is None:
         raise Invalid(f"start a {flow.title} run from {flow.entry}")
@@ -1596,7 +1600,7 @@ async def create_run(
         status="draft",
         knobs={**knobs.as_json(), **oracle, **extra, **(entry_knobs or {})},
         document_id=document_id,
-        created_by=principal.id,
+        created_by=principal.id if isinstance(principal, Principal) else created_by,
     )
     db.add(run)
     await db.flush()
@@ -1660,7 +1664,7 @@ async def update_run(
     await db.commit()
 
 
-async def estimate(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> EstimateOut:
+async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID) -> EstimateOut:
     run = await _get_run(db, run_id, lock=True)
     if run.status != "draft":
         raise RunError("only a draft run can be estimated")
@@ -1698,7 +1702,7 @@ async def estimate(db: AsyncSession, principal: Principal, run_id: uuid.UUID) ->
 # --------------------------------------------------------------------------- start
 
 
-async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
+async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID) -> None:
     run = await _get_run(db, run_id, lock=True)
     if run.status != "draft":
         raise RunError(f"run is {run.status}, not a draft")
@@ -2658,6 +2662,9 @@ async def _submit_now(
             )
             scopes = sdef.scopes
             outputs = sdef.outputs_for(kind)
+        if (run.knobs or {}).get("triage_automatic"):
+            # Oracle's daily request triage acts as a member and reads no one's sources.
+            scopes = tuple(sc for sc in scopes if sc != "read:sources")
         if mode.attach:
             agents = sum(1 for s in steps if not s.waits)
             ttl = workflow.credential_seconds(agents, len(steps) - agents, settings)
@@ -3660,6 +3667,23 @@ async def _advance(
             launch_import = {"error": f"{flows.LAUNCH_FILE} could not be imported "
                              f"({type(exc).__name__})"}  # fmt: skip
         art["launch_import"] = launch_import
+    triage_import: dict[str, Any] | None = None
+    if flows.TRIAGE_FILE in sdef.outputs:
+        from oracle.requests import triage
+
+        try:
+            # In a savepoint, as the items check: a bad file never fails the tick.
+            async with db.begin_nested():
+                triage_import = await triage.apply(db, run, art["files"].get(flows.TRIAGE_FILE))
+        except safe_yaml.ParseBusy:
+            raise  # no worker for it: this tick gives up, the next retries
+        except Exception as exc:  # noqa: BLE001
+            log.exception("applying %s of run %s failed", flows.TRIAGE_FILE, run.id)
+            triage_import = {"error": f"{flows.TRIAGE_FILE} could not be applied "
+                             f"({type(exc).__name__})"}  # fmt: skip
+        for note in triage_import.get("notes") or []:
+            _note_art(art, note)
+        art["triage_import"] = triage_import
     if sdef.imports_draft:
         kind = await _target_kind(db, run)
         name = flows.draft_file(kind)
@@ -3729,6 +3753,8 @@ async def _advance(
             payload["scope_id"] = str(scope_id)
     if launch_import is not None:
         payload["launch_import"] = launch_import
+    if triage_import is not None:
+        payload["triage_import"] = triage_import
     if wait is not None:
         payload["wait"] = wait
         _set_knob(run, "opening_wait", None)
@@ -3771,7 +3797,7 @@ async def _advance(
         )
     )
     await _link_scope(db, scope_id, checkpoint_id)
-    for result in (baseline_import, imported, launch_import):
+    for result in (baseline_import, imported, launch_import, triage_import):
         if result is not None and result.get("error"):
             await _finish(db, run, "failed", result["error"])
             return True
