@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
 import { Button, Chip, Notice, Page, PageHeader, Sheet, Split } from "@/components/ds";
@@ -11,6 +10,7 @@ import { api, unwrap } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { DraftSheet } from "./_draft-sheet";
 import { IntakeInspector } from "./_inspector";
 import { OPEN_GAP, STATUS, dayMonth, gateReason, type Batch } from "./_lib";
 import { QuestionsTab } from "./_questions";
@@ -49,12 +49,12 @@ type Tab = "questions";
  * or record a decision from the inspector.
  */
 export function BeforeDrafting({ id }: { id: string }) {
-  const router = useRouter();
   const { me, role } = useMe();
   const phone = useIsPhone();
   const [version, setVersion] = useState(0);
   const [tab, setTab] = useState<Tab>("questions");
   const [sheet, setSheet] = useState(false);
+  const [drafting, setDrafting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,20 +94,6 @@ export function BeforeDrafting({ id }: { id: string }) {
   const status = STATUS[s.intake.status];
   const openGaps = s.gaps.filter((g) => OPEN_GAP.has(g.status)).length;
   const fresh = s.new_evidence.visible ? (s.new_evidence.count ?? 0) : 0;
-
-  async function draft() {
-    setBusy(true);
-    setError(null);
-    try {
-      const run = await unwrap(api.POST("/v1/intakes/{intake_id}/runs", { params: { path: { intake_id: id } }, body: { knobs: { depth: "standard", roles: {}, checkpoints: {} } } }));
-      router.push(`/runs/${run.id}`);
-    } catch (e) {
-      setError(errorMessage(e));
-      changed();
-    } finally {
-      setBusy(false);
-    }
-  }
 
   const inspector = <IntakeInspector summary={s} role={role} onChanged={changed} />;
   const more = (author || approver) && !converted && (
@@ -175,7 +161,7 @@ export function BeforeDrafting({ id }: { id: string }) {
         action={
           <>
             {!converted && !archived && (
-              <Button variant="primary" icon="doc" disabled={busy || blocked || !approver} title={reason ?? (approver ? undefined : "An approver drafts the PRD")} onClick={draft}>
+              <Button variant="primary" icon="doc" disabled={busy || blocked || !approver} title={reason ?? (approver ? undefined : "An approver starts the draft")} onClick={() => setDrafting(true)}>
                 Draft with Oracle
               </Button>
             )}
@@ -205,6 +191,8 @@ export function BeforeDrafting({ id }: { id: string }) {
           )}
         </div>
       </Split>
+      {/* C4: Draft with Oracle opens its sheet (template, baseline, depth, stops, estimate). */}
+      {drafting && <DraftSheet summary={s} onClose={() => setDrafting(false)} />}
       {phone && (
         <Sheet open={sheet} title="Before drafting" onClose={() => setSheet(false)} testId="intake-sheet">
           <div className="p-2">{inspector}</div>

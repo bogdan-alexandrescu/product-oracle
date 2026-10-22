@@ -2378,7 +2378,8 @@ async function route(db: Db, req: Request): Promise<Response> {
         return null;
       },
     };
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, people: db.members, subjects }, req, p, q);
+    const confirmedGoals = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
+    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, people: db.members, subjects, confirmedGoals }, req, p, q);
     if (intake) return intake;
   }
   // Requests and their themes (C1) check roles themselves: commenters add, approvers decide.

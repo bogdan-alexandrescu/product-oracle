@@ -173,7 +173,7 @@ test("commenter brief, approver finds it: Continue works, the draft waits for an
 
   await login(page, "approver@example.com");
   await page.goto("/documents");
-  await page.getByRole("button", { name: /^Ideas \d+$/ }).click();
+  await page.getByRole("button", { name: /^Ideas\s*\d+$/ }).click();
   const row = page.getByTestId("idea-row").filter({ hasText: "Gift wrapping at checkout" });
   await expect(row).toBeVisible();
   await expect(row).toContainText(/\d+ questions? open|Ready to draft/);

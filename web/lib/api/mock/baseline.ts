@@ -57,6 +57,44 @@ export const COMMENTER_PROPOSAL = "b3000000-0000-4000-8000-000000000001";
 const OTHER_MEMBER = "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e6f7";
 /** The Baseline to PRD run (./runs.ts) whose agents made the seeded proposals. */
 export const AGENT_RUN = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a291";
+
+/** GET /v1/baseline/review-status (C4, B1 "Reuse base"): whether a PRD run may reuse the baseline. */
+export interface ReviewStatus {
+  last_approved_at: string | null;
+  checkpoint_id: string | null;
+  run_id: string | null;
+  age_days: number | null;
+  build_under_way: boolean;
+  reusable: boolean;
+  reason: "too_old" | "never_reviewed" | "build_under_way" | null;
+  baseline_segment_usd: Record<"quick" | "standard" | "deep", number>;
+}
+
+/** The scenario whose last baseline review is too old to reuse (approved 41 days ago). */
+export const BASELINE_STALE_SCENARIO = "baseline-stale";
+const REVIEW_CHECKPOINT = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a2c1";
+
+/**
+ * The mock's last baseline review: approved 9 days ago and reusable, or 41 days ago (too old)
+ * in the "baseline-stale" scenario. The baseline segment costs its roles at each depth, as
+ * the runs mock prices it (researcher $4 + analyst $3 at standard).
+ */
+export function baselineReviewStatus(now: Date = new Date()): ReviewStatus {
+  const stale = typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === BASELINE_STALE_SCENARIO;
+  const age = stale ? 41 : 9;
+  const at = new Date(now.getTime() - age * 86_400_000);
+  at.setUTCHours(16, 40, 0, 0);
+  return {
+    last_approved_at: at.toISOString(),
+    checkpoint_id: REVIEW_CHECKPOINT,
+    run_id: AGENT_RUN,
+    age_days: age,
+    build_under_way: false,
+    reusable: !stale,
+    reason: stale ? "too_old" : null,
+    baseline_segment_usd: { quick: 3.5, standard: 7, deep: 14 },
+  };
+}
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const now = () => new Date().toISOString();
@@ -687,6 +725,7 @@ export async function routeBaseline(
   try {
     const [head, id, action] = rest;
 
+    if (head === "review-status" && !id && m === "GET") return json(200, baselineReviewStatus());
     if (head === "graph" && m === "GET") {
       return json(200, { entities: s.entities.map(entityOut), edges: s.edges.map(edgeOut) });
     }
