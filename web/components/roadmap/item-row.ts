@@ -21,6 +21,8 @@ export type ItemRow = {
   freshness?: Schemas["RoadmapItemOut"]["freshness"];
   stale_reasons?: string[];
   engineering?: Schemas["TrackerRecordRef"][];
+  /** E3: an item the compared version had and this one dropped (a muted, struck row). */
+  ghost?: boolean;
 };
 
 export const HORIZONS: { value: Horizon; label: string }[] = [

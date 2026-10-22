@@ -17027,8 +17027,18 @@ export interface components {
             /** Version Count */
             version_count: number;
         };
+        /** ItemFieldChange */
         ItemFieldChange: {
-            [key: string]: unknown;
+            /** Field */
+            field: string;
+            /** Before */
+            before?: unknown;
+            /** After */
+            after?: unknown;
+            /** Added */
+            added?: string[] | null;
+            /** Removed */
+            removed?: string[] | null;
         };
         /** ItemHistoryOut */
         ItemHistoryOut: {

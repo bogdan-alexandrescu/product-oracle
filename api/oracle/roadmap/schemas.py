@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from oracle.v2.schemas import Freshness
 
@@ -492,13 +492,8 @@ class ItemFieldChange(BaseModel):
     before: Any = None
     after: Any = None
     # depends_on only: the ids added and removed (left out on other fields).
-    added: list[str] | None = None
-    removed: list[str] | None = None
-
-    @model_serializer(mode="wrap")
-    def _drop_unset_lists(self, handler: Any) -> dict[str, Any]:
-        out = handler(self)
-        return {k: v for k, v in out.items() if k not in ("added", "removed") or v is not None}
+    added: list[str] | None = Field(default=None, exclude_if=lambda v: v is None)
+    removed: list[str] | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class RoadmapItemChange(BaseModel):

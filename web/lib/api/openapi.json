@@ -53347,8 +53347,51 @@
         "title": "ItemDetail"
       },
       "ItemFieldChange": {
-        "additionalProperties": true,
-        "type": "object"
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "before": {
+            "title": "Before"
+          },
+          "after": {
+            "title": "After"
+          },
+          "added": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added"
+          },
+          "removed": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field"
+        ],
+        "title": "ItemFieldChange"
       },
       "ItemHistoryOut": {
         "properties": {
