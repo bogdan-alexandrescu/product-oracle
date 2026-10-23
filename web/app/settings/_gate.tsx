@@ -1,0 +1,37 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
+
+import { Empty, LinkButton, PageHeader, Panel } from "@/components/ds";
+import { Loading } from "@/components/ui";
+import { useMe } from "@/lib/me";
+import { SETTINGS_WRITES, settingsTabOf, useSettingsTabs } from "@/lib/settings-tabs";
+
+/**
+ * #370: a Settings page renders only for a role that can read it. A deep link to a tab the
+ * role does not have says so, instead of a form that would fail.
+ */
+export function SettingsGate({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const { tabs, ready } = useSettingsTabs();
+  const { can } = useMe();
+  const tab = settingsTabOf(pathname);
+  const write = SETTINGS_WRITES[pathname];
+  if (!tab || (tabs.includes(tab) && (!write || can(write)))) return children;
+  if (!ready) return <Loading />;
+  return (
+    <>
+      <PageHeader title={tab.label} />
+      <Panel testId="not-for-role" bodyClassName="flex flex-col items-center gap-3 pb-8">
+        <Empty icon="lock">Not available for your role</Empty>
+        <p className="text-[15px] text-text2">Ask an owner if you need it.</p>
+        {tabs[0] && (
+          <LinkButton href={tabs[0].href} variant="ghost">
+            Open Settings
+          </LinkButton>
+        )}
+      </Panel>
+    </>
+  );
+}

@@ -11,6 +11,15 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=1024)
 
 
+class Capabilities(BaseModel):
+    """#370: what the caller's role may do, per API operation (operationId)."""
+
+    role: Role
+    # A3: the engineering lead flag gates its own actions (date checks, engineering stops).
+    engineering_lead: bool = False
+    operations: dict[str, bool]
+
+
 class Me(BaseModel):
     kind: Literal["user", "token"]
     tenant_id: uuid.UUID

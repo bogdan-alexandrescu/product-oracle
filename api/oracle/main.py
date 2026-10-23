@@ -14,6 +14,7 @@ from oracle.auth.router import router as auth_router
 from oracle.autonomy_router import router as autonomy_router
 from oracle.baseline.router import router as baseline_router
 from oracle.blockers.router import router as blockers_router
+from oracle.capabilities import stamp_openapi
 from oracle.claude_accounts.router import router as claude_accounts_router
 from oracle.claude_accounts.sweep import get_pool_settings, run_scheduler
 from oracle.config import get_settings
@@ -237,6 +238,8 @@ def create_app() -> FastAPI:
     app.include_router(ticker_router)
     # Every REST operation above (and any added later) is also an MCP tool here.
     mount_mcp(app)
+    # #370: each operation's role in the OpenAPI document (x-min-role).
+    stamp_openapi(app)
     return app
 
 
