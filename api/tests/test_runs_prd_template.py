@@ -135,9 +135,22 @@ async def test_the_prd_draft_prompt_names_the_template_and_pastes_the_skeleton(c
 
 # --- the roadmap draft prompt, pinned ------------------------------------------------------
 
-# sha256 (first 16 hex) of each roadmap_draft step prompt, captured from main BEFORE
-# roadmap_lines became draft_lines (C4): (with a source PRD, theme, MCP attached).
+# sha256 (first 16 hex) of each roadmap_draft step prompt: (with a source PRD, theme, MCP
+# attached). Captured from main BEFORE roadmap_lines became draft_lines (C4), then refreshed
+# once for G5 (#189), whose only change is the tool list line
+# "- get_run_discussions: summaries and staged changes from the people's discussions about
+# this run" (G5 §3.4); ROADMAP_PINS_BEFORE_G5 proves nothing else moved.
 ROADMAP_PINS = {
+    (True, "roadmap-board", False): ["58c9a09daa046d4f", "cd29acdff89ff04b"],
+    (True, "roadmap-board", True): ["4ed5355ca2c8a5c6", "3dbd391534f079e2"],
+    (True, None, False): ["a77b9eb1b9711f3f", "233941cfdf924864"],
+    (True, None, True): ["9187444391a34f39", "33e32c23877f76aa"],
+    (False, "roadmap-board", False): ["04da9cab796958cf", "e817643b0cd0a0fa"],
+    (False, "roadmap-board", True): ["04da9cab796958cf", "e817643b0cd0a0fa"],
+    (False, None, False): ["9a864584f2c5a203", "a79ed7f8e17afec0"],
+    (False, None, True): ["9a864584f2c5a203", "a79ed7f8e17afec0"],
+}
+ROADMAP_PINS_BEFORE_G5 = {
     (True, "roadmap-board", False): ["7ab0ec790db5698a", "8f559e817762b3af"],
     (True, "roadmap-board", True): ["ad669b369c095f42", "bc613cba7b18b062"],
     (True, None, False): ["fdee1ea119449d48", "8cec0bf72b0306de"],
@@ -147,6 +160,10 @@ ROADMAP_PINS = {
     (False, None, False): ["85f662a08cfcf9ed", "ad0edab8f1df8d6c"],
     (False, None, True): ["85f662a08cfcf9ed", "ad0edab8f1df8d6c"],
 }
+G5_TOOL_LINE = (
+    "- get_run_discussions: summaries and staged changes from the people's discussions"
+    " about this run\n"
+)
 
 
 def _source() -> flows.SourceContext:
@@ -198,6 +215,12 @@ def test_the_roadmap_draft_prompt_is_byte_for_byte_unchanged(case):
     steps = flows.build_steps(flow, flow.segment("roadmap_draft"), knobs, ctx)
     digests = [hashlib.sha256(s[2].encode()).hexdigest()[:16] for s in steps]
     assert digests == ROADMAP_PINS[case]
+    for s in steps:
+        assert s[2].count(G5_TOOL_LINE) == 1
+    before = [
+        hashlib.sha256(s[2].replace(G5_TOOL_LINE, "").encode()).hexdigest()[:16] for s in steps
+    ]
+    assert before == ROADMAP_PINS_BEFORE_G5[case]
 
 
 def test_baseline_to_prd_points_to_the_new_prd_door():

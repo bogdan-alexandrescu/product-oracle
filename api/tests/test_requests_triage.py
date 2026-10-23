@@ -101,7 +101,7 @@ def test_the_flow():
     assert segment.checkpoint == "request_triage"
     assert segment.tools == (
         "search", "get_source_item", "get_baseline", "list_requests", "list_request_themes",
-        "get_checkpoint_review",
+        "get_checkpoint_review", "get_run_discussions",
     )  # fmt: skip
     assert all(t in flows.MCP_TOOLS for t in segment.tools)
     assert flow.default_checkpoints == {"request_triage": False}
