@@ -19931,6 +19931,8 @@ export interface components {
         PoolOut: {
             /** Takes Calls */
             takes_calls: boolean;
+            /** On Fallback */
+            on_fallback: boolean;
             /** Reason */
             reason: string | null;
             /** Until */

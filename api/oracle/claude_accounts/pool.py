@@ -9,8 +9,9 @@ its caller share a process, so these are function calls rather than HTTP:
                unusable), or a NoAccount with the current hold untouched
     release()  give the named hold back; ``unusable`` when the credential would not read
 
-"No account" is an answer, not an error: ``no_accounts_registered`` means the pool is
-not how this company runs (use the fallback credential); every other reason is a wait.
+"No account" is an answer, not an error: ``no_accounts_registered`` (the pool is not how
+this company runs) and ``no_account_available`` (every account is spent) run on the
+fallback credential when one is set (``fallback.covers``); every other reason is a wait.
 """
 
 from __future__ import annotations

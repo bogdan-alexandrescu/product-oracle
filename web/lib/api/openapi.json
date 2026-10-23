@@ -61279,6 +61279,10 @@
             "type": "boolean",
             "title": "Takes Calls"
           },
+          "on_fallback": {
+            "type": "boolean",
+            "title": "On Fallback"
+          },
           "reason": {
             "anyOf": [
               {
@@ -61306,6 +61310,7 @@
         "type": "object",
         "required": [
           "takes_calls",
+          "on_fallback",
           "reason",
           "until"
         ],

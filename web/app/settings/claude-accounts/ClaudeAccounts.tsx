@@ -1439,8 +1439,8 @@ function Fallback({
       tools={
         // The tip sits outside the `fallback` block, so a reader's block holds no buttons.
         <InfoTip label="the fallback">
-          Used only while no account is registered: a <code className="font-mono">claude setup-token</code> value or an
-          Anthropic API key. Accounts that are spent or paused are waited for, never replaced by this.
+          Used while no account is registered or every account is spent: a <code className="font-mono">claude setup-token</code>{" "}
+          value or an Anthropic API key. Accounts that are paused or draining are waited for, never replaced by this.
         </InfoTip>
       }
     >

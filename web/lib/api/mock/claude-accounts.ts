@@ -9,7 +9,8 @@
  *
  * Whether an account (and the pool) takes calls is the API's rule (accounts.py choose and
  * eligibility): AVAILABLE, readable, and its binding window at least 15% clear, an old
- * reading counted at half. The "pool-spent" scenario has one account over its weekly limit.
+ * reading counted at half; with none, a fallback credential covers no account at all or every one
+ * spent (fallback.py covers). The "pool-spent" scenario has one account over its weekly limit.
  */
 import type { Schemas } from "@/lib/api/client";
 import { inWords } from "@/lib/format";
@@ -235,20 +236,29 @@ function out(a: Stored): Account {
   };
 }
 
-/** The pool's answer (router.pool_out: choose, then eligibility). */
+/** Why no account takes a call (accounts.py eligibility), and when the earliest spent window clears. */
+function whyNone(db: PoolDb, now: number): { reason: string; until: string | null } {
+  if (db.accounts.length === 0) return { reason: "no_accounts_registered", until: null };
+  const mine = db.accounts.filter((a) => !a.unreadable_now);
+  if (mine.length === 0) return { reason: "no_account_available", until: null };
+  const assignable = mine.filter((a) => a.state === "AVAILABLE");
+  if (assignable.length === 0) return { reason: "pool_paused", until: null };
+  const resets = assignable.map((a) => spentBy(a, now)?.[1]).filter((r): r is string => !!r).sort((x, y) => Date.parse(x) - Date.parse(y));
+  if (resets[0]) return { reason: "no_account_available", until: resets[0] };
+  const old = assignable.some((a) => a.observed_at !== null && now - Date.parse(a.observed_at) > STALE_AFTER_MS);
+  return { reason: old ? "no_recent_reading" : "no_account_available", until: null };
+}
+
+/** The reasons a call runs on the fallback credential when one is set (fallback.covers). */
+const FALLBACK_COVERS = ["no_accounts_registered", "no_account_available"];
+
+/** The pool's answer (router.pool_out: choose, then eligibility, then fallback.covers). */
 function poolOf(db: PoolDb): Schemas["PoolOut"] {
   const now = Date.now();
-  const yes = { takes_calls: true, reason: null, until: null };
-  if (db.accounts.some((a) => takesCalls(a, now))) return yes;
-  if (db.accounts.length === 0) return db.fallback ? yes : { takes_calls: false, reason: "no_accounts_registered", until: null };
-  const mine = db.accounts.filter((a) => !a.unreadable_now);
-  if (mine.length === 0) return { takes_calls: false, reason: "no_account_available", until: null };
-  const assignable = mine.filter((a) => a.state === "AVAILABLE");
-  if (assignable.length === 0) return { takes_calls: false, reason: "pool_paused", until: null };
-  const resets = assignable.map((a) => spentBy(a, now)?.[1]).filter((r): r is string => !!r).sort((x, y) => Date.parse(x) - Date.parse(y));
-  if (resets[0]) return { takes_calls: false, reason: "no_account_available", until: resets[0] };
-  const old = assignable.some((a) => a.observed_at !== null && now - Date.parse(a.observed_at) > STALE_AFTER_MS);
-  return { takes_calls: false, reason: old ? "no_recent_reading" : "no_account_available", until: null };
+  if (db.accounts.some((a) => takesCalls(a, now))) return { takes_calls: true, on_fallback: false, reason: null, until: null };
+  const { reason, until } = whyNone(db, now);
+  const onFallback = !!db.fallback && FALLBACK_COVERS.includes(reason);
+  return { takes_calls: onFallback, on_fallback: onFallback, reason, until };
 }
 
 /** The company's time zone: the alignment report's, as the API reads it (company_time.py). */

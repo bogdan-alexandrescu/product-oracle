@@ -32,7 +32,6 @@ from oracle.claude_accounts.accounts import (
     AccountError,
     AccountState,
     Hold,
-    Unavailable,
     choose,
     eligibility,
     validate_label,
@@ -114,10 +113,13 @@ class AccountOut(BaseModel):
 class PoolOut(BaseModel):
     """Whether Oracle's built-in calls can run now, as the gateway decides it."""
 
-    # An account the pool would choose, or no account registered and a fallback set.
+    # An account the pool would choose, or a fallback set for the pool's reason
+    # (``fallback.covers``: no account registered, or every account spent).
     takes_calls: bool
-    # Why not (``eligibility``): no_accounts_registered, no_account_available,
-    # pool_paused or no_recent_reading. Null when it takes calls.
+    # Calls run on the fallback credential, not an account.
+    on_fallback: bool
+    # Why no account takes them (``eligibility``): no_accounts_registered,
+    # no_account_available, pool_paused or no_recent_reading. Null when one does.
     reason: str | None
     # When the earliest spent window clears, if a clock is what it waits on.
     until: datetime | None
@@ -141,7 +143,7 @@ class AccountsPage(BaseModel):
     unreadable_documents: list[str]
     unreadable_document_count: int
     refresh_sweep: RefreshSweepOut
-    # The credential used while no account is registered.
+    # The credential used while no account is registered or every account is spent.
     fallback: FallbackOut | None
     pool: PoolOut
     # The company's time zone, which a person reads these times in.
@@ -297,15 +299,17 @@ def account_out(account: Account, *, now: datetime | None = None) -> AccountOut:
 
 
 def pool_out(accounts: list[Account], *, has_fallback: bool, now: datetime) -> PoolOut:
-    """The pool's own answer (``choose``, then ``eligibility``), so the page cannot say
-    Available while the gateway refuses."""
+    """The gateway's own answer (``choose``, then ``eligibility``, then
+    ``fallback.covers``), so the page cannot say Available while the gateway refuses, nor
+    that the AI is off while it runs on the fallback."""
     candidates = [a for a in accounts if a.provider == "anthropic"]
     if choose(candidates, now) is not None:
-        return PoolOut(takes_calls=True, reason=None, until=None)
+        return PoolOut(takes_calls=True, on_fallback=False, reason=None, until=None)
     reason, until = eligibility(candidates, now)
-    if reason is Unavailable.NO_ACCOUNTS_REGISTERED and has_fallback:
-        return PoolOut(takes_calls=True, reason=None, until=None)
-    return PoolOut(takes_calls=False, reason=reason.value, until=until)
+    on_fallback = has_fallback and fallback.covers(reason)
+    return PoolOut(
+        takes_calls=on_fallback, on_fallback=on_fallback, reason=reason.value, until=until
+    )
 
 
 async def _own(db: TenantDB, account_id: str) -> Account:
