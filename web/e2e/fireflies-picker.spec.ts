@@ -20,9 +20,9 @@ test("fireflies picker: all meetings in a date range", async ({ page }) => {
   const { form, picker } = await openAdd(page);
   const summary = picker.getByTestId("fireflies-summary");
   await expect(summary).toHaveText("All meetings");
-  // The API does not know the person's time zone: days are UTC days, and say so.
-  await expect(picker.getByTestId("fireflies-timezone")).toContainText(/^UTC/);
-  await expect(picker.getByTestId("fireflies-timezone")).toContainText("Oracle does not know your time zone");
+  // #401: days are whole days in the Company time zone (Los Angeles by default), and say so.
+  await expect(picker.getByTestId("fireflies-timezone")).toContainText("America/Los_Angeles");
+  await expect(picker.getByTestId("fireflies-timezone")).not.toContainText("UTC");
   await picker.getByLabel("From").fill("2026-09-01");
   await expect(summary).toHaveText("All meetings since Sep 1");
   // Lists are only for choosing: nothing to browse while taking everything.
