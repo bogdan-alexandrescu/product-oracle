@@ -166,7 +166,7 @@ test.describe("phone", () => {
     await openLaunches(page);
     await page.getByTestId("new-launch").click();
     const dialog = page.getByTestId("new-launch-dialog");
-    await dialog.getByTestId("launch-item-option").nth(2).getByRole("checkbox").check();
+    await dialog.getByTestId("launch-item-option").nth(0).getByRole("checkbox").check();
     const box = await dialog.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);

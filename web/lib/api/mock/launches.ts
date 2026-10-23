@@ -26,6 +26,8 @@ export interface LaunchesContext {
   /** The member who asked through a PRD comment (a commenter of the mock company). */
   askerId: string | null;
   trackId: string | null;
+  /** The track's latest approved roadmap items; null for an unknown track. */
+  roadmapItems?: (trackId: string) => Schemas["LaunchItem"][] | null;
 }
 
 const AT = "2026-10-19T09:00:00Z";
@@ -387,7 +389,7 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
       const b = await body<Schemas["ChangelogCreate"]>();
       if (b.audience === "public" && !b.released_on) return invalid("A public entry needs its release date");
       const e: Entry = {
-        id: mockUuid(), launch_id: b.launch_id ?? null, category: b.category, audience: b.audience, title: b.title, body: b.body ?? "",
+        id: mockUuid(), launch_id: b.launch_id ?? null, category: b.category, audience: b.audience, title: b.title.trim(), body: (b.body ?? "").trim(),
         released_on: b.released_on ?? now().slice(0, 10), status: "draft", published_by: null, published_actor: null, published_at: null,
         created_actor: `user:${ctx.userId}`, lock_version: 1, created_at: now(), updated_at: now(),
       };
@@ -465,10 +467,21 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
   if (p.length === 2 && m === "POST") {
     if (!approver) return forbidden("approver");
     const b = await body<Schemas["LaunchCreate"]>();
+    if (!b.title?.trim()) return invalid("Name the launch");
+    const keys = [...new Set(b.item_keys.map((k) => k.trim()).filter(Boolean))];
+    if (!keys.length) return invalid("name at least one roadmap item");
+    const known = ctx.roadmapItems?.(b.track_id);
+    if (known === null) return notFound("Track");
+    const items = known ? keys.map((k) => known.find((i) => i.item_key === k)) : [];
+    if (known && items.some((i) => !i)) {
+      return invalid("not items of the track's latest approved roadmap: " + keys.filter((k, i) => !items[i]).join(", "));
+    }
+    b.item_keys = keys;
     if (db.launches.some((l) => l.state !== "cancelled" && l.track_id === b.track_id && l.item_keys.join() === b.item_keys.join())) {
       return conflict("These items already have a launch");
     }
-    const l = launchRow(ctx, b.title, b.item_keys[0], { track_id: b.track_id, item_keys: b.item_keys, owner_id: b.owner_id ?? ctx.userId, created_at: now() });
+    const l = launchRow(ctx, b.title.trim(), keys[0], { track_id: b.track_id, item_keys: keys, owner_id: b.owner_id ?? ctx.userId, created_at: now() });
+    if (known) l.items = items as Schemas["LaunchItem"][];
     db.launches.push(l);
     applyTier(db, l);
     return json(201, out(db, l));
@@ -517,8 +530,9 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
   }
   if (p[3] === "tasks" && m === "POST") {
     const b = await body<Schemas["TaskCreate"]>();
+    if (b.key && db.tasks.some((x) => x.launch_id === launch.id && x.key === b.key)) return conflict(`The launch already has a task '${b.key}'`);
     const t: Task = {
-      id: mockUuid(), launch_id: launch.id, key: b.key ?? null, title: b.title, position: 1 + Math.max(0, ...db.tasks.filter((x) => x.launch_id === launch.id).map((x) => x.position)),
+      id: mockUuid(), launch_id: launch.id, key: b.key ?? null, title: b.title.trim(), position: 1 + Math.max(0, ...db.tasks.filter((x) => x.launch_id === launch.id).map((x) => x.position)),
       audience: b.audience, status: "todo", owner_id: b.owner_id ?? null, body: null, skip_reason: null, done_by: null, done_at: null,
       drafts: "no", optional: false, notice: null, lock_version: 1, updated_at: now(),
     };
@@ -528,8 +542,8 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
   if (p[3] === "notes" && m === "POST") {
     const b = await body<Schemas["RequesterCreate"]>();
     const n: Note = {
-      id: mockUuid(), launch_id: launch.id, requester_kind: "manual", request_id: null, member_id: null, display_name: b.display_name,
-      contact_hint: b.contact_hint ?? null, asked: b.asked ?? null, body: null, status: "drafted", channel: null, sent_on: null, sent_by: null,
+      id: mockUuid(), launch_id: launch.id, requester_kind: "manual", request_id: null, member_id: null, display_name: b.display_name.trim(),
+      contact_hint: b.contact_hint?.trim() || null, asked: b.asked?.trim() || null, body: null, status: "drafted", channel: null, sent_on: null, sent_by: null,
       skip_reason: null, notified_at: null, internal: false, notice: null, created_at: now(), updated_at: now(),
     };
     db.notes.push(n);
