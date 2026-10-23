@@ -30,6 +30,7 @@ from oracle.members.names import display_name
 from oracle.requests.models import EXCERPT_MAX, ProductRequest, RequestTheme
 from oracle.requests.schemas import (
     AcceptSuggestionIn,
+    DeclineSuggestionIn,
     DisqualifyIn,
     MergeIn,
     QualifyIn,
@@ -714,7 +715,7 @@ async def accept_suggestion(
     if row.state != "new":
         raise _conflict("Only a New request takes Oracle's suggestions")
     s = _suggestion(row.suggestion)
-    if s is None:
+    if s is None or s.declined_at:
         raise _invalid("Oracle has no suggestion for this request")
     parts = set(body.parts)
     with db.no_autoflush:
@@ -725,6 +726,29 @@ async def accept_suggestion(
         db, principal, "request.suggestion_accepted", "product_request", row.id,
         {"parts": sorted(parts)},
     )  # fmt: skip
+    return row
+
+
+async def decline_suggestion(
+    db: AsyncSession, principal: Principal, request_id: uuid.UUID, body: DeclineSuggestionIn
+) -> ProductRequest:
+    """Declines Oracle's suggestion: kept, marked declined, so the daily triage leaves it."""
+    row = await _locked(db, request_id)
+    expect_version(row, body.lock_version)
+    if row.state != "new":
+        raise _conflict("Only a New request takes Oracle's suggestions")
+    s = _suggestion(row.suggestion)
+    if s is None or s.declined_at:
+        raise _invalid("Oracle has no suggestion for this request")
+    email = await db.scalar(select(User.email).where(User.id == principal.user_id))
+    row.suggestion = {
+        **row.suggestion,
+        "declined_at": _now().isoformat(),
+        "declined_by": str(principal.user_id),
+        "declined_by_name": display_name(email) if email else None,
+    }
+    await flush_or_conflict(db)
+    await audit.record(db, principal, "request.suggestion_declined", "product_request", row.id, {})
     return row
 
 

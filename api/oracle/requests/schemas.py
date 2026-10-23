@@ -80,6 +80,10 @@ class ReopenIn(_In):
     lock_version: int
 
 
+class DeclineSuggestionIn(_In):
+    lock_version: int
+
+
 class AcceptSuggestionIn(_In):
     lock_version: int
     parts: Annotated[list[SuggestionPart], Field(min_length=1, max_length=4)]
@@ -130,6 +134,11 @@ class Suggestion(BaseModel):
     at: datetime | None = None
     # Parts an approver accepted so far.
     accepted: list[SuggestionPart] = []
+    # When and by whom an approver declined it; a declined suggestion is not offered again
+    # and triage leaves it.
+    declined_at: datetime | None = None
+    declined_by: uuid.UUID | None = None
+    declined_by_name: str | None = None
 
 
 class RequestOut(BaseModel):

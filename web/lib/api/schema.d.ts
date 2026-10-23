@@ -8476,6 +8476,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/requests/{request_id}/suggestion/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline Request Suggestion
+         * @description Decline Oracle's suggestion; nothing else changes.
+         */
+        post: operations["decline_request_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/request-themes": {
         parameters: {
             query?: never;
@@ -13438,6 +13458,11 @@ export interface components {
             css: string;
             /** Slides */
             slides: components["schemas"]["SlideOut"][];
+        };
+        /** DeclineSuggestionIn */
+        DeclineSuggestionIn: {
+            /** Lock Version */
+            lock_version: number;
         };
         /**
          * DeferChange
@@ -26240,6 +26265,12 @@ export interface components {
              * @default []
              */
             accepted: ("theme" | "goals" | "duplicate" | "feature")[];
+            /** Declined At */
+            declined_at?: string | null;
+            /** Declined By */
+            declined_by?: string | null;
+            /** Declined By Name */
+            declined_by_name?: string | null;
         };
         /** SuggestionAccept */
         SuggestionAccept: {
@@ -44888,6 +44919,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AcceptSuggestionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decline_request_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeclineSuggestionIn"];
             };
         };
         responses: {

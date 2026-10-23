@@ -29501,6 +29501,68 @@
         }
       }
     },
+    "/v1/requests/{request_id}/suggestion/decline": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Decline Request Suggestion",
+        "description": "Decline Oracle's suggestion; nothing else changes.",
+        "operationId": "decline_request_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclineSuggestionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/request-themes": {
       "get": {
         "tags": [
@@ -43857,6 +43919,20 @@
         ],
         "title": "DeckOut",
         "description": "The brief layer as slides, for Present mode: one slide per brief section after a\ntitle slide, Sources and data points slides last when the version has sources."
+      },
+      "DeclineSuggestionIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "DeclineSuggestionIn"
       },
       "DeferChange": {
         "properties": {
@@ -79734,6 +79810,41 @@
             "type": "array",
             "title": "Accepted",
             "default": []
+          },
+          "declined_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declined At"
+          },
+          "declined_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declined By"
+          },
+          "declined_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declined By Name"
           }
         },
         "type": "object",
