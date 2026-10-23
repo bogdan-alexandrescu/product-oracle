@@ -60122,13 +60122,19 @@
       "HandOverIn": {
         "properties": {
           "hand_over": {
-            "items": {
-              "$ref": "#/components/schemas/HandOver"
-            },
-            "type": "array",
-            "maxItems": 50,
-            "title": "Hand Over",
-            "default": []
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/HandOver"
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hand Over"
           }
         },
         "type": "object",
@@ -70067,13 +70073,19 @@
             "title": "Name"
           },
           "hand_over": {
-            "items": {
-              "$ref": "#/components/schemas/HandOver"
-            },
-            "type": "array",
-            "maxItems": 50,
-            "title": "Hand Over",
-            "default": []
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/HandOver"
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hand Over"
           }
         },
         "type": "object",

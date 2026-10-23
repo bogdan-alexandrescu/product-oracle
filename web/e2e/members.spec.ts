@@ -36,7 +36,7 @@ test("members: invite someone, copy the link, then revoke the invite", async ({ 
 
   await page.getByLabel("Email").fill("Pat@Example.com");
   await page.getByLabel("Role", { exact: true }).selectOption("approver");
-  await page.getByRole("button", { name: "Send invite" }).click();
+  await page.getByRole("button", { name: "Send invite", exact: true }).click();
   await expect(invites).toHaveCount(3);
   await expect(invites.first()).toContainText("pat@example.com");
   await expect(invites.first()).toContainText("Approver");
@@ -44,7 +44,7 @@ test("members: invite someone, copy the link, then revoke the invite", async ({ 
 
   // An existing member cannot be invited.
   await page.getByLabel("Email").fill("viewer@example.com");
-  await page.getByRole("button", { name: "Send invite" }).click();
+  await page.getByRole("button", { name: "Send invite", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "already a member" })).toBeVisible();
 
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);

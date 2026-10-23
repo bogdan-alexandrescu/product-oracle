@@ -203,7 +203,7 @@ test("members: an approver invites viewers and commenters only and sees only the
   await expect(inviteRow(page, "new.hire@example.com")).toHaveCount(0);
   await form.getByLabel("Email").fill("sam.support@example.com");
   await form.getByLabel("Role", { exact: true }).selectOption("viewer");
-  await form.getByRole("button", { name: "Send invite" }).click();
+  await form.getByRole("button", { name: "Send invite", exact: true }).click();
   await expect(inviteRow(page, "sam.support@example.com")).toContainText("Viewer");
   await expect(page.getByTestId("invite-row")).toHaveCount(1);
 
@@ -233,7 +233,7 @@ test("members: inviting outside the company's domains says so and adds no row", 
   await page.goto("/settings/members");
   const form = page.getByRole("form", { name: "Invite" });
   await form.getByLabel("Email").fill("x@elsewhere.test");
-  await form.getByRole("button", { name: "Send invite" }).click();
+  await form.getByRole("button", { name: "Send invite", exact: true }).click();
   await expect(form.getByRole("alert")).toContainText("outside the company's email domains");
   await expect(inviteRow(page, "x@elsewhere.test")).toHaveCount(0);
 });

@@ -103,7 +103,7 @@ async def update_member(
     and a demotion to viewer clears the flag. Clearing it returns the engineering-stop
     decisions they gave that are not delivered yet to the Inbox."""
     name = body.name if "name" in body.model_fields_set else ...
-    moves = [m.model_dump() for m in body.hand_over]
+    moves = [m.model_dump() for m in body.hand_over or []]
     user = await _call(
         service.update_member(
             db, principal, user_id, body.role, body.engineering_lead, name, hand_over=moves
@@ -138,7 +138,7 @@ async def disable_member(
     fresh. A no-op for a disabled member. With ``hand_over`` (A5), those
     responsibilities move first, in the same transaction; a refused target is a 422
     (``hand_over_target``) and nothing is moved or removed."""
-    moves = [m.model_dump() for m in body.hand_over] if body is not None else None
+    moves = [m.model_dump() for m in body.hand_over or []] if body is not None else None
     user = await _call(service.disable_member(db, principal, user_id, hand_over=moves))
     await db.commit()
     # The provider and runtime calls it owes, outside the review gate (retried by the tick).
@@ -229,7 +229,7 @@ async def hand_over(
     """Move an active or removed member's responsibilities to other members (``to``)
     or clear them (``to`` null), all or none; kinds left out stay. Returns what they
     still hold."""
-    moves = [m.model_dump() for m in body.hand_over]
+    moves = [m.model_dump() for m in body.hand_over or []]
     await _call(handover.hand_over(db, principal, user_id, moves))
     await db.commit()
     return HandOverOut.model_validate({"responsibilities": await handover.remaining(db, user_id)})

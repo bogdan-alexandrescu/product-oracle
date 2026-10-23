@@ -18845,11 +18845,8 @@ export interface components {
         };
         /** HandOverIn */
         HandOverIn: {
-            /**
-             * Hand Over
-             * @default []
-             */
-            hand_over: components["schemas"]["HandOver"][];
+            /** Hand Over */
+            hand_over?: components["schemas"]["HandOver"][] | null;
         };
         /** HandOverOut */
         HandOverOut: {
@@ -22630,11 +22627,8 @@ export interface components {
             engineering_lead?: boolean | null;
             /** Name */
             name?: string | null;
-            /**
-             * Hand Over
-             * @default []
-             */
-            hand_over: components["schemas"]["HandOver"][];
+            /** Hand Over */
+            hand_over?: components["schemas"]["HandOver"][] | null;
         };
         /** MilestoneCreate */
         MilestoneCreate: {

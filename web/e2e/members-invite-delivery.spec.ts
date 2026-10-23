@@ -11,7 +11,7 @@ const scenario = (page: Page, name: string) => page.addInitScript(([key, value])
 async function invite(page: Page, email: string, role = "approver") {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Role", { exact: true }).selectOption(role);
-  await page.getByRole("button", { name: "Send invite" }).click();
+  await page.getByRole("button", { name: "Send invite", exact: true }).click();
 }
 
 test("invite: Oracle emails the invite and grants access, and the page says so", async ({ page }) => {

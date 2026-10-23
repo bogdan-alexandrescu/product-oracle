@@ -83,7 +83,7 @@ class MemberPatch(BaseModel):
     engineering_lead: bool | None = None
     name: str | None = Field(default=None, max_length=200)
     # A5: responsibilities moved first, then the role change (one transaction).
-    hand_over: list["HandOver"] = Field(default=[], max_length=50)
+    hand_over: list["HandOver"] | None = Field(default=None, max_length=50)
 
     @field_validator("name")
     @classmethod
@@ -327,7 +327,7 @@ class HandOver(BaseModel):
 
 
 class HandOverIn(BaseModel):
-    hand_over: list[HandOver] = Field(default=[], max_length=50)
+    hand_over: list[HandOver] | None = Field(default=None, max_length=50)
 
 
 class HeldOut(BaseModel):

@@ -125,7 +125,7 @@ test("engineering lead: the flag adds no Settings tab; the lead keeps the commen
   // The commenter carries the engineering lead flag in this scenario.
   await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "eng-review"]);
   await openSettings(page, "commenter@example.com");
-  await expect(page).toHaveURL(/\/settings\/connections$/);
+  await expect(page).toHaveURL(/\/settings\/members$/);
   expect(await tabsShown(page)).toEqual(EVERYONE);
   await settingsNav(page).getByTestId("nav-templates").click();
   await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");

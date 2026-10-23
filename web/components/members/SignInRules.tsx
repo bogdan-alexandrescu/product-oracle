@@ -174,7 +174,7 @@ export function SignInRules() {
                 {RULES.find((r) => r.value === rules.without_invite)?.line}
               </p>
             </section>
-            <section aria-label="Default role" className="flex flex-col gap-2">
+            <section className="flex flex-col gap-2">
               <Field label="Default role" className="max-w-56">
                 <select
                   aria-label="Default role"
