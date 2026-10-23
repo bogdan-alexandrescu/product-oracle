@@ -25880,6 +25880,310 @@
         }
       }
     },
+    "/v1/roadmaps/{doc}/change-sets": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Open Roadmap Change Set",
+        "description": "Edit plan: open a draft change set on the roadmap's approved version (201), or\nreturn the draft it has (200). Nobody edits an approved version in place: the changes\nare proposed as a new version. 422 when no version is approved.",
+        "operationId": "open_roadmap_change_set",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeSetOut"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/roadmaps/{doc}/change-sets/{set_id}": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Roadmap Change Set",
+        "description": "A change set: its changes, the plan they make, and the diff against the base.",
+        "operationId": "get_roadmap_change_set",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Set Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeSetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Update Roadmap Change Set",
+        "description": "Replace a draft change set's changes (in order): add, move, defer, cut with a\nreason, reorder within a horizon. 422 when a change does not apply; 409 when it\nchanged since it was loaded, is no longer a draft, or its base is no longer the\napproved version.",
+        "operationId": "update_roadmap_change_set",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Set Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSetPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeSetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Discard Roadmap Change Set",
+        "description": "Discard a draft change set: the approved plan stays as it is.",
+        "operationId": "discard_roadmap_change_set",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Set Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeSetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/roadmaps/{doc}/change-sets/{set_id}/propose": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Propose Roadmap Change Set",
+        "description": "Propose changes: import the next roadmap version (the base's items plus the\nchanges), for the document's decider to approve through the review. 409 on a stale\nbase; 422 when there is nothing to propose.",
+        "operationId": "propose_roadmap_change_set",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Set Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeSetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/schedule-bases": {
       "get": {
         "tags": [
@@ -31011,6 +31315,75 @@
         ],
         "title": "ActionIn",
         "description": "One action on one item of a pending checkpoint's shared draft (D8). ``kind``,\n``field`` and ``value`` are checked against the checkpoint kind's vocabulary\n(oracle.runs.actions.VOCABULARY); a wrong one is 422 naming the rule."
+      },
+      "AddChange": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "add",
+            "title": "Op"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "op",
+          "title",
+          "horizon"
+        ],
+        "title": "AddChange",
+        "description": "Add an item: a Baseline feature (``feature_id``) or a new one (``title``)."
       },
       "AdvisoryIn": {
         "properties": {
@@ -36602,6 +36975,299 @@
         ],
         "title": "ChangeEventOut"
       },
+      "ChangeSetDiffItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "added",
+              "dropped",
+              "moved",
+              "changed",
+              "unchanged"
+            ],
+            "title": "Status"
+          },
+          "from_horizon": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "now",
+                  "next",
+                  "later"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Horizon"
+          },
+          "to_horizon": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "now",
+                  "next",
+                  "later"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Horizon"
+          },
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fields",
+            "default": []
+          },
+          "reordered": {
+            "type": "boolean",
+            "title": "Reordered",
+            "default": false
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "status"
+        ],
+        "title": "ChangeSetDiffItem",
+        "description": "How an item of the proposal differs from the approved version (roadmap.diff)."
+      },
+      "ChangeSetOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "roadmap": {
+            "type": "string",
+            "title": "Roadmap"
+          },
+          "roadmap_title": {
+            "type": "string",
+            "title": "Roadmap Title"
+          },
+          "base_version": {
+            "type": "integer",
+            "title": "Base Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "proposed",
+              "discarded"
+            ],
+            "title": "Status"
+          },
+          "changes": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/AddChange"
+                },
+                {
+                  "$ref": "#/components/schemas/MoveChange"
+                },
+                {
+                  "$ref": "#/components/schemas/DeferChange"
+                },
+                {
+                  "$ref": "#/components/schemas/CutChange"
+                },
+                {
+                  "$ref": "#/components/schemas/ReorderChange"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "op",
+                "mapping": {
+                  "add": "#/components/schemas/AddChange",
+                  "cut": "#/components/schemas/CutChange",
+                  "defer": "#/components/schemas/DeferChange",
+                  "move": "#/components/schemas/MoveChange",
+                  "reorder": "#/components/schemas/ReorderChange"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "cut": {
+            "items": {
+              "$ref": "#/components/schemas/CutItem"
+            },
+            "type": "array",
+            "title": "Cut"
+          },
+          "diff": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeSetDiffItem"
+            },
+            "type": "array",
+            "title": "Diff"
+          },
+          "summary": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Summary"
+          },
+          "proposed_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed Version"
+          },
+          "decider_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decider Id"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "roadmap",
+          "roadmap_title",
+          "base_version",
+          "status",
+          "changes",
+          "items",
+          "cut",
+          "diff",
+          "summary",
+          "lock_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ChangeSetOut"
+      },
+      "ChangeSetPatch": {
+        "properties": {
+          "changes": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/AddChange"
+                },
+                {
+                  "$ref": "#/components/schemas/MoveChange"
+                },
+                {
+                  "$ref": "#/components/schemas/DeferChange"
+                },
+                {
+                  "$ref": "#/components/schemas/CutChange"
+                },
+                {
+                  "$ref": "#/components/schemas/ReorderChange"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "op",
+                "mapping": {
+                  "add": "#/components/schemas/AddChange",
+                  "cut": "#/components/schemas/CutChange",
+                  "defer": "#/components/schemas/DeferChange",
+                  "move": "#/components/schemas/MoveChange",
+                  "reorder": "#/components/schemas/ReorderChange"
+                }
+              }
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Changes"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "changes",
+          "lock_version"
+        ],
+        "title": "ChangeSetPatch",
+        "description": "The change set's changes, whole, in order, and the lock_version last read."
+      },
       "ChangedSection": {
         "properties": {
           "section_key": {
@@ -40711,6 +41377,68 @@
         ],
         "title": "CriterionInfo"
       },
+      "CutChange": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "cut",
+            "title": "Op"
+          },
+          "key": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Key"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "op",
+          "key",
+          "reason"
+        ],
+        "title": "CutChange",
+        "description": "Cut an item from the plan, with the reason."
+      },
+      "CutItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "horizon",
+          "reason"
+        ],
+        "title": "CutItem"
+      },
       "DateMarkOut": {
         "properties": {
           "section_key": {
@@ -42160,6 +42888,28 @@
         ],
         "title": "DeckOut",
         "description": "The brief layer as slides, for Present mode: one slide per brief section after a\ntitle slide, Sources and data points slides last when the version has sources."
+      },
+      "DeferChange": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "defer",
+            "title": "Op"
+          },
+          "key": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "op",
+          "key"
+        ],
+        "title": "DeferChange",
+        "description": "Defer an item: it moves to Later."
       },
       "DependenciesCreate": {
         "properties": {
@@ -56947,6 +57697,38 @@
         ],
         "title": "MonitorOut"
       },
+      "MoveChange": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "move",
+            "title": "Op"
+          },
+          "key": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Key"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          }
+        },
+        "type": "object",
+        "required": [
+          "op",
+          "key",
+          "horizon"
+        ],
+        "title": "MoveChange",
+        "description": "Move an item to another horizon (to the end of it)."
+      },
       "MyAccountOut": {
         "properties": {
           "user_id": {
@@ -59954,6 +60736,72 @@
           "role"
         ],
         "title": "PlanWho"
+      },
+      "PlannedItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "new": {
+            "type": "boolean",
+            "title": "New",
+            "default": false
+          },
+          "deferred": {
+            "type": "boolean",
+            "title": "Deferred",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "horizon",
+          "position"
+        ],
+        "title": "PlannedItem"
       },
       "PrdAnchor": {
         "properties": {
@@ -64077,6 +64925,35 @@
           "lock_version"
         ],
         "title": "ReopenIn"
+      },
+      "ReorderChange": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "reorder",
+            "title": "Op"
+          },
+          "key": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Key"
+          },
+          "position": {
+            "type": "integer",
+            "maximum": 500.0,
+            "minimum": 0.0,
+            "title": "Position"
+          }
+        },
+        "type": "object",
+        "required": [
+          "op",
+          "key",
+          "position"
+        ],
+        "title": "ReorderChange",
+        "description": "Put an item at ``position`` (0 first) within its horizon."
       },
       "ReplyCreate": {
         "properties": {

@@ -3,7 +3,7 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -457,3 +457,116 @@ class TrackChange(BaseModel):
     actor: str
     data: dict[str, Any]
     created_at: datetime
+
+
+# --- change sets: edits to the approved plan, proposed as a new version (#346) --------------
+
+ChangeSetStatus = Literal["draft", "proposed", "discarded"]
+ItemKey = Annotated[str, Field(min_length=1, max_length=120)]
+
+
+class AddChange(BaseModel):
+    """Add an item: a Baseline feature (``feature_id``) or a new one (``title``)."""
+
+    op: Literal["add"]
+    title: str = Field(min_length=1, max_length=200)
+    horizon: Horizon
+    feature_id: uuid.UUID | None = None
+    outcome: str | None = Field(default=None, max_length=1000)
+    # Set by Oracle when the change is stored: the feature's key, else from the title.
+    key: ItemKey | None = None
+
+
+class MoveChange(BaseModel):
+    """Move an item to another horizon (to the end of it)."""
+
+    op: Literal["move"]
+    key: ItemKey
+    horizon: Horizon
+
+
+class DeferChange(BaseModel):
+    """Defer an item: it moves to Later."""
+
+    op: Literal["defer"]
+    key: ItemKey
+
+
+class CutChange(BaseModel):
+    """Cut an item from the plan, with the reason."""
+
+    op: Literal["cut"]
+    key: ItemKey
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ReorderChange(BaseModel):
+    """Put an item at ``position`` (0 first) within its horizon."""
+
+    op: Literal["reorder"]
+    key: ItemKey
+    position: int = Field(ge=0, le=500)
+
+
+PlanChange = Annotated[
+    AddChange | MoveChange | DeferChange | CutChange | ReorderChange, Field(discriminator="op")
+]
+
+
+class ChangeSetPatch(BaseModel):
+    """The change set's changes, whole, in order, and the lock_version last read."""
+
+    changes: list[PlanChange] = Field(max_length=200)
+    lock_version: int
+
+
+class PlannedItem(BaseModel):
+    key: str
+    title: str
+    horizon: Horizon
+    position: int
+    outcome: str | None = None
+    feature_id: uuid.UUID | None = None
+    new: bool = False
+    deferred: bool = False
+
+
+class CutItem(BaseModel):
+    key: str
+    title: str
+    horizon: Horizon
+    reason: str
+
+
+class ChangeSetDiffItem(BaseModel):
+    """How an item of the proposal differs from the approved version (roadmap.diff)."""
+
+    key: str
+    title: str
+    status: Literal["added", "dropped", "moved", "changed", "unchanged"]
+    from_horizon: Horizon | None = None
+    to_horizon: Horizon | None = None
+    fields: list[str] = []
+    # Its place within its horizon changed (a reorder).
+    reordered: bool = False
+    reason: str | None = None
+
+
+class ChangeSetOut(BaseModel):
+    id: uuid.UUID
+    roadmap: str
+    roadmap_title: str
+    base_version: int
+    status: ChangeSetStatus
+    changes: list[PlanChange]
+    items: list[PlannedItem]
+    cut: list[CutItem]
+    diff: list[ChangeSetDiffItem]
+    summary: dict[str, int]
+    proposed_version: int | None = None
+    # Who approves the proposed version: the document's designated decider, when named.
+    decider_id: uuid.UUID | None = None
+    lock_version: int
+    created_by: uuid.UUID | None = None
+    created_at: datetime
+    updated_at: datetime
