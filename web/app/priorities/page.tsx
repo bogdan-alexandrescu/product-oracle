@@ -473,6 +473,11 @@ function FeatureInspector({
                     <div className="flex min-w-0 items-center gap-2.5">
                       <CodeChip kind="goal" entityKey={g.goal} title={g.title} />
                     </div>
+                    {g.parent && (
+                      <div className="mt-0.5 text-[13px] text-text2" data-testid="goal-via-parent">
+                        Subgoal of {g.parent_title ?? g.parent}: its weight is its share of the parent&apos;s
+                      </div>
+                    )}
                     <div className="tnum mt-1 flex flex-wrap items-center gap-x-1 font-mono text-[13px] text-text2">
                       weight {g.weight}
                       {g.weight_assumed && <AssumedMark />} × contribution {g.contribution}

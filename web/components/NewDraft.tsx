@@ -7,6 +7,7 @@ import { useId, useMemo, useState, useSyncExternalStore, type FormEvent } from "
 import {
   Button,
   Chip,
+  CodeTag,
   Icon,
   InfoTip,
   Inspector,
@@ -21,6 +22,7 @@ import {
 import { ThemeThumbnail } from "@/components/ThemePreview";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { namedText } from "@/lib/codes";
 import { unwrapProblems, ProblemsError } from "@/lib/api/problems";
 import { assess, goalViews } from "@/app/home/_goals";
 import { hasRole, useMe } from "@/lib/me";
@@ -671,6 +673,15 @@ export function GoalPicker({
 }) {
   const goals = useConfirmedGoals();
   const views = goalViews(goals.data ?? []);
+  // #345: a goal's subgoals show under it, folded on demand.
+  const [folded, setFolded] = useState<Set<string>>(new Set());
+  const fold = (id: string) =>
+    setFolded((f) => {
+      const next = new Set(f);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   return (
     <fieldset className="min-w-0">
       <legend className="mb-2 text-[15px] font-semibold text-text">
@@ -680,27 +691,43 @@ export function GoalPicker({
       {goals.loading && <Loading />}
       {goals.data && views.length === 0 && <p className="text-sm text-text2">No confirmed goals yet. Oracle will ask.</p>}
       <div className="flex flex-col gap-1.5">
-        {views.map((g) => {
-          const checked = value.includes(g.id);
-          const p = assess(g);
-          return (
-            <label
-              key={g.id}
-              className={`flex min-w-0 cursor-pointer items-center gap-2.5 rounded-button border px-3 py-2 ${
-                checked ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong"
-              }`}
-            >
-              <input
-                type="checkbox"
-                className="size-4 flex-none accent-[var(--accent)]"
-                checked={checked}
-                onChange={(e) => onChange(e.target.checked ? [...value, g.id] : value.filter((id) => id !== g.id))}
-              />
-              <span className="min-w-0 flex-1 font-semibold text-text [overflow-wrap:anywhere]">{g.title}</span>
-              {p.text && <span className="flex-none text-sm text-text2">{p.text}</span>}
-            </label>
-          );
-        })}
+        {views
+          .filter((g) => !g.parentId || !folded.has(g.parentId))
+          .map((g) => {
+            const checked = value.includes(g.id);
+            const p = assess(g);
+            return (
+              <div key={g.id} className={`flex min-w-0 items-center gap-1.5 ${g.parentId ? "ml-6 max-[600px]:ml-4" : ""}`}>
+                <label
+                  data-testid={`goal-pick-${g.tag}`}
+                  className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-button border px-3 py-2 ${
+                    checked ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="size-4 flex-none accent-[var(--accent)]"
+                    checked={checked}
+                    onChange={(e) => onChange(e.target.checked ? [...value, g.id] : value.filter((id) => id !== g.id))}
+                  />
+                  {g.code && <CodeTag code={g.code} />}
+                  <span className="min-w-0 flex-1 font-semibold text-text [overflow-wrap:anywhere]">{g.name}</span>
+                  {p.text && <span className="flex-none text-sm text-text2">{p.text}</span>}
+                </label>
+                {g.subgoals > 0 && (
+                  <button
+                    type="button"
+                    aria-expanded={!folded.has(g.id)}
+                    aria-label={`${folded.has(g.id) ? "Show" : "Hide"} subgoals of ${namedText(g)}`}
+                    onClick={() => fold(g.id)}
+                    className="flex size-8 flex-none items-center justify-center rounded-button border border-line text-text2 hover:border-line-strong"
+                  >
+                    {folded.has(g.id) ? "▸" : "▾"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
       </div>
     </fieldset>
   );

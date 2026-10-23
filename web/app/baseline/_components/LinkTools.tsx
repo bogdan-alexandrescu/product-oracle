@@ -5,6 +5,8 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { Button, Notice } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type EdgeOut, type EntityDetail, type GraphOut, type Schemas } from "@/lib/api/client";
+import { namedText } from "@/lib/codes";
+import { goalTree } from "@/lib/goal-tree";
 import { errorMessage } from "@/lib/use-query";
 
 import { sourceKindLabel, titleOf } from "./common";
@@ -50,7 +52,8 @@ export function LinkToGoalForm({
   onSave: (link: NewLink) => void;
 }) {
   const linked = new Set(detail.edges_out.filter((e) => e.type === "supports").map((e) => e.dst_id));
-  const goals = (graph?.entities ?? []).filter((g) => g.type === "goal" && g.status !== "rejected" && !linked.has(g.id));
+  // A goal or a subgoal (#345), in tree order; a subgoal's code (G-B.1) names its parent.
+  const goals = goalTree(graph?.entities ?? []).filter((n) => !linked.has(n.goal.id));
   const [goal, setGoal] = useState("");
   const [contribution, setContribution] = useState("2");
   const [invalid, setInvalid] = useState(false);
@@ -69,9 +72,9 @@ export function LinkToGoalForm({
             Goal
             <select className={INPUT} value={goal} onChange={(e) => setGoal(e.target.value)}>
               <option value="">Choose…</option>
-              {goals.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.title}
+              {goals.map((n) => (
+                <option key={n.goal.id} value={n.goal.id}>
+                  {namedText(n)}
                 </option>
               ))}
             </select>

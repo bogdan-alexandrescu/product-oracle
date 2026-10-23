@@ -645,7 +645,14 @@ class MockError extends Error {
   }
 }
 
-type Changes = { title?: string | null; body?: string | null; attrs?: Attrs | null; status?: EntityRow["status"] | null };
+type Changes = {
+  title?: string | null;
+  body?: string | null;
+  attrs?: Attrs | null;
+  status?: EntityRow["status"] | null;
+  /** #345: a subgoal's parent goal; null promotes it. */
+  parent_id?: string | null;
+};
 
 /** The subset of `changes` that differs from the entity, attrs merged (as service._entity_changes). */
 function entityDiff(e: EntityRow, changes: Changes): Partial<EntityRow> {
@@ -657,7 +664,57 @@ function entityDiff(e: EntityRow, changes: Changes): Partial<EntityRow> {
     if (!same(merged, e.attrs)) out.attrs = merged;
   }
   if (changes.status != null && changes.status !== e.status) out.status = changes.status;
+  if ("parent_id" in changes && (changes.parent_id ?? null) !== (e.parent_id ?? null)) out.parent_id = changes.parent_id ?? null;
   return out;
+}
+
+/** #345: as service.check_parent: a goal under a goal that is no subgoal, no cycle, one level. */
+function parentRefusal(s: BaselineState, type: string, parentId: string | null | undefined, e?: EntityRow): string | null {
+  if (!parentId) return null;
+  if (type !== "goal") return "only a goal has a parent goal";
+  if (e && parentId === e.id) return "a goal cannot be its own parent (a cycle)";
+  const parent = s.entities.find((x) => x.id === parentId);
+  if (!parent || parent.type !== "goal") return "the parent must be a goal";
+  if (e && parent.parent_id === e.id) return "the parent is a subgoal of this goal (a cycle)";
+  if (parent.parent_id) return "the parent is a subgoal itself; subgoals are one level deep";
+  if (e && s.entities.some((x) => x.parent_id === e.id)) return "a goal with subgoals cannot become a subgoal";
+  return null;
+}
+
+const typedNum = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/** #345: a goal's own progress, 0-1 (oracle.baseline.rollup.own_progress). */
+function ownProgress(a: Attrs): number | null {
+  const current = typedNum(a.current);
+  const target = typedNum(a.target);
+  const start = typedNum(a.start);
+  const up = a.comparison === "at_least" || a.comparison === "above";
+  const down = a.comparison === "at_most" || a.comparison === "below";
+  if (current == null || target == null || (!up && !down)) return null;
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
+  if (start != null && start !== target) return clamp((current - start) / (target - start));
+  if (up) return current >= target ? 1 : target > 0 ? clamp(current / target) : 0;
+  if (current <= target) return 1;
+  return current > 0 ? clamp(target / current) : 0;
+}
+
+/** #345: own measurement first, else the subgoals' progress weighted by their weight (rollup.rollup). */
+function progressOf(s: BaselineState, g: EntityRow): Schemas["GoalProgress"] {
+  const live = s.entities.filter((x) => x.parent_id === g.id && x.type === "goal" && x.status !== "rejected");
+  const own = ownProgress(g.attrs);
+  if (own != null) return { value: own, source: "own", subgoals: live.length };
+  let total = 0;
+  let weights = 0;
+  for (const x of live) {
+    const p = ownProgress(x.attrs);
+    if (p == null) continue;
+    const w = typedNum(x.attrs.weight);
+    const weight = w != null && w > 0 ? w : 1;
+    total += weight * p;
+    weights += weight;
+  }
+  if (!weights) return { value: null, source: null, subgoals: live.length };
+  return { value: total / weights, source: "subgoals", subgoals: live.length };
 }
 
 function lock(item: EntityRow | EdgeRow, userId: string) {
@@ -727,6 +784,8 @@ function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: 
   if (input.type === "goal" && input.status === "confirmed") {
     throw new MockError(422, "goals start proposed; confirm them with POST .../confirm");
   }
+  const refusal = parentRefusal(s, input.type, input.parent_id);
+  if (refusal) throw new MockError(422, refusal);
   const at = now();
   const e: EntityRow = {
     id: newId(),
@@ -742,6 +801,7 @@ function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: 
     locked_at: null,
     confidence: null,
     run_id: null,
+    parent_id: input.parent_id ?? null,
     created_at: at,
     updated_at: at,
   };
@@ -914,7 +974,9 @@ function without(fields: Changes, keys: string[]): Changes {
 
 /** service.entity_snapshot: what a revision keeps of an entity. */
 function entitySnapshot(e: EntityRow): Record<string, unknown> {
-  return { type: e.type, key: e.key, title: e.title, body: e.body ?? null, attrs: { ...e.attrs }, status: e.status };
+  const out: Record<string, unknown> = { type: e.type, key: e.key, title: e.title, body: e.body ?? null, attrs: { ...e.attrs }, status: e.status };
+  if (e.parent_id) out.parent_id = e.parent_id;
+  return out;
 }
 
 function changesFor(field: string, value: unknown): Changes {
@@ -956,7 +1018,12 @@ export async function routeBaseline(
   const isMember = caller.isMember ?? (() => true);
   // B5: a goal carries its goal_check (null for other types).
   const entityOut = (e: EntityRow) =>
-    ({ ...withCount(s, e, "entity_id"), goal_check: e.type === "goal" ? goalCheck(e.attrs, e.status, isMember) : null }) as Schemas["EntityOut"];
+    ({
+      ...withCount(s, e, "entity_id"),
+      goal_check: e.type === "goal" ? goalCheck(e.attrs, e.status, isMember) : null,
+      parent_id: e.parent_id ?? null,
+      progress: e.type === "goal" ? progressOf(s, e) : null,
+    }) as Schemas["EntityOut"];
   /** 422 with every problem, as the API refuses a person's bad goal fields. */
   const refuse = (errors: GoalProblem[]) => json(422, { detail: `goal fields rejected: ${errors.length} problem(s)`, errors });
   const goalRefusal = (e: EntityRow, attrs: Attrs | null | undefined) =>
@@ -1077,6 +1144,9 @@ export async function routeBaseline(
         const input = await body<Schemas["EntityPatch"]>();
         const problems = (input.origin ?? "user") === "user" ? goalRefusal(e, input.attrs as Attrs | null) : [];
         if (problems.length) return refuse(problems);
+        const moved = "parent_id" in input && (input.parent_id ?? null) !== (e.parent_id ?? null);
+        const refusal = moved ? parentRefusal(s, e.type, input.parent_id, e) : null;
+        if (refusal) return fail(422, refusal);
         const proposal = updateEntity(s, e, input as Changes, {
           origin: input.origin ?? "user",
           userId: caller.userId,
