@@ -171,6 +171,9 @@ class FlowSegmentOut(BaseModel):
     # None: the segment opens no stop (the code_map flow's index).
     checkpoint: CheckpointKind | None
     approver_role: Role
+    # F4: who decides the stop: by role, or the engineering lead (owners too; approvers
+    # while no lead is named), so the screens can say "Waits for the engineering lead".
+    decider: Literal["role", "engineering_lead"] = "role"
 
 
 class FlowStart(BaseModel):
@@ -612,6 +615,8 @@ class GateLeft(BaseModel):
     code: str
     label: str
     waivable: bool
+    # F4's blocking_question: the question left unanswered.
+    question_id: str | None = None
 
 
 class Gate(BaseModel):
@@ -650,6 +655,9 @@ class CheckpointOut(BaseModel):
     created_at: datetime
     # Whether the caller's role may decide it (pending checkpoints only).
     can_decide: bool = False
+    # F4: an engineering stop that waits for the engineering leads and owners (a lead is
+    # named); False: it goes by its approver role, as every other stop.
+    lead_stop: bool = False
     # Why approving it is refused now (owner, 2026-10-20): the draft its segment left was
     # not imported (Request changes, or Retry import on the segment, first), or the feature
     # set has blocking problems (C6: Request changes).

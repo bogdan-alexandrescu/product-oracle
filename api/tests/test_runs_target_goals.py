@@ -287,7 +287,7 @@ async def test_a_prd_whose_goal_trace_leaves_out_a_target_goal_says_so(client, r
     """Finding 3, end to end: the run's feature set check and its imported PRD name the
     target goal they leave out (the FakeRuntime's PRD traces G1 only)."""
     from tests.fixtures import seed_auth
-    from tests.test_runs import get, started, tick
+    from tests.test_runs import decide, get, started, tick
 
     _, auth = await seed_auth()
     resp = await client.post(
@@ -303,7 +303,10 @@ async def test_a_prd_whose_goal_trace_leaves_out_a_target_goal_says_so(client, r
     run = await started(
         client, auth, document="example-prd", checkpoints=off, goals=["support-load"]
     )
-    for _ in range(4):
+    for _ in range(3):
+        await tick(client, auth)
+    run = await decide(client, auth, await get(client, auth, run["id"]))  # Engineering check
+    for _ in range(2):
         await tick(client, auth)
     run = await get(client, auth, run["id"])
     fs_check = next(s for s in run["segments"] if s["name"] == "feature_set")

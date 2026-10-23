@@ -12,12 +12,14 @@ from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from tests.fixtures import seed_auth
 from tests.legacy.helpers import DOC, fixture, import_md, user_cookie
 
-# Base role costs summing to 25, doubled by deep depth: exactly $50.
+# Base role costs summing to 25 with the Engineering check (on by default), doubled by
+# deep depth: exactly $50.
 ROLES_AT_50 = {
     "baseline": ["researcher"],
     "feature_set": ["researcher"],
-    "priority": ["prioritizer", "analyst"],
-    "prd_draft": ["writer", "critic", "prioritizer"],
+    "eng_review": ["architect"],
+    "priority": ["analyst"],
+    "prd_draft": ["writer", "critic"],
 }
 
 

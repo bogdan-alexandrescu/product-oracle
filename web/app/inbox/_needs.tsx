@@ -28,10 +28,12 @@ import { calendarDay } from "@/lib/dates";
 import { InboxActions, SuggestionPeek, type OnActed } from "./_actions";
 import {
   CANCEL_AGAIN_CONFIRM,
+  briefsCheck,
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   orderHref,
   RETRY_CONFIRM,
+  reviewHref,
   SENT_BACK_STATE,
   STOP_CANCELLING_CONFIRM,
   age,
@@ -764,6 +766,17 @@ export function strategyNeeds(strategy: InboxOut["strategy"]): Need[] {
   ];
 }
 
+/** A checkpoint row's name; the Engineering check says its document, features and blocking questions (F4). */
+function checkpointSummary(c: InboxOut["checkpoints"][number]): string {
+  const check = briefsCheck(c);
+  if (!check) return CHECKPOINT_LABEL[c.kind];
+  const n = check.features.length;
+  const blocking = (c.gate?.left ?? []).filter((x) => x.code === "blocking_question").length;
+  return [c.segment_title ?? CHECKPOINT_LABEL[c.kind], c.document_slug, `${n} feature${n === 1 ? "" : "s"}`, ...(blocking ? [`${blocking} blocking`] : [])]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 type InboxCheckpointRow = InboxOut["checkpoints"][number];
 type InboxSummary = NonNullable<InboxCheckpointRow["summary"]>;
 type InboxChild = InboxSummary["children"][number];
@@ -1001,7 +1014,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       ? summary.need_you === 0 && summary.blocking === 0
         ? "Roadmap items · ready to approve"
         : `Roadmap items · ${summary.need_you} need you`
-      : CHECKPOINT_LABEL[c.kind];
+      : checkpointSummary(c);
     const from = counted && summary.source ? `from ${summary.source.title} v${summary.source.version}` : null;
     const wait = summary?.wait;
     const review = `/runs/${c.run_id}#decide`;
@@ -1055,7 +1068,10 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       run: shortId(c.run_id),
       at: c.created_at,
       left: wait?.state === "open" && wait.seconds_left != null ? timeLeft(wait.seconds_left) : null,
-      action: isHeld(c) ? (
+      action: reviewHref(c.run_id, c) ? (
+        // F4: the Engineering check has its own review screen.
+        <LinkButton href={reviewHref(c.run_id, c)!}>Review</LinkButton>
+      ) : isHeld(c) ? (
         // The run page's checkpoint row, until the kind's review screen ships (D1).
         <LinkButton href={review}>Review</LinkButton>
       ) : counted ? (

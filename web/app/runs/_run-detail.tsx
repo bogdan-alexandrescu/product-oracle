@@ -39,11 +39,13 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import {
+  briefsCheck,
   CANCEL_AGAIN_CONFIRM,
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   orderHref,
   RETRY_CONFIRM,
+  reviewHref,
   runStatusLabel,
   RunStatusBadge,
   STOP_CANCELLING_CONFIRM,
@@ -714,8 +716,13 @@ function SegmentItem({
     // onDraftChanged is a new function on every render: the revision decides.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revisionKey]);
-  const deciding = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
-  const compact = checkpoints.filter((c) => !(c.status === "pending" && c.can_decide));
+  // F4: a stop with its own review screen (the Engineering check) is opened from a line here.
+  const screened = checkpoints.find((c) => c.status === "pending" && reviewHref(run.id, c)) ?? null;
+  // The Waiting chip counts every stop waiting for me, the screened one included.
+  const mine = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
+  const deciding = mine.filter((c) => c !== screened);
+  // The screened stop is said once, on its line: never again as a chip.
+  const compact = checkpoints.filter((c) => c !== screened && !(c.status === "pending" && c.can_decide));
   const waiting = checkpoints.some((c) => c.status === "pending");
   // Decided, not delivered to the run yet: said under the segment, with why it waits.
   const delivering = checkpoints.filter((c) => c.delivery && !s.sent_back);
@@ -733,6 +740,7 @@ function SegmentItem({
     s.draft_import ||
     s.artifacts.length > 0 ||
     deciding.length > 0 ||
+    !!screened ||
     delivering.length > 0 ||
     s.status === "running" ||
     vague > 0 ||
@@ -864,17 +872,17 @@ function SegmentItem({
                 {CHECKPOINT_LABEL[kind]}: off
               </Chip>
             ))}
-          {deciding.length > 0 && (
+          {mine.length > 0 && (
             // The decision panel below and the inspector name the checkpoint; the row shows its state.
             <a
               href="#decide"
               data-testid="checkpoint-waiting"
               className="inline-flex max-w-full rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              <Chip kind="warn" title={`Waiting: ${deciding.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}`}>
+              <Chip kind="warn" title={`Waiting: ${mine.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}`}>
                 <Icon name="clock" size={16} />
                 Waiting
-                <span className="sr-only">: {deciding.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}</span>
+                <span className="sr-only">: {mine.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}</span>
               </Chip>
             </a>
           )}
@@ -952,6 +960,7 @@ function SegmentItem({
             <DeliveryLine key={cp.id} cp={cp} />
           ))}
           <VagueGoalsLine count={vague} href={`/baseline?tab=proposals&run=${run.id}&interview=vague`} />
+          {screened && <ReviewScreenLine run={run} cp={screened} />}
           {deciding.map((cp, i) =>
             // D10: a PRD or roadmap review with its draft imported is decided in the version;
             // a refused draft and a console answer stay here.
@@ -980,6 +989,24 @@ function SegmentItem({
         </div>
       )}
     </li>
+  );
+}
+
+/** F4: the Engineering check waiting, its counts, and Review (its own screen). */
+function ReviewScreenLine({ run, cp }: { run: RunOut; cp: CheckpointOut }) {
+  const check = briefsCheck(cp)!;
+  const blocking = (cp.gate?.left ?? []).filter((x) => x.code === "blocking_question").length;
+  return (
+    <div id="decide" tabIndex={-1} className="flex flex-wrap items-center gap-2" data-testid="review-screen-line">
+      <span className="font-semibold">
+        {plural(check.features.length, "feature")}
+        {blocking > 0 && ` · ${blocking} blocking`}
+      </span>
+      <span className="text-text2">{cp.can_decide ? "Waiting for you" : "Waits for the engineering lead"}</span>
+      <LinkButton href={reviewHref(run.id, cp)!} variant={cp.can_decide ? "primary" : "secondary"}>
+        {cp.can_decide ? "Review" : "View"}
+      </LinkButton>
+    </div>
   );
 }
 

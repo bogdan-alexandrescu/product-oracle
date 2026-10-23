@@ -131,7 +131,7 @@ async def test_a_tick_without_a_worker_retries_on_the_next_tick(client, runtime,
         current = await get(client, auth, run["id"])
         assert current["status"] != "failed", current.get("error")
     assert saw_busy and calls["n"] >= 2
-    assert current["segments"][3]["draft_import"]["version"] is not None
+    assert current["segments"][4]["draft_import"]["version"] is not None
 
 
 async def test_cancelled_callers_keep_the_slot_until_the_workers_finish():

@@ -37,6 +37,7 @@ _ID = re.compile(r"^fake-(?P<segment>[a-z_]+)-a(?P<attempt>\d+)-c(?P<cents>\d+)-
 SEGMENT_FILES: dict[str, tuple[str, ...]] = {
     "baseline": ("baseline.yaml", "summary.md"),
     "feature_set": ("feature_set.yaml", "design.md"),
+    "eng_review": ("tech_briefs.yaml",),
     "priority": ("priority.yaml",),
     "prd_draft": ("prd.md",),
     "next_draft": ("prd.md", "resolutions.yaml"),
@@ -329,6 +330,21 @@ def _default_content(
             "    confidence: 0.8\n"
             "    requirements: []\n"
             "excluded: []\n"
+        )
+    if name == "tech_briefs.yaml":
+        # F5-1's format (oracle.engineering.briefs): one brief per feature of the approved
+        # scope the prompt pastes, else the default feature set's one; no code map.
+        briefs = "".join(
+            f"  - feature: {key}\n    title: {key}\n"
+            "    approach: Built by the local agent runtime\n"
+            "    touches: []\n    reuse: []\n    risks: []\n    questions: []\n"
+            "    size: m\n    depends_on: []\n"
+            '    assumptions: ["No code map: written by the local agent runtime"]\n'
+            for key in scope or ["price-early"]
+        )
+        return (
+            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            "version: 1\ncode_map: {used: false, repos: []}\nfeatures:\n" + briefs
         )
     if name == "requests_triage.yaml":
         # C1 (oracle.requests.triage): nothing classified, nothing found.

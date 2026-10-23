@@ -68,7 +68,7 @@ def test_baseline_to_prd_shares_the_one_baseline_segment():
     # first segment differs from the new flow's in any field, or it loses a segment;
     # no_claim=the later segments' content.
     b2p = flows.FLOWS["baseline_to_prd"]
-    assert len(b2p.segments) == 4
+    assert len(b2p.segments) == 5  # with the Engineering check
     assert b2p.segments[0] is flows.BASELINE_SEGMENT
     assert flows.FLOWS["baseline"].segments == (flows.BASELINE_SEGMENT,)
     for f in fields(flows.SegmentDef):

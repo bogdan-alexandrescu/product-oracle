@@ -34,14 +34,14 @@ test("goals in Draft with Oracle: the brief's goals are picked, and a change sti
   await goals.getByRole("checkbox", { name: /Grow paid conversion/ }).check();
   await goals.getByRole("checkbox", { name: /Raise activation/ }).uncheck();
   await sheet.getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $19.50");
+  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $24.50");
   await sheet.getByRole("button", { name: "Close Draft with Oracle" }).click();
   await expect(sheet).toHaveCount(0);
 
   // Reopened, the sheet takes up the draft run's goals, not the brief's.
   await page.reload();
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $19.50");
+  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $24.50");
   await expect(goals.getByRole("checkbox", { name: /Raise activation/ })).not.toBeChecked();
   await expect(goals.getByRole("checkbox", { name: /Grow paid conversion/ })).toBeChecked();
   await sheet.getByRole("button", { name: "Start drafting" }).click();

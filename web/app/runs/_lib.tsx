@@ -88,6 +88,38 @@ export const CHECKPOINT_LABEL: Record<CheckpointKind, string> = {
   update_review: "Update review",
 };
 
+/**
+ * F4: a stop's name where a Baseline to PRD run is configured. The engineering stops show
+ * their segment's title ("Engineering check"); the kind's label stays the spec flow's.
+ */
+export function stopLabel(segment: { name: string; title: string; checkpoint?: CheckpointKind | null }): string {
+  if (segment.name in STOP_HELP) return segment.title;
+  return segment.checkpoint ? CHECKPOINT_LABEL[segment.checkpoint] : segment.title;
+}
+
+/** F4: what each engineering stop does, said under its toggle. */
+export const STOP_HELP: Record<string, string> = {
+  eng_review: "The engineering lead checks feasibility and sizes before the priority order.",
+  eng_dates: "After the PRD review, the engineering lead records the dates behind the draft's Now items.",
+};
+
+/** F4: the Engineering check of a Baseline to PRD run, as its checkpoint stores it (briefs_check). */
+export type BriefsCheck = {
+  features: { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] }[];
+  problems: { code: string; message: string; feature?: string | null }[];
+  code_map_used: boolean;
+};
+
+export function briefsCheck(cp: Pick<CheckpointOut, "kind" | "payload">): BriefsCheck | null {
+  const check = cp.kind === "eng_review" ? (cp.payload as { briefs_check?: BriefsCheck } | null)?.briefs_check : null;
+  return check && Array.isArray(check.features) ? check : null;
+}
+
+/** The Engineering check's own review screen (F4); other kinds are decided on the run page. */
+export function reviewHref(runId: string, cp: Pick<CheckpointOut, "id" | "kind" | "payload">): string | null {
+  return briefsCheck(cp) ? `/runs/${runId}/review/${cp.id}` : null;
+}
+
 export const SEGMENT_STATUS_KIND: Record<SegmentOut["status"], ChipKind> = {
   pending: "na",
   running: "acc",

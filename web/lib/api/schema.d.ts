@@ -12792,6 +12792,11 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /**
+             * Lead Stop
+             * @default false
+             */
+            lead_stop: boolean;
             /** Cannot Approve */
             cannot_approve?: string | null;
             gate?: components["schemas"]["Gate"] | null;
@@ -17418,6 +17423,12 @@ export interface components {
              * @enum {string}
              */
             approver_role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Decider
+             * @default role
+             * @enum {string}
+             */
+            decider: "role" | "engineering_lead";
         };
         /** FlowStart */
         FlowStart: {
@@ -17572,6 +17583,8 @@ export interface components {
             label: string;
             /** Waivable */
             waivable: boolean;
+            /** Question Id */
+            question_id?: string | null;
         };
         /**
          * GateView
@@ -18139,6 +18152,11 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /**
+             * Lead Stop
+             * @default false
+             */
+            lead_stop: boolean;
             /** Cannot Approve */
             cannot_approve?: string | null;
             gate?: components["schemas"]["Gate"] | null;
