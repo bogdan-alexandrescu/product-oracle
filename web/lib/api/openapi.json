@@ -12153,7 +12153,7 @@
           "baseline"
         ],
         "summary": "Accept Proposal",
-        "description": "Apply the change as your own edit (it locks the item).",
+        "description": "Apply the change as your own edit (it locks the item). ``skip_fields`` keeps those\nfields as they are and applies the rest (#268).",
         "operationId": "accept_proposal",
         "security": [
           {
@@ -12181,7 +12181,7 @@
               "schema": {
                 "anyOf": [
                   {
-                    "$ref": "#/components/schemas/ProposalDecision"
+                    "$ref": "#/components/schemas/ProposalAccept"
                   },
                   {
                     "type": "null"
@@ -63977,6 +63977,31 @@
         ],
         "title": "ProductIntakeOut"
       },
+      "ProposalAccept": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "skip_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skip Fields",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "ProposalAccept"
+      },
       "ProposalCreate": {
         "properties": {
           "op": {
@@ -64188,6 +64213,14 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "overlaps": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalOverlap"
+            },
+            "type": "array",
+            "title": "Overlaps",
+            "default": []
           }
         },
         "type": "object",
@@ -64200,6 +64233,41 @@
           "created_at"
         ],
         "title": "ProposalOut"
+      },
+      "ProposalOverlap": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "current": {
+            "title": "Current"
+          },
+          "proposed": {
+            "title": "Proposed"
+          },
+          "changed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Changed At"
+          },
+          "by": {
+            "type": "string",
+            "enum": [
+              "proposal",
+              "edit"
+            ],
+            "title": "By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "changed_at",
+          "by"
+        ],
+        "title": "ProposalOverlap",
+        "description": "A field an open proposal would change that has changed since it was written (#268):\nby accepting another proposal, or by an edit."
       },
       "ProposalProposer": {
         "properties": {

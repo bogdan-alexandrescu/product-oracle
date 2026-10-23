@@ -8,7 +8,7 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { mockUuid, seeded } from "./ids";
-import { addGoalCodes, addNoisyProposals, attributeCommenterProposal, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { addGoalCodes, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
@@ -1556,6 +1556,7 @@ function load(): Db {
     // An Inbox row quoting Oracle's text with a known code (G-B) and an unknown one (G-Z).
     db.autonomy.actions.push(seedOracleDid(db.user_id, uuid(), "Moved 'Saved addresses' up 2 within G-B, ahead of G-Z"));
   }
+  if (scenario === "proposal-overlap") addOverlappingProposals(db.baseline, uuid);
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
   save(db);
   return db;

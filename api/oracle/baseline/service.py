@@ -436,9 +436,127 @@ async def lock_proposal(db: AsyncSession, proposal_id: uuid.UUID) -> Proposal | 
     )
 
 
+def _snapshot_value(snapshot: dict[str, Any] | None, key: str) -> Any:
+    if snapshot is None:
+        return None
+    if key.startswith("attrs."):
+        return (snapshot.get("attrs") or {}).get(key.removeprefix("attrs."))
+    return snapshot.get(key)
+
+
+async def overlaps(db: AsyncSession, proposals: list[Proposal]) -> dict[uuid.UUID, list[dict]]:
+    """{proposal id: [overlap]} (#268): the fields an open update would change whose value
+    changed since it was written and is neither that value again nor the proposed one.
+    ``by`` is "proposal" when the last change was accepting another proposal, else "edit"."""
+    from oracle.baseline.describe import _changes, _old, _same
+
+    out: dict[uuid.UUID, list[dict]] = {p.id: [] for p in proposals}
+    todo = [
+        p for p in proposals
+        if p.status == "open" and p.payload.get("op") == "update" and (p.entity_id or p.edge_id)
+    ]  # fmt: skip
+    if not todo:
+        return out
+    ids = {p.entity_id or p.edge_id for p in todo}
+    since = min(p.created_at for p in todo)
+    on_targets = (EntityRevision.entity_id.in_(ids), EntityRevision.edge_id.in_(ids))
+    revisions = (
+        await db.scalars(
+            select(EntityRevision)
+            .where(or_(*on_targets), EntityRevision.created_at > since)
+            .order_by(EntityRevision.created_at)
+        )
+    ).all()
+    if not revisions:
+        return out
+    targets: dict[uuid.UUID, Entity | Edge] = {
+        **{e.id: e for e in await db.scalars(select(Entity).where(Entity.id.in_(ids)))},
+        **{e.id: e for e in await db.scalars(select(Edge).where(Edge.id.in_(ids)))},
+    }
+    accepted = (
+        await db.scalars(
+            select(Proposal).where(
+                Proposal.status == "accepted",
+                or_(Proposal.entity_id.in_(ids), Proposal.edge_id.in_(ids)),
+                Proposal.decided_at > since,
+            )
+        )
+    ).all()
+    for p in todo:
+        tid = p.entity_id or p.edge_id
+        mine = [
+            r
+            for r in revisions
+            if (r.entity_id or r.edge_id) == tid and r.created_at > p.created_at
+        ]
+        for key, proposed in _changes(p.payload.get("fields") or {}):
+            changed = [
+                r for r in mine
+                if _snapshot_value(r.before, key) != _snapshot_value(r.after, key)
+            ]  # fmt: skip
+            if not changed or tid not in targets:
+                continue
+            current = _old(targets[tid], key)[1]
+            if _same(current, _snapshot_value(changed[0].before, key)) or _same(current, proposed):
+                continue
+            last = _snapshot_value(changed[-1].after, key)
+            by_proposal = any(
+                (a.entity_id or a.edge_id) == tid
+                and a.decided_at > p.created_at
+                and any(
+                    k == key and _same(last, v) for k, v in _changes(a.payload.get("fields") or {})
+                )
+                for a in accepted
+            )
+            out[p.id].append(
+                {
+                    "field": key,
+                    "current": current,
+                    "proposed": proposed,
+                    "changed_at": changed[-1].created_at,
+                    "by": "proposal" if by_proposal else "edit",
+                }
+            )
+    return out
+
+
+def _skipped(payload: dict[str, Any], skip_fields: list[str]) -> list[str]:
+    """``skip_fields`` as the proposal's keys ("milestone" is "attrs.milestone")."""
+    from oracle.baseline.describe import _changes
+
+    if payload.get("op") != "update":
+        raise InvalidError("only an update can skip fields")
+    changes = {k for k, _ in _changes(payload.get("fields") or {})}
+    out = []
+    for f in skip_fields:
+        key = f if f in ("title", "body", "status") or f.startswith("attrs.") else f"attrs.{f}"
+        if key not in changes:
+            raise InvalidError(f"this proposal does not change {f}")
+        if key not in out:
+            out.append(key)
+    return out
+
+
+def _without(fields: dict[str, Any], keys: list[str]) -> dict[str, Any]:
+    out = {k: v for k, v in fields.items() if k not in keys}
+    if isinstance(fields.get("attrs"), dict):
+        attrs = {k: v for k, v in fields["attrs"].items() if f"attrs.{k}" not in keys}
+        if attrs:
+            out["attrs"] = attrs
+        else:
+            out.pop("attrs")
+    return out
+
+
 async def decide_proposal(
-    db: AsyncSession, proposal_id: uuid.UUID, principal: Principal, accept: bool, note: str | None
+    db: AsyncSession,
+    proposal_id: uuid.UUID,
+    principal: Principal,
+    accept: bool,
+    note: str | None,
+    skip_fields: list[str] | None = None,
 ) -> Proposal:
+    """Accept or reject; an accept may keep some fields as they are (``skip_fields``, #268)."""
     proposal = await lock_proposal(db, proposal_id)
     if proposal is None or proposal.status == "withdrawn":
         raise NotFoundError("Proposal not found")
@@ -446,6 +564,7 @@ async def decide_proposal(
         raise ConflictError(f"Proposal is already {proposal.status}")
     if accept and await awaits_answer(db, proposal.payload):
         raise ConflictError("This proposal waits for the author to share the answer")
+    skipped = _skipped(proposal.payload, skip_fields) if accept and skip_fields else []
     # B4: history reads the sentence the decider saw, written from the target before the change.
     from oracle.baseline.describe import summaries
 
@@ -454,7 +573,7 @@ async def decide_proposal(
         p = proposal.payload
         reason = note or p.get("reason") or f"accepted proposal {proposal.id}"
         writer = Writer(principal, "user", run_id=proposal.run_id, reason=reason)
-        fields = dict(p.get("fields") or {})
+        fields = _without(dict(p.get("fields") or {}), skipped)
         if p["kind"] == "entity":
             if p["op"] == "create":
                 await create_entity(db, writer, **_entity_create_args(fields))
@@ -476,6 +595,8 @@ async def decide_proposal(
                     await _detach(db, proposal)
                     await delete_edge(db, writer, target)
     proposal.payload = {**proposal.payload, "summary": summary}
+    if skipped:
+        proposal.payload = {**proposal.payload, "skipped_fields": skipped}
     proposal.status = "accepted" if accept else "rejected"
     proposal.decided_by = principal.id
     proposal.decided_at = _now()
@@ -485,7 +606,7 @@ async def decide_proposal(
         "baseline.proposal." + proposal.status,
         "proposal",
         proposal.id,
-        {"note": note} if note else None,
+        {k: v for k, v in (("note", note), ("skipped_fields", skipped)) if v} or None,
     )
     await db.flush()
     return proposal

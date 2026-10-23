@@ -3578,7 +3578,8 @@ export interface paths {
         put?: never;
         /**
          * Accept Proposal
-         * @description Apply the change as your own edit (it locks the item).
+         * @description Apply the change as your own edit (it locks the item). ``skip_fields`` keeps those
+         *     fields as they are and applies the rest (#268).
          */
         post: operations["accept_proposal"];
         delete?: never;
@@ -20850,6 +20851,16 @@ export interface components {
              */
             updated_at: string;
         };
+        /** ProposalAccept */
+        ProposalAccept: {
+            /** Note */
+            note?: string | null;
+            /**
+             * Skip Fields
+             * @default []
+             */
+            skip_fields: string[];
+        };
         /**
          * ProposalCreate
          * @description Suggest a change for an approver to accept: commenters and agents use this.
@@ -20923,6 +20934,34 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Overlaps
+             * @default []
+             */
+            overlaps: components["schemas"]["ProposalOverlap"][];
+        };
+        /**
+         * ProposalOverlap
+         * @description A field an open proposal would change that has changed since it was written (#268):
+         *     by accepting another proposal, or by an edit.
+         */
+        ProposalOverlap: {
+            /** Field */
+            field: string;
+            /** Current */
+            current?: unknown;
+            /** Proposed */
+            proposed?: unknown;
+            /**
+             * Changed At
+             * Format: date-time
+             */
+            changed_at: string;
+            /**
+             * By
+             * @enum {string}
+             */
+            by: "proposal" | "edit";
         };
         /**
          * ProposalProposer
@@ -35816,7 +35855,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["ProposalDecision"] | null;
+                "application/json": components["schemas"]["ProposalAccept"] | null;
             };
         };
         responses: {
