@@ -7,7 +7,6 @@ import uuid
 from sqlalchemy import select
 
 from oracle import changes
-
 from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
 from oracle.v2.models import ChangeEvent
@@ -212,6 +211,5 @@ async def test_bulk_changes_name_the_count_that_applies_to_the_item_once(
     await bulk(42)
     await bulk(11)
     reasons = (await items(client, auth))["payment-step"]["stale_reasons"]
-    assert len(reasons) == 1, reasons
-    assert "42" not in reasons[0] and "11" not in reasons[0], reasons
-    assert reasons[0].endswith("changed"), reasons
+    # Only the requirement of the 42 and of the 11 is the payment step's: it is named, once.
+    assert reasons == ["requirement:saved-cards changed"], reasons

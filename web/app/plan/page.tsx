@@ -79,6 +79,18 @@ export default function PlanPage() {
   const canBaseline = can("confirm_entity");
   // F7: approvers, owners and engineering leads link and unlink tracker issues.
   const canLink = can("link_tracker_issue");
+  // #370 (#505): each track control shows only to a role that can call its route.
+  const trackRights = useMemo(
+    () => ({
+      edit: can("update_track"),
+      addMilestone: can("create_track_milestone"),
+      check: can("monitor_track"),
+      // Like create_run: an owner only for some runs, so an approver may on most tracks.
+      draftRoadmap: can("create_track_roadmap_run", true),
+      push: can("push_track_to_tracker"),
+    }),
+    [can],
+  );
   const [scope, setScope, ready] = usePlanScope(userId ?? (me ? "token" : null));
   const q = useQuery(
     `plan|${ready ? scope : "wait"}`,
@@ -203,7 +215,7 @@ export default function PlanPage() {
         <Split inspector={inspector && <div className="max-[600px]:hidden">{inspector}</div>}>
           {tracks.error && <Notice tone="error">{tracks.error}</Notice>}
           {tracks.data?.map((t) => (
-            <TrackPanel key={t.id} track={t} canWrite={canWrite} picked={milestone} onPick={onPickMilestone} onChange={putTrack} />
+            <TrackPanel key={t.id} track={t} may={trackRights} picked={milestone} onPick={onPickMilestone} onChange={putTrack} />
           ))}
           <Panel
             title="Roadmap"

@@ -98,16 +98,28 @@ export function milestoneTitle(t: Track, id: string): string {
   return `${n} · ${prev ? day(prev) : formatDay(t.created_at)} – ${day(m.target_date)}`;
 }
 
-/** A PRD's track (#339): title, owner and status edited in place, its milestones, and its actions. */
+/** What the viewer's role may do to a track, one flag per operation (#370: `can()`). */
+export type TrackRights = {
+  edit: boolean;
+  addMilestone: boolean;
+  check: boolean;
+  draftRoadmap: boolean;
+  push: boolean;
+};
+
+/**
+ * A PRD's track (#339): title, owner and status edited in place, its milestones, and its
+ * actions. #370 (#505): a control shows only to a role that can use it.
+ */
 export function TrackPanel({
   track,
-  canWrite,
+  may,
   picked,
   onPick,
   onChange,
 }: {
   track: Track;
-  canWrite: boolean;
+  may: TrackRights;
   picked: MilestonePick | null;
   onPick: (pick: MilestonePick) => void;
   onChange: (t: Track) => void;
@@ -129,8 +141,8 @@ export function TrackPanel({
     ? owner.data?.get(track.owner_id)
     : undefined;
   const health = HEALTH[track.health];
-  const off = !canWrite || busy;
-  const reason = canWrite ? undefined : READ_ONLY;
+  const off = busy;
+  const actions = may.check || may.draftRoadmap || may.push;
 
   async function act<T>(call: () => Promise<T>, done: (out: T) => void) {
     setBusy(true);
@@ -176,19 +188,20 @@ export function TrackPanel({
           <Chip kind={health.kind} data-testid="track-health">
             {health.label}
           </Chip>
-          <Button
-            variant="ghost"
-            disabled={off}
-            title={reason}
-            onClick={() => setRenaming(true)}
-          >
-            Rename
-          </Button>
+          {may.edit && (
+            <Button
+              variant="ghost"
+              disabled={off}
+              onClick={() => setRenaming(true)}
+            >
+              Rename
+            </Button>
+          )}
         </>
       }
     >
       <div className="flex flex-col gap-3 px-4 py-3 text-[15px] max-[600px]:px-3">
-        {renaming && (
+        {renaming && may.edit && (
           <form
             className="flex flex-wrap items-end gap-2"
             onSubmit={(e) => {
@@ -233,31 +246,37 @@ export function TrackPanel({
                   ? "…"
                   : "No owner"}
             </span>
-            <Button
-              variant="ghost"
-              disabled={off}
-              title={reason}
-              onClick={() => setPicking((v) => !v)}
-            >
-              Change owner
-            </Button>
+            {may.edit && (
+              <Button
+                variant="ghost"
+                disabled={off}
+                onClick={() => setPicking((v) => !v)}
+              >
+                Change owner
+              </Button>
+            )}
           </span>
-          <SegmentedControl<Status>
-            label="Track status"
-            size="sm"
-            value={track.status}
-            onChange={(status) =>
-              status !== track.status && void patch({ status })
-            }
-            items={(["active", "paused", "closed"] as const).map((s) => ({
-              value: s,
-              label: STATUS_LABEL[s],
-              disabled: off,
-              title: reason,
-            }))}
-          />
+          {may.edit ? (
+            <SegmentedControl<Status>
+              label="Track status"
+              size="sm"
+              value={track.status}
+              onChange={(status) =>
+                status !== track.status && void patch({ status })
+              }
+              items={(["active", "paused", "closed"] as const).map((s) => ({
+                value: s,
+                label: STATUS_LABEL[s],
+                disabled: off,
+              }))}
+            />
+          ) : (
+            <span data-testid="track-status" className="text-sm text-text2">
+              {STATUS_LABEL[track.status]}
+            </span>
+          )}
         </div>
-        {picking && canWrite && (
+        {picking && may.edit && (
           <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface2 p-2.5">
             <PersonPicker
               writersOnly={false}
@@ -285,16 +304,17 @@ export function TrackPanel({
           <span className="text-[13px] font-semibold tracking-[0.02em] text-text2">
             Milestones
           </span>
-          <Button
-            variant="ghost"
-            icon="plus"
-            className="ml-auto"
-            disabled={off}
-            title={reason}
-            onClick={() => onPick({ trackId: track.id, id: null })}
-          >
-            Add milestone
-          </Button>
+          {may.addMilestone && (
+            <Button
+              variant="ghost"
+              icon="plus"
+              className="ml-auto"
+              disabled={off}
+              onClick={() => onPick({ trackId: track.id, id: null })}
+            >
+              Add milestone
+            </Button>
+          )}
         </div>
         <ul className="flex flex-col pb-2">
           {sortedMilestones(track).map((m) => {
@@ -332,73 +352,75 @@ export function TrackPanel({
           )}
         </ul>
       </div>
-      <div className="flex flex-col gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
-        <div className="flex flex-wrap gap-2">
-          <Button
-            disabled={off}
-            title={reason}
-            onClick={() =>
-              void act(
-                () => unwrap(api.POST("/v1/tracks/{track_id}/monitor", path)),
-                (out) => {
-                  onChange(out.overview);
-                  setResult({
-                    tone: "pass",
-                    text: `Checked: ${out.changed.length ? `changed ${out.changed.join(", ").replaceAll("_", " ")}` : "nothing changed"}.`,
-                  });
-                },
-              )
-            }
-          >
-            Check now
-          </Button>
-          <Button
-            disabled={off}
-            title={reason}
-            onClick={() =>
-              void act(
-                () =>
-                  unwrap(api.POST("/v1/tracks/{track_id}/roadmap-run", path)),
-                (run) => router.push(`/runs/${run.id}`),
-              )
-            }
-          >
-            Draft roadmap from this track
-          </Button>
-          <Button
-            disabled={off}
-            title={reason}
-            onClick={async () => {
-              setBusy(true);
-              setError(null);
-              setResult(null);
-              try {
-                await unwrap(
-                  api.POST("/v1/tracks/{track_id}/tracker-push", path),
-                );
-                setResult({ tone: "pass", text: "Sent to the tracker." });
-              } catch (e) {
-                setResult({ tone: "warn", text: errorMessage(e) });
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            Push to tracker
-          </Button>
+      {(actions || result || error) && (
+        <div className="flex flex-col gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
+          {actions && (
+            <div className="flex flex-wrap gap-2">
+              {may.check && (
+                <Button
+                  disabled={off}
+                  onClick={() =>
+                    void act(
+                      () => unwrap(api.POST("/v1/tracks/{track_id}/monitor", path)),
+                      (out) => {
+                        onChange(out.overview);
+                        setResult({
+                          tone: "pass",
+                          text: `Checked: ${out.changed.length ? `changed ${out.changed.join(", ").replaceAll("_", " ")}` : "nothing changed"}.`,
+                        });
+                      },
+                    )
+                  }
+                >
+                  Check now
+                </Button>
+              )}
+              {may.draftRoadmap && (
+                <Button
+                  disabled={off}
+                  onClick={() =>
+                    void act(
+                      () =>
+                        unwrap(api.POST("/v1/tracks/{track_id}/roadmap-run", path)),
+                      (run) => router.push(`/runs/${run.id}`),
+                    )
+                  }
+                >
+                  Draft roadmap from this track
+                </Button>
+              )}
+              {may.push && (
+                <Button
+                  disabled={off}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError(null);
+                    setResult(null);
+                    try {
+                      await unwrap(
+                        api.POST("/v1/tracks/{track_id}/tracker-push", path),
+                      );
+                      setResult({ tone: "pass", text: "Sent to the tracker." });
+                    } catch (e) {
+                      setResult({ tone: "warn", text: errorMessage(e) });
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  Push to tracker
+                </Button>
+              )}
+            </div>
+          )}
+          {result && (
+            <Notice tone={result.tone} testId="track-result">
+              {result.text}
+            </Notice>
+          )}
+          {error && <InlineError>{error}</InlineError>}
         </div>
-        {result && (
-          <Notice tone={result.tone} testId="track-result">
-            {result.text}
-          </Notice>
-        )}
-        {error && <InlineError>{error}</InlineError>}
-        {!canWrite && (
-          <p data-testid="track-readonly" className="text-sm text-text2">
-            {READ_ONLY}
-          </p>
-        )}
-      </div>
+      )}
     </Panel>
   );
 }

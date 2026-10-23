@@ -67,7 +67,7 @@ test("the goal drawer shows a person's name and labelled attributes and history"
   await expect(d.locator('[data-attr="owner_confidence"]')).toHaveText("100%");
 
   const history = d.getByTestId("entity-history").getByRole("listitem").first();
-  await expect(history).toContainText("Owner confidence 43% → 100%");
+  await expect(history).toContainText("Owner confidence: 43% → 100%");
   await expect(history).not.toContainText("_");
 });
 

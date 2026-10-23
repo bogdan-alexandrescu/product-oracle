@@ -471,6 +471,21 @@ function unplanned(db: RoadmapDb, trackId: string, keys: Set<string>): Schemas["
     .map((r) => ({ kind: "unplanned", tracker_ref: r.external_ref, item_key: r.item_key, detail: `${r.external_ref} (${r.title ?? "untitled"}) is not on the roadmap.` }));
 }
 
+/**
+ * An item's stale reasons as one line, as the API says them (oracle.roadmap.staleness.stale_why,
+ * #505): one counted line per verb, the latest, so two bulk writes never read as two counts.
+ */
+function staleWhy(reasons: readonly string[], fallback: string): string {
+  const counted = /^(\d+) baseline items? (.+)$/;
+  const out: string[] = [];
+  for (const r of reasons) {
+    const verb = counted.exec(r)?.[2];
+    if (verb) out.splice(0, out.length, ...out.filter((o) => counted.exec(o)?.[2] !== verb));
+    if (!out.includes(r)) out.push(r);
+  }
+  return out.join("; ") || fallback;
+}
+
 function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackOverview"] {
   const prd = ctx.documents.find((d) => d.id === t.prd_id)!;
   const roadmap = t.roadmap_id ? ctx.documents.find((d) => d.id === t.roadmap_id) : undefined;
@@ -483,7 +498,7 @@ function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackO
   for (const i of items) {
     counts[i.horizon] += 1;
     const reasons: Record<string, string>[] = [];
-    if (i.freshness === "potentially_stale" || i.freshness === "under_review") reasons.push({ kind: "stale", detail: i.stale_reasons.join("; ") || "its PRD trace changed" });
+    if (i.freshness === "potentially_stale" || i.freshness === "under_review") reasons.push({ kind: "stale", detail: staleWhy(i.stale_reasons, "its PRD trace changed") });
     const d = drift(db, i);
     allDrift.push(...d);
     for (const e of d) if (e.kind !== "ahead") reasons.push({ kind: "slipping", detail: e.detail });
@@ -989,7 +1004,7 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
     records: [{ ref: "ENG-405", state: "in_progress", target: "2026-12-09" }], date: "2026-11-30", dateStatus: "verified", dateSource: "ENG-412", slipDays: 9,
     reasons: [
       // #505: two bulk baseline writes marked it stale, as the API's stale reasons read.
-      { kind: "stale", detail: ["42 baseline items changed", "11 baseline items changed"].join("; ") },
+      { kind: "stale", detail: staleWhy(["42 baseline items changed", "11 baseline items changed"], "its PRD trace changed") },
       { kind: "slipping", detail: "ENG-405 targets 2026-12-09, after the milestone date 2026-11-30." },
     ],
     next: { action: "decide_slip", who: "owner" } },
