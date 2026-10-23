@@ -55,6 +55,23 @@ def test_drafting_and_note_prompts_carry_the_named_code_rules():
     assert flows.NAMED_CODES in text
 
 
+def test_the_roadmap_prompts_do_not_carry_the_named_code_rules():
+    """Only the prompts that write PRD sections, proposals and checkpoint notes carry the
+    rules; the roadmap draft's prompt is pinned byte for byte (test_runs_prd_template)."""
+    flow = flows.FLOWS["prd_to_roadmap"]
+    ctx = flows.PromptContext(
+        run_id="run-1",
+        document="team-calendar-roadmap",
+        snapshot_as_of=None,
+        low_confidence=0.4,
+        kind="roadmap",
+    )
+    for seg in flow.segments:
+        for role in seg.roles:
+            text = flows.step_prompt(flow, seg, role, last=True, ctx=ctx)
+            assert flows.NAMED_CODES not in text, (seg.name, role)
+
+
 # --- Output checks -------------------------------------------------------------------
 
 
@@ -76,6 +93,23 @@ def test_a_bare_first_use_and_a_run_of_codes_are_found():
     # Two codes are not a list yet; a later bare mention of a named code is fine.
     two = named_codes.findings("F-1 Sign-up form and F-2 Invite flow; then F-1, F-2 again.")
     assert two == named_codes.Findings(unnamed=[], runs=[])
+
+
+def test_undashed_goal_requirement_and_milestone_codes_are_checked():
+    body = "This serves G1 first and needs R1.\n\nG2, R2 and M2 land together."
+    found = named_codes.findings(body)
+    assert found.unnamed == ["G1", "R1"]
+    assert found.runs == [["G2", "R2", "M2"]]
+    named = named_codes.findings(
+        "G1 Fewer missed deadlines leads. The shared calendar (R1) serves G1.\n\n"
+        "M1 · Oct 19 – Nov 13 ships it."
+    )
+    assert named == named_codes.Findings(unnamed=[], runs=[])
+    # A milestone heading with its dates names the code for its section.
+    assert named_codes.findings("M1 ships the calendar.", "M1 · Oct 19 – Nov 13").unnamed == []
+    # Quarters, halves, versions and standards are not codes.
+    plain = named_codes.findings("Ships in Q3, H2 or v2; uses SHA256, MD5 and UTF8.")
+    assert plain == named_codes.Findings(unnamed=[], runs=[])
 
 
 FIXTURE = replace(
