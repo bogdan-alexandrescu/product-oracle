@@ -7603,6 +7603,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/roadmaps/{doc}/change-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Roadmap Change Sets
+         * @description The roadmap's change sets, newest first: the draft being edited, the proposals
+         *     waiting for the decider (``approved`` false) and the rest. ``limit`` and ``offset``
+         *     page through them.
+         */
+        get: operations["list_roadmap_change_sets"];
+        put?: never;
+        /**
+         * Open Roadmap Change Set
+         * @description Edit plan: open a draft change set on the roadmap's approved version (201), or
+         *     return the draft it has (200). Nobody edits an approved version in place: the changes
+         *     are proposed as a new version. 422 when no version is approved.
+         */
+        post: operations["open_roadmap_change_set"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/change-sets/{set_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Roadmap Change Set
+         * @description A change set: its changes, the plan they make, and the diff against the base.
+         */
+        get: operations["get_roadmap_change_set"];
+        put?: never;
+        post?: never;
+        /**
+         * Discard Roadmap Change Set
+         * @description Discard a draft change set: the approved plan stays as it is.
+         */
+        delete: operations["discard_roadmap_change_set"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Roadmap Change Set
+         * @description Replace a draft change set's changes (in order): add, move, defer, cut with a
+         *     reason, reorder within a horizon. 422 when a change does not apply; 409 when it
+         *     changed since it was loaded, is no longer a draft, or its base is no longer the
+         *     approved version.
+         */
+        patch: operations["update_roadmap_change_set"];
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/change-sets/{set_id}/propose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Roadmap Change Set
+         * @description Propose changes: import the next roadmap version (the base's items plus the
+         *     changes), for the document's decider to approve through the review. 409 on a stale
+         *     base; 422 when there is nothing to propose.
+         */
+        post: operations["propose_roadmap_change_set"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/schedule-bases": {
         parameters: {
             query?: never;
@@ -9195,6 +9276,30 @@ export interface components {
             answers: string[];
             /** Note */
             note?: string | null;
+        };
+        /**
+         * AddChange
+         * @description Add an item: a Baseline feature (``feature_id``) or a new one (``title``).
+         */
+        AddChange: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "add";
+            /** Title */
+            title: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Outcome */
+            outcome?: string | null;
+            /** Key */
+            key?: string | null;
         };
         /**
          * AdvisoryIn
@@ -11074,6 +11179,103 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * ChangeSetDiffItem
+         * @description How an item of the proposal differs from the approved version (roadmap.diff).
+         */
+        ChangeSetDiffItem: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "added" | "dropped" | "moved" | "changed" | "unchanged";
+            /** From Horizon */
+            from_horizon?: ("now" | "next" | "later") | null;
+            /** To Horizon */
+            to_horizon?: ("now" | "next" | "later") | null;
+            /**
+             * Fields
+             * @default []
+             */
+            fields: string[];
+            /**
+             * Reordered
+             * @default false
+             */
+            reordered: boolean;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** ChangeSetOut */
+        ChangeSetOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Roadmap */
+            roadmap: string;
+            /** Roadmap Title */
+            roadmap_title: string;
+            /** Base Version */
+            base_version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "proposed" | "discarded" | "superseded";
+            /** Changes */
+            changes: (components["schemas"]["AddChange"] | components["schemas"]["MoveChange"] | components["schemas"]["DeferChange"] | components["schemas"]["CutChange"] | components["schemas"]["ReorderChange"])[];
+            /** Items */
+            items: components["schemas"]["PlannedItem"][];
+            /** Cut */
+            cut: components["schemas"]["CutItem"][];
+            /** Diff */
+            diff: components["schemas"]["ChangeSetDiffItem"][];
+            /** Summary */
+            summary: {
+                [key: string]: number;
+            };
+            /** Proposed Version */
+            proposed_version?: number | null;
+            /**
+             * Approved
+             * @default false
+             */
+            approved: boolean;
+            /** Superseded By Version */
+            superseded_by_version?: number | null;
+            /** Decider Id */
+            decider_id?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ChangeSetPatch
+         * @description The change set's changes, whole, in order, and the lock_version last read.
+         */
+        ChangeSetPatch: {
+            /** Changes */
+            changes: (components["schemas"]["AddChange"] | components["schemas"]["MoveChange"] | components["schemas"]["DeferChange"] | components["schemas"]["CutChange"] | components["schemas"]["ReorderChange"])[];
+            /** Lock Version */
+            lock_version: number;
+        };
         /** ChangedSection */
         ChangedSection: {
             /** Section Key */
@@ -12678,6 +12880,35 @@ export interface components {
             reads: string[];
         };
         /**
+         * CutChange
+         * @description Cut an item from the plan, with the reason.
+         */
+        CutChange: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "cut";
+            /** Key */
+            key: string;
+            /** Reason */
+            reason: string;
+        };
+        /** CutItem */
+        CutItem: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Reason */
+            reason: string;
+        };
+        /**
          * DateMarkOut
          * @description A date written in a roadmap's text, checked against its PRD's schedule bases now
          *     (O4 'document dates', oracle.roadmap.doc_dates). ``label`` is the marker shown next
@@ -13188,6 +13419,19 @@ export interface components {
             css: string;
             /** Slides */
             slides: components["schemas"]["SlideOut"][];
+        };
+        /**
+         * DeferChange
+         * @description Defer an item: it moves to Later.
+         */
+        DeferChange: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "defer";
+            /** Key */
+            key: string;
         };
         /** DependenciesCreate */
         DependenciesCreate: {
@@ -18727,6 +18971,24 @@ export interface components {
             changed: string[];
         };
         /**
+         * MoveChange
+         * @description Move an item to another horizon (to the end of it).
+         */
+        MoveChange: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "move";
+            /** Key */
+            key: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+        };
+        /**
          * MyAccountOut
          * @description The signed-in member: who they are, their role and how they sign in.
          */
@@ -19914,6 +20176,34 @@ export interface components {
             role: "viewer" | "commenter" | "approver" | "owner" | "track_owner" | "engineering_lead";
             /** User Id */
             user_id?: string | null;
+        };
+        /** PlannedItem */
+        PlannedItem: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Position */
+            position: number;
+            /** Outcome */
+            outcome?: string | null;
+            /** Feature Id */
+            feature_id?: string | null;
+            /**
+             * New
+             * @default false
+             */
+            new: boolean;
+            /**
+             * Deferred
+             * @default false
+             */
+            deferred: boolean;
         };
         /** PrdAnchor */
         PrdAnchor: {
@@ -21386,6 +21676,21 @@ export interface components {
         ReopenIn: {
             /** Lock Version */
             lock_version: number;
+        };
+        /**
+         * ReorderChange
+         * @description Put an item at ``position`` (0 first) within its horizon.
+         */
+        ReorderChange: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "reorder";
+            /** Key */
+            key: string;
+            /** Position */
+            position: number;
         };
         /** ReplyCreate */
         ReplyCreate: {
@@ -42569,6 +42874,211 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlignmentReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_roadmap_change_sets: {
+        parameters: {
+            query?: {
+                status?: ("draft" | "proposed" | "discarded" | "superseded") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeSetOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_roadmap_change_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeSetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_roadmap_change_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeSetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_roadmap_change_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeSetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_roadmap_change_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeSetPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeSetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_roadmap_change_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeSetOut"];
                 };
             };
             /** @description Validation Error */
