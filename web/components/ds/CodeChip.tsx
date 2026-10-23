@@ -9,6 +9,7 @@ import { named, useNames, type Named } from "@/lib/codes";
 const OPEN_DELAY = 250;
 const CLOSE_DELAY = 150;
 const PHONE = "(max-width: 639px)";
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** One card is open at a time: opening one closes the last. */
 let closeOpen: (() => void) | null = null;
@@ -17,6 +18,8 @@ let closeOpen: (() => void) | null = null;
  * The one hover-and-tap card (#304) behind a chip. It opens on hover (after a short delay),
  * on keyboard focus and on tap, and closes with Escape and on a click outside. Below 640 px
  * it is a bottom sheet. The card sits in a portal, so a narrow table cell never clips it.
+ * Keyboard: a click (Enter, Space) or Tab from the open chip moves focus into the card, Tab
+ * cycles inside it, and Escape closes it with focus back on the chip.
  */
 export function HoverCard({
   trigger,
@@ -42,6 +45,10 @@ export function HoverCard({
   const button = useRef<HTMLButtonElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const pinned = useRef(false);
+  /** Focus goes into the card once it is drawn. */
+  const focusIn = useRef(false);
+  /** The chip takes focus back on Escape: that focus does not reopen the card. */
+  const returning = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clear = () => {
@@ -55,7 +62,18 @@ export function HoverCard({
   const hide = () => {
     clear();
     pinned.current = false;
+    focusIn.current = false;
     setOpen(false);
+  };
+  const focusables = () => [...(card.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
+  /** Focus the card's first link or button, else the card itself. */
+  const enter = () => {
+    if (!card.current) {
+      focusIn.current = true;
+      return;
+    }
+    focusIn.current = false;
+    (focusables()[0] ?? card.current).focus({ preventScroll: true });
   };
   const later = (fn: () => void, ms: number) => {
     clear();
@@ -63,6 +81,12 @@ export function HoverCard({
   };
 
   useEffect(() => clear, []);
+
+  useEffect(() => {
+    if (open && at && focusIn.current) enter();
+    // enter only touches refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, at]);
 
   useLayoutEffect(() => {
     if (!open || !button.current) return;
@@ -81,7 +105,14 @@ export function HoverCard({
     };
     closeOpen = mine;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") hide();
+      if (e.key !== "Escape") return;
+      const inside = !!card.current?.contains(document.activeElement);
+      hide();
+      if (inside) {
+        returning.current = true;
+        button.current?.focus({ preventScroll: true });
+        returning.current = false;
+      }
     };
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
@@ -119,7 +150,14 @@ export function HoverCard({
         data-testid={testId}
         onMouseEnter={() => (open ? stay() : later(show, OPEN_DELAY))}
         onMouseLeave={leave}
-        onFocus={show}
+        onFocus={() => {
+          if (!returning.current) show();
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== "Tab" || e.shiftKey || !open || !focusables().length) return;
+          e.preventDefault();
+          enter();
+        }}
         onBlur={(e) => {
           if (!card.current?.contains(e.relatedTarget as Node) && !pinned.current) setOpen(false);
         }}
@@ -129,6 +167,7 @@ export function HoverCard({
           else {
             pinned.current = true;
             show();
+            enter();
           }
         }}
         className={unstyled ? className : `inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-goal text-left align-middle outline-offset-2 ${className}`}
@@ -142,10 +181,20 @@ export function HoverCard({
             ref={card}
             id={id}
             role="tooltip"
+            tabIndex={-1}
             data-testid="code-card"
             data-sheet={at.phone ? "true" : undefined}
             onMouseEnter={stay}
             onMouseLeave={leave}
+            onKeyDown={(e) => {
+              if (e.key !== "Tab") return;
+              // Tab cycles inside the card.
+              e.preventDefault();
+              const els = focusables();
+              if (!els.length) return;
+              const i = els.indexOf(document.activeElement as HTMLElement);
+              els[e.shiftKey ? (i <= 0 ? els.length - 1 : i - 1) : (i + 1) % els.length].focus();
+            }}
             onBlur={(e) => {
               if (!card.current?.contains(e.relatedTarget as Node) && e.relatedTarget !== button.current && !pinned.current) setOpen(false);
             }}
@@ -154,7 +203,7 @@ export function HoverCard({
               at.phone
                 ? "fixed inset-x-0 bottom-0 rounded-t-inspector border-t border-line bg-surface px-4 pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] shadow-tip"
                 : "fixed w-80 max-w-[calc(100vw-24px)] rounded-panel border border-line bg-surface p-3 shadow-tip"
-            }`}
+            } outline-none`}
           >
             {children}
           </div>,
