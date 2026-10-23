@@ -33,7 +33,11 @@ async function churnWithSubgoal(page: Page) {
   await add.getByLabel("Subgoal title").fill(SUB);
   await add.getByRole("button", { name: "Add" }).click();
   const row = page.getByTestId(`goal-${SUB_KEY}`);
-  await expect(row).toContainText("G3.1");
+  await expect(row).toBeVisible();
+  // A company without goal codes (#304): neither the goal nor its subgoal draws one.
+  await expect(row.getByTestId("code-tag")).toHaveCount(0);
+  await expect(row).not.toContainText("G3.1");
+  await expect(churn.getByTestId("code-tag")).toHaveCount(0);
 
   // Its own target, through the goal form.
   await row.getByRole("button", { name: SUB, exact: true }).click();
@@ -89,7 +93,7 @@ test("add a subgoal, set its target, link a feature, see the parent roll up, pic
   const f = drawer(page, "Guided setup");
   await f.getByRole("button", { name: "Link to goal" }).click();
   const link = f.getByRole("form", { name: "Link to goal" });
-  await link.getByLabel("Goal").selectOption({ label: `G3.1 ${SUB}` });
+  await link.getByLabel("Goal").selectOption({ label: SUB });
   await link.getByLabel("Contribution").selectOption("3");
   await link.getByRole("button", { name: "Link" }).click();
   await expect(f.getByRole("list", { name: "Supports" })).toContainText(SUB);
@@ -101,13 +105,14 @@ test("add a subgoal, set its target, link a feature, see the parent roll up, pic
   await expect(card.getByTestId("goal-rollup")).toHaveText("60% · from subgoals");
   await expect(card.getByTestId("home-goal-G3.1")).toContainText(SUB);
   await expect(card.getByTestId("home-goal-G3.1")).toContainText("60%");
+  await expect(card.getByTestId("home-goal-G3.1").getByTestId("code-tag")).toHaveCount(0);
   await expect(page.getByTestId("plan-goals").getByTestId("home-goal-G1").getByTestId("goal-subgoals")).toHaveCount(0);
 
   // New PRD: the subgoal sits under its goal, folds, and can be picked.
   await page.goto("/documents/new?kind=prd");
   const goals = page.getByRole("group", { name: "Which goals does it serve?" });
   await expect(goals.getByTestId("goal-pick-G3.1")).toContainText(SUB);
-  await expect(goals.getByTestId("goal-pick-G3.1").getByTestId("code-tag")).toHaveText("G3.1");
+  await expect(goals.getByTestId("goal-pick-G3.1").getByTestId("code-tag")).toHaveCount(0);
   await goals.getByRole("button", { name: "Hide subgoals of Cut early churn" }).click();
   await expect(goals.getByTestId("goal-pick-G3.1")).toHaveCount(0);
   await goals.getByRole("button", { name: "Show subgoals of Cut early churn" }).click();
@@ -127,17 +132,20 @@ test("move, promote and archive a subgoal; viewers see no tree controls", async 
   const d = drawer(page, SUB);
   await d.getByLabel("Parent goal").selectOption({ label: "Raise activation" });
   await d.getByRole("button", { name: "Move" }).click();
-  await expect(row).toContainText("G1.1");
+  const underActivation = page.getByTestId("goal-g.activation").getByRole("button", { name: "Hide subgoals of Raise activation" });
+  await expect(underActivation).toBeVisible();
+  await expect(row.getByTestId("code-tag")).toHaveCount(0);
   await expect(page.getByTestId("goal-g.early-churn").locator('[data-attr="progress"]')).toHaveText("–");
 
   await d.getByRole("button", { name: "Promote to goal" }).click();
   await expect(d).toContainText("Promoted to a goal.");
-  await expect(row).not.toContainText("G1.1");
+  await expect(underActivation).toHaveCount(0);
   await expect(d.getByRole("button", { name: "Promote to goal" })).toHaveCount(0);
 
   await d.getByLabel("Parent goal").selectOption({ label: "Cut early churn" });
   await d.getByRole("button", { name: "Move" }).click();
-  await expect(row).toContainText("G3.1");
+  await expect(page.getByTestId("goal-g.early-churn").getByRole("button", { name: "Hide subgoals of Cut early churn" })).toBeVisible();
+  await expect(row.getByTestId("code-tag")).toHaveCount(0);
   // Archiving asks why, as any archive does; the parent then no longer counts it.
   await d.getByRole("button", { name: "Archive subgoal" }).click();
   const ask = d.getByRole("form", { name: "Archive" });
@@ -171,6 +179,11 @@ test("in the company's code style a subgoal is G-B.1, its chip showing code and 
   await expect(row.getByTestId("code-tag")).toHaveText("G-B.1");
   await expect(row.getByRole("button", { name: "Win back lapsed teams", exact: true })).toBeVisible();
   await expect(row).not.toContainText("G2.1");
+  // Its inspector's header names it by the same code as its chip.
+  await row.getByRole("button", { name: "Win back lapsed teams", exact: true }).click();
+  const d = drawer(page, "Win back lapsed teams");
+  await expect(d.getByTestId("drawer-code")).toHaveText("G-B.1");
+  await d.getByRole("button", { name: "Close" }).click();
 
   await page.goto("/plan");
   const sub = page.getByTestId("plan-goals").getByTestId("home-goal-G2.1");
@@ -180,6 +193,83 @@ test("in the company's code style a subgoal is G-B.1, its chip showing code and 
   const card = page.getByTestId("code-card");
   await expect(card.getByTestId("code-tag")).toHaveText("G-B.1");
   await expect(card.getByTestId("card-name")).toHaveText("Win back lapsed teams");
+});
+
+/** Adds a subgoal under G-B Growth in the named-codes company and returns its row. */
+async function addGrowthSubgoal(page: Page, title: string, key: string) {
+  await page.getByTestId("goal-g.paid-conversion").getByRole("button", { name: "Add subgoal" }).click();
+  const add = page.getByRole("form", { name: "Add subgoal" });
+  await add.getByLabel("Subgoal title").fill(title);
+  await add.getByRole("button", { name: "Add" }).click();
+  const row = page.getByTestId(`goal-g.paid-conversion.${key}`);
+  await expect(row).toBeVisible();
+  return row;
+}
+
+// protects: a subgoal's code is fixed by the order it was added under its parent, so a
+// code quoted in a PRD keeps naming the same subgoal: a sibling's weight change, a new
+// sibling or an archived one never renumbers it.
+// fails_when: G-B.1 and G-B.2 swap when the second one is made heavier, or a later
+// subgoal takes an archived one's number.
+// no_claim: a subgoal moved to another parent (it is numbered by when it was created).
+test("a subgoal keeps its code when a sibling's weight changes or a sibling is archived", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "named-codes"), MOCK_SCENARIO_KEY);
+  await openBaseline(page);
+  const first = await addGrowthSubgoal(page, "Win back lapsed teams", "win-back-lapsed-teams");
+  const second = await addGrowthSubgoal(page, "Grow team seats", "grow-team-seats");
+  await expect(first.getByTestId("code-tag")).toHaveText("G-B.1");
+  await expect(second.getByTestId("code-tag")).toHaveText("G-B.2");
+
+  // The second subgoal becomes the heavier one: it is listed first, and keeps G-B.2.
+  await second.getByRole("button", { name: "Grow team seats", exact: true }).click();
+  const d = drawer(page, "Grow team seats");
+  await d.getByRole("button", { name: "Edit" }).click();
+  const form = d.getByRole("form", { name: "Edit" });
+  await form.locator("label", { hasText: "Weight" }).getByRole("spinbutton").fill("5");
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form).toHaveCount(0);
+  await expect(second.locator('[data-attr="weight"]')).toContainText("5");
+  await d.getByRole("button", { name: "Close" }).click();
+  await expect(second.getByTestId("code-tag")).toHaveText("G-B.2");
+  await expect(first.getByTestId("code-tag")).toHaveText("G-B.1");
+
+  // The first is rejected: the second stays G-B.2, and a new one is G-B.3, not G-B.1.
+  await first.getByRole("button", { name: "Win back lapsed teams", exact: true }).click();
+  const f = drawer(page, "Win back lapsed teams");
+  await f.getByRole("button", { name: "Reject" }).click();
+  await f.getByRole("form", { name: "Reject" }).getByRole("button", { name: "Reject" }).click();
+  await expect(first).toHaveCount(0);
+  await expect(second.getByTestId("code-tag")).toHaveText("G-B.2");
+  await f.getByRole("button", { name: "Close" }).click();
+  const third = await addGrowthSubgoal(page, "Shorter trials", "shorter-trials");
+  await expect(third.getByTestId("code-tag")).toHaveText("G-B.3");
+
+  await page.goto("/plan");
+  await expect(page.getByTestId("plan-goals").getByText("G-B.2", { exact: true })).toBeVisible();
+});
+
+// protects: a proposed subgoal is rejected, not archived: its inspector offers Reject and
+// says Rejected; only a confirmed subgoal offers Archive subgoal.
+// fails_when: a proposed subgoal shows "Archive subgoal", or its message says Archived.
+// no_claim: archiving a confirmed subgoal (the move, promote and archive test).
+test("a proposed subgoal offers Reject, not Archive subgoal, and says Rejected", async ({ page }) => {
+  await openBaseline(page);
+  await page.getByTestId("goal-g.early-churn").getByRole("button", { name: "Add subgoal" }).click();
+  const add = page.getByRole("form", { name: "Add subgoal" });
+  await add.getByLabel("Subgoal title").fill(SUB);
+  await add.getByRole("button", { name: "Add" }).click();
+  const row = page.getByTestId(`goal-${SUB_KEY}`);
+  await row.getByRole("button", { name: SUB, exact: true }).click();
+  const d = drawer(page, SUB);
+  await expect(d.getByRole("button", { name: "Promote to goal" })).toBeVisible();
+  await expect(d.getByRole("button", { name: "Archive subgoal" })).toHaveCount(0);
+  await d.getByRole("button", { name: "Reject" }).click();
+  const ask = d.getByRole("form", { name: "Reject" });
+  await ask.getByLabel(/Reason/).fill("A duplicate of the activation work.");
+  await ask.getByRole("button", { name: "Reject" }).click();
+  await expect(d).toContainText(`Rejected “${SUB}”.`);
+  await expect(d).not.toContainText("Archived");
+  await expect(row).toHaveCount(0);
 });
 
 /** WCAG contrast of an element's text against the first opaque background behind it. */

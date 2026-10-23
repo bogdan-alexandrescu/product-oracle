@@ -2,6 +2,7 @@
 parent's progress is its own measurement when it has one, else the weighted progress of
 its subgoals. Scoring credits the parent through the subgoal."""
 
+import warnings
 from datetime import date
 
 import pytest
@@ -127,6 +128,29 @@ async def test_move_and_promote(client, ctx):
     assert (await _patch(client, ctx, sub, "commenter", parent_id=None)).status_code == 403
 
 
+# protects=an archived goal is not offered a new subgoal; fails_when=a subgoal is created
+# under, or moved under, an archived goal; no_claim=what happens to subgoals already under
+# a goal when it is archived (they stand as goals in the web tree).
+async def test_archived_goal_is_refused_as_a_parent(client, ctx):
+    archived = await _goal(client, ctx, "old-activation")
+    resp = await client.post(
+        f"{B}/entities/{archived['id']}/reject",
+        json={"reason": "Replaced."},
+        headers=ctx.as_("approver"),
+    )
+    assert resp.status_code == 200, resp.text
+    resp = await client.post(
+        f"{B}/entities",
+        json={"type": "goal", "key": "old-setup", "title": "Setup", "parent_id": archived["id"]},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 422 and "archived" in resp.text
+    other = await _goal(client, ctx, "retention")
+    resp = await _patch(client, ctx, other, parent_id=archived["id"])
+    assert resp.status_code == 422 and "archived" in resp.text
+    assert (await _get(client, ctx, other))["parent_id"] is None
+
+
 # --- roll-up ------------------------------------------------------------------------------
 
 
@@ -188,6 +212,21 @@ async def test_parent_rolls_up_through_the_api(client, ctx):
         "source": "own",
         "subgoals": 0,
     }
+
+
+# protects=a goal's progress is served through its schema; fails_when=each goal listed
+# logs a Pydantic serializer warning (progress handed over as a bare dict); no_claim=the
+# roll-up maths (above).
+async def test_progress_is_served_through_its_schema(client, ctx):
+    parent = await _goal(client, ctx, "activation")
+    await _goal(client, ctx, "activation-setup", parent, **_typed())
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        listed = await client.get(f"{B}/entities?type=goal", headers=ctx.as_("viewer"))
+        one = await _get(client, ctx, parent)
+    assert listed.status_code == 200, listed.text
+    assert one["progress"]["subgoals"] == 1
+    assert not [w for w in caught if "serializ" in str(w.message).lower()]
 
 
 # --- scoring ---------------------------------------------------------------------------
