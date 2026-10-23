@@ -34,7 +34,9 @@ const sheet = (page: Page) => page.getByRole("dialog", { name: "Draft with Oracl
 
 async function briefToSheet(page: Page, title: string) {
   await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
+  await expect(page).toHaveURL(/\/documents$/);
   await page.getByRole("link", { name: "New PRD" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
   await page.getByRole("textbox", { name: "Title" }).fill(title);
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Buyers drop off when the total shows up late in checkout.");
   await page.getByRole("button", { name: "Continue" }).click();
@@ -45,7 +47,7 @@ async function briefToSheet(page: Page, title: string) {
 
 async function verdict(page: Page, key: string, choice: string, note?: string) {
   await row(page, key).getByRole("button").first().click();
-  await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: choice }).click();
+  await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: choice, exact: true }).click();
   if (note != null) {
     const save = inspector(page).getByRole("button", { name: "Save verdict" });
     await expect(save).toBeDisabled();

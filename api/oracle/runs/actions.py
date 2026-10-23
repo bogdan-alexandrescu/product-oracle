@@ -39,6 +39,7 @@ from oracle.docs.models import DocumentVersion
 from oracle.engineering import check as eng_check
 from oracle.members.leads import (
     ENGINEERING_KINDS,
+    LEAD_ONLY,
     engineering_leads,
     lead_refusal,
     lead_stop,
@@ -382,12 +383,20 @@ async def _writable(
     )
     if cp is None:
         raise service.NotFound(f"checkpoint {checkpoint_id} not found")
-    role = cp.approver_role if stage else "commenter"
-    if not has_role(principal.role, role):  # type: ignore[arg-type]
-        raise service.Forbidden(f"Requires the {role} role")
-    refusal = await caller_refusal(db, principal, role)  # type: ignore[arg-type]
-    if refusal is not None:
-        raise service.Forbidden(refusal)
+    if stage and await _by_lead(db, run, cp):
+        # F4: with an engineering lead named, its leads and owners stage at its stops.
+        if not await _may_stage(db, principal, run, cp):
+            raise service.Forbidden(LEAD_ONLY)
+        refusal = await lead_refusal(db, principal)
+        if refusal is not None:
+            raise service.Forbidden(refusal)
+    else:
+        role = cp.approver_role if stage else "commenter"
+        if not has_role(principal.role, role):  # type: ignore[arg-type]
+            raise service.Forbidden(f"Requires the {role} role")
+        refusal = await caller_refusal(db, principal, role)  # type: ignore[arg-type]
+        if refusal is not None:
+            raise service.Forbidden(refusal)
     if cp.status != "pending":
         raise service.RunError(DECIDED)
     return run, cp
@@ -395,6 +404,21 @@ async def _writable(
 
 def _stages(principal: Principal, cp: Checkpoint) -> bool:
     return has_role(principal.role, cp.approver_role)  # type: ignore[arg-type]
+
+
+async def _by_lead(db: AsyncSession, run: Run, cp: Checkpoint) -> bool:
+    """Whether the stop waits for the engineering leads and owners (F4, A3's rule)."""
+    if cp.kind not in ENGINEERING_KINDS:
+        return False
+    return lead_stop(cp.kind, run.flow, await engineering_leads(db))
+
+
+async def _may_stage(db: AsyncSession, principal: Principal, run: Run, cp: Checkpoint) -> bool:
+    """Who stages (and so decides): A3's ``may_decide`` at an engineering stop, else the
+    checkpoint's role floor."""
+    if cp.kind in ENGINEERING_KINDS:
+        return may_decide(principal, cp, run.flow, await engineering_leads(db))
+    return _stages(principal, cp)
 
 
 async def _action(db: AsyncSession, cp: Checkpoint, action_id: uuid.UUID) -> CheckpointAction:
@@ -625,9 +649,13 @@ async def remove_action(
     run, cp = await _writable(db, principal, run_id, checkpoint_id, stage=False)
     action = await _action(db, cp, action_id)
     if action.created_by != principal.id:
-        if not _stages(principal, cp):
+        if not await _may_stage(db, principal, run, cp):
             raise service.Forbidden("Only its author or an approver can undo this action")
-        refusal = await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+        refusal = (
+            await lead_refusal(db, principal)
+            if await _by_lead(db, run, cp)
+            else await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+        )
         if refusal is not None:
             raise service.Forbidden(refusal)
     await _withdraw(db, principal, action.question_id)
@@ -923,7 +951,7 @@ async def read(
     tally.waiting_on = list(waiting.values())
 
     pending = cp.status == "pending"
-    stages = pending and _stages(principal, cp) and not principal.read_only
+    stages = pending and await _may_stage(db, principal, run, cp) and not principal.read_only
     attempt = (cp.payload or {}).get("attempt")
     problems = checked.check.problems if checked else []
     staged = [r for r in rows if r.state == "staged"]

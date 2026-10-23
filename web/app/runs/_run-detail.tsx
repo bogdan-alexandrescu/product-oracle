@@ -33,11 +33,13 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import {
+  briefsCheck,
   CANCEL_AGAIN_CONFIRM,
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   orderHref,
   RETRY_CONFIRM,
+  reviewHref,
   runStatusLabel,
   RunStatusBadge,
   STOP_CANCELLING_CONFIRM,
@@ -659,7 +661,9 @@ function SegmentItem({
   const draft = useDraft(run.id, waitingCp?.id ?? null);
   const shared = draft.review && draft.review.checkpoint_id === waitingCp?.id ? draft.review : null;
   const [draftError, setDraftError] = useState<string | null>(null);
-  const deciding = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
+  // F4: a stop with its own review screen (the Engineering check) is opened from a line here.
+  const screened = checkpoints.find((c) => c.status === "pending" && reviewHref(run.id, c)) ?? null;
+  const deciding = checkpoints.filter((c) => c.status === "pending" && c.can_decide && c !== screened);
   const compact = checkpoints.filter((c) => !(c.status === "pending" && c.can_decide));
   const waiting = checkpoints.some((c) => c.status === "pending");
   // Decided, not delivered to the run yet: said under the segment, with why it waits.
@@ -675,6 +679,7 @@ function SegmentItem({
     s.draft_import ||
     s.artifacts.length > 0 ||
     deciding.length > 0 ||
+    !!screened ||
     delivering.length > 0 ||
     s.status === "running" ||
     !!shared;
@@ -881,6 +886,7 @@ function SegmentItem({
           {delivering.map((cp) => (
             <DeliveryLine key={cp.id} cp={cp} />
           ))}
+          {screened && <ReviewScreenLine run={run} cp={screened} />}
           {deciding.map((cp, i) => (
             <CheckpointRow
               key={cp.id}
@@ -903,6 +909,24 @@ function SegmentItem({
         </div>
       )}
     </li>
+  );
+}
+
+/** F4: the Engineering check waiting, its counts, and Review (its own screen). */
+function ReviewScreenLine({ run, cp }: { run: RunOut; cp: CheckpointOut }) {
+  const check = briefsCheck(cp)!;
+  const blocking = (cp.gate?.left ?? []).filter((x) => x.code === "blocking_question").length;
+  return (
+    <div id="decide" tabIndex={-1} className="flex flex-wrap items-center gap-2" data-testid="review-screen-line">
+      <span className="font-semibold">
+        {plural(check.features.length, "feature")}
+        {blocking > 0 && ` · ${blocking} blocking`}
+      </span>
+      <span className="text-text2">{cp.can_decide ? "Waiting for you" : "Waits for the engineering lead"}</span>
+      <LinkButton href={reviewHref(run.id, cp)!} variant={cp.can_decide ? "primary" : "secondary"}>
+        {cp.can_decide ? "Review" : "View"}
+      </LinkButton>
+    </div>
   );
 }
 

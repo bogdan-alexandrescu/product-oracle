@@ -12,10 +12,12 @@ import { sectionHref } from "@/lib/section-link";
 import { InboxActions, SuggestionPeek, type OnActed } from "./_actions";
 import {
   CANCEL_AGAIN_CONFIRM,
+  briefsCheck,
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   orderHref,
   RETRY_CONFIRM,
+  reviewHref,
   SENT_BACK_STATE,
   STOP_CANCELLING_CONFIRM,
   age,
@@ -636,6 +638,17 @@ export function strategyNeeds(strategy: InboxOut["strategy"]): Need[] {
   ];
 }
 
+/** A checkpoint row's name; the Engineering check says its document, features and blocking questions (F4). */
+function checkpointSummary(c: InboxOut["checkpoints"][number]): string {
+  const check = briefsCheck(c);
+  if (!check) return CHECKPOINT_LABEL[c.kind];
+  const n = check.features.length;
+  const blocking = (c.gate?.left ?? []).filter((x) => x.code === "blocking_question").length;
+  return [c.segment_title ?? CHECKPOINT_LABEL[c.kind], c.document_slug, `${n} feature${n === 1 ? "" : "s"}`, ...(blocking ? [`${blocking} blocking`] : [])]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /**
  * The Inbox's rows, each with its action. `compact` (Home) gives an overrun, a stuck run and
  * a failed import one action that opens the run, where the rest are.
@@ -649,7 +662,9 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     kind: "Checkpoint",
     item: (
       <>
-        <span className="truncate">{CHECKPOINT_LABEL[c.kind]}</span>
+        <span className="truncate" data-testid="checkpoint-summary">
+          {checkpointSummary(c)}
+        </span>
         {held(c) ? (
           <Chip kind="warn" title={CONSOLE_HELD}>
             Console approval held
@@ -673,7 +688,10 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     ),
     run: shortId(c.run_id),
     at: c.created_at,
-    action: held(c) ? (
+    action: reviewHref(c.run_id, c) ? (
+      // F4: the Engineering check has its own review screen.
+      <LinkButton href={reviewHref(c.run_id, c)!}>Review</LinkButton>
+    ) : held(c) ? (
       // The run page's checkpoint row, until the kind's review screen ships (D1).
       <LinkButton href={`/runs/${c.run_id}#decide`}>Review</LinkButton>
     ) : (
