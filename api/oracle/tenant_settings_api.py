@@ -41,6 +41,9 @@ from every member's Google Docs sources in the same request, with no Drive call
   "slack_channel": {"id", "name"} | null}`` (oracle.reports.alignment). A partial value
   takes the defaults for the rest.
 
+- ``company_timezone`` (#336, owner 2026-10-22: one company time zone): an IANA zone, the
+  company's day for "today" (the decision log's review dates). Default ``UTC``.
+
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
 
@@ -48,6 +51,7 @@ import re
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 from typing import Annotated, Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -100,6 +104,8 @@ DEFAULTS: dict[str, Any] = {
     },
     # H11: every responsibility at its default (oracle.autonomy.REGISTRY).
     "autonomy": {},
+    # #336: the company's day; UTC until an owner sets the zone.
+    "company_timezone": "UTC",
 }
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
@@ -275,12 +281,24 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
             return validate_setting(value)
         except ValueError as e:
             raise InvalidSetting(str(e)) from None
+    if key == "company_timezone":
+        return validate_timezone(value)
     if key == "autonomy":
         raise InvalidSetting(
             "autonomy changes one responsibility at a time, with a reason: use "
             "PUT /v1/autonomy/{key} (a null value here resets every default)"
         )
     raise KeyError(key)
+
+
+def validate_timezone(value: Any) -> str:
+    if isinstance(value, str) and value and value == value.strip():
+        try:
+            ZoneInfo(value)
+            return value
+        except (ZoneInfoNotFoundError, ValueError):
+            pass
+    raise InvalidSetting("company_timezone must be an IANA time zone, e.g. America/Los_Angeles")
 
 
 def validate_planning_horizons(value: Any) -> dict[str, int]:

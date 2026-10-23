@@ -19,6 +19,7 @@ import uuid
 from collections.abc import Iterable
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -87,12 +88,15 @@ def _title(text: str) -> str:
     return text if len(text) <= 200 else text[:199].rstrip() + "…"
 
 
-def _review_date(value: datetime | date | None) -> date:
+async def _review_date(db: AsyncSession, value: datetime | date | None) -> date:
+    """The review day in the company time zone; by default the company's today + 90."""
+    zone = await service.company_zone(db)
     if isinstance(value, datetime):
-        return (value if value.tzinfo else value.replace(tzinfo=UTC)).astimezone(UTC).date()
+        moment = value if value.tzinfo else value.replace(tzinfo=UTC)
+        return moment.astimezone(ZoneInfo(zone)).date()
     if isinstance(value, date):
         return value
-    return service.today() + timedelta(days=service.REVIEW_DAYS)
+    return service.today(zone) + timedelta(days=service.REVIEW_DAYS)
 
 
 def _person(principal: "Principal | None") -> uuid.UUID | None:
@@ -151,7 +155,7 @@ async def capture(
         entity_ids=list(dict.fromkeys(entity_ids)),
         subjects=list(subjects)[:10],
         expected_outcome=expected_outcome,
-        review_at=None if checkpoint else _review_date(review_at),
+        review_at=None if checkpoint else await _review_date(db, review_at),
         origin=origin,
         source_kind=source_kind,
         source_id=source_id,
@@ -159,7 +163,7 @@ async def capture(
         decided_via=decided_via,
         decided_by=decided_by or approver_id,
         decided_actor=decided_actor,
-        decided_at=datetime.now(UTC),
+        decided_at=service._now(),
         created_by=_person(principal),
     )
     db.add(d)

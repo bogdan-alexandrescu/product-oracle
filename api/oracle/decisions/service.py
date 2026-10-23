@@ -14,6 +14,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Text, and_, any_, cast, func, inspect, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,12 +67,22 @@ def ref(number: int) -> str:
     return f"D-{number}"
 
 
-def today() -> date:
-    return datetime.now(UTC).date()
-
-
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def today(zone: str = "UTC") -> date:
+    """The date now in ``zone``. Read the company's day through :func:`company_today`."""
+    return _now().astimezone(ZoneInfo(zone)).date()
+
+
+async def company_zone(db: AsyncSession) -> str:
+    return await get_setting(db, "company_timezone")
+
+
+async def company_today(db: AsyncSession) -> date:
+    """Today in the company time zone (#336): review dates are the company's days."""
+    return today(await company_zone(db))
 
 
 def class_of(d: Decision) -> str:
@@ -79,12 +90,13 @@ def class_of(d: Decision) -> str:
     return "checkpoint" if d.origin == "checkpoint" else "judgement"
 
 
-def state_of(d: Decision, on: date | None = None) -> str:
+def state_of(d: Decision, on: date) -> str:
+    """``on``: the company's today."""
     if (
         d.status == "decided"
         and class_of(d) == "judgement"
         and d.review_at is not None
-        and d.review_at <= (on or today())
+        and d.review_at <= on
     ):
         return "review_due"
     return d.status
@@ -135,14 +147,14 @@ def source_of(d: Decision) -> DecisionSource | None:
     return DecisionSource(kind=d.source_kind, id=d.source_id, **extra)
 
 
-def summary(d: Decision, emails: dict[uuid.UUID, str]) -> DecisionSummary:
+def summary(d: Decision, emails: dict[uuid.UUID, str], day: date) -> DecisionSummary:
     return DecisionSummary(
         id=d.id,
         number=d.number,
         ref=ref(d.number),
         title=d.title,
         status=d.status,  # type: ignore[arg-type]
-        state=state_of(d),  # type: ignore[arg-type]
+        state=state_of(d, day),  # type: ignore[arg-type]
         class_=class_of(d),  # type: ignore[arg-type]
         origin=d.origin,  # type: ignore[arg-type]
         reversibility=d.reversibility,  # type: ignore[arg-type]
@@ -183,7 +195,7 @@ async def out(db: AsyncSession, principal: Principal | None, d: Decision) -> Dec
         {d.approver_id, d.decided_by, *(r.reviewed_by for r in reviews)},  # type: ignore[arg-type]
     )
     revisit = await _revisit_of(db, d)
-    base = summary(d, emails).model_dump(by_alias=False)
+    base = summary(d, emails, await company_today(db)).model_dump(by_alias=False)
     can = _abilities(principal, d)
     return DecisionOut(
         **base,
@@ -255,25 +267,27 @@ class Filters:
     offset: int = 0
 
 
-def _due():
-    """A decided judgement call whose review date has come (state ``review_due``)."""
+def _due(day: date):
+    """A decided judgement call whose review date has come (state ``review_due``) on
+    ``day``, the company's today."""
     return and_(
         Decision.status == "decided",
         Decision.origin != "checkpoint",
-        Decision.review_at <= today(),
+        Decision.review_at <= day,
     )
 
 
 async def list_decisions(
     db: AsyncSession, principal: Principal, f: Filters
 ) -> list[DecisionSummary]:
+    day = await company_today(db)
     query = select(Decision)
     if f.class_ in ("judgement", "checkpoint"):
         query = query.where(Decision.class_ == f.class_)
     if f.status == "review_due":
         f.due = True
     elif f.status == "open":
-        query = query.where(or_(Decision.status == "proposed", _due()))
+        query = query.where(or_(Decision.status == "proposed", _due(day)))
     elif f.status:
         query = query.where(Decision.status == f.status)
     if f.approver == "me":
@@ -284,7 +298,7 @@ async def list_decisions(
         except ValueError:
             raise DecisionError(422, "approver is me or a member id") from None
     if f.due:
-        query = query.where(_due())
+        query = query.where(_due(day))
     if f.origin:
         query = query.where(Decision.origin.in_([o for o in f.origin.split(",") if o]))
     if f.chosen:
@@ -311,7 +325,7 @@ async def list_decisions(
     query = query.order_by(Decision.number.desc()).limit(f.limit).offset(f.offset)
     rows = list(await db.scalars(query))
     emails = await _emails(db, {d.approver_id for d in rows})
-    return [summary(d, emails) for d in rows]
+    return [summary(d, emails, day) for d in rows]
 
 
 async def people(db: AsyncSession) -> list[User]:
@@ -361,8 +375,8 @@ def _subjects(subjects: list[Any]) -> list[dict[str, Any]]:
     return [{k: v for k, v in s.model_dump(mode="json").items() if v is not None} for s in subjects]
 
 
-def check_review_at(value: date, *, start: date | None = None) -> date:
-    first = today()
+def check_review_at(value: date, first: date, *, start: date | None = None) -> date:
+    """``first``: the company's today."""
     if value < first:
         raise DecisionError(422, "The review date cannot be in the past")
     if value > (start or first) + timedelta(days=MAX_REVIEW_DAYS):
@@ -459,7 +473,7 @@ async def update(
         if "review_at" in fields:
             if body.review_at is None:
                 raise DecisionError(422, "A decided decision keeps a review date")
-            d.review_at = check_review_at(body.review_at)
+            d.review_at = check_review_at(body.review_at, await company_today(db))
         if "expected_outcome" in fields:
             d.expected_outcome = (body.expected_outcome or "").strip() or None
         if "prediction" in fields:
@@ -578,7 +592,8 @@ async def decide(db: AsyncSession, principal: Principal, d: Decision, body: Deci
         refusal = await irreversible_refusal(db, approver)
         if refusal:
             raise DecisionError(403, refusal)
-    review_at = check_review_at(body.review_at or today() + timedelta(days=REVIEW_DAYS))
+    day = await company_today(db)
+    review_at = check_review_at(body.review_at or day + timedelta(days=REVIEW_DAYS), day)
     d.reversibility = reversibility
     d.chosen_option = body.option_key
     d.rationale = rationale
@@ -672,7 +687,8 @@ async def review(db: AsyncSession, principal: Principal, d: Decision, body: Revi
         outcome_status=await _outcome_status(db, d),
     )
     if body.verdict == "reaffirmed":
-        nxt = check_review_at(body.next_review_at or today() + timedelta(days=REVIEW_DAYS))
+        day = await company_today(db)
+        nxt = check_review_at(body.next_review_at or day + timedelta(days=REVIEW_DAYS), day)
         d.review_at = nxt
         row.next_review_at = nxt
     elif body.verdict == "revisit":
@@ -767,7 +783,7 @@ async def inbox_rows(
     if principal.is_run:
         return []
     who = _who(principal)
-    day, now = today(), _now()
+    day, now = await company_today(db), _now()
     since = now - timedelta(days=SHOWN_DAYS)
     judgement = Decision.origin != "checkpoint"
     revisited = select(Decision.supersedes_id).where(
