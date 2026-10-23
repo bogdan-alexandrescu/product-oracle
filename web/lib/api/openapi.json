@@ -51231,6 +51231,16 @@
               }
             ],
             "title": "Segment Title"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InboxSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -51246,6 +51256,97 @@
           "flow_title"
         ],
         "title": "InboxCheckpoint"
+      },
+      "InboxChild": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/InboxChildReason"
+          },
+          "fix": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReasonFix"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "staged": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewAction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suggested": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewAction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "reason"
+        ],
+        "title": "InboxChild",
+        "description": "One item under a checkpoint's Inbox row (D9): an item still needing the caller, its\nfirst open reason, the safe one-click fix of that reason (None when it has none) and a\ncommenter's suggestion on the item. ``staged`` stays null: an item fixed earlier leaves\nits slot (the Inbox page keeps the row it just fixed, done, with Undo)."
+      },
+      "InboxChildReason": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "confirm"
+            ],
+            "title": "Severity"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "label",
+          "text"
+        ],
+        "title": "InboxChildReason"
       },
       "InboxCounts": {
         "properties": {
@@ -52330,6 +52431,42 @@
         "title": "InboxRevokeFailure",
         "description": "A provider revoke a member's disable still owes, whose last attempt did not\nrevoke (C2): retried by the tick for 24 hours, then waiting for an owner."
       },
+      "InboxSections": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "reviewed": {
+            "type": "integer",
+            "title": "Reviewed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "reviewed"
+        ],
+        "title": "InboxSections"
+      },
+      "InboxSource": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "version"
+        ],
+        "title": "InboxSource"
+      },
       "InboxStaged": {
         "properties": {
           "document_id": {
@@ -52469,6 +52606,97 @@
           "href"
         ],
         "title": "InboxSubject"
+      },
+      "InboxSummary": {
+        "properties": {
+          "need_you": {
+            "type": "integer",
+            "title": "Need You",
+            "default": 0
+          },
+          "blocking": {
+            "type": "integer",
+            "title": "Blocking",
+            "default": 0
+          },
+          "to_confirm": {
+            "type": "integer",
+            "title": "To Confirm",
+            "default": 0
+          },
+          "handled": {
+            "type": "integer",
+            "title": "Handled",
+            "default": 0
+          },
+          "waiting_on": {
+            "type": "integer",
+            "title": "Waiting On",
+            "default": 0
+          },
+          "wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WaitInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/InboxChild"
+            },
+            "type": "array",
+            "title": "Children",
+            "default": []
+          },
+          "more": {
+            "type": "integer",
+            "title": "More",
+            "default": 0
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InboxSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sections": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InboxSections"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "console_held": {
+            "type": "boolean",
+            "title": "Console Held",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "InboxSummary",
+        "description": "What a pending checkpoint needs of the caller and how much (D9), from the same read\nas ``GET \u2026/review`` (oracle.runs.actions.inbox_summary): its counts, the wait, up to\nthree child rows (blocking first, then in position order) and ``more`` items needing\nthe caller beyond them. A kind's review spec registers its own (``SUMMARIES``)."
       },
       "InspectedModule": {
         "properties": {
