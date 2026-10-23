@@ -205,6 +205,13 @@ async def test_patch_full_typed_set_is_measurable(client, ctx):
         "missing": [],
         "warnings": [],
         "problems": [],
+        # The company's planning horizons (B2's defaults here), for the form's Horizon tip.
+        "horizons": {
+            "short_quarters": 1,
+            "medium_quarters": 2,
+            "long_from_months": 12,
+            "long_to_months": 24,
+        },
     }
     assert out["attrs"]["target"] == 45
     feat = await entity(client, ctx, type="feature", key="guided-setup")
