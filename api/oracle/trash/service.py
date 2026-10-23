@@ -4,10 +4,11 @@ and the restore.
 A delete moves the root (a document, an intake or a run) and everything that depends on it
 to Trash in one :class:`~oracle.trash.models.TrashEntry`:
 
-- a document: the documents built from any of its versions (a PRD's roadmaps and tech
-  briefs, and theirs in turn), and the runs that write any of them. What hangs off those
-  (versions, feedback, discussions, review campaigns, change sets, publications, draft
-  roadmaps, spec requests) is left out of every read with them (oracle.trash.filter);
+- a document: the documents built from any of its versions and its spec requests' tech
+  briefs (a PRD's roadmaps and tech briefs, and theirs in turn), and the runs that write
+  any of them. What hangs off those (versions, feedback, discussions, review campaigns,
+  change sets, publications, draft roadmaps, spec requests) is left out of every read
+  with them (oracle.trash.filter);
 - an intake: the document it became, with that document's dependents;
 - a run: itself (its checkpoints and segments leave the Inbox with it).
 
@@ -106,17 +107,26 @@ async def published_ids(db: AsyncSession, ids: set[uuid.UUID]) -> set[uuid.UUID]
 
 
 async def _derived(db: AsyncSession, document_ids: set[uuid.UUID]) -> list[Document]:
-    """Documents built from any version of ``document_ids``, transitively."""
+    """Documents built from any version of ``document_ids``, and their tech briefs (a spec
+    request's ``params["document_id"]``: the spec import sets no source on their versions),
+    transitively."""
+    from oracle.v2.models import ArtifactRequest
+
     seen = set(document_ids)
     found: list[Document] = []
     frontier = set(document_ids)
     while frontier:
         versions = select(DocumentVersion.id).where(DocumentVersion.document_id.in_(frontier))
+        built = select(DocumentVersion.document_id).where(
+            DocumentVersion.source_version_id.in_(versions)
+        )
+        specs = select(_spec_document()).where(ArtifactRequest.source_document_id.in_(frontier))
         stmt = (
             select(Document)
-            .join(DocumentVersion, DocumentVersion.document_id == Document.id)
-            .where(DocumentVersion.source_version_id.in_(versions), Document.id.not_in(seen))
-            .distinct()
+            .where(
+                or_(Document.id.in_(built), cast(Document.id, Text).in_(specs)),
+                Document.id.not_in(seen),
+            )
             .order_by(Document.id)
         )
         rows = list(await db.scalars(stmt))

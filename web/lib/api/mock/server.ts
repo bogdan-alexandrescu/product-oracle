@@ -1330,11 +1330,14 @@ function seed(): Db {
       if (v.source) ver(d.slug, v.number).source = versionSource(docs.get(v.source.slug)!, ver(v.source.slug, v.source.version));
     }
   }
-  // #482 "trash-family": the early shipping cost brief is built from usage-alerts v1 too, so
-  // that PRD has a derived roadmap and a spec (deleting it takes both to Trash).
+  // #482 "trash-family": the early shipping cost brief is usage-alerts' tech brief too, so
+  // that PRD has a derived roadmap and a spec (deleting it takes both to Trash). As the spec
+  // import makes it: through its spec request, with no source on the brief's versions.
   if (localStorage.getItem(MOCK_SCENARIO_KEY) === "trash-family") {
-    const brief = "checkout-redesign-early-shipping-cost-spec";
-    for (const v of db.versions) if (v.document_id === docs.get(brief)!.id) v.source = versionSource(docs.get("usage-alerts")!, a1);
+    const brief = docs.get("checkout-redesign-early-shipping-cost-spec")!;
+    for (const v of db.versions) if (v.document_id === brief.id) v.source = null;
+    db.specs ??= seedSpecs();
+    for (const s of db.specs.specs) if (s.document_slug === brief.slug) s.request.source_document_id = docs.get("usage-alerts")!.id;
   }
   docs.get("usage-alerts-roadmap")!.status = "in_review";
   db.runs = seeded("runs", () => seedRuns(runsContext(db)));
@@ -2985,6 +2988,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       versions: db.versions,
       runs: () => (db.runs ??= seeded("runs", () => seedRuns(runsContext(db)))).runs,
       intakes: () => ensureV2(db).intakes,
+      specRequests: () => (db.specs ??= seedSpecs()).specs.map((s) => ({ source_document_id: s.request.source_document_id, document_slug: s.document_slug })),
       me,
       uuid,
       now,
