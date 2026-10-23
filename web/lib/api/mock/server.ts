@@ -13,7 +13,9 @@ import { addGoalCodes, addNoisyProposals, addOverlappingProposals, attributeComm
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
-import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
+import { applied, handOver, membersDetailRoute, type MembersContext, type MembersDb } from "./members";
+import type { HandOver } from "@/lib/api/members-types";
+import { accountRoute, liveCredentials, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
@@ -135,6 +137,10 @@ export interface Db {
   invites: InviteRow[];
   /** A5: access requests (Settings › Members). */
   access_requests?: Schemas["AccessRequestOut"][];
+  /** A5: the note the pending person sent with their request (the access-pending scenario). */
+  access_note?: string | null;
+  /** A5: what each member holds (responsibilities, approvals), seeded in ./members.ts. */
+  holdings?: MembersDb["holdings"];
   /** Invites an owner resent (the "mail-fails" scenario sends those). */
   invites_resent?: string[];
   documents: DocumentRow[];
@@ -2366,6 +2372,7 @@ const notFound = (what: string) => json(404, { detail: `${what} not found` });
 
 const ROLE_ORDER: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => ROLE_ORDER.indexOf(role) >= ROLE_ORDER.indexOf(min);
+const APPROVER_INVITES = "Approvers invite viewers and commenters. Ask an owner to invite an approver.";
 const forbidden = (min: Role) => json(403, { detail: `Requires the ${min} role` });
 
 function meOut(db: Db, m: MemberRow): Schemas["Me"] {
@@ -2447,6 +2454,19 @@ const iapRefusal = (email: string) =>
     ? `oracle-api-be: Google returned 400 (bad request): User ${email} does not exist.`
     : "oracle-api-be: Google returned 403 (permission denied)";
 
+/** A5: the scenarios that sign in with Google as someone who is not a member (GET /v1/auth/access). */
+const ACCESS_SCENARIOS: Record<string, Schemas["AccessStateOut"]["state"]> = {
+  "access-pending": "pending",
+  "access-declined": "declined",
+  "access-invite-only": "invite_only",
+  "access-expired": "invite_expired",
+  "access-outside": "outside_domains",
+};
+const ACCESS_EMAIL = "new.person@example.com";
+
+/** An open invite past its expiry (A5): still a row, with Resend. */
+const expired = (i: InviteRow) => i.status === "open" && !!i.expires_at && Date.parse(i.expires_at) < Date.now();
+
 /** The background send: queued invite emails whose time has come are sent, or fail. */
 function settleInviteEmails(db: Db) {
   const fails = localStorage.getItem(MOCK_SCENARIO_KEY) === "mail-fails";
@@ -2458,28 +2478,43 @@ function settleInviteEmails(db: Db) {
   }
 }
 
-/** Members, invites: owners only, as in the API. */
+/**
+ * Members: owners only, as in the API. Invites and access requests (A5): approvers too, with
+ * their invite_roles (viewer and commenter), and only the invites they sent.
+ */
 async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): Promise<Response> {
-  if (!atLeast(me.role, "owner")) return forbidden("owner");
   const m = req.method;
+  const owner = atLeast(me.role, "owner");
+  if (!owner && (p[1] === "members" || !atLeast(me.role, "approver"))) return forbidden(p[1] === "members" ? "owner" : "approver");
+  const inviteRoles = meOut(db, me).invite_roles;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
   const account = (db.account ??= seedAccount(db.members, uuid));
   const out = (x: MemberRow): MemberRow => ({ ...x, open_tokens: openTokens(account, x.id) });
+  const detailCtx: MembersContext = { db, me, uuid, now, openTokens: (id) => openTokens(account, id), credentials: (id) => liveCredentials(account, id) };
   if (p[1] === "members") {
     if (!p[2] && m === "GET") return json(200, db.members.map(out));
+    // A5: a member's detail, the preview of a change, and hand-over (./members.ts).
+    const detail = await membersDetailRoute(detailCtx, req, p);
+    if (detail) return detail;
     const target = db.members.find((x) => x.id === p[2]);
     if (!target) return notFound("Member");
     // A disabled owner is not another owner.
     const otherOwner = db.members.some((x) => x.id !== target.id && x.role === "owner" && x.status !== "disabled");
     if (m === "PATCH") {
       // A role, the engineering lead flag (A3), or both: role first.
-      const { role, engineering_lead: lead } = await body<Schemas["MemberPatch"]>();
-      if (role == null && lead == null) return json(422, { detail: "Send role, engineering_lead or both" });
+      const { role, engineering_lead: lead, name, hand_over } = await body<Schemas["MemberPatch"] & { hand_over?: HandOver[] }>();
+      if (role == null && lead == null && name === undefined) return json(422, { detail: "Send role, engineering_lead, name or more" });
+      if (name != null && name.trim().length > 80) return json(422, { detail: "A name is at most 80 characters" });
       const nextRole = role ?? target.role;
       if (role != null && target.role === "owner" && role !== "owner" && target.status !== "disabled" && !otherOwner) {
         return json(409, { detail: "Cannot demote the last owner; make someone else owner" });
       }
       if (lead && nextRole === "viewer") return json(422, { detail: VIEWER_REFUSED });
+      // A5: hand-over first, then the role change; a refused move changes nothing.
+      const refused = handOver(detailCtx, target.id, hand_over);
+      if (refused) return refused;
+      if (name !== undefined) target.name = name?.trim() || null;
+      if (role != null && role !== target.role) applied(detailCtx, { ...target, role }, "role");
       target.role = nextRole;
       // A viewer never carries the flag: a demotion to viewer clears it.
       if (nextRole === "viewer") target.engineering_lead = false;
@@ -2495,6 +2530,11 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         if (target.role === "owner" && !otherOwner) {
           return json(409, { detail: "Cannot remove the last owner; make someone else owner" });
         }
+        // A5: the hand-over applies first, then the disable; a refused move removes no one.
+        const input = m === "POST" ? await body<{ hand_over?: HandOver[] } | null>() : null;
+        const refused = handOver(detailCtx, target.id, input?.hand_over);
+        if (refused) return refused;
+        applied(detailCtx, target, "remove");
         Object.assign(target, { status: "disabled", disabled_at: now(), disabled_by: me.id });
         // Their Google IAP access is taken away; in "iap-revoke-fails" Google refuses, and
         // the revoke is owed (the tick retries it).
@@ -2525,6 +2565,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
     if (p[3] === "approve" && m === "POST") {
       if (row.status !== "pending") return json(409, { detail: `This request was already ${row.status}` });
       const { role, name } = await body<Schemas["AccessApprove"]>();
+      if (!inviteRoles.includes(role)) return json(403, { detail: APPROVER_INVITES });
       const invite: InviteRow = {
         id: uuid(),
         email: row.email,
@@ -2573,22 +2614,30 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       const status = new URL(req.url).searchParams.get("status") ?? "open";
       return json(
         200,
-        db.invites.filter((i) => status === "all" || i.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)),
+        db.invites
+          // A5: an open invite past its expiry reads expired; ?status=open lists both (each needs an action).
+          .map((i) => (expired(i) ? { ...i, status: "expired" as const } : i))
+          .filter((i) => (status === "all" || i.status === status || (status === "open" && i.status === "expired")) && (owner || i.invited_by === me.id))
+          .sort((a, b) => b.created_at.localeCompare(a.created_at)),
       );
     }
     if (!p[2] && m === "POST") {
       const input = await body<Schemas["InviteCreate"]>();
       const email = input.email.trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(422, { detail: "Not an email address" });
+      if (!inviteRoles.includes(input.role)) return json(403, { detail: APPROVER_INVITES });
       if (input.engineering_lead && input.role === "viewer") return json(422, { detail: VIEWER_REFUSED });
       if ((input.message?.length ?? 0) > 500) return json(422, { detail: "The message is longer than 500 characters" });
       if (!SIGN_IN_DOMAINS.includes(email.split("@")[1])) {
-        return json(422, { detail: `Only addresses at ${SIGN_IN_DOMAINS.join(" or ")} can sign in to Oracle` });
+        // A5 (3.4): the API's outside_company_domains refusal.
+        return json(422, {
+          detail: `${email} is outside the company's email domains (${SIGN_IN_DOMAINS.join(", ")}), so Google sign-in can't let them join. Add the domain under Sign-in first.`,
+        });
       }
       if (db.members.some((x) => x.email === email)) return json(409, { detail: `${email} is already a member` });
-      if (db.invites.some((i) => i.email === email && i.status === "open")) {
-        return json(409, { detail: `${email} already has an open invite; revoke it first` });
-      }
+      const before = db.invites.find((i) => i.email === email && i.status === "open");
+      if (before && expired(before)) return json(409, { detail: `${email} has an expired invite; resend it` });
+      if (before) return json(409, { detail: `${email} already has an open invite; revoke it first` });
       const invite: InviteRow = {
         id: uuid(),
         email,
@@ -2613,8 +2662,20 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       db.invites.push(invite);
       return json(201, invite);
     }
-    const invite = db.invites.find((i) => i.id === p[2]);
+    // Approvers act on their own invites only; another's is not found.
+    const invite = db.invites.find((i) => i.id === p[2] && (owner || i.invited_by === me.id));
     if (!invite) return notFound("Invite");
+    if (!owner && m === "POST" && (p[3] === "access" || p[3] === "email")) return forbidden("owner");
+    // A5: Resend gives an open or expired invite 14 more days.
+    if (m === "POST" && p[3] === "resend") {
+      if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
+      Object.assign(invite, {
+        expires_at: new Date(Date.now() + 14 * 86_400_000).toISOString(),
+        resent_at: now(),
+        resend_count: (invite.resend_count ?? 0) + 1,
+      });
+      return json(200, invite);
+    }
     if (m === "POST" && (p[3] === "access" || p[3] === "email")) {
       if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
       if (p[3] === "access") {
@@ -2971,6 +3032,29 @@ async function route(db: Db, req: Request): Promise<Response> {
     const out = await routePublicInterviews(ensureInterviews(db), interviewsContext(db, db.user_id, "viewer"), req, p);
     if (out) return out;
   }
+  // A5: where a Google sign-in without membership stands (the access-* scenarios); /v1/me is then 401.
+  const access = ACCESS_SCENARIOS[localStorage.getItem(MOCK_SCENARIO_KEY) ?? ""];
+  if (p[1] === "auth" && p[2] === "access") {
+    const signedIn = db.members.find((x) => x.email === sessionOf(db) && x.status !== "disabled");
+    const state = access ?? (signedIn ? "member" : "no_google_sign_in");
+    const out: Schemas["AccessStateOut"] = {
+      state,
+      email: access ? ACCESS_EMAIL : (signedIn?.email ?? null),
+      company: "Acme",
+      requested_at: state === "pending" ? "2026-10-21T16:05:00Z" : null,
+      note: (db.access_note ??= null),
+      invite_expired_at: state === "invite_expired" ? "2026-10-30T12:00:00Z" : null,
+    };
+    if (p[3] === "note" && m === "POST") {
+      if (state !== "pending") return json(409, { detail: "There is no request waiting for a note" });
+      const { note } = await body<Schemas["AccessNote"]>();
+      if ((note ?? "").length > 500) return json(422, { detail: "A note is at most 500 characters" });
+      db.access_note = out.note = note?.trim() || null;
+      return json(200, out);
+    }
+    if (!p[3] && m === "GET") return json(200, out);
+  }
+  if (access) return json(401, { detail: "Not authenticated" });
   const member = db.members.find((x) => x.email === sessionOf(db));
   if (!member || member.status === "disabled") return json(401, { detail: "Not authenticated" });
   const me = withMockRole(member);
@@ -3079,6 +3163,20 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (res) return res;
   }
   if (p[1] === "members" || p[1] === "invites" || p[1] === "access-requests") return membersRoute(db, req, p, me);
+  // A5: who becomes a member on a Google sign-in (Settings › Members › Sign-in), owners only.
+  if (p[1] === "sign-in-rules" && !p[2] && m === "GET") {
+    if (!atLeast(me.role, "owner")) return forbidden("owner");
+    const stored = mockSettingValue("company_email_domains");
+    const set = (Array.isArray(stored) ? stored : []).map(String).filter((d) => !SIGN_IN_DOMAINS.includes(d));
+    const rules: Schemas["SignInRulesOut"] = {
+      google_sign_in: true,
+      new_sign_ins_off: false,
+      domains: [...SIGN_IN_DOMAINS.map((domain) => ({ domain, from: "deployment" as const })), ...set.map((domain) => ({ domain, from: "settings" as const }))],
+      without_invite: String(mockSettingValue("sign_in_without_invite") ?? "request") as Schemas["SignInRulesOut"]["without_invite"],
+      default_role: String(mockSettingValue("iap_default_role") ?? "commenter") as Role,
+    };
+    return json(200, rules);
+  }
   // Tech briefs (./engineering.ts): every member reads.
   const briefs = await routeEngineering(req, p, q, {
     documents: db.documents,
