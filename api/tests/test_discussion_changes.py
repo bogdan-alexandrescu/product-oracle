@@ -483,7 +483,9 @@ async def test_propose_and_resolve_end_done(client):
     measure = {"entity_id": goal["id"], "metric": "activation rate", "unit": "%",
                "comparison": "at_least", "target": 40, "horizon": "medium",
                "owner_id": uid(ctx, "approver")}  # fmt: skip
-    cid = await add_change(ctx.tenant_id, d["id"], "goal_measure", measure)
+    cid = await add_change(
+        ctx.tenant_id, d["id"], "goal_measure", measure, target={"entity_id": goal["id"]}
+    )  # as extraction sets it
     out = await act(client, ctx.as_("commenter"), cid, "propose")
     assert out["change"]["status"] == "done"
     pid = out["change"]["result_ref"]["proposal_id"]
@@ -636,6 +638,101 @@ async def test_record_a_date_basis_follows_date_rights(client):
     assert rows[verified_id].status == "verified"
     assert rows[proposed_id].status == "proposed" and rows[proposed_id].verified_by is None
     assert rows[out["change"]["result_ref"]["basis_id"]].status == "verified"
+
+
+# --- review fixes (#504): Propose through B6's guards, Record from Oracle ------------------
+
+
+def _goal_version(entity_id: str, **over) -> dict:
+    """A goal_measure version (B5's typed fields); the start value 11 is below 12."""
+    payload = {"entity_id": entity_id, "metric": "Accounts lost in their first 90 days",
+               "unit": "%", "comparison": "below", "target": 8, "start": 11,
+               "horizon": "medium"}  # fmt: skip
+    return {**payload, **over}
+
+
+# protects=item 1 of #504's review: G3's Propose on a goal version keeps B6's guards: one
+# pushback when the target is already met (409, Oracle's line, no proposal), then the
+# override is logged; B5's checks refuse bad fields (422 with every problem, nothing made);
+# the typed value clears its *_text key; the goal is the change's target, not the payload's
+# entity_id; the reason links the discussion's web page; fails_when=a proposal of a met
+# target is created with no pushback or override, bad fields pass, a stale *_text stays, the
+# payload's entity is written, or the reason names the API path; no_claim=B6's own route
+# (test_goal_interview).
+async def test_propose_through_g3_keeps_b6s_goal_guards(client):
+    ctx, _doc = await company(client)
+    _tenant[0] = ctx.tenant_id
+    attrs = {"metric": "Accounts lost in their first 90 days", "owner": uid(ctx, "approver"),
+             "target_text": "about 8 percent"}  # fmt: skip
+    goal = await entity(client, ctx, type="goal", key="early-churn", title="Cut early churn",
+                        attrs=attrs)  # fmt: skip
+    other = await entity(client, ctx, type="goal", key="activation", title="Raise activation")
+    d = await start(client, ctx, subject_kind="entity", subject={"entity_id": goal["id"]},
+                    title="Churn measure")  # fmt: skip
+    target = {"entity_id": goal["id"]}
+
+    met = await add_change(ctx.tenant_id, d["id"], "goal_measure",
+                           _goal_version(goal["id"], target=12), target=target)  # fmt: skip
+    sentence = (
+        "The start value 11 already meets the target 12; a target that is already met does "
+        "not measure progress."
+    )
+    pushed = await act(client, ctx.as_("commenter"), met, "propose", expect=409)
+    assert pushed == {"detail": sentence, "pushback": True}
+    async with tenant_session(ctx.tenant_id) as s:
+        assert list(await s.scalars(select(Proposal))) == []
+        last = await s.scalar(select(DiscussionMessage).order_by(
+            DiscussionMessage.created_at.desc()).limit(1))  # fmt: skip
+        assert (last.author_kind, last.body) == ("oracle", f"Pushback: {sentence}")
+    out = await act(client, ctx.as_("commenter"), met, "propose")
+    assert out["change"]["status"] == "done"
+    assert out["change"]["override_reason"] == (
+        "Kept target 12 although the start value 11 already meets it."
+    )
+
+    bad = await add_change(ctx.tenant_id, d["id"], "goal_measure",
+                           _goal_version(goal["id"], unit="Parsecs!"), target=target)  # fmt: skip
+    refused = await act(client, ctx.as_("commenter"), bad, "propose", expect=422)
+    assert refused["errors"][0]["code"] == "bad_unit"
+
+    good = await add_change(ctx.tenant_id, d["id"], "goal_measure",
+                            _goal_version(other["id"], start=None), target=target)  # fmt: skip
+    out = await act(client, ctx.as_("commenter"), good, "propose")
+    async with tenant_session(ctx.tenant_id) as s:
+        proposals = list(await s.scalars(select(Proposal)))
+        assert len(proposals) == 2  # the met one kept, the good one; not the bad one
+        p = await s.get(Proposal, uuid.UUID(out["change"]["result_ref"]["proposal_id"]))
+    assert str(p.entity_id) == goal["id"]
+    attrs = p.payload["fields"]["attrs"]
+    assert attrs["target"] == 8 and attrs["target_text"] is None
+    reason = p.payload["reason"]
+    assert reason.startswith("From discussion Churn measure")
+    assert f"/baseline?discussion={d['id']}" in reason and "/v1/" not in reason
+
+
+# protects=item 2 of #504's review (Record on with F3): Oracle may propose Record in its
+# change block on a roadmap item; the row is proposed with Record's action for an approver
+# and refused (why_not) for a commenter without date rights; fails_when=basis_record is
+# dropped or offered to someone F3 refuses; no_claim=what the basis does to dates (F3).
+async def test_oracle_may_propose_record_in_its_change_block(client, model):
+    ctx, doc = await company(client)
+    _tenant[0] = ctx.tenant_id
+    await with_key(ctx)
+    d = await start(client, ctx, subject_kind="roadmap_item",
+                    subject={"document_id": doc, "version": 1, "item_key": "mobile-push"},
+                    title="Push date")  # fmt: skip
+    entry = {"kind": "basis_record", "target": {}, "payload": basis(doc), "rationale": PUSH,
+             "basis": [], "replaces": None}  # fmt: skip
+    model.chunks = answer_of(entry, prose="The team estimate supports it [c:1].")
+    evs = await ask_and_stream(client, ctx.as_("commenter"), d["id"])
+    [sent] = dict(evs)["changes"]
+    assert (sent["kind"], sent["status"]) == ("basis_record", "proposed")
+    [c] = await listed(client, ctx.as_("approver"), d["id"])
+    assert c["action"] == {"verb": "Record", "allowed": True, "why_not": None}
+    [c] = await listed(client, ctx.as_("commenter"), d["id"])
+    assert c["action"] == {"verb": "Record", "allowed": False,
+                           "why_not": changes.RECORDERS}  # fmt: skip
+    await act(client, ctx.as_("commenter"), c["id"], "verify", expect=403)
 
 
 # protects=criterion 8 (Use as answer): the person asked posts the change as the question's
