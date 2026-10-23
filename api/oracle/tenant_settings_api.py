@@ -41,6 +41,13 @@ from every member's Google Docs sources in the same request, with no Drive call
   "slack_channel": {"id", "name"} | null}`` (oracle.reports.alignment). A partial value
   takes the defaults for the rest.
 
+- ``outcome_measure_days`` (H3): 7-365, default 30: an outcome is checked at the later of
+  its prediction's ``by`` and this many days after it shipped.
+- ``calibration_min_outcomes`` (H3): 1-100, default 5: assessed outcomes a goal (or the
+  company) needs before its track record sets a factor.
+- ``outcome_calibration`` (H3): ``apply`` (default) multiplies priority confidence by the
+  track record; ``show`` only displays it.
+
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
 
@@ -101,6 +108,12 @@ DEFAULTS: dict[str, Any] = {
     },
     # H11: every responsibility at its default (oracle.autonomy.REGISTRY).
     "autonomy": {},
+    # H3 Predicted versus actual: days after shipping before an outcome is checked, the
+    # assessed outcomes a goal needs before its own track record counts, and whether the
+    # track record lowers priority scores (apply) or is only shown (show).
+    "outcome_measure_days": 30,
+    "calibration_min_outcomes": 5,
+    "outcome_calibration": "apply",
 }
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
@@ -273,6 +286,15 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
             raise InvalidSetting(
                 f"blocker_risk_review_max_days must be between 1 and {MAX_REVIEW_DAYS}"
             )
+        return value
+    if key in ("outcome_measure_days", "calibration_min_outcomes"):
+        lo, hi = (7, 365) if key == "outcome_measure_days" else (1, 100)
+        if isinstance(value, bool) or not isinstance(value, int) or not lo <= value <= hi:
+            raise InvalidSetting(f"{key} must be a whole number from {lo} to {hi}")
+        return value
+    if key == "outcome_calibration":
+        if value not in ("apply", "show"):
+            raise InvalidSetting("outcome_calibration must be apply or show")
         return value
     if key == "company_email_domains":
         return validate_company_domains(value)

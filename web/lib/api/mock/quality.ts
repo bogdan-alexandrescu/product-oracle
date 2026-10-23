@@ -105,6 +105,140 @@ export function seedQuality(): QualityDb {
   return { outcomes: [], learnings: [] };
 }
 
+// --- H3 Predicted versus actual ------------------------------------------------------
+
+type Prediction = Schemas["Prediction"];
+const DAY = 86_400_000;
+const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+export const OUTCOME_SCORES: Record<string, number> = { held: 1, partially_held: 0.5, not_held: 0 };
+export const CALIBRATION = { floor: 0.5, ceiling: 1.0, min: 5 };
+
+/** The Outcomes table's state: predicted, tracking (measuring), due (a proposal waits), assessed. */
+export function stateOf(o: Outcome): "predicted" | "tracking" | "due" | "assessed" {
+  if (o.status === "predicted") return "predicted";
+  if (o.status === "tracking") return o.proposed_assessment ? "due" : "tracking";
+  return "assessed";
+}
+
+/** The API's PredictionIn check, in its words. */
+function predictionProblem(p: Prediction): string | null {
+  const base = p.baseline_value, want = p.predicted_value, line = p.threshold_value;
+  if (base == null || want == null) return null;
+  if (!p.direction) return "say which way the prediction goes: increase or decrease";
+  if ((want - base) * (p.direction === "increase" ? 1 : -1) <= 0)
+    return `an ${p.direction} prediction must be ${p.direction === "increase" ? "above" : "below"} its baseline`;
+  if (line != null && !(Math.min(base, want) <= line && line <= Math.max(base, want)))
+    return "the partly-held line lies between the baseline and the prediction";
+  return null;
+}
+
+function outcomeRow(over: Partial<Outcome> & Pick<Outcome, "title" | "goal_id" | "status">, owner: string): Outcome {
+  const at = new Date(Date.now() - 60 * DAY).toISOString();
+  return {
+    id: crypto.randomUUID(), outcome_entity_id: null, document_id: null, prd_version_id: null, roadmap_version_id: null,
+    roadmap_item_key: null, experiment_id: null, module_keys: [], gap_categories: [], observed: null, assessments: [],
+    owner_id: owner, created_by: owner, assessed_at: null, lock_version: 1, created_at: at, updated_at: at,
+    roadmap_item_id: null, track_id: null, needs_prediction: false, confidence_at_prediction: 0.5, shipped_at: null,
+    ship_signal: null, assess_due_on: null, proposed_assessment: null, decision_id: null,
+    prediction: { metric: "Accounts that finish setup within 7 days", predicted: "42%", baseline: "38%", threshold: null, by: null },
+    ...over,
+  };
+}
+
+/**
+ * The "outcomes" scenario (synthetic): Saved payment methods is due for its check (38% → 42%,
+ * now 41%), Guided setup checklist needs a prediction, Order status emails is measuring, and
+ * six earlier predictions on Raise activation were assessed (3 held, 3 not; expected 4.2).
+ */
+export function seedOutcomes(owner: string, goalId: string, roadmapVersionId: string | null): Outcome[] {
+  const now = Date.now();
+  const by = isoDay(now - 20 * DAY);
+  const typed: Prediction = {
+    metric: "Accounts that finish setup within 7 days", baseline: "38%", predicted: "42%", threshold: "40%", by,
+    unit: "%", direction: "increase", baseline_value: 38, predicted_value: 42, threshold_value: 40,
+  };
+  const shipped = new Date(now - 45 * DAY).toISOString();
+  const rows: Outcome[] = [
+    outcomeRow({
+      title: "Saved payment methods", goal_id: goalId, status: "tracking", prediction: typed, roadmap_item_key: "saved-payment",
+      roadmap_version_id: roadmapVersionId, confidence_at_prediction: 0.8, shipped_at: shipped, assess_due_on: isoDay(now - 2 * DAY),
+      ship_signal: { kind: "tracker", refs: ["github:example-org/storefront#402", "github:example-org/storefront#403", "github:example-org/storefront#404"], at: shipped, note: null },
+      proposed_assessment: { verdict: "partially_held", actual_value: 41, measured_at: isoDay(now - 3 * DAY), observed: "41%", source: "goal_history", note: null },
+    }, owner),
+    outcomeRow({
+      title: "Guided setup checklist", goal_id: goalId, status: "predicted", needs_prediction: true, roadmap_item_key: "setup-checklist",
+      roadmap_version_id: roadmapVersionId,
+      prediction: { metric: "Accounts that finish setup within 7 days", baseline: "38%", predicted: "Not set yet", threshold: null, by: isoDay(now + 70 * DAY), unit: "%", direction: "increase", baseline_value: 38 },
+    }, owner),
+    outcomeRow({
+      title: "Order status emails", goal_id: goalId, status: "tracking", roadmap_item_key: "status-emails", roadmap_version_id: roadmapVersionId,
+      prediction: { ...typed, by: isoDay(now + 40 * DAY) }, shipped_at: shipped, assess_due_on: isoDay(now + 40 * DAY),
+      ship_signal: { kind: "milestone", refs: [], at: shipped, note: null },
+    }, owner),
+  ];
+  const past = [["held", 0.8], ["held", 0.8], ["held", 0.7], ["not_held", 0.7], ["not_held", 0.6], ["not_held", 0.6]] as const;
+  past.forEach(([verdict, confidence], i) => {
+    const at = new Date(now - (30 + i * 20) * DAY).toISOString();
+    rows.push(outcomeRow({
+      title: `Earlier activation bet ${i + 1}`, goal_id: goalId, status: verdict, confidence_at_prediction: confidence, assessed_at: at,
+      observed: verdict === "held" ? "43%" : "37%", prediction: { ...typed, by: isoDay(now - (40 + i * 20) * DAY) },
+      assessments: [{ verdict, observed: verdict === "held" ? "43%" : "37%", note: null, evidence_ids: [], assessed_by: owner, assessed_at: at, actor: "person" }],
+    }, owner));
+  });
+  return rows;
+}
+
+function figures(rows: Outcome[], min: number): Schemas["CalibrationFigures"] {
+  const score = rows.reduce((s, o) => s + OUTCOME_SCORES[o.status], 0);
+  const expected = rows.reduce((s, o) => s + (o.confidence_at_prediction ?? 0.5), 0);
+  const factor = Math.round(Math.min(Math.max((score + 1) / (expected + 1), CALIBRATION.floor), CALIBRATION.ceiling) * 100) / 100;
+  return {
+    n: rows.length, score: Math.round(score * 1000) / 1000, expected: Math.round(expected * 1000) / 1000,
+    factor: rows.length >= min && rows.length > 0 ? factor : null, held: rows.filter((o) => o.status === "held").length,
+  };
+}
+
+/** GET /v1/priorities/calibration over the mock's outcomes; ``titles`` names the goals. */
+export function calibration(db: QualityDb | undefined, titles: Record<string, string>, setting: "apply" | "show" = "apply"): Schemas["CalibrationOut"] {
+  const since = Date.now() - 365 * DAY;
+  const rows = (db?.outcomes ?? []).filter((o) => o.status in OUTCOME_SCORES && o.assessed_at && Date.parse(o.assessed_at) >= since);
+  const byGoal = new Map<string, Outcome[]>();
+  for (const o of rows) byGoal.set(o.goal_id, [...(byGoal.get(o.goal_id) ?? []), o]);
+  return {
+    setting, min_outcomes: CALIBRATION.min, floor: CALIBRATION.floor, ceiling: CALIBRATION.ceiling,
+    company: figures(rows, CALIBRATION.min),
+    goals: [...byGoal].map(([goal_id, rs]) => ({ goal_id, title: titles[goal_id] ?? "", ...figures(rs, CALIBRATION.min) })),
+  };
+}
+
+const VERDICT_WORDS: Record<string, string> = { held: "held", partially_held: "partly held", not_held: "not held", inconclusive: "inconclusive" };
+const shown = (v: number | null | undefined, unit?: string | null) => (v == null ? "no value" : `${v}${unit === "%" ? "%" : unit ? ` ${unit}` : ""}`);
+
+/** The outcome rows of my Inbox, as GET /v1/inbox returns them. */
+export function outcomeInboxRows(db: QualityDb | undefined, me: string, roadmapTitle: string): Schemas["InboxOutcome"][] {
+  const mine = (db?.outcomes ?? []).filter((o) => o.owner_id === me);
+  const out: Schemas["InboxOutcome"][] = [];
+  const waiting = mine.filter((o) => o.status === "predicted" && o.needs_prediction);
+  if (waiting.length) {
+    const n = waiting.length;
+    out.push({ id: waiting[0].id, title: `Add predictions · ${roadmapTitle} · ${n} item${n === 1 ? "" : "s"}`, reason: "needs_prediction", state: "predicted", counts: true, count: n, roadmap_version_id: waiting[0].roadmap_version_id ?? null, due_on: null });
+  }
+  for (const o of mine) {
+    if (o.status === "tracking" && o.proposed_assessment) {
+      const p = o.prediction;
+      out.push({
+        id: o.id, title: `Outcome check due · ${o.title} · predicted ${p.baseline ?? "?"} → ${p.predicted}, now ${shown(o.proposed_assessment.actual_value, p.unit)}`,
+        reason: "check_due", state: "due", counts: true, count: 1, due_on: o.assess_due_on ?? null, roadmap_version_id: null,
+      });
+    }
+    const last = o.assessments[o.assessments.length - 1];
+    if (last?.actor === "oracle" && o.status in VERDICT_WORDS) {
+      out.push({ id: o.id, title: `Oracle recorded: ${VERDICT_WORDS[o.status]} · ${o.title}`, reason: "oracle_recorded", state: "assessed", counts: false, count: 1, due_on: o.assess_due_on ?? null, roadmap_version_id: null });
+    }
+  }
+  return out;
+}
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
@@ -291,8 +425,13 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
 
   if (p[1] === "outcomes") {
     if (m === "GET" && !p[2]) {
-      const hits = ctx.db.outcomes.filter((o) =>
-        ["goal_id", "document_id", "status"].every((k) => !q.get(k) || String(o[k as keyof Outcome]) === q.get(k)),
+      const hits = ctx.db.outcomes.filter(
+        (o) =>
+          ["goal_id", "document_id", "status", "track_id", "roadmap_item_id"].every(
+            (k) => !q.get(k) || String(o[k as keyof Outcome]) === q.get(k),
+          ) &&
+          (!q.get("state") || stateOf(o) === q.get("state")) &&
+          (!q.get("needs_prediction") || String(o.needs_prediction) === q.get("needs_prediction")),
       );
       return json(200, [...hits].reverse());
     }
@@ -312,18 +451,52 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
         roadmap_item_key: data.roadmap_item_key ?? null, experiment_id: data.experiment_id ?? null,
         prediction: { baseline: null, threshold: null, by: null, ...data.prediction },
         module_keys: data.module_keys ?? [], gap_categories: data.gap_categories ?? [], status: "tracking", observed: null,
+        needs_prediction: false,
         assessments: [], owner_id: data.owner_id ?? ctx.userId, created_by: ctx.userId, assessed_at: null, lock_version: 1,
         created_at: now, updated_at: now,
       };
       ctx.db.outcomes.push(o);
       return json(201, o);
     }
+    if (m === "PATCH" && p[2] && !p[3]) {
+      const o = ctx.db.outcomes.find((x) => x.id === p[2]);
+      if (!o) return fail(404, "Outcome not found");
+      const data = await body<Schemas["OutcomeUpdate"]>();
+      if (data.lock_version !== o.lock_version) return fail(409, "This outcome changed since you opened it; reload it");
+      if (data.prediction) {
+        if (o.status !== "predicted") return fail(409, "Shipped: the prediction is frozen");
+        const problem = predictionProblem(data.prediction);
+        if (problem) return fail(422, problem);
+        o.prediction = { baseline: null, threshold: null, by: null, ...data.prediction };
+        o.needs_prediction = data.prediction.predicted_value == null;
+      }
+      if (data.owner_id) o.owner_id = data.owner_id;
+      Object.assign(o, { updated_at: new Date().toISOString(), lock_version: o.lock_version + 1 });
+      return json(200, o);
+    }
+    if (m === "POST" && p[2] && p[3] === "shipped") {
+      const o = ctx.db.outcomes.find((x) => x.id === p[2]);
+      if (!o) return fail(404, "Outcome not found");
+      if (o.status !== "predicted") return fail(409, "Already shipped");
+      const data = (await body<Schemas["ShippedIn"]>()) ?? {};
+      const at = data.at ?? new Date().toISOString();
+      const after = new Date(Date.parse(at) + 30 * 86_400_000).toISOString().slice(0, 10);
+      const by = o.prediction.by ?? null;
+      Object.assign(o, {
+        status: "tracking", shipped_at: at, ship_signal: { kind: "manual", refs: [], at, note: data.note ?? null },
+        assess_due_on: by && by > after ? by : after, lock_version: o.lock_version + 1,
+      });
+      return json(200, o);
+    }
     if (m === "POST" && p[2] && p[3] === "assessments") {
       const o = ctx.db.outcomes.find((x) => x.id === p[2]);
       if (!o) return fail(404, "Outcome not found");
       const a = await body<Schemas["AssessmentIn"]>();
       const now = new Date().toISOString();
-      o.assessments.push({ verdict: a.verdict, observed: a.observed, note: a.note ?? null, evidence_ids: a.evidence_ids ?? [], assessed_by: ctx.userId, assessed_at: now });
+      o.assessments.push({
+        verdict: a.verdict, observed: a.observed, note: a.note ?? null, evidence_ids: a.evidence_ids ?? [], assessed_by: ctx.userId,
+        assessed_at: now, actual_value: a.actual_value ?? null, measured_at: a.measured_at ?? null, actor: "person",
+      });
       Object.assign(o, { status: a.verdict, observed: a.observed, assessed_at: now, updated_at: now, lock_version: o.lock_version + 1 });
       const direction: Schemas["LearningDraft"]["direction"] = a.verdict === "held" ? "note" : "recommend_more";
       const suggested_learnings: Schemas["LearningDraft"][] = [

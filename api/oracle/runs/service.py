@@ -8707,6 +8707,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.launches import service as launches_service
 
     launch_rows = await launches_service.inbox_rows(db, principal)
+    from oracle.quality.outcomes import inbox_rows as outcome_rows
+
+    outcome_inbox = await outcome_rows(db, principal)
     # H11: what Oracle did on its own, for those it notified (open ones count).
     from oracle.autonomy_router import inbox_actions
 
@@ -8746,9 +8749,11 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         # Strategy drift: one row, however many findings.
         + (1 if strategy else 0)
         + sum(1 for r in launch_rows if r.counted)
+        + sum(1 for r in outcome_inbox if r.counts)
         + sum(a.counts for a in oracle_actions)
         + counted,
         launches=launch_rows,
+        outcomes=outcome_inbox,
         items=states,
         counts=counts,
         staged=staged,

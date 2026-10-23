@@ -148,7 +148,11 @@ class HumanRatingIn(BaseModel):
 
 # --- outcomes and learnings -------------------------------------------------------------
 
-OutcomeStatus = Literal["tracking", "held", "partially_held", "not_held", "inconclusive"]
+OutcomeStatus = Literal[
+    "predicted", "tracking", "held", "partially_held", "not_held", "inconclusive"
+]
+# GET /v1/outcomes?state=: due is tracking with a proposal waiting; assessed is any verdict.
+OutcomeState = Literal["predicted", "tracking", "due", "assessed"]
 Verdict = Literal["held", "partially_held", "not_held", "inconclusive"]
 LearningTarget = Literal["module", "question_category", "criterion"]
 LearningDirection = Literal["recommend_more", "recommend_less", "note"]
@@ -163,6 +167,34 @@ class Prediction(BaseModel):
     predicted: str = Field(min_length=1, max_length=300)
     threshold: str | None = Field(default=None, max_length=300)
     by: date | None = None
+    # H3: typed, comparable figures beside the text ("%", "min", "count", a currency).
+    unit: str | None = Field(default=None, max_length=40)
+    direction: Literal["increase", "decrease"] | None = None
+    baseline_value: float | None = None
+    predicted_value: float | None = None
+    # The least that still counts as "partly held".
+    threshold_value: float | None = None
+
+
+class PredictionIn(Prediction):
+    """A prediction a person writes: its typed figures must agree with each other."""
+
+    @model_validator(mode="after")
+    def _typed(self) -> "PredictionIn":
+        base, want, line = self.baseline_value, self.predicted_value, self.threshold_value
+        if base is not None and want is not None:
+            if self.direction is None:
+                raise ValueError("say which way the prediction goes: increase or decrease")
+            if (want - base) * (1 if self.direction == "increase" else -1) <= 0:
+                raise ValueError(
+                    f"an {self.direction} prediction must be "
+                    f"{'above' if self.direction == 'increase' else 'below'} its baseline"
+                )
+            if line is not None and not min(base, want) <= line <= max(base, want):
+                raise ValueError(
+                    "the partly-held line lies between the baseline and the prediction"
+                )
+        return self
 
 
 class OutcomeCreate(BaseModel):
@@ -176,7 +208,9 @@ class OutcomeCreate(BaseModel):
     roadmap_version_id: uuid.UUID | None = None
     roadmap_item_key: str | None = Field(default=None, max_length=200)
     experiment_id: uuid.UUID | None = None
-    prediction: Prediction
+    # H3: the roadmap item row (preferred to a version and a section key).
+    roadmap_item_id: uuid.UUID | None = None
+    prediction: PredictionIn
     # Modules and question categories the prediction rested on (for learnings).
     module_keys: list[str] = Field(default=[], max_length=50)
     gap_categories: list[GapCategory] = Field(default=[], max_length=17)
@@ -184,9 +218,15 @@ class OutcomeCreate(BaseModel):
 
     @model_validator(mode="after")
     def _linked(self) -> "OutcomeCreate":
-        if not (self.prd_version_id or self.roadmap_version_id or self.experiment_id):
+        if not (
+            self.prd_version_id
+            or self.roadmap_version_id
+            or self.experiment_id
+            or self.roadmap_item_id
+        ):
             raise ValueError(
-                "link what launched: prd_version_id, roadmap_version_id or experiment_id"
+                "link what launched: prd_version_id, roadmap_item_id, roadmap_version_id or "
+                "experiment_id"
             )
         if bool(self.roadmap_version_id) != bool(self.roadmap_item_key):
             raise ValueError("roadmap_version_id and roadmap_item_key go together")
@@ -198,6 +238,9 @@ class AssessmentIn(BaseModel):
     observed: str = Field(min_length=1, max_length=1000)
     note: str | None = Field(default=None, max_length=4000)
     evidence_ids: list[uuid.UUID] = Field(default=[], max_length=50)
+    # H3: the goal value it was judged on, and its day.
+    actual_value: float | None = None
+    measured_at: date | None = None
 
 
 class Assessment(BaseModel):
@@ -207,6 +250,65 @@ class Assessment(BaseModel):
     evidence_ids: list[uuid.UUID] = []
     assessed_by: uuid.UUID | None = None
     assessed_at: datetime
+    actual_value: float | None = None
+    measured_at: date | None = None
+    # "oracle" when H11 Autonomy let Oracle record it.
+    actor: Literal["person", "oracle"] = "person"
+
+
+class ShipSignal(BaseModel):
+    kind: Literal["tracker", "milestone", "launch", "manual"]
+    refs: list[str] = []
+    at: datetime
+    note: str | None = None
+
+
+class ProposedAssessment(BaseModel):
+    """Oracle's reading on the due date; a person confirms, edits or marks it inconclusive."""
+
+    verdict: Verdict
+    observed: str | None = None
+    actual_value: float | None = None
+    measured_at: date | None = None
+    source: Literal["goal_history", "measurement"] | None = None
+    # "measured early" when no value was recorded on or after ``by``.
+    note: str | None = None
+
+
+class OutcomeUpdate(BaseModel):
+    """PATCH /v1/outcomes/{id}: the prediction (while predicted) and the owner."""
+
+    prediction: PredictionIn | None = None
+    owner_id: uuid.UUID | None = None
+    lock_version: int
+
+
+class ShippedIn(BaseModel):
+    at: datetime | None = None
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class CalibrationFigures(BaseModel):
+    n: int
+    score: float
+    expected: float
+    # None below calibration_min_outcomes.
+    factor: float | None = None
+    held: int = 0
+
+
+class GoalCalibration(CalibrationFigures):
+    goal_id: uuid.UUID
+    title: str
+
+
+class CalibrationOut(BaseModel):
+    setting: Literal["apply", "show"]
+    min_outcomes: int
+    floor: float
+    ceiling: float
+    company: CalibrationFigures
+    goals: list[GoalCalibration]
 
 
 class OutcomeOut(BaseModel):
@@ -225,6 +327,15 @@ class OutcomeOut(BaseModel):
     module_keys: list[str]
     gap_categories: list[str]
     status: OutcomeStatus
+    roadmap_item_id: uuid.UUID | None = None
+    track_id: uuid.UUID | None = None
+    needs_prediction: bool = False
+    confidence_at_prediction: float | None = None
+    shipped_at: datetime | None = None
+    ship_signal: ShipSignal | None = None
+    assess_due_on: date | None = None
+    proposed_assessment: ProposedAssessment | None = None
+    decision_id: uuid.UUID | None = None
     observed: str | None = None
     assessments: list[Assessment]
     owner_id: uuid.UUID | None = None
@@ -233,6 +344,20 @@ class OutcomeOut(BaseModel):
     lock_version: int
     created_at: datetime
     updated_at: datetime
+
+
+class InboxOutcome(BaseModel):
+    """An outcome row of the Inbox (H3): Add predictions (the roadmap's approver, one per
+    roadmap, counted), Outcome check due (the owner, counted), Oracle recorded (shown)."""
+
+    id: uuid.UUID
+    title: str
+    reason: Literal["needs_prediction", "check_due", "oracle_recorded"]
+    due_on: date | None = None
+    state: Literal["predicted", "due", "assessed"]
+    counts: bool
+    count: int = 1
+    roadmap_version_id: uuid.UUID | None = None
 
 
 class LearningDraft(BaseModel):
