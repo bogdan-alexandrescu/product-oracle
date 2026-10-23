@@ -433,6 +433,12 @@ export function PublishView({ doc }: { doc: string }) {
       ? Promise.resolve(undefined)
       : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/readiness", { params: { path: { doc, n }, query: { purpose: "publish" } } })),
   );
+  // #254: the confirm names how many sections are not reviewed.
+  const versionQ = useQuery(`version|${doc}|${n}`, () =>
+    n == null ? Promise.resolve(undefined) : unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })).catch(() => undefined),
+  );
+  const sections = versionQ.data?.sections ?? [];
+  const unreviewed = sections.filter((s) => !s.verdict).length;
   // Optional reads: without them the blocks fall back to the verdict's own rows.
   const strategyQ = useQuery(`blocker-strategy|${doc}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/blocker-strategy", { params: { path: { doc } } })).catch(() => undefined),
@@ -663,6 +669,11 @@ export function PublishView({ doc }: { doc: string }) {
               </h2>
             </div>
             <div className="px-5 py-3.5 max-[600px]:px-4">
+              {unreviewed > 0 && (
+                <p data-testid="unreviewed-sections" className="mb-2 font-semibold text-warn">
+                  {unreviewed} of {sections.length} sections {unreviewed === 1 ? "is" : "are"} not reviewed
+                </p>
+              )}
               <OnPublish n={n} />
             </div>
             {refusal && (

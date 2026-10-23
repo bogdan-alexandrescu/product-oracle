@@ -505,6 +505,7 @@ PublishProblemCode = Literal[
     "source_permission_revoked",
     "already_published",
     "superseded_version",
+    "nothing_written",
     "template_unresolved",
     "open_critical_change_request",
     # Warnings only:

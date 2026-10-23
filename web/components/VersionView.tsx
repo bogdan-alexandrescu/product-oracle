@@ -960,6 +960,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                     approvedAt={version.approved_at}
                     isLatest={n === latest}
                     blockedReason={approveBlocked}
+                    unreviewed={{ count: sections.length - reviewedCount, total: sections.length }}
                     onApproved={() => {
                       verQ.reload();
                       docQ.reload();

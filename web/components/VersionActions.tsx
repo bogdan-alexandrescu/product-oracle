@@ -110,6 +110,7 @@ export function ApproveButton({
   isLatest,
   onApproved,
   blockedReason,
+  unreviewed,
 }: {
   doc: string;
   n: number;
@@ -118,6 +119,8 @@ export function ApproveButton({
   onApproved: () => void;
   /** Why the version cannot be approved now (a roadmap's marked dates, O4): Approve is disabled. */
   blockedReason?: string;
+  /** #254: sections not reviewed, of all; the confirm names them. */
+  unreviewed?: { count: number; total: number };
 }) {
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -167,6 +170,11 @@ export function ApproveButton({
   }
   return (
     <div className="flex flex-wrap items-center justify-end gap-2" role="group" aria-label="Confirm approval">
+      {unreviewed && unreviewed.count > 0 && (
+        <span data-testid="unreviewed-sections" className="text-sm font-semibold text-warn">
+          {unreviewed.count} of {unreviewed.total} sections {unreviewed.count === 1 ? "is" : "are"} not reviewed.
+        </span>
+      )}
       <span className="text-sm font-semibold text-text2">{isLatest ? `Approve v${n}?` : `v${n} is not the latest. Approve?`}</span>
       <Button variant="ghost" onClick={() => setConfirming(false)}>
         Cancel

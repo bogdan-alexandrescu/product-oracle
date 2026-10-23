@@ -139,7 +139,7 @@ from oracle.baseline import yaml_io
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.decisions import capture as decisions_capture
 from oracle.docs import service as docs_service
-from oracle.docs import visibility
+from oracle.docs import visibility, written
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
@@ -1447,18 +1447,21 @@ async def _resolve_source(
                 f"version {number} of '{document.slug}' is not approved: a {target} is built "
                 f"from an approved {name} version"
             )
-        return document, version
-    version = await db.scalar(
-        stmt.where(DocumentVersion.approved_at.is_not(None))
-        .order_by(DocumentVersion.number.desc())
-        .limit(1)
-    )
-    if version is None:
-        target = flows.KIND_NAMES.get(flow.target_kind or "", "roadmap")
-        raise Invalid(
-            f"'{document.slug}' has no approved version: approve a version of the {name} "
-            f"before building its {target}"
+    else:
+        version = await db.scalar(
+            stmt.where(DocumentVersion.approved_at.is_not(None))
+            .order_by(DocumentVersion.number.desc())
+            .limit(1)
         )
+        if version is None:
+            target = flows.KIND_NAMES.get(flow.target_kind or "", "roadmap")
+            raise Invalid(
+                f"'{document.slug}' has no approved version: approve a version of the {name} "
+                f"before building its {target}"
+            )
+    # #254: nothing is built from a version that is still only its template's text.
+    if await written.nothing_written(db, document, version):
+        raise Invalid(f"version {version.number} of '{document.slug}': {written.NOTHING_WRITTEN}")
     return document, version
 
 
