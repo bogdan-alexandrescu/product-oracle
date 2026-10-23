@@ -12,6 +12,7 @@ import { Button, Chip, Empty, Icon, InfoTip, LinkButton, Page, PageHeader, Segme
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { StartDiscussion, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
 import { SectionQuestions, type GoTo } from "@/components/FeedbackPanel";
+import { HeldRewritesButton, HeldRewritesPanel, useHeldRewrites } from "@/components/HeldRewrites";
 import { DEFAULT_FILTERS, type FeedbackFilters, type PlacedComment } from "@/components/review/FeedbackList";
 import {
   OutlineRail,
@@ -120,6 +121,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     unwrap(api.GET("/v1/documents/{doc}/versions/{n}/comments", { params: { path: { doc, n } } })),
   );
   const [refreshKey, setRefreshKey] = useState(0);
+  // #347: each section's review state (re-review asked, its owner) and the held agent rewrites.
+  const statesQ = useQuery(`section-states|${doc}|${n}`, () =>
+    unwrap(api.GET("/v1/documents/{doc}/versions/{n}/section-states", { params: { path: { doc, n } } })).catch(() => null),
+  );
+  const held = useHeldRewrites(doc);
+  const [heldOpen, setHeldOpen] = useState(false);
   // Every feedback item on the document: the panel's list and every open-feedback count.
   const feedbackQ = useQuery(
     `feedback|${doc}|${refreshKey}`,
@@ -249,6 +256,10 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const readOnly = !!version?.approved_at;
   const latest = versions.at(-1)?.number;
   const refine = useMemo(() => ({ doc, n }), [doc, n]);
+  const sectionStates = useMemo(
+    () => new Map((statesQ.data?.sections ?? []).map((st) => [st.section_key, st])),
+    [statesQ.data],
+  );
 
   const sections = useMemo(() => version?.sections ?? [], [version]);
   const allKeys = useMemo(() => new Set(sections.map((s) => s.section_key)), [sections]);
@@ -689,6 +700,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     changedLock: changedLocks.has(s.section_key),
     evidenceTargets: canComment ? graphQ.data?.entities : undefined,
     refine: canDecide && !readOnly && n === latest ? refine : undefined,
+    // Approvers edit any section by hand; a section's owner edits their own.
+    edit:
+      !readOnly && n === latest && (canDecide || (!!me?.user_id && sectionStates.get(s.section_key)?.owner_id === me.user_id))
+        ? refine
+        : undefined,
+    rereview: !!sectionStates.get(s.section_key)?.rereview_requested,
     ask: canComment && !readOnly && n === latest && document_ ? { documentId: document_.id } : undefined,
     onHighlightClick,
     onVerdict,
@@ -1012,6 +1029,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               Comment on the whole draft
             </Button>
           )}
+          {(held.rows.length > 0 || heldOpen) && (
+            <HeldRewritesButton open={held.open} active={heldOpen} onClick={() => setHeldOpen((o) => !o)} />
+          )}
           <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
           {document_?.kind === "prd" && n === latest && !canDecide && (
             <LinkButton icon="check" href={`/documents/${doc}/publish`}>
@@ -1093,6 +1113,17 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               </p>
             )}
           </div>
+        )}
+
+        {heldOpen && (
+          <HeldRewritesPanel
+            doc={doc}
+            rows={held.rows}
+            headings={headings}
+            canDecide={canDecide}
+            onChanged={held.reload}
+            onClose={() => setHeldOpen(false)}
+          />
         )}
 
         {pane === "items" && isRoadmap && (
