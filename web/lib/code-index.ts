@@ -3,9 +3,11 @@
  * use codes such as `F-28`, `F-30a`, `R1–R10`, `M2` and `G-B` with nothing beside them. The
  * reader recognises the codes it knows when the text is shown; nothing stored changes.
  *
- * Known codes come from the document's own headings (`F-28 Some feature name`) and lines
- * that start with a code (`R1 (F-28) Title.`, `D2 — Decision`, `Q1: Open question`), and
- * from the company's goals. A slice (`F-30a`) with no line of its own takes its parent's
+ * Known codes come from the document's own headings (`F-28 Some feature name`, `M1 …`),
+ * its requirement lines (`R1 (F-28) Title.`), the decisions, open questions and milestones
+ * a section of that name lists (`- D2 — Decision`, `| Q1 | Open question |`), and the
+ * company's goals. Nothing else defines a code: `- SHA256 is used for hashing.` or a
+ * `Q1: …` line in ordinary prose stays plain. A slice (`F-30a`) with no line of its own takes its parent's
  * name; a range (`R1–R10`) is one reference to its known members. Code blocks, code spans
  * and URLs are never read.
  *
@@ -15,13 +17,15 @@
 
 /** A code: `F-28`, `G-B`, `OKR-2`, `R1`, `M2`; a slice adds a lower-case letter (`F-30a`). */
 const CODE = String.raw`[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+[a-z]?|[A-Z]{1,4}\d+[a-z]?`;
-/** A line that names a code: `F-28 Name`, `**R1** (F-28) Title.`, `D2 — Use one card`. */
-const DEFINES = new RegExp(String.raw`^(?:[-*+]\s+|\d+[.)]\s+|#{1,6}\s+)?(\*\*)?(${CODE})\1?(?:\s*\(([^)]{1,40})\))?(?:\*\*)?\s*(?:[:.·–—-]\s*|\s+)(\S.*)$`);
+/** A heading that names a code: `F-28 Name`, `M1 — Name`. */
+const HEADING = new RegExp(String.raw`^(${CODE})\s*(?:[:.·–—-]\s*|\s+)(\S.*)$`);
+/** A requirement line: `R1 (F-28) Title.`, `- **R1** (F-28) Title.`. */
+const REQUIREMENT = new RegExp(String.raw`^(?:[-*+]\s+|\d+[.)]\s+)?(\*\*)?(${CODE})\1?\s*\((${CODE})\)\s*(?:[:.·–—-]\s*)?(\S.*)$`);
+/** A list item that names a code: `- D2 — Use one card`, `1. Q1: Who signs off?`. */
+const LISTED = new RegExp(String.raw`^(?:[-*+]|\d+[.)])\s+(\*\*)?(${CODE})\1?\s*(?:[:.·–—-]\s*|\s+)(\S.*)$`);
 /** A code (or a range of two) in running text, not inside a word, a path or a key. */
 const TOKEN = new RegExp(String.raw`(?<![\w./:#@=&?-])(${CODE})(?:\s?[–—]\s?(${CODE}))?(?![\w-]|\.\w)`, "g");
 const URL_RE = /\b(?:https?:\/\/|www\.)\S+/g;
-/** A code followed by a mark: `Q1: …`, `D2 — …`, `F-28. …`. */
-const MARKED = new RegExp(String.raw`^(?:${CODE})\s*[:.·–—-]\s`);
 const WHOLE = new RegExp(String.raw`^(?:${CODE})$`);
 const SPLIT_NUM = /^([A-Z][A-Z0-9]*?-?)(\d+)$/;
 
@@ -49,18 +53,32 @@ export type CodeSection = { section_key: string; heading: string; body_md: strin
 /** A company goal or feature with its own code (`G-B Growth`, a feature keyed `F-2`). */
 export type CodeEntity = { id: string; kind: "Goal" | "Feature"; code: string; name: string; status?: string | null };
 
+/** A code's kind from its whole prefix: `FY2026` or `SHA256` is no kind ("Section"). */
 const KINDS: [RegExp, CodeKind][] = [
-  [/^F/, "Feature"],
-  [/^M/, "Milestone"],
-  [/^R(?!ISK)/, "Requirement"],
-  [/^(?:D|ADR)/, "Decision"],
-  [/^(?:Q|OQ)/, "Open question"],
-  [/^RISK/, "Risk"],
-  [/^G/, "Goal"],
+  [/^F-?\d/, "Feature"],
+  [/^M-?\d/, "Milestone"],
+  [/^R-?\d/, "Requirement"],
+  [/^(?:D|ADR)-?\d/, "Decision"],
+  [/^(?:Q|OQ)-?\d/, "Open question"],
+  [/^RISK-?\d/, "Risk"],
+  [/^G-?[A-Z0-9]/, "Goal"],
 ];
 
 function kindOf(code: string): CodeKind {
   return KINDS.find(([re]) => re.test(code))?.[1] ?? "Section";
+}
+
+/** The kinds a heading names: `F-28 Name`, `M1 Name`. */
+const HEADING_KINDS = new Set<CodeKind>(["Feature", "Milestone"]);
+
+/** The kinds a section lists by its heading: "Decisions and open questions", "Milestones". */
+function listedKinds(heading: string): Set<CodeKind> {
+  const kinds = new Set<CodeKind>();
+  if (/\bdecisions?\b/i.test(heading)) kinds.add("Decision");
+  if (/\bquestions?\b/i.test(heading)) kinds.add("Open question");
+  if (/\bmilestones?\b/i.test(heading)) kinds.add("Milestone");
+  if (/\brisks?\b/i.test(heading)) kinds.add("Risk");
+  return kinds;
 }
 
 /** The name a line gives: its first sentence, without trailing markup. */
@@ -99,36 +117,33 @@ export function buildCodeIndex(sections: readonly CodeSection[], entities: reado
   };
   const parents: [CodeEntry, string][] = [];
   const define = (s: CodeSection, code: string, rest: string, parent?: string) => {
-    const under = parent && WHOLE.test(parent.trim()) ? parent.trim() : null;
-    // `G2 (retention): more repeat orders`: the words in brackets are the name.
-    const named = parent && !under ? cleanName(parent) : "";
-    const name = named || cleanName(rest);
+    const name = cleanName(rest);
     if (!name || index.has(code)) return;
     const e: CodeEntry = { code, kind: kindOf(code), name, sectionKey: s.section_key, from: "this PRD" };
-    if (named) e.line = cleanName(rest);
-    if (under) parents.push([e, under]);
+    if (parent) parents.push([e, parent]);
     add(e);
   };
   // Headings first: a heading names its code wherever a line mentions it earlier.
   for (const s of sections) {
-    const m = s.heading.trim().match(DEFINES);
-    if (m) define(s, m[2], m[4], m[3]);
+    const m = s.heading.trim().match(HEADING);
+    if (m && HEADING_KINDS.has(kindOf(m[1]))) define(s, m[1], m[2]);
   }
   for (const s of sections) {
+    const listed = listedKinds(s.heading);
     for (const line of proseLines(s.body_md)) {
-      const cells = line.startsWith("|") ? line.split("|").map((c) => c.trim()) : null;
-      if (cells) {
-        // A table row: `| F-28 | Name | ... |`.
-        const code = cells[1]?.replace(/\*\*/g, "");
-        if (code && WHOLE.test(code) && cells[2]) define(s, code, cells[2]);
+      // A requirement line names its parent: `R1 (F-28) Title.`.
+      const r = line.match(REQUIREMENT);
+      if (r && kindOf(r[2]) === "Requirement") {
+        define(s, r[2], r[4], r[3]);
         continue;
       }
-      const m = line.match(DEFINES);
-      // A line names its code when it is listed, bold, under a parent or followed by a mark
-      // ("R1 (F-28) Title.", "- D2 — Use one card", "Q1: Who signs off?"), not in prose.
-      if (m && (/^(?:[-*+]|\d+[.)]|#)/.test(line) || m[1] || m[3] || MARKED.test(line))) {
-        define(s, m[2], m[4], m[3]);
-      }
+      if (!listed.size) continue;
+      // A section that lists decisions, questions or milestones: `- D2 — …`, `| Q1 | … |`.
+      const cells = line.startsWith("|") ? line.split("|").map((c) => c.trim()) : null;
+      const m = cells ? null : line.match(LISTED);
+      const code = cells ? cells[1]?.replace(/\*\*/g, "") : m?.[2];
+      const rest = cells ? cells[2] : m?.[3];
+      if (code && rest && WHOLE.test(code) && listed.has(kindOf(code))) define(s, code, rest);
     }
   }
   for (const [e, p] of parents) {
