@@ -66,11 +66,15 @@ export function MeProvider({ children }: { children: ReactNode }) {
   return <MeContext.Provider value={value}>{children}</MeContext.Provider>;
 }
 
-/** Re-checks GET /v1/me whenever the pathname changes. Render it inside <Suspense>. */
+/**
+ * Re-checks GET /v1/me whenever the pathname changes. Render it inside <Suspense>. A
+ * customer's interview link (C3, /i/<token>) has no member: it never asks.
+ */
 export function MeSync() {
   const pathname = usePathname();
   const { refresh } = useMe();
   useEffect(() => {
+    if (pathname.startsWith("/i/")) return;
     void refresh();
   }, [pathname, refresh]);
   return null;

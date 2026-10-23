@@ -8232,6 +8232,241 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/interviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Interviews
+         * @description Interviews, newest first.
+         */
+        get: operations["list_interviews"];
+        put?: never;
+        /**
+         * Create Interview
+         * @description Create a Draft customer interview and queue Oracle's draft of its questions.
+         */
+        post: operations["create_interview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Interview
+         * @description An interview: its approved guide, the guide job, the transcript, the snapshot and
+         *     the requests it created.
+         */
+        get: operations["get_interview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Interview
+         * @description Edit a Draft's intro, questions (at most 8, in order) or the customer's name.
+         */
+        patch: operations["patch_interview"];
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}/guide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redraft Interview Guide
+         * @description Ask Oracle to draft a Draft's questions again.
+         */
+        post: operations["redraft_interview_guide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Interview Link
+         * @description Create the private link: shown once, works once, expires after 7 days.
+         */
+        post: operations["create_interview_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Interview
+         * @description Withdraw the interview: its link stops working at once.
+         */
+        post: operations["revoke_interview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/interview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Team Interview
+         * @description My team interview for this intake (created on first call): Oracle's follow-ups
+         *     and my replies on the intake's questions.
+         */
+        post: operations["open_team_interview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take Team Turn
+         * @description Answer one of the intake's questions in my team interview. Oracle follows up once
+         *     when the answer does not meet the gap's stop condition; the reply, or with
+         *     ``skip_follow_up`` the answer as written, is recorded as my decision. A turn past 25
+         *     seconds records the answer as written.
+         */
+        post: operations["take_team_turn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/interviews/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Interview
+         * @description The interview behind a private link (no member credential). The first open binds
+         *     the link to this browser with a cookie and posts Oracle's first question.
+         */
+        get: operations["public_interview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/interviews/{token}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Public Interview Message
+         * @description The customer's answer; Oracle acknowledges it and asks one follow-up or the next
+         *     approved question.
+         */
+        post: operations["public_interview_message"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/interviews/{token}/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Public Interview Skip
+         * @description Skip the current question: Oracle asks the next one.
+         */
+        post: operations["public_interview_skip"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/interviews/{token}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Public Interview Finish
+         * @description Send my answers: the interview finishes and the link stops working.
+         */
+        post: operations["public_interview_finish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/plan": {
         parameters: {
             query?: never;
@@ -16832,6 +17067,220 @@ export interface components {
              */
             answers_since_run: number;
         };
+        /** InterviewCreate */
+        InterviewCreate: {
+            /**
+             * Kind
+             * @default customer
+             * @constant
+             */
+            kind: "customer";
+            /** Interviewee Name */
+            interviewee_name: string;
+            /** Interviewee Company */
+            interviewee_company?: string | null;
+            subject: components["schemas"]["InterviewSubject"];
+        };
+        /** InterviewGuideItem */
+        InterviewGuideItem: {
+            /** Id */
+            id: string;
+            /** Prompt */
+            prompt: string;
+            /** Purpose */
+            purpose?: string | null;
+        };
+        /** InterviewGuideItemIn */
+        InterviewGuideItemIn: {
+            /** Id */
+            id?: string | null;
+            /** Prompt */
+            prompt: string;
+            /** Purpose */
+            purpose?: string | null;
+        };
+        /** InterviewJobState */
+        InterviewJobState: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+            /** Error */
+            error?: string | null;
+        };
+        /**
+         * InterviewLinkOut
+         * @description The private link, shown once.
+         */
+        InterviewLinkOut: {
+            /** Url */
+            url: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
+        /** InterviewMessageOut */
+        InterviewMessageOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "oracle" | "interviewee";
+            /** Kind */
+            kind: string;
+            /** Body */
+            body: string;
+            /** Guide Item */
+            guide_item?: string | null;
+            /** Question Id */
+            question_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** InterviewOut */
+        InterviewOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "team" | "customer";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "invited" | "in_progress" | "finished" | "expired" | "revoked";
+            /** Title */
+            title: string;
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Theme Id */
+            theme_id?: string | null;
+            /** Topic */
+            topic?: string | null;
+            /** Intro */
+            intro?: string | null;
+            /** Guide */
+            guide: components["schemas"]["InterviewGuideItem"][];
+            guide_job?: components["schemas"]["InterviewJobState"] | null;
+            /** Interviewee Name */
+            interviewee_name?: string | null;
+            /** Interviewee Company */
+            interviewee_company?: string | null;
+            /** Link Expires At */
+            link_expires_at?: string | null;
+            /** Link Opened At */
+            link_opened_at?: string | null;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /** Created By Name */
+            created_by_name?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /** Messages */
+            messages: components["schemas"]["InterviewMessageOut"][];
+            /** Snapshot */
+            snapshot: {
+                [key: string]: unknown;
+            };
+            snapshot_job?: components["schemas"]["InterviewJobState"] | null;
+            /** Request Ids */
+            request_ids: string[];
+            /** Can Manage */
+            can_manage: boolean;
+        };
+        /** InterviewPatch */
+        InterviewPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Intro */
+            intro?: string | null;
+            /** Guide */
+            guide?: components["schemas"]["InterviewGuideItemIn"][] | null;
+            /** Interviewee Name */
+            interviewee_name?: string | null;
+            /** Interviewee Company */
+            interviewee_company?: string | null;
+        };
+        /**
+         * InterviewSubject
+         * @description What the interview is about: exactly one of an intake, a request theme or a topic.
+         */
+        InterviewSubject: {
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Theme Id */
+            theme_id?: string | null;
+            /** Topic */
+            topic?: string | null;
+        };
+        /** InterviewSummary */
+        InterviewSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "team" | "customer";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "invited" | "in_progress" | "finished" | "expired" | "revoked";
+            /** Title */
+            title: string;
+            /** Interviewee Name */
+            interviewee_name?: string | null;
+            /** Interviewee Company */
+            interviewee_company?: string | null;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /** Created By Name */
+            created_by_name?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Request Count */
+            request_count: number;
+        };
         /** InviteCreate */
         InviteCreate: {
             /** Email */
@@ -20032,6 +20481,71 @@ export interface components {
             oauth_scopes: string[];
             /** Token Help */
             token_help: string;
+        };
+        /** PublicInterview */
+        PublicInterview: {
+            /** Company */
+            company: string;
+            /** Interviewee Name */
+            interviewee_name: string;
+            /** Intro */
+            intro: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "invited" | "in_progress" | "finished";
+            /** Messages */
+            messages: components["schemas"]["PublicInterviewMessage"][];
+            progress: components["schemas"]["PublicInterviewProgress"];
+        };
+        /** PublicInterviewDone */
+        PublicInterviewDone: {
+            /** Done */
+            done: boolean;
+        };
+        /** PublicInterviewMessage */
+        PublicInterviewMessage: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "oracle" | "customer";
+            /** Body */
+            body: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+        };
+        /** PublicInterviewMessageIn */
+        PublicInterviewMessageIn: {
+            /** Body */
+            body: string;
+        };
+        /** PublicInterviewProgress */
+        PublicInterviewProgress: {
+            /** Asked */
+            asked: number;
+            /** Total */
+            total: number;
+        };
+        /** PublicInterviewRefusal */
+        PublicInterviewRefusal: {
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "used" | "expired" | "withdrawn";
+        };
+        /** PublicInterviewTurn */
+        PublicInterviewTurn: {
+            /** Messages */
+            messages: components["schemas"]["PublicInterviewMessage"][];
+            progress: components["schemas"]["PublicInterviewProgress"];
+            /** Done */
+            done: boolean;
         };
         /**
          * PublicationOut
@@ -25146,6 +25660,33 @@ export interface components {
             skip_reason?: string | null;
             /** Lock Version */
             lock_version: number;
+        };
+        /**
+         * TeamTurnIn
+         * @description An answer to one of the intake's questions, a reply to Oracle's follow-up, or (with
+         *     ``skip_follow_up`` and no body) "Skip, record my answer".
+         */
+        TeamTurnIn: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Body */
+            body?: string | null;
+            /**
+             * Skip Follow Up
+             * @default false
+             */
+            skip_follow_up: boolean;
+        };
+        /** TeamTurnOut */
+        TeamTurnOut: {
+            /** Messages */
+            messages: components["schemas"]["InterviewMessageOut"][];
+            recorded?: components["schemas"]["AnswerResult"] | null;
+            /** Next Question Id */
+            next_question_id?: string | null;
         };
         /** TechBriefAnswer */
         TechBriefAnswer: {
@@ -43015,6 +43556,503 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CandidateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_interviews: {
+        parameters: {
+            query?: {
+                status?: ("draft" | "invited" | "in_progress" | "finished" | "expired" | "revoked") | null;
+                intake_id?: string | null;
+                theme_id?: string | null;
+                kind?: ("team" | "customer") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redraft_interview_guide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_interview_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_team_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    take_team_turn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamTurnIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamTurnOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    public_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterview"];
+                };
+            };
+            /** @description Unknown link (the body of an expired one) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Used in another browser, expired or withdrawn */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    public_interview_message: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicInterviewMessageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewTurn"];
+                };
+            };
+            /** @description Unknown link (the body of an expired one) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Used in another browser, expired or withdrawn */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Empty or too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_interview_skip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewTurn"];
+                };
+            };
+            /** @description Unknown link (the body of an expired one) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Used in another browser, expired or withdrawn */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    public_interview_finish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewDone"];
+                };
+            };
+            /** @description Unknown link (the body of an expired one) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Used in another browser, expired or withdrawn */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
                 };
             };
             /** @description Validation Error */

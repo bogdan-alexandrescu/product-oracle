@@ -57,7 +57,7 @@ from oracle.llm.transports import (
     TransportResult,
     get_llm_settings,
 )
-from oracle.tenancy import current_tenant
+from oracle.tenancy import current_tenant, tenant_session
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +72,11 @@ JOBS = (
     "decision_options",
     # C9: Oracle reads a person's reason for a move or pin against the evidence.
     "override_reason_check",
+    # C3 Interviews: a customer interview's guide and snapshot (queued) and its turns
+    # (inline, in the customer's request).
+    "interview_guide",
+    "interview_turn",
+    "interview_snapshot",
 )
 
 #: Accounts one call may try before giving up (the first plus two swaps).
@@ -185,7 +190,9 @@ async def complete(
                 got.reason.value,
                 got.next_reset_at.isoformat() if got.next_reset_at else None,
             )
-        spare = await fallback.load(session)
+        # Its own short session: the caller's connection is not held across the call.
+        async with tenant_session(tenant_id) as read:
+            spare = await fallback.load(read)
         if spare is None:
             raise NoClaudeAccount(NO_ACCOUNT_MESSAGE, got.reason.value)
         via = "fallback_api_key" if spare.kind == "api_key" else "fallback_plan"
