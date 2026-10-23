@@ -1461,6 +1461,8 @@ function load(): Db {
   if (scenario === "named-codes") {
     addGoalCodes(db.baseline);
     addCodedPrd(db);
+    // An Inbox row quoting Oracle's text with a known code (G-B) and an unknown one (G-Z).
+    db.autonomy.actions.push(seedOracleDid(db.user_id, uuid(), "Moved 'Saved addresses' up 2 within G-B, ahead of G-Z"));
   }
   save(db);
   return db;

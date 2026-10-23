@@ -10,7 +10,9 @@ import { login, openSection, section } from "./helpers";
  * protects = each known code in a PRD section is underlined with the shared card behind it
  * (hover, Tab, tap), and Go to section opens the section that names it;
  * fails_when = a known code is drawn plain, an unknown one or one in a URL or code span is
- * underlined, or the card does not open; no_claim = proposals, notes and Inbox rows.
+ * underlined, or the card does not open; no_claim = proposals and checkpoint notes.
+ * Inbox (owner decision 2026-10-23): the row stays one link with its codes plain; the row's
+ * expanded detail shows Oracle's text with each known code carrying the card.
  */
 
 const withCodes = (page: Page) => page.addInitScript((key) => localStorage.setItem(key, "named-codes"), MOCK_SCENARIO_KEY);
@@ -74,6 +76,34 @@ test("hover and Tab open the card; a range lists its members; Go to section open
   const target = section(page, "f-28");
   await expect(target).toBeInViewport();
   await expect(target).toContainText("Shared trip notes");
+});
+
+test("an Inbox row stays one plain link; its expanded detail names the codes in Oracle's text", async ({ page }) => {
+  await withCodes(page);
+  await login(page);
+  await page.goto("/inbox");
+  const row = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Saved addresses" });
+  await expect(row.getByRole("link", { name: /within G-B/ })).toBeVisible();
+  await expect(row.getByTestId("named-code")).toHaveCount(0);
+
+  const more = row.getByRole("button", { name: "Show the text" });
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  const quote = page.getByTestId("need-quote");
+  await expect(quote).toHaveText("Moved 'Saved addresses' up 2 within G-B, ahead of G-Z");
+  // G-B is a company goal; G-Z is not known and stays plain.
+  await expect(quote.getByTestId("named-code")).toHaveText(["G-B"]);
+
+  await quote.getByTestId("named-code").hover();
+  const card = page.getByTestId("code-card");
+  await expect(card).toBeVisible();
+  await expect(card.getByTestId("card-name")).toHaveText("Growth");
+  await expect(card.getByRole("link", { name: "Open" })).toHaveAttribute("href", /^\/baseline\?entity=/);
+  await page.keyboard.press("Escape");
+
+  await more.click();
+  await expect(quote).toHaveCount(0);
 });
 
 test.describe("on a phone", () => {
