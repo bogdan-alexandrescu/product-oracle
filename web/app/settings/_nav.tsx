@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import { LinkButton, ScrollStrip } from "@/components/ds";
+import { hasRole, useMe } from "@/lib/me";
 
 const ITEMS = [
   { label: "Members", href: "/settings/members", testId: "nav-members" },
@@ -16,6 +17,8 @@ const ITEMS = [
   { label: "Templates", href: "/settings/templates", testId: "nav-templates" },
   { label: "Themes", href: "/settings/themes", testId: "nav-themes" },
   { label: "Autonomy", href: "/settings/autonomy", testId: "nav-autonomy" },
+  // #482: owners alone delete and restore, so only they see Trash (#370).
+  { label: "Trash", href: "/settings/trash", testId: "nav-trash", owner: true },
 ];
 
 /**
@@ -26,6 +29,7 @@ const ITEMS = [
 export function SettingsNav() {
   const pathname = usePathname();
   const fromSetup = useSearchParams().get("from") === "setup";
+  const { role } = useMe();
   return (
     <nav
       aria-label="Settings"
@@ -33,7 +37,7 @@ export function SettingsNav() {
       className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel"
     >
       <ScrollStrip className="min-h-9" stripClassName="items-center gap-1">
-        {ITEMS.map((it) => {
+        {ITEMS.filter((it) => !it.owner || hasRole(role, "owner")).map((it) => {
           const on =
             pathname === it.href ||
             pathname.startsWith(`${it.href}/`) ||

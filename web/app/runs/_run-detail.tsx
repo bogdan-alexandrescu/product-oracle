@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
+import { DeleteMenu } from "@/components/ArtifactMenu";
 import { SourceLink } from "@/components/BuildRoadmap";
 import {
   Button,
@@ -67,6 +69,9 @@ type CheckpointReview = Schemas["CheckpointReview"];
 type WaitInfo = Schemas["WaitInfo"];
 type ActionIn = Schemas["ActionIn"];
 
+/** A run still at work cannot go to Trash: cancel it first (#482). */
+const WORKING = new Set<string>(["awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"]);
+
 /** `revision`: the shared draft's the decider saw (D8); `onChanged` hears it changed since. */
 type Decide = (
   cp: CheckpointOut,
@@ -88,6 +93,7 @@ function toDecision() {
 export function RunDetail({ id }: { id: string }) {
   const q = useQuery(`run|${id}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: id } } })));
   const { me, role } = useMe();
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // #258: what the last "Check agents now" checked, said once it answers.
@@ -239,6 +245,13 @@ export function RunDetail({ id }: { id: string }) {
                 Resume
               </Button>
             )}
+            {/* #482: a run alone goes to Trash (its document stays). */}
+            <DeleteMenu
+              title={run.flow_title}
+              dependents={async () => ({ root: { type: "run", id: run.id, slug: null, title: run.flow_title, kind: run.flow }, items: [], published: false, working_runs: WORKING.has(run.status) ? [run.id] : [] })}
+              remove={(query) => unwrap(api.DELETE("/v1/runs/{run_id}", { params: { path: { run_id: run.id }, query: { reason: query.reason } } }))}
+              onDeleted={() => router.push("/runs")}
+            />
           </>
         }
       />

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
 import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
 import { login } from "./helpers";
@@ -122,6 +123,57 @@ test("an owner deletes from the document page and lands back on the list", async
   await expect(prdRow(page, "Visit reminders")).toHaveCount(0);
 });
 
+test("an owner deletes a brief from its page, then restores it from Settings › Trash", async ({ page }) => {
+  await page.addInitScript(([key]) => localStorage.setItem(key, "before-drafting"), [MOCK_SCENARIO_KEY] as const);
+  await login(page);
+  await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+  await page.getByRole("button", { name: `Actions for ${BEFORE_DRAFTING.title}` }).click();
+  await page.getByRole("menuitem", { name: "Delete…" }).click();
+  await page.getByRole("dialog", { name: `Delete ${BEFORE_DRAFTING.title}` }).getByRole("button", { name: "Move to Trash" }).click();
+  await expect(page).toHaveURL(/\/documents$/);
+  await page.goto("/settings/trash");
+  const entry = page.getByTestId("trash-entry").filter({ hasText: BEFORE_DRAFTING.title });
+  await expect(entry).toContainText("Brief");
+  await entry.getByRole("button", { name: `Restore ${BEFORE_DRAFTING.title}` }).click();
+  await expect(page.getByText("Trash is empty")).toBeVisible();
+  await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+  await expect(page.getByRole("heading", { level: 1, name: BEFORE_DRAFTING.title })).toBeAttached();
+});
+
+test("an owner deletes a run from its page and restores it", async ({ page }) => {
+  await login(page);
+  await page.goto("/runs");
+  const row = page.getByTestId("run-row").filter({ hasText: "Succeeded" }).first();
+  await row.getByRole("link").first().click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  const url = page.url();
+  const menu = page.getByRole("button", { name: /^Actions for / });
+  const title = (await menu.getAttribute("aria-label"))!.replace("Actions for ", "");
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await menu.click();
+  await page.getByRole("menuitem", { name: "Delete…" }).click();
+  await page.getByRole("dialog", { name: `Delete ${title}` }).getByRole("button", { name: "Move to Trash" }).click();
+  await expect(page).toHaveURL(/\/runs$/);
+  await page.goto("/settings/trash");
+  await expect(page.getByTestId("trash-entry")).toHaveCount(1);
+  await expect(page.getByTestId("trash-entry")).toContainText("Run");
+
+  await page.getByRole("button", { name: `Restore ${title}` }).click();
+  await expect(page.getByText("Trash is empty")).toBeVisible();
+  await page.goto(url);
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+});
+
+test("an approver sees no ⋮ menu on a run or a brief", async ({ page }) => {
+  await asRole(page, "approver");
+  await login(page);
+  await page.goto("/runs");
+  await page.getByTestId("run-row").first().getByRole("link").first().click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+});
+
 test("an owner sees Edit, Regenerate… and Delete…", async ({ page }) => {
   await login(page);
   await page.goto("/documents/usage-alerts-roadmap");
@@ -161,8 +213,10 @@ for (const role of ["commenter", "viewer"] as const) {
     await page.goto("/documents/usage-alerts-roadmap");
     await expect(page.getByRole("heading", { level: 1, name: ROADMAP })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+    // The version view (its sections keep their own menus).
     await page.goto("/documents/usage-alerts-roadmap/v/1");
-    await expect(page.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+    await expect(page.getByTestId("document-sections").filter({ visible: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: `Actions for ${ROADMAP}` })).toHaveCount(0);
   });
 }
 
