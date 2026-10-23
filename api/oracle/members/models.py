@@ -70,6 +70,8 @@ class AccessRequest(TenantScoped, Base):
     invite_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("invites.id", ondelete="SET NULL")
     )
+
+
 # The owner's note to the invitee (#203): plain text, never HTML.
 INVITE_MESSAGE_MAX = 500
 
