@@ -3509,7 +3509,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove Evidence */
+        /**
+         * Remove Evidence
+         * @description Remove a piece of evidence; ``reason`` (why it was wrong) is kept in the audit log.
+         */
         delete: operations["remove_evidence"];
         options?: never;
         head?: never;
@@ -35492,7 +35495,9 @@ export interface operations {
     };
     remove_evidence: {
         parameters: {
-            query?: never;
+            query?: {
+                reason?: string | null;
+            };
             header?: never;
             path: {
                 evidence_id: string;

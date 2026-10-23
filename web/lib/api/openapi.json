@@ -11917,6 +11917,7 @@
           "baseline"
         ],
         "summary": "Remove Evidence",
+        "description": "Remove a piece of evidence; ``reason`` (why it was wrong) is kept in the audit log.",
         "operationId": "remove_evidence",
         "security": [
           {
@@ -11935,6 +11936,23 @@
               "type": "string",
               "format": "uuid",
               "title": "Evidence Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
             }
           }
         ],

@@ -4,6 +4,7 @@
  * scoring, so the UI's badge and breakdown can be exercised.
  */
 import type { Schemas } from "@/lib/api/client";
+import type { CitedItem } from "./baseline";
 import { FIREFLIES_CONNECTION_ID } from "./fireflies";
 import { mockUuid, PRODUCT_CHAT_ID, seeded, seededItemId } from "./ids";
 import { MOCK_NOTION_CONNECTION_ID } from "./notion";
@@ -379,6 +380,14 @@ export function sourceRepos(id: string): { kind: Source["kind"]; repos: string[]
   if (!s) return null;
   const repos = (s.config as Record<string, unknown>).repos;
   return { kind: s.kind, repos: Array.isArray(repos) ? repos.map(String) : [] };
+}
+
+/** One of the signed-in person's items, as citing it as evidence copies it (#338); null when there is none. */
+export function sourceItem(id: string): CitedItem | null {
+  const i = load().items.find((x) => x.id === id && !x.deleted_at);
+  if (!i) return null;
+  const { source_id, source_kind, kind, title, url, content, fetched_at } = i;
+  return { id: i.id, source_id, source_kind, kind, title: title ?? null, url: url ?? null, content, fetched_at: fetched_at ?? now() };
 }
 
 /** How many sources there are (A1's Pick sources step). */
