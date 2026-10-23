@@ -23,6 +23,7 @@ test("a milestone reads with its dates, and its codes as a named list", async ({
   await fleet(page);
 
   // The outline names the milestone by its dated title.
+  await page.getByTestId("outline-rail").getByRole("button", { name: "Unfold Delivery plan" }).click();
   await expect(outlineRow(page, "m1")).toContainText(M1);
   const m1 = await openSection(page, "m1");
   await expect(m1.getByRole("heading", { name: M1 })).toBeVisible();
