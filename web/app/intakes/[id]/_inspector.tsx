@@ -10,7 +10,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole, type Role } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CATEGORY_LABEL, HARD_BLOCKERS, criticalCount, type Gap, type Summary } from "./_lib";
+import { CATEGORY_LABEL, DECIDED_GAP, HARD_BLOCKERS, criticalCount, type Gap, type Summary } from "./_lib";
 
 type Decision = Schemas["DecisionIn"]["decision"];
 
@@ -132,7 +132,9 @@ function IntakeGoals({ summary: s }: { summary: Summary }) {
 
 /**
  * The right column (a sheet behind "Gaps N open" on a phone): Ready to draft, with each
- * critical question that holds the draft and Decide; the figures; the goals; the template.
+ * critical question that holds the draft and Decide, or the critical questions still open
+ * that hold nothing (never "Ready to draft" while one is open), or Archived; the figures;
+ * the goals; the template.
  */
 export function IntakeInspector({
   summary: s,
@@ -147,6 +149,9 @@ export function IntakeInspector({
   const gate = s.readiness;
   const blocking = gate.blocking_gap_ids.map((id) => s.gaps.find((g) => g.id === id)).filter((g): g is Summary["gaps"][number] => !!g);
   const converted = s.intake.status === "converted";
+  const archived = s.intake.status === "archived";
+  // Critical questions still open that hold nothing (none is a blocker): what the draft lacks.
+  const missing = blocking.length ? [] : s.gaps.filter((g) => g.importance === "critical" && !DECIDED_GAP.has(g.status));
   return (
     <Inspector
       eyebrow="Before drafting"
@@ -160,7 +165,29 @@ export function IntakeInspector({
       ]}
     >
       <InspectorSection testId="ready-to-draft">
-        {gate.gate === "clear" ? (
+        {archived ? (
+          <div className="flex flex-col gap-1.5">
+            <Chip kind="na" dot>
+              Archived
+            </Chip>
+            <p className="text-[13px] text-text2">Its questions are kept here, and no one is asked them any more.</p>
+          </div>
+        ) : gate.gate === "clear" && missing.length > 0 ? (
+          <div className="flex flex-col gap-2.5">
+            <Chip kind="warn" dot>
+              {criticalCount(missing.length)} open
+            </Chip>
+            <p className="text-[13px] text-text2">None of them holds the draft, but the draft has no answer for them yet.</p>
+            <ul className="flex flex-col gap-2">
+              {missing.map((g) => (
+                <li key={g.id} className="flex min-w-0 flex-col gap-0.5" data-testid="missing-gap">
+                  <span className="text-sm break-words text-text">{g.statement}</span>
+                  <span className="text-[13px] text-text2">{CATEGORY_LABEL[g.category]}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : gate.gate === "clear" ? (
           <Chip kind="pass" dot>
             Ready to draft
           </Chip>
@@ -197,7 +224,7 @@ export function IntakeInspector({
             </ul>
           </div>
         )}
-        {gate.private_blocking_gap_ids.length > 0 && (
+        {!archived && gate.private_blocking_gap_ids.length > 0 && (
           <p className="mt-2 text-[13px] text-text2">
             {criticalCount(gate.private_blocking_gap_ids.length)} from your own sources hold nothing until you share them.
           </p>

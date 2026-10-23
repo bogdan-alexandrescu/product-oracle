@@ -26788,7 +26788,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "draft" | "asked" | "answered" | "deferred" | "delegated" | "researching" | "withdrawn";
+            status: "draft" | "asked" | "answered" | "deferred" | "delegated" | "researching" | "withdrawn" | "retired";
             /**
              * Created At
              * Format: date-time
@@ -39927,7 +39927,7 @@ export interface operations {
                 intake_id?: string | null;
                 document_id?: string | null;
                 gap_id?: string | null;
-                status?: ("draft" | "asked" | "answered" | "deferred" | "delegated" | "researching" | "withdrawn") | null;
+                status?: ("draft" | "asked" | "answered" | "deferred" | "delegated" | "researching" | "withdrawn" | "retired") | null;
                 asked_to?: "me" | null;
                 limit?: number;
                 offset?: number;

@@ -223,6 +223,7 @@ function QuestionBubble({
             <span data-testid="asked-to">{mine ? "Asked you" : `Asked ${nameOf(people, me, q.asked_to)}`}</span>
             {q.status === "deferred" && <Chip kind="na">Deferred</Chip>}
             {q.status === "researching" && <Chip kind="acc">Being researched</Chip>}
+            {q.status === "retired" && <Chip kind="na">Retired</Chip>}
           </div>
         </article>
       </div>
@@ -515,7 +516,7 @@ export function QuestionsTab({
           </section>
         ))}
       </div>
-      {asker && <NextQuestions intakeId={s.intake.id} me={me} version={version} onAsked={onChanged} />}
+      {asker && s.intake.status !== "archived" && <NextQuestions intakeId={s.intake.id} me={me} version={version} onAsked={onChanged} />}
     </div>
   );
 }

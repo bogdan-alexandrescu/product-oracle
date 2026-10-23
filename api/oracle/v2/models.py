@@ -97,6 +97,8 @@ QUESTION_STATUSES = (
     "delegated",
     "researching",
     "withdrawn",
+    # Its brief was archived: kept as history, asked again if the brief is restored (#307).
+    "retired",
 )
 # §5 step 6: "I don't know", defer, another person's answer, "Research this".
 ANSWER_KINDS = ("answer", "dont_know", "defer", "delegate", "research")
