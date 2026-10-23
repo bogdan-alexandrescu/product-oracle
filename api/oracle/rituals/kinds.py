@@ -71,8 +71,14 @@ KINDS: dict[str, RitualKind] = {
     )
 }  # fmt: skip
 
-# Features whose block builders are registered. H1, H4, H6 and H8 add theirs.
-FEATURES: set[str] = set()
+# Features whose block builders are registered (oracle.rituals.blocks). All four are on
+# main: H1 Decision log (oracle.decisions), H4 Strategy and vision (oracle.strategy), H6
+# Launches and changelog (oracle.launches) and H8 Board and investor drafts (the update
+# document kind and the update_draft flow). H8's kinds stay off by default
+# (enabled_by_default); their update_draft block links the latest update draft and does
+# not start the update draft run yet. A kind whose feature is not listed here is not
+# listed and never fires.
+FEATURES: set[str] = {"decisions", "strategy", "launches", "updates"}
 
 
 def available(kind: RitualKind) -> bool:

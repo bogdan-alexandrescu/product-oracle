@@ -41,6 +41,12 @@ TITLES = {
     "unserved_features": "Features serving no confirmed goal",
     "suggested_next": "Suggested next",
     "alignment_report": "Weekly alignment report",
+    "decisions_due": "Decisions due for review",
+    "decisions_made": "Decisions made",
+    "strategy_drift": "Strategy drift",
+    "strategy_age": "Strategy age",
+    "changelog_drafts": "Changelog drafts",
+    "update_draft": "Update draft",
 }
 # Features that moved this many ranks between the last two snapshots.
 PRIORITY_MOVE = 3
@@ -472,6 +478,115 @@ async def alignment_report(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, An
              "text": f"{title}: {report.content.get('headline')}"}]  # fmt: skip
 
 
+# --- H1 Decision log, H4 Strategy and vision, H6 Launches and changelog, H8 drafts -----
+
+
+def _decision_row(d: Any) -> dict[str, Any]:
+    return {"decision_id": str(d.id), "number": d.number, "title": d.title,
+            "review_at": d.review_at.isoformat() if d.review_at else None,
+            "href": f"/company/decisions/{d.number}",
+            "text": f"D-{d.number} {d.title}"}  # fmt: skip
+
+
+async def decisions_due(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
+    """Decided judgement calls whose review date has come by the due time (H1's
+    ``review_due``)."""
+    from oracle.decisions.models import Decision
+
+    return [
+        _decision_row(d)
+        for d in await db.scalars(
+            select(Decision)
+            .where(Decision.status == "decided", Decision.origin != "checkpoint",
+                   Decision.review_at <= ctx.period_to.date())
+            .order_by(Decision.review_at, Decision.number)
+        )
+    ]  # fmt: skip
+
+
+async def decisions_made(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
+    from oracle.decisions.models import Decision
+
+    return [
+        _decision_row(d)
+        for d in await db.scalars(
+            select(Decision)
+            .where(Decision.status == "decided",
+                   Decision.decided_at.between(ctx.period_from, ctx.period_to))
+            .order_by(Decision.decided_at)
+        )
+    ]  # fmt: skip
+
+
+async def strategy_drift(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
+    """H4's open drift findings, worst first."""
+    from oracle.strategy.models import StrategyFinding
+
+    order = {"high": 0, "warning": 1, "info": 2}
+    found = sorted(
+        await db.scalars(select(StrategyFinding).where(StrategyFinding.status == "open")),
+        key=lambda f: (order.get(f.severity, 3), f.kind, f.subject_ref),
+    )
+    return [{"finding_id": str(f.id), "kind": f.kind, "severity": f.severity,
+             "subject_ref": f.subject_ref, "href": "/company/strategy",
+             "text": f"{f.kind.replace('_', ' ').capitalize()}: {f.subject_ref}"}
+            for f in found]  # fmt: skip
+
+
+async def strategy_age(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
+    """How old the approved vision and strategy are, and when each is due for review."""
+    from oracle.strategy.drift import _latest_approved
+
+    rows: list[dict[str, Any]] = []
+    for kind, label in (("strategy", "strategy"), ("vision", "vision")):
+        a = await _latest_approved(db, kind)
+        if a is None:
+            if kind == "strategy":
+                rows.append({"kind": kind, "href": "/company/strategy",
+                             "text": "No approved strategy yet"})  # fmt: skip
+            continue
+        approved = a.version.approved_at
+        days = (ctx.now - approved).days if approved else None
+        rows.append({
+            "kind": kind, "title": a.document.title, "approved_at":
+            approved.isoformat() if approved else None, "age_days": days,
+            "review_on": a.review_on.isoformat(), "href": "/company/strategy",
+            "text": f"The {label} was approved {days} days ago; review by {a.review_on}",
+        })  # fmt: skip
+    return rows
+
+
+async def changelog_drafts(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
+    """H6's changelog entries still in draft."""
+    from oracle.launches.models import ChangelogEntry
+
+    return [
+        {"entry_id": str(e.id), "title": e.title, "category": e.category,
+         "audience": e.audience, "released_on": e.released_on.isoformat(),
+         "href": "/plan/changelog", "text": f"{e.category.capitalize()}: {e.title}"}
+        for e in await db.scalars(
+            select(ChangelogEntry).where(ChangelogEntry.status == "draft")
+            .order_by(ChangelogEntry.released_on, ChangelogEntry.title)
+        )
+    ]  # fmt: skip
+
+
+async def update_draft(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
+    """H8's latest update document, linked. Starting the update draft run during
+    preparation is not built yet: the owner starts it from Company › Updates."""
+    doc = await db.scalar(
+        select(Document)
+        .where(Document.kind == "update")
+        .order_by(Document.created_at.desc())
+        .limit(1)
+    )
+    if doc is None:
+        return [{"href": "/company/updates", "text": "No update draft yet"}]
+    return [{"document_id": str(doc.id), "title": doc.title, "status": doc.status,
+             "href": f"/company/updates?document={doc.id}",
+             "text": f"{doc.title} ({doc.status})"}]  # fmt: skip
+
+
 Builder = Callable[[AsyncSession, BlockCtx], Awaitable[list[dict[str, Any]]]]
 BUILDERS: dict[str, Builder] = {
     "goals": goals,
@@ -489,6 +604,12 @@ BUILDERS: dict[str, Builder] = {
     "unserved_features": unserved_features,
     "suggested_next": suggested_next,
     "alignment_report": alignment_report,
+    "decisions_due": decisions_due,
+    "decisions_made": decisions_made,
+    "strategy_drift": strategy_drift,
+    "strategy_age": strategy_age,
+    "changelog_drafts": changelog_drafts,
+    "update_draft": update_draft,
 }
 
 

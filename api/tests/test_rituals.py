@@ -153,23 +153,42 @@ async def test_the_feature_gated_kinds_have_their_blocks(client, ctx, at):
 
     owner = ctx.users["owner"].id
     async with tenant_session(ctx.tenant_id) as db:
-        db.add(Decision(
-            number=1, title="Price the starter plan monthly", status="decided",
-            approver_id=owner, driver="Ada Example", origin="manual", chosen_option="a",
-            rationale="Simpler", decided_at=datetime(2026, 10, 20, tzinfo=UTC),
-            review_at=date(2026, 10, 21),
-        ))
-        db.add(StrategyFinding(
-            kind="goal_without_strategy", severity="warning", subject_kind="entity",
-            subject_ref="goal:activation",
-        ))
-        db.add(ChangelogEntry(
-            category="added", audience="public", title="Bulk export", released_on=date(2026, 10, 20),
-            created_actor="oracle",
-        ))
+        db.add(
+            Decision(
+                number=1,
+                title="Price the starter plan monthly",
+                status="decided",
+                approver_id=owner,
+                driver="Ada Example",
+                origin="manual",
+                chosen_option="a",
+                rationale="Simpler",
+                decided_at=datetime(2026, 10, 20, tzinfo=UTC),
+                review_at=date(2026, 10, 21),
+            )
+        )
+        db.add(
+            StrategyFinding(
+                kind="goal_without_strategy",
+                severity="warning",
+                subject_kind="entity",
+                subject_ref="goal:activation",
+            )
+        )
+        db.add(
+            ChangelogEntry(
+                category="added",
+                audience="public",
+                title="Bulk export",
+                released_on=date(2026, 10, 20),
+                created_actor="oracle",
+            )
+        )
         await db.commit()  # fmt: skip
     await tick(ctx.tenant_id)
-    listed = {r["kind"] for r in (await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json()}
+    listed = {
+        r["kind"] for r in (await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json()
+    }
     assert {"decision_review", "strategy_review", "changelog", "investor_update",
             "board_meeting"} <= listed  # fmt: skip
 
