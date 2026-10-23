@@ -137,7 +137,9 @@ def test_a_file_problem_keeps_the_gate_closed_whatever_is_staged():
 def test_a_kind_without_blocking_reasons_has_no_gate():
     """protects=kinds no spec registered are untouched; fails_when=they get a gate;
     no_claim=the later specs' sources."""
-    assert set(gate.BLOCKING_SOURCES) == {"roadmap_items", "feature_set", "priority_order"}
+    assert set(gate.BLOCKING_SOURCES) == {
+        "roadmap_items", "feature_set", "priority_order", "eng_review"
+    }  # fmt: skip
     assert gate.approve_gate(cp([SECTION], kind="prd_review"), None, []) is None
 
 
@@ -167,7 +169,7 @@ async def test_approve_is_refused_while_a_blocking_reason_is_open(review):  # no
         "file_problems": 0,
         "left": [
             {"item": "gift-cards", "item_title": "Gift cards", "code": "unknown_prd_section",
-             "label": "No PRD section", "waivable": True},
+             "label": "No PRD section", "waivable": True, "question_id": None},
         ],
     }  # fmt: skip
     assert cp["cannot_approve"] == LEFT

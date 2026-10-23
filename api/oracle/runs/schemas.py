@@ -168,6 +168,9 @@ class FlowSegmentOut(BaseModel):
     # None: the segment opens no stop (the code_map flow's index).
     checkpoint: CheckpointKind | None
     approver_role: Role
+    # F4: who decides the stop: by role, or the engineering lead (owners too; approvers
+    # while no lead is named), so the screens can say "Waits for the engineering lead".
+    decider: Literal["role", "engineering_lead"] = "role"
 
 
 class FlowStart(BaseModel):
@@ -535,6 +538,8 @@ class GateLeft(BaseModel):
     code: str
     label: str
     waivable: bool
+    # F4's blocking_question: the question left unanswered.
+    question_id: str | None = None
 
 
 class Gate(BaseModel):

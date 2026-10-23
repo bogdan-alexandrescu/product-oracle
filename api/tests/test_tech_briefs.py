@@ -29,9 +29,11 @@ from tests.tech_brief_helpers import (
     FEATURES,
     NO_MAP,
     SAMPLE,
+    BriefsRuntime,
     flow_with_eng_check,
     seed_features,
 )
+from tests.test_code_maps import MAP, shared_map
 
 # --------------------------------------------------------------------------- the check
 
@@ -191,7 +193,11 @@ def eng_flow(monkeypatch):
 
 @pytest.fixture
 def runtime():
-    fake = FakeRuntime({"eng_check": [Outcome(artifacts={flows.BRIEFS_FILE: SAMPLE})]})
+    fake = BriefsRuntime(
+        {
+            "eng_check": [Outcome(artifacts={flows.BRIEFS_FILE: SAMPLE})],
+        }
+    )
     set_runtime(fake)
     yield fake
     set_runtime(None)
@@ -246,8 +252,33 @@ def pending(run: dict) -> dict:
     return next(c for c in run["checkpoints"] if c["status"] == "pending")
 
 
-async def decide(client, headers, run: dict) -> dict:
+async def stage_check(client, headers, run: dict, verdicts=None, answers=None) -> None:
+    """F4's Engineering check gate: stage a verdict per feature and an answer per blocking
+    question (``verdicts``/``answers`` by feature key; else feasible and "Yes")."""
     cp = pending(run)
+    for f in cp["payload"]["briefs_check"]["features"]:
+        bodies = [
+            {
+                "field": "verdict",
+                "value": (verdicts or {}).get(f["key"]) or {"verdict": "feasible", "note": None},
+            }
+        ]
+        bodies += [{"field": f"answer:{q['id']}",
+                    "value": (answers or {}).get(f["key"], {}).get(q["id"], "Yes")}
+                   for q in f["questions"] if q["blocking"]]  # fmt: skip
+        for body in bodies:
+            resp = await client.post(
+                f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/actions",
+                json={"item_key": f["key"], "kind": "edit", **body},
+                headers=headers,
+            )
+            assert resp.status_code in (200, 201), resp.text
+
+
+async def decide(client, headers, run: dict, stage: bool = True) -> dict:
+    cp = pending(run)
+    if stage and cp["kind"] == "eng_review":
+        await stage_check(client, headers, run)
     resp = await client.post(
         f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
         json={"decision": "approved", "note": "Looks buildable"},
@@ -257,18 +288,15 @@ async def decide(client, headers, run: dict) -> dict:
     return resp.json()
 
 
-VERDICTS = {
-    "verdicts": {"feature-a": {"value": "feasible_with_changes", "note": "One writer"}},
-    "answers": {"feature-a": [{"question_id": "q1", "answer": "Hourly is fine"}]},
-}
-
-
-async def record_engineering_decisions(tenant_id: uuid.UUID, run: dict) -> None:
-    """What F4's Engineering check screen records on the checkpoint before Approve."""
-    async with tenant_session(tenant_id) as s:
-        cp = await s.get(Checkpoint, uuid.UUID(pending(run)["id"]))
-        cp.payload = {**cp.payload, "briefs": VERDICTS}
-        await s.commit()
+async def record_engineering_decisions(client, headers, run: dict) -> None:
+    """What F4's Engineering check screen stages before Approve."""
+    await stage_check(
+        client,
+        headers,
+        run,
+        verdicts={"feature-a": {"verdict": "feasible_with_changes", "note": "One writer"}},
+        answers={"feature-a": {"q1": "Hourly is fine"}},
+    )
 
 
 async def brief_rows(tenant_id: uuid.UUID):
@@ -296,11 +324,12 @@ async def test_existing_prd_briefs_are_registered_when_the_engineering_check_is_
     ids = await seed_features(tenant_id)
     assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
     lead_id, lead = await member(tenant_id, "approver")
+    await shared_map(tenant_id, MAP)  # F4's check: SAMPLE's refs are in the run's map
     run = await start(client, auth, "checkout-redesign")
     run = await advance_to(client, auth, run["id"], "eng_review")
     assert await brief_rows(tenant_id) == []
-    await record_engineering_decisions(tenant_id, run)
-    await decide(client, lead, run)
+    await record_engineering_decisions(client, lead, run)
+    await decide(client, lead, run, stage=False)
 
     rows = await brief_rows(tenant_id)
     assert [req.title for req, _ in rows] == ["Feature A", "Feature B"]
@@ -330,9 +359,8 @@ async def test_existing_prd_briefs_are_registered_when_the_engineering_check_is_
     assert av_a.provenance["answers"] == [
         {"question_id": "q1", "answer": "Hourly is fine", "by": str(lead_id)}
     ]
-    # A feature without a recorded verdict: the check's approval stands for it.
-    assert av_b.provenance["verdict"]["value"] is None
-    assert av_b.provenance["verdict"]["note"] == "Looks buildable"
+    # F4's gate: every feature has a verdict before Approve (feature B's staged feasible).
+    assert av_b.provenance["verdict"]["value"] == "feasible"
     assert cp.status == "approved"
 
     async with tenant_session(tenant_id) as s:
@@ -417,6 +445,7 @@ async def test_a_new_prd_gets_its_briefs_with_the_prd_draft_import(client, eng_f
     # than the import, or not at all; no_claim=the import's own checks.
     tenant_id, auth = await seed_auth()
     await seed_features(tenant_id)
+    await shared_map(tenant_id, MAP)  # F4's check: SAMPLE's refs are in the run's map
     run = await start(client, auth, "new-prd")
     run = await advance_to(client, auth, run["id"], "eng_review")
     await decide(client, auth, run)
@@ -461,7 +490,11 @@ async def test_with_the_engineering_check_off_briefs_are_registered_as_drafts(
 
 @pytest.fixture
 def no_map_runtime():
-    fake = FakeRuntime({"eng_check": [Outcome(artifacts={flows.BRIEFS_FILE: NO_MAP})]})
+    fake = BriefsRuntime(
+        {
+            "eng_check": [Outcome(artifacts={flows.BRIEFS_FILE: NO_MAP})],
+        }
+    )
     set_runtime(fake)
     yield fake
     set_runtime(None)
@@ -536,6 +569,7 @@ async def test_registration_is_idempotent(client, eng_flow, runtime):
 
     tenant_id, auth = await seed_auth()
     await seed_features(tenant_id)
+    await shared_map(tenant_id, MAP)  # F4's check: SAMPLE's refs are in the run's map
     run = await start(client, auth, "twice")
     await advance_to(client, auth, run["id"], "prd_review")
     async with tenant_session(tenant_id) as s:
@@ -643,6 +677,7 @@ async def test_registration_parses_and_renders_on_the_parse_pool(
     tenant_id, auth = await seed_auth()
     await seed_features(tenant_id)
     assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
+    await shared_map(tenant_id, MAP)  # F4's check: SAMPLE's refs are in the run's map
     run = await start(client, auth, "checkout-redesign")
     run = await advance_to(client, auth, run["id"], "eng_review")
     threads["load"].clear()
@@ -656,13 +691,16 @@ async def test_registration_parses_and_renders_on_the_parse_pool(
         assert name.startswith("safe-yaml"), threads
 
 
-async def test_non_text_decisions_are_dropped_at_registration(client, eng_flow, runtime):
+async def test_non_text_decisions_are_dropped_at_registration(
+    client, eng_flow, runtime, monkeypatch
+):
     # protects=the GET routes read a brief whose checkpoint recorded non-text verdicts or
     # answers; fails_when=such a value is stored and the routes answer 500.
     tenant_id, auth = await seed_auth()
     await seed_features(tenant_id)
     assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
     lead_id, lead = await member(tenant_id, "approver")
+    await shared_map(tenant_id, MAP)  # F4's check: SAMPLE's refs are in the run's map
     run = await start(client, auth, "checkout-redesign")
     run = await advance_to(client, auth, run["id"], "eng_review")
     recorded = {
@@ -678,10 +716,15 @@ async def test_non_text_decisions_are_dropped_at_registration(client, eng_flow, 
             "feature-b": "none",
         },
     }
-    async with tenant_session(tenant_id) as s:
-        cp = await s.get(Checkpoint, uuid.UUID(pending(run)["id"]))
-        cp.payload = {**cp.payload, "briefs": recorded}
-        await s.commit()
+    # F4's Approve records the staged choices on the checkpoint: record these instead.
+    from oracle.engineering import check as eng_check
+
+    monkeypatch.setattr(eng_check, "decisions", lambda cp, actions: {**recorded, "sizes": {}})
+
+    async def no_lines(*args):
+        return []  # what the later prompts read of such values is not this test's claim
+
+    monkeypatch.setattr(eng_check, "prompt_lines", no_lines)
     await decide(client, lead, run)
 
     _, viewer = await member(tenant_id, "viewer")
@@ -723,25 +766,38 @@ def test_a_commit_or_as_of_that_is_not_text_is_a_bad_entry():
 
 @pytest.fixture
 def unquoted_runtime():
-    fake = FakeRuntime({"eng_check": [Outcome(artifacts={flows.BRIEFS_FILE: UNQUOTED})]})
+    fake = BriefsRuntime(
+        {
+            "eng_check": [Outcome(artifacts={flows.BRIEFS_FILE: UNQUOTED})],
+        }
+    )
     set_runtime(fake)
     yield fake
     set_runtime(None)
 
 
-async def test_an_unquoted_commit_does_not_block_the_engineering_approval(
+async def test_an_unquoted_commit_is_a_file_problem_at_the_engineering_approval(
     client, eng_flow, unquoted_runtime
 ):
-    # protects=the lead approves an Engineering check whose tech_briefs.yaml has an
-    # unquoted commit and as_of, and nothing is registered; fails_when=the approval
-    # answers 500 on a pydantic ValidationError.
+    # protects=an Engineering check whose tech_briefs.yaml has an unquoted commit and
+    # as_of is refused as a file-level problem (F4: Send back is the only way on), and
+    # nothing is registered; fails_when=the approval answers 500 on a pydantic
+    # ValidationError, or lands.
     tenant_id, auth = await seed_auth()
     await seed_features(tenant_id)
     assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
     _, lead = await member(tenant_id, "approver")
     run = await start(client, auth, "checkout-redesign")
     run = await advance_to(client, auth, run["id"], "eng_review")
-    await decide(client, lead, run)
+    cp = pending(run)
+    assert cp["gate"]["file_problems"] > 0
+    resp = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
+        json={"decision": "approved"},
+        headers=lead,
+    )
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"]["code"] == "blocking_open"
     assert await brief_rows(tenant_id) == []
 
 
@@ -750,11 +806,11 @@ async def test_an_unquoted_commit_does_not_break_the_prd_draft_import(
 ):
     # protects=a new PRD's prd_draft import goes through when the run's tech_briefs.yaml
     # has an unquoted commit and as_of; fails_when=the import raises on every tick.
+    # F4's gate refuses such a check (a file-level problem), so its stop is off here: the
+    # stand-in segment still writes the file (tests.tech_brief_helpers).
     tenant_id, auth = await seed_auth()
     await seed_features(tenant_id)
-    run = await start(client, auth, "new-prd")
-    run = await advance_to(client, auth, run["id"], "eng_review")
-    await decide(client, auth, run)
+    run = await start(client, auth, "new-prd", checkpoints={"eng_review": False})
     await advance_to(client, auth, run["id"], "prd_review")  # tick asserts no errors
     async with tenant_session(tenant_id) as s:
         assert await s.scalar(select(DocumentVersion)) is not None

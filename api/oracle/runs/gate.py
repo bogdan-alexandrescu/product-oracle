@@ -16,6 +16,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from oracle.engineering import check as eng_check
 from oracle.runs.feature_set import FILE_PROBLEMS
 from oracle.runs.models import Checkpoint
 from oracle.runs.schemas import Gate, GateLeft
@@ -52,6 +53,9 @@ class Source:
     read: Callable[[Checkpoint], tuple[list[dict[str, Any]], int]]
     not_waivable: frozenset[str] | None
     refusal: str
+    # A kind whose reasons the staged actions themselves close (F4's Engineering check: a
+    # staged verdict closes no_verdict): read with them instead of ``read``.
+    live: Callable[[Checkpoint, list[Any]], tuple[list[dict[str, Any]], int]] | None = None
 
 
 def _roadmap_items(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
@@ -93,6 +97,10 @@ def _priority_order(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
     return _problems((cp.payload or {}).get("priority_check"))
 
 
+def _eng_review(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
+    return eng_check.reasons(cp, [])
+
+
 # The spec owning each checkpoint kind registers its blocking reasons here.
 BLOCKING_SOURCES: dict[str, Source] = {
     "roadmap_items": Source(_roadmap_items, DATE_CODES, DATE_NOT_WAIVED),
@@ -100,6 +108,8 @@ BLOCKING_SOURCES: dict[str, Source] = {
     "feature_set": Source(_feature_set, UNKNOWN_CODES, UNKNOWN_NOT_WAIVED),
     # C8 (checked at segment end: nothing edits the order until pick C9).
     "priority_order": Source(_priority_order, None, ORDER_NOT_WAIVED),
+    # F4 Engineering check: a verdict per feature and an answer per blocking question.
+    "eng_review": Source(_eng_review, None, eng_check.NOT_WAIVED, live=eng_check.reasons),
 }
 
 
@@ -129,8 +139,8 @@ def approve_gate(
     source = BLOCKING_SOURCES.get(cp.kind)
     if source is None:
         return None
-    stored, file_problems = source.read(cp)
     staged = [a for a in actions if a.state == "staged"]
+    stored, file_problems = source.live(cp, staged) if source.live else source.read(cp)
     left = [
         GateLeft(
             item=r["item"],
@@ -138,6 +148,7 @@ def approve_gate(
             code=r["code"],
             label=r.get("label") or r["code"],
             waivable=waivable(cp.kind, r["code"]),
+            question_id=r.get("question_id"),
         )
         for r in (stored if reasons is None else reasons)
         if r.get("severity") == BLOCKING and not any(_waives(a, cp.kind, r) for a in staged)

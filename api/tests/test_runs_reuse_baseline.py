@@ -229,7 +229,7 @@ async def test_an_intake_run_reuses_a_reusable_baseline(client, runtime):
         client, ctx, (await plain_run(client, ctx, reuse_baseline=False))["id"]
     )
     assert rebuilt["total_usd"] - est["total_usd"] == pytest.approx(7.0)
-    assert est["total_usd"] == pytest.approx(19.5)
+    assert est["total_usd"] == pytest.approx(24.5)
 
     started = await start(client, ctx, run["id"])
     assert started["status"] == "running"
@@ -268,7 +268,7 @@ async def test_an_intake_run_rebuilds_when_the_baseline_is_not_reusable(client, 
     run = resp.json()
     assert run["knobs"].get("reuse_baseline") is None
     est = await estimate(client, ctx, run["id"])
-    assert est["total_usd"] == pytest.approx(26.5)
+    assert est["total_usd"] == pytest.approx(31.5)
 
 
 @pytest.fixture
@@ -310,7 +310,7 @@ async def test_start_refuses_when_a_build_started_after_the_estimate(client, run
     assert refused["detail"] == {"code": "baseline_not_reusable", "reason": "build_under_way"}
     after = (await client.get(f"/v1/runs/{run['id']}", headers=ctx.as_("owner"))).json()
     assert after["status"] == "draft"
-    assert [s["status"] for s in after["segments"]] == ["pending"] * 4
+    assert [s["status"] for s in after["segments"]] == ["pending"] * 5
     assert after["checkpoints"] == []
     assert runtime.submitted == []
 
@@ -335,7 +335,7 @@ async def test_a_plain_run_without_the_knob_still_builds_the_baseline(client, ru
     run = await plain_run(client, ctx)
     assert run["knobs"].get("reuse_baseline") is None
     est = await estimate(client, ctx, run["id"])
-    assert est["total_usd"] == pytest.approx(26.5)
+    assert est["total_usd"] == pytest.approx(31.5)
     assert all(r["note"] is None and r["reused"] is False for r in est["segments"])
     started = await start(client, ctx, run["id"])
     assert started["segments"][0]["status"] == "running"

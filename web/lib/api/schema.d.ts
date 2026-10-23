@@ -15560,6 +15560,12 @@ export interface components {
              * @enum {string}
              */
             approver_role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Decider
+             * @default role
+             * @enum {string}
+             */
+            decider: "role" | "engineering_lead";
         };
         /** FlowStart */
         FlowStart: {
@@ -15714,6 +15720,8 @@ export interface components {
             label: string;
             /** Waivable */
             waivable: boolean;
+            /** Question Id */
+            question_id?: string | null;
         };
         /**
          * GateView

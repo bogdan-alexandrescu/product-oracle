@@ -143,6 +143,7 @@ from oracle.docs import visibility, written
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
+from oracle.engineering import check as eng_check
 from oracle.jobs.models import LlmSuggestion
 from oracle.members.leads import (
     ENGINEERING_KINDS,
@@ -336,7 +337,31 @@ def _flow(run: Run) -> flows.FlowDef:
 
 
 def _knobs(run: Run) -> flows.Knobs:
-    return flows.resolve_knobs(_flow(run), run.knobs)
+    raw = run.knobs or {}
+    stored = raw.get("checkpoints")
+    if isinstance(stored, dict) and stored:
+        # Stored knobs name every stop of the flow as it was when the run was made: a stop
+        # added since (F4's eng_review) is off for it, so its segments stay as they were.
+        added = {
+            s.checkpoint: False
+            for s in _flow(run).segments
+            if s.skip_when_off and s.checkpoint not in stored
+        }
+        if added:
+            raw = {**raw, "checkpoints": {**stored, **added}}
+    return flows.resolve_knobs(_flow(run), raw)
+
+
+def _skipped_off(sdef: flows.SegmentDef, knobs: flows.Knobs) -> bool:
+    """F4: a segment skipped whole because its stop is off (no step, no spend)."""
+    return (
+        sdef.skip_when_off
+        and sdef.checkpoint is not None
+        and not knobs.checkpoints.get(sdef.checkpoint, True)
+    )
+
+
+OFF_NOTE = "Turned off when the run started."
 
 
 def _art(segment: RunSegment) -> dict[str, Any]:
@@ -400,6 +425,9 @@ def flow_catalog() -> FlowCatalog:
                         outputs=list(s.outputs_for(f.target_kind or "prd")),
                         checkpoint=s.checkpoint,  # type: ignore[arg-type]
                         approver_role=s.approver_role,  # type: ignore[arg-type]
+                        decider="engineering_lead"
+                        if s.checkpoint in ENGINEERING_KINDS and f.key != SPEC_FLOW
+                        else "role",
                     )
                     for s in f.segments
                 ],
@@ -1910,7 +1938,8 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
     for i, sdef in enumerate(flow.segments, start=1):
         amount = flows.segment_estimate(sdef, knobs)
         skip = bool(reused) and sdef.name == "baseline"
-        if skip:
+        off = _skipped_off(sdef, knobs)
+        if skip or off:
             amount = Decimal("0.00")
         segments[sdef.name].estimate_usd = amount
         rows.append(
@@ -1923,7 +1952,7 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
                 reused=skip,
                 note=f"Current baseline, approved {reuse.short_date(reused['approved_at'])}"
                 if skip
-                else None,
+                else (OFF_NOTE if off else None),
             )
         )
     total = sum((Decimal(str(r.estimate_usd)) for r in rows), Decimal(0))
@@ -2033,6 +2062,10 @@ async def _launch(db: AsyncSession, run: Run, principal: Principal | str | None 
     ceiling = (run.estimate_usd * flows.OVERRUN_FACTOR).quantize(Decimal("0.0001"))
     _set_knob(run, "spend_ceiling_usd", str(ceiling))
     segments = await _segments(db, run.id)
+    knobs = _knobs(run)
+    for s in segments:
+        if _skipped_off(_flow(run).segment(s.name), knobs):
+            _skip_off(s)
     first = segments[0]
     reused = (run.knobs or {}).get("reuse_baseline")
     if reused and first.name == "baseline" and len(segments) > 1:
@@ -2040,6 +2073,18 @@ async def _launch(db: AsyncSession, run: Run, principal: Principal | str | None 
         first = segments[1]
     # Workflow mode covers the segments from ``first`` on: no baseline step is submitted.
     await _submit(db, run, first, segments)
+
+
+def _skip_off(segment: RunSegment) -> None:
+    """F4: the segment's stop is off, so nothing of it runs (recorded skipped at no cost)."""
+    art = _art(segment)
+    art["note"] = OFF_NOTE
+    _set_art(segment, art)
+    segment.status = "skipped"
+    segment.estimate_usd = Decimal("0.00")
+    segment.cost_usd = Decimal("0")
+    segment.finished_at = _now()
+    segment.error = None
 
 
 async def _skip_reused_baseline(
@@ -2249,7 +2294,10 @@ async def _prompt_context(
         kind=kind,
         source=source,
         draft=draft_ctx,
-        extra_lines=await extensions.prompt_lines(db, run),
+        extra_lines=[
+            *await extensions.prompt_lines(db, run),
+            *await eng_check.prompt_lines(db, run.id, segment.name),
+        ],
         intake_id=run.knobs.get("intake_id"),
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
         scope_yaml=scope_yaml,
@@ -3025,7 +3073,11 @@ async def _submit_now(
     kind = await _target_kind(db, run)
     registered_again = False
     while True:
-        covered = [s for s in segments if s.seq >= segment.seq] if mode.waits else [segment]
+        covered = (
+            [s for s in segments if s.seq >= segment.seq and s.status != "skipped"]
+            if mode.waits
+            else [segment]
+        )
         planned: list[tuple[int, str, list[str]]] = []
         contexts: list[tuple[int, flows.SegmentDef, flows.PromptContext]] = []
         for s in covered:
@@ -3653,7 +3705,7 @@ async def _next(
     segment: RunSegment,
     segments: list[RunSegment],
 ) -> None:
-    later = [s for s in segments if s.seq > segment.seq]
+    later = [s for s in segments if s.seq > segment.seq and s.status != "skipped"]
     wf = _drivable(run)
     if later and wf is not None and _plan_entry(wf, later[0].seq) is not None:
         # Already part of the live workflow: it runs once the wait is answered.
@@ -4181,6 +4233,11 @@ async def _advance(
         "attempt": attempt.get("attempt", 1),
         "artifacts": sorted(art["files"].keys()),
     }
+    if sdef.checkpoint == eng_check.KIND and flows.BRIEFS_FILE in sdef.outputs:
+        # F4: what the Engineering check's screen and its gate read.
+        payload[eng_check.PAYLOAD_KEY] = await eng_check.check_segment(
+            db, run, art["files"].get(flows.BRIEFS_FILE)
+        )
     if imported is not None:
         payload["import"] = imported
     if baseline_import is not None:
@@ -6585,7 +6642,9 @@ async def decide_checkpoint(
     segment = next((s for s in segments if s.seq == seq), None)
     # Only a segment in the state its checkpoint expects is started: the checkpoint's
     # segment succeeded, and the next one (approved) has not run.
-    later = next((s for s in segments if segment and s.seq > segment.seq), None)
+    later = next(
+        (s for s in segments if segment and s.seq > segment.seq and s.status != "skipped"), None
+    )
     if segment is None or segment.status != "succeeded":
         raise RunError(f"the checkpoint's segment is {segment.status if segment else 'missing'}")
     if decision == "approved" and later is not None and later.status != "pending":
@@ -6613,6 +6672,14 @@ async def decide_checkpoint(
     from oracle.staging import hooks as staging_hooks
 
     await staging_hooks.decided(db, cp, decision)
+    if decision == "approved" and cp.kind == eng_check.KIND and run.flow != SPEC_FLOW:
+        # F4: the lead's verdicts, answers and sizes, in this transaction.
+        staged = await db.scalars(
+            select(CheckpointAction).where(
+                CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged"
+            )
+        )
+        await eng_check.on_approved(db, principal, run, cp, list(staged))
     if decision == "approved":
         # F5-1: an approved Engineering check registers its tech briefs when the run's
         # PRD exists (else the prd_draft import does), in this transaction.
