@@ -416,3 +416,16 @@ def test_run_label_takes_the_company_zone():
     )
     assert describe.run_label(run, AUCKLAND) == "Build the baseline · Oct 21"
     assert describe.run_label(run, "America/Los_Angeles") == "Build the baseline · Oct 20"
+
+
+def test_the_deck_banner_names_the_company_time():
+    from oracle.docs.models import Document, DocumentVersion
+    from oracle.export import deck
+    from oracle.export.render import ExportVersion
+
+    doc = Document(slug="saved-addresses", title="Saved addresses PRD", kind="prd")
+    version = DocumentVersion(number=2, approved_at=LATE, created_at=LATE)
+    ev = ExportVersion(
+        document=doc, version=version, sections=[], citations=[], latest_number=2, zone=AUCKLAND
+    )
+    assert "approved 2026-10-13 09:00 NZDT" in deck._banner(ev)
