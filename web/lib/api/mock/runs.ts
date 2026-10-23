@@ -1076,8 +1076,20 @@ function itemsReuse(ctx: RunsContext, r: RunOut) {
   return ctx.draftItemsToReuse?.(r.source.document_id, r.source.version) ?? null;
 }
 
+type ItemsReused = { version: number; ready_at: string | null };
+
+/** The draft items the run's estimate reused (the API's draft_items_reused knob): Start uses them. */
+const estimated = (r: RunOut) => r as RunOut & { draft_items_reused?: ItemsReused | null };
+
+/** As the API: a run estimated with reused draft items still has the same ones at start (else 409). */
+function itemsChanged(ctx: RunsContext, r: RunOut): Response | null {
+  const knob = estimated(r).draft_items_reused;
+  if (!knob || JSON.stringify(itemsReuse(ctx, r)) === JSON.stringify(knob)) return null;
+  return fail(409, "the PRD version's draft roadmap items changed since the estimate: estimate the run again");
+}
+
 /** "Reused: the roadmap items of v3, derived 20 Oct", as the API. */
-function itemsReusedNote(reuse: { version: number; ready_at: string | null }) {
+function itemsReusedNote(reuse: ItemsReused) {
   const on = reuse.ready_at ? new Date(reuse.ready_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }) : null;
   return `Reused: the roadmap items of v${reuse.version}${on ? `, derived ${on}` : ""}`;
 }
@@ -1099,7 +1111,7 @@ function launch(ctx: RunsContext, r: RunOut) {
     submit(ctx, r, r.segments[1]);
     return;
   }
-  const items = itemsReuse(ctx, r);
+  const items = estimated(r).draft_items_reused;
   if (items && first?.name === "roadmap_items") {
     // E1 part B: the items step runs nothing and costs nothing; its stop opens at once.
     Object.assign(first, { status: "succeeded", cost_usd: 0, estimate_usd: 0, note: itemsReusedNote(items), started_at: ctx.now(), finished_at: ctx.now() });
@@ -1408,6 +1420,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     }
     r.segments = segmentsFor(r.flow, r.knobs, ctx.uuid);
     r.estimate_usd = null;
+    // As the API: what the run reuses is decided again by its next estimate.
+    estimated(r).draft_items_reused = null;
     r.needs_approval = false;
     return done();
   }
@@ -1421,6 +1435,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const reused = reusedReview(r);
     // E1 part B: a Build roadmap run reusing the draft items runs no items step.
     const items = itemsReuse(ctx, r);
+    estimated(r).draft_items_reused = items;
     const free = (name: string) => (!!reused && name === "baseline") || (!!items && name === "roadmap_items");
     for (const s of r.segments) s.estimate_usd = free(s.name) ? 0 : segEstimate(s.roles, r.knobs.depth);
     const total = round2(r.segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
@@ -1449,7 +1464,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (action === "start" && m === "POST") {
     if (r.status !== "draft") return fail(409, `run is ${r.status}, not a draft`);
     if (r.estimate_usd == null) return fail(409, "estimate the run first");
-    const stale = notReusable(r);
+    const stale = notReusable(r) ?? itemsChanged(ctx, r);
     if (stale) return stale;
     const refused = buildUnderWay(ctx, r.flow);
     if (refused) return refused;
@@ -1464,6 +1479,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   }
   if (action === "approve" && m === "POST") {
     if (r.status !== "awaiting_approval") return fail(409, `run is ${r.status}, not awaiting approval`);
+    const changed = itemsChanged(ctx, r);
+    if (changed) return changed;
     r.approved_by = ctx.userId;
     r.approved_at = ctx.now();
     launch(ctx, r);

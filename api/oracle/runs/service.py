@@ -2071,7 +2071,13 @@ async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> 
 async def _launch(db: AsyncSession, run: Run, principal: Principal | str | None = None) -> None:
     run.status = "running"
     run.started_at = _now()
-    ceiling = (run.estimate_usd * flows.OVERRUN_FACTOR).quantize(Decimal("0.0001"))
+    items_reused = (run.knobs or {}).get("draft_items_reused")
+    base = run.estimate_usd
+    if items_reused:
+        # E1 part B: the ceiling counts the reused items step at its nominal cost, so a
+        # send-back that derives the items again (a paid step) does not pause the run.
+        base += flows.segment_estimate(_flow(run).segment("roadmap_items"), _knobs(run))
+    ceiling = (base * flows.OVERRUN_FACTOR).quantize(Decimal("0.0001"))
     _set_knob(run, "spend_ceiling_usd", str(ceiling))
     segments = await _segments(db, run.id)
     first = segments[0]
@@ -2079,9 +2085,14 @@ async def _launch(db: AsyncSession, run: Run, principal: Principal | str | None 
     if reused and first.name == "baseline" and len(segments) > 1:
         await _skip_reused_baseline(db, run, first, reused, principal)
         first = segments[1]
-    items_reused = (run.knobs or {}).get("draft_items_reused")
     if items_reused and first.name == "roadmap_items":
-        if await _reuse_draft_items(db, run, first, segments, items_reused, principal):
+        try:
+            if await _reuse_draft_items(db, run, first, segments, items_reused, principal):
+                return
+        except safe_yaml.ParseBusy:
+            # No free worker for the items check: the segment stays succeeded with its
+            # advance "opening", and the next tick advances it again (_resume_advance).
+            log.warning("run %s: the reused items wait for a parse worker", run.id)
             return
     # Workflow mode covers the segments from ``first`` on: no baseline step is submitted.
     await _submit(db, run, first, segments)
@@ -2171,6 +2182,8 @@ async def _reuse_draft_items(
     )
     art["reused_items"] = knob
     art["note"] = note
+    # Until it is advanced: a busy parse pool stops the advance, and the tick resumes it.
+    art["attempts"][-1]["advanced"] = "opening"
     _set_art(segment, art)
     segment.status = "succeeded"
     segment.estimate_usd = Decimal("0.00")
@@ -6895,6 +6908,9 @@ async def _continue_decided(
     # Until its workflow is submitted, the segment remembers the decision that started
     # it: a disable of the decider voids it.
     art = _art(target)
+    if target is segment and art.pop("reused_items", None) is not None:
+        # E1 part B: a send-back derives the reused items again; they are no longer reused.
+        art.pop("note", None)
     art["decision"] = {
         "checkpoint_id": str(cp.id),
         "decided_by": str(cp.decided_by),
