@@ -1357,6 +1357,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     // Ritual rows (H2): the mock has no rituals yet (the UI lane adds them); outcome rows (H3) are added by ./quality.ts.
     rituals: [],
     outcomes: [],
+    // G6: discussion rows are added by the server (./discussions.ts).
+    discussions: [],
     checkpoints,
     deliveries,
     approvals,

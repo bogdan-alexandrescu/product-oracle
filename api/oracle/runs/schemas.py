@@ -1107,6 +1107,39 @@ from oracle.rituals.schemas import InboxRitual  # noqa: E402
 from oracle.roadmap.schemas import InboxTrack  # noqa: E402
 
 
+class InboxDiscussionPerson(BaseModel):
+    user_id: uuid.UUID
+    name: str
+
+
+class InboxDiscussionItem(BaseModel):
+    """G6: a discussion row. ``invited`` (added by a mention or a private one's starter),
+    ``mentioned`` (mentioned again) or ``changes_proposed`` (approvers: changes waiting on
+    them, derived on read; id ``chg_<discussion id>``). Shown only to those who can read
+    the discussion now."""
+
+    id: str
+    kind: Literal["invited", "mentioned", "changes_proposed"]
+    discussion_id: uuid.UUID
+    title: str
+    visibility: Literal["open", "private"]
+    subject_label: str
+    # The thread on its subject's page: "...?discussion=<id>".
+    subject_url: str
+    by: InboxDiscussionPerson | None = None
+    # A mention's message, its first 140 characters.
+    excerpt: str | None = None
+    # changes_proposed: the changes left for me.
+    count: int | None = None
+    # The people in it, up to 3, and how many more.
+    people: list[str] = []
+    people_more: int = 0
+    at: datetime
+    state: Literal["new", "open", "done"]
+    # Commenters and up join (write in) it; viewers read it.
+    can_write: bool = False
+
+
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
     # Those with the checkpoint's approver role: decisions recorded and not delivered to
@@ -1171,6 +1204,9 @@ class InboxOut(BaseModel):
     # owners; slips and overdue items also the engineering leads); new and open ones
     # count in ``total``.
     tracks: list[InboxTrack] = []
+    # G6: invitations, mentions and changes proposed in discussions; new and open ones
+    # count in ``total``.
+    discussions: list[InboxDiscussionItem] = []
 
 
 FeatureState = Literal["on", "off", "unknown"]

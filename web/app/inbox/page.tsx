@@ -114,6 +114,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
       </>
     ),
   },
+  { id: "discussions", title: "Discussions" },
   { id: "approvals", title: "Cost approvals" },
   { id: "overruns", title: "Paused on overrun" },
   { id: "lookups", title: "Stuck runs" },
