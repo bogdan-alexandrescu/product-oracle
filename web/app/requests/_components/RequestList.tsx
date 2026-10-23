@@ -7,7 +7,7 @@ import type { Schemas } from "@/lib/api/client";
 
 type Request = Schemas["RequestOut"];
 
-const STATE: Record<Request["state"], { label: string; kind: ChipKind }> = {
+export const STATE: Record<Request["state"], { label: string; kind: ChipKind }> = {
   new: { label: "New", kind: "na" },
   qualified: { label: "Qualified", kind: "pass" },
   merged: { label: "Merged", kind: "na" },
@@ -25,9 +25,16 @@ export const CHANNEL_LABEL: Record<Request["channel"], string> = {
   in_app: "In app",
 };
 
+/** How long ago a request came in: "today", else whole days ("3d"). */
+export function age(iso: string): string {
+  const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
+  return days < 1 ? "today" : `${days}d`;
+}
+
 /**
- * The request queue, newest first (#329): each request's title, state, channel, requester
- * and goal chips; the selected one is marked. `empty` shows when there are none.
+ * The request queue, newest first (#329, #348): each request's title, goal chips, state,
+ * theme, requester, channel and age; the selected one is marked. `empty` shows when there
+ * are none.
  */
 export function RequestList({
   requests,
@@ -58,14 +65,18 @@ export function RequestList({
               {r.title}
             </button>
             <span className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-text2">
-              <Chip kind={STATE[r.state].kind}>{STATE[r.state].label}</Chip>
-              <Chip kind="line">{CHANNEL_LABEL[r.channel]}</Chip>
               {r.goal_ids.map((id) => (
                 <Chip key={id} kind="acc" data-testid="goal-chip">
                   {goalTitles.get(id) ?? "A goal"}
                 </Chip>
               ))}
+              <Chip kind={STATE[r.state].kind}>{STATE[r.state].label}</Chip>
+              {r.theme && <span className="truncate font-medium text-text">{r.theme.title}</span>}
               {r.requester_name && <span className="truncate">{r.requester_name}</span>}
+              <Chip kind="line">{CHANNEL_LABEL[r.channel]}</Chip>
+              <span data-testid="request-age" className="tnum" title={new Date(r.created_at).toLocaleString()}>
+                {age(r.created_at)}
+              </span>
             </span>
           </li>
         );

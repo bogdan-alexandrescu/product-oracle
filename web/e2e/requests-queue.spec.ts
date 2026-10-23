@@ -82,7 +82,7 @@ test("Inspector: the filer edits a New request's words", async ({ page }) => {
 
   await inspector(page).getByRole("button", { name: "Edit" }).click();
   await inspector(page).getByLabel("Title").fill("Reorder last week's basket");
-  await inspector(page).getByRole("button", { name: "Save" }).click();
+  await inspector(page).getByRole("button", { name: "Save", exact: true }).click();
   await expect(inspector(page).getByRole("heading", { name: "Reorder last week's basket" })).toBeVisible();
   await page.reload();
   await expect(row(page, "Reorder last week's basket")).toBeVisible();
@@ -97,7 +97,7 @@ test("Inspector: link goals, theme, feature and PRD, then qualify with a reason"
   await pick(page, "Dark mode");
   const panel = inspector(page);
   await panel.getByRole("checkbox", { name: "Raise activation" }).check();
-  await panel.getByLabel("Theme", { exact: true }).selectOption({ label: "Reporting" });
+  await panel.getByRole("combobox", { name: "Theme", exact: true }).selectOption({ label: "Reporting" });
   await panel.getByLabel("Feature").selectOption({ label: "Dark mode" });
   await panel.getByLabel("PRD").selectOption({ index: 1 });
   await panel.getByRole("button", { name: "Save links" }).click();
@@ -177,8 +177,10 @@ test("Themes: create, rename and archive a theme", async ({ page }) => {
   const theme = page.getByTestId("theme-row").filter({ hasText: "Payments" });
   await expect(theme).toBeVisible();
   await theme.getByRole("button", { name: "Rename" }).click();
-  await theme.getByLabel("Theme title").fill("Payments and billing");
-  await theme.getByRole("button", { name: "Save" }).click();
+  // While renaming, the title is in the input, so find the row by its testid.
+  const editing = page.getByTestId("theme-row").filter({ has: page.getByLabel("Theme title") });
+  await editing.getByLabel("Theme title").fill("Payments and billing");
+  await editing.getByRole("button", { name: "Save", exact: true }).click();
   const renamed = page.getByTestId("theme-row").filter({ hasText: "Payments and billing" });
   await expect(renamed).toBeVisible();
   await renamed.getByRole("button", { name: "Archive" }).click();
