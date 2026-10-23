@@ -19,7 +19,7 @@ type EdgeRow = Omit<Schemas["EdgeOut"], "evidence_count">;
 type EvidenceRow = Schemas["EvidenceOut"] & { added_by?: string | null };
 type ConflictRow = Schemas["ConflictOut"];
 /** Stored as the API stores it: the sentence and who made it are written when it is read (B4). */
-type ProposalRow = Omit<Schemas["ProposalOut"], "summary" | "proposer" | "run">;
+type ProposalRow = Omit<Schemas["ProposalOut"], "summary" | "proposer" | "run" | "overlaps">;
 type Attrs = Record<string, unknown>;
 
 export interface BaselineState {
@@ -30,7 +30,11 @@ export interface BaselineState {
   proposals: ProposalRow[];
   /** Goal revisions as GET .../revisions serves them: each month's `current`; absent in older saved data. */
   revisions?: Schemas["RevisionOut"][];
+  /** Each applied change to one entity field, as entity_revisions would show it (#268). */
+  fieldChanges?: FieldChange[];
 }
+
+type FieldChange = { entity_id: string; field: string; before: unknown; after: unknown; at: string };
 
 export type BaselineCaller = {
   userId: string;
@@ -673,7 +677,14 @@ function updateEntity(
     return p;
   }
   const before = entitySnapshot(e);
+  const flatBefore = flatOf(e);
   Object.assign(e, diff, { updated_at: now() });
+  const after = flatOf(e);
+  for (const field of new Set([...Object.keys(flatBefore), ...Object.keys(after)])) {
+    if (!same(flatBefore[field] ?? null, after[field] ?? null)) {
+      (s.fieldChanges ??= []).push({ entity_id: e.id, field, before: flatBefore[field] ?? null, after: after[field] ?? null, at: now() });
+    }
+  }
   if (writer.origin === "user") lock(e, writer.userId);
   // A revision for the change, as service._revision records it.
   (s.revisions ??= []).push({
@@ -840,6 +851,50 @@ function attachEvidence(
   return row;
 }
 
+/** An entity's fields as "title", "body", "status" and "attrs.<key>". */
+function flatOf(e: EntityRow): Record<string, unknown> {
+  const attrs = Object.entries(e.attrs ?? {}).map(([k, v]) => [`attrs.${k}`, v]);
+  return { title: e.title, body: e.body ?? null, status: e.status, ...Object.fromEntries(attrs) };
+}
+
+/** A proposal's changes as [key, value], keys as flatOf names them. */
+function flatChanges(fields: Changes = {}): [string, unknown][] {
+  return Object.entries(fields).flatMap(([k, v]): [string, unknown][] =>
+    k === "attrs" && v && typeof v === "object" ? Object.entries(v).map(([ak, av]) => [`attrs.${ak}`, av]) : k === "id" ? [] : [[k, v]],
+  );
+}
+
+/** As service.overlaps (#268): the fields an open update would change that changed since it was written. */
+function overlapsOf(s: BaselineState, p: ProposalRow): Schemas["ProposalOverlap"][] {
+  const payload = p.payload as { op?: string; fields?: Changes };
+  const target = p.entity_id ? s.entities.find((e) => e.id === p.entity_id) : undefined;
+  if (p.status !== "open" || payload.op !== "update" || !target) return [];
+  const mine = (s.fieldChanges ?? []).filter((c) => c.entity_id === target.id && c.at > p.created_at);
+  const current = flatOf(target);
+  return flatChanges(payload.fields).flatMap(([field, proposed]) => {
+    const changed = mine.filter((c) => c.field === field);
+    const now_ = current[field] ?? null;
+    if (changed.length === 0 || same(now_, changed[0].before) || same(now_, proposed)) return [];
+    const last = changed[changed.length - 1];
+    const byProposal = s.proposals.some(
+      (a) =>
+        a.status === "accepted" &&
+        a.entity_id === target.id &&
+        (a.decided_at ?? "") > p.created_at &&
+        flatChanges((a.payload as { fields?: Changes }).fields).some(([k, v]) => k === field && same(v, last.after)),
+    );
+    return [{ field, current: now_, proposed, changed_at: last.at, by: byProposal ? "proposal" : "edit" }];
+  });
+}
+
+/** `fields` without the skipped keys. */
+function without(fields: Changes, keys: string[]): Changes {
+  const out = Object.fromEntries(Object.entries(fields).filter(([k]) => k !== "attrs" && !keys.includes(k))) as Changes;
+  const attrs = Object.entries(fields.attrs ?? {}).filter(([k]) => !keys.includes(`attrs.${k}`));
+  if (attrs.length > 0) out.attrs = Object.fromEntries(attrs);
+  return out;
+}
+
 /** service.entity_snapshot: what a revision keeps of an entity. */
 function entitySnapshot(e: EntityRow): Record<string, unknown> {
   return { type: e.type, key: e.key, title: e.title, body: e.body ?? null, attrs: { ...e.attrs }, status: e.status };
@@ -893,6 +948,7 @@ export async function routeBaseline(
       run,
       summary: p.status !== "open" && typeof stored === "string" ? stored : describe(p, s.entities, s.edges),
       proposer: proposer(p, { run, memberEmail: caller.memberEmail }),
+      overlaps: overlapsOf(s, p),
     };
   };
 
@@ -1058,8 +1114,15 @@ export async function routeBaseline(
         }
         const target = p.entity_id ? findEntity(p.entity_id) : undefined;
         if (!target) return fail(404, "Entity not found");
-        p.payload = { ...p.payload, summary: describe(p, s.entities, s.edges) };
-        updateEntity(s, target, payload.fields ?? {}, { origin: "user", userId: caller.userId });
+        // "milestone" means "attrs.milestone", as the API reads skip_fields.
+        const keys = ((await body<Schemas["ProposalAccept"] | null>())?.skip_fields ?? []).map((f) =>
+          ["title", "body", "status"].includes(f) || f.startsWith("attrs.") ? f : `attrs.${f}`,
+        );
+        const changes = flatChanges(payload.fields).map(([k]) => k);
+        const unknown = keys.find((k) => !changes.includes(k));
+        if (unknown) return fail(422, `this proposal does not change ${unknown}`);
+        p.payload = { ...p.payload, summary: describe(p, s.entities, s.edges), ...(keys.length ? { skipped_fields: keys } : {}) };
+        updateEntity(s, target, without(payload.fields ?? {}, keys), { origin: "user", userId: caller.userId });
       }
       if (action === "reject") p.payload = { ...p.payload, summary: describe(p, s.entities, s.edges) };
       Object.assign(p, {
@@ -1176,6 +1239,29 @@ export function addNoisyProposals(s: BaselineState, uuid: () => string) {
   );
   const paid = goal("g.paid-conversion");
   propose(paid, { title: paid.title, attrs: { target: paid.attrs.target } }, "2026-10-16T08:22:00Z");
+}
+
+/**
+ * The "proposal-overlap" scenario (#268): two run proposals on Saved carts that both set its
+ * milestone, written before either was accepted.
+ */
+export function addOverlappingProposals(s: BaselineState, uuid: () => string) {
+  const carts = s.entities.find((e) => e.key === "f.saved-carts")!;
+  const propose = (fields: Attrs, reason: string, created_at: string) =>
+    s.proposals.push({
+      id: uuid(),
+      entity_id: carts.id,
+      edge_id: null,
+      payload: { op: "update", kind: "entity", fields, reason, origin: "agent" },
+      run_id: AGENT_RUN,
+      actor: `run:${AGENT_RUN}`,
+      status: "open",
+      decided_by: null,
+      decided_at: null,
+      created_at,
+    });
+  propose({ attrs: { milestone: "M2" } }, "Slice a ships in M2.", "2026-10-16T08:30:00Z");
+  propose({ attrs: { milestone: "Below the line", effort: "XL" } }, "Moved below the line after sizing.", "2026-10-16T08:31:00Z");
 }
 
 /** Makes the seeded commenter proposal the given member's (the mock's members get their ids after the seed). */

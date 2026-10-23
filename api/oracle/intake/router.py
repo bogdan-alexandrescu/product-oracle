@@ -20,6 +20,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
@@ -745,6 +746,12 @@ async def answer_question(
     except service.IntakeError as e:
         raise _http(e) from e
     await db.commit()
+    return await answer_result(db, principal, result)
+
+
+async def answer_result(db: AsyncSession, principal: Principal, result: dict) -> AnswerResult:
+    """What :func:`answers.answer` did, as the caller may read it (after the commit). A
+    team interview's turn (oracle.interviews.team) records through the same path."""
     for row in (result["answer"], result["question"], result["gap"], *result["proposals"]):
         if row is not None:
             await db.refresh(row)

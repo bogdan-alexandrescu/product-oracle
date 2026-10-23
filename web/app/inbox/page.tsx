@@ -10,7 +10,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingChanged } from "@/lib/waiting";
 
 import { useActed } from "./_actions";
-import { allNeeds, NeedTable, sourceNeeds, STATE_TABS, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
+import { allNeeds, NeedTable, sourceNeeds, STATE_TABS, useFixedHere, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
 import { useQuestionRows } from "./_questions";
 
 type Source = Schemas["SourceOut"];
@@ -54,7 +54,9 @@ export default function InboxPage() {
   const { onActed, notice } = useActed(() => Promise.all([q.reload(), questionsQ.reload()]));
 
   const seenBefore = arrived ? arrivalQ.data : inbox?.last_seen_at;
-  const rows = inbox ? allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed) : null;
+  // D9: the child rows I fixed on this visit stay, done with Undo.
+  const fixed = useFixedHere();
+  const rows = inbox ? allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed) : null;
   const waiting = rows ? waitingNeeds(rows).length : undefined;
 
   return (
@@ -120,6 +122,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "report-failures", title: "Report not posted to Slack" },
   { id: "reports", title: "Reports" },
   { id: "strategy", title: "Strategy drift" },
+  { id: "dates", title: "Dates to verify" },
   { id: "launches", title: "Launches" },
   { id: "oracle-actions", title: "Oracle did" },
   { id: "feedback", title: "Feedback" },

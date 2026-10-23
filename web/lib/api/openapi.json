@@ -12153,7 +12153,7 @@
           "baseline"
         ],
         "summary": "Accept Proposal",
-        "description": "Apply the change as your own edit (it locks the item).",
+        "description": "Apply the change as your own edit (it locks the item). ``skip_fields`` keeps those\nfields as they are and applies the rest (#268).",
         "operationId": "accept_proposal",
         "security": [
           {
@@ -12181,7 +12181,7 @@
               "schema": {
                 "anyOf": [
                   {
-                    "$ref": "#/components/schemas/ProposalDecision"
+                    "$ref": "#/components/schemas/ProposalAccept"
                   },
                   {
                     "type": "null"
@@ -18143,7 +18143,8 @@
                     "deferred",
                     "delegated",
                     "researching",
-                    "withdrawn"
+                    "withdrawn",
+                    "retired"
                   ],
                   "type": "string"
                 },
@@ -26904,7 +26905,9 @@
                 {
                   "enum": [
                     "verified",
-                    "withdrawn"
+                    "proposed",
+                    "withdrawn",
+                    "rejected"
                   ],
                   "type": "string"
                 },
@@ -26913,6 +26916,22 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "name": "item_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Key"
             }
           }
         ],
@@ -26948,7 +26967,7 @@
           "roadmaps"
         ],
         "summary": "Create Schedule Basis",
-        "description": "Record a verified estimate, capacity figure or commitment supporting a date for\none PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a\ntracker issue is matched to (``tracker_key``). The approver or engineering lead\nrecording it verifies it.\nFrom a tracker record, the record's own target date must be that date, and the record\nmust be this PRD's.",
+        "description": "Record an estimate, capacity figure or commitment supporting a date for one PRD's\nroadmap items (O4), optionally only one item (``item_key``) or the items a tracker\nissue is matched to (``tracker_key``). The recorder's rights decide its status (F3):\nan engineering lead or an owner (an approver while no lead is named) verifies it by\nrecording it; an approver's waits as ``proposed`` until a lead verifies it.\nFrom a tracker record, the record's own target date must be that date, and the record\nmust be this PRD's.",
         "operationId": "create_schedule_basis",
         "security": [
           {
@@ -26990,6 +27009,36 @@
             }
           }
         }
+      }
+    },
+    "/v1/schedule-bases/rights": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Schedule Basis Rights",
+        "description": "The caller's date rights (F3): ``verify``, ``propose`` or null, and whether an\nengineering lead is named (the Record basis dialog's submit label).",
+        "operationId": "get_schedule_basis_rights",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateRightsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
       }
     },
     "/v1/schedule-bases/{basis_id}/withdraw": {
@@ -27037,6 +27086,182 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WithdrawOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/schedule-bases/{basis_id}/verify": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Verify Schedule Basis",
+        "description": "Verify a proposed basis (F3): from now on it supports its date. Milestones of its\ntracker key are re-checked and its PRD's tracks monitored again. 409 unless proposed.",
+        "operationId": "verify_schedule_basis",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "basis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Basis Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleBasisVerify"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleBasisOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/schedule-bases/{basis_id}/reject": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Reject Schedule Basis",
+        "description": "Reject a proposed basis, with a reason (F3): it never supports a date. 409 unless\nproposed.",
+        "operationId": "reject_schedule_basis",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "basis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Basis Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleBasisReject"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleBasisOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/schedule-bases/{basis_id}/impact": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Schedule Basis Impact",
+        "description": "What withdrawing this basis would change (F3), computed as the withdrawal does and\nwriting nothing: the milestones it dates (and whether another basis keeps the date),\nthe roadmap items whose date rests on it, and the roadmap versions' places that would\nshow \"date withdrawn\".",
+        "operationId": "get_schedule_basis_impact",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "basis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Basis Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BasisImpactOut"
                 }
               }
             }
@@ -29501,6 +29726,68 @@
         }
       }
     },
+    "/v1/requests/{request_id}/suggestion/decline": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Decline Request Suggestion",
+        "description": "Decline Oracle's suggestion; nothing else changes.",
+        "operationId": "decline_request_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclineSuggestionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/request-themes": {
       "get": {
         "tags": [
@@ -29829,6 +30116,818 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CandidateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interviews": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Create Interview",
+        "description": "Create a Draft customer interview and queue Oracle's draft of its questions.",
+        "operationId": "create_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterviewCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "List Interviews",
+        "description": "Interviews, newest first.",
+        "operationId": "list_interviews",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "draft",
+                    "invited",
+                    "in_progress",
+                    "finished",
+                    "expired",
+                    "revoked"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "intake_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Intake Id"
+            }
+          },
+          {
+            "name": "theme_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Theme Id"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "team",
+                    "customer"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InterviewSummary"
+                  },
+                  "title": "Response List Interviews"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interviews/{interview_id}": {
+      "get": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Get Interview",
+        "description": "An interview: its approved guide, the guide job, the transcript, the snapshot and\nthe requests it created.",
+        "operationId": "get_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Patch Interview",
+        "description": "Edit a Draft's intro, questions (at most 8, in order) or the customer's name.",
+        "operationId": "patch_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterviewPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interviews/{interview_id}/guide": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Redraft Interview Guide",
+        "description": "Ask Oracle to draft a Draft's questions again.",
+        "operationId": "redraft_interview_guide",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interviews/{interview_id}/link": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Create Interview Link",
+        "description": "Create the private link: shown once, works once, expires after 7 days.",
+        "operationId": "create_interview_link",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewLinkOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interviews/{interview_id}/revoke": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Revoke Interview",
+        "description": "Withdraw the interview: its link stops working at once.",
+        "operationId": "revoke_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/interview": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Open Team Interview",
+        "description": "My team interview for this intake (created on first call): Oracle's follow-ups\nand my replies on the intake's questions.",
+        "operationId": "open_team_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interviews/{interview_id}/turns": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Take Team Turn",
+        "description": "Answer one of the intake's questions in my team interview. Oracle follows up once\nwhen the answer does not meet the gap's stop condition; the reply, or with\n``skip_follow_up`` the answer as written, is recorded as my decision. A turn past 25\nseconds records the answer as written.",
+        "operationId": "take_team_turn",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamTurnIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamTurnOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/public/interviews/{token}": {
+      "get": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Public Interview",
+        "description": "The interview behind a private link (no member credential). The first open binds\nthe link to this browser with a cookie and posts Oracle's first question.",
+        "operationId": "public_interview",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterview"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown link (the body of an expired one)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Used in another browser, expired or withdrawn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/public/interviews/{token}/messages": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Public Interview Message",
+        "description": "The customer's answer; Oracle acknowledges it and asks one follow-up or the next\napproved question.",
+        "operationId": "public_interview_message",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicInterviewMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewTurn"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown link (the body of an expired one)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Used in another browser, expired or withdrawn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Empty or too long"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/v1/public/interviews/{token}/skip": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Public Interview Skip",
+        "description": "Skip the current question: Oracle asks the next one.",
+        "operationId": "public_interview_skip",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewTurn"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown link (the body of an expired one)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Used in another browser, expired or withdrawn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/public/interviews/{token}/finish": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Public Interview Finish",
+        "description": "Send my answers: the interview finishes and the link stops working.",
+        "operationId": "public_interview_finish",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewDone"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown link (the body of an expired one)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Used in another browser, expired or withdrawn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInterviewRefusal"
                 }
               }
             }
@@ -32042,6 +33141,33 @@
               }
             ],
             "title": "Last Assigned At"
+          },
+          "takes_calls": {
+            "type": "boolean",
+            "title": "Takes Calls"
+          },
+          "spent_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spent By"
+          },
+          "spent_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spent Until"
           }
         },
         "type": "object",
@@ -32059,7 +33185,10 @@
           "last_refresh_at",
           "token_expires_at",
           "last_refresh_reason",
-          "last_assigned_at"
+          "last_assigned_at",
+          "takes_calls",
+          "spent_by",
+          "spent_until"
         ],
         "title": "AccountOut"
       },
@@ -32095,6 +33224,13 @@
                 "type": "null"
               }
             ]
+          },
+          "pool": {
+            "$ref": "#/components/schemas/PoolOut"
+          },
+          "time_zone": {
+            "type": "string",
+            "title": "Time Zone"
           }
         },
         "type": "object",
@@ -32103,7 +33239,9 @@
           "unreadable_documents",
           "unreadable_document_count",
           "refresh_sweep",
-          "fallback"
+          "fallback",
+          "pool",
+          "time_zone"
         ],
         "title": "AccountsPage"
       },
@@ -34397,6 +35535,45 @@
         ],
         "title": "Basis",
         "description": "One input that drove a decision: what was read, what it held, and how we know."
+      },
+      "BasisImpactOut": {
+        "properties": {
+          "basis_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Basis Id"
+          },
+          "milestones": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactMilestone"
+            },
+            "type": "array",
+            "title": "Milestones"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactDocument"
+            },
+            "type": "array",
+            "title": "Documents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "basis_id",
+          "milestones",
+          "items",
+          "documents"
+        ],
+        "title": "BasisImpactOut",
+        "description": "What withdrawing a basis would change (F3), computed as the withdrawal would."
       },
       "BatchState": {
         "properties": {
@@ -42426,6 +43603,35 @@
         "title": "DateMarkOut",
         "description": "A date written in a roadmap's text, checked against its PRD's schedule bases now\n(O4 'document dates', oracle.roadmap.doc_dates). ``label`` is the marker shown next\nto the date (``unverified``, ``date withdrawn``); None for a verified date. The\ntext itself is never rewritten."
       },
+      "DateRightsOut": {
+        "properties": {
+          "rights": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "verify",
+                  "propose"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rights"
+          },
+          "lead_named": {
+            "type": "boolean",
+            "title": "Lead Named"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rights",
+          "lead_named"
+        ],
+        "title": "DateRightsOut"
+      },
       "DecideIn": {
         "properties": {
           "option_key": {
@@ -43857,6 +45063,20 @@
         ],
         "title": "DeckOut",
         "description": "The brief layer as slides, for Present mode: one slide per brief section after a\ntitle slide, Sources and data points slides last when the version has sources."
+      },
+      "DeclineSuggestionIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "DeclineSuggestionIn"
       },
       "DeferChange": {
         "properties": {
@@ -51861,6 +53081,101 @@
         ],
         "title": "HumanView"
       },
+      "ImpactDocument": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "marks": {
+            "type": "integer",
+            "title": "Marks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "version",
+          "marks"
+        ],
+        "title": "ImpactDocument"
+      },
+      "ImpactItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "roadmap": {
+            "type": "string",
+            "title": "Roadmap"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "roadmap",
+          "version",
+          "item_key"
+        ],
+        "title": "ImpactItem"
+      },
+      "ImpactMilestone": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "track_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Track Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "keeps_date": {
+            "type": "boolean",
+            "title": "Keeps Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "track_id",
+          "name",
+          "target_date",
+          "keeps_date"
+        ],
+        "title": "ImpactMilestone"
+      },
       "ImpactReport": {
         "properties": {
           "subject": {
@@ -52378,6 +53693,16 @@
               }
             ],
             "title": "Segment Title"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InboxSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -52393,6 +53718,97 @@
           "flow_title"
         ],
         "title": "InboxCheckpoint"
+      },
+      "InboxChild": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/InboxChildReason"
+          },
+          "fix": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReasonFix"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "staged": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewAction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suggested": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewAction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "reason"
+        ],
+        "title": "InboxChild",
+        "description": "One item under a checkpoint's Inbox row (D9): an item still needing the caller, its\nfirst open reason, the safe one-click fix of that reason (None when it has none) and a\ncommenter's suggestion on the item. ``staged`` stays null: an item fixed earlier leaves\nits slot (the Inbox page keeps the row it just fixed, done, with Undo)."
+      },
+      "InboxChildReason": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "confirm"
+            ],
+            "title": "Severity"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "label",
+          "text"
+        ],
+        "title": "InboxChildReason"
       },
       "InboxCounts": {
         "properties": {
@@ -52424,6 +53840,251 @@
         },
         "type": "object",
         "title": "InboxCounts"
+      },
+      "InboxDateBasis": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "estimate",
+              "capacity",
+              "commitment"
+            ],
+            "title": "Kind"
+          },
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          },
+          "supports_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Supports Date"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "prd_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Prd Document Id"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key"
+          },
+          "tracker_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Key"
+          },
+          "tracker_record_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Record Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "proposed",
+              "withdrawn",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "proposed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By"
+          },
+          "proposed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed At"
+          },
+          "verified_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified By"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "withdrawn_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn By"
+          },
+          "withdrawn_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn At"
+          },
+          "withdrawn_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn Reason"
+          },
+          "rejected_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected By"
+          },
+          "rejected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected At"
+          },
+          "rejected_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected Reason"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/DocumentRef"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "reference",
+          "supports_date",
+          "detail",
+          "prd_document_id",
+          "item_key",
+          "tracker_key",
+          "tracker_record_id",
+          "status",
+          "verified_by",
+          "verified_at",
+          "withdrawn_by",
+          "withdrawn_at",
+          "created_at",
+          "prd"
+        ],
+        "title": "InboxDateBasis",
+        "description": "A proposed basis in the Inbox of those who verify it (F3), with its PRD."
       },
       "InboxDecision": {
         "properties": {
@@ -53105,6 +54766,14 @@
             "title": "Oracle Actions",
             "default": []
           },
+          "dates": {
+            "items": {
+              "$ref": "#/components/schemas/InboxDateBasis"
+            },
+            "type": "array",
+            "title": "Dates",
+            "default": []
+          },
           "total": {
             "type": "integer",
             "title": "Total"
@@ -53477,6 +55146,42 @@
         "title": "InboxRevokeFailure",
         "description": "A provider revoke a member's disable still owes, whose last attempt did not\nrevoke (C2): retried by the tick for 24 hours, then waiting for an owner."
       },
+      "InboxSections": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "reviewed": {
+            "type": "integer",
+            "title": "Reviewed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "reviewed"
+        ],
+        "title": "InboxSections"
+      },
+      "InboxSource": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "version"
+        ],
+        "title": "InboxSource"
+      },
       "InboxStaged": {
         "properties": {
           "document_id": {
@@ -53616,6 +55321,97 @@
           "href"
         ],
         "title": "InboxSubject"
+      },
+      "InboxSummary": {
+        "properties": {
+          "need_you": {
+            "type": "integer",
+            "title": "Need You",
+            "default": 0
+          },
+          "blocking": {
+            "type": "integer",
+            "title": "Blocking",
+            "default": 0
+          },
+          "to_confirm": {
+            "type": "integer",
+            "title": "To Confirm",
+            "default": 0
+          },
+          "handled": {
+            "type": "integer",
+            "title": "Handled",
+            "default": 0
+          },
+          "waiting_on": {
+            "type": "integer",
+            "title": "Waiting On",
+            "default": 0
+          },
+          "wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WaitInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/InboxChild"
+            },
+            "type": "array",
+            "title": "Children",
+            "default": []
+          },
+          "more": {
+            "type": "integer",
+            "title": "More",
+            "default": 0
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InboxSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sections": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InboxSections"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "console_held": {
+            "type": "boolean",
+            "title": "Console Held",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "InboxSummary",
+        "description": "What a pending checkpoint needs of the caller and how much (D9), from the same read\nas ``GET \u2026/review`` (oracle.runs.actions.inbox_summary): its counts, the wait, up to\nthree child rows (blocking first, then in position order) and ``more`` items needing\nthe caller beyond them. A kind's review spec registers its own (``SUMMARIES``)."
       },
       "InspectedModule": {
         "properties": {
@@ -54915,6 +56711,670 @@
         ],
         "title": "IntakeSummary",
         "description": "The Opportunity and Gaps summary, as the reader may see it (S6)."
+      },
+      "InterviewCreate": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "customer",
+            "title": "Kind",
+            "default": "customer"
+          },
+          "interviewee_name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Interviewee Name"
+          },
+          "interviewee_company": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Company"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/InterviewSubject"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "interviewee_name",
+          "subject"
+        ],
+        "title": "InterviewCreate"
+      },
+      "InterviewGuideItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "prompt": {
+            "type": "string",
+            "title": "Prompt"
+          },
+          "purpose": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "prompt"
+        ],
+        "title": "InterviewGuideItem"
+      },
+      "InterviewGuideItemIn": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "prompt": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Prompt"
+          },
+          "purpose": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "InterviewGuideItemIn"
+      },
+      "InterviewJobState": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "InterviewJobState"
+      },
+      "InterviewLinkOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "title": "InterviewLinkOut",
+        "description": "The private link, shown once."
+      },
+      "InterviewMessageOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "oracle",
+              "interviewee"
+            ],
+            "title": "Role"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "guide_item": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guide Item"
+          },
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "kind",
+          "body",
+          "created_at"
+        ],
+        "title": "InterviewMessageOut"
+      },
+      "InterviewOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "team",
+              "customer"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "invited",
+              "in_progress",
+              "finished",
+              "expired",
+              "revoked"
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "intake_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Id"
+          },
+          "theme_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Id"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "intro": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intro"
+          },
+          "guide": {
+            "items": {
+              "$ref": "#/components/schemas/InterviewGuideItem"
+            },
+            "type": "array",
+            "title": "Guide"
+          },
+          "guide_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InterviewJobState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "interviewee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Name"
+          },
+          "interviewee_company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Company"
+          },
+          "link_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Expires At"
+          },
+          "link_opened_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Opened At"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Created By"
+          },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/InterviewMessageOut"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Snapshot"
+          },
+          "snapshot_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InterviewJobState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Request Ids"
+          },
+          "can_manage": {
+            "type": "boolean",
+            "title": "Can Manage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "title",
+          "guide",
+          "created_by",
+          "created_at",
+          "lock_version",
+          "messages",
+          "snapshot",
+          "request_ids",
+          "can_manage"
+        ],
+        "title": "InterviewOut"
+      },
+      "InterviewPatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "intro": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intro"
+          },
+          "guide": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/InterviewGuideItemIn"
+                },
+                "type": "array",
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guide"
+          },
+          "interviewee_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Name"
+          },
+          "interviewee_company": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Company"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "InterviewPatch"
+      },
+      "InterviewSubject": {
+        "properties": {
+          "intake_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Id"
+          },
+          "theme_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Id"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "InterviewSubject",
+        "description": "What the interview is about: exactly one of an intake, a request theme or a topic."
+      },
+      "InterviewSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "team",
+              "customer"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "invited",
+              "in_progress",
+              "finished",
+              "expired",
+              "revoked"
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "interviewee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Name"
+          },
+          "interviewee_company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewee Company"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Created By"
+          },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "request_count": {
+            "type": "integer",
+            "title": "Request Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "title",
+          "created_by",
+          "created_at",
+          "request_count"
+        ],
+        "title": "InterviewSummary"
       },
       "InviteCreate": {
         "properties": {
@@ -61914,6 +64374,15 @@
             ],
             "title": "Date Status"
           },
+          "basis_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Basis Ids",
+            "default": []
+          },
           "slip_days": {
             "anyOf": [
               {
@@ -62580,6 +65049,50 @@
           "position"
         ],
         "title": "PlannedItem"
+      },
+      "PoolOut": {
+        "properties": {
+          "takes_calls": {
+            "type": "boolean",
+            "title": "Takes Calls"
+          },
+          "on_fallback": {
+            "type": "boolean",
+            "title": "On Fallback"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          }
+        },
+        "type": "object",
+        "required": [
+          "takes_calls",
+          "on_fallback",
+          "reason",
+          "until"
+        ],
+        "title": "PoolOut",
+        "description": "Whether Oracle's built-in calls can run now, as the gateway decides it."
       },
       "PrdAnchor": {
         "properties": {
@@ -63749,6 +66262,31 @@
         ],
         "title": "ProductIntakeOut"
       },
+      "ProposalAccept": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "skip_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skip Fields",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "ProposalAccept"
+      },
       "ProposalCreate": {
         "properties": {
           "op": {
@@ -63960,6 +66498,14 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "overlaps": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalOverlap"
+            },
+            "type": "array",
+            "title": "Overlaps",
+            "default": []
           }
         },
         "type": "object",
@@ -63972,6 +66518,41 @@
           "created_at"
         ],
         "title": "ProposalOut"
+      },
+      "ProposalOverlap": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "current": {
+            "title": "Current"
+          },
+          "proposed": {
+            "title": "Proposed"
+          },
+          "changed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Changed At"
+          },
+          "by": {
+            "type": "string",
+            "enum": [
+              "proposal",
+              "edit"
+            ],
+            "title": "By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "changed_at",
+          "by"
+        ],
+        "title": "ProposalOverlap",
+        "description": "A field an open proposal would change that has changed since it was written (#268):\nby accepting another proposal, or by an edit."
       },
       "ProposalProposer": {
         "properties": {
@@ -64196,6 +66777,166 @@
           "token_help"
         ],
         "title": "ProviderOut"
+      },
+      "PublicInterview": {
+        "properties": {
+          "company": {
+            "type": "string",
+            "title": "Company"
+          },
+          "interviewee_name": {
+            "type": "string",
+            "title": "Interviewee Name"
+          },
+          "intro": {
+            "type": "string",
+            "title": "Intro"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "invited",
+              "in_progress",
+              "finished"
+            ],
+            "title": "Status"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/PublicInterviewMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/PublicInterviewProgress"
+          }
+        },
+        "type": "object",
+        "required": [
+          "company",
+          "interviewee_name",
+          "intro",
+          "status",
+          "messages",
+          "progress"
+        ],
+        "title": "PublicInterview"
+      },
+      "PublicInterviewDone": {
+        "properties": {
+          "done": {
+            "type": "boolean",
+            "title": "Done"
+          }
+        },
+        "type": "object",
+        "required": [
+          "done"
+        ],
+        "title": "PublicInterviewDone"
+      },
+      "PublicInterviewMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "oracle",
+              "customer"
+            ],
+            "title": "Role"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "body",
+          "at"
+        ],
+        "title": "PublicInterviewMessage"
+      },
+      "PublicInterviewMessageIn": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "PublicInterviewMessageIn"
+      },
+      "PublicInterviewProgress": {
+        "properties": {
+          "asked": {
+            "type": "integer",
+            "title": "Asked"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asked",
+          "total"
+        ],
+        "title": "PublicInterviewProgress"
+      },
+      "PublicInterviewRefusal": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "used",
+              "expired",
+              "withdrawn"
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "PublicInterviewRefusal"
+      },
+      "PublicInterviewTurn": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/PublicInterviewMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/PublicInterviewProgress"
+          },
+          "done": {
+            "type": "boolean",
+            "title": "Done"
+          }
+        },
+        "type": "object",
+        "required": [
+          "messages",
+          "progress",
+          "done"
+        ],
+        "title": "PublicInterviewTurn"
       },
       "PublicationOut": {
         "properties": {
@@ -72539,6 +75280,18 @@
               }
             ],
             "title": "Tracker Record Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           }
         },
         "additionalProperties": false,
@@ -72550,7 +75303,7 @@
           "prd"
         ],
         "title": "ScheduleBasisCreate",
-        "description": "A verified estimate, capacity figure or commitment. Recording it is the\nverification: the approver says this source supports this date, for this PRD's\nroadmap items (O4)."
+        "description": "An estimate, capacity figure or commitment supporting a date for this PRD's roadmap\nitems (O4). The recorder's rights decide its status (F3): an engineering lead or an\nowner (an approver while no lead is named) verifies it by recording it; an approver's\nwaits as proposed for a lead."
       },
       "ScheduleBasisOut": {
         "properties": {
@@ -72631,9 +75384,46 @@
             "type": "string",
             "enum": [
               "verified",
-              "withdrawn"
+              "proposed",
+              "withdrawn",
+              "rejected"
             ],
             "title": "Status"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "proposed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By"
+          },
+          "proposed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed At"
           },
           "verified_by": {
             "anyOf": [
@@ -72648,8 +75438,15 @@
             "title": "Verified By"
           },
           "verified_at": {
-            "type": "string",
-            "format": "date-time",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Verified At"
           },
           "withdrawn_by": {
@@ -72676,6 +75473,52 @@
             ],
             "title": "Withdrawn At"
           },
+          "withdrawn_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn Reason"
+          },
+          "rejected_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected By"
+          },
+          "rejected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected At"
+          },
+          "rejected_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected Reason"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -72701,6 +75544,42 @@
           "created_at"
         ],
         "title": "ScheduleBasisOut"
+      },
+      "ScheduleBasisReject": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "ScheduleBasisReject"
+      },
+      "ScheduleBasisVerify": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ScheduleBasisVerify"
       },
       "ScheduleBasisWithdraw": {
         "properties": {
@@ -78627,7 +81506,8 @@
               "deferred",
               "delegated",
               "researching",
-              "withdrawn"
+              "withdrawn",
+              "retired"
             ],
             "title": "Status"
           },
@@ -79438,6 +82318,41 @@
             "type": "array",
             "title": "Accepted",
             "default": []
+          },
+          "declined_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declined At"
+          },
+          "declined_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declined By"
+          },
+          "declined_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declined By Name"
           }
         },
         "type": "object",
@@ -80134,6 +83049,77 @@
           "lock_version"
         ],
         "title": "TaskPatch"
+      },
+      "TeamTurnIn": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Question Id"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "skip_follow_up": {
+            "type": "boolean",
+            "title": "Skip Follow Up",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "question_id"
+        ],
+        "title": "TeamTurnIn",
+        "description": "An answer to one of the intake's questions, a reply to Oracle's follow-up, or (with\n``skip_follow_up`` and no body) \"Skip, record my answer\"."
+      },
+      "TeamTurnOut": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/InterviewMessageOut"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "recorded": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_question_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Question Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "messages"
+        ],
+        "title": "TeamTurnOut"
       },
       "TechBriefAnswer": {
         "properties": {

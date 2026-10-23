@@ -25,6 +25,8 @@ import {
 import { Kbd } from "@/components/review/parts";
 import { ReviewPanel, type PanelTab } from "@/components/review/ReviewPanel";
 import { RoleNote } from "@/components/RoleNote";
+import { useDateRights } from "@/components/DateBasisDialog";
+import { DateMarkContext, type DateMarkCtx } from "@/components/DateMarker";
 import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import { SectionView } from "@/components/SectionView";
@@ -636,6 +638,17 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     ...new Map((version?.date_marks ?? []).filter((m) => m.label).map((m) => [`${m.text}|${m.label}`, m])).values(),
   ];
   const isUpdate = document_?.kind === "update";
+  // F3: a roadmap's markers open a popover to record the basis a date needs.
+  const dateRights = useDateRights();
+  const dateMarkCtx: DateMarkCtx | null =
+    isRoadmap && version
+      ? {
+          prd: version.source?.document_id ?? null,
+          sectionText: (key) => version.sections.find((x) => x.section_key === key)?.body_md ?? "",
+          rights: dateRights.data ?? null,
+          onChanged: () => void verQ.reload(),
+        }
+      : null;
   const approveBlocked =
     flaggedDates.length > 0 && isUpdate
       ? // H8: an update's Approve names what is left to resolve.
@@ -916,6 +929,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   );
 
   return (
+    <DateMarkContext.Provider value={dateMarkCtx}>
     <div ref={rootRef} onClickCapture={onLinkCapture} className={onDocument ? "max-[639px]:pb-16" : undefined}>
       <Page>
         <PageHeader
@@ -1294,6 +1308,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         <CommentPopover rect={composing.rect} anchor={composing.anchor} onCancel={closeComposer} onSubmit={submitComment} />
       )}
     </div>
+    </DateMarkContext.Provider>
   );
 }
 

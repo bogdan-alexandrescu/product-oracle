@@ -52,6 +52,7 @@ from oracle.baseline.schemas import (
     LinkTarget,
     NodeStatus,
     OriginIn,
+    ProposalAccept,
     ProposalCreate,
     ProposalDecision,
     ProposalOut,
@@ -115,12 +116,14 @@ async def _proposals_out(db, rows: list[Proposal]) -> list[ProposalOut]:
     runs = await service.proposal_runs(db, (p.run_id for p in rows))
     sentences = await describe.summaries(db, rows)
     who = await describe.proposers(db, rows, runs)
+    overlaps = await service.overlaps(db, rows)
     return [
         ProposalOut(
             **{c: getattr(p, c) for c in _PROPOSAL_COLUMNS},
             run=runs.get(p.run_id),
             summary=sentences[p.id],
             proposer=who[p.id],
+            overlaps=overlaps[p.id],
         )
         for p in rows
     ]
@@ -663,9 +666,10 @@ async def accept_proposal(
     proposal_id: uuid.UUID,
     principal: ApproverNow,
     db: TenantDB,
-    body: ProposalDecision | None = None,
+    body: ProposalAccept | None = None,
 ) -> ProposalOut:
-    """Apply the change as your own edit (it locks the item)."""
+    """Apply the change as your own edit (it locks the item). ``skip_fields`` keeps those
+    fields as they are and applies the rest (#268)."""
     return await _decide(db, principal, proposal_id, True, body)
 
 
@@ -682,7 +686,12 @@ async def reject_proposal(
 async def _decide(db, principal, proposal_id, accept, body) -> ProposalOut:
     try:
         proposal = await service.decide_proposal(
-            db, proposal_id, principal, accept, body.note if body else None
+            db,
+            proposal_id,
+            principal,
+            accept,
+            body.note if body else None,
+            getattr(body, "skip_fields", None),
         )
     except service.BaselineError as exc:
         await db.rollback()

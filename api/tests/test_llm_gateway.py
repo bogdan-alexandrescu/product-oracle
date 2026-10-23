@@ -576,3 +576,81 @@ async def test_claude_code_dies_with_the_api_process(slow_claude):
     finally:
         with contextlib.suppress(ProcessLookupError):
             os.kill(pid, signal.SIGKILL)
+
+
+# --- refusals a person reads (#403) -------------------------------------------------
+
+
+def test_a_refusal_gives_the_clearing_time_in_words_in_the_zone():
+    from oracle.claude_accounts.accounts import Unavailable
+    from oracle.claude_accounts.pool import NoAccount
+
+    at = datetime(2026, 10, 25, 21, 59, 59, 807205, tzinfo=UTC)
+    refused = NoAccount(Unavailable.NO_ACCOUNT_AVAILABLE, at)
+    assert refused.message("America/Los_Angeles") == (
+        "every Claude account is spent; the earliest window clears Sun Oct 25, 2:59 PM PDT"
+    )
+    assert refused.message("Europe/Berlin").endswith("clears Sun Oct 25, 10:59 PM CET")
+    assert "2026-10-25T" not in refused.message()
+
+
+async def test_a_spent_pool_refuses_in_the_company_time_zone_never_iso(tenant_id, fakes):
+    from oracle.tenant_settings import TenantSetting
+
+    await add_account(tenant_id, "weekly", windows={"seven_day": window(0.97, timedelta(days=2))})
+    async with tenant_session(tenant_id) as s:
+        s.add(TenantSetting(key="alignment_report", value={"timezone": "Asia/Tokyo"}))
+        await s.commit()
+    with pytest.raises(NoClaudeAccount) as info:
+        await _call(tenant_id, fakes)
+    message = str(info.value)
+    assert message.startswith("No Claude account can take this call: every Claude account is spent")
+    assert message.endswith(" JST"), message
+    assert "T" not in message.split("clears ")[1].split(",")[0]
+    assert "+00:00" not in message
+    assert info.value.next_reset_at is not None
+
+
+# --- a spent pool and the fallback credential (#403, owner decision 2026-10-23) ------
+
+
+async def test_a_spent_pool_with_a_fallback_runs_the_call_on_the_fallback(tenant_id, fakes):
+    from oracle.claude_accounts import fallback
+
+    weekly = await add_account(
+        tenant_id, "weekly", windows={"seven_day": window(0.97, timedelta(days=2))}
+    )
+    async with tenant_session(tenant_id) as s:
+        await fallback.store(s, PLAN_TOKEN_PREFIX + "01-spare", None)
+        await s.commit()
+    told: list[tuple[str | None, str]] = []
+    async with tenant_session(tenant_id) as s:
+        out = await gateway.complete(
+            s,
+            "Be brief.",
+            MESSAGES,
+            256,
+            job="reporting",
+            transports=fakes,
+            on_call=lambda label, via: told.append((label, via)),
+        )
+    # Which credential ran it: the fallback, never the spent account.
+    assert (out.via, out.account_id, out.account_label) == ("fallback_plan", None, None)
+    assert told == [(None, "fallback_plan")]
+    assert [t for t, _ in fakes.plan.calls] == [PLAN_TOKEN_PREFIX + "01-spare"]
+    assert (await get_account(tenant_id, weekly.account_id)).assigned == 0
+
+
+async def test_a_spent_pool_without_a_fallback_still_refuses_with_the_worded_time(tenant_id, fakes):
+    await add_account(tenant_id, "weekly", windows={"seven_day": window(0.97, timedelta(days=2))})
+    with pytest.raises(NoClaudeAccount) as info:
+        await _call(tenant_id, fakes)
+    assert info.value.reason == "no_account_available"
+    message = str(info.value)
+    assert message.startswith(
+        "No Claude account can take this call: every Claude account is spent; "
+        "the earliest window clears "
+    )
+    assert message.endswith((" PDT", " PST")), message
+    assert "+00:00" not in message
+    assert fakes.plan.calls == []

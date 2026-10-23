@@ -3,9 +3,10 @@
     text = (await gateway.complete(session, system, messages, max_tokens, job="reporting")).text
 
 Which credential pays: an account from the company's Claude account pool
-(``oracle.claude_accounts``), chosen by headroom; when the pool has no account at all,
-the fallback credential (a setup-token or an API key) set on Settings > Claude accounts;
-otherwise :class:`NoClaudeAccount` with the pool's reason. A pool account's access
+(``oracle.claude_accounts``), chosen by headroom; when the pool has no account at all or
+every account is spent, the fallback credential (a setup-token or an API key) set on
+Settings > Claude accounts (``fallback.covers``); otherwise :class:`NoClaudeAccount`
+with the pool's reason. A pool account's access
 token runs through Claude Code headless with ``CLAUDE_CODE_OAUTH_TOKEN`` set for that
 call only.
 
@@ -45,6 +46,7 @@ from oracle.claude_accounts.accounts import (
     SWAP_UNUSABLE,
     WindowReading,
 )
+from oracle.company_time import company_time_zone
 from oracle.llm.transports import (
     ClaudeCodeTransport,
     LlmAuthError,
@@ -58,7 +60,7 @@ from oracle.llm.transports import (
     TransportResult,
     get_llm_settings,
 )
-from oracle.tenancy import current_tenant
+from oracle.tenancy import current_tenant, tenant_session
 
 log = logging.getLogger(__name__)
 
@@ -73,6 +75,11 @@ JOBS = (
     "decision_options",
     # C9: Oracle reads a person's reason for a move or pin against the evidence.
     "override_reason_check",
+    # C3 Interviews: a customer interview's guide and snapshot (queued) and its turns
+    # (inline, in the customer's request).
+    "interview_guide",
+    "interview_turn",
+    "interview_snapshot",
     # G2 Live replies: what a person waits for in a discussion.
     "discussion_reply",
 )
@@ -242,15 +249,19 @@ async def _run(
 
     got = await _assign(tenant_id, job=job, attempt_id=attempt_id)
     if isinstance(got, pool.NoAccount):
-        if not got.is_pool_absent:
+        spare = None
+        if fallback.covers(got.reason):
+            # Its own short session: the caller's connection is not held across the call.
+            async with tenant_session(tenant_id) as read:
+                spare = await fallback.load(read)
+        if spare is None and got.is_pool_absent:
+            raise NoClaudeAccount(NO_ACCOUNT_MESSAGE, got.reason.value)
+        if spare is None:
             raise NoClaudeAccount(
-                f"No Claude account can take this call: {got.message()}",
+                f"No Claude account can take this call: {got.message(await _zone(tenant_id))}",
                 got.reason.value,
                 got.next_reset_at.isoformat() if got.next_reset_at else None,
             )
-        spare = await fallback.load(session)
-        if spare is None:
-            raise NoClaudeAccount(NO_ACCOUNT_MESSAGE, got.reason.value)
         via = "fallback_api_key" if spare.kind == "api_key" else "fallback_plan"
         _time_for_a_call(deadline)
         if on_call is not None:
@@ -359,6 +370,12 @@ async def _give_back(
             log.exception("could not give back the hold of a call cancelled while assigned")
 
 
+async def _zone(tenant_id: uuid.UUID) -> str:
+    """The company's time zone, which a refusal words its clearing time in."""
+    async with tenant_session(tenant_id) as s:
+        return await company_time_zone(s)
+
+
 class _NoSwap(NoClaudeAccount):
     pass
 
@@ -373,7 +390,8 @@ async def _swap(
             if whole.next_reset_at is not None:
                 moved = whole
         raise _NoSwap(
-            f"No other Claude account can take this call ({reason}): {moved.message()}",
+            f"No other Claude account can take this call ({reason}): "
+            f"{moved.message(await _zone(tenant_id))}",
             moved.reason.value,
             moved.next_reset_at.isoformat() if moved.next_reset_at else None,
         )

@@ -380,6 +380,17 @@ function syncQuestions(db: V2Db, intake: Intake, at = now()) {
   });
 }
 
+/** Archived: the brief's open questions are retired (#307). Restored: asked again, a delegated one of its delegate. */
+function retireQuestions(db: V2Db, intake: Intake) {
+  const archived = intake.status === "archived";
+  for (const q of db.questions.filter((x) => x.intake_id === intake.id)) {
+    if (archived && (q.status === "asked" || q.status === "delegated")) q.status = "retired";
+    else if (!archived && q.status === "retired") {
+      q.status = db.answers.some((a) => a.question_id === q.id && a.kind === "delegate") ? "delegated" : "asked";
+    }
+  }
+}
+
 /** Every asked question has a person (C2): `assign`, else the gap's owner, else the intake's author. */
 /**
  * Ask the next batch. Each question goes to someone who can answer it, as in the API: its own
@@ -502,7 +513,10 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       }
       if ("document" in patch && !atLeast(ctx.role, "approver")) return fail(403, "Linking an intake to a PRD needs an approver");
       if (patch.title) intake.title = patch.title;
-      if (patch.status) intake.status = patch.status;
+      if (patch.status && patch.status !== intake.status) {
+        intake.status = patch.status;
+        retireQuestions(db, intake);
+      }
       intake.lock_version += 1;
       intake.updated_at = now();
       return json(200, intakeOut(intake, db));
@@ -775,7 +789,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     const intake = question.intake_id ? findIntake(question.intake_id) : undefined;
     const allowed = question.asked_by === ctx.userId || intake?.author_id === ctx.userId || atLeast(ctx.role, "approver");
     if (!allowed) return fail(403, "Only the person who asked, the intake's author or an approver can do this");
-    if (question.status === "answered" || question.status === "withdrawn") return fail(409, `This question is ${question.status}; it stays as it is`);
+    if (question.status === "answered" || question.status === "withdrawn" || question.status === "retired") return fail(409, `This question is ${question.status}; it stays as it is`);
     if (input.status === "withdrawn") question.status = "withdrawn";
     else {
       if (!canAnswer(ctx, input.asked_to!)) return fail(422, CANNOT_ANSWER);
@@ -798,6 +812,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     if (!question) return fail(404, "Question not found");
     const input = await body<Schemas["AnswerIn"]>();
     if (question.status === "answered") return fail(409, "This question is answered; it is not asked again");
+    if (question.status === "withdrawn" || question.status === "retired") return fail(409, `A ${question.status} question cannot be answered`);
     if (question.asked_to && question.asked_to !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "This question was asked of someone else");
     if (input.kind === "answer" && !input.body?.trim()) return fail(422, "An answer needs a body");
     if (input.kind === "research" && !(question.intake_id && question.gap_id)) return fail(422, "Only a question about an intake's gap can be researched");

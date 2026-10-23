@@ -3578,7 +3578,8 @@ export interface paths {
         put?: never;
         /**
          * Accept Proposal
-         * @description Apply the change as your own edit (it locks the item).
+         * @description Apply the change as your own edit (it locks the item). ``skip_fields`` keeps those
+         *     fields as they are and applies the rest (#268).
          */
         post: operations["accept_proposal"];
         delete?: never;
@@ -7704,14 +7705,36 @@ export interface paths {
         put?: never;
         /**
          * Create Schedule Basis
-         * @description Record a verified estimate, capacity figure or commitment supporting a date for
-         *     one PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a
-         *     tracker issue is matched to (``tracker_key``). The approver or engineering lead
-         *     recording it verifies it.
+         * @description Record an estimate, capacity figure or commitment supporting a date for one PRD's
+         *     roadmap items (O4), optionally only one item (``item_key``) or the items a tracker
+         *     issue is matched to (``tracker_key``). The recorder's rights decide its status (F3):
+         *     an engineering lead or an owner (an approver while no lead is named) verifies it by
+         *     recording it; an approver's waits as ``proposed`` until a lead verifies it.
          *     From a tracker record, the record's own target date must be that date, and the record
          *     must be this PRD's.
          */
         post: operations["create_schedule_basis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/schedule-bases/rights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Schedule Basis Rights
+         * @description The caller's date rights (F3): ``verify``, ``propose`` or null, and whether an
+         *     engineering lead is named (the Record basis dialog's submit label).
+         */
+        get: operations["get_schedule_basis_rights"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7734,6 +7757,71 @@ export interface paths {
          *     stale. 409 when already withdrawn.
          */
         post: operations["withdraw_schedule_basis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/schedule-bases/{basis_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Schedule Basis
+         * @description Verify a proposed basis (F3): from now on it supports its date. Milestones of its
+         *     tracker key are re-checked and its PRD's tracks monitored again. 409 unless proposed.
+         */
+        post: operations["verify_schedule_basis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/schedule-bases/{basis_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Schedule Basis
+         * @description Reject a proposed basis, with a reason (F3): it never supports a date. 409 unless
+         *     proposed.
+         */
+        post: operations["reject_schedule_basis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/schedule-bases/{basis_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Schedule Basis Impact
+         * @description What withdrawing this basis would change (F3), computed as the withdrawal does and
+         *     writing nothing: the milestones it dates (and whether another basis keeps the date),
+         *     the roadmap items whose date rests on it, and the roadmap versions' places that would
+         *     show "date withdrawn".
+         */
+        get: operations["get_schedule_basis_impact"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -8475,6 +8563,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/requests/{request_id}/suggestion/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline Request Suggestion
+         * @description Decline Oracle's suggestion; nothing else changes.
+         */
+        post: operations["decline_request_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/request-themes": {
         parameters: {
             query?: never;
@@ -8569,6 +8677,241 @@ export interface paths {
          * @description Dismiss a found item: Oracle does not offer it again.
          */
         post: operations["dismiss_request_candidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Interviews
+         * @description Interviews, newest first.
+         */
+        get: operations["list_interviews"];
+        put?: never;
+        /**
+         * Create Interview
+         * @description Create a Draft customer interview and queue Oracle's draft of its questions.
+         */
+        post: operations["create_interview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Interview
+         * @description An interview: its approved guide, the guide job, the transcript, the snapshot and
+         *     the requests it created.
+         */
+        get: operations["get_interview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Interview
+         * @description Edit a Draft's intro, questions (at most 8, in order) or the customer's name.
+         */
+        patch: operations["patch_interview"];
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}/guide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redraft Interview Guide
+         * @description Ask Oracle to draft a Draft's questions again.
+         */
+        post: operations["redraft_interview_guide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Interview Link
+         * @description Create the private link: shown once, works once, expires after 7 days.
+         */
+        post: operations["create_interview_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Interview
+         * @description Withdraw the interview: its link stops working at once.
+         */
+        post: operations["revoke_interview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/interview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Team Interview
+         * @description My team interview for this intake (created on first call): Oracle's follow-ups
+         *     and my replies on the intake's questions.
+         */
+        post: operations["open_team_interview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take Team Turn
+         * @description Answer one of the intake's questions in my team interview. Oracle follows up once
+         *     when the answer does not meet the gap's stop condition; the reply, or with
+         *     ``skip_follow_up`` the answer as written, is recorded as my decision. A turn past 25
+         *     seconds records the answer as written.
+         */
+        post: operations["take_team_turn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/interviews/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Interview
+         * @description The interview behind a private link (no member credential). The first open binds
+         *     the link to this browser with a cookie and posts Oracle's first question.
+         */
+        get: operations["public_interview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/interviews/{token}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Public Interview Message
+         * @description The customer's answer; Oracle acknowledges it and asks one follow-up or the next
+         *     approved question.
+         */
+        post: operations["public_interview_message"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/interviews/{token}/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Public Interview Skip
+         * @description Skip the current question: Oracle asks the next one.
+         */
+        post: operations["public_interview_skip"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/interviews/{token}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Public Interview Finish
+         * @description Send my answers: the interview finishes and the link stops working.
+         */
+        post: operations["public_interview_finish"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9250,6 +9593,12 @@ export interface components {
             last_refresh_reason: string | null;
             /** Last Assigned At */
             last_assigned_at: string | null;
+            /** Takes Calls */
+            takes_calls: boolean;
+            /** Spent By */
+            spent_by: string | null;
+            /** Spent Until */
+            spent_until: string | null;
         };
         /** AccountsPage */
         AccountsPage: {
@@ -9261,6 +9610,9 @@ export interface components {
             unreadable_document_count: number;
             refresh_sweep: components["schemas"]["RefreshSweepOut"];
             fallback: components["schemas"]["FallbackOut"] | null;
+            pool: components["schemas"]["PoolOut"];
+            /** Time Zone */
+            time_zone: string;
         };
         /**
          * ActionIn
@@ -10106,6 +10458,23 @@ export interface components {
             evidence_ids: string[];
             /** Source */
             source?: string | null;
+        };
+        /**
+         * BasisImpactOut
+         * @description What withdrawing a basis would change (F3), computed as the withdrawal would.
+         */
+        BasisImpactOut: {
+            /**
+             * Basis Id
+             * Format: uuid
+             */
+            basis_id: string;
+            /** Milestones */
+            milestones: components["schemas"]["ImpactMilestone"][];
+            /** Items */
+            items: components["schemas"]["ImpactItem"][];
+            /** Documents */
+            documents: components["schemas"]["ImpactDocument"][];
         };
         /** BatchState */
         BatchState: {
@@ -12954,6 +13323,13 @@ export interface components {
              */
             where: "title" | "heading" | "body";
         };
+        /** DateRightsOut */
+        DateRightsOut: {
+            /** Rights */
+            rights: ("verify" | "propose") | null;
+            /** Lead Named */
+            lead_named: boolean;
+        };
         /** DecideIn */
         DecideIn: {
             /** Option Key */
@@ -13437,6 +13813,11 @@ export interface components {
             css: string;
             /** Slides */
             slides: components["schemas"]["SlideOut"][];
+        };
+        /** DeclineSuggestionIn */
+        DeclineSuggestionIn: {
+            /** Lock Version */
+            lock_version: number;
         };
         /**
          * DeferChange
@@ -16296,6 +16677,48 @@ export interface components {
              */
             created_at: string;
         };
+        /** ImpactDocument */
+        ImpactDocument: {
+            /** Slug */
+            slug: string;
+            /** Version */
+            version: number;
+            /** Marks */
+            marks: number;
+        };
+        /** ImpactItem */
+        ImpactItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Roadmap */
+            roadmap: string;
+            /** Version */
+            version: number;
+            /** Item Key */
+            item_key: string;
+        };
+        /** ImpactMilestone */
+        ImpactMilestone: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Track Id
+             * Format: uuid
+             */
+            track_id: string;
+            /** Name */
+            name: string;
+            /** Target Date */
+            target_date: string | null;
+            /** Keeps Date */
+            keeps_date: boolean;
+        };
         /** ImpactReport */
         ImpactReport: {
             subject: components["schemas"]["ImpactSubject"];
@@ -16472,6 +16895,38 @@ export interface components {
             document_slug?: string | null;
             /** Segment Title */
             segment_title?: string | null;
+            summary?: components["schemas"]["InboxSummary"] | null;
+        };
+        /**
+         * InboxChild
+         * @description One item under a checkpoint's Inbox row (D9): an item still needing the caller, its
+         *     first open reason, the safe one-click fix of that reason (None when it has none) and a
+         *     commenter's suggestion on the item. ``staged`` stays null: an item fixed earlier leaves
+         *     its slot (the Inbox page keeps the row it just fixed, done, with Undo).
+         */
+        InboxChild: {
+            /** Item */
+            item: string;
+            /** Title */
+            title?: string | null;
+            reason: components["schemas"]["InboxChildReason"];
+            fix?: components["schemas"]["ReasonFix"] | null;
+            staged?: components["schemas"]["ReviewAction"] | null;
+            suggested?: components["schemas"]["ReviewAction"] | null;
+        };
+        /** InboxChildReason */
+        InboxChildReason: {
+            /** Code */
+            code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "blocking" | "confirm";
+            /** Label */
+            label: string;
+            /** Text */
+            text: string;
         };
         /** InboxCounts */
         InboxCounts: {
@@ -16500,6 +16955,75 @@ export interface components {
              * @default 0
              */
             done: number;
+        };
+        /**
+         * InboxDateBasis
+         * @description A proposed basis in the Inbox of those who verify it (F3), with its PRD.
+         */
+        InboxDateBasis: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "estimate" | "capacity" | "commitment";
+            /** Reference */
+            reference: string;
+            /**
+             * Supports Date
+             * Format: date
+             */
+            supports_date: string;
+            /** Detail */
+            detail: string | null;
+            /**
+             * Prd Document Id
+             * Format: uuid
+             */
+            prd_document_id: string;
+            /** Item Key */
+            item_key: string | null;
+            /** Tracker Key */
+            tracker_key: string | null;
+            /** Tracker Record Id */
+            tracker_record_id: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "verified" | "proposed" | "withdrawn" | "rejected";
+            /** Note */
+            note?: string | null;
+            /** Proposed By */
+            proposed_by?: string | null;
+            /** Proposed At */
+            proposed_at?: string | null;
+            /** Verified By */
+            verified_by: string | null;
+            /** Verified At */
+            verified_at: string | null;
+            /** Withdrawn By */
+            withdrawn_by: string | null;
+            /** Withdrawn At */
+            withdrawn_at: string | null;
+            /** Withdrawn Reason */
+            withdrawn_reason?: string | null;
+            /** Rejected By */
+            rejected_by?: string | null;
+            /** Rejected At */
+            rejected_at?: string | null;
+            /** Rejected Reason */
+            rejected_reason?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            prd: components["schemas"]["DocumentRef"];
         };
         /**
          * InboxDecision
@@ -16794,6 +17318,11 @@ export interface components {
              * @default []
              */
             oracle_actions: components["schemas"]["InboxOracleAction"][];
+            /**
+             * Dates
+             * @default []
+             */
+            dates: components["schemas"]["InboxDateBasis"][];
             /** Total */
             total: number;
             /**
@@ -16953,6 +17482,20 @@ export interface components {
              */
             retry_until: string;
         };
+        /** InboxSections */
+        InboxSections: {
+            /** Total */
+            total: number;
+            /** Reviewed */
+            reviewed: number;
+        };
+        /** InboxSource */
+        InboxSource: {
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
         /**
          * InboxStaged
          * @description 'N changes staged for draft N+1' on one document, with the build action.
@@ -17011,6 +17554,60 @@ export interface components {
             title: string;
             /** Href */
             href: string | null;
+        };
+        /**
+         * InboxSummary
+         * @description What a pending checkpoint needs of the caller and how much (D9), from the same read
+         *     as ``GET …/review`` (oracle.runs.actions.inbox_summary): its counts, the wait, up to
+         *     three child rows (blocking first, then in position order) and ``more`` items needing
+         *     the caller beyond them. A kind's review spec registers its own (``SUMMARIES``).
+         */
+        InboxSummary: {
+            /**
+             * Need You
+             * @default 0
+             */
+            need_you: number;
+            /**
+             * Blocking
+             * @default 0
+             */
+            blocking: number;
+            /**
+             * To Confirm
+             * @default 0
+             */
+            to_confirm: number;
+            /**
+             * Handled
+             * @default 0
+             */
+            handled: number;
+            /**
+             * Waiting On
+             * @default 0
+             */
+            waiting_on: number;
+            wait?: components["schemas"]["WaitInfo"] | null;
+            /**
+             * Children
+             * @default []
+             */
+            children: components["schemas"]["InboxChild"][];
+            /**
+             * More
+             * @default 0
+             */
+            more: number;
+            /** Title */
+            title?: string | null;
+            source?: components["schemas"]["InboxSource"] | null;
+            sections?: components["schemas"]["InboxSections"] | null;
+            /**
+             * Console Held
+             * @default false
+             */
+            console_held: boolean;
         };
         /** InspectedModule */
         InspectedModule: {
@@ -17515,6 +18112,220 @@ export interface components {
              * @default 0
              */
             answers_since_run: number;
+        };
+        /** InterviewCreate */
+        InterviewCreate: {
+            /**
+             * Kind
+             * @default customer
+             * @constant
+             */
+            kind: "customer";
+            /** Interviewee Name */
+            interviewee_name: string;
+            /** Interviewee Company */
+            interviewee_company?: string | null;
+            subject: components["schemas"]["InterviewSubject"];
+        };
+        /** InterviewGuideItem */
+        InterviewGuideItem: {
+            /** Id */
+            id: string;
+            /** Prompt */
+            prompt: string;
+            /** Purpose */
+            purpose?: string | null;
+        };
+        /** InterviewGuideItemIn */
+        InterviewGuideItemIn: {
+            /** Id */
+            id?: string | null;
+            /** Prompt */
+            prompt: string;
+            /** Purpose */
+            purpose?: string | null;
+        };
+        /** InterviewJobState */
+        InterviewJobState: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+            /** Error */
+            error?: string | null;
+        };
+        /**
+         * InterviewLinkOut
+         * @description The private link, shown once.
+         */
+        InterviewLinkOut: {
+            /** Url */
+            url: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
+        /** InterviewMessageOut */
+        InterviewMessageOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "oracle" | "interviewee";
+            /** Kind */
+            kind: string;
+            /** Body */
+            body: string;
+            /** Guide Item */
+            guide_item?: string | null;
+            /** Question Id */
+            question_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** InterviewOut */
+        InterviewOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "team" | "customer";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "invited" | "in_progress" | "finished" | "expired" | "revoked";
+            /** Title */
+            title: string;
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Theme Id */
+            theme_id?: string | null;
+            /** Topic */
+            topic?: string | null;
+            /** Intro */
+            intro?: string | null;
+            /** Guide */
+            guide: components["schemas"]["InterviewGuideItem"][];
+            guide_job?: components["schemas"]["InterviewJobState"] | null;
+            /** Interviewee Name */
+            interviewee_name?: string | null;
+            /** Interviewee Company */
+            interviewee_company?: string | null;
+            /** Link Expires At */
+            link_expires_at?: string | null;
+            /** Link Opened At */
+            link_opened_at?: string | null;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /** Created By Name */
+            created_by_name?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /** Messages */
+            messages: components["schemas"]["InterviewMessageOut"][];
+            /** Snapshot */
+            snapshot: {
+                [key: string]: unknown;
+            };
+            snapshot_job?: components["schemas"]["InterviewJobState"] | null;
+            /** Request Ids */
+            request_ids: string[];
+            /** Can Manage */
+            can_manage: boolean;
+        };
+        /** InterviewPatch */
+        InterviewPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Intro */
+            intro?: string | null;
+            /** Guide */
+            guide?: components["schemas"]["InterviewGuideItemIn"][] | null;
+            /** Interviewee Name */
+            interviewee_name?: string | null;
+            /** Interviewee Company */
+            interviewee_company?: string | null;
+        };
+        /**
+         * InterviewSubject
+         * @description What the interview is about: exactly one of an intake, a request theme or a topic.
+         */
+        InterviewSubject: {
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Theme Id */
+            theme_id?: string | null;
+            /** Topic */
+            topic?: string | null;
+        };
+        /** InterviewSummary */
+        InterviewSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "team" | "customer";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "invited" | "in_progress" | "finished" | "expired" | "revoked";
+            /** Title */
+            title: string;
+            /** Interviewee Name */
+            interviewee_name?: string | null;
+            /** Interviewee Company */
+            interviewee_company?: string | null;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /** Created By Name */
+            created_by_name?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Request Count */
+            request_count: number;
         };
         /** InviteCreate */
         InviteCreate: {
@@ -20126,6 +20937,11 @@ export interface components {
             date: string | null;
             /** Date Status */
             date_status: ("verified" | "unverified" | "withdrawn") | null;
+            /**
+             * Basis Ids
+             * @default []
+             */
+            basis_ids: string[];
             /** Slip Days */
             slip_days: number | null;
             /** Tracked */
@@ -20344,6 +21160,20 @@ export interface components {
              * @default false
              */
             deferred: boolean;
+        };
+        /**
+         * PoolOut
+         * @description Whether Oracle's built-in calls can run now, as the gateway decides it.
+         */
+        PoolOut: {
+            /** Takes Calls */
+            takes_calls: boolean;
+            /** On Fallback */
+            on_fallback: boolean;
+            /** Reason */
+            reason: string | null;
+            /** Until */
+            until: string | null;
         };
         /** PrdAnchor */
         PrdAnchor: {
@@ -20750,6 +21580,16 @@ export interface components {
              */
             updated_at: string;
         };
+        /** ProposalAccept */
+        ProposalAccept: {
+            /** Note */
+            note?: string | null;
+            /**
+             * Skip Fields
+             * @default []
+             */
+            skip_fields: string[];
+        };
         /**
          * ProposalCreate
          * @description Suggest a change for an approver to accept: commenters and agents use this.
@@ -20823,6 +21663,34 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Overlaps
+             * @default []
+             */
+            overlaps: components["schemas"]["ProposalOverlap"][];
+        };
+        /**
+         * ProposalOverlap
+         * @description A field an open proposal would change that has changed since it was written (#268):
+         *     by accepting another proposal, or by an edit.
+         */
+        ProposalOverlap: {
+            /** Field */
+            field: string;
+            /** Current */
+            current?: unknown;
+            /** Proposed */
+            proposed?: unknown;
+            /**
+             * Changed At
+             * Format: date-time
+             */
+            changed_at: string;
+            /**
+             * By
+             * @enum {string}
+             */
+            by: "proposal" | "edit";
         };
         /**
          * ProposalProposer
@@ -20908,6 +21776,71 @@ export interface components {
             oauth_scopes: string[];
             /** Token Help */
             token_help: string;
+        };
+        /** PublicInterview */
+        PublicInterview: {
+            /** Company */
+            company: string;
+            /** Interviewee Name */
+            interviewee_name: string;
+            /** Intro */
+            intro: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "invited" | "in_progress" | "finished";
+            /** Messages */
+            messages: components["schemas"]["PublicInterviewMessage"][];
+            progress: components["schemas"]["PublicInterviewProgress"];
+        };
+        /** PublicInterviewDone */
+        PublicInterviewDone: {
+            /** Done */
+            done: boolean;
+        };
+        /** PublicInterviewMessage */
+        PublicInterviewMessage: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "oracle" | "customer";
+            /** Body */
+            body: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+        };
+        /** PublicInterviewMessageIn */
+        PublicInterviewMessageIn: {
+            /** Body */
+            body: string;
+        };
+        /** PublicInterviewProgress */
+        PublicInterviewProgress: {
+            /** Asked */
+            asked: number;
+            /** Total */
+            total: number;
+        };
+        /** PublicInterviewRefusal */
+        PublicInterviewRefusal: {
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "used" | "expired" | "withdrawn";
+        };
+        /** PublicInterviewTurn */
+        PublicInterviewTurn: {
+            /** Messages */
+            messages: components["schemas"]["PublicInterviewMessage"][];
+            progress: components["schemas"]["PublicInterviewProgress"];
+            /** Done */
+            done: boolean;
         };
         /**
          * PublicationOut
@@ -23709,9 +24642,10 @@ export interface components {
         };
         /**
          * ScheduleBasisCreate
-         * @description A verified estimate, capacity figure or commitment. Recording it is the
-         *     verification: the approver says this source supports this date, for this PRD's
-         *     roadmap items (O4).
+         * @description An estimate, capacity figure or commitment supporting a date for this PRD's roadmap
+         *     items (O4). The recorder's rights decide its status (F3): an engineering lead or an
+         *     owner (an approver while no lead is named) verifies it by recording it; an approver's
+         *     waits as proposed for a lead.
          */
         ScheduleBasisCreate: {
             /**
@@ -23736,6 +24670,8 @@ export interface components {
             tracker_key?: string | null;
             /** Tracker Record Id */
             tracker_record_id?: string | null;
+            /** Note */
+            note?: string | null;
         };
         /** ScheduleBasisOut */
         ScheduleBasisOut: {
@@ -23773,23 +24709,44 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "verified" | "withdrawn";
+            status: "verified" | "proposed" | "withdrawn" | "rejected";
+            /** Note */
+            note?: string | null;
+            /** Proposed By */
+            proposed_by?: string | null;
+            /** Proposed At */
+            proposed_at?: string | null;
             /** Verified By */
             verified_by: string | null;
-            /**
-             * Verified At
-             * Format: date-time
-             */
-            verified_at: string;
+            /** Verified At */
+            verified_at: string | null;
             /** Withdrawn By */
             withdrawn_by: string | null;
             /** Withdrawn At */
             withdrawn_at: string | null;
+            /** Withdrawn Reason */
+            withdrawn_reason?: string | null;
+            /** Rejected By */
+            rejected_by?: string | null;
+            /** Rejected At */
+            rejected_at?: string | null;
+            /** Rejected Reason */
+            rejected_reason?: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ScheduleBasisReject */
+        ScheduleBasisReject: {
+            /** Reason */
+            reason: string;
+        };
+        /** ScheduleBasisVerify */
+        ScheduleBasisVerify: {
+            /** Note */
+            note?: string | null;
         };
         /** ScheduleBasisWithdraw */
         ScheduleBasisWithdraw: {
@@ -25831,7 +26788,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "draft" | "asked" | "answered" | "deferred" | "delegated" | "researching" | "withdrawn";
+            status: "draft" | "asked" | "answered" | "deferred" | "delegated" | "researching" | "withdrawn" | "retired";
             /**
              * Created At
              * Format: date-time
@@ -26101,6 +27058,12 @@ export interface components {
              * @default []
              */
             accepted: ("theme" | "goals" | "duplicate" | "feature")[];
+            /** Declined At */
+            declined_at?: string | null;
+            /** Declined By */
+            declined_by?: string | null;
+            /** Declined By Name */
+            declined_by_name?: string | null;
         };
         /** SuggestionAccept */
         SuggestionAccept: {
@@ -26357,6 +27320,33 @@ export interface components {
             skip_reason?: string | null;
             /** Lock Version */
             lock_version: number;
+        };
+        /**
+         * TeamTurnIn
+         * @description An answer to one of the intake's questions, a reply to Oracle's follow-up, or (with
+         *     ``skip_follow_up`` and no body) "Skip, record my answer".
+         */
+        TeamTurnIn: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Body */
+            body?: string | null;
+            /**
+             * Skip Follow Up
+             * @default false
+             */
+            skip_follow_up: boolean;
+        };
+        /** TeamTurnOut */
+        TeamTurnOut: {
+            /** Messages */
+            messages: components["schemas"]["InterviewMessageOut"][];
+            recorded?: components["schemas"]["AnswerResult"] | null;
+            /** Next Question Id */
+            next_question_id?: string | null;
         };
         /** TechBriefAnswer */
         TechBriefAnswer: {
@@ -35716,7 +36706,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["ProposalDecision"] | null;
+                "application/json": components["schemas"]["ProposalAccept"] | null;
             };
         };
         responses: {
@@ -38937,7 +39927,7 @@ export interface operations {
                 intake_id?: string | null;
                 document_id?: string | null;
                 gap_id?: string | null;
-                status?: ("draft" | "asked" | "answered" | "deferred" | "delegated" | "researching" | "withdrawn") | null;
+                status?: ("draft" | "asked" | "answered" | "deferred" | "delegated" | "researching" | "withdrawn" | "retired") | null;
                 asked_to?: "me" | null;
                 limit?: number;
                 offset?: number;
@@ -43263,7 +44253,8 @@ export interface operations {
         parameters: {
             query?: {
                 prd?: string | null;
-                status?: ("verified" | "withdrawn") | null;
+                status?: ("verified" | "proposed" | "withdrawn" | "rejected") | null;
+                item_key?: string | null;
             };
             header?: never;
             path?: never;
@@ -43324,6 +44315,26 @@ export interface operations {
             };
         };
     };
+    get_schedule_basis_rights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DateRightsOut"];
+                };
+            };
+        };
+    };
     withdraw_schedule_basis: {
         parameters: {
             query?: never;
@@ -43346,6 +44357,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WithdrawOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_schedule_basis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                basis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleBasisVerify"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleBasisOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_schedule_basis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                basis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleBasisReject"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleBasisOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_schedule_basis_impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                basis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasisImpactOut"];
                 };
             };
             /** @description Validation Error */
@@ -44772,6 +45884,41 @@ export interface operations {
             };
         };
     };
+    decline_request_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeclineSuggestionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_request_themes: {
         parameters: {
             query?: {
@@ -44955,6 +46102,503 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CandidateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_interviews: {
+        parameters: {
+            query?: {
+                status?: ("draft" | "invited" | "in_progress" | "finished" | "expired" | "revoked") | null;
+                intake_id?: string | null;
+                theme_id?: string | null;
+                kind?: ("team" | "customer") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redraft_interview_guide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_interview_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_team_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    take_team_turn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamTurnIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamTurnOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    public_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterview"];
+                };
+            };
+            /** @description Unknown link (the body of an expired one) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Used in another browser, expired or withdrawn */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    public_interview_message: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicInterviewMessageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewTurn"];
+                };
+            };
+            /** @description Unknown link (the body of an expired one) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Used in another browser, expired or withdrawn */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Empty or too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_interview_skip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewTurn"];
+                };
+            };
+            /** @description Unknown link (the body of an expired one) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Used in another browser, expired or withdrawn */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    public_interview_finish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewDone"];
+                };
+            };
+            /** @description Unknown link (the body of an expired one) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
+                };
+            };
+            /** @description Used in another browser, expired or withdrawn */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInterviewRefusal"];
                 };
             };
             /** @description Validation Error */

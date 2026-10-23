@@ -207,12 +207,14 @@ async def ask(db: AsyncSession, d: Discussion, message: DiscussionMessage) -> Di
 
 @dataclass
 class _Live:
-    """A reply running in this process: its text so far and who listens."""
+    """A reply running in this process: its text so far, the citations its complete markers
+    point at (sent as they appear, #406), and who listens."""
 
     text: str = ""
+    citations: list[dict[str, Any]] = field(default_factory=list)
     queues: list[asyncio.Queue] = field(default_factory=list)
 
-    def publish(self, item: tuple[str, str]) -> None:
+    def publish(self, item: tuple[str, Any]) -> None:
         for q in self.queues:
             q.put_nowait(item)
 
@@ -227,6 +229,8 @@ def _listen(reply_id: uuid.UUID) -> tuple[asyncio.Queue, str] | None:
     if live is None:
         return None
     q: asyncio.Queue = asyncio.Queue()
+    if live.citations:
+        q.put_nowait(("citations", live.citations))
     live.queues.append(q)
     return q, live.text
 
@@ -349,6 +353,11 @@ async def _produce(
     async def on_text(text: str) -> None:
         live.text += text
         live.publish(("delta", text))
+        if "]" in text:
+            cites = citations_of(live.text, ctx)[1]
+            if len(cites) > len(live.citations):
+                live.citations = cites
+                live.publish(("citations", cites))
         if len(live.text) - saved >= SAVE_CHARS:
             await save_partial()
 
@@ -471,14 +480,16 @@ async def stream(
             yield ": ping\n\n"
         if listening is not None:
             try:
-                kind, text = await asyncio.wait_for(q.get(), CHECK_SECONDS)
+                kind, data = await asyncio.wait_for(q.get(), CHECK_SECONDS)
             except TimeoutError:
-                kind, text = "", ""
+                kind, data = "", ""
             if kind == "end":
                 break
             if kind == "delta":
-                sent += len(text)
-                yield sse("delta", {"text": text})
+                sent += len(data)
+                yield sse("delta", {"text": data})
+            if kind == "citations":
+                yield sse("citations", data)
             if time.monotonic() - last_check < CHECK_SECONDS:
                 continue
         last_check = time.monotonic()

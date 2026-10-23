@@ -1,14 +1,17 @@
 """What Oracle reads to reply in a discussion (G2 Live replies, 3.3).
 
 One context per reply, numbered so Oracle can cite ``[c:n]``, at most 60,000 characters,
-filled in order: the subject, the baseline slice (confirmed goals, then the entities
-linked to the subject with their top evidence), the conversation, and the earlier
-pushbacks in this discussion (C1b: once).
+filled in order: the subject (on a document version, its text: the section the discussion
+is on first, then the rest, within ``MAX_DOCUMENT_CHARS``, #406), the baseline slice
+(confirmed goals, then the entities linked to the subject with their top evidence), the
+conversation, and the earlier pushbacks in this discussion (C1b: once).
 
 S6 (G1 §3.4) and AUD-9: findings are read only as ``sharing.EVERYONE`` sees them, or as
 their author sees them in the author's own discussion (rule 3.4.3). Nothing here calls
 source search or reads a ``source_items`` row: every source is its person's own, and a
-reply is read by everyone in the discussion.
+reply is read by everyone in the discussion. A document's text is its sections' plain text
+(markers stripped on import); its citations' excerpts come from people's sources and are
+not read.
 """
 
 import uuid
@@ -27,6 +30,9 @@ from oracle.tenant_settings import TenantSetting
 from oracle.v2.models import KnowledgeGap, ProductIntake
 
 MAX_CHARS = 60_000
+# The document a discussion is on: its share of the context, so the conversation still fits.
+MAX_DOCUMENT_CHARS = 18_000
+MAX_SECTION_CHARS = 6_000
 MAX_MESSAGES = 40
 MAX_CONVERSATION_CHARS = 40_000
 MAX_ENTITIES = 40
@@ -148,9 +154,40 @@ async def _entity(db: AsyncSession, ctx: Context, e: Entity, label: str | None =
         )
 
 
+def add_sections(ctx: Context, doc: str, sections: list[tuple[str, str, str]]) -> None:
+    """``(key, heading, text)`` in reading order, until the document's budget is spent."""
+    start = ctx.size
+    for key, heading, text in sections:
+        line = sharing.one_line(text, MAX_SECTION_CHARS)
+        # The line's own prefix and the closing note's room.
+        if ctx.size - start + len(heading) + len(line) + 80 > MAX_DOCUMENT_CHARS:
+            ctx.note("The rest of the document is not shown.")
+            return
+        ctx.add("section", f"{doc}:{key}", heading, line)
+
+
+async def _document(db: AsyncSession, ctx: Context, version: Any, first: str | None) -> None:
+    """The version's text: the section the discussion is on first (on the whole document,
+    its brief layer), then the rest."""
+    from oracle.docs.models import Document, Section
+
+    doc = await db.get(Document, version.document_id)
+    rows = list(
+        await db.scalars(
+            select(Section).where(Section.version_id == version.id).order_by(Section.ordinal)
+        )
+    )
+    # Stable: the rest stay in reading order.
+    rows.sort(key=lambda sec: sec.section_key != first if first else sec.layer != "brief")
+    title = doc.title if doc is not None else "the document"
+    ctx.note(f"The document the discussion is on: {title}, version {version.number}")
+    sections = [(sec.section_key, sec.heading, sec.body_text) for sec in rows]
+    add_sections(ctx, str(version.document_id), sections)
+
+
 async def _subject(db: AsyncSession, ctx: Context, d: Discussion) -> set[uuid.UUID]:
     """The subject (G1 §3.2); the entities it links to."""
-    from oracle.docs.models import DocumentVersion, Section
+    from oracle.docs.models import DocumentVersion
     from oracle.roadmap.models import RoadmapItem
 
     s, kind = d.subject, d.subject_kind
@@ -175,17 +212,9 @@ async def _subject(db: AsyncSession, ctx: Context, d: Discussion) -> set[uuid.UU
                     "roadmap_item", str(item.id), f"Roadmap item: {item.title}",
                     f"horizon {item.horizon}; outcome {item.outcome or 'none'}",
                 )  # fmt: skip
-        elif version is not None:
-            stmt = select(Section).where(Section.version_id == version.id)
-            if kind == "section":
-                stmt = stmt.where(Section.section_key == s["section_key"])
-            else:
-                stmt = stmt.where(Section.layer == "brief")
-            for sec in await db.scalars(stmt.order_by(Section.ordinal)):
-                ctx.add(
-                    "section", f"{s['document_id']}:{sec.section_key}", sec.heading,
-                    sharing.one_line(sec.body_text, 6000),
-                )  # fmt: skip
+        if version is not None:
+            first = s.get("section_key") if kind == "section" else None
+            await _document(db, ctx, version, first)
     elif kind == "entity":
         e = await db.get(Entity, uuid.UUID(s["entity_id"]))
         if e is not None:

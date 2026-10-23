@@ -22,6 +22,7 @@ Each pending checkpoint has one draft on the server: a list of per-item actions
 The writes commit; :func:`read` does not write.
 """
 
+import logging
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -35,16 +36,22 @@ from oracle import audit
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
-from oracle.docs.models import DocumentVersion
+from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
-from oracle.runs import gate, reasons, roadmap, service
+from oracle.runs import batch, gate, reasons, roadmap, service
 from oracle.runs.models import ACTION_KINDS, Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.schemas import (
     ActionIn,
     CheckpointReview,
+    ConsoleAnswer,
+    InboxChild,
+    InboxChildReason,
+    InboxSource,
+    InboxSummary,
     ItemReason,
     ItemsProblem,
+    ReasonFix,
     ReviewAction,
     ReviewAnswer,
     ReviewAnswerer,
@@ -88,6 +95,8 @@ KIND_WORDS = {
     "strategy_review": "strategy review",
     "launch_review": "launch review",
 }
+
+log = logging.getLogger(__name__)
 
 
 class InvalidAction(ValueError):
@@ -282,8 +291,11 @@ async def _file(db: AsyncSession, run: Run, cp: Checkpoint) -> _File | None:
     seq = (cp.payload or {}).get("segment_seq")
     if name is None or not isinstance(seq, int):
         return None
-    segment = await db.scalar(
-        select(RunSegment).where(RunSegment.run_id == run.id, RunSegment.seq == seq)
+    segment = await batch.once(
+        ("segment", run.id, seq),
+        lambda: db.scalar(
+            select(RunSegment).where(RunSegment.run_id == run.id, RunSegment.seq == seq)
+        ),
     )
     text = ((segment.artifacts or {}).get("files") or {}).get(name) if segment else None
     if not isinstance(text, str):
@@ -738,6 +750,55 @@ def _answers(action: ReviewAction, reason: dict[str, Any]) -> bool:
     return action.kind == "waive" or not action.answers or reason["code"] in action.answers
 
 
+async def _actions(db: AsyncSession, checkpoint_ids: list[uuid.UUID]) -> list[CheckpointAction]:
+    return list(
+        await db.scalars(
+            select(CheckpointAction)
+            .where(CheckpointAction.checkpoint_id.in_(checkpoint_ids))
+            .order_by(CheckpointAction.created_at, CheckpointAction.id)
+        )
+    )
+
+
+async def read_ahead(db: AsyncSession, cps: list[Checkpoint], runs: dict[uuid.UUID, Run]) -> None:
+    """In one Inbox call (oracle.runs.batch): the checkpoints' segments and draft actions in
+    two reads, and their items' traces together (oracle.runs.reasons.read_ahead), for their
+    reviews to share."""
+    seqs = {
+        (c.run_id, s)
+        for c in cps
+        if c.kind in ITEM_FILES and isinstance(s := (c.payload or {}).get("segment_seq"), int)
+    }
+    if not seqs:
+        return
+    found = {
+        (s.run_id, s.seq): s
+        for s in await db.scalars(
+            select(RunSegment).where(RunSegment.run_id.in_({r for r, _ in seqs}))
+        )
+    }
+    for key in seqs:
+        batch.put(("segment", *key), found.get(key))
+    rows = await _actions(db, [c.id for c in cps if c.kind in ITEM_FILES])
+    for c in cps:
+        batch.put(("actions", c.id), [r for r in rows if r.checkpoint_id == c.id])
+    runs_items = []
+    for c in cps:
+        name, seq = ITEM_FILES.get(c.kind), (c.payload or {}).get("segment_seq")
+        segment = found.get((c.run_id, seq)) if name else None
+        text = ((segment.artifacts or {}).get("files") or {}).get(name) if segment else None
+        if isinstance(text, str):
+            check = await service.items_check(db, runs[c.run_id], text)
+            runs_items.append((runs[c.run_id], check.items))
+    try:
+        # As each review's own reasons (service.checked_items): an error here loses only
+        # the read ahead; each review then reads its own, in its savepoint.
+        async with db.begin_nested():
+            await reasons.read_ahead(db, runs_items)
+    except Exception:  # noqa: BLE001 - the read ahead never fails the Inbox
+        log.exception("the Inbox could not read its checkpoints' traces ahead")
+
+
 async def read(
     db: AsyncSession, principal: Principal, run_id: uuid.UUID, checkpoint_id: uuid.UUID
 ) -> CheckpointReview:
@@ -748,28 +809,30 @@ async def read(
     )
     if cp is None:
         raise service.NotFound(f"checkpoint {checkpoint_id} not found")
+    return await _read(db, principal, run, cp)
+
+
+async def _read(
+    db: AsyncSession, principal: Principal, run: Run, cp: Checkpoint
+) -> CheckpointReview:
     found = await _file(db, run, cp)
-    rows = (
-        await db.scalars(
-            select(CheckpointAction)
-            .where(CheckpointAction.checkpoint_id == cp.id)
-            .order_by(CheckpointAction.created_at, CheckpointAction.id)
-        )
-    ).all()
+    rows = await batch.once(("actions", cp.id), lambda: _actions(db, [cp.id]))
     question_ids = [r.question_id for r in rows if r.question_id]
-    questions = {
-        q.id: q
-        for q in await db.scalars(
-            select(StakeholderQuestion).where(StakeholderQuestion.id.in_(question_ids))
-        )
-    }
+    questions: dict[uuid.UUID, StakeholderQuestion] = {}
     answers: dict[uuid.UUID, StakeholderAnswer] = {}
-    for a in await db.scalars(
-        select(StakeholderAnswer)
-        .where(StakeholderAnswer.question_id.in_(question_ids))
-        .order_by(StakeholderAnswer.created_at)
-    ):
-        answers[a.question_id] = a  # the latest wins
+    if question_ids:
+        questions = {
+            q.id: q
+            for q in await db.scalars(
+                select(StakeholderQuestion).where(StakeholderQuestion.id.in_(question_ids))
+            )
+        }
+        for a in await db.scalars(
+            select(StakeholderAnswer)
+            .where(StakeholderAnswer.question_id.in_(question_ids))
+            .order_by(StakeholderAnswer.created_at)
+        ):
+            answers[a.question_id] = a  # the latest wins
     ids = [r.created_by for r in rows] + [r.updated_by for r in rows]
     ids += [q.asked_to for q in questions.values()]
     ids += [a.answered_by for a in answers.values()]
@@ -907,3 +970,125 @@ async def read(
         can_decide=stages,
         gate=gate.approve_gate(cp, None, staged) if pending else None,
     )
+
+
+# --------------------------------------------------------------------------- inbox (D9)
+
+# Child rows under a checkpoint's Inbox row.
+INBOX_CHILDREN = 3
+_SEVERITY = {reasons.BLOCKING: 0, reasons.CONFIRM: 1}
+
+
+def _determined(kind: str, field_: str | None, value: Any) -> bool:
+    """A safe fix (D9): it only stages, needs no text and one click undoes it: accept, a
+    horizon, Remove date, removing dependencies, an order."""
+    if kind == "accept":
+        return True
+    if kind != "edit":
+        return False
+    if field_ == "horizon":
+        return value in HORIZONS
+    if field_ == "milestone_date":
+        return value is None
+    if field_ == "depends_on":
+        return isinstance(value, dict) and set(value) == {"remove"} and bool(_ids(value["remove"]))
+    if field_ == "order":
+        after = value.get("after") if isinstance(value, dict) and set(value) == {"after"} else None
+        return value is None or (isinstance(after, str) and bool(after))
+    return False
+
+
+def safe_fix(item: str, fixes: list[ReasonFix] | list[dict[str, Any]]) -> ReasonFix | None:
+    """The first of a reason's fixes the Inbox offers in one click: safe, and on its item."""
+    for raw in fixes:
+        f = raw if isinstance(raw, ReasonFix) else ReasonFix.model_validate(raw)
+        a = f.action
+        if a.item == item and _determined(a.kind, a.field, a.value):
+            return f
+    return None
+
+
+def _first(found: list[ItemReason]) -> ItemReason:
+    return sorted(found, key=lambda r: _SEVERITY.get(r.severity, 0))[0]
+
+
+def summarize(review: CheckpointReview) -> InboxSummary:
+    """The Inbox's projection of a roadmap items review: its tally and the child rows. A
+    child is an item still needing the caller, with its first open reason; an item fixed
+    earlier (handled) never takes a slot. Blocking first, then in position order."""
+    rows: list[tuple[tuple[int, int], InboxChild]] = []
+    for it in review.items:
+        if not it.reasons or it.state != "needs_you":
+            continue
+        shown = _first(
+            [r for r in it.reasons if not any(_answers(a, r.model_dump()) for a in it.actions)]
+        )
+        suggested = next(
+            (a for a in it.actions if a.state == "suggested" and a.kind != "question"), None
+        )
+        child = InboxChild(
+            item=it.key,
+            title=it.title,
+            reason=InboxChildReason(
+                code=shown.code, severity=shown.severity, label=shown.label, text=shown.text
+            ),
+            fix=safe_fix(it.key, shown.fixes),
+            suggested=suggested,
+        )
+        order = (_SEVERITY.get(shown.severity, 0), it.position or 10**6)
+        rows.append((order, child))
+    rows.sort(key=lambda r: r[0])
+    shown_rows = rows[:INBOX_CHILDREN]
+    tally = review.tally
+    return InboxSummary(
+        need_you=tally.need_you,
+        blocking=tally.blocking_open,
+        to_confirm=tally.to_confirm_open,
+        handled=tally.handled,
+        waiting_on=sum(1 for i in review.items if i.state == "waiting"),
+        wait=review.wait,
+        children=[c for _, c in shown_rows],
+        more=tally.need_you - len(shown_rows),
+    )
+
+
+async def _roadmap_items(
+    db: AsyncSession, principal: Principal, run: Run, cp: Checkpoint
+) -> InboxSummary:
+    summary = summarize(await _read(db, principal, run, cp))
+    if run.document_id is not None:
+        document_id = run.document_id
+        summary.title = await batch.once(
+            ("document_title", document_id),
+            lambda: db.scalar(select(Document.title).where(Document.id == document_id)),
+        )
+    source_id = service._source_id(run)
+    source = await service._version_source(db, source_id) if source_id else None
+    if source is not None:
+        summary.source = InboxSource(title=source.title, version=source.version)
+    return summary
+
+
+Summary = Callable[[AsyncSession, Principal, Run, Checkpoint], Any]
+# checkpoint kind -> its Inbox summary; the spec owning a kind's review registers it here.
+SUMMARIES: dict[str, Summary] = {"roadmap_items": _roadmap_items}
+
+
+async def inbox_summary(
+    db: AsyncSession,
+    cp: Checkpoint,
+    principal: Principal,
+    *,
+    run: Run,
+    console: ConsoleAnswer | None = None,
+) -> InboxSummary | None:
+    """A pending checkpoint's Inbox counts (D9), one review read; None for a kind without a
+    summary. ``console_held``: a console approval waiting for Confirm while blocking reasons
+    are open (D3: recorded, not followed). Until D3's gate lands it is judged by the
+    summary's open blocking reasons, so a kind without a summary is never held."""
+    found = SUMMARIES.get(cp.kind)
+    if found is None:
+        return None
+    summary: InboxSummary = await found(db, principal, run, cp)
+    summary.console_held = bool(console and console.needs == "confirm" and summary.blocking)
+    return summary

@@ -33,8 +33,9 @@ import {
   type Column,
   type InspectorStat,
 } from "@/components/ds";
+import { ClaudeOffNotice, limitWord } from "@/components/ClaudeOffNotice";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, inWords } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -75,6 +76,7 @@ export function ClaudeAccounts() {
   const owner = hasRole(role, "owner");
   const [chosen, setChosen] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [fallbackOpen, setFallbackOpen] = useState(false);
   // Keyed by what they are for ("add", or an account id for signing in again), held
   // here so a reload after a write does not lose a sign-in under way.
   const [signins, setSignins] = useState<Record<string, SignIn>>({});
@@ -124,6 +126,7 @@ export function ClaudeAccounts() {
       )}
       {q.data && (
         <div className="flex flex-col gap-4 max-[600px]:gap-3">
+          {owner && <ClaudeOffNotice page={q.data} onAdd={() => setAdding(true)} onFallback={() => setFallbackOpen(true)} />}
           <Broken accounts={q.data.accounts} owner={owner} onOpen={(id) => setChosen(id)} />
           <Pool
             page={q.data}
@@ -135,6 +138,8 @@ export function ClaudeAccounts() {
             }}
             adding={adding || (owner && q.data.accounts.length === 0)}
             setAdding={setAdding}
+            fallbackOpen={fallbackOpen}
+            setFallbackOpen={setFallbackOpen}
             signin={signin}
             setSignin={setSignin}
             reload={q.reload}
@@ -148,7 +153,8 @@ export function ClaudeAccounts() {
 /** The summary as chips; the hidden dots keep it one readable sentence for tests and readers. */
 function SummaryChips({ page }: { page: Page }) {
   const n = page.accounts.length;
-  const available = page.accounts.filter((a) => a.state === "AVAILABLE").length;
+  // What the pool would give a call to, not the state alone: a spent account is AVAILABLE.
+  const available = page.accounts.filter((a) => a.takes_calls).length;
   const broken = page.accounts.filter(needsAHuman).length;
   const missing = page.unreadable_document_count;
   const sweep = page.refresh_sweep;
@@ -226,6 +232,8 @@ function Pool({
   choose,
   adding,
   setAdding,
+  fallbackOpen,
+  setFallbackOpen,
   signin,
   setSignin,
   reload,
@@ -236,6 +244,8 @@ function Pool({
   choose: (id: string | null) => void;
   adding: boolean;
   setAdding: (on: boolean) => void;
+  fallbackOpen: boolean;
+  setFallbackOpen: (on: boolean) => void;
   signin: (key: string) => SignIn;
   setSignin: (key: string, s: SignIn) => void;
   reload: () => Promise<void>;
@@ -285,7 +295,7 @@ function Pool({
       align: "right",
       cell: (a) => <WindowFig reading={readingOf(a, FIVE_HOUR)} window="five-hour" />,
     },
-    { key: "state", header: "State", width: "164px", cell: (a) => <AcctState state={a.state} /> },
+    { key: "state", header: "State", width: "196px", wrap: true, cell: (a) => <AcctState account={a} zone={page.time_zone} stacked /> },
     {
       key: "clears",
       header: "Clears",
@@ -320,6 +330,7 @@ function Pool({
             key={shown.account_id}
             account={shown}
             now={now}
+            zone={page.time_zone}
             owner={owner}
             signin={signin(shown.account_id)}
             setSignin={(s) => setSignin(shown.account_id, s)}
@@ -365,7 +376,7 @@ function Pool({
           </p>
         )}
       </Panel>
-      <Fallback page={page} owner={owner} reload={reload} />
+      <Fallback page={page} owner={owner} open={fallbackOpen} setOpen={setFallbackOpen} reload={reload} />
     </Split>
   );
 }
@@ -423,8 +434,30 @@ export function reasonLabel(reason: string): string {
   return sentence(words);
 }
 
-/** The state as a chip; the platform's spelling is the title. */
-function AcctState({ state }: { state: string }) {
+/**
+ * The state as a chip; the platform's spelling is the title. An AVAILABLE account the
+ * pool will not choose because a window is spent reads "Spent until", as the gateway
+ * treats it, never Available.
+ */
+function AcctState({ account, zone, stacked }: { account: Account; zone: string; stacked?: boolean }) {
+  const { state } = account;
+  if (account.spent_until) {
+    const title = `Over its ${account.spent_by ? limitWord(account.spent_by) : "limit"}: Oracle gives it no calls until then.`;
+    const when = inWords(account.spent_until, zone);
+    // In a row the time goes under the chip, so the column stays narrow.
+    return stacked ? (
+      <span className="flex flex-col items-start gap-0.5" title={title}>
+        <Chip kind="warn" dot>
+          Spent until
+        </Chip>
+        <span className="tnum text-[13px] leading-4 text-text2">{when}</span>
+      </span>
+    ) : (
+      <Chip kind="warn" dot title={title}>
+        Spent until {when}
+      </Chip>
+    );
+  }
   return (
     <Chip kind={STATE_KIND[state] ?? "na"} dot title={state}>
       {stateLabel(state)}
@@ -563,6 +596,7 @@ function Fact({ label, children, mono }: { label: string; children: ReactNode; m
 function Detail({
   account,
   now,
+  zone,
   owner,
   signin,
   setSignin,
@@ -570,6 +604,7 @@ function Detail({
 }: {
   account: Account;
   now: number;
+  zone: string;
   owner: boolean;
   signin: SignIn;
   setSignin: (s: SignIn) => void;
@@ -584,7 +619,7 @@ function Detail({
       title={account.label}
       chips={
         <>
-          <AcctState state={account.state} />
+          <AcctState account={account} zone={zone} />
           <Chip hero>{account.provider} · Claude subscription</Chip>
         </>
       }
@@ -618,6 +653,7 @@ function Detail({
       ]}
     >
       <InspectorSection label="Facts">
+        {account.spent_by && <Fact label="Spent">Over its {limitWord(account.spent_by)}</Fact>}
         {account.reason && <Fact label="Reason">{reasonLabel(account.reason)}</Fact>}
         <Fact label="Jobs on it">{account.assigned}</Fact>
         <Fact label="Last read">
@@ -1350,9 +1386,20 @@ function AddAccount({
 }
 
 /** The credential built-in jobs use while no account is registered. */
-function Fallback({ page, owner, reload }: { page: Page; owner: boolean; reload: () => Promise<void> }) {
+function Fallback({
+  page,
+  owner,
+  open,
+  setOpen,
+  reload,
+}: {
+  page: Page;
+  owner: boolean;
+  open: boolean;
+  setOpen: (on: boolean) => void;
+  reload: () => Promise<void>;
+}) {
   const [token, setToken] = useState("");
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const spare = page.fallback;
@@ -1392,8 +1439,8 @@ function Fallback({ page, owner, reload }: { page: Page; owner: boolean; reload:
       tools={
         // The tip sits outside the `fallback` block, so a reader's block holds no buttons.
         <InfoTip label="the fallback">
-          Used only while no account is registered: a <code className="font-mono">claude setup-token</code> value or an
-          Anthropic API key. Accounts that are spent or paused are waited for, never replaced by this.
+          Used while no account is registered or every account is spent: a <code className="font-mono">claude setup-token</code>{" "}
+          value or an Anthropic API key. Accounts that are paused or draining are waited for, never replaced by this.
         </InfoTip>
       }
     >
@@ -1429,6 +1476,7 @@ function Fallback({ page, owner, reload }: { page: Page; owner: boolean; reload:
                 value={token}
                 autoComplete="off"
                 spellCheck={false}
+                autoFocus
                 onChange={(e) => setToken(e.target.value)}
               />
             </Field>

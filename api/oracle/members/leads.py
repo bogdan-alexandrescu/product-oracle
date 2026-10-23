@@ -2,11 +2,12 @@
 
 One source of truth for the flag. Every place that checks who decides a checkpoint asks
 :func:`may_decide` (C2 Multiple reviewers); the date-basis routes ask
-:func:`may_verify_dates`. Several members may carry the flag; disabled members never count.
+:func:`date_rights` (F3 Date bases). Several members may carry the flag; disabled members
+never count.
 """
 
 import uuid
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,15 +80,26 @@ def may_decide(principal: "Principal", cp: Stop, flow: str, leads: frozenset[uui
     return decides(principal.role, principal.user_id, cp, flow, leads)
 
 
-def may_verify_dates(principal: "Principal", leads: frozenset[uuid.UUID]) -> bool:
-    """Who may record or withdraw a verified schedule basis until F3 Date bases lands:
-    approvers and owners (O4 Roadmap shape), plus engineering leads of any role. F3 replaces
-    it with date_rights, the owner's decided rule (2026-10-21, F3 "Who verifies")."""
-    return has_role(principal.role, "approver") or (
+DateRights = Literal["verify", "propose"]
+
+
+def date_rights(principal: "Principal", leads: frozenset[uuid.UUID]) -> DateRights | None:
+    """What ``principal`` may do with a schedule basis (F3 Date bases, owner 2026-10-21,
+    "Who verifies"): ``verify`` (record it verified, verify or reject a proposed one,
+    withdraw one) for engineering leads (commenter or above) and owners, and for approvers
+    while no lead is named (O4); ``propose`` (record it, waiting for a lead) for approvers
+    while a lead is named; None for everyone else. The one rule every caller asks."""
+    if principal.role == "owner":
+        return "verify"
+    if (
         principal.user_id is not None
         and principal.user_id in leads
         and has_role(principal.role, "commenter")
-    )
+    ):
+        return "verify"
+    if has_role(principal.role, "approver"):
+        return "propose" if leads else "verify"
+    return None
 
 
 async def lead_now(db: AsyncSession, user_id: uuid.UUID) -> bool:
