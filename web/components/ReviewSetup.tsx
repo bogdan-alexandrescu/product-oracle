@@ -16,8 +16,10 @@ import { errorMessage, useQuery } from "@/lib/use-query";
  * policy: decider, mandatory reviewers, required sections, re-review on change; owners),
  * each section's owner, reviewers and due date (approvers), and feedback campaigns asked
  * for and closed (approvers). Each save sends the lock_version it read; a 409 shows the
- * API's words and reloads, so the next save starts from what is there now. A control the
- * signed-in member's role can never use is hidden, not disabled (owner rule, #370).
+ * API's words and reloads, so the next save starts from what is there now (a section's form
+ * takes the saved values and says what changed before Save is allowed again). A control the
+ * signed-in member's role can never use is hidden, not disabled; a read-only sheet says
+ * View only (owner rule, #370).
  */
 
 type Policy = Schemas["ReviewPolicyOut"];
@@ -202,6 +204,7 @@ function PolicyForm({
     <form onSubmit={save} className="flex flex-col gap-4 p-4">
       <div className="flex flex-wrap items-center gap-2">
         <Chip kind={draft.source === "document" ? "acc" : "na"}>{SOURCE_LABEL[draft.source]}</Chip>
+        {!canEdit && <Chip kind="line">View only</Chip>}
         <span className="text-sm text-text2">The decider and reviewers must be approvers or owners.</span>
       </div>
       <PeopleField
@@ -367,11 +370,24 @@ function AssignmentForm({
   const [due, setDue] = useState(state.due_at ? state.due_at.slice(0, 10) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // After a 409: the row the form was built from, until the reloaded row arrives (Save waits for it).
+  const [stale, setStale] = useState<SectionState | null>(null);
+  // What someone else changed: the row before and as saved now.
+  const [changed, setChanged] = useState<{ was: SectionState; now: SectionState } | null>(null);
+  if (stale && state.lock_version !== stale.lock_version) {
+    // The form takes what is saved now, so the next Save starts from it, not over it.
+    setStale(null);
+    setChanged({ was: stale, now: state });
+    setOwner(state.owner_id ? [state.owner_id] : []);
+    setReviewers(state.reviewer_ids ?? []);
+    setDue(state.due_at ? state.due_at.slice(0, 10) : "");
+  }
 
   async function save(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
+    setChanged(null);
     try {
       await unwrap(
         api.PUT("/v1/documents/{doc}/sections/{key}/assignment", {
@@ -381,7 +397,12 @@ function AssignmentForm({
       );
       await onDone(true);
     } catch (err) {
-      setError(errorMessage(err));
+      if (err instanceof ApiError && err.status === 409) {
+        setError("Someone else changed this section since you opened it. The form now shows what is saved; check it and save again.");
+        setStale(state);
+      } else {
+        setError(errorMessage(err));
+      }
       await onDone(false);
     } finally {
       setSaving(false);
@@ -397,8 +418,9 @@ function AssignmentForm({
         <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={`${TEXTAREA} h-9`} />
       </label>
       {error && <InlineError>{error}</InlineError>}
+      {changed && <ChangedNote was={changed.was} now={changed.now} people={people} />}
       <div className="flex items-center gap-2">
-        <Button type="submit" variant="solid" icon="check" disabled={saving}>
+        <Button type="submit" variant="solid" icon="check" disabled={saving || stale !== null}>
           {saving ? "Saving…" : "Save"}
         </Button>
         <Button variant="ghost" onClick={onCancel}>
@@ -409,6 +431,27 @@ function AssignmentForm({
   );
 }
 
+/** What someone else changed on a section's owner, reviewers and due date, each as now (was). */
+function ChangedNote({ was, now, people }: { was: SectionState; now: SectionState; people: Map<string, Person> }) {
+  const names = (ids: readonly string[]) => (ids.length ? ids.map((id) => people.get(id)?.name ?? "Someone").join(", ") : null);
+  const day = (at: string | null | undefined) => (at ? formatDayUtc(at) : null);
+  const same = (a: readonly string[], b: readonly string[]) => [...a].sort().join(",") === [...b].sort().join(",");
+  const lines: string[] = [];
+  if (was.owner_id !== now.owner_id) {
+    lines.push(`Owner: ${names(now.owner_id ? [now.owner_id] : []) ?? "No owner"} (was ${names(was.owner_id ? [was.owner_id] : []) ?? "No owner"})`);
+  }
+  if (!same(was.reviewer_ids ?? [], now.reviewer_ids ?? [])) {
+    lines.push(`Reviewers: ${names(now.reviewer_ids ?? []) ?? "None"} (was ${names(was.reviewer_ids ?? []) ?? "None"})`);
+  }
+  if (day(was.due_at) !== day(now.due_at)) lines.push(`Due date: ${day(now.due_at) ?? "None"} (was ${day(was.due_at) ?? "None"})`);
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5 text-sm text-text" data-testid="assignment-changed">
+      <span className={FIELD_LABEL}>What changed</span>
+      {lines.length ? lines.map((l) => <span key={l} className="min-w-0 break-words">{l}</span>) : <span className="text-text2">Nothing you can see here.</span>}
+    </div>
+  );
+}
+
 /** Feedback campaigns on the document: Ask for feedback opens one on the latest version; each can be closed and reopened (approvers). */
 export function Campaigns({ doc }: { doc: string }) {
   const { role } = useMe();
@@ -416,8 +459,11 @@ export function Campaigns({ doc }: { doc: string }) {
   const q = useQuery(`campaigns|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}/campaigns", { params: { path: { doc } } })));
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The campaign being closed or reopened: its button waits, so a double click sends one change.
+  const [toggling, setToggling] = useState<string | null>(null);
 
   async function toggle(c: Campaign) {
+    setToggling(c.id);
     setError(null);
     try {
       await unwrap(
@@ -429,7 +475,11 @@ export function Campaigns({ doc }: { doc: string }) {
     } catch (err) {
       setError(errorMessage(err));
     }
-    await q.reload();
+    try {
+      await q.reload();
+    } finally {
+      setToggling(null);
+    }
   }
 
   const rows = q.data ?? [];
@@ -470,7 +520,7 @@ export function Campaigns({ doc }: { doc: string }) {
             </span>
             <span className="flex-1" />
             {canEdit && (
-              <Button variant="ghost" aria-label={`${c.status === "open" ? "Close" : "Reopen"} ${c.title}`} onClick={() => toggle(c)}>
+              <Button variant="ghost" aria-label={`${c.status === "open" ? "Close" : "Reopen"} ${c.title}`} disabled={toggling === c.id} onClick={() => toggle(c)}>
                 {c.status === "open" ? "Close" : "Reopen"}
               </Button>
             )}
