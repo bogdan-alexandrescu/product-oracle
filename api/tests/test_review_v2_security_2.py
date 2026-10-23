@@ -637,6 +637,10 @@ async def test_a_run_draft_closes_only_feedback_on_sections_it_changed(client):
     warnings = {w.code: w for w in result.version.warnings}
     # problem: not changed; risks: approved, the change waits as a patch.
     assert warnings["resolution_not_applied"].section_keys == ["problem", "risks"]
+    # #396: a person reads the sections by heading; agents get the feedback ids in refs.
+    left_open = warnings["resolution_not_applied"]
+    assert items["problem"] not in left_open.message and "2 feedback items" in left_open.message
+    assert left_open.refs == {"feedback_items": f"{items['problem']}, {items['risks']}"}
     async with tenant_session(ctx.tenant_id) as s:
         rows = {i.section_key: i.status for i in await s.scalars(select(FeedbackItem))}
     assert rows == {"solution": "addressed", "problem": "open", "risks": "open"}
