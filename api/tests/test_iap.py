@@ -79,6 +79,7 @@ async def _users() -> list[str]:
 
 async def test_valid_assertion_provisions_user(client, fetches):
     r = await seed()
+    await _join_at_once(r.tenant_id)
     resp = await client.get("/v1/me", headers={HEADER: assertion("Dana@Example.com")})
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -283,6 +284,14 @@ async def _invite(tenant_id, email: str, role: str, **fields) -> uuid.UUID:
         return invite.id
 
 
+async def _join_at_once(tenant_id) -> None:
+    """A5: these tests are of the ``join`` rule (an uninvited sign-in joins at once);
+    the default, ``request``, has its own tests (tests/test_access_requests.py)."""
+    async with tenant_session(tenant_id) as s:
+        s.add(TenantSetting(key="sign_in_without_invite", value="join"))
+        await s.commit()
+
+
 async def _set_default_role(tenant_id, value) -> None:
     async with tenant_session(tenant_id) as s:
         s.add(TenantSetting(key="iap_default_role", value=value))
@@ -322,6 +331,7 @@ async def test_invited_email_gets_the_invite_role(client, fetches):
 )
 async def test_uninvited_email_gets_the_company_default(client, fetches, setting, role):
     r = await seed()
+    await _join_at_once(r.tenant_id)
     if setting is not None:
         await _set_default_role(r.tenant_id, setting)
     resp = await client.get("/v1/me", headers={HEADER: assertion("lee@example.com")})
@@ -331,6 +341,7 @@ async def test_uninvited_email_gets_the_company_default(client, fetches, setting
 
 async def test_revoked_and_accepted_invites_are_ignored(client, fetches):
     r = await seed()
+    await _join_at_once(r.tenant_id)
     await _invite(r.tenant_id, "kim@example.com", "owner", revoked_at=datetime.now(UTC))
     await _invite(r.tenant_id, "kim@example.com", "approver", accepted_at=datetime.now(UTC))
     resp = await client.get("/v1/me", headers={HEADER: assertion("kim@example.com")})

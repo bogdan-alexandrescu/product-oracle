@@ -217,7 +217,16 @@ def test_parity_every_operation_is_a_tool_or_listed_as_unavailable():
         "create_personal_token",
         "change_password",
         "sign_out_everywhere",
+        # A5: a Google-signed person's own access state and note, browser only.
+        "get_access_state",
+        "send_access_note",
     }
+    # A5's routes for owners and approvers are tools.
+    tools = {o.operation_id for o in ops.values() if not o.excluded}
+    assert {
+        "list_access_requests", "approve_access_request", "decline_access_request",
+        "reopen_access_request", "get_sign_in_rules", "resend_invite", "update_my_account",
+    } <= tools  # fmt: skip
 
 
 async def test_parity_over_the_wire(tenant_id):
