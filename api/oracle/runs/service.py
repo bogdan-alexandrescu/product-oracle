@@ -8707,6 +8707,10 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.launches import service as launches_service
 
     launch_rows = await launches_service.inbox_rows(db, principal)
+    from oracle.rituals.service import inbox_rows as ritual_rows
+
+    rituals = await ritual_rows(db, principal)
+    counted += sum(1 for r in rituals if r.counts)
     # H11: what Oracle did on its own, for those it notified (open ones count).
     from oracle.autonomy_router import inbox_actions
 
@@ -8749,6 +8753,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + sum(a.counts for a in oracle_actions)
         + counted,
         launches=launch_rows,
+        rituals=rituals,
         items=states,
         counts=counts,
         staged=staged,

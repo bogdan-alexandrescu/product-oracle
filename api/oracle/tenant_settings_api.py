@@ -41,6 +41,10 @@ from every member's Google Docs sources in the same request, with no Drive call
   "slack_channel": {"id", "name"} | null}`` (oracle.reports.alignment). A partial value
   takes the defaults for the rest.
 
+- ``company_timezone`` (H2): an IANA time zone name (``zoneinfo``), new rituals' zone.
+- ``ritual_summaries`` (H2): ``on_demand`` or ``always`` (Every pre-read); also set with
+  ``PUT /v1/rituals/summaries``.
+
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
 
@@ -101,6 +105,10 @@ DEFAULTS: dict[str, Any] = {
     },
     # H11: every responsibility at its default (oracle.autonomy.REGISTRY).
     "autonomy": {},
+    # H2: the company's time zone (an IANA name), new rituals' default.
+    "company_timezone": "UTC",
+    # H2: Oracle's written summary of a pre-read: on_demand, or always (Every pre-read).
+    "ritual_summaries": "on_demand",
 }
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
@@ -287,6 +295,18 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
             return validate_setting(value)
         except ValueError as e:
             raise InvalidSetting(str(e)) from None
+    if key == "company_timezone":
+        from oracle.rituals.schedule import zone
+
+        try:
+            zone(value) if isinstance(value, str) else zone("")
+        except ValueError:
+            raise InvalidSetting("company_timezone must be an IANA time zone name") from None
+        return value
+    if key == "ritual_summaries":
+        if value not in ("on_demand", "always"):
+            raise InvalidSetting("ritual_summaries must be on_demand or always")
+        return value
     if key == "autonomy":
         raise InvalidSetting(
             "autonomy changes one responsibility at a time, with a reason: use "

@@ -47,6 +47,9 @@ READ_AREAS = {
         "tracks",
         "milestones",
         "roadmaps",
+        # H2: rituals and their pre-reads (a summary or update draft run reads them).
+        "rituals",
+        "ritual-occurrences",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }
