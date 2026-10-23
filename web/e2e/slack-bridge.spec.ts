@@ -189,3 +189,34 @@ test("a mirror whose first post failed shows Slack's reason, and Stop mirroring 
   await openMenu(page);
   await expect(thread(page).getByRole("menuitem", { name: "Mirror to Slack…" })).toBeVisible();
 });
+
+// protects=review #451 item 1: stopping a mirror whose first post Slack has not taken yet
+// says nothing was posted in Slack (no closing line goes to a thread that never existed), and
+// frees the discussion to be mirrored again; fails_when=the confirm promises a closing line in
+// the thread, or the discussion stays mirrored; no_claim=the outbox dropping the queued root
+// and later mirrors still posting (API tests).
+test("stopping a mirror before its first post says nothing was posted in Slack", async ({ page }) => {
+  await withScenario(page);
+  await login(page, APPROVER);
+  await openDiscussion(page, MIRRORED_TITLE);
+
+  // The documented mock hook: the outbox still holds the thread's first post.
+  await page.evaluate(
+    ([title]) => (globalThis as unknown as { __poMockSlack: { posting: (x: { title: string }) => Promise<void> } }).__poMockSlack.posting({ title }),
+    [MIRRORED_TITLE],
+  );
+
+  await openDiscussion(page, MIRRORED_TITLE);
+  const chip = thread(page).getByTestId("discussion-slack");
+  await expect(chip).toHaveText("#product");
+  await expect(chip).not.toHaveAttribute("href", /.*/);
+  await openMenu(page);
+  await thread(page).getByRole("menuitem", { name: "Stop mirroring" }).click();
+  const ask = page.getByRole("alertdialog", { name: "Stop mirroring" });
+  await expect(ask).toContainText("Stop mirroring to #product? Nothing was posted in Slack.");
+  await expect(ask).not.toContainText("closing line");
+  await ask.getByRole("button", { name: "Stop mirroring" }).click();
+  await expect(chip).toHaveCount(0);
+  await openMenu(page);
+  await expect(thread(page).getByRole("menuitem", { name: "Mirror to Slack…" })).toBeVisible();
+});

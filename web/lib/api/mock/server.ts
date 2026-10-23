@@ -31,7 +31,7 @@ import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
-import { discussionSlackRoute, failSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
+import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
@@ -3056,7 +3056,8 @@ let queue: Promise<unknown> = Promise.resolve();
  * a reply from the mirrored Slack thread of the discussion titled `title`, as the events
  * endpoint would, from the member with `email`. The page shows it on its next load.
  * `__poMockSlack.fail({title, error})` makes that discussion's mirror failed, as when Slack
- * gives up on its first post.
+ * gives up on its first post; `__poMockSlack.posting({title})` makes it wait for its first
+ * post (no thread yet).
  */
 if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") {
   (globalThis as { __poMockSlack?: unknown }).__poMockSlack = {
@@ -3074,6 +3075,15 @@ if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") 
       const next = queue.then(() => {
         const db = load();
         failSlackMirror((db.discussions ??= emptyDiscussions()), input);
+        save(db);
+      });
+      queue = next.catch(() => undefined);
+      return next;
+    },
+    posting: (input: { title: string }) => {
+      const next = queue.then(() => {
+        const db = load();
+        holdSlackMirror((db.discussions ??= emptyDiscussions()), input);
         save(db);
       });
       queue = next.catch(() => undefined);

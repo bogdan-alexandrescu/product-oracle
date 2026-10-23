@@ -191,3 +191,13 @@ export function failSlackMirror(db: DiscussionsDb, input: { title: string; error
   if (!d?.slack) throw new Error(`"${input.title}" is not mirrored to Slack`);
   d.slack = { ...d.slack, thread_url: null, status: "failed", error: input.error };
 }
+
+/**
+ * Test hook: Slack has not taken the first post of the discussion titled `title` yet (the
+ * outbox still holds it), so the mirror has no thread.
+ */
+export function holdSlackMirror(db: DiscussionsDb, input: { title: string }) {
+  const d = db.discussions.find((x) => x.title === input.title);
+  if (!d?.slack) throw new Error(`"${input.title}" is not mirrored to Slack`);
+  d.slack = { ...d.slack, thread_url: null, status: "posting", error: null };
+}
