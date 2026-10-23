@@ -2,7 +2,9 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from oracle import wording
 
 DocumentStatus = Literal["draft", "in_review", "approved"]
 # "oracle": Oracle's own baseline (a goal, decision, constraint or feature); its ``ref`` is
@@ -53,8 +55,18 @@ class VersionWarning(BaseModel):
     """A non-fatal import finding stored on the version."""
 
     code: Literal["locked_section_changed"] | str
+    # What a person reads, in the app's words (#396: oracle.wording, which also rewrites
+    # the wording stored before it); the ids are in ``refs`` and ``section_keys``.
     message: str
     section_keys: list[str] = []
+    # The ids agents and the API need (a date's text and PRD slug, a citation's key and
+    # source item), never shown to a person.
+    refs: dict[str, str] = {}
+
+    @field_validator("message")
+    @classmethod
+    def _in_the_app_s_words(cls, v: str) -> str:
+        return wording.say(v)
 
 
 class ImportProblem(BaseModel):
@@ -63,6 +75,12 @@ class ImportProblem(BaseModel):
     section_key: str | None = None
     cite_key: str | None = None
     line: int | None = None
+    refs: dict[str, str] = {}
+
+    @field_validator("message")
+    @classmethod
+    def _in_the_app_s_words(cls, v: str) -> str:
+        return wording.say(v)
 
 
 class ImportErrorResponse(BaseModel):

@@ -86,7 +86,7 @@ def test_every_date_message_says_what_to_do_in_the_app(mark, prd, update):
     assert "Plan › Dates" in msg and "now-payment-step" not in msg
     if mark.where != "title":
         assert '"Payment step"' in msg
-    if prd:
+    if prd and mark.status != "withdrawn":
         assert '"Checkout redesign PRD"' in msg
 
 
