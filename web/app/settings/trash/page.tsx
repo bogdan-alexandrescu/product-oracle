@@ -7,7 +7,7 @@ import { Button, Chip, Empty, InfoTip, Notice, PageHeader, Panel, toast } from "
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { artifactsChanged } from "@/lib/artifacts";
 import { formatDateTime } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Entry = Schemas["TrashEntryOut"];
@@ -66,8 +66,8 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
 
 /** Settings › Trash (#482, owners): each delete with what went with it, Restore and days left. */
 export default function TrashPage() {
-  const { role, loading } = useMe();
-  const owner = hasRole(role, "owner");
+  const { can, loading } = useMe();
+  const owner = can("list_trash");
   const q = useQuery(owner ? "trash" : "trash|none", () => (owner ? unwrap(api.GET("/v1/trash")) : Promise.resolve([] as Entry[])));
   return (
     <>

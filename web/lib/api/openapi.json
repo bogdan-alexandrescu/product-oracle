@@ -288,6 +288,915 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/documents/{doc}/dependents": {
+      "get": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Document Dependents",
+        "description": "What a delete of this document takes to Trash with it (the delete dialog).",
+        "operationId": "document_dependents",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependentsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/documents/{doc}": {
+      "delete": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Delete Document",
+        "description": "Move the document and its dependents to Trash (30 days, then purged). A published\none needs ``confirm_published`` (409 without): its external copy stays where it is.\n409 while a run is working on any of them.",
+        "operationId": "delete_document",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          },
+          {
+            "name": "confirm_published",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Confirm Published"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      },
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Document",
+        "operationId": "get_document",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/documents/{doc}/restore": {
+      "post": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Restore Document",
+        "description": "Restore the document with everything that went to Trash with it.",
+        "operationId": "restore_document",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/intakes/{intake_id}/dependents": {
+      "get": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Intake Dependents",
+        "operationId": "intake_dependents",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependentsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/intakes/{intake_id}": {
+      "delete": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Delete Intake",
+        "description": "Move the brief, the PRD it became and that PRD's dependents to Trash.",
+        "operationId": "delete_intake",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          },
+          {
+            "name": "confirm_published",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Confirm Published"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/intakes/{intake_id}/restore": {
+      "post": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Restore Intake",
+        "operationId": "restore_intake",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/runs/{run_id}": {
+      "delete": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Delete Run",
+        "description": "Move a finished, cancelled or draft run to Trash (409 while it works).",
+        "operationId": "delete_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      },
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Run",
+        "operationId": "get_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      },
+      "patch": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Update Run",
+        "description": "Change a draft's document or knobs; its estimate is cleared.",
+        "operationId": "update_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/runs/{run_id}/restore": {
+      "post": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Restore Run",
+        "operationId": "restore_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/trash": {
+      "get": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "List Trash",
+        "description": "What is in Trash, newest first: who deleted it, when, why, what went with it and\nthe days left before the ticker purges it.",
+        "operationId": "list_trash",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TrashEntryOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Trash"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/trash/{entry_id}/restore": {
+      "post": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Restore Trash Entry",
+        "description": "Restore everything the delete took, together; ``not_restored`` says what could not\ncome back with it (what it was built from, purged or still in Trash, and what was\ntrashed separately).",
+        "operationId": "restore_trash_entry",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/trash/{entry_id}": {
+      "delete": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Purge Trash Entry",
+        "description": "Delete for good now, without waiting for the 30 days.",
+        "operationId": "purge_trash_entry",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/documents/{doc}/regenerate/estimate": {
+      "post": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Estimate Regeneration",
+        "description": "A draft run of the document's flow, estimated: the inputs it will use and the cost.\nFor the document's decider or an approver (403 otherwise); 422 for a kind no flow\nwrites (edit it instead).",
+        "operationId": "estimate_regeneration",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenerateEstimateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegenerateEstimateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/documents/{doc}/regenerate": {
+      "post": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Start Regeneration",
+        "description": "Start the estimated run, through the same cost gates as starting any run. Its\nresult is imported as the document's next version.",
+        "operationId": "start_regeneration",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/oracle__trash__schemas__RegenerateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
     "/v1/documents": {
       "get": {
         "tags": [
@@ -341,57 +1250,6 @@
                     "$ref": "#/components/schemas/DocumentSummary"
                   },
                   "title": "Response List Documents"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "viewer"
-      }
-    },
-    "/v1/documents/{doc}": {
-      "get": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Get Document",
-        "operationId": "get_document",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "doc",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Doc"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentOut"
                 }
               }
             }
@@ -17739,119 +18597,6 @@
         "x-per-item": "owner"
       }
     },
-    "/v1/runs/{run_id}": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Get Run",
-        "operationId": "get_run",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Run Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "viewer"
-      },
-      "patch": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Update Run",
-        "description": "Change a draft's document or knobs; its estimate is cleared.",
-        "operationId": "update_run",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Run Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RunPatch"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "approver"
-      }
-    },
     "/v1/runs/{run_id}/decisions": {
       "get": {
         "tags": [
@@ -28876,7 +29621,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RegenerateIn"
+                "$ref": "#/components/schemas/oracle__specs__schemas__RegenerateIn"
               }
             }
           }
@@ -49509,6 +50254,41 @@
         ],
         "title": "DependenciesCreate"
       },
+      "DependentsOut": {
+        "properties": {
+          "root": {
+            "$ref": "#/components/schemas/TrashItem"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrashItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "published": {
+            "type": "boolean",
+            "title": "Published"
+          },
+          "working_runs": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Working Runs",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "root",
+          "items",
+          "published"
+        ],
+        "title": "DependentsOut",
+        "description": "What the delete dialog lists: the root and everything that goes to Trash with it.\n``published``: ask once more, the external copy stays where it is. ``working_runs``:\nruns to cancel before the delete is allowed."
+      },
       "DeriveIn": {
         "properties": {
           "depth": {
@@ -69683,6 +70463,24 @@
         "title": "NotReadCounts",
         "description": "Entries of ``unavailable_items`` by status (a missing status is unavailable)."
       },
+      "NotRestored": {
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/TrashItem"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "reason"
+        ],
+        "title": "NotRestored",
+        "description": "Something a restore could not bring back with the entry, and why."
+      },
       "NoteCounts": {
         "properties": {
           "total": {
@@ -76514,21 +77312,9 @@
         ],
         "title": "RefreshSweepOut"
       },
-      "RegenerateIn": {
+      "RegenerateEstimateIn": {
         "properties": {
-          "prd_version": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prd Version"
-          },
-          "reason": {
+          "note": {
             "anyOf": [
               {
                 "type": "string",
@@ -76538,19 +77324,75 @@
                 "type": "null"
               }
             ],
-            "title": "Reason"
-          },
-          "knobs": {
-            "$ref": "#/components/schemas/KnobsIn",
-            "default": {
-              "depth": "standard",
-              "roles": {},
-              "checkpoints": {}
-            }
+            "title": "Note"
           }
         },
         "type": "object",
-        "title": "RegenerateIn"
+        "title": "RegenerateEstimateIn"
+      },
+      "RegenerateEstimateOut": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "document_slug": {
+            "type": "string",
+            "title": "Document Slug"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "flow": {
+            "type": "string",
+            "title": "Flow"
+          },
+          "inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Inputs"
+          },
+          "estimate_usd": {
+            "type": "number",
+            "title": "Estimate Usd"
+          },
+          "approval_threshold_usd": {
+            "type": "number",
+            "title": "Approval Threshold Usd"
+          },
+          "needs_owner_approval": {
+            "type": "boolean",
+            "title": "Needs Owner Approval"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "document_slug",
+          "kind",
+          "flow",
+          "inputs",
+          "estimate_usd",
+          "approval_threshold_usd",
+          "needs_owner_approval"
+        ],
+        "title": "RegenerateEstimateOut",
+        "description": "A draft run that would regenerate the document, estimated; nothing is spent until\nit is started. Over the threshold an owner approves it first."
       },
       "RegenerationOut": {
         "properties": {
@@ -96492,6 +97334,143 @@
         "title": "TrackerRecordsImport",
         "description": "Engineering status as read from a tracker, posted by an approver (an export, the\nCLI, an MCP client acting for them; not a run's token). Oracle stores it; it never\nwrites back."
       },
+      "TrashEntryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "root": {
+            "$ref": "#/components/schemas/TrashItem"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrashItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "deleted_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted By"
+          },
+          "deleted_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted By Name"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Deleted At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "published": {
+            "type": "boolean",
+            "title": "Published"
+          },
+          "purge_after": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Purge After"
+          },
+          "days_left": {
+            "type": "integer",
+            "title": "Days Left"
+          },
+          "not_restored": {
+            "items": {
+              "$ref": "#/components/schemas/NotRestored"
+            },
+            "type": "array",
+            "title": "Not Restored",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "root",
+          "items",
+          "deleted_at",
+          "published",
+          "purge_after",
+          "days_left"
+        ],
+        "title": "TrashEntryOut",
+        "description": "One delete in Settings \u203a Trash: restored together, purged after ``days_left``."
+      },
+      "TrashItem": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "document",
+              "intake",
+              "run"
+            ],
+            "title": "Type"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "title",
+          "kind"
+        ],
+        "title": "TrashItem",
+        "description": "A document, intake or run as it was when it went to Trash."
+      },
       "TriageDailyIn": {
         "properties": {
           "on": {
@@ -98409,6 +99388,70 @@
           "into_id"
         ],
         "title": "MergeIn"
+      },
+      "oracle__specs__schemas__RegenerateIn": {
+        "properties": {
+          "prd_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Version"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "knobs": {
+            "$ref": "#/components/schemas/KnobsIn",
+            "default": {
+              "depth": "standard",
+              "roles": {},
+              "checkpoints": {}
+            }
+          }
+        },
+        "type": "object",
+        "title": "RegenerateIn"
+      },
+      "oracle__trash__schemas__RegenerateIn": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id"
+        ],
+        "title": "RegenerateIn"
       },
       "GoalAttrs": {
         "description": "The typed fields of a goal's ``attrs`` (published so MCP clients see the shape).",

@@ -10,7 +10,7 @@ import { Button, Icon, Notice, toast, useFocusTrap } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { artifactsChanged } from "@/lib/artifacts";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe, type Operation } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
 
@@ -59,13 +59,13 @@ async function undo(entry: Schemas["TrashEntryOut"]) {
  * Delete… for owners. Commenters and viewers can use none of these, so it is not drawn (#370).
  */
 export function ArtifactMenu({ doc, onDeleted }: { doc: ArtifactDoc; onDeleted?: () => void }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const [open, setOpen] = useState<"delete" | "regenerate" | null>(null);
   const router = useRouter();
-  if (!hasRole(role, "approver")) return null;
-  const edit = doc.latest_version != null ? versionHref(doc.slug, doc.kind, doc.latest_version) : null;
-  const regenerate = !!doc.kind && REGENERATES.has(doc.kind);
-  const del = hasRole(role, "owner");
+  // #370: each action shows when the API lets this role call it.
+  const edit = can("edit_document_section") && doc.latest_version != null ? versionHref(doc.slug, doc.kind, doc.latest_version) : null;
+  const regenerate = can("start_regeneration") && !!doc.kind && REGENERATES.has(doc.kind);
+  const del = can("delete_document");
   if (!edit && !regenerate && !del) return null;
   const label = `Actions for ${doc.title}`;
   return (
@@ -404,18 +404,21 @@ function RegenerateDialog({ doc, onClose }: { doc: ArtifactDoc; onClose: () => v
  */
 export function DeleteMenu({
   title,
+  op,
   dependents,
   remove,
   onDeleted,
 }: {
   title: string;
+  /** The delete operation, so the menu shows only to roles that may call it (#370). */
+  op: Operation;
   dependents: () => Promise<Schemas["DependentsOut"]>;
   remove: (query: { reason?: string | null; confirm_published?: boolean }) => Promise<Schemas["TrashEntryOut"]>;
   onDeleted?: () => void;
 }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const [open, setOpen] = useState(false);
-  if (!hasRole(role, "owner")) return null;
+  if (!can(op)) return null;
   return (
     <>
       <RowMenu label={`Actions for ${title}`}>

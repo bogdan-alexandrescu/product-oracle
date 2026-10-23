@@ -192,6 +192,7 @@ export function BeforeDrafting({ id }: { id: string }) {
             {more}
             {/* #482: owners delete a brief (and the PRD it became) to Trash. */}
             <DeleteMenu
+              op="delete_intake"
               title={s.intake.title}
               dependents={() => unwrap(api.GET("/v1/intakes/{intake_id}/dependents", { params: { path: { intake_id: id } } }))}
               remove={(query) => unwrap(api.DELETE("/v1/intakes/{intake_id}", { params: { path: { intake_id: id }, query } }))}

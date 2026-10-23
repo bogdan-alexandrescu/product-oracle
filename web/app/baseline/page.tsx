@@ -255,10 +255,10 @@ export default function BaselinePage() {
       }
     : null;
   // B6: the run the From filter names, for its after-review line.
-  const fromRun = useQuery(`baseline-from-run:${from}`, () =>
+  const filterRun = useQuery(`baseline-filter-run:${from}`, () =>
     from && from !== "none" ? unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: from } } })) : Promise.resolve(null),
   );
-  const reviewed = fromRun.data?.checkpoints.find((c) => c.kind === "baseline_confirm" && c.status === "approved") as
+  const reviewed = filterRun.data?.checkpoints.find((c) => c.kind === "baseline_confirm" && c.status === "approved") as
     | { vague_goals?: number | null }
     | undefined;
   const openBlocker = useCallback((id: string) => {

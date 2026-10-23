@@ -284,6 +284,7 @@ export function RunDetail({ id }: { id: string }) {
             )}
             {/* #482: a run alone goes to Trash (its document stays). */}
             <DeleteMenu
+              op="delete_run"
               title={run.flow_title}
               dependents={async () => ({ root: { type: "run", id: run.id, slug: null, title: run.flow_title, kind: run.flow }, items: [], published: false, working_runs: WORKING.has(run.status) ? [run.id] : [] })}
               remove={(query) => unwrap(api.DELETE("/v1/runs/{run_id}", { params: { path: { run_id: run.id }, query: { reason: query.reason } } }))}
