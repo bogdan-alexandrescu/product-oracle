@@ -66,8 +66,8 @@ def test_the_private_finding_and_panel_chats_restrict_the_starter_too():
 # whose path exists); fails_when=a kind is missing, unvalidated, or available before its
 # pick; no_claim=proposing or staging (G3, G4).
 def test_the_registry_covers_every_kind_and_none_is_available_yet():
-    waiting = {"ask_person", "basis_record", "scope_feature", "scope_requirement",
-               "priority_move", "priority_pin"}  # fmt: skip
+    waiting = {"ask_person", "scope_feature", "scope_requirement", "priority_move",
+               "priority_pin"}  # fmt: skip
     assert set(kinds.REGISTRY) == set(CHANGE_KINDS)
     for name, kind in kinds.REGISTRY.items():
         assert kind.name == name
