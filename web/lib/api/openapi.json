@@ -26234,6 +26234,270 @@
         }
       }
     },
+    "/v1/documents/{doc}/versions/{n}/roadmap-items": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Draft Roadmap Items",
+        "description": "A PRD version's items-only roadmap (E1): its derivation's status (queued,\nrunning, ready, failed, superseded, off, skipped, or none) and its items, which are\nproposals until a roadmap is approved.",
+        "operationId": "get_draft_roadmap_items",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "brief",
+                "full"
+              ],
+              "type": "string",
+              "default": "full",
+              "title": "View"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftRoadmapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/versions/{n}/roadmap-items/derive": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Derive Draft Roadmap Items",
+        "description": "Derive the version's roadmap items again (or for the first time): queued for the\ncaller; the tick starts it within a minute. The current items stay until the new\nones are stored.",
+        "operationId": "derive_draft_roadmap_items",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DeriveIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftRoadmapOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already being derived"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/roadmap-items/settings": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Draft Roadmap Settings",
+        "description": "Whether Oracle derives roadmap items for each new draft of this PRD.",
+        "operationId": "get_draft_roadmap_settings",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftRoadmapSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Put Draft Roadmap Settings",
+        "description": "Turn \"Derive for each new draft\" off or on for this PRD (owners).",
+        "operationId": "put_draft_roadmap_settings",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftRoadmapSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftRoadmapSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/roadmap-items/diff": {
       "get": {
         "tags": [
@@ -42981,6 +43245,23 @@
         ],
         "title": "DependenciesCreate"
       },
+      "DeriveIn": {
+        "properties": {
+          "depth": {
+            "type": "string",
+            "enum": [
+              "quick",
+              "standard",
+              "deep"
+            ],
+            "title": "Depth",
+            "default": "standard"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DeriveIn"
+      },
       "DesignArtifactOut": {
         "properties": {
           "request_id": {
@@ -45346,6 +45627,247 @@
         },
         "type": "object",
         "title": "DraftNoteIn"
+      },
+      "DraftRoadmapOut": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/DraftRoadmapPrd"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "ready",
+              "failed",
+              "superseded",
+              "off",
+              "skipped",
+              "none"
+            ],
+            "title": "Status"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested At"
+          },
+          "ready_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ready At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "check": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftRoadmapPrevious"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auto": {
+            "type": "boolean",
+            "title": "Auto"
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "full"
+            ],
+            "title": "View"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RoadmapItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "status",
+          "run_id",
+          "requested_at",
+          "ready_at",
+          "error",
+          "check",
+          "previous",
+          "auto",
+          "view",
+          "items"
+        ],
+        "title": "DraftRoadmapOut",
+        "description": "A PRD version's items-only roadmap: its derivation's status and its items. Items\nhave no track, are always fresh and carry no engineering records."
+      },
+      "DraftRoadmapPrd": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "version",
+          "approved"
+        ],
+        "title": "DraftRoadmapPrd"
+      },
+      "DraftRoadmapPrevious": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "ready",
+              "failed",
+              "superseded",
+              "off",
+              "skipped",
+              "none"
+            ],
+            "title": "Status"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "status",
+          "items"
+        ],
+        "title": "DraftRoadmapPrevious",
+        "description": "The nearest earlier version of the PRD with ready items."
+      },
+      "DraftRoadmapSettings": {
+        "properties": {
+          "each_draft": {
+            "type": "boolean",
+            "title": "Each Draft"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "each_draft"
+        ],
+        "title": "DraftRoadmapSettings"
+      },
+      "DraftRoadmapSummary": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "ready",
+              "failed",
+              "superseded",
+              "off",
+              "skipped",
+              "none"
+            ],
+            "title": "Status"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          },
+          "problems": {
+            "type": "integer",
+            "title": "Problems"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "items",
+          "problems"
+        ],
+        "title": "DraftRoadmapSummary",
+        "description": "A PRD version's derivation on its version read (the Roadmap tab's label)."
       },
       "DriftEntry": {
         "properties": {
@@ -49458,7 +49980,8 @@
               "launch_kit",
               "baseline",
               "code_map",
-              "update_draft"
+              "update_draft",
+              "prd_draft_items"
             ],
             "title": "Key"
           },
@@ -51202,7 +51725,8 @@
               "launch_kit",
               "baseline",
               "code_map",
-              "update_draft"
+              "update_draft",
+              "prd_draft_items"
             ],
             "title": "Flow"
           },
@@ -69917,7 +70441,8 @@
               "launch_kit",
               "baseline",
               "code_map",
-              "update_draft"
+              "update_draft",
+              "prd_draft_items"
             ],
             "title": "Flow"
           },
@@ -70188,7 +70713,8 @@
               "launch_kit",
               "baseline",
               "code_map",
-              "update_draft"
+              "update_draft",
+              "prd_draft_items"
             ],
             "title": "Flow"
           },
@@ -70746,7 +71272,8 @@
               "launch_kit",
               "baseline",
               "code_map",
-              "update_draft"
+              "update_draft",
+              "prd_draft_items"
             ],
             "title": "Flow"
           },
@@ -84260,6 +84787,16 @@
             "type": "array",
             "title": "Date Marks",
             "default": []
+          },
+          "draft_roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftRoadmapSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

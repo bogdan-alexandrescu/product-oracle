@@ -32,6 +32,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -49,6 +50,12 @@ BASIS_KINDS = ("estimate", "capacity", "commitment")
 BASIS_STATUSES = ("verified", "withdrawn")
 TRACKERS = ("linear", "jira", "github", "other")
 TRACKER_STATES = ("todo", "in_progress", "done", "cancelled", "unknown")
+# E1 Roadmap per PRD draft (migration 0030_draft_roadmaps): a draft's derivation. "none"
+# (no row) is the API's word for a version imported before E1.
+DRAFT_STATUSES = ("queued", "running", "ready", "failed", "superseded", "off", "skipped")
+DRAFT_DEPTHS = ("quick", "standard", "deep")
+# new_draft: queued by the version's import; derive: a person's Derive (never superseded).
+DRAFT_VIA = ("new_draft", "derive")
 
 
 class ProductTrack(TenantScoped, Base):
@@ -192,8 +199,45 @@ class TrackerRecord(TenantScoped, Base):
     updated_at: Mapped[datetime] = _updated_at()
 
 
+class DraftRoadmap(TenantScoped, Base):
+    """E1: the items-only roadmap of one PRD version (draft or approved), derived by a
+    prd_draft_items run. Its items are ``roadmap_items`` rows with ``draft_roadmap_id``
+    set; they never go stale (the next draft derives again)."""
+
+    __tablename__ = "draft_roadmaps"
+    __table_args__ = (
+        UniqueConstraint("prd_version_id"),
+        CheckConstraint(_in("status", DRAFT_STATUSES), name="status"),
+        CheckConstraint(_in("depth", DRAFT_DEPTHS), name="depth"),
+        CheckConstraint(_in("requested_via", DRAFT_VIA), name="via"),
+        Index("ix_draft_roadmaps_prd_status", "tenant_id", "prd_document_id", "status"),
+    )
+
+    prd_document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    prd_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("document_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="queued")
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("runs.id", ondelete="SET NULL")
+    )
+    # A user or API token id, like runs.created_by.
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    requested_via: Mapped[str] = mapped_column(Text, nullable=False, server_default="new_draft")
+    depth: Mapped[str] = mapped_column(Text, nullable=False, server_default="standard")
+    # {"items", "by_horizon", "problems"}, as the run's items check returned it.
+    items_check: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    error: Mapped[str | None] = mapped_column(Text)
+    ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = _updated_at()
+
+
 class RoadmapItem(TenantScoped, Base):
     """One item of a roadmap version, traced to the PRD version it came from (§11.4).
+    Or (E1) one item of a PRD draft's items-only roadmap (``draft_roadmap_id``): exactly
+    one owner each.
 
     Rows of an approved roadmap version are never rewritten; only their freshness
     columns move (as ``artifact_dependencies`` do, §11.5).
@@ -204,11 +248,24 @@ class RoadmapItem(TenantScoped, Base):
         UniqueConstraint("roadmap_version_id", "item_key"),
         CheckConstraint(_in("horizon", HORIZONS), name="horizon"),
         CheckConstraint(_in("freshness", FRESHNESS), name="freshness"),
+        CheckConstraint(
+            "(roadmap_version_id IS NULL) <> (draft_roadmap_id IS NULL)", name="one_owner"
+        ),
         Index("ix_roadmap_items_prd_section", "prd_version_id", "prd_section_key"),
+        Index(
+            "uq_roadmap_items_draft_key",
+            "draft_roadmap_id",
+            "item_key",
+            unique=True,
+            postgresql_where=text("draft_roadmap_id IS NOT NULL"),
+        ),
     )
 
-    roadmap_document_id: Mapped[uuid.UUID] = _fk("documents", nullable=False)
-    roadmap_version_id: Mapped[uuid.UUID] = _fk("document_versions", nullable=False)
+    roadmap_document_id: Mapped[uuid.UUID | None] = _fk("documents")
+    roadmap_version_id: Mapped[uuid.UUID | None] = _fk("document_versions")
+    draft_roadmap_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("draft_roadmaps.id", ondelete="CASCADE")
+    )
     track_id: Mapped[uuid.UUID | None] = _fk("product_tracks", "SET NULL")
     run_id: Mapped[uuid.UUID | None] = _fk("runs", "SET NULL")
     item_key: Mapped[str] = mapped_column(Text, nullable=False)

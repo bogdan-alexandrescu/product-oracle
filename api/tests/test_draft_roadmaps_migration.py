@@ -22,7 +22,8 @@ base.SCRATCH_URL = (
 )
 REVISION = "0030_draft_roadmaps"
 PREVIOUS = "0029_discussion_replies"
-ITEMS = "SELECT row_to_json(r)::text FROM roadmap_items r ORDER BY id"
+# Every column a roadmap version's item had before the migration.
+ITEMS = "SELECT (to_jsonb(r) - 'draft_roadmap_id')::text FROM roadmap_items r ORDER BY id"
 
 
 @pytest.fixture

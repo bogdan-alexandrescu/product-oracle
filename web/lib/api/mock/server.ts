@@ -35,6 +35,7 @@ import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } fr
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
+import { draftRoadmapSummary, queueDraftRoadmap, routeDraftRoadmap, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
 import { DIFF_SCENARIO, dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
@@ -103,6 +104,8 @@ export interface Db {
   blockers?: BlockersDb;
   /** C1e: each member's last Inbox visit (what "new" is measured from), by member id. */
   inbox_seen?: Record<string, string>;
+  /** E1: every PRD draft's items-only roadmap (./draft-roadmap.ts); seeded on first use. */
+  draft_roadmaps?: DraftRoadmapDb;
   /** Roadmap items, product tracks, schedule bases and tracker records (./roadmap.ts, CR-11). */
   roadmap?: RoadmapDb;
   /** Specs, flows and wireframes (./specs.ts); absent in data saved before CR-09. */
@@ -1278,6 +1281,7 @@ function importSections(
     })),
   });
   db.versions.push(v);
+  queueDraft(db, doc.id, v);
   for (const r of resolutions) {
     const f = db.feedback.find((x) => x.id === r.feedback_id);
     if (f && f.status === "open") Object.assign(f, { status: r.status, resolution_note: r.note, addressed_in_version: v.number, updated_at: now() });
@@ -1403,6 +1407,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       const v = buildVersion(doc, base);
       v.source = run.source ?? null;
       db.versions.push(v);
+      queueDraft(db, doc.id, v);
       // D12: what Build next draft sent the agents: the text changes are applied in this
       // version and the agent-staged items leave Staged (the draft answers them).
       const sent = (run as SentRun).sent;
@@ -1657,7 +1662,10 @@ function latestReview(db: Db, versionId: string, key: string): ReviewRow | undef
 }
 
 function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
-  return {
+  // E1: the version's draft roadmap summary (PRD versions only), for the Roadmap tab's label.
+  const doc = db.documents.find((d) => d.id === v.document_id);
+  const draft_roadmap = draftRoadmapSummary(doc?.kind === "prd" ? draftDb(db) : undefined, doc, v.number);
+  const out: Schemas["VersionOut"] = {
     ...v,
     date_marks: [],
     sections: v.sections.map((s) => {
@@ -1678,6 +1686,35 @@ function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
       };
     }),
   };
+  return Object.assign(out, { draft_roadmap });
+}
+
+/** E1: the draft roadmaps' context: the signed-in member (role override included) and the mock's runs. */
+function draftCtx(db: Db): DraftRoadmapContext {
+  const member = db.members.find((x) => x.email === sessionOf(db)) ?? db.members.find((m) => m.id === db.user_id)!;
+  const me = withMockRole(member);
+  return {
+    role: me.role,
+    userId: me.id,
+    documents: db.documents,
+    versions: db.versions,
+    members: db.members,
+    uuid,
+    now,
+    runs: () => (db.runs ??= seeded("runs", () => seedRuns(runsContext(db)))),
+  };
+}
+
+function draftDb(db: Db): DraftRoadmapDb {
+  return (db.draft_roadmaps ??= seeded("draft-roadmaps", () => seedDraftRoadmaps(draftCtx(db))));
+}
+
+/** E1: a new PRD version queues its items-only roadmap (the API's version_imported handler). */
+function queueDraft(db: Db, documentId: string, v: VersionRow, origin?: "skeleton") {
+  const doc = db.documents.find((d) => d.id === documentId);
+  if (!doc || doc.kind !== "prd") return;
+  const by = db.members.find((x) => x.email === sessionOf(db))?.id ?? null;
+  queueDraftRoadmap({ now }, draftDb(db), doc, v, by, origin);
 }
 
 function commentOut(db: Db, c: CommentRow): Schemas["CommentOut"] {
@@ -2137,6 +2174,7 @@ function reviewV2Context(db: Db, userId: string, role: Role) {
         sections,
       };
       db.versions.push(next);
+      queueDraft(db, doc.id, next);
       touch(db, doc.id);
       return versionOut(db, next);
     },
@@ -2707,6 +2745,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     documents: db.documents,
     versions: db.versions,
   };
+  // E1: a PRD draft's roadmap items and the PRD's "Derive for each new draft" switch.
+  const draftRes = await routeDraftRoadmap(draftCtx(db), draftDb(db), req, p, q);
+  if (draftRes) return draftRes;
   db.roadmap ??= seedRoadmap(roadmapCtx, localStorage.getItem(MOCK_SCENARIO_KEY));
   const roadmapRes = await routeRoadmap(roadmapCtx, db.roadmap, req, p, q);
   if (roadmapRes) return roadmapRes;
@@ -2729,6 +2770,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (input?.kind === "update") return startUpdate(db, me, input);
   }
   const handled = await laneF(db, req, p, m, me.role);
+  // E1: a draft started from the template's empty skeleton has nothing to derive yet.
+  if (handled?.status === 201 && p[1] === "drafts" && p.length === 2 && m === "POST") {
+    const started = (await handled.clone().json()) as { document_id?: string; version?: number };
+    const v = db.versions.find((x) => x.document_id === started.document_id && x.number === (started.version ?? 1));
+    if (v && started.document_id) queueDraft(db, started.document_id, v, "skeleton");
+  }
   if (handled) return handled;
 
   const followUp = followUpsRoute(db, req, p, me);
@@ -2745,6 +2792,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   const decided = await routeDecisions(decisionsCtx, db.decisions, req, p, q);
   if (decided) return decided;
   const seenBefore = db.inbox_seen?.[me.id] ?? null;
+  // E1: the ticker moves each PRD draft's derivation one step (queued -> running -> ready).
+  if (p[1] === "internal" && p[2] === "tick" && m === "POST") tickDraftRoadmaps(draftCtx(db), draftDb(db));
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   // C4: an intake's draft run that starts converts its brief (the API's drafting.on_start).
   if (runs?.ok && req.method === "POST" && p[1] === "runs" && p[3] === "start" && p.length === 4) startedIntakeRun(ensureV2(db), p[2]);
@@ -3047,6 +3096,8 @@ export async function mockFetch(req: Request): Promise<Response> {
   // Every call, in order: tests count them (Home's call budget).
   const url = new URL(req.url);
   const log = ((globalThis as { __poMockCalls?: string[] }).__poMockCalls ??= []);
+  // Tests act as Oracle's ticker (POST /v1/internal/tick) through this, as they would with page.request against the API.
+  (globalThis as { __poMockFetch?: typeof mockFetch }).__poMockFetch ??= mockFetch;
   log.push(`${req.method} ${url.pathname}${url.search}`);
   await new Promise((r) => setTimeout(r, LATENCY_MS));
   if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_FAIL_KEY)) {

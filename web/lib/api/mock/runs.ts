@@ -149,6 +149,9 @@ const BASELINE_SEGMENT: Schemas["FlowSegmentOut"] = {
   approver_role: "approver",
 };
 
+/** E1: the draft-items flow (the generated Flow literal gains it when the schema is regenerated). */
+export const DRAFT_ITEMS_FLOW: Schemas["FlowOut"]["key"] = "prd_draft_items";
+
 export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
   flows: [
     {
@@ -197,6 +200,22 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       segments: [
         { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver" },
         { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver" },
+      ],
+    },
+    {
+      // E1: every PRD draft's items-only roadmap; started by Oracle's ticker (or Derive on the
+      // Roadmap tab), never from the New run dialog. Writes no document; no checkpoint waits.
+      key: DRAFT_ITEMS_FLOW,
+      title: "Roadmap items for a PRD draft",
+      description: "Roadmap items (horizon, milestone, dependencies, priority) proposed from one PRD draft; shown on that version's Roadmap tab.",
+      requires_document: false,
+      target_kind: null,
+      source_kind: "prd",
+      in_new_run_dialog: false,
+      starts_from: null,
+      writes_document: false,
+      segments: [
+        { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver" },
       ],
     },
     {
@@ -990,6 +1009,8 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
   }
   for (const r of ctx.db.runs) {
     if (r.status !== "running" || delivered.has(r.id)) continue;
+    // E1: a draft's items run is finished by the draft roadmap's own tick (./draft-roadmap.ts).
+    if (r.flow === DRAFT_ITEMS_FLOW) continue;
     out.runs_checked += 1;
     if (ctx.slowAgents && agentsWorking(ctx, r)) continue;
     const done = finishRunning(ctx, r);
@@ -2569,4 +2590,88 @@ function renderReview(review: Record<string, unknown>, decidedAt: string | null 
   const label = words[kind] ?? kind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
   const ordered = Object.fromEntries(REVIEW_KEYS.map((k) => [k, review[k] ?? null]));
   return [`# Review of ${what}${attempt}, at the ${label} checkpoint.`, `# Sent back by an approver${on}. Apply each entry; answer each in resolutions.`, ...yamlLines(ordered, ""), ""].join("\n");
+}
+
+// ---------------------------------------------------------------- E1 draft roadmap items
+
+/**
+ * E1: the run Oracle's ticker starts for a PRD draft's items (./draft-roadmap.ts): flow
+ * prd_draft_items on that version at standard depth, its roadmap_items checkpoint off,
+ * created by whoever imported the version (or clicked Derive), running at once.
+ */
+export function startDraftItemsRun(
+  db: RunsDb,
+  args: { uuid: () => string; now: string; createdBy: string; source: VersionSource; depth?: "quick" | "standard" | "deep" },
+): RunOut {
+  const flow = flowOf(DRAFT_ITEMS_FLOW);
+  const knobs = resolveKnobs(DRAFT_ITEMS_FLOW, { depth: args.depth ?? "standard", checkpoints: { roadmap_items: false } }) as RunOut["knobs"];
+  const segments = segmentsFor(DRAFT_ITEMS_FLOW, knobs, args.uuid);
+  for (const s of segments) s.estimate_usd = segEstimate(s.roles, knobs.depth);
+  const [items] = segments;
+  Object.assign(items, {
+    status: "running",
+    started_at: args.now,
+    workflow_id: `mock-wf-${args.uuid().slice(0, 8)}`,
+    attempts: [{ attempt: 1, workflow_id: "mock-wf-draft-items", submitted_at: args.now, cost_usd: 0, note: null, note_by: null, state: "running" }],
+  });
+  const estimate = round2(segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
+  const run: RunOut = {
+    id: args.uuid(),
+    flow: DRAFT_ITEMS_FLOW,
+    flow_title: flow.title,
+    status: "running",
+    document_id: null,
+    document_slug: null,
+    document_kind: null,
+    source: args.source,
+    template: null,
+    theme: null,
+    estimate_usd: estimate,
+    spent_usd: 0,
+    created_by: args.createdBy,
+    created_at: args.now,
+    started_at: args.now,
+    finished_at: null,
+    waiting_on: null,
+    error: null,
+    can_retry: false,
+    can_stop_cancelling: false,
+    can_retry_lookup: false,
+    cancel_again: [],
+    can_dismiss_overrun: false,
+    can_retry_import: false,
+    knobs,
+    snapshot_id: args.uuid(),
+    snapshot_as_of: args.now,
+    approved_by: null,
+    approved_at: null,
+    needs_approval: false,
+    overrun_ceiling_usd: round2(estimate * FACTOR),
+    runtime: "fake",
+    notes: FLOW_CATALOG.runtime_notes,
+    segments,
+    checkpoints: [],
+    token_read_only: false,
+    open_proposals: 0,
+  };
+  refresh(run);
+  db.runs.push(run);
+  return run;
+}
+
+/** E1: the agents finish a draft's items run (90% of its estimate); its checkpoint is recorded skipped. */
+export function finishDraftItemsRun(db: RunsDb, runId: string | null, args: { uuid: () => string; now: string }) {
+  const run = db.runs.find((r) => r.id === runId);
+  if (!run || run.status !== "running") return;
+  const [s] = run.segments;
+  const a = s.attempts[s.attempts.length - 1];
+  if (a) Object.assign(a, { cost_usd: round2((s.estimate_usd ?? 0) * 0.9), state: "succeeded" });
+  Object.assign(s, { status: "succeeded", cost_usd: round2((s.estimate_usd ?? 0) * 0.9), artifacts: ["roadmap_items.yaml"], finished_at: args.now });
+  run.checkpoints.push({
+    id: args.uuid(), run_id: run.id, kind: "roadmap_items", status: "skipped", approver_role: "approver",
+    segment_seq: s.seq, decided_by: null, decided_at: args.now, note: "No checkpoint: draft items are reviewed on the Roadmap tab", payload: {},
+    created_at: args.now, can_decide: false, cannot_approve: null,
+  });
+  Object.assign(run, { status: "succeeded", finished_at: args.now });
+  refresh(run);
 }

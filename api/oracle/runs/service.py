@@ -286,6 +286,8 @@ ORACLE_KNOBS = (
     "reuse_baseline",
     # #260: the confirmed goals a Baseline to PRD run serves, [{"id", "key", "title"}].
     "target_goals",
+    # E1: the PRD draft's derivation a prd_draft_items run stores its items in.
+    "draft_roadmap_id",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -1509,11 +1511,13 @@ async def _resolve_source(
             f"not a {name}"
         )
     stmt = select(DocumentVersion).where(DocumentVersion.document_id == document.id)
+    if number is None and not flow.source_approved:
+        raise Invalid(f"name the version of the {name} to read")
     if number is not None:
         version = await db.scalar(stmt.where(DocumentVersion.number == number))
         if version is None:
             raise Invalid(f"version {number} of '{document.slug}' not found")
-        if version.approved_at is None:
+        if version.approved_at is None and flow.source_approved:
             target = flows.KIND_NAMES.get(flow.target_kind or "", "roadmap")
             raise Invalid(
                 f"version {number} of '{document.slug}' is not approved: a {target} is built "
@@ -1643,6 +1647,12 @@ async def _resolve_inputs(
     if flow.target_kind not in TEMPLATED_KINDS and (inputs.template or inputs.theme):
         raise Invalid(f"the {flow.title} flow takes no template or theme")
     source = await _resolve_source(db, flow, inputs.source, inputs.source_version)
+    if flow.stores_draft_items:
+        # E1: the run's document is its source PRD; it writes no document of its own.
+        if inputs.document is not None:
+            raise Invalid(f"the {flow.title} flow writes no document")
+        assert source is not None
+        return source[0].id, {"source_version_id": str(source[1].id)}
     default_slug = None
     if source is not None and inputs.document is None:
         # "<prd>-roadmap": that roadmap's next version, or a new roadmap.
@@ -2368,8 +2378,14 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         if e.type == "goal" and e.status == "confirmed"
     ]
     bases = await schedule.verified_bases(db, version.document_id)
-    known_from, known = await _known_roadmap_items(db, run)
+    if _flow(run).stores_draft_items:
+        from oracle.roadmap import draft_items
+
+        known_from, known = await draft_items.known_items(db, version)
+    else:
+        known_from, known = await _known_roadmap_items(db, run)
     return flows.SourceContext(
+        approved=version.approved_at is not None or not _flow(run).stores_draft_items,
         known_items=known,
         known_from=known_from,
         horizons=await _run_horizons(db, run),
@@ -3645,6 +3661,10 @@ async def _finish(
     await _detach(db, run, cancel=status != "succeeded", state=state, done=done)
     _set_knob(run, "spent_at_end", str(run.spent_usd or 0))
     await revoke_run_tokens(db, run.id)
+    if status in ("failed", "cancelled") and _flow(run).stores_draft_items:
+        from oracle.roadmap import draft_items
+
+        await draft_items.run_ended(db, run, run.error or "Cancelled")
 
 
 async def _next(
@@ -4050,6 +4070,22 @@ async def _advance(
                 None,
             )
         art["items_check"] = items_check
+    draft_error: str | None = None
+    if flow.stores_draft_items:
+        from oracle.roadmap import draft_items
+
+        try:
+            # In a savepoint, as the check: a failed store fails the run, never the tick.
+            async with db.begin_nested():
+                stored, draft_error = await draft_items.store(
+                    db, run, art["files"].get(ITEMS_FILE), items_check or {}
+                )
+        except safe_yaml.ParseBusy:
+            raise  # no worker for it: this tick gives up, the next retries
+        except Exception as exc:  # noqa: BLE001
+            log.exception("storing the draft items of run %s failed", run.id)
+            draft_error = f"the roadmap items could not be stored ({type(exc).__name__})"
+        art["draft_items"] = {"error": draft_error} if draft_error else {"stored": stored}
     fs_check: dict[str, Any] | None = None
     scope_id: uuid.UUID | None = None
     if feature_set.FILE in sdef.outputs:
@@ -4255,7 +4291,13 @@ async def _advance(
         if result is not None and result.get("error"):
             await _finish(db, run, "failed", result["error"])
             return True
-    if items_check is not None and items_check["problems"]:
+    if flow.stores_draft_items:
+        # E1: the items are stored with their problems; the review is on the Roadmap
+        # tab. The run fails only when nothing could be stored.
+        if draft_error:
+            await _finish(db, run, "failed", draft_error)
+            return True
+    elif items_check is not None and items_check["problems"]:
         problems = "; ".join(f"[{p['code']}] {p['message']}" for p in items_check["problems"][:5])
         await _finish(db, run, "failed", f"{ITEMS_FILE} was rejected: {problems}")
         return True
@@ -6378,6 +6420,10 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
     of runtime calls per run, and never with a run's row lock held across one."""
     stats = _TickStats()
     errors: list[str] = []
+    # E1: queued derivations of PRD drafts start first, so this pass submits them.
+    from oracle.roadmap import draft_items
+
+    errors += await draft_items.start_due(db)
     # Runs with a live workflow are watched whatever their state: a wait may be answered
     # outside Oracle or expire, the workflow may end in SwarmCloud, and one Oracle is
     # cancelling (even for a run that ended) has its cost read until the cancel holds.

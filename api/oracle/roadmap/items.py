@@ -46,7 +46,7 @@ from oracle import safe_yaml
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.roadmap import schedule
-from oracle.roadmap.models import HORIZONS, RoadmapItem
+from oracle.roadmap.models import HORIZONS, DraftRoadmap, RoadmapItem
 from oracle.runs import roadmap as items_file
 from oracle.runs.models import Run, RunSegment
 from oracle.v2.models import DocumentSectionLink, FeasibilityExperiment
@@ -422,19 +422,24 @@ async def import_items(
     *,
     run_id: uuid.UUID | None = None,
     strict: bool = False,
+    draft: DraftRoadmap | None = None,
 ) -> ImportResult:
     """Store ``roadmap_items.yaml`` as the items of a roadmap version, replacing any it
     had. ``strict``: refuse the whole file on any problem (a person's import); else
     store the items that can be stored (a run's file, already shown at its checkpoint).
-    The caller commits."""
+    ``draft`` (E1): store them as that PRD draft's items instead; ``version`` is then the
+    PRD version itself, and the items have no roadmap and no track. The caller commits."""
     from oracle.roadmap import tracks
 
     result = ImportResult()
-    prd_version = (
-        await db.get(DocumentVersion, version.source_version_id)
-        if version.source_version_id
-        else None
-    )
+    if draft is not None:
+        prd_version: DocumentVersion | None = version
+    else:
+        prd_version = (
+            await db.get(DocumentVersion, version.source_version_id)
+            if version.source_version_id
+            else None
+        )
     prd_doc = await db.get(Document, prd_version.document_id) if prd_version else None
     keys = None
     if prd_version is not None:
@@ -465,10 +470,13 @@ async def import_items(
                 )
             ).all()
         )
-    track = await tracks.track_for_roadmap(db, version, prd_version)
-    for old in await db.scalars(
-        select(RoadmapItem).where(RoadmapItem.roadmap_version_id == version.id)
-    ):
+    track = None if draft is not None else await tracks.track_for_roadmap(db, version, prd_version)
+    owner = (
+        RoadmapItem.draft_roadmap_id == draft.id
+        if draft is not None
+        else RoadmapItem.roadmap_version_id == version.id
+    )
+    for old in await db.scalars(select(RoadmapItem).where(owner)):
         await db.delete(old)
     await db.flush()
     seen: set[str] = set()
@@ -485,8 +493,9 @@ async def import_items(
             section = None
         confidence = raw.get("confidence")
         item = RoadmapItem(
-            roadmap_document_id=version.document_id,
-            roadmap_version_id=version.id,
+            roadmap_document_id=None if draft is not None else version.document_id,
+            roadmap_version_id=None if draft is not None else version.id,
+            draft_roadmap_id=draft.id if draft is not None else None,
             track_id=track.id if track else None,
             run_id=run_id,
             item_key=key,

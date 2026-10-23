@@ -31,6 +31,13 @@ def items_file(version: int, body: str = ITEMS) -> str:
     return body.replace("version: 1}", f"version: {version}}}")
 
 
+@pytest.fixture(autouse=True)
+def derivations_start(monkeypatch):
+    from oracle.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "draft_roadmaps_start", True)
+
+
 @pytest.fixture
 def runtime():
     fake = FakeRuntime()
@@ -99,7 +106,7 @@ async def test_a_new_prd_version_queues_its_items_in_the_import(client, owner, r
     """protects: criterion 1, every imported PRD version queues its derivation for the
     importer; fails_when: no row, another status, or another requester; no_claim: the
     run itself (next tests)."""
-    tenant_id, _ = owner
+    tenant_id, auth = owner
     pm, headers = await person(tenant_id, "approver")
     await new_version(client, headers, 1)
     found = await rows(tenant_id)
@@ -132,19 +139,19 @@ async def test_the_tick_starts_one_run_and_stores_its_items(client, owner, runti
     with the checkpoint off, and its file is stored as the draft's items; fails_when: no
     run, another cost or creator, a checkpoint that waits, or items on a roadmap version;
     no_claim: agent output quality (the fake runtime scripts the file)."""
-    tenant_id, _ = owner
+    tenant_id, auth = owner
     pm, headers = await person(tenant_id, "approver")
     await new_version(client, headers, 1)
     await verified_estimate(client, headers)
     runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": items_file(1)})]
-    await tick(client, headers)
+    await tick(client, auth)
     (run,) = await draft_runs(tenant_id)
     assert run.estimate_usd == pytest.approx(5.50) and run.created_by == pm.id
     assert run.knobs["checkpoints"] == {"roadmap_items": False}
     assert run.knobs["draft_roadmap_id"] == str((await rows(tenant_id))[1].id)
     row = (await rows(tenant_id))[1]
     assert row.status in ("running", "ready") and row.run_id == run.id
-    await tick(client, headers)
+    await tick(client, auth)
     row = (await rows(tenant_id))[1]
     assert row.status == "ready" and row.items_check["items"] == 2
     async with tenant_session(tenant_id) as s:
@@ -159,7 +166,7 @@ async def test_the_tick_starts_one_run_and_stores_its_items(client, owner, runti
     assert run.status == "succeeded"
     body = await read(client, headers, 1)
     assert body["status"] == "ready" and body["run_id"] == str(run.id)
-    assert [i["id"] for i in body["items"]] == ["payment-step", "shipping-step"]
+    assert [i["item_key"] for i in body["items"]] == ["payment-step", "shipping-step"]
     assert body["items"][0]["milestone"]["date"] == "2026-11-30"
     assert body["check"]["by_horizon"]["now"] == 1
 
@@ -180,7 +187,7 @@ async def test_items_with_problems_are_stored_and_the_run_succeeds(client, owner
         "unverified_date",
         "unknown_dependency",
     }
-    pay = next(i for i in body["items"] if i["id"] == "payment-step")
+    pay = next(i for i in body["items"] if i["item_key"] == "payment-step")
     assert pay["milestone"].get("date") is None
     assert pay["milestone"]["refused_date"] == "2026-11-30"
     assert pay["milestone"]["refused"] == schedule.UNVERIFIED
@@ -230,7 +237,6 @@ async def test_one_at_a_time_latest_draft_wins(client, owner, runtime):
     # A long segment: v2 stays running while v3 is imported.
     runtime.script["roadmap_items"] = [
         Outcome(polls=3, artifacts={"roadmap_items.yaml": items_file(2)}),
-        Outcome(artifacts={"roadmap_items.yaml": items_file(3)}),
         Outcome(artifacts={"roadmap_items.yaml": items_file(4)}),
         Outcome(artifacts={"roadmap_items.yaml": items_file(1)}),
     ]
@@ -242,14 +248,12 @@ async def test_one_at_a_time_latest_draft_wins(client, owner, runtime):
     assert found[2].status == "running" and found[3].status == "queued"
     assert len(await draft_runs(tenant_id)) == 1
     # A person's Derive on v1 waits its turn; v4 queued after it still starts first.
-    resp = await client.post(
-        ITEMS_PATH.format(doc=PRD, n=1) + "/derive", json={}, headers=auth
-    )
+    resp = await client.post(ITEMS_PATH.format(doc=PRD, n=1) + "/derive", json={}, headers=auth)
     assert resp.status_code == 202, resp.text
     await new_version(client, auth, 4)
     found = await rows(tenant_id)
     assert found[3].status == "superseded" and found[1].status == "queued"
-    for _ in range(6):
+    for _ in range(12):
         await tick(client, auth)
     found = await rows(tenant_id)
     assert found[2].status == "ready" and found[4].status == "ready"
@@ -336,13 +340,13 @@ async def test_a_demoted_requester_fails_the_row_and_starts_nothing(client, owne
     """protects: criterion 10, a derivation runs only for someone who may still start
     runs; fails_when: a run is created for a commenter; no_claim: disabled members (the
     same check)."""
-    tenant_id, _ = owner
+    tenant_id, auth = owner
     pm, headers = await person(tenant_id, "approver")
     await new_version(client, headers, 1)
     async with tenant_session(tenant_id) as s:
         (await s.get(User, pm.id)).role = "commenter"
         await s.commit()
-    await tick(client, headers)
+    await tick(client, auth)
     row = (await rows(tenant_id))[1]
     assert row.status == "failed" and "can no longer start runs" in row.error
     assert await draft_runs(tenant_id) == []
@@ -409,7 +413,8 @@ async def test_prd_to_roadmap_still_refuses_an_unapproved_version(client, owner,
     )
     assert resp.status_code == 201, resp.text
     flow = next(
-        f for f in (await client.get("/v1/flows", headers=auth)).json()["flows"]
+        f
+        for f in (await client.get("/v1/flows", headers=auth)).json()["flows"]
         if f["key"] == "prd_draft_items"
     )
     assert flow["source_kind"] == "prd" and flow["target_kind"] is None
@@ -425,9 +430,7 @@ async def test_run_tokens_read_draft_items_and_nothing_else(client, owner, runti
     assert required_scope("GET", path) == "read:documents"
     assert required_scope("POST", path + "/derive") is None
     assert required_scope("PUT", "/v1/documents/{doc}/roadmap-items/settings") is None
-    assert required_scope("GET", "/v1/documents/{doc}/roadmap-items/settings") == (
-        "read:documents"
-    )
+    assert required_scope("GET", "/v1/documents/{doc}/roadmap-items/settings") == ("read:documents")
 
 
 def test_item_fields_are_shared_by_both_tasks_and_the_lines_say_draft():
