@@ -44,6 +44,8 @@ BOT = "U0ORACLEBOT"
 TEAM = "T0EXAMPLE"
 EVENTS = events.PATH
 CHANNEL = "C0PRODUCT"
+# A public channel Oracle's app is not in: Slack sends no events from it.
+OUTSIDE = "C0GENERAL"
 QUIET = "Caps can ship in one sprint if detection waits."
 SCOPES = "chat:write,chat:write.public,channels:read,groups:read,users:read,users:read.email,channels:history,groups:history"  # noqa: E501
 F6_SCOPES = "chat:write,chat:write.public,channels:read,groups:read"
@@ -83,8 +85,9 @@ class FakeSlack:
             })  # fmt: skip
         if method == "conversations.list":
             return httpx.Response(200, json={"ok": True, "channels": [
-                {"id": CHANNEL, "name": "product", "is_private": False},
-                {"id": "G0LEADS", "name": "leads", "is_private": True},
+                {"id": CHANNEL, "name": "product", "is_private": False, "is_member": True},
+                {"id": "G0LEADS", "name": "leads", "is_private": True, "is_member": True},
+                {"id": OUTSIDE, "name": "general", "is_private": False, "is_member": False},
             ], "response_metadata": {"next_cursor": ""}})  # fmt: skip
         if method == "chat.postMessage":
             return httpx.Response(200, json={"ok": True, "ts": self.next_ts()})
@@ -532,7 +535,9 @@ async def test_who_mirrors_and_the_status(client, slack):
     assert status.json() == {"connected": True, "label": "Example Co", "mirroring": True,
                              "needs_reconnect": False}  # fmt: skip
     channels = await client.get(
-        "/v1/company-integrations/slack/channels", headers=ctx.as_("commenter")
+        "/v1/company-integrations/slack/channels",
+        params={"mirror": "true"},
+        headers=ctx.as_("commenter"),
     )
     assert [c["name"] for c in channels.json()] == ["leads", "product"]
     viewer = await client.post(
@@ -804,6 +809,58 @@ async def test_disconnect_sends_no_close_for_a_mirror_without_a_thread(client, s
     assert [m for m, _ in slack.calls][-1] == "auth.revoke"
     assert await live_link(ctx, d["id"]) is None
     assert all(i.status != "queued" for i in await outbox_items(ctx))
+
+
+# protects=review #491 item 1: the mirror's channel picker offers only the channels Oracle's
+# app is in, and mirroring to one it is not in is refused, while the report's picker (F6)
+# still lists every public channel; fails_when=a channel the app is not in is offered or
+# accepted for mirroring (its replies would never come back), or F6 loses it;
+# no_claim=Slack's membership itself.
+async def test_the_mirror_picker_offers_only_channels_oracle_is_in(client, slack):
+    ctx, doc = await setup(client)
+    await install(client, ctx)
+    mirror = await client.get(
+        "/v1/company-integrations/slack/channels",
+        params={"mirror": "true"},
+        headers=ctx.as_("commenter"),
+    )
+    assert mirror.status_code == 200, mirror.text
+    assert [c["id"] for c in mirror.json()] == ["G0LEADS", CHANNEL]
+    report = await client.get("/v1/company-integrations/slack/channels", headers=ctx.as_("owner"))
+    assert [c["id"] for c in report.json()] == [OUTSIDE, "G0LEADS", CHANNEL]
+    d = await start(client, ctx, subject=section(doc), message={"body": "First thought."})
+    resp = await client.post(
+        f"/v1/discussions/{d['id']}/slack", json={"channel_id": OUTSIDE},
+        headers=ctx.as_("commenter"),
+    )  # fmt: skip
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == bridge.NO_CHANNEL
+    assert await live_link(ctx, d["id"]) is None
+    await outbox.tick(ctx.tenant_id)
+    assert slack.of("chat.postMessage") == []
+
+
+# protects=review #491 item 2: Disconnect with a token that cannot be decrypted leaves no
+# closing line queued, each one dropped with a reason, so a reconnect does not post them;
+# fails_when=the ``close`` items stay queued and the next tick after a reconnect posts them;
+# no_claim=Slack's revoke (it cannot be called without the token).
+async def test_disconnect_with_an_unreadable_token_drops_the_closing_lines(client, slack):
+    ctx, _doc = await setup(client)
+    d, _thread = await mirrored(client, ctx, slack)
+    async with tenant_session(ctx.tenant_id) as s:
+        await s.execute(update(CompanyIntegration).values(ciphertext=b"not-a-fernet-token"))
+        await s.commit()
+    (row,) = (await client.get("/v1/company-integrations", headers=ctx.as_("owner"))).json()
+    posted = len(slack.of("chat.postMessage"))
+    resp = await client.delete(f"/v1/company-integrations/{row['id']}", headers=ctx.as_("owner"))
+    assert resp.status_code == 204, resp.text
+    assert await live_link(ctx, d["id"]) is None
+    closes = [i for i in await outbox_items(ctx) if i.op == "close"]
+    assert closes and all(i.status == "dropped" and i.error for i in closes)
+    assert all(i.status != "queued" for i in await outbox_items(ctx))
+    await install(client, ctx)
+    await outbox.tick(ctx.tenant_id)
+    assert len(slack.of("chat.postMessage")) == posted
 
 
 # protects=review #451 item 3: reconnecting a disconnected install to another Slack keeps the

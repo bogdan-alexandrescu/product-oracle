@@ -63,7 +63,9 @@ test("an owner connects Oracle to Slack and the card says discussions can be mir
 // from its ⋯ menu, through a searchable channel picker and the confirm copy, and the header
 // then shows the "#product" chip linking to the thread; fails_when="Mirror to Slack…" is
 // missing for the starter, the picker hint or confirm copy is wrong, or no chip shows after
-// Mirror; no_claim=the root message Oracle posts in Slack (the outbox, API tests).
+// Mirror; review #491 item 1: the picker offers only channels Oracle's app is in (#general,
+// public but without the app, is absent); no_claim=the root message Oracle posts in Slack
+// (the outbox, API tests).
 test("the starter mirrors an open discussion to #product: confirm copy, then the #product chip", async ({ page }) => {
   await withScenario(page);
   await login(page, COMMENTER);
@@ -76,6 +78,9 @@ test("the starter mirrors an open discussion to #product: confirm copy, then the
   await expect(dialog).toContainText("Invite @Product Oracle to a channel to see it here.");
   const options = dialog.getByRole("listbox", { name: "Channels" }).getByRole("option");
   await expect(options).toHaveCount(4);
+  await expect(options.filter({ hasText: "#product" })).toHaveCount(1);
+  // #general is a public channel Oracle's app is not in: its replies would never come back.
+  await expect(options.filter({ hasText: "#general" })).toHaveCount(0);
   await dialog.getByRole("searchbox", { name: "Find a channel" }).fill("prod");
   await expect(options).toHaveCount(1);
   await options.filter({ hasText: "#product" }).click();

@@ -22,13 +22,19 @@ export const MIRRORED_TITLE = "Alert digests: daily or weekly?";
 export const F6_SCOPES = ["chat:write", "chat:write.public", "channels:read"];
 export const BRIDGE_SCOPES = [...F6_SCOPES, "groups:read", "users:read", "users:read.email"];
 
-/** The channels Oracle's app is in: public ones, and a private one it was invited to. */
+/** The channels the report can post to: every public one, and a private one the app was invited to. */
 export const SLACK_CHANNELS: Schemas["NotificationChannelOut"][] = [
   { id: "C0ENG", name: "eng", is_private: false },
+  { id: "C0GENERAL", name: "general", is_private: false },
   { id: "G0LEADS", name: "leads", is_private: true },
   { id: "C0PLAN", name: "plan", is_private: false },
   { id: "C0PRODUCT", name: "product", is_private: false },
 ];
+
+/** The public channels Oracle's app is not in: Slack sends no replies from them, so a discussion is never mirrored there. */
+const NOT_IN = new Set(["C0GENERAL"]);
+/** The channels a discussion can be mirrored to: the ones Oracle's app is in. */
+export const MIRROR_CHANNELS = SLACK_CHANNELS.filter((c) => !NOT_IN.has(c.id));
 
 /** A made-up Slack thread link (never a real company's Slack). */
 const threadUrl = (channelId: string, seq: number) => `https://example-co.slack.com/archives/${channelId}/p17610400000${String(seq).padStart(5, "0")}`;
@@ -67,14 +73,17 @@ const json = (status: number, body: unknown) =>
 const refuse = (status: number, detail: string) => json(status, { detail });
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 
-/** GET /v1/company-integrations/slack/status (any member) and …/slack/channels (commenters and up); null otherwise. */
+/**
+ * GET /v1/company-integrations/slack/status (any member) and …/slack/channels (commenters and
+ * up; `?mirror=true` keeps the channels Oracle's app is in); null otherwise.
+ */
 export function slackRoute(integration: Integration | null, me: { role: Role }, req: Request, p: string[]): Response | null {
   if (p[1] !== "company-integrations" || p[2] !== "slack" || req.method !== "GET") return null;
   if (p[3] === "status") return json(200, slackStatus(integration));
   if (p[3] === "channels") {
     if (RANK[me.role] < RANK.commenter) return refuse(403, "Requires the commenter role");
     if (!integration) return refuse(409, "Connect Slack for notifications first");
-    return json(200, SLACK_CHANNELS);
+    return json(200, new URL(req.url).searchParams.get("mirror") === "true" ? MIRROR_CHANNELS : SLACK_CHANNELS);
   }
   return null;
 }
@@ -101,8 +110,8 @@ export async function discussionSlackRoute(
   if (needsReconnect(ctx.integration)) return refuse(409, "Reconnect Slack to allow mirroring discussions");
   if (d.slack) return refuse(409, `Already mirrored to #${d.slack.channel_name}`);
   const { channel_id } = (JSON.parse((await req.text()) || "{}") ?? {}) as Partial<Schemas["DiscussionSlackIn"]>;
-  const channel = SLACK_CHANNELS.find((c) => c.id === channel_id);
-  if (!channel) return refuse(422, "Invite @Product Oracle to the channel first");
+  const channel = MIRROR_CHANNELS.find((c) => c.id === channel_id);
+  if (!channel) return refuse(422, "Oracle's Slack app is not in that channel");
   const link: Link = { channel_name: channel.name, thread_url: threadUrl(channel.id, d.lock_version), status: "live", error: null };
   d.slack = link;
   return json(201, link);
