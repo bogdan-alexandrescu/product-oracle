@@ -12,7 +12,8 @@ import { ADMIN, login } from "./helpers";
  * the company's built-in rituals (Weekly goals check-in, Monthly roadmap refresh and
  * Quarterly goals review on; Investor update paused), a Monthly roadmap refresh pre-read
  * prepared early for Tue Nov 3 10:00 UTC (the owner and the approver attend), and last
- * week's goals check-in, held, whose summary run failed. The mock clock starts on Fri
+ * week's goals check-in, held, whose summary run failed. Every ritual is in the Company
+ * time zone, America/Los_Angeles unless an owner set another. The mock clock starts on Fri
  * Oct 23 2026 12:00 UTC and the browser shows New York time. Each test states its card.
  */
 
@@ -57,7 +58,8 @@ test("12a: an owner moves the roadmap refresh to the last Friday at 16:00 and Ne
   // protects=AC12a, Company › Rituals as the Rituals tab of the Company rail item, the
   // inspector's schedule picker and the Next column in the viewer's zone; fails_when=the tab
   // is missing or not third, the schedule is not saved, or Next keeps the old date or shows
-  // UTC instead of New York time (Oct 30 16:00 UTC is 12:00 PM there); no_claim=the API's DST
+  // the company's time instead of New York time (Oct 30 16:00 in Los Angeles is 7:00 PM
+  // there); no_claim=the API's DST
   // maths (test_rituals_schedule.py).
   await withRituals(page);
   await login(page);
@@ -74,7 +76,7 @@ test("12a: an owner moves the roadmap refresh to the last Friday at 16:00 and Ne
   await panel.getByLabel("Time", { exact: true }).fill("16:00");
   await panel.getByRole("button", { name: "Save" }).click();
   await expect(row).toContainText("Last Friday of the month, 16:00");
-  await expect(row.locator('[data-col="next"]')).toHaveText("Fri, Oct 30, 12:00 PM");
+  await expect(row.locator('[data-col="next"]')).toHaveText("Fri, Oct 30, 7:00 PM");
   // Oracle's words: a company, never a workspace or tenant.
   await expect(page.getByTestId("rituals-panel")).not.toContainText(/workspace|tenant/i);
   await expect(panel).not.toContainText(/workspace|tenant/i);
@@ -259,8 +261,8 @@ test("H2 review: a held occurrence lists the decisions recorded with it, each op
 
 test("H2 review: the rituals follow a change of the Company time zone", async ({ page }) => {
   // protects=rituals on the Company time zone move with it (owner decision 2026-10-22), in
-  // the mock as in the API; fails_when=the inspector keeps UTC after the owner picked Tokyo;
-  // no_claim=the API's next dates (test_company_timezone.py).
+  // the mock as in the API; fails_when=the inspector keeps Los Angeles after the owner picked
+  // Tokyo; no_claim=the API's next dates (test_company_timezone.py).
   await withRituals(page);
   await login(page);
   await page.goto("/settings/company");
@@ -269,5 +271,28 @@ test("H2 review: the rituals follow a change of the Company time zone", async ({
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
   await openRituals(page);
   await ritualRow(page, "Weekly goals check-in").click();
-  await expect(inspector(page).getByLabel("Time zone")).toHaveValue("Asia/Tokyo");
+  await expect(inspector(page).getByTestId("ritual-zone")).toContainText("Asia/Tokyo");
+});
+
+test("One zone: a ritual has no Time zone field; the inspector names the Company time zone", async ({ page }) => {
+  // protects=owner decision 2026-10-22: every ritual is in the Company time zone, so the
+  // owner's inspector has no Time zone field, says the ritual runs in the Company time zone
+  // and links to where it is set; a ritual the owner adds is in it too; fails_when=the
+  // inspector still offers a zone, or a new ritual takes the browser's zone (New York);
+  // no_claim=the API refusing a zone (test_rituals.py).
+  await withRituals(page);
+  await login(page);
+  await openRituals(page);
+  await ritualRow(page, "Monthly roadmap refresh").click();
+  const panel = inspector(page);
+  await expect(panel.getByLabel("Repeats")).toBeVisible();
+  await expect(panel.getByLabel("Time zone")).toHaveCount(0);
+  await expect(panel.getByTestId("ritual-zone")).toHaveText("Company time zone · America/Los_Angeles");
+  await expect(panel.getByRole("link", { name: "Change" })).toHaveAttribute("href", "/settings/company#timezone");
+  await page.getByRole("button", { name: "Add ritual" }).click();
+  const form = page.getByRole("form", { name: "Add ritual" });
+  await form.getByLabel("Title").fill("Pricing sync");
+  await form.getByRole("button", { name: "Add" }).click();
+  await ritualRow(page, "Pricing sync").click();
+  await expect(inspector(page).getByTestId("ritual-zone")).toHaveText("Company time zone · America/Los_Angeles");
 });

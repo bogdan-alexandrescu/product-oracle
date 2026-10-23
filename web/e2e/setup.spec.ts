@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+
 import { login } from "./helpers";
 
 /**
@@ -279,4 +281,19 @@ test("setup: a non-owner on Settings > Company sees the role note and no inputs"
   await expect(main.getByRole("combobox")).toHaveCount(0);
   await expect(main.getByRole("spinbutton")).toHaveCount(0);
   await expect(page.locator("#horizons")).toHaveCount(0);
+});
+
+test("setup: a step this build has no words for is still listed", async ({ page }) => {
+  // protects=H2 review (minor): every step /v1/setup returns has a row, so the rows add up
+  // to the panel's count; fails_when=a step the web has no label for is skipped silently
+  // (the count says 9 and 8 rows show); no_claim=the API's steps (the mock's
+  // "setup-new-step" scenario stands in for an API with a step this build predates).
+  await page.addInitScript((key) => localStorage.setItem(key, "setup-new-step"), MOCK_SCENARIO_KEY);
+  await login(page);
+  await expect(panel(page).getByTestId("panel-count")).toHaveText(/^\d+ of 9$/);
+  await expect(panel(page).locator("[data-testid^='setup-row-']")).toHaveCount(9);
+  const fresh = row(page, "calendar");
+  await expect(fresh).toHaveAttribute("data-done", "false");
+  await expect(fresh).toContainText("Calendar");
+  await expect(fresh.getByTestId("setup-status")).toHaveText("Not done");
 });

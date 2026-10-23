@@ -99,3 +99,53 @@ def test_the_report_zone_becomes_the_company_time_zone(scratch_db):
     assert _settings(moved)["alignment_report"] == {**REPORT, "timezone": "Europe/Berlin"}
     assert _settings(kept)["alignment_report"] == {**REPORT, "timezone": "Asia/Tokyo"}
     assert _settings(bare) == {}
+
+
+def _ritual(tenant: uuid.UUID, zone: str, status: str = "active") -> uuid.UUID:
+    rid = uuid.uuid4()
+    schedule = {"freq": "weekly", "interval": 1, "weekday": 2, "week_of_month": 1, "month": 1,
+                "time": "11:00", "timezone": zone}  # fmt: skip
+    _run(
+        "INSERT INTO rituals (id, tenant_id, kind, title, schedule, duration_min, prep_hours, "
+        "owner_id, status, next_due_at) VALUES (:id, :t, 'custom', 'Pricing sync', "
+        "CAST(:s AS jsonb), 30, 12, :o, :st, "
+        "CASE WHEN :st = 'active' THEN now() + interval '1 day' END)",
+        id=rid, t=tenant, s=json.dumps(schedule), o=uuid.uuid4(), st=status,
+    )  # fmt: skip
+    return rid
+
+
+def _ritual_row(rid: uuid.UUID):
+    ((schedule, next_due_at),) = _run(
+        "SELECT schedule, next_due_at FROM rituals WHERE id = :id", id=rid
+    )
+    return schedule, next_due_at
+
+
+def test_a_ritual_zone_of_its_own_moves_to_the_company_time_zone(scratch_db):
+    """protects=owner decision 2026-10-22, one zone: a ritual stored in a zone of its own
+    moves to the Company time zone (America/Los_Angeles when none is set), with its next
+    date recomputed there; a paused one keeps no next date; fails_when=a ritual keeps
+    Berlin or UTC, or its next date stays in the old zone; no_claim=occurrences already
+    prepared (they keep their dates)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    cfg = _cfg()
+    command.upgrade(cfg, PREVIOUS)
+    tokyo, unset = uuid.uuid4(), uuid.uuid4()
+    for t in (tokyo, unset):
+        _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=t)
+    _set(tokyo, "company_timezone", "Asia/Tokyo")
+    berlin = _ritual(tokyo, "Europe/Berlin")
+    utc = _ritual(unset, "UTC")
+    paused = _ritual(unset, "Europe/Berlin", status="paused")
+    command.upgrade(cfg, REVISION)
+    for rid, zone in ((berlin, "Asia/Tokyo"), (utc, "America/Los_Angeles")):
+        schedule, next_due_at = _ritual_row(rid)
+        assert schedule["timezone"] == zone
+        local = next_due_at.astimezone(ZoneInfo(zone))
+        assert (local.weekday(), local.strftime("%H:%M")) == (2, "11:00")
+        assert next_due_at > datetime.now(ZoneInfo("UTC"))
+    schedule, next_due_at = _ritual_row(paused)
+    assert schedule["timezone"] == "America/Los_Angeles" and next_due_at is None

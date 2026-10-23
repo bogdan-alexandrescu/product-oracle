@@ -70,8 +70,9 @@ async def test_defaults_and_unknown_keys(client, owner):
         },
         # H11: every responsibility at its default (written through /v1/autonomy).
         "autonomy": {},
-        # The Company time zone: goals' today, the alignment report and rituals.
-        "company_timezone": "UTC",
+        # The Company time zone: goals' today, the alignment report and rituals; Los
+        # Angeles until an owner sets it (owner decision 2026-10-22).
+        "company_timezone": "America/Los_Angeles",
         # H2: Oracle's written summary of a pre-read, on demand.
         "ritual_summaries": "on_demand",
         # H3: outcome checks 30 days after shipping, 5 assessed outcomes, apply calibration.

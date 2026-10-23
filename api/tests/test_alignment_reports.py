@@ -1159,3 +1159,66 @@ async def test_a_track_that_cannot_be_read_does_not_stop_the_report(
     assert [t["prd"]["slug"] for t in report.content["tracks"]] == [PRD]
     assert report.content["unreadable_tracks"] == [{"track_id": str(bad_id), "title": "Billing"}]
     assert "could not read 1 track(s) this time: Billing" in report.markdown
+
+
+async def _report_occurrence(tenant_id) -> RitualOccurrence:
+    ritual = await report_ritual(tenant_id)
+    async with tenant_session(tenant_id) as db:
+        (occ,) = await db.scalars(
+            select(RitualOccurrence).where(RitualOccurrence.ritual_id == ritual.id)
+        )
+        return occ
+
+
+async def _summary_runs(tenant_id) -> list:
+    from oracle.runs.models import Run
+
+    async with tenant_session(tenant_id) as db:
+        return list(await db.scalars(select(Run.id).where(Run.flow == "ritual_summary")))
+
+
+async def test_failing_catch_ups_keep_the_ready_pre_read(client, owner, runtime, at, monkeypatch):
+    """protects=H2 review (minor): F6's catch-up rebuilds an occurrence that is already
+    ready; when the rebuild fails, however often, the occurrence stays ready with the
+    pre-read it has; fails_when=three failed catch-ups turn a ready occurrence into
+    failed (an owners' Inbox row for a pre-read people can read); no_claim=the first
+    build's retries (test_rituals_ticker)."""
+    from oracle.rituals import blocks
+
+    tenant_id, auth = owner
+    at(la(2026, 10, 26, 9))
+    assert await due(tenant_id) == []
+    built = await _report_occurrence(tenant_id)
+    assert built.status == "ready"
+    await a_track(client, auth, runtime)
+
+    async def broken(*args, **kwargs):
+        raise RuntimeError("report unavailable")
+
+    monkeypatch.setitem(blocks.BUILDERS, "alignment_report", broken)
+    for _ in range(rituals.MAX_ATTEMPTS + 1):
+        await due(tenant_id)
+    occ = await _report_occurrence(tenant_id)
+    assert occ.status == "ready"
+    assert occ.pre_read == built.pre_read and occ.attempts == 0
+
+
+async def test_a_catch_up_rebuild_restarts_the_summary(client, owner, runtime, at):
+    """protects=H2 review (minor): with Every pre-read, the catch-up that rebuilds this
+    week's pre-read (now with the week's report) starts a new summary of it, and the
+    summary of the empty pre-read is gone; fails_when=the occurrence keeps the summary
+    of the pre-read it no longer has; no_claim=the run's content."""
+    tenant_id, auth = owner
+    resp = await client.put("/v1/rituals/summaries", json={"mode": "always"}, headers=auth)
+    assert resp.status_code == 200, resp.text
+    at(la(2026, 10, 26, 9))
+    assert await due(tenant_id) == []
+    first = await _report_occurrence(tenant_id)
+    assert first.status == "ready" and first.summary_run_id is not None
+    await a_track(client, auth, runtime)
+    (report,) = await due(tenant_id)
+    occ = await _report_occurrence(tenant_id)
+    assert occ.pre_read["blocks"][0]["rows"][0]["report_id"] == str(report.id)
+    assert occ.summary_run_id not in (None, first.summary_run_id)
+    assert occ.summary_state == "running"
+    assert len(await _summary_runs(tenant_id)) == 2

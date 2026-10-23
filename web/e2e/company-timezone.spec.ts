@@ -8,11 +8,12 @@ import { login } from "./helpers";
  * the mock layer.
  */
 
-// protects: an owner sets the Company time zone on Settings › Company (UTC until then), the
+// protects: an owner sets the Company time zone on Settings › Company (America/Los_Angeles
+// until then, owner decision 2026-10-22), the
 // Set up checklist's Time zone step opens it and shows the zone, and the weekly alignment
 // report says it runs in that zone instead of asking for its own.
-// fails_when: there is no Company time zone, it does not stick, or the report still has its
-// own Time zone field.
+// fails_when: there is no Company time zone, it reads UTC before an owner sets it, it does
+// not stick, or the report still has its own Time zone field.
 // no_claim: the API's use of the zone (pytest covers goals' today, the report and rituals).
 test("Company time zone: set on Settings › Company, read by the weekly report", async ({ page }) => {
   await login(page);
@@ -22,7 +23,7 @@ test("Company time zone: set on Settings › Company, read by the weekly report"
   await step.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company/);
   const zone = page.getByLabel("Company time zone");
-  await expect(zone).toHaveValue("UTC");
+  await expect(zone).toHaveValue("America/Los_Angeles");
   await zone.selectOption("Asia/Tokyo");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");

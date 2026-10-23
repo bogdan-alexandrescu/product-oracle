@@ -65,29 +65,57 @@ async def test_owners_create_and_edit_others_read(client, ctx, at):
 
 async def test_a_new_schedule_moves_next_due(client, ctx, at):
     """protects=criterion 12a's API: changing the schedule recomputes next_due_at in the
-    ritual's zone; fails_when=next_due_at keeps the old schedule; no_claim=the screen."""
+    Company time zone; fails_when=next_due_at keeps the old schedule; no_claim=the screen."""
     r = (await create(client, ctx)).json()
-    schedule = {"freq": "monthly", "week_of_month": -1, "weekday": 4, "time": "16:00",
-                "timezone": "UTC"}  # fmt: skip
+    schedule = {"freq": "monthly", "week_of_month": -1, "weekday": 4, "time": "16:00"}
     resp = await client.patch(
         f"/v1/rituals/{r['id']}",
         json={"lock_version": r["lock_version"], "schedule": schedule},
         headers=ctx.as_("owner"),
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json()["next_due_at"] == "2026-10-30T16:00:00Z"
+    # The last Friday of October, 16:00 in Los Angeles (PDT): 23:00 UTC.
+    assert resp.json()["next_due_at"] == "2026-10-30T23:00:00Z"
+
+
+async def test_a_ritual_has_no_time_zone_of_its_own(client, ctx, at):
+    """protects=owner decision 2026-10-22, one zone: a ritual is always in the Company
+    time zone; a zone in a create or edit body (another one, or none that exists) is not
+    the ritual's, and the API's schedule input has no time zone field; fails_when=a ritual
+    is stored or scheduled in Berlin, or the input still offers a zone; no_claim=the
+    screen (rituals.spec.ts)."""
+    resp = await create(client, ctx)  # the body names Europe/Berlin
+    assert resp.status_code == 201, resp.text
+    r = resp.json()
+    assert r["schedule"]["timezone"] == "America/Los_Angeles"
+    # Wednesday 11:00 in Los Angeles (PDT): 18:00 UTC.
+    assert r["next_due_at"] == "2026-10-21T18:00:00Z"
+    schedule = {**CUSTOM["schedule"], "timezone": "Nowhere/Land"}
+    resp = await client.patch(
+        f"/v1/rituals/{r['id']}",
+        json={"lock_version": r["lock_version"], "schedule": schedule},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["schedule"]["timezone"] == "America/Los_Angeles"
+    from oracle.main import app
+
+    schemas = app.openapi()["components"]["schemas"]
+    for name in ("RitualCreate", "RitualPatch"):
+        ref = schemas[name]["properties"]["schedule"]["anyOf"][0]["$ref"].rsplit("/", 1)[1]
+        assert "timezone" not in schemas[ref]["properties"], name
 
 
 @pytest.mark.parametrize(
     ("over", "field"),
     [
-        ({"schedule": {**CUSTOM["schedule"], "timezone": "Nowhere/Land"}}, "timezone"),
+        ({"schedule": {**CUSTOM["schedule"], "time": "25:00"}}, "time"),
         ({"duration_min": 4}, "duration_min"),
         ({"prep_hours": 169}, "prep_hours"),
     ],
 )
 async def test_invalid_values_are_422_naming_the_field(client, ctx, at, over, field):
-    """protects=criterion 8: an unknown time zone, a length or lead time out of range is
+    """protects=criterion 8: a time of day, a length or lead time out of range is
     422 naming the field; fails_when=it is stored, or the error names nothing;
     no_claim=every schedule rule (test_rituals_schedule.py)."""
     resp = await create(client, ctx, **over)
@@ -452,6 +480,37 @@ async def test_a_run_token_reads_the_pre_read_and_cannot_write(client, ctx, at):
             assert refused.is_error
     finally:
         set_runtime(None)
+
+
+async def test_the_summary_prompt_names_its_tool(client, ctx, at):
+    """protects=the ritual_summary segment's prompt tells the writer to read the pre-read
+    with get_ritual_occurrence_pre_read and gives the occurrence id to call it with;
+    fails_when=the task says the pre-read is "below" and the occurrence is named only by
+    an HTTP path the agent cannot call; no_claim=the run's content."""
+    from types import SimpleNamespace
+
+    from oracle.rituals import summaries
+    from oracle.runs import flows
+
+    occ = await ready_occurrence(client, ctx, at)
+    run = SimpleNamespace(knobs={"ritual_occurrence_id": occ["id"]})
+    async with tenant_session(ctx.tenant_id) as db:
+        lines = await summaries.prompt_lines(db, run)
+    flow = flows.FLOWS["ritual_summary"]
+    (sdef,) = flow.segments
+    pctx = flows.PromptContext(
+        run_id="r-1", document=None, snapshot_as_of=None, low_confidence=0.5, extra_lines=lines
+    )
+    prompt = flows.step_prompt(flow, sdef, "writer", last=True, ctx=pctx)
+    (task,) = [line for line in prompt.splitlines() if line.startswith("Task: ")]
+    assert "get_ritual_occurrence_pre_read" in task and "below" not in task
+    call = f'get_ritual_occurrence_pre_read(occurrence_id="{occ["id"]}")'
+    assert call in prompt
+    assert "/pre-read.md" not in prompt
+    assert (
+        f"- get_ritual_occurrence_pre_read: {flows.MCP_TOOLS['get_ritual_occurrence_pre_read']}"
+        in prompt
+    )
 
 
 async def test_another_companys_ids_are_404(client, ctx, at):
