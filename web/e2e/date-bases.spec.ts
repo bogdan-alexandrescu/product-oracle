@@ -165,8 +165,10 @@ async function selectPlanItem(page: Page, title: string) {
 
 test("plan inspector: a withdrawn date is struck through with its reason, and Re-verify date records a new basis", async ({ page }) => {
   // protects=AC13 (the Plan half); fails_when=the inspector's date line does not name the
-  // basis and who verified it, stays verified after Withdraw, shows no reason, or offers no
-  // Re-verify date; no_claim=the API's plan rules (api/tests/test_plan.py).
+  // basis and who verified it, stays verified after Withdraw, shows no reason, offers no
+  // Re-verify date, or a basis the roadmap's date does not name verifies it (the API's
+  // schedule.supporting: the reference must appear in the date's source, here ENG-412);
+  // no_claim=the API's plan rules (api/tests/test_plan.py).
   await asScenario(page);
   let line = await selectPlanItem(page, "Daily alert digest email");
   await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Admin");
@@ -187,22 +189,40 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   const dialog = page.getByTestId("date-basis-dialog");
   await expect(dialog.getByLabel("Date it supports")).toHaveValue("2026-11-30");
   await expect(dialog.getByLabel("Item")).toHaveValue("alert-digest");
+  // ENG-450 supports Nov 30 for this item, but the roadmap's date names ENG-412: still withdrawn.
   await dialog.getByLabel("Reference").fill("ENG-450");
   await dialog.getByRole("button", { name: "Verify" }).click();
   await expect(dialog).toBeHidden();
-  await expect(line).toContainText("Nov 30 ✓ ENG-450, verified by Admin");
+  line = await selectPlanItem(page, "Daily alert digest email");
+  await expect(line).toContainText("date withdrawn");
+  await expect(line).not.toContainText("✓");
+  // A new basis under the reference the date names verifies it again.
+  await line.getByRole("button", { name: "Re-verify date" }).click();
+  await expect(dialog.getByLabel("Date it supports")).toHaveValue("2026-11-30");
+  await dialog.getByLabel("Reference").fill("ENG-412");
+  await dialog.getByRole("button", { name: "Verify" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Admin");
 });
 
 test("plan inspector: an unverified date offers Verify date; the dialog picks the item and the tracker record", async ({ page }) => {
   // protects=AC13 (unverified line) and the Record basis dialog's pickers (§2); fails_when=
   // One item is a free-text key, there is no tracker-record picker, the record does not fill
-  // Reference and Date, or its id is not sent (the API then cannot check the record's target);
+  // Reference and Date, its id is not sent (the API then cannot check the record's target), or
+  // a basis the date does not name (CAP-9; the date's source is ENG-431) verifies it;
   // no_claim=the API's record checks (api/tests/test_schedule_bases_verify.py).
   await asScenario(page);
-  const line = await selectPlanItem(page, "Alerts in the team chat");
+  let line = await selectPlanItem(page, "Alerts in the team chat");
   await expect(line).toContainText("Dec 15 · unverified");
   await line.getByRole("button", { name: "Verify date" }).click();
   const dialog = page.getByTestId("date-basis-dialog");
+  await dialog.getByLabel("Reference").fill("CAP-9");
+  await dialog.getByRole("button", { name: "Verify" }).click();
+  await expect(dialog).toBeHidden();
+  line = await selectPlanItem(page, "Alerts in the team chat");
+  await expect(line).toContainText("Dec 15 · unverified");
+  await expect(line).not.toContainText("✓");
+  await line.getByRole("button", { name: "Verify date" }).click();
   await expect(dialog.getByLabel("Date it supports")).toHaveValue("2026-12-15");
   await expect(dialog.getByLabel("For")).toHaveValue("item");
   const itemPicker = dialog.getByLabel("Item");
