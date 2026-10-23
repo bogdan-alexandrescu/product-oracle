@@ -694,3 +694,58 @@ async def test_another_companys_request_is_404(client, ctx):
     assert resp.status_code == 404
     listed = (await client.get("/v1/requests", headers=other.as_("owner"))).json()
     assert listed["total"] == 0
+
+
+# --- New request in the app (#329) ---------------------------------------------------
+
+
+async def test_in_app_request_is_new_audited_and_names_the_member(client, ctx):
+    """protects=#329 (the In app channel is accepted, New, audited, listed with its goal
+    and filed as the signed-in member); fails_when=in_app is refused, not audited, or its
+    requester is not the member; no_claim=the New request dialog (requests-new.spec.ts)."""
+    g = await goal(client, ctx)
+    out = await add(
+        client,
+        ctx,
+        title="Reorder a past basket",
+        body="Buyers order the same things every week and build the basket by hand.",
+        channel="in_app",
+        goal_ids=[g["id"]],
+    )
+    assert out["state"] == "new" and out["origin"] == "person"
+    assert out["channel"] == "in_app"
+    assert out["goal_ids"] == [g["id"]]
+    assert out["requester_name"] == "Commenter"
+    assert out["requester_kind"] == "team"
+    assert out["filed_by"] == str(ctx.users["commenter"].id)
+    [event] = await audits(ctx, "request.created")
+    assert event.data == {"channel": "in_app"}
+    listed = await client.get("/v1/requests?channel=in_app", headers=ctx.as_("viewer"))
+    assert [r["id"] for r in listed.json()["items"]] == [out["id"]]
+    assert listed.json()["by_channel"] == {"in_app": 1}
+
+
+async def test_in_app_roles_match_the_other_channels(client, ctx):
+    """protects=#329 rule 4 (whoever files in other channels files in the app; an owner
+    names someone else); fails_when=a viewer files in_app, a commenter or approver cannot,
+    or a non-owner files in someone else's name; no_claim=API tokens' requester."""
+    for channel in ("in_app", "sales"):
+        await add(client, ctx, who="viewer", expect=403, channel=channel)
+        for who in ("commenter", "approver", "owner"):
+            out = await add(client, ctx, who=who, channel=channel)
+            assert out["filed_by"] == str(ctx.users[who].id)
+    mine = await add(client, ctx, who="approver", channel="in_app", requester_name="Approver")
+    assert mine["requester_name"] == "Approver"
+    for who in ("commenter", "approver"):
+        resp = await client.post(
+            "/v1/requests",
+            json={"title": "x", "channel": "in_app", "requester_name": "Sam Rivera"},
+            headers=ctx.as_(who),
+        )
+        assert resp.status_code == 403, who
+        assert resp.json()["detail"] == "Only an owner files a request in someone else's name"
+    named = await add(
+        client, ctx, who="owner", channel="in_app", requester_name="Sam Rivera"
+    )
+    assert named["requester_name"] == "Sam Rivera"
+    assert named["filed_by"] == str(ctx.users["owner"].id)
