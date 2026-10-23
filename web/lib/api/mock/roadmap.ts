@@ -54,8 +54,12 @@ export interface RoadmapContext {
   role: Role;
   /** A3: the caller carries the engineering lead flag (they may record and withdraw date bases). */
   engineeringLead?: boolean;
+  /** F3: some member carries the flag (an approver's basis then waits as proposed). */
+  leadNamed?: boolean;
   documents: Doc[];
   versions: Version[];
+  /** The mock approver's id (who proposed the seeded basis). */
+  approverId?: string;
 }
 
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
@@ -68,6 +72,8 @@ const DATE_UNVERIFIED =
 const OUTSIDE_NOW = "dated milestones belong only in now; the date was dropped";
 /** The mock scenario (MOCK_SCENARIO_KEY) whose roadmap items carry every field the Items tab shows (E2). */
 export const ITEMS_SCENARIO = "roadmap-items";
+/** F3 Date bases: commenter@example.com is the engineering lead, a basis waits for them. */
+export const DATE_BASES_SCENARIO = "date-bases";
 
 const now = () => new Date().toISOString();
 const today = () => now().slice(0, 10);
@@ -143,7 +149,8 @@ function itemsFor(ctx: RoadmapContext, roadmap: Version, trackId: string | null)
  */
 export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): RoadmapDb {
   const withItems = scenario === ITEMS_SCENARIO;
-  return seeded(withItems ? `roadmap:${ITEMS_SCENARIO}` : "roadmap", () => {
+  const key = withItems ? `roadmap:${ITEMS_SCENARIO}` : scenario === DATE_BASES_SCENARIO ? `roadmap:${DATE_BASES_SCENARIO}` : "roadmap";
+  return seeded(key, () => {
     const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [] };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = ctx.documents.find((d) => d.slug === "usage-alerts-roadmap");
@@ -159,12 +166,31 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
     if (rv) db.items[rv.id] = itemsFor(ctx, rv, track.id);
     // O4 'document dates': the roadmap's Beta date rests on ENG-412; its GA date's basis
     // (ENG-413) was withdrawn, so the version view marks it "date withdrawn".
-    for (const [reference, day, status] of [["ENG-412", "2026-11-30", "verified"], ["ENG-413", "2026-12-15", "withdrawn"]] as const) {
+    // F3 "date-bases": GA's date has no basis at all (unverified), and an approver's
+    // ENG-420 waits for the engineering lead.
+    const seeds =
+      scenario === DATE_BASES_SCENARIO
+        ? ([["ENG-412", "2026-11-30", "verified"], ["ENG-420", "2027-01-15", "proposed"]] as const)
+        : ([["ENG-412", "2026-11-30", "verified"], ["ENG-413", "2026-12-15", "withdrawn"]] as const);
+    for (const [reference, day, status] of seeds) {
+      const proposed = status === "proposed";
       db.bases.push({
         id: mockUuid(), kind: "estimate", reference, supports_date: day, detail: null, prd_document_id: prd.id,
-        item_key: null, tracker_key: null, tracker_record_id: null, status, verified_by: ctx.userId, verified_at: AT,
-        withdrawn_by: status === "withdrawn" ? ctx.userId : null, withdrawn_at: status === "withdrawn" ? AT : null, created_at: AT,
+        item_key: null, tracker_key: null, tracker_record_id: null, status, note: null,
+        proposed_by: proposed ? (ctx.approverId ?? null) : null, proposed_at: proposed ? AT : null,
+        verified_by: proposed ? null : ctx.userId, verified_at: proposed ? null : AT,
+        withdrawn_by: status === "withdrawn" ? ctx.userId : null, withdrawn_at: status === "withdrawn" ? AT : null,
+        withdrawn_reason: status === "withdrawn" ? "The team re-estimated" : null,
+        rejected_by: null, rejected_at: null, rejected_reason: null, created_at: AT,
       });
+    }
+    // F3 "date-bases": the tracker record a basis may be recorded from (the GA date's issue).
+    if (scenario === DATE_BASES_SCENARIO) {
+      db.records.push({
+        id: mockUuid(), tracker: "linear", external_ref: "ENG-431", title: "Alerts in the team chat", url: "https://tracker.example.com/ENG-431",
+        track_id: track.id, item_key: "slack-alerts", state: "todo", raw_status: null, estimate: null, estimate_unit: null,
+        target_date: "2026-12-15", observed_at: AT, recorded_by: ctx.userId, created_at: AT, updated_at: AT,
+      } as TrackerRecord);
     }
     db.milestones.push({
       id: mockUuid(), track_id: track.id, name: "First release", horizon: "now", target_date: null, basis_ids: [],
@@ -327,9 +353,12 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
   const can = (role: Role) => RANK[ctx.role] >= RANK[role];
   const forbidden = () => json(403, { detail: "Requires the approver role" });
-  // A3: date bases are recorded and withdrawn by approvers, owners and engineering leads.
-  const verifies = () => can("approver") || (!!ctx.engineeringLead && can("commenter"));
+  // F3, as oracle.members.leads.date_rights: leads and owners verify; an approver
+  // verifies while no lead is named and proposes once one is.
+  const rights = (): "verify" | "propose" | null =>
+    ctx.role === "owner" || (!!ctx.engineeringLead && can("commenter")) ? "verify" : can("approver") ? (ctx.leadNamed ? "propose" : "verify") : null;
   const notVerifier = () => json(403, { detail: "Requires the approver role or the engineering lead" });
+  const notDecider = () => json(403, { detail: "Requires the engineering lead or an owner" });
   const findDoc = (ref: string) => ctx.documents.find((d) => d.id === ref || d.slug === ref);
   const findTrack = (id: string) => db.tracks.find((t) => t.id === id);
 
@@ -399,30 +428,89 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
     if (!p[2] && m === "GET") {
       const prd = q.get("prd") ? findDoc(q.get("prd")!) : undefined;
       if (q.get("prd") && !prd) return notFound(`document '${q.get("prd")}'`);
-      return json(200, db.bases.filter((b) => (!prd || b.prd_document_id === prd.id) && (!q.get("status") || b.status === q.get("status"))));
+      const item = q.get("item_key");
+      return json(200, db.bases.filter((b) => (!prd || b.prd_document_id === prd.id) && (!q.get("status") || b.status === q.get("status")) && (!item || b.item_key === item)));
     }
+    if (p[2] === "rights" && m === "GET") return json(200, { rights: rights(), lead_named: !!ctx.leadNamed });
     if (!p[2] && m === "POST") {
-      if (!verifies()) return notVerifier();
+      const may = rights();
+      if (!may) return notVerifier();
       const b = await body<Schemas["ScheduleBasisCreate"]>();
       // O4: a basis is recorded for one PRD, optionally one item or one tracker issue.
       if (!b.prd) return json(422, { detail: "prd: a schedule basis is recorded for one PRD" });
       if (b.item_key && b.tracker_key) return json(422, { detail: "name an item_key or a tracker_key, not both" });
       const prd = findDoc(b.prd);
       if (!prd) return notFound(`document '${b.prd}'`);
+      // From a tracker record: the record's own target date must be that date.
+      if (b.tracker_record_id) {
+        const rec = db.records.find((r) => r.id === b.tracker_record_id);
+        if (!rec) return notFound("Tracker record");
+        if (rec.target_date !== b.supports_date)
+          return json(422, { detail: `tracker record ${rec.external_ref} targets ${rec.target_date}, not ${b.supports_date}` });
+      }
+      const verified = may === "verify";
       const row: Basis = {
         id: mockUuid(), kind: b.kind, reference: b.reference.trim(), supports_date: b.supports_date, detail: b.detail ?? null,
-        prd_document_id: prd.id, item_key: b.item_key ?? null, tracker_key: b.tracker_key ?? null, tracker_record_id: b.tracker_record_id ?? null, status: "verified",
-        verified_by: ctx.userId, verified_at: now(), withdrawn_by: null, withdrawn_at: null, created_at: now(),
+        prd_document_id: prd.id, item_key: b.item_key ?? null, tracker_key: b.tracker_key ?? null, tracker_record_id: b.tracker_record_id ?? null,
+        status: verified ? "verified" : "proposed", note: b.note ?? null,
+        proposed_by: verified ? null : ctx.userId, proposed_at: verified ? null : now(),
+        verified_by: verified ? ctx.userId : null, verified_at: verified ? now() : null, withdrawn_by: null, withdrawn_at: null,
+        withdrawn_reason: null, rejected_by: null, rejected_at: null, rejected_reason: null, created_at: now(),
       };
       db.bases.push(row);
       return json(201, row);
     }
+    const row = p[2] ? db.bases.find((b) => b.id === p[2]) : undefined;
+    // F3: what withdrawing would change, writing nothing.
+    if (p[2] && p[3] === "impact" && m === "GET") {
+      if (!row) return notFound("Schedule basis");
+      const milestones = db.milestones
+        .filter((x) => x.basis_ids.includes(row.id))
+        .map((x) => ({
+          id: x.id, track_id: x.track_id, name: x.name, target_date: x.target_date,
+          keeps_date: x.basis_ids.some((id) => id !== row.id && db.bases.find((b) => b.id === id)?.status === "verified"),
+        }));
+      const items: Schemas["ImpactItem"][] = [];
+      const documents: Schemas["ImpactDocument"][] = [];
+      if (row.status === "verified") {
+        for (const v of ctx.versions) {
+          const doc = ctx.documents.find((d) => d.id === v.document_id);
+          if (!doc || doc.kind !== "roadmap" || v.source?.document_id !== row.prd_document_id || latest(ctx, doc.id)?.id !== v.id) continue;
+          for (const i of db.items[v.id] ?? []) {
+            const ms = liveItem(db, i).milestone;
+            if (ms?.date === row.supports_date && ((ms?.basis_ids ?? []) as string[]).includes(row.id)) {
+              items.push({ id: i.id, roadmap: doc.slug, version: v.number, item_key: i.item_key });
+            }
+          }
+          const sections = v.sections as unknown as Parameters<typeof dateMarks>[2];
+          const marks = dateMarks(db, row.prd_document_id, sections).filter(
+            (mk) => mk.status === "verified" && mk.date === row.supports_date && mk.bases.length === 1 && mk.bases[0] === row.reference,
+          ).length;
+          if (marks) documents.push({ slug: doc.slug, version: v.number, marks });
+        }
+      }
+      return json(200, { basis_id: row.id, milestones, items, documents });
+    }
+    if (p[2] && (p[3] === "verify" || p[3] === "reject") && m === "POST") {
+      if (rights() !== "verify") return notDecider();
+      if (!row) return notFound("Schedule basis");
+      if (row.status !== "proposed") return json(409, { detail: `Only a proposed basis is decided; this one is ${row.status}` });
+      const b = await body<{ note?: string | null; reason?: string }>();
+      if (p[3] === "verify") Object.assign(row, { status: "verified", verified_by: ctx.userId, verified_at: now(), note: b?.note ?? row.note });
+      else {
+        if (!b?.reason?.trim()) return json(422, { detail: "reason: a rejection needs a reason" });
+        Object.assign(row, { status: "rejected", rejected_by: ctx.userId, rejected_at: now(), rejected_reason: b.reason });
+      }
+      return json(200, row);
+    }
     if (p[2] && p[3] === "withdraw" && m === "POST") {
-      if (!verifies()) return notVerifier();
-      const row = db.bases.find((b) => b.id === p[2]);
+      if (rights() !== "verify") return notDecider();
       if (!row) return notFound("Schedule basis");
       if (row.status === "withdrawn") return json(409, { detail: "This schedule basis is already withdrawn" });
-      Object.assign(row, { status: "withdrawn", withdrawn_by: ctx.userId, withdrawn_at: now() });
+      if (row.status !== "verified") return json(409, { detail: `Only a verified basis is withdrawn; this one is ${row.status}` });
+      const b = await body<{ reason?: string }>();
+      if (!b?.reason?.trim()) return json(422, { detail: "reason: a withdrawal needs a reason" });
+      Object.assign(row, { status: "withdrawn", withdrawn_by: ctx.userId, withdrawn_at: now(), withdrawn_reason: b.reason });
       const undated: string[] = [];
       for (const ms of db.milestones.filter((x) => x.basis_ids.includes(row.id))) {
         ms.basis_ids = ms.basis_ids.filter((id) => id !== row.id && db.bases.find((b) => b.id === id)?.status === "verified");
@@ -734,6 +822,18 @@ export function routePlan(ctx: PlanContext, db: RoadmapDb, req: Request, p: stri
   return json(200, planOut(ctx, db, scope));
 }
 
+/**
+ * F3: the seeded date status as the bases now stand: a verified basis for the PRD, the date and
+ * the whole PRD or this item verifies it; a verified date whose only bases were withdrawn is withdrawn.
+ */
+function dateStatus(db: RoadmapDb, prdId: string, s: PlanSeedItem): NonNullable<PlanSeedItem["dateStatus"]> | null {
+  if (!s.date) return s.dateStatus ?? null;
+  const on = db.bases.filter((b) => b.prd_document_id === prdId && b.supports_date === s.date && (!b.item_key || b.item_key === s.key));
+  if (on.some((b) => b.status === "verified")) return "verified";
+  if (s.dateStatus === "verified" && on.some((b) => b.status === "withdrawn")) return "withdrawn";
+  return s.dateStatus ?? null;
+}
+
 function planHistory(q: URLSearchParams): Response {
   const roadmap = q.get("roadmap");
   const key = q.get("item") ?? "";
@@ -796,7 +896,7 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
       goal_ids: goalIds(s.goals),
       state: origin === "draft" ? "proposed" : (s.state ?? "planned"),
       reasons: origin === "draft" ? [] : (s.reasons ?? []),
-      engineering: { records, date: s.date ?? null, date_status: s.dateStatus ?? null, slip_days: s.slipDays ?? null, tracked: records.length > 0 },
+      engineering: { records, date: s.date ?? null, date_status: dateStatus(db, prd.id, s), slip_days: s.slipDays ?? null, tracked: records.length > 0 },
       next,
     };
   };

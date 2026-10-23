@@ -86,7 +86,7 @@ export default function PlanPage() {
     if (window.matchMedia("(max-width: 600px)").matches) setSheet(true);
   }, []);
   const counts = data?.counts;
-  const inspector = item ? <PlanInspector key={item.id} item={item} goals={tags} history={history} me={userId} /> : undefined;
+  const inspector = item ? <PlanInspector key={item.id} item={item} goals={tags} history={history} me={userId} onChanged={q.reload} /> : undefined;
 
   return (
     <div className="min-w-0 px-6 pb-6 max-[600px]:px-2.5 max-[600px]:pb-24">
