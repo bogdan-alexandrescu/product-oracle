@@ -144,3 +144,24 @@ test("only the designated decider approves or sends back the run review; others 
   await bar(page).getByRole("group", { name: "Confirm Approve draft" }).getByRole("button", { name: "Approve draft" }).click();
   await expect(barText(page)).toContainText("0 of 3 sections reviewed · Approved");
 });
+
+test("with a designated decider, someone else's last section approval leaves the run review waiting for the decider", async ({ page }) => {
+  // protects=owner decision 2026-10-22: the last section's approval approves the run review only
+  // when the designated decider gave it; fails_when=an owner approving every section approves the
+  // run review, or the bar does not say it waits for the decider; no_claim=the API's rule
+  // (api/tests/test_run_review_link.py).
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "run-review-decider"]);
+  await login(page);
+  await page.goto(VERSION);
+  for (const key of KEYS) await approveSection(page, key);
+  await expect(barText(page)).toHaveText("Run review · Baseline to PRD · draft v2 · 3 of 3 sections reviewed");
+  await expect(bar(page)).toContainText("Every section is approved · waits for Approver, the designated decider");
+  await expect(bar(page).getByRole("button")).toHaveCount(0);
+
+  await signOut(page);
+  await login(page, "approver@example.com");
+  await page.goto(VERSION);
+  await expect(barText(page)).toHaveText("Run review · Baseline to PRD · draft v2 · 3 of 3 sections reviewed");
+  await bar(page).getByRole("button", { name: "Approve draft" }).click();
+  await expect(barText(page)).toContainText("3 of 3 sections reviewed · Approved");
+});

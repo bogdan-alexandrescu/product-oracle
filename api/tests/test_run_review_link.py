@@ -338,3 +338,33 @@ async def test_only_the_designated_decider_decides_the_run_review(client, owner,
     resp = await _send_back(client, decider, run, cp)
     assert resp.status_code == 200, resp.text
     assert (await _checkpoint(tenant_id, cp["id"])).status == "changes_requested"
+
+
+async def test_the_last_section_approves_the_run_review_only_when_the_decider_gives_it(
+    client, owner, runtime
+):
+    """Owner, 2026-10-22: with a designated decider, someone else's approval of the last
+    section leaves the run review pending for the decider; the decider's approval of the
+    last section approves it."""
+    tenant_id, auth = owner
+    run, cp = await _waiting(client, auth)
+    decider_id, decider = await _decider(client, tenant_id, auth)
+    keys = await _keys(tenant_id)
+    for key in keys:
+        await _verdict(client, auth, key)
+    assert (await _checkpoint(tenant_id, cp["id"])).status == "pending"
+    assert (await get(client, auth, run["id"]))["status"] == "awaiting_checkpoint"
+    assert await _audits(tenant_id, "checkpoint.approved") == []
+    review = (await client.get(f"/v1/documents/{DOC}/versions/2/run-review", headers=auth)).json()
+    assert review["status"] == "pending" and review["sections"]["approved"] == len(keys)
+    assert review["decider_id"] == str(decider_id) and review["can_decide"] is False
+    mine = (await client.get(f"/v1/documents/{DOC}/versions/2/run-review", headers=decider)).json()
+    assert mine["can_decide"] is True
+
+    # The decider gives the last section's approval: the run review is approved.
+    await _verdict(client, decider, keys[-1], "changes_requested")
+    await _verdict(client, decider, keys[-1])
+    assert (await _checkpoint(tenant_id, cp["id"])).status == "approved"
+    [event] = await _audits(tenant_id, "checkpoint.approved")
+    assert event.data["via"] == "document_review"
+    assert (await get(client, auth, run["id"]))["status"] == "succeeded"
