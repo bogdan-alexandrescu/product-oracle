@@ -12,6 +12,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { mockUuid, seeded } from "./ids";
+import type { PlanEditItem, PlanEditsDb } from "./plan-edits";
 import itemsFixture from "./roadmap-items.json";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -158,8 +159,10 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
     const rv = roadmap && latest(ctx, roadmap.id);
     if (rv) db.items[rv.id] = itemsFor(ctx, rv, track.id);
     // O4 'document dates': the roadmap's Beta date rests on ENG-412; its GA date's basis
-    // (ENG-413) was withdrawn, so the version view marks it "date withdrawn".
-    for (const [reference, day, status] of [["ENG-412", "2026-11-30", "verified"], ["ENG-413", "2026-12-15", "withdrawn"]] as const) {
+    // (ENG-413) was withdrawn, so the version view marks it "date withdrawn". In the
+    // "plan-decider" scenario (#346) it stands, so a version proposed from it can be approved.
+    const ga = scenario === "plan-decider" ? "verified" : "withdrawn";
+    for (const [reference, day, status] of [["ENG-412", "2026-11-30", "verified"], ["ENG-413", "2026-12-15", ga]] as const) {
       db.bases.push({
         id: mockUuid(), kind: "estimate", reference, supports_date: day, detail: null, prd_document_id: prd.id,
         item_key: null, tracker_key: null, tracker_record_id: null, status, verified_by: ctx.userId, verified_at: AT,
@@ -656,6 +659,8 @@ type Horizon = PlanItem["horizon"];
 export interface PlanContext extends RoadmapContext {
   /** The baseline's goals (id and key), for the items' goal ids. */
   goals: { id: string; key: string }[];
+  /** #346: the versions change sets proposed (./plan-edits.ts); an approved one is the live plan. */
+  edits?: PlanEditsDb;
 }
 
 /** One item of the mock plan: an approved row, its draft twin (when the roadmap draft changes it), or a new draft row. */
@@ -674,7 +679,7 @@ type PlanSeedItem = {
   section: string;
 };
 
-const ALERTS_ROADMAP_SLUG = "usage-alerts-roadmap";
+export const ALERTS_ROADMAP_SLUG = "usage-alerts-roadmap";
 const CHECKOUT_ROADMAP_SLUG = "checkout-redesign-roadmap";
 const NEXT_LABEL: Record<NonNullable<Schemas["PlanNext"]["action"]>, string> = {
   review_prd: "PRD review",
@@ -703,6 +708,23 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
     next: { action: "link_issue", who: "approver" } },
   { key: "team-budgets", title: "Budgets per team", horizon: "later", goals: ["g.early-churn"], state: "planned", section: "behaviour" },
 ];
+/** The seeded approved plan's items (usage-alerts-roadmap v1), for a change set's base (#346). */
+export function seededPlanItems(slug: string, version: number): PlanEditItem[] | null {
+  if (slug !== ALERTS_ROADMAP_SLUG || version !== 1) return null;
+  return ALERTS_APPROVED.map((i) => ({ key: i.key, title: i.title, horizon: i.horizon }));
+}
+
+/** The latest approved version a change set proposed, with its items (#346). */
+function editedPlan(ctx: PlanContext, slug: string): { version: number; items: PlanEditItem[] } | null {
+  const doc = ctx.documents.find((d) => d.slug === slug);
+  const proposed = ctx.edits?.versions[slug];
+  if (!doc || !proposed) return null;
+  const approved = ctx.versions.filter((v) => v.document_id === doc.id && v.approved_at && proposed[v.number]).map((v) => v.number);
+  if (!approved.length) return null;
+  const version = Math.max(...approved);
+  return { version, items: proposed[version] };
+}
+
 /** usage-alerts-roadmap draft 2: twins of approved items (E3: only plan changes count). */
 const ALERTS_DRAFT: Record<string, { horizon?: Horizon; change: Schemas["ItemChange"] }> = {
   "alert-rules-api": { change: { kind: "unchanged", fields: [], notes: ["confidence"] } },
@@ -802,7 +824,14 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
   };
 
   const items: PlanItem[] = [];
-  if (alerts) {
+  const edited = alerts ? editedPlan(ctx, ALERTS_ROADMAP_SLUG) : null;
+  if (alerts && edited) {
+    // #346: a proposed version the decider approved is the live plan (draft 2 is superseded).
+    for (const e of edited.items) {
+      const s: PlanSeedItem = { ...(ALERTS_APPROVED.find((a) => a.key === e.key) ?? { section: "behaviour" }), key: e.key, title: e.title, horizon: e.horizon };
+      items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: edited.version }, "approved", null));
+    }
+  } else if (alerts) {
     for (const s of ALERTS_APPROVED) {
       const d = scope === "all" ? ALERTS_DRAFT[s.key] : undefined;
       if (d && d.change.kind !== "dropped") items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: 2 }, "draft", d.change, d.horizon));

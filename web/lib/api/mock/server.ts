@@ -34,7 +34,8 @@ import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } fr
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
-import { dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { emptyPlanEdits, routeChangeSets, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
+import { ALERTS_ROADMAP_SLUG, dateMarks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
@@ -104,6 +105,8 @@ export interface Db {
   inbox_seen?: Record<string, string>;
   /** Roadmap items, product tracks, schedule bases and tracker records (./roadmap.ts, CR-11). */
   roadmap?: RoadmapDb;
+  /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
+  plan_edits?: PlanEditsDb;
   /** Specs, flows and wireframes (./specs.ts); absent in data saved before CR-09. */
   specs?: SpecsDb;
   /** F5-2 code maps (./engineering.ts); absent in older saved data. */
@@ -2016,6 +2019,42 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
   return notFound("Route");
 }
 
+/** #346: the change-set mock's view of the db; a proposal imports the next version, copied from its base. */
+function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsContext {
+  return {
+    userId: me.id,
+    role: me.role,
+    documents: db.documents,
+    versions: db.versions,
+    uuid,
+    now,
+    deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
+    seededItems: seededPlanItems,
+    // The Plan mock's usage-alerts-roadmap v1 is its approved plan (./roadmap.ts, ALERTS_APPROVED).
+    seededApproved: (slug) => (slug === ALERTS_ROADMAP_SLUG ? 1 : null),
+    newVersion: (doc, base, body) => {
+      const row = db.versions.find((v) => v.id === base.id)!;
+      const document = db.documents.find((d) => d.id === doc.id)!;
+      const kept = row.sections.filter((s) => s.section_key !== "plan-changes");
+      const at = kept.findIndex((s) => s.section_key === "sources");
+      const added = {
+        ...kept[0], id: uuid(), section_key: "plan-changes", level: 2, heading: "Plan changes", body_md: body,
+        body_text: plainText(body), content_hash: hash("Plan changes\n" + body), citation_keys: [], layer: "detail" as const, notes: null, spec_states: [],
+      };
+      const sections = (at < 0 ? [...kept, added] : [...kept.slice(0, at), added, ...kept.slice(at)]).map((s, ordinal) => ({ ...s, ordinal }));
+      const number = Math.max(...docVersions(db, document).map((v) => v.number)) + 1;
+      const next: VersionRow = {
+        ...structuredClone(row), id: uuid(), number, approved_at: null, approval_lapses: [], created_at: now(),
+        imported_by: me.id, sections, content_hash: hash(sections.map((s) => s.content_hash).join("")),
+      };
+      db.versions.push(next);
+      document.status = "in_review";
+      document.updated_at = now();
+      return next;
+    },
+  };
+}
+
 /** The v2 review mock's view of the db; a section save copies the latest version. */
 function reviewV2Context(db: Db, userId: string, role: Role) {
   return {
@@ -2294,6 +2333,15 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (!db.review_v2) {
     const prd = db.documents.find((d) => d.kind === "prd");
     db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id);
+    // The "plan-decider" scenario (#346): the approver is usage-alerts-roadmap's designated decider.
+    const roadmapDoc = db.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
+    const decider = db.members.find((x) => x.email === "approver@example.com");
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "plan-decider" && roadmapDoc && decider) {
+      db.review_v2.policies.push({
+        document_id: roadmapDoc.id, decider_id: decider.id, mandatory_reviewer_ids: [], required_section_keys: [],
+        section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
+      });
+    }
   }
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
@@ -2579,11 +2627,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     versions: db.versions,
   };
   db.roadmap ??= seedRoadmap(roadmapCtx, localStorage.getItem(MOCK_SCENARIO_KEY));
+  db.plan_edits ??= emptyPlanEdits();
+  const editsRes = await routeChangeSets(planEditsContext(db, me), db.plan_edits, req, p, q);
+  if (editsRes) return editsRes;
   const roadmapRes = await routeRoadmap(roadmapCtx, db.roadmap, req, p, q);
   if (roadmapRes) return roadmapRes;
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
   const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
-  const planRes = routePlan({ ...roadmapCtx, goals }, db.roadmap, req, p, q);
+  const planRes = routePlan({ ...roadmapCtx, goals, edits: db.plan_edits }, db.roadmap, req, p, q);
   if (planRes) return planRes;
   if (p[1] === "tracks" && p[3] === "roadmap-run" && m === "POST") {
     if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
@@ -2814,6 +2865,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, { document_id: doc.id, version: v.number, items, counts });
   }
   if (sub === "approve" && m === "POST") {
+    // F2: the designated decider, when the review policy names one, is the only one who approves.
+    const decider = db.review_v2?.policies.find((x) => x.document_id === doc.id)?.decider_id;
+    if (decider && decider !== me.id) return json(403, { detail: "Only the designated decider approves this document's versions" });
     // H4: a vision or a product strategy is an owner's to approve.
     const words = doc.kind === "vision" ? "a vision" : doc.kind === "strategy" ? "a product strategy" : doc.kind === "update" ? "an update" : null;
     if (words && me.role !== "owner") return json(403, { detail: `Only an owner can approve ${words}` });
