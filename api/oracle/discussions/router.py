@@ -3,6 +3,7 @@ up start and write; who may add people, close or make a private discussion open 
 checked per discussion (oracle.discussions.access). Every route is also an MCP tool with
 the caller's role; run tokens never see them (``discussions`` is not a run-token area)."""
 
+import contextlib
 import uuid
 from collections.abc import Awaitable
 from typing import Annotated, Any
@@ -29,6 +30,7 @@ from oracle.discussions.schemas import (
     DiscussionParticipantsIn,
     DiscussionPatch,
     DiscussionReadIn,
+    DiscussionStarted,
     Origin,
     Status,
 )
@@ -52,21 +54,35 @@ async def _call[T](op: Awaitable[T]) -> T:
 
 @router.post(
     "/discussions",
-    response_model=DiscussionOut,
+    response_model=DiscussionStarted,
     status_code=status.HTTP_201_CREATED,
     responses={404: {"description": "The subject is not in this company"}},
 )
 async def create_discussion(
-    body: DiscussionCreate, principal: Commenter, db: TenantDB
-) -> DiscussionOut:
+    body: DiscussionCreate, principal: Commenter, db: TenantDB, wait: bool = False
+) -> DiscussionStarted:
     """Start a discussion about one subject: open (everyone who can see the subject reads
     it) or private (only the people picked). ``title`` defaults to the subject's label;
     ``participants`` is the starter's pick for a private discussion and mentions on an
-    open one; ``message`` is optional."""
-    d = await _call(service.start(db, principal, body))
+    open one; ``message`` is optional.
+
+    Oracle replies to the first message as to any other (``POST …/messages``): while only
+    the starter is in it, and after that when addressed. ``reply`` is its ``pending``
+    reply; ``wait`` runs it here, as there. When Oracle has answered a lot in a short time
+    the discussion still starts, without a reply."""
+    d, first = await _call(service.start(db, principal, body))
+    reply = None
+    if first is not None and await replies.wants_reply(db, d, first):
+        with contextlib.suppress(replies.ReplyLimited):
+            reply = await replies.ask(db, d, first)
     await db.commit()
+    if reply is not None and wait:
+        await replies.wait(principal.tenant_id, reply.id)
+        await db.refresh(reply)
     await db.refresh(d)
-    return await service.discussion_out(db, principal, d)
+    out = await service.discussion_out(db, principal, d)
+    [reply_out] = await service.messages_out(db, [reply], principal) if reply else [None]
+    return DiscussionStarted(**out.model_dump(), reply=reply_out)
 
 
 @router.get("/discussions", response_model=DiscussionPage)

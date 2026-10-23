@@ -109,7 +109,7 @@ test("a viewer opening the discussion reads it and has no composer", async ({ pa
   await login(page, VIEWER);
   await page.goto(DOC);
   await openDiscussion(page, "Checkout redesign PRD · 2. Problem");
-  await expect(thread(page).getByTestId("discussion-message")).toContainText("Is the drop-off at shipping or at payment?");
+  await expect(thread(page).getByTestId("discussion-message").first()).toContainText("Is the drop-off at shipping or at payment?");
   await expect(thread(page)).toContainText("Viewers can read but not write here.");
   await expect(thread(page).getByRole("textbox", { name: "Message" })).toHaveCount(0);
   await expect(thread(page).getByRole("button", { name: "Send" })).toHaveCount(0);
@@ -174,13 +174,13 @@ test("an approver discusses a pending checkpoint in a sheet on the run page", as
   await form.getByRole("textbox", { name: "First message" }).fill("Is G2's target the one from the plan?");
   await form.getByRole("button", { name: "Start discussion" }).click();
   await expect(sheet.getByTestId("discussion-thread")).toBeVisible();
-  await expect(sheet.getByTestId("discussion-message")).toContainText("Is G2's target the one from the plan?");
+  await expect(sheet.getByTestId("discussion-message").first()).toContainText("Is G2's target the one from the plan?");
   await expect(sheet.getByRole("textbox", { name: "Message" })).toBeVisible();
 
   // Discuss again: the sheet opens on the same thread.
   await sheet.getByRole("button", { name: /^Close/ }).click();
   await card.getByRole("button", { name: "Discuss" }).click();
-  await expect(page.getByTestId("sheet-discuss").getByTestId("discussion-message")).toContainText("Is G2's target");
+  await expect(page.getByTestId("sheet-discuss").getByTestId("discussion-message").first()).toContainText("Is G2's target");
 });
 
 // protects=criterion 14.6: on a phone the thread opens in the review sheet with its composer
