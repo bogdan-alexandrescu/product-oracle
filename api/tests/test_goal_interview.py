@@ -270,7 +270,7 @@ def test_run_tokens_reach_no_interview_route():
 # protects=criterion 1: one interview per goal on subject entity:<id>, with the starter and
 # the goal's owner in it, reopened on a second call; 422 on a measurable goal or a non-goal,
 # 404 on none; fails_when=a second discussion opens, the owner is left out, or a 422 is
-# missed; no_claim=the owner's Inbox row (G6, not built).
+# missed; no_claim=the owner's Inbox row (test_the_goal_owner_gets_an_inbox_row).
 async def test_start_creates_one_interview_with_the_owner(client):
     ctx = await company()
     goal = await vague_goal(client, ctx)
@@ -302,6 +302,26 @@ async def test_start_creates_one_interview_with_the_owner(client):
     assert [(g["entity"]["id"], g["missing"], g["discussion_id"]) for g in listed] == [
         (goal["id"], ["unit", "comparison", "target", "horizon"], first["discussion_id"])
     ]
+
+
+# protects=criterion 2: the goal's owner, added when the interview starts, gets an Invited
+# row in the Inbox (G6 Discussion rows in the Inbox); fails_when=no row for the owner, or a
+# row for the starter; no_claim=the row's wording and states (tests/test_discussion_inbox.py).
+async def test_the_goal_owner_gets_an_inbox_row(client):
+    ctx = await company()
+    goal = await vague_goal(client, ctx)
+    await start(client, ctx, goal["id"])
+    title = "Make “Cut early churn” measurable"
+
+    async def rows_for(who: str) -> list[dict]:
+        resp = await client.get("/v1/inbox", headers=ctx.as_(who))
+        assert resp.status_code == 200, resp.text
+        return [r for r in resp.json()["discussions"] if r["title"] == title]
+
+    [row] = await rows_for("approver")
+    assert row["kind"] == "invited" and row["state"] == "new"
+    assert row["by"]["user_id"] == uid(ctx, "commenter")
+    assert await rows_for("commenter") == []
 
 
 # protects=criterion 3: the opening turn stores up to 3 goal_measure changes, skips the one
