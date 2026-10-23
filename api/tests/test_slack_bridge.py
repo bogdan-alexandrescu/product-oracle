@@ -717,6 +717,82 @@ async def test_a_slack_source_sync_skips_oracle_after_disconnect(client, slack, 
     assert await synced_with() == [BOT]
 
 
+# protects=review #451 item 1: a mirror stopped before its root post is unlinked with nothing
+# left queued for it, so a full batch of such mirrors never stops a later one; fails_when=a
+# ``close`` waits forever for a thread that never comes and BATCH of them fill every tick;
+# no_claim=Slack's ordering.
+async def test_mirrors_stopped_before_their_root_post_do_not_stop_later_ones(client, slack):
+    ctx, doc = await setup(client)
+    await install(client, ctx)
+    stopped = []
+    for i in range(outbox.BATCH + 1):
+        d = await start(client, ctx, subject=section(doc), message={"body": f"Idea {i}."})
+        await mirror_to(client, ctx, d["id"])
+        resp = await client.delete(f"/v1/discussions/{d['id']}/slack", headers=ctx.as_("approver"))
+        assert resp.status_code == 204
+        stopped.append(d["id"])
+    later = await start(client, ctx, subject=section(doc), message={"body": "Later one."})
+    await mirror_to(client, ctx, later["id"])
+    await outbox.tick(ctx.tenant_id)
+    link = await live_link(ctx, later["id"])
+    assert link is not None and link.thread_ts
+    # Only the later root was posted: no closing line for a thread that never existed.
+    (root,) = slack.of("chat.postMessage")
+    assert "thread_ts" not in root
+    for d_id in stopped:
+        assert (await get(client, ctx, d_id, "commenter"))["slack"] is None
+    assert all(i.status != "queued" for i in await outbox_items(ctx))
+
+
+# protects=review #451 item 2: Disconnect sends no closing line for a mirror whose root was
+# not posted yet; fails_when=a ``close`` goes to the channel without a thread;
+# no_claim=Slack's revoke.
+async def test_disconnect_sends_no_close_for_a_mirror_without_a_thread(client, slack):
+    ctx, doc = await setup(client)
+    row = await install(client, ctx)
+    d = await start(client, ctx, subject=section(doc), message={"body": "Not posted yet."})
+    await mirror_to(client, ctx, d["id"])
+    resp = await client.delete(f"/v1/company-integrations/{row['id']}", headers=ctx.as_("owner"))
+    assert resp.status_code == 204, resp.text
+    assert slack.of("chat.postMessage") == []
+    assert [m for m, _ in slack.calls][-1] == "auth.revoke"
+    assert await live_link(ctx, d["id"]) is None
+    assert all(i.status != "queued" for i in await outbox_items(ctx))
+
+
+# protects=review #451 item 3: reconnecting a disconnected install to another Slack keeps the
+# first Slack's app user for its sources' syncs, next to the new one; fails_when=the old
+# ``bot_user_id`` is overwritten and Oracle's earlier posts there become evidence;
+# no_claim=the connector's own skip.
+async def test_reconnecting_to_another_slack_keeps_the_first_apps_user(client, slack, monkeypatch):
+    service.load_connectors()
+    connector = FakeConnector(kind="slack")
+    monkeypatch.setitem(base._registry, "slack", connector)
+    ctx, _doc = await setup(client)
+    row = await install(client, ctx)
+    conn = await make_connection(ctx.tenant_id, ctx.users["owner"], "slack")
+    resp = await client.post(
+        "/v1/sources",
+        json={"kind": "slack", "name": "Team chat", "connection_id": str(conn),
+              "config": {"channels": ["C0PRODUCT"]}},
+        headers=ctx.as_("owner"),
+    )  # fmt: skip
+    assert resp.status_code == 201, resp.text
+    source = resp.json()["id"]
+    resp = await client.delete(f"/v1/company-integrations/{row['id']}", headers=ctx.as_("owner"))
+    assert resp.status_code == 204
+    slack.answers["oauth.v2.access"] = [httpx.Response(200, json={
+        "ok": True, "access_token": TOKEN, "token_type": "bot", "scope": SCOPES,
+        "bot_user_id": "U0OTHERBOT", "app_id": "A0ORACLE",
+        "team": {"id": "T0ELSEWHERE", "name": "Elsewhere Ltd"},
+    })]  # fmt: skip
+    back = await install(client, ctx)
+    assert back["id"] == row["id"] and back["status"] == "active"
+    got = await client.post(f"/v1/sources/{source}/sync", headers=ctx.as_("owner"))
+    assert got.status_code == 200, got.text
+    assert sorted(connector.calls[-1]["config"][ORACLE_SLACK_USERS]) == [BOT, "U0OTHERBOT"]
+
+
 # protects=criterion 11: the MCP tool list has the mirror routes but no Slack events or
 # callback tool; fails_when=the public endpoint becomes a tool; no_claim=the tools' use.
 async def test_no_mcp_tool_for_slack_events(client):
