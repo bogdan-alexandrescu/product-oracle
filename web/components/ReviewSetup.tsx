@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent } from "react";
 
 import { Button, Chip, Panel, Sheet } from "@/components/ds";
 import { peopleByIds, PersonPicker, type Person } from "@/components/PersonPicker";
@@ -16,7 +16,8 @@ import { errorMessage, useQuery } from "@/lib/use-query";
  * policy: decider, mandatory reviewers, required sections, re-review on change; owners),
  * each section's owner, reviewers and due date (approvers), and feedback campaigns asked
  * for and closed (approvers). Each save sends the lock_version it read; a 409 shows the
- * API's words and reloads, so the next save starts from what is there now.
+ * API's words and reloads, so the next save starts from what is there now. A control the
+ * signed-in member's role can never use is hidden, not disabled (owner rule, #370).
  */
 
 type Policy = Schemas["ReviewPolicyOut"];
@@ -39,18 +40,9 @@ function usePeople(ids: readonly (string | null | undefined)[]): Map<string, Per
   return q.data ?? new Map();
 }
 
-/** Why a control is disabled, under it. */
-function Reason({ children }: { children: ReactNode }) {
-  return (
-    <p data-testid="review-reason" className="text-sm text-text2">
-      {children}
-    </p>
-  );
-}
-
 /**
  * Chosen people as chips (each with Remove), and a button that opens the member picker.
- * `single`: one person at most (the picked one replaces it).
+ * `single`: one person at most (the picked one replaces it). `readOnly`: the chips alone.
  */
 function PeopleField({
   label,
@@ -61,7 +53,7 @@ function PeopleField({
   single = false,
   approversOnly = false,
   empty,
-  disabled,
+  readOnly = false,
   testId,
 }: {
   label: string;
@@ -72,7 +64,7 @@ function PeopleField({
   single?: boolean;
   approversOnly?: boolean;
   empty: string;
-  disabled?: boolean;
+  readOnly?: boolean;
   testId?: string;
 }) {
   const [picking, setPicking] = useState(false);
@@ -86,7 +78,7 @@ function PeopleField({
         {ids.map((id) => (
           <span key={id} className="inline-flex items-center gap-1 rounded-full border border-line-strong py-0.5 pr-1 pl-2.5 text-sm">
             {nameOf(id)}
-            {!disabled && (
+            {!readOnly && (
               <button
                 type="button"
                 aria-label={`Remove ${nameOf(id)}`}
@@ -98,9 +90,11 @@ function PeopleField({
             )}
           </span>
         ))}
-        <Button variant="ghost" icon="plus" disabled={disabled} onClick={() => setPicking((x) => !x)} aria-expanded={picking}>
-          {addLabel}
-        </Button>
+        {!readOnly && (
+          <Button variant="ghost" icon="plus" onClick={() => setPicking((x) => !x)} aria-expanded={picking}>
+            {addLabel}
+          </Button>
+        )}
       </div>
       {picking && (
         <PersonPicker
@@ -210,7 +204,6 @@ function PolicyForm({
         <Chip kind={draft.source === "document" ? "acc" : "na"}>{SOURCE_LABEL[draft.source]}</Chip>
         <span className="text-sm text-text2">The decider and reviewers must be approvers or owners.</span>
       </div>
-      {!canEdit && <Reason>Only an owner can change review settings.</Reason>}
       <PeopleField
         label="Decider"
         addLabel="Choose the decider"
@@ -221,7 +214,7 @@ function PolicyForm({
         single
         approversOnly
         empty="Any approver"
-        disabled={!canEdit}
+        readOnly={!canEdit}
       />
       <PeopleField
         label="Mandatory reviewers"
@@ -232,48 +225,71 @@ function PolicyForm({
         onChange={(ids) => set({ mandatory_reviewer_ids: ids })}
         approversOnly
         empty="None"
-        disabled={!canEdit}
+        readOnly={!canEdit}
       />
-      <fieldset className="flex min-w-0 flex-col gap-1.5">
-        <legend className={`${FIELD_LABEL} mb-1.5`}>Required sections</legend>
-        {sections.map((s) => (
-          <label key={s.section_key} className="flex min-h-9 min-w-0 items-center gap-2 text-sm text-text">
+      {canEdit ? (
+        <>
+          <fieldset className="flex min-w-0 flex-col gap-1.5" data-testid="required-sections">
+            <legend className={`${FIELD_LABEL} mb-1.5`}>Required sections</legend>
+            {sections.map((s) => (
+              <label key={s.section_key} className="flex min-h-9 min-w-0 items-center gap-2 text-sm text-text">
+                <input
+                  type="checkbox"
+                  className="size-4 flex-none accent-[var(--accent)]"
+                  checked={required.has(s.section_key)}
+                  onChange={(e) =>
+                    set({
+                      required_section_keys: e.target.checked
+                        ? [...draft.required_section_keys, s.section_key]
+                        : draft.required_section_keys.filter((k) => k !== s.section_key),
+                    })
+                  }
+                />
+                <span className="min-w-0 break-words">{s.heading}</span>
+              </label>
+            ))}
+          </fieldset>
+          <label className="flex min-h-9 items-center gap-2 text-sm text-text">
             <input
               type="checkbox"
               className="size-4 flex-none accent-[var(--accent)]"
-              checked={required.has(s.section_key)}
-              disabled={!canEdit}
-              onChange={(e) =>
-                set({
-                  required_section_keys: e.target.checked
-                    ? [...draft.required_section_keys, s.section_key]
-                    : draft.required_section_keys.filter((k) => k !== s.section_key),
-                })
-              }
+              checked={draft.rereview_on_change}
+              onChange={(e) => set({ rereview_on_change: e.target.checked })}
             />
-            <span className="min-w-0 break-words">{s.heading}</span>
+            Ask for re-review when an approved section changes
           </label>
-        ))}
-      </fieldset>
-      <label className="flex min-h-9 items-center gap-2 text-sm text-text">
-        <input
-          type="checkbox"
-          className="size-4 flex-none accent-[var(--accent)]"
-          checked={draft.rereview_on_change}
-          disabled={!canEdit}
-          onChange={(e) => set({ rereview_on_change: e.target.checked })}
-        />
-        Ask for re-review when an approved section changes
-      </label>
+        </>
+      ) : (
+        <>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <span className={FIELD_LABEL}>Required sections</span>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-text" data-testid="required-sections">
+              {sections
+                .filter((s) => required.has(s.section_key))
+                .map((s) => (
+                  <Chip key={s.section_key} kind="line">
+                    {s.heading}
+                  </Chip>
+                ))}
+              {!sections.some((s) => required.has(s.section_key)) && <span className="text-text2">None</span>}
+            </div>
+          </div>
+          <p className="text-sm text-text">
+            {draft.rereview_on_change ? "Re-review is asked for when an approved section changes." : "No re-review when an approved section changes."}
+          </p>
+        </>
+      )}
       {error && <InlineError>{error}</InlineError>}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" variant="primary" disabled={!canEdit || saving}>
-          {saving ? "Saving…" : "Save review settings"}
-        </Button>
-        <Button variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
+      {canEdit && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="submit" variant="primary" disabled={saving}>
+            {saving ? "Saving…" : "Save review settings"}
+          </Button>
+          <Button variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      )}
     </form>
   );
 }
@@ -286,11 +302,6 @@ export function SectionAssignments({ doc, states, onSaved }: { doc: string; stat
   const [editing, setEditing] = useState<string | null>(null);
   return (
     <Panel title="Section owners and reviewers" count={states.length} testId="section-assignments">
-      {!canEdit && (
-        <div className="border-b border-line px-4 py-2">
-          <Reason>Only an approver or owner can assign sections.</Reason>
-        </div>
-      )}
       <ul className="divide-y divide-line">
         {states.map((s) => (
           <li key={s.section_key} data-section-key={s.section_key} className="flex min-w-0 flex-col gap-2 px-4 py-2.5">
@@ -298,17 +309,18 @@ export function SectionAssignments({ doc, states, onSaved }: { doc: string; stat
               <span className="min-w-0 font-semibold break-words text-text">{s.heading}</span>
               {s.required && <Chip kind="line">Required</Chip>}
               <span className="flex-1" />
-              <Button
-                variant="ghost"
-                disabled={!canEdit}
-                aria-label={`Edit owner and reviewers of ${s.heading}`}
-                aria-expanded={editing === s.section_key}
-                onClick={() => setEditing((k) => (k === s.section_key ? null : s.section_key))}
-              >
-                Edit
-              </Button>
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  aria-label={`Edit owner and reviewers of ${s.heading}`}
+                  aria-expanded={editing === s.section_key}
+                  onClick={() => setEditing((k) => (k === s.section_key ? null : s.section_key))}
+                >
+                  Edit
+                </Button>
+              )}
             </div>
-            {editing === s.section_key ? (
+            {canEdit && editing === s.section_key ? (
               <AssignmentForm
                 doc={doc}
                 state={s}
@@ -427,17 +439,14 @@ export function Campaigns({ doc }: { doc: string }) {
       count={rows.length}
       testId="campaigns"
       tools={
-        <Button icon="comment" disabled={!canEdit} onClick={() => setAsking((x) => !x)} aria-expanded={asking}>
-          Ask for feedback
-        </Button>
+        canEdit && (
+          <Button icon="comment" onClick={() => setAsking((x) => !x)} aria-expanded={asking}>
+            Ask for feedback
+          </Button>
+        )
       }
     >
-      {!canEdit && (
-        <div className="border-b border-line px-4 py-2">
-          <Reason>Only an approver or owner can ask for feedback.</Reason>
-        </div>
-      )}
-      {asking && (
+      {canEdit && asking && (
         <CampaignForm
           doc={doc}
           onDone={async () => {
@@ -460,9 +469,11 @@ export function Campaigns({ doc }: { doc: string }) {
               {c.due_at ? ` · due ${formatDayUtc(c.due_at)}` : ""}
             </span>
             <span className="flex-1" />
-            <Button variant="ghost" disabled={!canEdit} aria-label={`${c.status === "open" ? "Close" : "Reopen"} ${c.title}`} onClick={() => toggle(c)}>
-              {c.status === "open" ? "Close" : "Reopen"}
-            </Button>
+            {canEdit && (
+              <Button variant="ghost" aria-label={`${c.status === "open" ? "Close" : "Reopen"} ${c.title}`} onClick={() => toggle(c)}>
+                {c.status === "open" ? "Close" : "Reopen"}
+              </Button>
+            )}
           </li>
         ))}
       </ul>
