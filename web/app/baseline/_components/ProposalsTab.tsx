@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useId } from "react";
 
-import { Button, Chip, Panel } from "@/components/ds";
+import { Button, Chip, CodeText, Panel } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import type { GraphOut, ProposalOut, Schemas } from "@/lib/api/client";
 import { formatDateTime, formatDay } from "@/lib/format";
@@ -175,14 +175,14 @@ function Sentence({ p, graph, onOpen }: { p: ProposalOut; graph: GraphOut | unde
   return (
     <p data-testid="proposal-summary" className="line-clamp-2 min-w-0 font-semibold [overflow-wrap:anywhere]">
       {at < 0 || !title ? (
-        p.summary
+        <CodeText text={p.summary} />
       ) : (
         <>
-          {p.summary.slice(0, at)}
+          <CodeText text={p.summary.slice(0, at)} />
           <button type="button" onClick={() => onOpen(p.entity_id!)} className="inline text-left font-semibold hover:underline">
             {title}
           </button>
-          {p.summary.slice(at + title.length)}
+          <CodeText text={p.summary.slice(at + title.length)} />
         </>
       )}
     </p>
@@ -247,7 +247,7 @@ function ProposalList({
                   <Source p={p} meId={meId} />
                   {payload.reason && (
                     <p className="truncate text-sm text-text2" title={payload.reason}>
-                      {payload.reason}
+                      <CodeText text={payload.reason} />
                     </p>
                   )}
                   <details className="text-sm">

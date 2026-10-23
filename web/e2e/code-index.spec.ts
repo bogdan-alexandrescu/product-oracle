@@ -20,9 +20,10 @@ const DOC = [
   },
   { section_key: "milestones", heading: "Milestones", body_md: "| Code | Name |\n|---|---|\n| M1 | Private beta |\n| M2 | Public launch |" },
   { section_key: "decisions", heading: "Decisions and open questions", body_md: "- D1 — Lists are per trip\n- Q1: Who can edit a shared list?\n\nF-31 depends on F-30 in prose." },
+  { section_key: "goal-trace", heading: "Goal trace", body_md: "- **G2 (retention)**: more repeat trips within 30 days." },
 ];
 
-const index: CodeIndex = buildCodeIndex(DOC, [{ id: "goal-1", code: "G-B", name: "Growth", status: "confirmed" }]);
+const index: CodeIndex = buildCodeIndex(DOC, [{ id: "goal-1", kind: "Goal", code: "G-B", name: "Growth", status: "confirmed" }]);
 
 const known = (text: string) => splitCodes(text, index).flatMap((p) => (typeof p === "string" ? [] : [p.text]));
 
@@ -33,7 +34,8 @@ test("finds headings, requirement lines, table rows, decisions and goals", () =>
   expect(index.get("M2")).toMatchObject({ kind: "Milestone", name: "Public launch", sectionKey: "milestones" });
   expect(index.get("D1")).toMatchObject({ kind: "Decision", name: "Lists are per trip" });
   expect(index.get("Q1")).toMatchObject({ kind: "Open question", name: "Who can edit a shared list?" });
-  expect(index.get("G-B")).toMatchObject({ kind: "Goal", name: "Growth", entityId: "goal-1" });
+  expect(index.get("G-B")).toMatchObject({ kind: "Goal", name: "Growth", entityId: "goal-1", from: "confirmed" });
+  expect(index.get("G2")).toMatchObject({ kind: "Goal", name: "retention", line: "more repeat trips within 30 days", sectionKey: "goal-trace" });
   // A code that only prose mentions is not defined by it.
   expect(index.has("F-31")).toBe(false);
 });

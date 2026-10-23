@@ -8,6 +8,7 @@ import { SourceLink } from "@/components/BuildRoadmap";
 import {
   Button,
   Chip,
+  CodeText,
   confirmInPage,
   LinkButton,
   Icon,
@@ -1444,7 +1445,11 @@ function CheckpointRow({
         </Chip>
         {review && <WaitChip wait={review.wait} forYou role={cp.approver_role} />}
       </div>
-      {cp.note && <p className="mt-1.5 text-text2">{cp.note}</p>}
+      {cp.note && (
+        <p className="mt-1.5 text-text2">
+          <CodeText text={cp.note} />
+        </p>
+      )}
       {answer && <ConsolePanel answer={answer} />}
       {approveBlocked && (
         <p className="mt-2 text-sm text-warn" data-testid="cannot-approve">

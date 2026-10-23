@@ -26,6 +26,8 @@ import { ReviewPanel, type PanelTab } from "@/components/review/ReviewPanel";
 import { RoleNote } from "@/components/RoleNote";
 import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { SectionView } from "@/components/SectionView";
+import { buildCodeIndex } from "@/lib/code-index";
+import { useCodeEntities } from "@/lib/codes";
 import { BuildDraftButton } from "@/components/NextDraft";
 import { RoadmapItemsPane } from "@/components/roadmap/RoadmapItemsPane";
 import { VersionTabs } from "@/components/roadmap/VersionTabs";
@@ -353,6 +355,11 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     }
     return m;
   }, [version]);
+
+  // #305: the codes this version names (its headings and lines, the company's goals and
+  // features), indexed once per version, not per section.
+  const codeEntities = useCodeEntities();
+  const codes = useMemo(() => buildCodeIndex(version?.sections ?? [], codeEntities), [version, codeEntities]);
 
   const citations = useMemo(() => {
     const m = new Map<string, { citation: CitationOut; number: number }>();
@@ -695,6 +702,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     showLayer: hasBrief,
     dateMarks: dateMarks.get(s.section_key),
     onDiscuss: !readOnly ? discussSection : undefined,
+    codes,
   });
   const expandFor = (origin: string): ExpandCtx => ({
     keys: expandable,

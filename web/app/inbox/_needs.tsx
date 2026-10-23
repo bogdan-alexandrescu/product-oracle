@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useId, type ReactNode } from "react";
 
-import { Button, Chip, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
+import { Button, Chip, CodeText, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { BUILD_PARAM } from "@/components/NextDraft";
@@ -276,7 +276,7 @@ export function feedbackNeeds(
         <Chip kind="now">Draft {f.staged_for_version}</Chip>
       ) : state === "declined" ? (
         <span className="truncate text-text2" title={f.resolution_note ?? undefined} data-testid="decline-note">
-          {f.resolution_note ?? "Declined"}
+          {f.resolution_note ? <CodeText text={f.resolution_note} /> : "Declined"}
         </span>
       ) : state === "done" ? (
         <Chip kind="pass">{f.addressed_in_version ? `v${f.addressed_in_version}` : "Closed"}</Chip>
