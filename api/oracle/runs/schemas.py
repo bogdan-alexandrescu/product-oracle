@@ -751,11 +751,67 @@ class TickOut(BaseModel):
     member_follow_ups: int = 0
 
 
+class InboxChildReason(BaseModel):
+    code: str
+    severity: Literal["blocking", "confirm"]
+    label: str
+    text: str
+
+
+class InboxChild(BaseModel):
+    """One item under a checkpoint's Inbox row (D9): an item still needing the caller, its
+    first open reason, the safe one-click fix of that reason (None when it has none) and a
+    commenter's suggestion on the item. ``staged`` stays null: an item fixed earlier leaves
+    its slot (the Inbox page keeps the row it just fixed, done, with Undo)."""
+
+    item: str
+    title: str | None = None
+    reason: InboxChildReason
+    fix: ReasonFix | None = None
+    staged: "ReviewAction | None" = None
+    suggested: "ReviewAction | None" = None
+
+
+class InboxSource(BaseModel):
+    title: str
+    version: int
+
+
+class InboxSections(BaseModel):
+    total: int
+    reviewed: int
+
+
+class InboxSummary(BaseModel):
+    """What a pending checkpoint needs of the caller and how much (D9), from the same read
+    as ``GET …/review`` (oracle.runs.actions.inbox_summary): its counts, the wait, up to
+    three child rows (blocking first, then in position order) and ``more`` items needing
+    the caller beyond them. A kind's review spec registers its own (``SUMMARIES``)."""
+
+    need_you: int = 0
+    blocking: int = 0
+    to_confirm: int = 0
+    handled: int = 0
+    waiting_on: int = 0
+    wait: "WaitInfo | None" = None
+    children: list[InboxChild] = []
+    more: int = 0
+    # The roadmap's title and the PRD version it comes from.
+    title: str | None = None
+    source: InboxSource | None = None
+    # PRD and roadmap review (D10): sections reviewed of the version's.
+    sections: InboxSections | None = None
+    # A console approval given while blocking reasons are open: recorded, not followed (D3).
+    console_held: bool = False
+
+
 class InboxCheckpoint(CheckpointOut):
     flow: Flow
     flow_title: str
     document_slug: str | None = None
     segment_title: str | None = None
+    # D9: what needs a decision and how much; None for a kind without a summary.
+    summary: InboxSummary | None = None
 
 
 # C1e Inbox states: new (open, raised after my last Inbox visit), open, staged (accepted,
@@ -1179,3 +1235,9 @@ class CheckpointReview(BaseModel):
     can_decide: bool = False
     # The approve gate, as decide reads it (D3); None for a kind with no blocking reasons.
     gate: Gate | None = None
+
+
+InboxChild.model_rebuild()
+InboxSummary.model_rebuild()
+InboxCheckpoint.model_rebuild()
+InboxOut.model_rebuild()

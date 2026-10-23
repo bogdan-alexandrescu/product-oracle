@@ -176,6 +176,7 @@ from oracle.runs import (
     roadmap,
     workflow,
 )
+from oracle.runs.batch import batched, once
 from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -4640,22 +4641,55 @@ class CheckedItems:
     prd_sections: set[str] | None
 
 
-async def checked_items(db: AsyncSession, run: Run, text: str) -> CheckedItems:
+async def _version_source(db: AsyncSession, source_id: uuid.UUID) -> Any:
+    """A PRD version's slug, number and title (once per Inbox call, oracle.runs.batch)."""
+    return await once(
+        ("version_source", source_id),
+        lambda: _source_of(db, source_id),
+    )
+
+
+async def _source_of(db: AsyncSession, source_id: uuid.UUID) -> Any:
+    return (await docs_service.version_sources(db, [source_id])).get(source_id)
+
+
+async def _section_keys(db: AsyncSession, version_id: uuid.UUID) -> list[str]:
+    return list(
+        await db.scalars(select(Section.section_key).where(Section.version_id == version_id))
+    )
+
+
+async def items_check(db: AsyncSession, run: Run, text: str) -> roadmap.ItemsCheck:
+    """The check of a Roadmap items file, read once per Inbox call (oracle.runs.batch)."""
+    check, *_ = await once(("items_check", _source_id(run), text), lambda: _checked(db, run, text))
+    return check
+
+
+async def _checked(
+    db: AsyncSession, run: Run, text: str
+) -> tuple[roadmap.ItemsCheck, str | None, int | None, set[str] | None]:
     slug = version = prd_id = None
     keys: set[str] | None = None
     source_id = _source_id(run)
     if source_id is not None:
-        source = (await docs_service.version_sources(db, [source_id])).get(source_id)
+        source = await _version_source(db, source_id)
         if source is not None:
             slug, version, prd_id = source.slug, source.version, source.document_id
             keys = set(
-                await db.scalars(select(Section.section_key).where(Section.version_id == source_id))
+                await once(("section_keys", source_id), lambda: _section_keys(db, source_id))
             )
     # CR-11: a date only with a verified estimate, capacity or commitment behind it.
-    bases = await schedule.verified_bases(db, prd_id)
+    bases = await once(("date_bases", prd_id), lambda: schedule.verified_bases(db, prd_id))
     # In a worker thread with a time cap: agent output never holds the event loop.
     check = await roadmap.check_items_async(
         text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
+    )
+    return check, slug, version, keys
+
+
+async def checked_items(db: AsyncSession, run: Run, text: str) -> CheckedItems:
+    check, slug, version, keys = await once(
+        ("items_check", _source_id(run), text), lambda: _checked(db, run, text)
     )
     if not check.items:
         return CheckedItems(check, [], None, False, keys)
@@ -8868,6 +8902,16 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
 
     checkpoints = [item(c) for c in mine]
     deliveries = [item(c) for c in owed]
+    # D9: what each needs of me and how much, one review read each; the company-wide reads
+    # and each item's trace once for them all.
+    from oracle.runs import actions
+
+    with batched():
+        await actions.read_ahead(db, [c for c in mine if c.kind in actions.SUMMARIES], runs)
+        for c, row in zip(mine, checkpoints, strict=True):
+            row.summary = await actions.inbox_summary(
+                db, c, principal, run=runs[c.run_id], console=row.console
+            )
 
     feedback: list[InboxDocument] = []
     states: list[InboxFeedbackItem] = []
