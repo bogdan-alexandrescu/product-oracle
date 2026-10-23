@@ -43,8 +43,11 @@ from tests.test_brief import (
 )
 from tests.test_priorities import _token
 
-# How long the event loop may go without running another task.
-MAX_STALL = 0.2
+# The most CPU time the event loop's thread may spend without running another task. CPU
+# time, not the wall clock: a shared CI runner stalls every thread now and then, which is
+# not the loop doing the work (#331). The work kept off it takes seconds (its dates about
+# 19 s, its HTML export 4.4 s).
+MAX_STALL = 0.5
 # How long a test keeps asking for a version whose dates are still being found.
 PATIENCE = 180.0
 
@@ -55,15 +58,16 @@ SLUG = "big-roadmap"
 
 @contextlib.asynccontextmanager
 async def heartbeat():
-    """The longest the event loop went without running this task, in seconds (``[0]``)."""
+    """The most CPU time the event loop's thread spent without running this task, in seconds
+    (``[0]``)."""
     longest = [0.0]
     stop = asyncio.Event()
 
     async def beat() -> None:
-        last = time.perf_counter()
+        last = time.thread_time()
         while not stop.is_set():
             await asyncio.sleep(0.01)
-            now = time.perf_counter()
+            now = time.thread_time()
             longest[0] = max(longest[0], now - last)
             last = now
 
@@ -73,6 +77,12 @@ async def heartbeat():
     finally:
         stop.set()
         await task
+
+
+def off_the_loop(threads: list[str]) -> None:
+    """Each call was made on a worker thread, none on the event loop's."""
+    loop = threading.current_thread().name
+    assert threads and loop not in threads, f"ran on {threads}, the loop is on {loop}"
 
 
 async def big_roadmap(tenant_id) -> str:
@@ -111,12 +121,15 @@ async def big_roadmap(tenant_id) -> str:
     return f"/v1/documents/{SLUG}/versions/1"
 
 
-def count_calls(monkeypatch, module, name: str) -> list[int]:
+def count_calls(monkeypatch, module, name: str, threads: list[str] | None = None) -> list[int]:
+    """Calls of ``module.name``; the name of the thread of each is added to ``threads``."""
     calls = [0]
     real = getattr(module, name)
 
     def counted(*args, **kwargs):
         calls[0] += 1
+        if threads is not None:
+            threads.append(threading.current_thread().name)
         return real(*args, **kwargs)
 
     monkeypatch.setattr(module, name, counted)
@@ -140,11 +153,13 @@ async def until_ready(client, url: str, auth: dict):
 async def test_a_large_roadmap_read_never_blocks_the_loop_and_is_found_once(client, monkeypatch):
     tenant_id, auth = await seed_auth()
     url = await big_roadmap(tenant_id)
-    finds = count_calls(monkeypatch, doc_dates, "find")
+    threads: list[str] = []
+    finds = count_calls(monkeypatch, doc_dates, "find", threads)
 
     async with heartbeat() as stall:
         resp = await until_ready(client, url, auth)
-    assert stall[0] < MAX_STALL, f"the event loop stalled for {stall[0]:.2f} s"
+    assert stall[0] < MAX_STALL, f"the event loop's thread worked {stall[0]:.2f} s on end"
+    off_the_loop(threads)
     # Served once its dates are found, or refused because they take too long.
     assert resp.status_code in (200, 422), resp.text
     if resp.status_code == 200:
@@ -153,7 +168,7 @@ async def test_a_large_roadmap_read_never_blocks_the_loop_and_is_found_once(clie
     # The next read is served from what the first one found: no second parse.
     async with heartbeat() as stall:
         again = await client.get(url, headers=auth)
-    assert stall[0] < MAX_STALL, f"the event loop stalled for {stall[0]:.2f} s"
+    assert stall[0] < MAX_STALL, f"the event loop's thread worked {stall[0]:.2f} s on end"
     assert again.status_code == resp.status_code, again.text
     assert finds[0] == 1
 
@@ -309,13 +324,18 @@ async def test_template_dates_are_found_once_per_template_body(monkeypatch):
 
 
 @pytest.mark.parametrize("fmt", ["html", "md"])
-async def test_a_large_roadmap_export_never_blocks_the_loop(client, fmt):
+async def test_a_large_roadmap_export_never_blocks_the_loop(client, monkeypatch, fmt):
     tenant_id, auth = await seed_auth()
     url = await big_roadmap(tenant_id)
+    finds: list[str] = []
+    renders: list[str] = []
+    count_calls(monkeypatch, doc_dates, "find", finds)
+    count_calls(monkeypatch, export_router, "render_export", renders)
 
     async with heartbeat() as stall:
         resp = await until_ready(client, f"{url}/export?format={fmt}", auth)
-    assert stall[0] < MAX_STALL, f"the event loop stalled for {stall[0]:.2f} s"
+    assert stall[0] < MAX_STALL, f"the event loop's thread worked {stall[0]:.2f} s on end"
+    off_the_loop(finds)
     assert resp.status_code in (200, 422), resp.text
     if resp.status_code == 422:
         assert resp.json()["detail"] in (
@@ -323,6 +343,7 @@ async def test_a_large_roadmap_export_never_blocks_the_loop(client, fmt):
             "This roadmap is too large to check its dates quickly",
         )
     else:
+        off_the_loop(renders)
         assert "[[[[a]]]]" in resp.text
 
 
