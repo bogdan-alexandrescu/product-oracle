@@ -19,7 +19,7 @@ import pytest
 from sqlalchemy import select, update
 
 from oracle.connections import oauth
-from oracle.integrations import slack_api
+from oracle.integrations import slack_api, slack_oauth
 from oracle.integrations.models import CompanyIntegration
 from oracle.llm import gateway
 from oracle.mcp.scopes import required_scope
@@ -74,7 +74,8 @@ class FakeSlack:
         if method == "oauth.v2.access":
             return httpx.Response(200, json={
                 "ok": True, "access_token": TOKEN, "token_type": "bot",
-                "scope": "chat:write,chat:write.public,channels:read,groups:read",
+                # G8 Slack bridge's scopes too (an F6-only install asks to reconnect).
+                "scope": ",".join(slack_oauth.BOT_SCOPES),
                 "bot_user_id": "U0BOT",
                 "app_id": "A0ORACLE", "team": {"id": "T0EXAMPLE", "name": "Example Co"},
             })  # fmt: skip
@@ -567,7 +568,7 @@ async def test_install_channel_and_weekly_post(client, owner, runtime, at, slack
     url = urlparse(resp.json()["url"])
     assert f"{url.scheme}://{url.netloc}{url.path}" == "https://slack.com/oauth/v2/authorize"
     query = parse_qs(url.query)
-    assert query["scope"] == ["chat:write,chat:write.public,channels:read,groups:read"]
+    assert query["scope"] == [",".join(slack_oauth.BOT_SCOPES)]
     assert query["client_id"] == ["slack-client"]
     assert query["redirect_uri"] == [
         "https://oracle.example.com/v1/company-integrations/slack/callback"
@@ -975,8 +976,8 @@ async def test_rights_and_company_scope(client, owner, runtime, slack):
     assert (
         await client.post(f"/v1/alignment-reports/{report['id']}/read", headers=viewer)
     ).status_code == 200
-    for path in ("/v1/company-integrations", "/v1/company-integrations/slack/install",
-                 "/v1/company-integrations/slack/channels"):  # fmt: skip
+    # G8: the channel list is open to commenters (mirroring a discussion).
+    for path in ("/v1/company-integrations", "/v1/company-integrations/slack/install"):
         assert (await client.get(path, headers=commenter)).status_code == 403, path
     other = await other_company()
     rid = report["id"]
