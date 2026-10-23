@@ -43,6 +43,8 @@ MAX_TOKENS = {
     "decision_options": 4000,
     # A synchronous call inside POST /v1/priorities/overrides (oracle.priorities.reason_check).
     "override_reason_check": 600,
+    # C7: one requirement deepened at a feature-set review.
+    "scope_enhance": 2000,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -955,6 +957,20 @@ async def decision_options(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
     }
 
 
+# --- scope enhance (C7) -------------------------------------------------------------------
+
+
+async def scope_enhance(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Deepen one requirement of a proposed feature set: a deeper text, acceptance
+    criteria, edge cases and data needs. A suggestion only: the row changes when an
+    approver accepts it (oracle.runs.scope_review.accept_enhancement)."""
+    from oracle.runs import scope_review
+
+    payload = await scope_review.enhance_payload(s, job)
+    answer = await ask("scope_enhance", payload)
+    return scope_review.enhance_output(answer, str((job.input or {}).get("item_id")))
+
+
 RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any]]]] = {
     "review_comments": review_comments,
     "reporting": reporting,
@@ -963,6 +979,7 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "quality_review": quality_review,
     "refinement_batch": refinement_batch,
     "decision_options": decision_options,
+    "scope_enhance": scope_enhance,
 }
 
 

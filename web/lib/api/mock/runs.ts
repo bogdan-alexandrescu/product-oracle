@@ -9,6 +9,7 @@ import { displayName } from "@/lib/names";
 
 import { AGENT_RUN, baselineReviewStatus } from "./baseline";
 import { ranking } from "./lane-f";
+import { applySuggestion, latestScope, prepareScope, recheck, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, type StoredScope } from "./scope";
 
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
@@ -120,6 +121,8 @@ export interface RunsContext {
   ) => Omit<NonNullable<SegmentOut["draft_import"]>, "warnings" | "problems">;
   /** The run's open baseline proposals (RunOut.open_proposals). */
   openProposals?: (runId: string) => number;
+  /** C7: Approve with edits: the requirements a person added, written to the baseline as `by`'s. */
+  scopeApproved?: (scope: StoredScope, by: string) => void;
   uuid: () => string;
   now: () => string;
 }
@@ -489,14 +492,14 @@ export const CONSOLE_HELD = "Blocking problems are open: fix or waive them, then
 
 /** As oracle.runs.gate (C6): a key the baseline does not know is fixed, never waived. */
 const UNKNOWN_CODES = ["unknown_feature", "unknown_requirement", "unknown_goal", "unknown_dependency"];
-const UNKNOWN_NOT_WAIVED = "an unknown key is never waived: fix it or send it back to the agents";
+const UNKNOWN_NOT_WAIVED = "This cannot be waived; leave it out or send it back";
 /** As oracle.runs.feature_set.FILE_PROBLEMS: problems of the file itself. */
 const FEATURE_SET_FILE_PROBLEMS = ["unreadable_yaml", "missing_file", "wrong_version", "wrong_document"];
 
 /** As oracle.runs.gate.waivable: what each kind's spec lets a waiver answer (C8: nothing). */
 function waivable(kind: string, code: string): boolean {
   if (kind === "roadmap_items") return !DATE_CODES.includes(code);
-  if (kind === "feature_set") return !UNKNOWN_CODES.includes(code);
+  if (kind === "feature_set") return !UNKNOWN_CODES.includes(code) && !FEATURE_SET_FILE_PROBLEMS.includes(code) && code !== "no_features";
   return false;
 }
 
@@ -1200,6 +1203,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       .sort((a, b) => (b.approved_at ?? "").localeCompare(a.approved_at ?? ""))[0];
     return found ? json(200, found) : fail(404, `document ${p[2]} has no approved PRD scope`);
   }
+  // C7: the feature-set stop's rows (./scope.ts), and a run's latest scope.
+  const scoped = await routeScopes(ctx, req, p);
+  if (scoped) return scoped;
   if (p[1] !== "runs") return null;
 
   if (p.length === 2 && m === "GET") {
@@ -1522,11 +1528,19 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const text = (note ?? draft.note)?.trim() || null;
     // D4: a send-back says something: a staged action or a note.
     const staged = draft.actions.filter((a) => a.state === "staged");
-    if (decision === "changes_requested" && !text && !staged.length) return fail(422, "Stage a change, ask a question, or write a note to send back.");
+    // C7: a feature set's edits and adds are its rows (counted as edits), never staged actions.
+    const sent = staged.filter((a) => cp.kind !== "feature_set" || (a.kind !== "edit" && a.kind !== "add"));
+    const edits = cp.kind === "feature_set" ? scopeEdits(ctx.db, r.id) : 0;
+    if (decision === "changes_requested" && !text && !sent.length && !edits) return fail(422, "Stage a change, ask a question, or write a note to send back.");
     const status = confirming ? "approved" : (decision as "approved" | "changes_requested");
     Object.assign(cp, { status, note: text, decided_by: ctx.userId, decided_at: ctx.now(), console: null });
     if (decision === "changes_requested") cp.review = buildReview(ctx, r, cp, staged, text);
-    if (cp.kind === "feature_set" && (decision === "approved" || decision === "changes_requested")) decideScope(ctx, r, decision, ctx.userId);
+    if (cp.kind === "feature_set") {
+      // C7: Approve with edits writes the requirements a person added to the baseline as theirs.
+      const scope = latestScope(ctx.db, r.id);
+      if (status === "approved" && scope?.status === "proposed") ctx.scopeApproved?.(scope, ctx.member?.id ?? ctx.userId);
+      decideScope(ctx, r, status, ctx.userId);
+    }
     if (cp.kind === "priority_order" && (decision === "approved" || decision === "changes_requested")) decideOrder(ctx, r, cp, decision, ctx.userId);
     cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: confirming ? "swarmcloud_console" : "oracle" } };
     if (ctx.undelivered) {
@@ -2368,6 +2382,11 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
   if (rest[0] === "actions" && rest.length === 1 && m === "POST") {
     const a = await body<Schemas["ActionIn"]>();
     if (!KINDS.includes(a.kind)) return fail(422, `unknown action kind ${a.kind}: one of ${KINDS.join(", ")}`);
+    // C7: the feature set's vocabulary: edit a field of a row, add a requirement, accept, waive, question.
+    if (cp.kind === "feature_set") {
+      if (!["edit", "add", "accept", "waive", "question"].includes(a.kind)) return fail(422, `a feature set takes edit, add, accept, waive or question, not ${a.kind}`);
+      if (a.kind === "edit" && !SCOPE_EDIT_FIELDS.includes(a.field ?? "")) return fail(422, `field: one of ${SCOPE_EDIT_FIELDS.join(", ")}`);
+    }
     if (a.kind === "waive") {
       // D3: never a date or the whole file; the approver's alone (a commenter cannot suggest one).
       if (a.item_key === "*") return fail(422, FILE_NOT_WAIVED);
@@ -2377,6 +2396,14 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
     }
     const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (a.field ?? ""));
     if (existing && !stages && existing.created_by !== who) return fail(403, "Only its author or an approver can change this action");
+    if (cp.kind === "feature_set" && stages && (a.kind === "edit" || a.kind === "add")) {
+      // C7, as the API: an approver's own edit or add changes the row at once (nothing staged).
+      const refused = applySuggestion(ctx, r.id, { ...a, field: a.field ?? null, value: a.value ?? null } as DraftActionRow, who);
+      if (refused) return refused;
+      draft.actions = draft.actions.filter((x) => x !== existing);
+      bump(draft, name);
+      return out();
+    }
     const row: DraftActionRow = {
       id: existing?.id ?? ctx.uuid(),
       item_key: a.item_key,
@@ -2397,6 +2424,14 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
   const action = draft.actions.find((x) => x.id === rest[1]);
   if (rest[0] === "actions" && !action) return fail(404, `action ${rest[1]} not found`);
   if (action && rest[2] === "stage" && m === "POST") {
+    // C7: an approver's Accept of a suggested edit or add applies it to the scope row, and the action goes.
+    if (cp.kind === "feature_set" && action.state === "suggested" && (action.kind === "edit" || action.kind === "add")) {
+      const refused = applySuggestion(ctx, r.id, action, who);
+      if (refused) return refused;
+      draft.actions = draft.actions.filter((x) => x !== action);
+      bump(draft, name);
+      return out();
+    }
     if (action.state !== "staged") {
       Object.assign(action, { state: "staged", updated_by: who, updated_at: ctx.now() });
       bump(draft, name);
@@ -2569,4 +2604,220 @@ function renderReview(review: Record<string, unknown>, decidedAt: string | null 
   const label = words[kind] ?? kind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
   const ordered = Object.fromEntries(REVIEW_KEYS.map((k) => [k, review[k] ?? null]));
   return [`# Review of ${what}${attempt}, at the ${label} checkpoint.`, `# Sent back by an approver${on}. Apply each entry; answer each in resolutions.`, ...yamlLines(ordered, ""), ""].join("\n");
+}
+
+// --------------------------------------------------------------------------- C7 scope review
+
+/** The runs the "scope-review" scenario seeds (C7): attempt 1, attempt 2, and a held console approval. */
+export const SCOPE_REVIEW_RUN = "7a11c0de-0000-4000-8000-0000000000f6";
+export const SCOPE_ATTEMPT2_RUN = "7a11c0de-0000-4000-8000-0000000000f7";
+export const SCOPE_CONSOLE_RUN = "7a11c0de-0000-4000-8000-0000000000f8";
+
+type SpecFeature = FeatureSetSpec["features"][number];
+const req = (key: string, text: string, acceptance: string[]) => ({ key, text, acceptance });
+const SAVED: SpecFeature = {
+  key: "saved-addresses",
+  title: "Saved addresses",
+  summary: "Returning buyers pick a saved address at checkout",
+  goals: [{ key: "g.paid-conversion", contribution: 3 }],
+  depends_on: ["address-lookup"],
+  confidence: 0.8,
+  requirements: [
+    req("saved-addresses-pick", "The buyer picks one of up to five saved addresses", ["Five addresses at most", "The last used one is preselected"]),
+    req("saved-addresses-save", "A new address can be saved while paying", ["Saving is opt-in"]),
+    req("saved-addresses-remove", "The buyer removes a saved address from their account", ["Removed addresses are gone at the next checkout"]),
+  ],
+};
+const LOOKUP: SpecFeature = {
+  key: "address-lookup",
+  title: "Address lookup",
+  summary: "The buyer finds their address from a postcode",
+  goals: [{ key: "g.activation", contribution: 2 }],
+  depends_on: [],
+  confidence: 0.75,
+  requirements: [
+    req("address-lookup-postcode", "A postcode lists the matching addresses", ["Results show within a second"]),
+    req("address-lookup-manual", "The buyer can type the address by hand", ["Manual entry is one tap away"]),
+  ],
+};
+const BULK: SpecFeature = {
+  key: "bulk-edit",
+  title: "Bulk edit",
+  summary: "Business buyers update many saved addresses at once",
+  goals: [{ key: "g.paid-conversion", contribution: 1 }],
+  depends_on: ["saved-addresses", "address-book-export"],
+  confidence: 0.7,
+  requirements: [
+    req("bulk-edit-import", "A buyer uploads a file of address changes", ["Up to 200 rows"]),
+    req("bulk-edit-review", "The buyer reviews each change before it is saved", ["Rejected rows are listed"]),
+  ],
+};
+const LABELS: SpecFeature = {
+  key: "address-labels",
+  title: "Address labels",
+  summary: "Buyers name saved addresses (Home, Work)",
+  goals: [],
+  depends_on: ["saved-addresses"],
+  confidence: 0.65,
+  requirements: [
+    req("address-labels-name", "A saved address takes a short label", ["Labels are 20 characters at most"]),
+    req("address-labels-show", "Labels show first in the address picker", ["Unlabelled addresses show the street"]),
+  ],
+};
+const PICK: SpecFeature = {
+  key: "pick-address",
+  title: "Pick address in one step",
+  summary: "Address and delivery choice on one screen",
+  goals: [{ key: "g.activation", contribution: 2 }],
+  depends_on: ["saved-addresses"],
+  confidence: 0.35,
+  requirements: [
+    req("pick-address-one-screen", "Address and delivery option are chosen on one screen", ["No extra page load"]),
+    req("pick-address-summary", "The chosen address shows in the order summary", ["It can be changed from the summary"]),
+  ],
+};
+const EDIT: SpecFeature = {
+  key: "address-edit",
+  title: "Edit a saved address",
+  summary: "Buyers correct a saved address without retyping it",
+  goals: [{ key: "g.early-churn", contribution: 1 }],
+  depends_on: ["saved-addresses"],
+  confidence: 0.7,
+  requirements: [req("address-edit-inline", "A saved address is edited in place at checkout", ["Changes apply to this order"])],
+};
+const NOTES: SpecFeature = {
+  key: "delivery-notes",
+  title: "Delivery notes",
+  summary: "Buyers leave a note for the courier on a saved address",
+  goals: [{ key: "g.early-churn", contribution: 1 }],
+  depends_on: ["saved-addresses"],
+  confidence: 0.7,
+  requirements: [req("delivery-notes-text", "A saved address keeps a note for the courier", ["Notes are 140 characters at most"])],
+};
+const EXPORT_OUT = { key: "address-book-export", reason: "not_now" };
+const SHARING_OUT = { key: "address-sharing", reason: "out_of_scope" };
+
+/** Attempt 1: three rows need a person (a blocking dependency, no goal, low confidence). */
+const SCOPE_REVIEW_SET: FeatureSetSpec = { features: [SAVED, LOOKUP, BULK, LABELS, PICK, EDIT], excluded: [EXPORT_OUT, SHARING_OUT] };
+/** Attempt 2 after a send-back: Bulk edit is back in, Delivery notes is new, a requirement of Saved addresses went. */
+const SCOPE_ATTEMPT2_SET: FeatureSetSpec = {
+  features: [
+    { ...SAVED, requirements: SAVED.requirements.slice(0, 2) },
+    LOOKUP,
+    { ...BULK, depends_on: ["saved-addresses"] },
+    { ...LABELS, goals: [{ key: "g.early-churn", contribution: 1 }] },
+    { ...PICK, confidence: 0.7 },
+    NOTES,
+  ],
+  excluded: [EXPORT_OUT],
+};
+/** The held console approval: one blocking row (Bulk edit depends on the export left out). */
+const SCOPE_CONSOLE_SET: FeatureSetSpec = { features: [SAVED, LOOKUP, BULK], excluded: [EXPORT_OUT] };
+
+function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug: string, created_at: string, spec: FeatureSetSpec, attempt: number): { run: RunOut; scope: StoredScope; cp: CheckpointOut } {
+  const { from, now } = seedClock();
+  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), drafts: (db.drafts ??= {}) };
+  const full = { ...ctx, db: own, now };
+  const r = seedRun(ctx, own, "baseline_to_prd", slug, {}, created_at);
+  r.id = id;
+  for (const c of r.checkpoints) c.run_id = id;
+  from(r.created_at);
+  launch(full, r);
+  tick(full);
+  const [baseline, featureSet] = r.segments;
+  Object.assign(r.checkpoints[0], { status: "approved", decided_by: ctx.userId, decided_at: now() });
+  next(full, r, baseline);
+  tick(full);
+  if (attempt > 1) {
+    const first = featureSet.attempts[featureSet.attempts.length - 1];
+    featureSet.attempts.push({ ...first, attempt, note: "Bring bulk edit back without the export; drop removing addresses for now" });
+    featureSet.previous_attempt = { attempt: attempt - 1, artifacts: ["design.md", "feature_set.yaml"] };
+  }
+  featureSet.artifacts = ["design.md", "feature_set.yaml"];
+  db.artifacts[`${r.id}|${featureSet.seq}|feature_set.yaml`] = featureSetYaml(spec, r.document_slug, featureSet.name, attempt);
+  db.artifacts[`${r.id}|${featureSet.seq}|design.md`] = SAVED_ADDRESSES_DESIGN;
+  if (attempt > 1) {
+    db.artifacts[`${r.id}|${featureSet.seq}|feature_set.yaml|${attempt - 1}`] = featureSetYaml(SCOPE_REVIEW_SET, r.document_slug, featureSet.name, attempt - 1);
+    db.artifacts[`${r.id}|${featureSet.seq}|design.md|${attempt - 1}`] = SAVED_ADDRESSES_DESIGN;
+  }
+  own.scopes![r.id] = [];
+  proposeScope(full, r, featureSet.seq, attempt, spec, checkOf(spec));
+  const scope = own.scopes![r.id][0] as StoredScope;
+  // The goals by id, as the API stores a confirmed goal; the excluded rows' reasons as a person would pick.
+  const goals = new Map((ctx.confirmedGoals?.() ?? []).map((g) => [g.key, g.id]));
+  for (const f of scope.features) {
+    f.goals = f.goals.map((g) => ({ ...g, goal_id: goals.get(g.key) ?? null }));
+    const s = spec.features.find((x) => x.key === f.key);
+    if (s) f.text = s.summary;
+    // A row the set leaves out reads as a name ("Address book export"), as the agents titled it.
+    if (f.title === f.key) f.title = f.key.charAt(0).toUpperCase() + f.key.slice(1).replace(/-/g, " ");
+    f.flags = [];
+  }
+  prepareScope(scope);
+  const cp = r.checkpoints.find((c) => c.kind === "feature_set")!;
+  if (attempt > 1) cp.payload = { ...cp.payload, attempt };
+  recheck(own, scope);
+  refresh(r);
+  db.runs.push(r);
+  return { run: r, scope, cp };
+}
+
+/**
+ * The "scope-review" scenario (C7): the default company plus three Baseline to PRD runs at
+ * their feature set: saved-addresses (attempt 1: one blocking dependency, one feature with no
+ * goal, one with low confidence, and a commenter's suggestion), saved-addresses-next (attempt
+ * 2, for the Changed filter) and address-book (approved in SwarmCloud's console while one
+ * blocking row is open, so the approval is held).
+ */
+export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
+  const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1);
+  const commenter = (ctx.members ?? []).find((x) => x.email === "commenter@example.com");
+  if (commenter) {
+    db.drafts![first.cp.id] = {
+      revision: 1,
+      note: null,
+      actions: [
+        {
+          id: ctx.uuid(),
+          item_key: "address-edit",
+          kind: "edit",
+          field: "decision",
+          value: { decision: "exclude", reason: "not_now" },
+          answers: [],
+          note: null,
+          state: "suggested",
+          created_by: commenter.id,
+          updated_by: commenter.id,
+          updated_at: "2026-10-17T09:30:00Z",
+        },
+      ],
+      log: [{ revision: 1, by: displayName(commenter.email) }],
+    };
+  }
+  const second = seedScopeRun(db, ctx, SCOPE_ATTEMPT2_RUN, "saved-addresses-next", "2026-10-17T08:00:00Z", SCOPE_ATTEMPT2_SET, 2);
+  second.scope.previous = { "saved-addresses": "include", "address-lookup": "include", "bulk-edit": "exclude", "address-labels": "include", "pick-address": "include", "address-book-export": "exclude", "address-sharing": "exclude" };
+  second.scope.previous_requirements = {
+    "saved-addresses": ["saved-addresses-pick", "saved-addresses-save", "saved-addresses-remove"],
+    "address-lookup": ["address-lookup-postcode", "address-lookup-manual"],
+    "bulk-edit": ["bulk-edit-import", "bulk-edit-review"],
+    "address-labels": ["address-labels-name", "address-labels-show"],
+    "pick-address": ["pick-address-one-screen", "pick-address-summary"],
+    "address-book-export": [],
+    "address-sharing": [],
+  };
+  const held = seedScopeRun(db, ctx, SCOPE_CONSOLE_RUN, "address-book", "2026-10-17T07:00:00Z", SCOPE_CONSOLE_SET, 1);
+  held.cp.console = {
+    answered_by: "lead@example.com",
+    answered_at: "2026-10-17T07:40:00Z",
+    via: null,
+    verdict: "MERGE",
+    findings: [],
+    counted: true,
+    reason: CONSOLE_HELD,
+    needs: "confirm",
+    revise: false,
+    can_redo: false,
+  };
+  held.run.token_read_only = true;
+  refresh(held.run);
 }

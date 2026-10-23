@@ -75,7 +75,7 @@ def test_0016_roadmap_follows_the_wave_1_head():
     # 0022_engineering_lead, 0022_discussions, 0022_priority_snapshot_runs,
     # 0022_priority_overrides, 0022_code_maps, 0022_checkpoint_actions, 0022_updates,
     # 0023_source_partial_sync, 0023_intake_brief_fields and 0024_segment_skipped; one head.
-    assert script.get_heads() == ["0029_discussion_replies"]
+    assert script.get_heads() == ["0030_scope_review"]
     assert script.get_revision("0016_refinement_batch").down_revision == REVISION
     assert script.get_revision("0017_citation_source_oracle").down_revision == (
         "0016_refinement_batch"

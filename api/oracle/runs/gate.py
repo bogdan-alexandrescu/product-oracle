@@ -30,7 +30,7 @@ FILE_NOT_WAIVED = "a problem of the whole file is never waived: send it back to 
 UNKNOWN_CODES = frozenset(
     {"unknown_feature", "unknown_requirement", "unknown_goal", "unknown_dependency"}
 )
-UNKNOWN_NOT_WAIVED = "an unknown key is never waived: fix it or send it back to the agents"
+UNKNOWN_NOT_WAIVED = "This cannot be waived; leave it out or send it back"
 # C8 Priority order snapshot: every problem is fixed by C9 moves or Request changes.
 ORDER_NOT_WAIVED = "a priority order problem is never waived: send it back to the agents"
 
@@ -97,7 +97,7 @@ def _priority_order(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
 BLOCKING_SOURCES: dict[str, Source] = {
     "roadmap_items": Source(_roadmap_items, DATE_CODES, DATE_NOT_WAIVED),
     # C6 (as last re-checked at approval, oracle.runs.service._recheck_scope).
-    "feature_set": Source(_feature_set, UNKNOWN_CODES, UNKNOWN_NOT_WAIVED),
+    "feature_set": Source(_feature_set, UNKNOWN_CODES | set(FILE_PROBLEMS), UNKNOWN_NOT_WAIVED),
     # C8 (checked at segment end: nothing edits the order until pick C9).
     "priority_order": Source(_priority_order, None, ORDER_NOT_WAIVED),
 }
