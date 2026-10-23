@@ -32,7 +32,6 @@ import {
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   orderHref,
-  reviewHref,
   RETRY_CONFIRM,
   reviewHref,
   SENT_BACK_STATE,
@@ -1169,9 +1168,9 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       action: c.kind === "baseline_confirm" ? (
         // B2: the run's review opens in the Baseline, filtered to the run.
         <LinkButton href={`/baseline?run=${c.run_id}`}>Review</LinkButton>
-      ) : reviewHref(c.run_id, c) ? (
+      ) : reviewHref(c) ? (
         // F4: the Engineering check has its own review screen.
-        <LinkButton href={reviewHref(c.run_id, c)!}>Review</LinkButton>
+        <LinkButton href={reviewHref(c)!}>Review</LinkButton>
       ) : isHeld(c) ? (
         // The run page's checkpoint row, until the kind's review screen ships (D1).
         <LinkButton href={reviewHref(c) ?? review}>Review</LinkButton>

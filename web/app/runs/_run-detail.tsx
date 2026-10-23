@@ -730,7 +730,7 @@ function SegmentItem({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revisionKey]);
   // F4: a stop with its own review screen (the Engineering check) is opened from a line here.
-  const screened = checkpoints.find((c) => c.status === "pending" && reviewHref(run.id, c)) ?? null;
+  const screened = checkpoints.find((c) => c.status === "pending" && reviewHref({ ...c, run_id: run.id })) ?? null;
   // The Waiting chip counts every stop waiting for me, the screened one included.
   const mine = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
   const deciding = mine.filter((c) => c !== screened);
@@ -1024,7 +1024,7 @@ function ReviewScreenLine({ run, cp }: { run: RunOut; cp: CheckpointOut }) {
         {blocking > 0 && ` · ${blocking} blocking`}
       </span>
       <span className="text-text2">{cp.can_decide ? "Waiting for you" : "Waits for the engineering lead"}</span>
-      <LinkButton href={reviewHref(run.id, cp)!} variant={cp.can_decide ? "primary" : "secondary"}>
+      <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} variant={cp.can_decide ? "primary" : "secondary"}>
         {cp.can_decide ? "Review" : "View"}
       </LinkButton>
     </div>

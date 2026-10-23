@@ -115,11 +115,6 @@ export function briefsCheck(cp: Pick<CheckpointOut, "kind" | "payload">): Briefs
   return check && Array.isArray(check.features) ? check : null;
 }
 
-/** The Engineering check's own review screen (F4); other kinds are decided on the run page. */
-export function reviewHref(runId: string, cp: Pick<CheckpointOut, "id" | "kind" | "payload">): string | null {
-  return briefsCheck(cp) ? `/runs/${runId}/review/${cp.id}` : null;
-}
-
 export const SEGMENT_STATUS_KIND: Record<SegmentOut["status"], ChipKind> = {
   pending: "na",
   running: "acc",
@@ -152,9 +147,13 @@ export function orderHref(cp: { kind: CheckpointKind; payload?: Record<string, u
   return typeof id === "string" ? `/priorities?snapshot=${id}` : null;
 }
 
-/** C7: a checkpoint kind with its own review screen opens it (/runs/<id>/review/<checkpoint id>). */
-export function reviewHref(cp: { id: string; run_id: string; kind: CheckpointKind }): string | null {
-  return cp.kind === "feature_set" ? `/runs/${cp.run_id}/review/${cp.id}` : null;
+/**
+ * A checkpoint kind with its own review screen opens it (/runs/<id>/review/<checkpoint id>):
+ * C7's feature set, and F4's Engineering check once its briefs check is in; other kinds are
+ * decided on the run page.
+ */
+export function reviewHref(cp: { id: string; run_id: string; kind: CheckpointKind; payload?: CheckpointOut["payload"] }): string | null {
+  return cp.kind === "feature_set" || briefsCheck({ kind: cp.kind, payload: cp.payload ?? {} }) ? `/runs/${cp.run_id}/review/${cp.id}` : null;
 }
 
 export const FINAL_STATUSES: RunStatus[] = ["succeeded", "failed", "cancelled"];
