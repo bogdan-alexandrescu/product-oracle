@@ -81,7 +81,9 @@ async def test_a_mention_invites_and_reading_marks_it_done(client):
     ctx, doc = await company(client)
     before = (await inbox(client, ctx, "viewer"))["total"]
     d = await start(client, ctx, subject=section(doc), title=TITLE)
-    m = await post(client, ctx, d["id"], "commenter", "Viewer, see this", mentions=[uid(ctx, "viewer")])
+    m = await post(
+        client, ctx, d["id"], "commenter", "Viewer, see this", mentions=[uid(ctx, "viewer")]
+    )
     box = await inbox(client, ctx, "viewer")
     [row] = rows(box)
     assert row["kind"] == "invited" and row["state"] == "new"
@@ -211,7 +213,9 @@ async def test_only_the_owner_dismisses_a_row(client):
     assert (await client.delete(url, headers=ctx.as_("viewer"))).status_code == 204
     after = await inbox(client, ctx, "viewer")
     assert rows(after)[0]["state"] == "done" and after["total"] == box["total"] - 1
-    resp = await client.delete(f"/v1/inbox/discussion-items/chg_{d['id']}", headers=ctx.as_("viewer"))
+    resp = await client.delete(
+        f"/v1/inbox/discussion-items/chg_{d['id']}", headers=ctx.as_("viewer")
+    )
     assert resp.status_code == 404
 
 
@@ -221,14 +225,21 @@ async def test_only_the_owner_dismisses_a_row(client):
 async def test_a_question_from_a_discussion_carries_its_title(client):
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc), title=TITLE)
-    secret = await start(client, ctx, subject=section(doc), title=SECRET_TITLE, visibility="private")
+    secret = await start(
+        client, ctx, subject=section(doc), title=SECRET_TITLE, visibility="private"
+    )
     async with tenant_session(ctx.tenant_id) as s:
         for i, disc in enumerate((d, secret)):
             s.add(
                 StakeholderQuestion(
-                    document_id=uuid.UUID(doc), section_key="problem", category="general",
-                    prompt=f"Which plan thresholds apply? {i}", priority=1, status="asked",
-                    asked_to=ctx.users["viewer"].id, discussion_id=uuid.UUID(disc["id"]),
+                    document_id=uuid.UUID(doc),
+                    section_key="problem",
+                    category="general",
+                    prompt=f"Which plan thresholds apply? {i}",
+                    priority=1,
+                    status="asked",
+                    asked_to=ctx.users["viewer"].id,
+                    discussion_id=uuid.UUID(disc["id"]),
                 )  # fmt: skip
             )
         await s.commit()

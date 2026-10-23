@@ -470,6 +470,10 @@ class StakeholderQuestion(TenantScoped, Base):
     status: Mapped[str] = mapped_column(
         Text, nullable=False, default="draft", server_default="draft"
     )
+    # G6: the discussion it was asked from (C2's ask_person), shown as "From discussion".
+    discussion_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("discussions.id", ondelete="SET NULL")
+    )
     updated_at: Mapped[datetime] = _updated_at()
 
 

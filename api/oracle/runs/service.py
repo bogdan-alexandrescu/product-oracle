@@ -9000,6 +9000,10 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.autonomy_router import inbox_actions
 
     oracle_actions = await inbox_actions(db, principal)
+    # G6: invitations, mentions and changes proposed in discussions I can read.
+    from oracle.discussions import inbox as discussion_inbox
+
+    discussions = await discussion_inbox.rows(db, principal, seen)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -9036,6 +9040,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + (1 if strategy else 0)
         + sum(1 for r in launch_rows if r.counted)
         + sum(a.counts for a in oracle_actions)
+        + sum(1 for r in discussions if r.state in ("new", "open"))
         + counted,
         launches=launch_rows,
         items=states,
@@ -9044,6 +9049,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         decisions=decisions,
         needs_me=counts.new + counts.open + counted,
         last_seen_at=seen,
+        discussions=discussions,
     )
 
 

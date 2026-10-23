@@ -736,6 +736,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/inbox/discussion-items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Dismiss Inbox Discussion Item
+         * @description Dismiss my Invited or Mentioned row (G6): it moves to Done. A changes-proposed row
+         *     cannot be dismissed; it goes when its changes are handled.
+         */
+        delete: operations["dismiss_inbox_discussion_item"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/staging": {
         parameters: {
             query?: never;
@@ -16198,6 +16219,78 @@ export interface components {
             /** Counts */
             counts: boolean;
         };
+        /**
+         * InboxDiscussionItem
+         * @description G6: a discussion row. ``invited`` (added by a mention or a private one's starter),
+         *     ``mentioned`` (mentioned again) or ``changes_proposed`` (approvers: changes waiting on
+         *     them, derived on read; id ``chg_<discussion id>``). Shown only to those who can read
+         *     the discussion now.
+         */
+        InboxDiscussionItem: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "invited" | "mentioned" | "changes_proposed";
+            /**
+             * Discussion Id
+             * Format: uuid
+             */
+            discussion_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "open" | "private";
+            /** Subject Label */
+            subject_label: string;
+            /** Subject Url */
+            subject_url: string;
+            by?: components["schemas"]["InboxDiscussionPerson"] | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Count */
+            count?: number | null;
+            /**
+             * People
+             * @default []
+             */
+            people: string[];
+            /**
+             * People More
+             * @default 0
+             */
+            people_more: number;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open" | "done";
+            /**
+             * Can Write
+             * @default false
+             */
+            can_write: boolean;
+        };
+        /** InboxDiscussionPerson */
+        InboxDiscussionPerson: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+        };
         /** InboxDocument */
         InboxDocument: {
             /**
@@ -16493,6 +16586,11 @@ export interface components {
             launches: components["schemas"]["InboxLaunch"][];
             /** Last Seen At */
             last_seen_at?: string | null;
+            /**
+             * Discussions
+             * @default []
+             */
+            discussions: components["schemas"]["InboxDiscussionItem"][];
         };
         /** InboxQuestion */
         InboxQuestion: {
@@ -25441,6 +25539,10 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Discussion Id */
+            discussion_id?: string | null;
+            /** Discussion Title */
+            discussion_title?: string | null;
         };
         /** StaleEvidence */
         StaleEvidence: {
@@ -29774,6 +29876,42 @@ export interface operations {
                 content?: never;
             };
             /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_inbox_discussion_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such Inbox row of the caller's */
             404: {
                 headers: {
                     [name: string]: unknown;

@@ -58,6 +58,7 @@ from oracle.decisions.models import Decision, DecisionReview  # noqa: E402
 from oracle.discussions.models import (  # noqa: E402
     Discussion,
     DiscussionChange,
+    DiscussionInboxItem,
     DiscussionMessage,
     DiscussionParticipant,
 )
@@ -162,6 +163,7 @@ __all__ = [
     "DecisionReview",
     "Discussion",
     "DiscussionChange",
+    "DiscussionInboxItem",
     "DiscussionMessage",
     "DiscussionParticipant",
     "Citation",
