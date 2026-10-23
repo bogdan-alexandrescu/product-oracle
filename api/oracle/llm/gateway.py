@@ -45,6 +45,7 @@ from oracle.claude_accounts.accounts import (
     SWAP_UNUSABLE,
     WindowReading,
 )
+from oracle.company_time import company_time_zone
 from oracle.llm.transports import (
     ClaudeCodeTransport,
     LlmAuthError,
@@ -58,7 +59,7 @@ from oracle.llm.transports import (
     TransportResult,
     get_llm_settings,
 )
-from oracle.tenancy import current_tenant
+from oracle.tenancy import current_tenant, tenant_session
 
 log = logging.getLogger(__name__)
 
@@ -244,7 +245,7 @@ async def _run(
     if isinstance(got, pool.NoAccount):
         if not got.is_pool_absent:
             raise NoClaudeAccount(
-                f"No Claude account can take this call: {got.message()}",
+                f"No Claude account can take this call: {got.message(await _zone(tenant_id))}",
                 got.reason.value,
                 got.next_reset_at.isoformat() if got.next_reset_at else None,
             )
@@ -359,6 +360,12 @@ async def _give_back(
             log.exception("could not give back the hold of a call cancelled while assigned")
 
 
+async def _zone(tenant_id: uuid.UUID) -> str:
+    """The company's time zone, which a refusal words its clearing time in."""
+    async with tenant_session(tenant_id) as s:
+        return await company_time_zone(s)
+
+
 class _NoSwap(NoClaudeAccount):
     pass
 
@@ -373,7 +380,8 @@ async def _swap(
             if whole.next_reset_at is not None:
                 moved = whole
         raise _NoSwap(
-            f"No other Claude account can take this call ({reason}): {moved.message()}",
+            f"No other Claude account can take this call ({reason}): "
+            f"{moved.message(await _zone(tenant_id))}",
             moved.reason.value,
             moved.next_reset_at.isoformat() if moved.next_reset_at else None,
         )

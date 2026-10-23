@@ -6,15 +6,23 @@
  * em dashes) and one whose sign-in expired (old-laptop). Reads are open to every role;
  * changes need the owner role, as in the API. Sign-in: the code "bad-code" is refused,
  * anything else is accepted. A pasted login must carry a refresh token.
+ *
+ * Whether an account (and the pool) takes calls is the API's rule (accounts.py choose and
+ * eligibility): AVAILABLE, readable, and its binding window at least 15% clear, an old
+ * reading counted at half. The "pool-spent" scenario has one account over its weekly limit.
  */
 import type { Schemas } from "@/lib/api/client";
+import { inWords } from "@/lib/format";
+
+import { mockSettingValue } from "./connections";
 
 type Account = Schemas["AccountOut"];
+type Stored = Omit<Account, "stale" | "takes_calls" | "spent_by" | "spent_until">;
 type Hold = Schemas["HolderOut"] & { account_id: string };
 type Span = Schemas["SpanOut"] & { account_id: string };
 
 interface PoolDb {
-  accounts: Omit<Account, "stale">[];
+  accounts: Stored[];
   holds: Hold[];
   spans: Span[];
   pending: { state: string; label: string }[];
@@ -33,12 +41,16 @@ const KIND_NAME: Record<string, string> = {
   [KEY_KIND]: ["Anthropic", "API", "key"].join(" "),
 };
 const STALE_AFTER_MS = 30 * 60_000;
+const ASSIGN_FLOOR = 0.15;
+
+/** The scenario whose only account is over its weekly limit, so no call can run (#403). */
+export const POOL_SPENT_SCENARIO = "pool-spent";
 
 const at = (ms: number) => new Date(Date.now() + ms).toISOString();
 const MIN = 60_000;
 const HOUR = 60 * MIN;
 
-function seed(): PoolDb {
+function seed(scenario: string | null): PoolDb {
   const base = {
     provider: "anthropic",
     reason: "",
@@ -46,6 +58,31 @@ function seed(): PoolDb {
     last_refresh_reason: "still_valid",
   };
   const personal = "a1111111-0000-4000-8000-000000000001";
+  if (scenario === POOL_SPENT_SCENARIO)
+    return {
+      accounts: [
+        {
+          ...base,
+          account_id: personal,
+          label: "weekly",
+          state: "AVAILABLE",
+          assigned: 0,
+          windows: {
+            five_hour: { utilization: 0.09, resets_at: at(3 * HOUR), reset: false },
+            seven_day: { utilization: 0.95, resets_at: at((2 * 24 + 13) * HOUR), reset: false },
+          },
+          observed_at: at(-2 * MIN),
+          last_refresh_at: at(-4 * MIN),
+          token_expires_at: at(6 * HOUR),
+          last_assigned_at: at(-26 * HOUR),
+        },
+      ],
+      holds: [],
+      spans: [],
+      pending: [],
+      fallback: null,
+      sweep: { last_completed_at: at(-4 * MIN), last_outcome: "ok", readable: true },
+    };
   return {
     accounts: [
       {
@@ -145,14 +182,14 @@ function span(account_id: string, task: string, from: number, to: number | null,
   };
 }
 
-function load(): PoolDb {
+function load(scenario: string | null): PoolDb {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw) as PoolDb;
   } catch {
     // fall through to a fresh pool
   }
-  return seed();
+  return seed(scenario);
 }
 
 function json(status: number, body: unknown): Response {
@@ -162,13 +199,70 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+/** Fraction believed left (Account.headroom): the binding window; a reset one is full; an old reading halved. */
+function headroom(a: Stored, now: number): number {
+  const ws = Object.values(a.windows);
+  if (ws.length === 0 || a.observed_at === null) return 1;
+  const left = Math.min(...ws.map((w) => (Date.parse(w.resets_at) <= now ? 1 : Math.max(0, 1 - w.utilization))));
+  return now - Date.parse(a.observed_at) > STALE_AFTER_MS ? left * 0.5 : left;
+}
+
+/** The window keeping it below the floor and when it resets (Account.spent_by), or null. */
+function spentBy(a: Stored, now: number): [string, string] | null {
+  if (headroom(a, now) >= ASSIGN_FLOOR) return null;
+  const blocking = Object.entries(a.windows)
+    .filter(([, w]) => Date.parse(w.resets_at) > now && 1 - w.utilization < ASSIGN_FLOOR)
+    .sort(([, x], [, y]) => Date.parse(x.resets_at) - Date.parse(y.resets_at));
+  return blocking[0] ? [blocking[0][0], blocking[0][1].resets_at] : null;
+}
+
+const takesCalls = (a: Stored, now: number) => a.state === "AVAILABLE" && !a.unreadable_now && headroom(a, now) >= ASSIGN_FLOOR;
+
 /** `stale` is the server's verdict: no reading, or one older than thirty minutes. */
-function out(a: PoolDb["accounts"][number]): Account {
+function out(a: Stored): Account {
+  const now = Date.now();
   const observed = a.observed_at ? Date.parse(a.observed_at) : null;
-  const windows = Object.fromEntries(
-    Object.entries(a.windows).map(([k, w]) => [k, { ...w, reset: Date.parse(w.resets_at) <= Date.now() }]),
-  );
-  return { ...a, windows, stale: observed === null || Date.now() - observed > STALE_AFTER_MS };
+  const windows = Object.fromEntries(Object.entries(a.windows).map(([k, w]) => [k, { ...w, reset: Date.parse(w.resets_at) <= now }]));
+  const takes = takesCalls(a, now);
+  const spent = takes || a.state !== "AVAILABLE" || a.unreadable_now ? null : spentBy(a, now);
+  return {
+    ...a,
+    windows,
+    stale: observed === null || now - observed > STALE_AFTER_MS,
+    takes_calls: takes,
+    spent_by: spent?.[0] ?? null,
+    spent_until: spent?.[1] ?? null,
+  };
+}
+
+/** The pool's answer (router.pool_out: choose, then eligibility). */
+function poolOf(db: PoolDb): Schemas["PoolOut"] {
+  const now = Date.now();
+  const yes = { takes_calls: true, reason: null, until: null };
+  if (db.accounts.some((a) => takesCalls(a, now))) return yes;
+  if (db.accounts.length === 0) return db.fallback ? yes : { takes_calls: false, reason: "no_accounts_registered", until: null };
+  const mine = db.accounts.filter((a) => !a.unreadable_now);
+  if (mine.length === 0) return { takes_calls: false, reason: "no_account_available", until: null };
+  const assignable = mine.filter((a) => a.state === "AVAILABLE");
+  if (assignable.length === 0) return { takes_calls: false, reason: "pool_paused", until: null };
+  const resets = assignable.map((a) => spentBy(a, now)?.[1]).filter((r): r is string => !!r).sort((x, y) => Date.parse(x) - Date.parse(y));
+  if (resets[0]) return { takes_calls: false, reason: "no_account_available", until: resets[0] };
+  const old = assignable.some((a) => a.observed_at !== null && now - Date.parse(a.observed_at) > STALE_AFTER_MS);
+  return { takes_calls: false, reason: old ? "no_recent_reading" : "no_account_available", until: null };
+}
+
+/** The company's time zone: the alignment report's, as the API reads it (company_time.py). */
+const timeZone = () => ((mockSettingValue("alignment_report") as { timezone?: string } | undefined)?.timezone ?? "America/Los_Angeles");
+
+/**
+ * The gateway's refusal when the pool is spent and says when it clears, worded in the
+ * company's time zone (pool.NoAccount.message); null when the pool takes calls or waits
+ * on no clock.
+ */
+export function poolRefusal(scenario: string | null): string | null {
+  const pool = poolOf(load(scenario));
+  if (pool.takes_calls || pool.reason !== "no_account_available" || !pool.until) return null;
+  return `No Claude account can take this call: every Claude account is spent; the earliest window clears ${inWords(pool.until, timeZone())}`;
 }
 
 const LABEL = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/;
@@ -205,9 +299,9 @@ function register(db: PoolDb, label: string): Account {
 }
 
 /** Handles /v1/claude-accounts…; null for any other route. */
-export async function claudeAccountsRoute(req: Request, p: string[], q: URLSearchParams, role: string): Promise<Response | null> {
+export async function claudeAccountsRoute(req: Request, p: string[], q: URLSearchParams, role: string, scenario: string | null): Promise<Response | null> {
   if (p[1] !== "claude-accounts") return null;
-  const db = load();
+  const db = load(scenario);
   const res = await handle(db, req, p, q, role);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
   return res;
@@ -225,6 +319,8 @@ async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams,
       unreadable_document_count: 0,
       refresh_sweep: db.sweep,
       fallback: db.fallback,
+      pool: poolOf(db),
+      time_zone: timeZone(),
     };
     return json(200, page);
   }

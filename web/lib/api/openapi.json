@@ -31610,6 +31610,33 @@
               }
             ],
             "title": "Last Assigned At"
+          },
+          "takes_calls": {
+            "type": "boolean",
+            "title": "Takes Calls"
+          },
+          "spent_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spent By"
+          },
+          "spent_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spent Until"
           }
         },
         "type": "object",
@@ -31627,7 +31654,10 @@
           "last_refresh_at",
           "token_expires_at",
           "last_refresh_reason",
-          "last_assigned_at"
+          "last_assigned_at",
+          "takes_calls",
+          "spent_by",
+          "spent_until"
         ],
         "title": "AccountOut"
       },
@@ -31663,6 +31693,13 @@
                 "type": "null"
               }
             ]
+          },
+          "pool": {
+            "$ref": "#/components/schemas/PoolOut"
+          },
+          "time_zone": {
+            "type": "string",
+            "title": "Time Zone"
           }
         },
         "type": "object",
@@ -31671,7 +31708,9 @@
           "unreadable_documents",
           "unreadable_document_count",
           "refresh_sweep",
-          "fallback"
+          "fallback",
+          "pool",
+          "time_zone"
         ],
         "title": "AccountsPage"
       },
@@ -61233,6 +61272,45 @@
           "role"
         ],
         "title": "PlanWho"
+      },
+      "PoolOut": {
+        "properties": {
+          "takes_calls": {
+            "type": "boolean",
+            "title": "Takes Calls"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          }
+        },
+        "type": "object",
+        "required": [
+          "takes_calls",
+          "reason",
+          "until"
+        ],
+        "title": "PoolOut",
+        "description": "Whether Oracle's built-in calls can run now, as the gateway decides it."
       },
       "PrdAnchor": {
         "properties": {

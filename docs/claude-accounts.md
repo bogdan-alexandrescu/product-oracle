@@ -38,7 +38,18 @@ older than 30 minutes (`DEFAULT_STALE_AFTER`) is halved.
 When nothing qualifies, `eligibility` says why: `no_accounts_registered` (use the
 fallback credential), `pool_paused` (a person), `no_account_available` (a clock, with
 the earliest reset when one is known) or `no_recent_reading` (the next usage poll). Only
-the first falls back; the others raise `NoClaudeAccount` with the reason.
+the first falls back; the others raise `NoClaudeAccount` with the reason. Its message
+gives the reset in words in the company's time zone ("Sun Oct 25, 2:59 PM PDT"; the
+alignment report's zone until a Company time zone setting exists, `oracle/company_time.py`),
+never ISO.
+
+The listing (`GET /v1/claude-accounts`) serves the same answer, so the page cannot say
+Available while calls are refused: each account's `takes_calls` is `choose` on it alone,
+and an AVAILABLE account below the floor carries `spent_by` (the window) and
+`spent_until` (its reset), which the page reads as "Spent until …". `pool` is `choose`
+then `eligibility` over the whole pool (`takes_calls`, `reason`, `until`); when it takes
+no calls, owners see one notice on Home and on Settings › Claude accounts that Oracle's
+AI is off. `time_zone` is the zone those times are shown in.
 
 Each call takes a **hold** (3 hours, `DEFAULT_HOLD_TTL`), recorded in the hold log
 (`claude_account_holds`, kept 90 days) in the same transaction. At the call's turn

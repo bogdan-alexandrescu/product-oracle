@@ -26,7 +26,8 @@ const ISO = /\d{4}-\d\d-\d\dT\d\d:\d\d/;
 const withSpentPool = (page: Page) => page.addInitScript(([key, name]) => localStorage.setItem(key, name), [MOCK_SCENARIO_KEY, POOL_SPENT_SCENARIO]);
 const row = (page: Page, label: string) => page.getByTestId(`account-row-${label}`);
 const detail = (page: Page) => page.getByTestId("account-detail");
-const notice = (page: Page) => page.getByTestId("ai-off");
+// Next keeps a visited route mounted but hidden: the notice on screen is the visible one.
+const notice = (page: Page) => page.getByTestId("ai-off").filter({ visible: true });
 
 async function openAccounts(page: Page) {
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();

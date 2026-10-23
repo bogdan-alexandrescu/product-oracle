@@ -13,7 +13,7 @@ import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./bl
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
-import { claudeAccountsRoute } from "./claude-accounts";
+import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
@@ -1466,7 +1466,7 @@ function load(): Db {
   db.discussions =
     scenario === "discussions"
       ? seedDiscussionsScenario(db)
-      : scenario === "discussion-replies"
+      : scenario === "discussion-replies" || scenario === POOL_SPENT_SCENARIO
         ? seedDiscussionsScenario(db, seedDiscussionReplies)
         : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
@@ -2404,6 +2404,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       resolve: (kind, subject) => discussionSubject(db, kind, subject),
       uuid,
       now,
+      refusal: () => poolRefusal(localStorage.getItem(MOCK_SCENARIO_KEY)),
       // A streaming reply writes after its response: in turn with every other request.
       persist: (change) => {
         const next = queue.then(() => {
@@ -2481,7 +2482,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const connections = await connectionsRoute(req, p);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.
-  const pool = await claudeAccountsRoute(req, p, q, me.role);
+  const pool = await claudeAccountsRoute(req, p, q, me.role, localStorage.getItem(MOCK_SCENARIO_KEY));
   if (pool) return pool;
   // Alignment reports and the company Slack install check roles themselves (./reports.ts).
   const reports = await reportsRoute(db, db.user_id, me, req, p, q);

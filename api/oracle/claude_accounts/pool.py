@@ -27,6 +27,7 @@ from oracle.claude_accounts.accounts import (
     choose,
     eligibility,
 )
+from oracle.company_time import DEFAULT_ZONE, in_words
 from oracle.tenancy import tenant_session
 
 
@@ -49,9 +50,10 @@ class NoAccount:
     def is_pool_absent(self) -> bool:
         return self.reason is Unavailable.NO_ACCOUNTS_REGISTERED
 
-    def message(self) -> str:
+    def message(self, zone: str = DEFAULT_ZONE) -> str:
+        """In words, the clearing time in ``zone`` (the company's), never ISO."""
         when = (
-            f"; the earliest window clears at {self.next_reset_at.isoformat()}"
+            f"; the earliest window clears {in_words(self.next_reset_at, zone)}"
             if (self.next_reset_at)
             else ""
         )
