@@ -4662,22 +4662,23 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
         ),
         None,
     )
-    if earlier is not None:
-        _cost_on(
-            run, segments, {"seq": earlier.seq, "id": running.swarm_workflow_id}, status.cost_usd
-        )
     if art["attempts"]:
-        # The running workflow's attempt (one found later may sit after it).
+        # The running workflow's attempt (one found later may sit after it). On an earlier
+        # segment's workflow it keeps what its own agents spent (:func:`_take_cost`).
         current = _current_attempt(art, running)
-        current["cost_usd"] = (
-            0 if earlier is not None else _higher(status.cost_usd, current.get("cost_usd"))
-        )
+        if earlier is None:
+            current["cost_usd"] = _higher(status.cost_usd, current.get("cost_usd"))
         current["state"] = status.state
     running.cost_usd = sum(
         (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
     )
-    _recompute_spend(run, segments)
     _set_art(running, art)
+    if earlier is not None:
+        # The rest of the workflow's cost, counted once.
+        _cost_on(
+            run, segments, {"seq": earlier.seq, "id": running.swarm_workflow_id}, status.cost_usd
+        )
+    _recompute_spend(run, segments)
     _record_agents(running, workflow_id, status)
     art = _art(running)
 
@@ -5107,15 +5108,33 @@ def _searching(run: Run) -> str | None:
 
 def _cost_on(run: Run, segments: list[RunSegment], entry: dict[str, Any], cost: Decimal) -> None:
     """A searched workflow's cost on its segment's first attempt with its id (a revision
-    inside a workflow counts nothing again), never lower than one already recorded."""
+    inside a workflow counts nothing again), never lower than one already recorded.
+
+    #258: what other segments started in the workflow carry (their own agents' spend,
+    :func:`_take_cost`) is not counted again: the segment carries the rest."""
     segment = next((s for s in segments if s.seq == entry.get("seq")), None)
     if segment is None:
         return
+    others = sum(
+        (
+            Decimal(str(a.get("cost_usd") or 0))
+            for s in segments
+            if s is not segment
+            for a in _art(s)["attempts"]
+            if a.get("workflow_id") == entry["id"]
+        ),
+        Decimal(0),
+    )
     art = _art(segment)
     first = True
     for a in art["attempts"]:
         if a.get("workflow_id") == entry["id"]:
-            a["cost_usd"] = _higher(cost, a.get("cost_usd")) if first else 0
+            if first:
+                total = _higher(cost, a.get("workflow_cost_usd", a.get("cost_usd")))
+                a["workflow_cost_usd"] = total
+                a["cost_usd"] = max(total - float(others), 0)
+            else:
+                a["cost_usd"] = 0
             first = False
     segment.cost_usd = sum(
         (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
