@@ -222,7 +222,9 @@ async def create_invite(body: InviteCreate, principal: Owner, db: TenantDB) -> I
     ``not_sent`` with no sender configured: send them ``sign_in_url``). Refused (422)
     for an address outside the domains that can sign in."""
     invite = await _call(
-        service.create_invite(db, principal, body.email, body.role, body.engineering_lead)
+        service.create_invite(
+            db, principal, body.email, body.role, body.engineering_lead, body.message
+        )
     )
     send = delivery.queue_email(invite)
     await db.commit()

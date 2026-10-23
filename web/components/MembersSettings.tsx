@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ActedCell, SETTLING, Unavailable, useActed } from "@/components/account/acted";
 import { ConfirmDialog } from "@/components/account/ConfirmDialog";
-import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
+import { Field, INPUT, SELECT, TEXTAREA } from "@/app/settings/_components/fields";
 import {
   Avatar,
   Button,
@@ -39,6 +39,9 @@ const LEAD_TIP =
   "Engineering lead: decides both engineering stops (the check after the feature set and the dates after the PRD draft) and verifies dates. Any commenter or above can carry it.";
 const VIEWER_NOT_LEAD = "Viewers can't be the engineering lead";
 const CHECKBOX = "size-4 accent-[var(--accent)] disabled:opacity-50";
+/** The invite's personal note (#203): plain text, at most this long; a counter shows near it. */
+const MESSAGE_MAX = 500;
+const MESSAGE_COUNT_FROM = 400;
 
 function RoleSelect({
   value,
@@ -264,6 +267,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
   const [email, setEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("commenter");
   const [inviteLead, setInviteLead] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState("");
   const [pending, setPending] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -354,7 +358,9 @@ function OwnerView({ selfId }: { selfId: string | null }) {
           outcome: "Revoked",
           undo: async () => {
             const again = await unwrap(
-              api.POST("/v1/invites", { body: { email: invite.email, role: invite.role, engineering_lead: invite.engineering_lead } }),
+              api.POST("/v1/invites", {
+                body: { email: invite.email, role: invite.role, engineering_lead: invite.engineering_lead, message: invite.message ?? null },
+              }),
             ).catch((e) => {
               setError(errorMessage(e));
               return null;
@@ -411,13 +417,21 @@ function OwnerView({ selfId }: { selfId: string | null }) {
     setInviteError(null);
     try {
       const created = await unwrap(
-        api.POST("/v1/invites", { body: { email: email.trim(), role: inviteRole, engineering_lead: inviteLead && inviteRole !== "viewer" } }),
+        api.POST("/v1/invites", {
+          body: {
+            email: email.trim(),
+            role: inviteRole,
+            engineering_lead: inviteLead && inviteRole !== "viewer",
+            message: inviteMessage.trim() || null,
+          },
+        }),
       );
       invitesQ.setData((prev) => [created, ...(prev ?? [])]);
       polls.current = 0;
       setMade(created);
       setEmail("");
       setInviteLead(false);
+      setInviteMessage("");
     } catch (err) {
       setInviteError(errorMessage(err));
     } finally {
@@ -664,6 +678,21 @@ function OwnerView({ selfId }: { selfId: string | null }) {
             />
             Engineering lead
           </label>
+          <Field label="Message (optional)">
+            <textarea
+              rows={3}
+              maxLength={MESSAGE_MAX}
+              value={inviteMessage}
+              onChange={(e) => setInviteMessage(e.target.value.slice(0, MESSAGE_MAX))}
+              placeholder="A note for them, sent with the invite"
+              className={TEXTAREA}
+            />
+          </Field>
+          {inviteMessage.length >= MESSAGE_COUNT_FROM && (
+            <p data-testid="invite-message-count" aria-live="polite" className="tnum -mt-1.5 text-right text-[13px] text-text2">
+              {inviteMessage.length}/{MESSAGE_MAX}
+            </p>
+          )}
           <div>
             <Button type="submit" variant="solid" icon="plus" disabled={pending || !email.trim()}>
               {pending ? "Inviting…" : "Send invite"}
@@ -700,6 +729,12 @@ function OwnerView({ selfId }: { selfId: string | null }) {
                     <Button variant="ghost" aria-label={`Revoke invite for ${i.email}`} onClick={() => revokeInvite(i)}>
                       Revoke
                     </Button>
+                    {i.message && (
+                      // Plain text, on one line: the full note is its title.
+                      <span data-testid="invite-note" title={i.message} className="basis-full truncate text-[13px] text-text2">
+                        Note: {i.message}
+                      </span>
+                    )}
                     <AccessState invite={i} retrying={busy === `access:${i.id}`} onRetry={() => retryAccess(i)} />
                     <EmailState invite={i} resending={busy === `email:${i.id}`} onResend={() => resend(i)} />
                   </>

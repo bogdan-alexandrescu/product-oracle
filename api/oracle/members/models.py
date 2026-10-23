@@ -26,6 +26,8 @@ INVITE_ACCESS = ("granted", "pending", "skipped")
 # queued: a background send owes it; sent; failed (after its one retry); not_sent: no
 # sender configured (ORACLE_MAIL_PROVIDER, ORACLE_MAIL_SENDER).
 INVITE_EMAIL = ("queued", "sent", "failed", "not_sent")
+# The owner's note to the invitee (#203): plain text, never HTML.
+INVITE_MESSAGE_MAX = 500
 
 
 class Invite(TenantScoped, Base):
@@ -38,6 +40,10 @@ class Invite(TenantScoped, Base):
         CheckConstraint(ENGINEERING_LEAD_ROLE, name="engineering_lead_role"),
         CheckConstraint(_in("access", INVITE_ACCESS), name="access"),
         CheckConstraint(_in("email_status", INVITE_EMAIL), name="email_status"),
+        CheckConstraint(
+            f"message IS NULL OR char_length(message) <= {INVITE_MESSAGE_MAX}",
+            name="message_length",
+        ),
         # One open invite per email; accepted and revoked ones are history.
         Index(
             "uq_invites_tenant_id_email_open",
@@ -66,6 +72,8 @@ class Invite(TenantScoped, Base):
     email_error: Mapped[str | None] = mapped_column(Text)
     # When it got its email status (queued: when the send was owed).
     email_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The owner's note to the invitee (#203): sent in the email and by Resend.
+    message: Mapped[str | None] = mapped_column(Text)
 
 
 FOLLOW_UP_KINDS = ("provider_revoke", "run_cancel", "iap_revoke", "iap_grant")

@@ -134,7 +134,9 @@ def test_the_message_is_escaped_and_keeps_its_line_breaks():
         message.html
     )
     # The text part keeps the message's lines as typed.
-    assert 'Hi <b>Jordan</b> & team,\n<img src="https://evil.example/x.png">\nSee you' in message.text
+    assert (
+        'Hi <b>Jordan</b> & team,\n<img src="https://evil.example/x.png">\nSee you' in message.text
+    )
 
 
 def test_company_inviter_and_address_are_escaped_too():
@@ -249,7 +251,9 @@ def test_no_inviter_address_sets_no_reply_to():
     assert parsed["Reply-To"] is None
 
 
-@pytest.mark.parametrize("address", ["a@evil.com,b@corp.com", "Pat <b@corp.com>", "x\r\nBcc: b@c.com"])
+@pytest.mark.parametrize(
+    "address", ["a@evil.com,b@corp.com", "Pat <b@corp.com>", "x\r\nBcc: b@c.com"]
+)
 def test_a_reply_to_that_is_not_one_plain_address_is_dropped(address):
     """protects=the Reply-To header is only ever one plain address; fails_when=a crafted
     inviter address adds recipients or headers; no_claim=the To header (its own tests)."""
@@ -266,13 +270,17 @@ def test_a_reply_to_that_is_not_one_plain_address_is_dropped(address):
 # --- Through the API -----------------------------------------------------------------------------
 
 
-async def test_the_invite_stores_returns_and_sends_the_message(client, owner, iap, mail):
+async def test_the_invite_stores_returns_and_sends_the_message(client, owner, iap, mail):  # noqa: F811
     """protects=POST /v1/invites keeps the message, GET returns it, and the email carries it
     with Reply-To the owner; fails_when=it is dropped anywhere; no_claim=the web form (e2e)."""
     _, headers = owner
     resp = await client.post(
         "/v1/invites",
-        json={"email": "pat@example.com", "role": "approver", "message": "  Welcome aboard!\nPat  "},
+        json={
+            "email": "pat@example.com",
+            "role": "approver",
+            "message": "  Welcome aboard!\nPat  ",
+        },
         headers=headers,
     )
     assert resp.status_code == 201, resp.text
@@ -288,7 +296,7 @@ async def test_the_invite_stores_returns_and_sends_the_message(client, owner, ia
     assert "it reaches Admin." in sent.text
 
 
-async def test_no_message_is_null_and_leaves_the_block_out(client, owner, iap, mail):
+async def test_no_message_is_null_and_leaves_the_block_out(client, owner, iap, mail):  # noqa: F811
     _, headers = owner
     for body in ({}, {"message": None}, {"message": "   "}):
         address = f"p{uuid.uuid4().hex[:6]}@example.com"
@@ -302,7 +310,7 @@ async def test_no_message_is_null_and_leaves_the_block_out(client, owner, iap, m
     assert all("A note from" not in m.html for m in mail.sent)
 
 
-async def test_a_message_over_500_characters_is_refused(client, owner, iap, mail):
+async def test_a_message_over_500_characters_is_refused(client, owner, iap, mail):  # noqa: F811
     """protects=the 500-character limit; fails_when=a longer message is stored or sent;
     no_claim=the web counter (e2e)."""
     tenant_id, headers = owner
@@ -325,7 +333,7 @@ async def test_a_message_over_500_characters_is_refused(client, owner, iap, mail
     assert ok.json()["message"] == "x" * 500
 
 
-async def test_a_non_owner_is_refused_as_before(client, owner, iap, mail):
+async def test_a_non_owner_is_refused_as_before(client, owner, iap, mail):  # noqa: F811
     """protects=owners only; fails_when=an approver's invite with a message is accepted;
     no_claim=A5 part 1's approver invites."""
     tenant_id, _ = owner
@@ -341,7 +349,7 @@ async def test_a_non_owner_is_refused_as_before(client, owner, iap, mail):
     assert mail.attempts == 0
 
 
-async def test_resend_sends_the_same_message(client, owner, iap, mail, monkeypatch):
+async def test_resend_sends_the_same_message(client, owner, iap, mail, monkeypatch):  # noqa: F811
     """protects=Resend sends the stored message again; fails_when=the resent email loses it;
     no_claim=the cooldown (its own test)."""
     _, headers = owner
@@ -363,7 +371,7 @@ async def test_resend_sends_the_same_message(client, owner, iap, mail, monkeypat
     assert second.reply_to == "admin@example.com"
 
 
-async def test_an_inviter_with_no_address_gets_no_reply_to(client, owner, iap, mail):
+async def test_an_inviter_with_no_address_gets_no_reply_to(client, owner, iap, mail):  # noqa: F811
     """protects=an invite made by a service token (no person) sets no Reply-To and drops the
     reply sentence; fails_when=a made-up or empty address is used; no_claim=run tokens, which
     cannot invite at all."""

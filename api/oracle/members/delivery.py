@@ -33,9 +33,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.models import ApiToken, User
+from oracle.company_time import company_time_zone
 from oracle.config import get_settings
 from oracle.members import iap_access, mailer
 from oracle.members.models import Invite, MemberFollowUp
+from oracle.members.names import display_name
 from oracle.models import Tenant
 from oracle.tenancy import tenant_session
 
@@ -383,15 +385,17 @@ async def _claim(
     return invite
 
 
-async def _inviter(s: AsyncSession, invited_by: uuid.UUID | None) -> str:
+async def _inviter(s: AsyncSession, invited_by: uuid.UUID | None) -> tuple[str | None, str | None]:
+    """Who invited: (their name, else their address; their address), or (None, None)
+    for no person (a service token): no one for replies to reach."""
     if invited_by is not None:
         user = await s.get(User, invited_by)
         if user is None:
             token = await s.get(ApiToken, invited_by)
             user = await s.get(User, token.user_id) if token and token.user_id else None
         if user is not None:
-            return user.email
-    return "An owner"
+            return display_name(user.email), user.email
+    return None, None
 
 
 async def deliver(
@@ -410,12 +414,18 @@ async def deliver(
             return True
         tenant = await s.get(Tenant, tenant_id)
         address, role = invite.email, invite.role
+        inviter, reply_to = await _inviter(s, invite.invited_by)
         message = mailer.invite_email(
             to=address,
             company=tenant.name if tenant else "Your company",
             role=role,
-            inviter=await _inviter(s, invite.invited_by),
+            inviter=inviter,
+            reply_to=reply_to,
             link=sign_in_url(),
+            message=invite.message,
+            # An invite's expiry (A5 part 1) reads in the Company time zone.
+            expires_at=getattr(invite, "expires_at", None),
+            zone=await company_time_zone(s),
         )
         await s.commit()  # nothing held across the sends
 

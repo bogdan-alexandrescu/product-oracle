@@ -2353,6 +2353,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       const email = input.email.trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(422, { detail: "Not an email address" });
       if (input.engineering_lead && input.role === "viewer") return json(422, { detail: VIEWER_REFUSED });
+      if ((input.message?.length ?? 0) > 500) return json(422, { detail: "The message is longer than 500 characters" });
       if (!SIGN_IN_DOMAINS.includes(email.split("@")[1])) {
         return json(422, { detail: `Only addresses at ${SIGN_IN_DOMAINS.join(" or ")} can sign in to Oracle` });
       }
@@ -2377,6 +2378,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         email_status: scenario === "mail-off" ? "not_sent" : "queued",
         email_at: now(),
         sign_in_url: signInUrl(),
+        message: input.message?.trim() || null,
       };
       db.invites.push(invite);
       return json(201, invite);

@@ -67,6 +67,7 @@ def invite_out(invite: Invite) -> InviteOut:
         email_error=invite.email_error,
         email_at=invite.email_at,
         sign_in_url=sign_in_url(),
+        message=invite.message,
     )
 
 
@@ -1413,6 +1414,7 @@ async def create_invite(
     email: str,
     role: Role,
     engineering_lead: bool = False,
+    message: str | None = None,
 ) -> Invite:
     from oracle.auth.service import ReservedEmailError, check_email_allowed
     from oracle.members.leads import VIEWER_REFUSED
@@ -1438,7 +1440,11 @@ async def create_invite(
     if await session.scalar(select(Invite.id).where(Invite.email == email, *_open())) is not None:
         raise MemberError("conflict", f"{email} already has an open invite; revoke it first")
     invite = Invite(
-        email=email, role=role, engineering_lead=engineering_lead, invited_by=principal.id
+        email=email,
+        role=role,
+        engineering_lead=engineering_lead,
+        invited_by=principal.id,
+        message=message,
     )
     session.add(invite)
     try:
