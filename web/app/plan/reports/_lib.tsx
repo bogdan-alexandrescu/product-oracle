@@ -1,5 +1,6 @@
 import { Chip, type ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
+import { inZone } from "@/lib/format";
 
 export type Report = Schemas["AlignmentReportOut"];
 export type ReportItem = Schemas["AlignmentReportListItem"];
@@ -35,16 +36,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 /** "Nov 30" from "2026-11-30" (a calendar date, no time zone). */
 export const shortDay = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
 
-/** "Oct 19, 8:00 AM PDT": a moment in the company's time zone, as the report is set up. */
-export function inZone(iso: string, timeZone: string): string {
-  try {
-    return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone, timeZoneName: "short" })
-      .format(new Date(iso))
-      .replace(/ at /, ", ");
-  } catch {
-    return new Date(iso).toISOString();
-  }
-}
+export { inZone };
 
 /** The report's Slack line: posted, waiting, refused, or not posted. */
 export function slackText(r: Pick<Report, "slack" | "timezone">): string {

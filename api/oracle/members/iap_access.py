@@ -10,6 +10,8 @@ policy changed between the read and the write) is retried once. All of it is asy
 """
 
 import copy
+import json
+import re
 from typing import Protocol
 
 import httpx
@@ -21,8 +23,14 @@ from oracle.swarm.swarmcloud import GoogleAccessToken
 ROLE = "roles/iap.httpsResourceAccessor"
 IAP_API = "https://iap.googleapis.com/v1"
 TIMEOUT = httpx.Timeout(10.0)
-# What an error from Google is recorded as: its status and a short generic reason, never
-# its body (it can name projects, accounts and policies).
+# What an error from Google is recorded as: its status, a short generic reason and
+# Google's own message (#330: "User ... does not exist" says what went wrong), capped and
+# with anything shaped like a credential taken out; never the rest of its body.
+MESSAGE_CAP = 200
+_TOKENS = re.compile(
+    r"(?i:bearer\s+)?(?:ya29\.[\w.-]+|eyJ[\w-]*\.[\w-]+\.[\w-]*|(?:po|ort|poa|por)_[\w-]+"
+    r"|1//[\w-]+|AIza[\w-]{20,}|[A-Za-z0-9_-]{40,})"
+)
 REASONS = {
     400: "bad request",
     401: "not authenticated",
@@ -33,15 +41,39 @@ REASONS = {
 }
 
 
-def google_refusal(code: int) -> str:
-    """``Google returned 403 (permission denied)``: what Oracle records of a refusal."""
+def google_message(body: str | None) -> str | None:
+    """Google's own message in an error ``body`` (``{"error": {"message"}}``, or OAuth's
+    ``error_description``), capped at MESSAGE_CAP, with no tokens; None without one."""
+    try:
+        parsed = json.loads(body or "")
+    except ValueError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    error = parsed.get("error")
+    message = error.get("message") if isinstance(error, dict) else parsed.get("error_description")
+    if not isinstance(message, str):
+        return None
+    message = _TOKENS.sub("[token removed]", " ".join(message.split()))
+    if not message:
+        return None
+    if len(message) > MESSAGE_CAP:
+        message = message[: MESSAGE_CAP - 1].rstrip() + "…"
+    return message
+
+
+def google_refusal(code: int, body: str | None = None) -> str:
+    """``Google returned 400 (bad request): User ... does not exist.``: what Oracle
+    records of a refusal, Google's own message (if its ``body`` has one) after the status."""
     reason = REASONS.get(code)
     if reason is None:
         if code in (502, 503, 504):
             reason = "unavailable"
         else:
             reason = "server error" if code >= 500 else "refused"
-    return f"Google returned {code} ({reason})"
+    said = f"Google returned {code} ({reason})"
+    message = google_message(body)
+    return f"{said}: {message}" if message else said
 
 
 class IapError(Exception):
@@ -84,7 +116,7 @@ class GoogleIapClient:
         if resp.status_code == 409:
             raise EtagConflict("Google returned 409 (the policy's etag changed)")
         if resp.status_code != 200:
-            raise IapError(google_refusal(resp.status_code))
+            raise IapError(google_refusal(resp.status_code, resp.text))
         try:
             return resp.json()
         except ValueError:

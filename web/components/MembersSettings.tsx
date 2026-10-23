@@ -22,7 +22,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { api, unwrap, type Invite, type Member } from "@/lib/api/client";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime, inZone } from "@/lib/format";
 import { hasRole, useMe, type Role } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -159,25 +159,47 @@ const shortDate = (iso: string) => shortFmt.format(new Date(iso));
 const MAIL_POLL_MS = 1000;
 const MAIL_POLLS = 30;
 
-/** An invite's Google IAP access: granted, or not yet with Retry. Nothing without IAP. */
-function AccessState({ invite, retrying, onRetry }: { invite: Invite; retrying: boolean; onRetry: () => void }) {
-  if (invite.access === "granted") {
-    return (
-      <Chip kind="pass" data-testid="invite-access" title={invite.access_at ? `Granted ${formatDateTime(invite.access_at)}` : undefined}>
-        Access granted
-      </Chip>
-    );
-  }
-  if (invite.access !== "pending") return null;
+/** The company's time zone: the one its alignment report is set up in (Settings > Notifications). */
+const DEFAULT_ZONE = "America/Los_Angeles";
+const loadReportSetting = () =>
+  unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "alignment_report" } } })).then((s) => s.value as { timezone?: string });
+
+/** "Google sign-in treats this as pat@example.com; ...": a plus address is no Google account of its own. */
+function plusAddressWarning(email: string): string | null {
+  const at = email.trim().lastIndexOf("@");
+  const local = email.trim().slice(0, at);
+  if (at < 1 || !local.includes("+")) return null;
+  const base = `${local.slice(0, local.indexOf("+"))}${email.trim().slice(at)}`;
+  return `Google sign-in treats this as ${base}; IAP access can't be granted to it.`;
+}
+
+/** "Last tried Oct 22, 9:05 AM PDT · <reason>": what an invite's row says of an outcome, as text. */
+function Tried({ at, reason, zone, testId }: { at?: string | null; reason?: string | null; zone: string; testId: string }) {
+  const said = [at ? `Last tried ${inZone(at, zone)}` : null, reason || null].filter(Boolean).join(" · ");
+  if (!said) return null;
   return (
-    <>
-      <Chip kind="warn" data-testid="invite-access" title={invite.access_error ?? undefined}>
-        Access not granted yet
+    <span data-testid={testId} className="basis-full break-words text-[13px] text-text2">
+      {said}
+    </span>
+  );
+}
+
+/** An invite's Google IAP access: granted, or not yet with Retry; when last tried and why. Nothing without IAP. */
+function AccessState({ invite, zone, retrying, onRetry }: { invite: Invite; zone: string; retrying: boolean; onRetry: () => void }) {
+  if (invite.access !== "granted" && invite.access !== "pending") return null;
+  const granted = invite.access === "granted";
+  return (
+    <span className="flex basis-full flex-wrap items-center gap-1.5">
+      <Chip kind={granted ? "pass" : "warn"} data-testid="invite-access">
+        {granted ? "Access granted" : "Access not granted yet"}
       </Chip>
-      <Button variant="ghost" aria-label={`Retry access for ${invite.email}`} disabled={retrying} onClick={onRetry}>
-        {retrying ? "Retrying…" : "Retry"}
-      </Button>
-    </>
+      {!granted && (
+        <Button variant="ghost" aria-label={`Retry access for ${invite.email}`} aria-busy={retrying || undefined} disabled={retrying} onClick={onRetry}>
+          {retrying ? "Retrying…" : "Retry"}
+        </Button>
+      )}
+      <Tried at={invite.access_at} reason={granted ? null : invite.access_error} zone={zone} testId="invite-access-detail" />
+    </span>
   );
 }
 
@@ -188,20 +210,13 @@ const EMAIL_LABEL: Record<Invite["email_status"], string> = {
   not_sent: "Not sent",
 };
 
-/** An invite's email: Sent <date>, Sending…, Not sent (no sender), or Failed; Resend. */
-function EmailState({ invite, resending, onResend }: { invite: Invite; resending: boolean; onResend: () => void }) {
+/** An invite's email: Sent <date>, Sending…, Not sent (no sender), or Failed; Resend; when last tried and why. */
+function EmailState({ invite, zone, resending, onResend }: { invite: Invite; zone: string; resending: boolean; onResend: () => void }) {
   const s = invite.email_status;
-  const title =
-    s === "failed"
-      ? (invite.email_error ?? undefined)
-      : s === "not_sent"
-        ? "Oracle has no sender set up: send them the sign-in link"
-        : invite.email_at
-          ? `${EMAIL_LABEL[s]} ${formatDateTime(invite.email_at)}`
-          : undefined;
+  const reason = s === "failed" ? invite.email_error : s === "not_sent" ? "Oracle has no sender set up: send them the sign-in link" : null;
   return (
-    <>
-      <Chip kind={s === "failed" ? "crit" : s === "sent" ? "line" : "na"} data-testid="invite-email" title={title}>
+    <span className="flex basis-full flex-wrap items-center gap-1.5">
+      <Chip kind={s === "failed" ? "crit" : s === "sent" ? "line" : "na"} data-testid="invite-email">
         {EMAIL_LABEL[s]}
         {s === "sent" && invite.email_at ? ` ${shortDate(invite.email_at)}` : ""}
       </Chip>
@@ -210,7 +225,8 @@ function EmailState({ invite, resending, onResend }: { invite: Invite; resending
           {resending ? "Resending…" : "Resend"}
         </Button>
       )}
-    </>
+      <Tried at={s === "sent" || s === "failed" ? invite.email_at : null} reason={reason} zone={zone} testId="invite-email-detail" />
+    </span>
   );
 }
 
@@ -242,6 +258,7 @@ function StatusChip({ m }: { m: Member }) {
 function OwnerView({ selfId }: { selfId: string | null }) {
   const membersQ = useQuery("members", () => unwrap(api.GET("/v1/members")));
   const invitesQ = useQuery("invites", () => unwrap(api.GET("/v1/invites")));
+  const zone = useQuery("settings|alignment_report", loadReportSetting).data?.timezone ?? DEFAULT_ZONE;
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<Member | null>(null);
@@ -612,6 +629,11 @@ function OwnerView({ selfId }: { selfId: string | null }) {
               className={INPUT}
             />
           </Field>
+          {plusAddressWarning(email) && (
+            <p data-testid="plus-address-warning" role="note" className="-mt-1.5 text-[13px] font-medium text-warn">
+              {plusAddressWarning(email)}
+            </p>
+          )}
           {inviteError && (
             <p id="invite-error" role="alert" className="-mt-1.5 text-[13px] font-medium text-crit">
               {inviteError}
@@ -673,10 +695,8 @@ function OwnerView({ selfId }: { selfId: string | null }) {
                     <Button variant="ghost" aria-label={`Revoke invite for ${i.email}`} onClick={() => revokeInvite(i)}>
                       Revoke
                     </Button>
-                    <span className="flex basis-full flex-wrap items-center gap-1.5">
-                      <AccessState invite={i} retrying={busy === `access:${i.id}`} onRetry={() => retryAccess(i)} />
-                      <EmailState invite={i} resending={busy === `email:${i.id}`} onResend={() => resend(i)} />
-                    </span>
+                    <AccessState invite={i} zone={zone} retrying={busy === `access:${i.id}`} onRetry={() => retryAccess(i)} />
+                    <EmailState invite={i} zone={zone} resending={busy === `email:${i.id}`} onResend={() => resend(i)} />
                   </>
                 )}
               </li>

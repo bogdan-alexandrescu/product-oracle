@@ -18,6 +18,17 @@ export const formatDay = (iso: string) => dayFmt.format(new Date(iso));
 export const formatDayUtc = (iso: string) => utcDayFmt.format(new Date(iso));
 export const formatDateTime = (iso: string) => dateTimeFmt.format(new Date(iso));
 
+/** "Oct 19, 8:00 AM PDT": a moment in the company's time zone, as Settings > Notifications sets it. */
+export function inZone(iso: string, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone, timeZoneName: "short" })
+      .format(new Date(iso))
+      .replace(/ at /, ", ");
+  } catch {
+    return new Date(iso).toISOString();
+  }
+}
+
 export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
   slack: "Slack",
   notion: "Notion",
