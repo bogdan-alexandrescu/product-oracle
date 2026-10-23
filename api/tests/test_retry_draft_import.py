@@ -30,8 +30,13 @@ from oracle.tenancy import tenant_session
 from tests.fixtures import draft, seed_auth
 from tests.test_runs import BAD_PRD, as_user, decide, get, pending, started, tick
 
-# Only the PRD review stops: the draft segment (4) is the one that waits.
-OFF = {"baseline_confirm": False, "feature_set": False, "priority_order": False}
+# Only the PRD review stops: the draft segment (5) is the one that waits.
+OFF = {
+    "baseline_confirm": False,
+    "feature_set": False,
+    "eng_review": False,
+    "priority_order": False,
+}
 ORACLE_PRD = draft("prd_oracle_citations.md")
 OLDER = "citation #1 (o-g1) is invalid: source"
 NOT_IMPORTED = "the draft was not imported: retry import, or request changes"
@@ -59,7 +64,7 @@ def _older_oracle(monkeypatch) -> None:
     monkeypatch.setattr(docs_service, "parse_draft_async", refuse)
 
 
-def _retry_url(run, seq: int = 4) -> str:
+def _retry_url(run, seq: int = 5) -> str:
     return f"/v1/runs/{run['id']}/segments/{seq}/retry-draft-import"
 
 
@@ -76,7 +81,7 @@ async def _rejected(
     monkeypatch.undo()
     run = await get(client, auth, run["id"])
     assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "prd_review"
-    assert run["segments"][3]["draft_import"]["error"]
+    assert run["segments"][4]["draft_import"]["error"]
     return run
 
 
@@ -115,7 +120,7 @@ async def _retried(tenant_id) -> list[AuditEvent]:
 async def test_a_rejected_draft_is_imported_by_retry(client, owner, runtime, monkeypatch):
     tenant_id, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
-    seg = run["segments"][3]
+    seg = run["segments"][4]
     assert OLDER in seg["draft_import"]["error"] and seg["draft_import"]["version"] is None
     assert seg["can_retry_draft_import"] is True
     assert run["document_id"] is None
@@ -125,7 +130,7 @@ async def test_a_rejected_draft_is_imported_by_retry(client, owner, runtime, mon
     resp = await client.post(_retry_url(run), headers=auth)
     assert resp.status_code == 200, resp.text
     run = resp.json()
-    seg = run["segments"][3]
+    seg = run["segments"][4]
     imp = seg["draft_import"]
     assert imp["error"] is None
     assert (imp["slug"], imp["version"], imp["created"]) == ("example-prd", 1, True)
@@ -156,19 +161,19 @@ async def test_a_rejected_draft_is_imported_by_retry(client, owner, runtime, mon
 
     run = await decide(client, auth, run)
     assert run["status"] == "succeeded"
-    assert run["segments"][3]["draft_import"]["version"] == 1
+    assert run["segments"][4]["draft_import"]["version"] == 1
 
 
 async def test_a_draft_still_rejected_keeps_the_new_error(client, owner, runtime, monkeypatch):
     tenant_id, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch, prd=BAD_PRD)
-    before = run["segments"][3]["draft_import"]["error"]
+    before = run["segments"][4]["draft_import"]["error"]
     assert OLDER in before
 
     resp = await client.post(_retry_url(run), headers=auth)
     assert resp.status_code == 200, resp.text
     run = resp.json()
-    seg = run["segments"][3]
+    seg = run["segments"][4]
     after = seg["draft_import"]["error"]
     assert after != before and "prd.md was rejected" in after and "front_matter" in after
     # The new problems (the findings if the draft goes back to the writer) and their
@@ -193,8 +198,8 @@ async def test_nothing_to_retry_is_refused(client, owner, runtime, monkeypatch):
     for _ in range(4):
         await tick(client, auth)
     ok = await get(client, auth, ok["id"])
-    assert ok["segments"][3]["draft_import"]["version"] == 1
-    assert ok["segments"][3]["can_retry_draft_import"] is False
+    assert ok["segments"][4]["draft_import"]["version"] == 1
+    assert ok["segments"][4]["can_retry_draft_import"] is False
     resp = await client.post(_retry_url(ok), headers=auth)
     assert resp.status_code == 409 and "nothing to retry" in resp.json()["detail"]
     # A segment that imports no draft, and one the run does not have.
@@ -207,7 +212,7 @@ async def test_nothing_to_retry_is_refused(client, owner, runtime, monkeypatch):
 async def test_a_segment_that_left_no_draft_is_refused(client, owner, runtime, monkeypatch):
     _, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch, prd=None)
-    seg = run["segments"][3]
+    seg = run["segments"][4]
     assert seg["draft_import"]["error"] == "the segment left no prd.md"
     assert seg["can_retry_draft_import"] is False
     resp = await client.post(_retry_url(run), headers=auth)
@@ -220,7 +225,7 @@ async def test_refused_once_changes_are_requested(client, owner, runtime, monkey
     run = await _rejected(client, auth, runtime, monkeypatch)
     run = await decide(client, auth, run, "changes_requested", "Fix the citations")
     assert run["status"] == "running"
-    assert run["segments"][3]["can_retry_draft_import"] is False
+    assert run["segments"][4]["can_retry_draft_import"] is False
     resp = await client.post(_retry_url(run), headers=auth)
     assert resp.status_code == 409, resp.text
     assert await _retried(tenant_id) == []
@@ -258,20 +263,20 @@ async def test_after_the_run_finished_an_owner_retries(client, owner, runtime, m
     approver = await as_user(tenant_id, "approver")
     seen = await get(client, approver, run["id"])
     assert seen["status"] == "succeeded" and seen["document_id"] is None
-    assert seen["segments"][3]["can_retry_draft_import"] is False
+    assert seen["segments"][4]["can_retry_draft_import"] is False
     resp = await client.post(_retry_url(run), headers=approver)
     assert resp.status_code == 403, resp.text
     assert "owner" in resp.json()["detail"]
 
     run = await get(client, auth, run["id"])
-    assert run["segments"][3]["can_retry_draft_import"] is True
+    assert run["segments"][4]["can_retry_draft_import"] is True
     resp = await client.post(_retry_url(run), headers=auth)
     assert resp.status_code == 200, resp.text
     run = resp.json()
-    imp = run["segments"][3]["draft_import"]
+    imp = run["segments"][4]["draft_import"]
     assert imp["error"] is None and (imp["slug"], imp["version"]) == ("example-prd", 1)
     assert run["document_id"] == imp["document_id"]
-    assert run["segments"][3]["can_retry_draft_import"] is False
+    assert run["segments"][4]["can_retry_draft_import"] is False
     # Nothing about the run's checkpoints changes; the import is recorded on the review.
     assert run["status"] == "succeeded"
     review = next(c for c in run["checkpoints"] if c["kind"] == "prd_review")
@@ -295,7 +300,7 @@ async def test_refused_on_a_cancelled_or_failed_run(client, owner, runtime, monk
     cancelled = await _rejected(client, auth, runtime, monkeypatch)
     resp = await client.post(f"/v1/runs/{cancelled['id']}/cancel", headers=auth)
     assert resp.status_code == 200, resp.text
-    assert resp.json()["segments"][3]["can_retry_draft_import"] is False
+    assert resp.json()["segments"][4]["can_retry_draft_import"] is False
     resp = await client.post(_retry_url(cancelled), headers=auth)
     assert resp.status_code == 409 and "cancelled" in resp.json()["detail"]
 
@@ -308,8 +313,8 @@ async def test_refused_on_a_cancelled_or_failed_run(client, owner, runtime, monk
         await tick(client, auth)
     monkeypatch.undo()
     failed = await get(client, auth, failed["id"])
-    assert failed["status"] == "failed" and failed["segments"][3]["draft_import"]["error"]
-    assert failed["segments"][3]["can_retry_draft_import"] is False
+    assert failed["status"] == "failed" and failed["segments"][4]["draft_import"]["error"]
+    assert failed["segments"][4]["can_retry_draft_import"] is False
     resp = await client.post(_retry_url(failed), headers=auth)
     assert resp.status_code == 409 and "failed" in resp.json()["detail"]
     assert await _retried(tenant_id) == []
@@ -321,12 +326,12 @@ async def test_the_checkpoint_approver_role_retries(client, owner, runtime, monk
     for role in ("viewer", "commenter"):
         headers = await as_user(tenant_id, role)
         seen = await get(client, headers, run["id"])
-        assert seen["segments"][3]["can_retry_draft_import"] is False
+        assert seen["segments"][4]["can_retry_draft_import"] is False
         resp = await client.post(_retry_url(run), headers=headers)
         assert resp.status_code == 403, (role, resp.text)
     # An approver who did not create the run may: the review's approver role decides.
     approver = await as_user(tenant_id, "approver")
-    assert (await get(client, approver, run["id"]))["segments"][3]["can_retry_draft_import"]
+    assert (await get(client, approver, run["id"]))["segments"][4]["can_retry_draft_import"]
     resp = await client.post(_retry_url(run), headers=approver)
     assert resp.status_code == 200, resp.text
-    assert resp.json()["segments"][3]["draft_import"]["version"] == 1
+    assert resp.json()["segments"][4]["draft_import"]["version"] == 1

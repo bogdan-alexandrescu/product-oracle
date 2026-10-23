@@ -393,7 +393,7 @@ async def test_a_runs_unsafe_prd_md_fails_the_import_visibly(client, runtime, na
     assert run["status"] == "failed"
     code = "draft_too_large" if name == "base60_1m" else "invalid_front_matter"
     assert run["error"].startswith(f"prd.md was rejected: [{code}]"), run["error"]
-    assert run["segments"][3]["draft_import"]["version"] is None
+    assert run["segments"][4]["draft_import"]["version"] is None
 
 
 async def test_a_runs_unsafe_baseline_yaml_fails_the_import_visibly(client, runtime):

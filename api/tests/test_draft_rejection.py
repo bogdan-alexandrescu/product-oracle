@@ -17,7 +17,12 @@ from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from tests.fixtures import seed_auth
 from tests.test_runs import get, pending, started, tick
 
-OFF = {"baseline_confirm": False, "feature_set": False, "priority_order": False}
+OFF = {
+    "baseline_confirm": False,
+    "feature_set": False,
+    "eng_review": False,
+    "priority_order": False,
+}
 # The live case: 24 citations of a source this Oracle does not accept, cited 102 times.
 SOURCE_SUMMARY = (
     "Oracle refused prd.md: 24 citations use source 'x', which isn't accepted; "
@@ -130,7 +135,7 @@ async def test_a_refused_draft_carries_its_problems_and_summary(runtime, client)
     run = await get(client, auth, run["id"])
     assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "prd_review"
 
-    imp = run["segments"][3]["draft_import"]
+    imp = run["segments"][4]["draft_import"]
     # The string stays, for compatibility.
     assert imp["error"].startswith("prd.md was rejected: [invalid_citation] citation #1 (k1)")
     assert imp["summary"] == SOURCE_SUMMARY
@@ -167,7 +172,7 @@ async def test_an_imported_draft_has_no_problems(runtime, client):
     for _ in range(4):
         await tick(client, auth)
     run = await get(client, auth, run["id"])
-    imp = run["segments"][3]["draft_import"]
+    imp = run["segments"][4]["draft_import"]
     assert imp["error"] is None and imp["version"] == 1
     assert imp["problems"] == [] and imp["summary"] is None
     assert run["draft_rejected"] is None
@@ -183,7 +188,7 @@ async def test_a_segment_that_left_no_draft_carries_the_same_shape(runtime, clie
         await tick(client, auth)
     run = await get(client, auth, run["id"])
     assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "prd_review"
-    imp = run["segments"][3]["draft_import"]
+    imp = run["segments"][4]["draft_import"]
     assert imp["error"] == "the segment left no prd.md"
     assert imp["problems"] == [
         {
