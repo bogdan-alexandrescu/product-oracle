@@ -4,14 +4,24 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
-import { Button, Chip, GoalTag, InfoTip, Inspector, InspectorSection, Notice } from "@/components/ds";
+import { Button, Chip, CodeChip, InfoTip, Inspector, InspectorSection, Notice } from "@/components/ds";
 import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type GraphOut, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { named } from "@/lib/codes";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { EvidenceChip } from "./EvidenceChip";
+import {
+  AddDependencyForm,
+  CiteSourceForm,
+  ConfirmRemove,
+  ContributionSelect,
+  endName,
+  LinkToGoalForm,
+  type NewLink,
+} from "./LinkTools";
 import { LIMIT_LABEL, PromoteForm, suggestedBlocker } from "./PromoteBlocker";
 import {
   ConfidenceRing,
@@ -104,12 +114,17 @@ export function EntityDrawer({
   const onAuth = useAuthRedirect();
   const [editing, setEditing] = useState(false);
   const [promoting, setPromoting] = useState(promote && canWrite);
+  // Reject (a proposed item) or Archive (a confirmed one) asks for the reason first.
+  const [asking, setAsking] = useState<"reject" | "archive" | null>(null);
+  // Link to goal, Add dependency or Cite a source item, open below its section.
+  const [adding, setAdding] = useState<"goal" | "dependency" | "cite" | null>(null);
+  const [removingEvidence, setRemovingEvidence] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const d = q.data;
   const title = d?.title ?? entity.title;
-  const tag = tags.get(entity.id);
+  const code = named(title, d?.key ?? entity.key).code;
   const root = useRef<HTMLDivElement>(null);
 
   // Below the tables (narrow screens), bring the inspector into view when it opens.
@@ -169,6 +184,83 @@ export function EntityDrawer({
       return "Saved. The item is now locked against agent changes.";
     });
 
+  const decide = (action: "confirm" | "reject" | "archive", note?: string) =>
+    write(async () => {
+      const params = { params: { path: { entity_id: entity.id } }, body: { note: note || null } };
+      if (action === "confirm") await unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", params));
+      // Archiving a confirmed item rejects it, as the API does: it leaves the baseline, its history keeps why.
+      else await unwrap(api.POST("/v1/baseline/entities/{entity_id}/reject", params));
+      setAsking(null);
+      if (action === "confirm") return `Confirmed “${title}”.`;
+      if (action === "archive") return `Archived “${title}”: it leaves the baseline; its history keeps the reason.`;
+      return `Rejected “${title}”.`;
+    });
+
+  const LOCKED = "The link is locked, so your change was saved as a proposal for an approver.";
+
+  const addLink = (link: NewLink) =>
+    write(async () => {
+      const res = await api.POST("/v1/baseline/edges", { body: { ...link, src_id: entity.id, origin: "user" } });
+      await unwrap(Promise.resolve(res));
+      setAdding(null);
+      if (res.response.status === 202) return "Your link was saved as a proposal for an approver.";
+      const name = titleOf(graph, link.dst_id);
+      return link.type === "supports" ? `Linked to “${name}”.` : `Added the link to “${name}”.`;
+    });
+
+  const patchEdge = (edge: EdgeOut, body: Pick<Schemas["EdgePatch"], "attrs" | "status">, done: string) =>
+    write(async () => {
+      const res = await api.PATCH("/v1/baseline/edges/{edge_id}", {
+        params: { path: { edge_id: edge.id } },
+        body: { ...body, origin: "user" },
+      });
+      await unwrap(Promise.resolve(res));
+      return res.response.status === 202 ? LOCKED : done;
+    });
+
+  const removeEdge = (edge: EdgeOut) =>
+    write(async () => {
+      const res = await api.DELETE("/v1/baseline/edges/{edge_id}", { params: { path: { edge_id: edge.id } } });
+      await unwrap(Promise.resolve(res));
+      if (res.response.status === 202) return LOCKED;
+      return `Removed the link to “${endName(graph, edge, entity.id)}”.`;
+    });
+
+  const unlockEdge = (edge: EdgeOut) =>
+    write(async () => {
+      await unwrap(api.POST("/v1/baseline/edges/{edge_id}/unlock", { params: { path: { edge_id: edge.id } } }));
+      return "Unlocked: agents can change this link again.";
+    });
+
+  const cite = (item: Schemas["ItemOut"]) =>
+    write(async () => {
+      await unwrap(
+        api.POST("/v1/baseline/entities/{entity_id}/evidence", {
+          params: { path: { entity_id: entity.id } },
+          body: { source_item_id: item.id },
+        }),
+      );
+      setAdding(null);
+      return `Cited “${item.title ?? item.external_id}”.`;
+    });
+
+  const removeEvidence = (evidenceId: string, label: string, reason: string) =>
+    write(async () => {
+      await unwrap(
+        api.DELETE("/v1/baseline/evidence/{evidence_id}", {
+          params: { path: { evidence_id: evidenceId }, query: { reason } },
+        }),
+      );
+      setRemovingEvidence(null);
+      return `Removed “${label}”.`;
+    });
+
+  const open = (form: "goal" | "dependency" | "cite") => {
+    setNotice(null);
+    setError(null);
+    setAdding(form);
+  };
+
   const promoteBlocker = (body: Schemas["BlockerCreate"]) =>
     write(async () => {
       await unwrap(api.POST("/v1/blockers", { body }));
@@ -188,16 +280,22 @@ export function EntityDrawer({
         label={title}
         eyebrow={
           <>
-            {TYPE_LABEL[entity.type]} · <span className="font-mono">{d?.key ?? entity.key}</span>
+            {TYPE_LABEL[entity.type]}
+            {code && (
+              <>
+                {" · "}
+                <span className="font-mono">{code}</span>
+              </>
+            )}
           </>
         }
         title={title}
         chips={
           <>
-            {tag && <GoalTag id={tag} proposed={(d ?? entity).status === "proposed"} />}
             <NodeStatusBadge status={(d ?? entity).status} hero />
             <DeliveryChip value={(d ?? entity).type === "feature" ? (d ?? entity).attrs?.status : undefined} hero />
             <LockBadge entity={d ?? entity} meId={meId} hero />
+            {!canComment && <Chip hero>View only</Chip>}
             {suggestion && (
               <Chip kind="warn" hero data-testid="suggested-blocker">
                 Suggested blocker
@@ -326,7 +424,39 @@ export function EntityDrawer({
 
             <History entityId={d.id} updatedAt={d.updated_at} />
 
-            <Links detail={d} graph={graph} tags={tags} onOpen={onOpen} />
+            <Links
+              detail={d}
+              graph={graph}
+              tags={tags}
+              onOpen={onOpen}
+              canWrite={canWrite}
+              busy={busy}
+              onPatch={patchEdge}
+              onRemove={removeEdge}
+              onUnlock={unlockEdge}
+            />
+
+            {/* Only approvers and owners change links: other roles never see the controls. */}
+            {canWrite && (
+              <InspectorSection label="Add a link">
+                {adding === "goal" ? (
+                  <LinkToGoalForm detail={d} graph={graph} busy={busy} onCancel={() => setAdding(null)} onSave={addLink} />
+                ) : adding === "dependency" ? (
+                  <AddDependencyForm detail={d} graph={graph} busy={busy} onCancel={() => setAdding(null)} onSave={addLink} />
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {d.type !== "goal" && (
+                      <Button icon="plus" disabled={busy} onClick={() => open("goal")}>
+                        Link to goal
+                      </Button>
+                    )}
+                    <Button icon="plus" disabled={busy} onClick={() => open("dependency")}>
+                      Add dependency
+                    </Button>
+                  </div>
+                )}
+              </InspectorSection>
+            )}
 
             <InspectorSection label="Evidence" tools={<span className="tnum text-text">{d.evidence.length}</span>}>
               {d.evidence.length === 0 ? (
@@ -334,27 +464,65 @@ export function EntityDrawer({
               ) : (
                 <ul className="flex flex-col gap-1.5" aria-label="Evidence">
                   {d.evidence.map((ev) => (
-                    <li key={ev.id} className="flex min-h-8 max-w-full min-w-0 items-center gap-2" data-testid="evidence-row">
-                      <EvidenceChip evidence={ev} low={low} />
-                      <span className="min-w-0 flex-1 truncate text-sm text-text2" title={ev.ref ?? ev.url ?? undefined}>
-                        {ev.ref ?? ev.url}
-                        {ev.retrieved_at && <span className="tnum"> · {formatDate(ev.retrieved_at)}</span>}
-                      </span>
-                      {ev.kind && canComment && (
-                        <Button
-                          variant="ghost"
-                          className="flex-none"
-                          disabled={busy}
-                          aria-label={`Refresh ${ev.ref ?? ev.url}`}
-                          title="Fetch the public page again and rescore it"
-                          onClick={() => refreshLink(ev.id, ev.ref ?? ev.url ?? "the link")}
-                        >
-                          Refresh
-                        </Button>
+                    <li key={ev.id} className="flex flex-col gap-1.5" data-testid="evidence-row">
+                      <div className="flex min-h-8 max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        <EvidenceChip evidence={ev} low={low} />
+                        <span className="min-w-[6rem] flex-1 truncate text-sm text-text2" title={ev.ref ?? ev.url ?? undefined}>
+                          {ev.ref ?? ev.url}
+                          {ev.retrieved_at && <span className="tnum"> · {formatDate(ev.retrieved_at)}</span>}
+                        </span>
+                        {ev.kind && canComment && (
+                          <Button
+                            variant="ghost"
+                            className="flex-none"
+                            disabled={busy}
+                            aria-label={`Refresh ${ev.ref ?? ev.url}`}
+                            title="Fetch the public page again and rescore it"
+                            onClick={() => refreshLink(ev.id, ev.ref ?? ev.url ?? "the link")}
+                          >
+                            Refresh
+                          </Button>
+                        )}
+                        {/* Approvers remove any evidence; a commenter only a link they added (the API checks who). */}
+                        {(canWrite || (canComment && ev.kind)) && removingEvidence !== ev.id && (
+                          <Button
+                            variant="ghost"
+                            className="ml-auto flex-none"
+                            disabled={busy}
+                            aria-label={`Remove ${ev.ref ?? ev.url}`}
+                            onClick={() => {
+                              setNotice(null);
+                              setRemovingEvidence(ev.id);
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                      {removingEvidence === ev.id && (
+                        <ConfirmRemove
+                          name="Remove evidence"
+                          prompt="Remove this evidence? The item's confidence is rescored without it."
+                          reason
+                          busy={busy}
+                          onBack={() => setRemovingEvidence(null)}
+                          onRemove={(reason) => removeEvidence(ev.id, ev.ref ?? ev.url ?? "the evidence", reason)}
+                        />
                       )}
                     </li>
                   ))}
                 </ul>
+              )}
+              {canWrite && (
+                <div className="mt-3">
+                  {adding === "cite" ? (
+                    <CiteSourceForm busy={busy} onCancel={() => setAdding(null)} onCite={cite} />
+                  ) : (
+                    <Button icon="plus" disabled={busy} onClick={() => open("cite")}>
+                      Cite a source item
+                    </Button>
+                  )}
+                </div>
               )}
               {canComment && (
                 <div className="mt-3">
@@ -370,24 +538,94 @@ export function EntityDrawer({
               )}
             </InspectorSection>
 
+            {/* Only a role that can decide sees these controls (#370); busy disables them for the moment. */}
             {canWrite && !editing && !(promoting && suggestion) && (
               <InspectorSection>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    onClick={() => {
-                      setNotice(null);
-                      setEditing(true);
-                    }}
-                  >
-                    Edit
-                  </Button>
-                </div>
+                {asking ? (
+                  <AskReason action={asking} busy={busy} onBack={() => setAsking(null)} onSubmit={(note) => decide(asking, note)} />
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {d.status === "proposed" && (
+                      <>
+                        <Button variant="solid" disabled={busy} onClick={() => decide("confirm")}>
+                          Confirm
+                        </Button>
+                        <Button disabled={busy} onClick={() => setAsking("reject")}>
+                          Reject
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      onClick={() => {
+                        setNotice(null);
+                        setEditing(true);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    {d.status === "confirmed" && (
+                      <Button variant="danger" disabled={busy} onClick={() => setAsking("archive")}>
+                        Archive
+                      </Button>
+                    )}
+                  </div>
+                )}
               </InspectorSection>
             )}
           </>
         )}
       </Inspector>
     </div>
+  );
+}
+
+/** The in-page confirm for Reject and Archive, with the reason the item's history keeps. */
+function AskReason({
+  action,
+  busy,
+  onBack,
+  onSubmit,
+}: {
+  action: "reject" | "archive";
+  busy: boolean;
+  onBack: () => void;
+  onSubmit: (note: string) => void;
+}) {
+  const [note, setNote] = useState("");
+  const [invalid, setInvalid] = useState(false);
+  const name = action === "reject" ? "Reject" : "Archive";
+  return (
+    <form
+      aria-label={name}
+      className="flex flex-col gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (action === "archive" && !note.trim()) {
+          setInvalid(true);
+          return;
+        }
+        onSubmit(note.trim());
+      }}
+    >
+      <p className="text-text2">
+        {action === "reject"
+          ? "Reject this proposed item? It leaves the baseline."
+          : "Archive this item? It leaves the baseline and the Ledger; its history keeps it."}
+      </p>
+      <label className="flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
+        Reason{action === "reject" && " (optional)"}
+        <textarea className={INPUT} rows={2} value={note} autoFocus onChange={(e) => setNote(e.target.value)} />
+      </label>
+      {invalid && <Notice tone="error">Say why it is archived.</Notice>}
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" variant="danger" disabled={busy}>
+          {name}
+        </Button>
+        <Button onClick={onBack} disabled={busy}>
+          Back
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -416,41 +654,116 @@ function Links({
   graph,
   tags,
   onOpen,
+  canWrite,
+  busy,
+  onPatch,
+  onRemove,
+  onUnlock,
 }: {
   detail: EntityDetail;
   graph: GraphOut | undefined;
   tags: Map<string, string>;
   onOpen: (id: string) => void;
+  canWrite: boolean;
+  busy: boolean;
+  onPatch: (edge: EdgeOut, body: Pick<Schemas["EdgePatch"], "attrs" | "status">, done: string) => void;
+  onRemove: (edge: EdgeOut) => void;
+  onUnlock: (edge: EdgeOut) => void;
 }) {
+  // Remove asks first, in the row.
+  const [removing, setRemoving] = useState<string | null>(null);
   const out = (t: EdgeOut["type"]) => detail.edges_out.filter((e) => e.type === t && e.status !== "rejected");
   const inn = (t: EdgeOut["type"]) => detail.edges_in.filter((e) => e.type === t && e.status !== "rejected");
   const link = (id: string) => (
     <span className="flex min-w-0 items-center gap-2">
-      {tags.get(id) && <GoalTag id={tags.get(id)!} />}
+      {tags.has(id) && <CodeChip kind="goal" entityId={id} title={titleOf(graph, id)} codeOnly />}
       <button type="button" className="min-w-0 truncate text-left hover:underline" onClick={() => onOpen(id)}>
-        {titleOf(graph, id)}
+        {tags.get(id) ?? titleOf(graph, id)}
       </button>
     </span>
   );
   const list = (title: string, edges: EdgeOut[], end: "src_id" | "dst_id", contribution = false) =>
     edges.length > 0 && (
       <InspectorSection label={title}>
-        <ul aria-label={title}>
-          {(contribution ? [...edges].sort((a, b) => contributionOf(b.attrs) - contributionOf(a.attrs)) : edges).map((e) => (
-            <li key={e.id} className="flex min-h-8 min-w-0 items-center gap-2.5">
-              <span className="min-w-0 flex-1">{link(e[end])}</span>
-              {e.status === "proposed" && <Chip kind="warn">Proposed</Chip>}
-              {contribution && (
-                <span className="flex flex-none items-center gap-2" data-testid="contribution">
-                  <ContributionPips value={contributionOf(e.attrs)} proposed={e.status === "proposed"} />
-                  <span className="tnum font-semibold">
-                    <span className="sr-only">contribution </span>
-                    {contributionOf(e.attrs)}/3
-                  </span>
-                </span>
-              )}
-            </li>
-          ))}
+        <ul aria-label={title} className="flex flex-col gap-1">
+          {(contribution ? [...edges].sort((a, b) => contributionOf(b.attrs) - contributionOf(a.attrs)) : edges).map((e) => {
+            const name = titleOf(graph, e[end]);
+            const value = contributionOf(e.attrs);
+            return (
+              <li key={e.id} className="flex flex-col gap-1.5">
+                <div className="flex min-h-8 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+                  <span className="min-w-[9rem] flex-1">{link(e[end])}</span>
+                  {e.status === "proposed" && <Chip kind="warn">Proposed</Chip>}
+                  {contribution && (
+                    <span className="flex flex-none items-center gap-2" data-testid="contribution">
+                      <ContributionPips value={value} proposed={e.status === "proposed"} />
+                      {canWrite ? (
+                        <span className="w-[7.5rem]">
+                          <ContributionSelect
+                            label={`Contribution to ${name}`}
+                            value={String(value)}
+                            disabled={busy}
+                            onChange={(v) => onPatch(e, { attrs: { contribution: Number(v) } }, `Contribution set to ${v}.`)}
+                          />
+                        </span>
+                      ) : (
+                        <span className="tnum font-semibold">
+                          <span className="sr-only">contribution </span>
+                          {value}/3
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {canWrite && (
+                    <span className="ml-auto flex flex-none items-center gap-1">
+                      {e.status === "proposed" && (
+                        <Button
+                          variant="solid"
+                          disabled={busy}
+                          aria-label={`Confirm link to ${name}`}
+                          onClick={() => onPatch(e, { status: "confirmed" }, `Confirmed the link to “${name}”.`)}
+                        >
+                          Confirm
+                        </Button>
+                      )}
+                      {e.locked && (
+                        <Button
+                          variant="ghost"
+                          icon="lock"
+                          disabled={busy}
+                          aria-label={`Unlock link to ${name}`}
+                          title="Locked by a person: agents can only propose changes. Unlock lets them change it."
+                          onClick={() => onUnlock(e)}
+                        >
+                          Unlock
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        disabled={busy}
+                        aria-label={`Remove link to ${name}`}
+                        onClick={() => setRemoving(e.id)}
+                      >
+                        Remove
+                      </Button>
+                    </span>
+                  )}
+                </div>
+                {removing === e.id && (
+                  <ConfirmRemove
+                    name="Remove link"
+                    prompt={<>Remove the link to “{name}”?</>}
+                    busy={busy}
+                    onBack={() => setRemoving(null)}
+                    onRemove={() => {
+                      setRemoving(null);
+                      onRemove(e);
+                    }}
+                  />
+                )}
+              </li>
+            );
+          })}
         </ul>
       </InspectorSection>
     );

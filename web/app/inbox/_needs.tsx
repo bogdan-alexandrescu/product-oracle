@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useId, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 
-import { Button, Chip, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
+import { Button, Chip, CodeText, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { BUILD_PARAM } from "@/components/NextDraft";
@@ -42,6 +42,11 @@ export type Need = {
   counted?: boolean;
   /** Drawn under the row, across it: the row opened in place (a question's answer form). */
   detail?: ReactNode;
+  /**
+   * #305: Oracle's text the row quotes. The row keeps it plain (one link, its tooltip);
+   * "Show the text" opens it under the row with each known code carrying the card.
+   */
+  quote?: string | null;
 };
 
 export const NEED_COLUMNS: Column<Need>[] = [
@@ -120,7 +125,35 @@ export function NeedTable({
   heading?: ReactNode;
 }) {
   const headingId = useId();
+  const [shown, setShown] = useState<ReadonlySet<string>>(new Set());
   if (rows.length === 0) return null;
+  const toggle = (key: string) =>
+    setShown((s) => {
+      const next = new Set(s);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  const drawn = rows.map((n) =>
+    n.quote
+      ? {
+          ...n,
+          item: (
+            <>
+              {n.item}
+              <button
+                type="button"
+                aria-label="Show the text"
+                aria-expanded={shown.has(n.key)}
+                onClick={() => toggle(n.key)}
+                className="flex-none rounded-goal text-text2 hover:text-text"
+              >
+                <Icon name={shown.has(n.key) ? "chevron-up" : "chevron-down"} />
+              </button>
+            </>
+          ),
+        }
+      : n,
+  );
   return (
     <section aria-label={heading ? undefined : title} aria-labelledby={heading ? headingId : undefined} data-testid={testId}>
       {heading && (
@@ -135,11 +168,22 @@ export function NeedTable({
       <DataTable
         label={title}
         columns={compact ? NEED_COLUMNS_COMPACT : NEED_COLUMNS}
-        rows={rows}
+        rows={drawn}
         rowKey={(n) => n.key}
         hideHeader
         rowProps={(n) => ({ "data-need": n.kind, "data-state": n.state })}
-        detail={(n) => n.detail}
+        detail={(n) =>
+          n.quote && shown.has(n.key) ? (
+            <>
+              <p className="text-text2 [overflow-wrap:anywhere]" data-testid="need-quote">
+                <CodeText text={n.quote} />
+              </p>
+              {n.detail}
+            </>
+          ) : (
+            n.detail
+          )
+        }
       />
     </section>
   );
@@ -286,6 +330,7 @@ export function feedbackNeeds(
       icon: state === "declined" ? "x" : state === "done" || state === "staged" ? "check" : "comment",
       kind: f.kind === "comment" ? "Comment" : f.kind === "section_review" ? "Section review" : "Feedback",
       state,
+      quote: state === "declined" ? f.resolution_note : null,
       counted: true,
       group: "feedback",
       item: (
@@ -559,6 +604,7 @@ export function oracleActionNeeds(actions: OracleAction[], busy: string | null, 
       key: `oracle-${a.id}`,
       icon: "check",
       kind: "Oracle did",
+      quote: a.summary,
       state: open ? (isNew(a.created_at, seenBefore) ? "new" : "open") : "done",
       counted: true,
       group: "oracle-actions",

@@ -25,8 +25,9 @@ from oracle.auth.models import User
 from oracle.authz import require_role
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
+from oracle.docs.parser import DraftError
 from oracle.members.leads import engineering_leads, may_verify_dates
-from oracle.roadmap import diff_views, links, schedule, staleness, tracker, tracks, views
+from oracle.roadmap import changeset, diff_views, links, schedule, staleness, tracker, tracks, views
 from oracle.roadmap import items as items_mod
 from oracle.roadmap.models import (
     ProductTrack,
@@ -38,6 +39,9 @@ from oracle.roadmap.models import (
 from oracle.roadmap.schemas import (
     AlignmentReport,
     BasisStatus,
+    ChangeSetOut,
+    ChangeSetPatch,
+    ChangeSetStatus,
     ItemProblem,
     ItemsDiffOut,
     ItemsImport,
@@ -295,6 +299,117 @@ async def get_roadmap_alignment(
     names. Works without any tracker write permission."""
     document = await _document(db, doc, "roadmap")
     return await views.alignment(db, document, await _version(db, document, version))
+
+
+# --- change sets: edits to the approved plan, proposed as a new version (#346) ----------
+
+
+async def _change_set(db, doc: str, set_id: uuid.UUID):
+    document = await _document(db, doc, "roadmap")
+    try:
+        return document, await changeset.get(db, document, set_id)
+    except changeset.ChangeSetError as e:
+        raise _fail(e) from e
+
+
+@router.post(
+    "/roadmaps/{doc}/change-sets", response_model=ChangeSetOut, status_code=201,
+    responses={200: {}},
+)  # fmt: skip
+async def open_roadmap_change_set(
+    doc: str, principal: Approver, db: TenantDB, response: Response
+) -> ChangeSetOut:
+    """Edit plan: open a draft change set on the roadmap's approved version (201), or
+    return the draft it has (200). Nobody edits an approved version in place: the changes
+    are proposed as a new version. 422 when no version is approved."""
+    document = await _document(db, doc, "roadmap")
+    try:
+        row, created = await changeset.open_set(db, principal, document)
+    except changeset.ChangeSetError as e:
+        raise _fail(e) from e
+    await db.commit()
+    if not created:
+        response.status_code = status.HTTP_200_OK
+    return await changeset.view(db, document, row)
+
+
+@router.get("/roadmaps/{doc}/change-sets", response_model=list[ChangeSetOut])
+async def list_roadmap_change_sets(
+    doc: str,
+    principal: Reader,
+    db: TenantDB,
+    status_: Annotated[ChangeSetStatus | None, Query(alias="status")] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[ChangeSetOut]:
+    """The roadmap's change sets, newest first: the draft being edited, the proposals
+    waiting for the decider (``approved`` false) and the rest. ``limit`` and ``offset``
+    page through them."""
+    document = await _document(db, doc, "roadmap")
+    return [
+        await changeset.view(db, document, row)
+        for row in await changeset.list_sets(db, document, status_, limit, offset)
+    ]
+
+
+@router.get("/roadmaps/{doc}/change-sets/{set_id}", response_model=ChangeSetOut)
+async def get_roadmap_change_set(
+    doc: str, set_id: uuid.UUID, principal: Reader, db: TenantDB
+) -> ChangeSetOut:
+    """A change set: its changes, the plan they make, and the diff against the base."""
+    document, row = await _change_set(db, doc, set_id)
+    return await changeset.view(db, document, row)
+
+
+@router.patch("/roadmaps/{doc}/change-sets/{set_id}", response_model=ChangeSetOut)
+async def update_roadmap_change_set(
+    doc: str, set_id: uuid.UUID, body: ChangeSetPatch, principal: Approver, db: TenantDB
+) -> ChangeSetOut:
+    """Replace a draft change set's changes (in order): add, move, defer, cut with a
+    reason, reorder within a horizon. 422 when a change does not apply; 409 when it
+    changed since it was loaded, is no longer a draft, or its base is no longer the
+    approved version."""
+    document, row = await _change_set(db, doc, set_id)
+    try:
+        await changeset.update(db, principal, document, row, body.changes, body.lock_version)
+    except changeset.ChangeSetError as e:
+        raise _fail(e) from e
+    await db.commit()
+    return await changeset.view(db, document, row)
+
+
+@router.delete("/roadmaps/{doc}/change-sets/{set_id}", response_model=ChangeSetOut)
+async def discard_roadmap_change_set(
+    doc: str, set_id: uuid.UUID, principal: Approver, db: TenantDB
+) -> ChangeSetOut:
+    """Discard a draft change set: the approved plan stays as it is."""
+    document, row = await _change_set(db, doc, set_id)
+    try:
+        await changeset.discard(db, principal, document, row)
+    except changeset.ChangeSetError as e:
+        raise _fail(e) from e
+    await db.commit()
+    return await changeset.view(db, document, row)
+
+
+@router.post("/roadmaps/{doc}/change-sets/{set_id}/propose", response_model=ChangeSetOut)
+async def propose_roadmap_change_set(
+    doc: str, set_id: uuid.UUID, principal: Approver, db: TenantDB
+) -> ChangeSetOut:
+    """Propose changes: import the next roadmap version (the base's items plus the
+    changes), for the document's decider to approve through the review. 409 on a stale
+    base; 422 when there is nothing to propose."""
+    document, row = await _change_set(db, doc, set_id)
+    try:
+        await changeset.propose(db, principal, document, row)
+    except changeset.ChangeSetError as e:
+        await db.rollback()
+        raise _fail(e) from e
+    except DraftError as e:
+        await db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
+    await db.commit()
+    return await changeset.view(db, document, await changeset.get(db, document, set_id))
 
 
 # --- schedule bases (O4: never an invented date) ---------------------------------------------

@@ -23,7 +23,7 @@ type RunLike = {
 };
 
 /** A stored decision: the API's record without what is derived on the way out. */
-type Row = Omit<DecisionOut, "state" | "ref" | "approver_email" | "decided_by_email" | "reviews" | "revisit_id" | "superseded_by_id" | "can_edit" | "can_decide" | "can_withdraw" | "can_review" | "can_reassign">;
+type Row = Omit<DecisionOut, "state" | "ref" | "approver_email" | "decided_by_email" | "withdrawn_by_email" | "reviews" | "revisit_id" | "superseded_by_id" | "can_edit" | "can_decide" | "can_withdraw" | "can_review" | "can_reassign">;
 type ReviewRow = Schemas["DecisionReviewOut"] & { decision_id: string };
 
 export interface DecisionsDb {
@@ -332,6 +332,7 @@ function outOf(ctx: DecisionsContext, db: DecisionsDb, d: Row): DecisionOut {
     ...d,
     ...summaryOf(ctx, d),
     decided_by_email: emailOf(ctx, d.decided_by),
+    withdrawn_by_email: emailOf(ctx, d.withdrawn_by),
     revisit_id: revisit && d.status === "decided" ? revisit.id : null,
     superseded_by_id: revisit && d.status === "superseded" ? revisit.id : null,
     reviews: db.reviews
@@ -536,6 +537,9 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     if (d.status !== "proposed") return fail(409, `${ref(d.number)} is ${d.status}; only a proposal is withdrawn`);
     if (!(me.id === d.approver_id || me.id === d.created_by || me.role === "owner")) return fail(403, "Only its creator, its approver or an owner withdraws it");
     d.status = "withdrawn";
+    d.withdrawn_at = ctx.now();
+    d.withdrawn_by = me.id;
+    d.withdrawn_reason = (await body<Schemas["WithdrawIn"]>()).reason.trim();
     touch();
     return json(200, outOf(ctx, db, d));
   }

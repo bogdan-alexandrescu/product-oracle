@@ -8,8 +8,9 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { mockUuid, seeded } from "./ids";
-import { addNoisyProposals, attributeCommenterProposal, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { addGoalCodes, addNoisyProposals, attributeCommenterProposal, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
+import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
@@ -28,14 +29,15 @@ import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngReviewRun, seedFeatureSetRun, seedPriorityRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
-import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
+import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
-import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
-import { DIFF_SCENARIO, dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
+import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
+import { ALERTS_ROADMAP_SLUG, DIFF_SCENARIO, dateMarks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
@@ -105,6 +107,8 @@ export interface Db {
   inbox_seen?: Record<string, string>;
   /** Roadmap items, product tracks, schedule bases and tracker records (./roadmap.ts, CR-11). */
   roadmap?: RoadmapDb;
+  /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
+  plan_edits?: PlanEditsDb;
   /** Specs, flows and wireframes (./specs.ts); absent in data saved before CR-09. */
   specs?: SpecsDb;
   /** F5-2 code maps (./engineering.ts); absent in older saved data. */
@@ -312,6 +316,11 @@ export const MOCK_ROLE_KEY = "po-mock-role";
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
 export const MOCK_FAIL_KEY = "po-mock-fail";
+/** Tests set this localStorage key to "METHOD /path" to make that call's next request fail once with a 500. */
+export const MOCK_FAIL_ONCE_KEY = "po-mock-fail-once";
+/** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later. */
+export const MOCK_SLOW_KEY = "po-mock-slow";
+export const MOCK_SLOW_MS = 1500;
 /**
  * D8: tests set this localStorage key to a member's email to have them change a checkpoint's
  * shared draft after the page loaded it: the next decide bumps the draft's revision by one
@@ -842,6 +851,25 @@ function seedNextDraft(costly: boolean): Db {
   item(null, "Say which fleets join the pilot first.", "2026-10-19T10:06:00Z");
   if (costly) db.next_draft_run_usd = 64;
   return db;
+}
+
+/** The "named-codes" scenario's PRD (#305): agent-written text with bare codes (./named-codes.ts). */
+function addCodedPrd(db: Db) {
+  const at = CODED_PRD.versions[0].created_at;
+  const row: DocumentRow = {
+    id: uuid(),
+    slug: CODED_PRD.slug,
+    title: CODED_PRD.title,
+    status: "in_review",
+    kind: "prd",
+    template: CODED_PRD.template ?? null,
+    template_version: CODED_PRD.template_version ?? null,
+    theme: null,
+    created_at: at,
+    updated_at: at,
+  };
+  db.documents.push(row);
+  db.versions.push(buildVersion(row, CODED_PRD.versions[0]));
 }
 
 /** The default seed plus one PRD of 100+ sections in nested chapters (./big-prd.ts). */
@@ -1495,6 +1523,24 @@ function load(): Db {
         : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
+  // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
+  if (scenario === "held-section-gone") {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
+    const first = db.review_v2.patches[0];
+    if (first) {
+      db.review_v2.patches.push({
+        ...first, id: "p0000000-0000-4000-8000-000000000002", section_key: "launch-checklist", heading: "Launch checklist",
+        base_hash: hash("launch-checklist"), body_md: "Tell support a day before the cart change ships.",
+      });
+    }
+  }
+  if (scenario === "named-codes") {
+    addGoalCodes(db.baseline);
+    addCodedPrd(db);
+    // An Inbox row quoting Oracle's text with a known code (G-B) and an unknown one (G-Z).
+    db.autonomy.actions.push(seedOracleDid(db.user_id, uuid(), "Moved 'Saved addresses' up 2 within G-B, ahead of G-Z"));
+  }
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
   save(db);
   return db;
@@ -1664,6 +1710,7 @@ function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
       const r = latestReview(db, v.id, s.section_key);
       return {
         ...s,
+        revision: sectionRevision(s, hash),
         spec_states: s.spec_states ?? [],
         verdict: r
           ? {
@@ -2105,6 +2152,42 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
   return notFound("Route");
 }
 
+/** #346: the change-set mock's view of the db; a proposal imports the next version, copied from its base. */
+function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsContext {
+  return {
+    userId: me.id,
+    role: me.role,
+    documents: db.documents,
+    versions: db.versions,
+    uuid,
+    now,
+    deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
+    seededItems: seededPlanItems,
+    // The Plan mock's usage-alerts-roadmap v1 is its approved plan (./roadmap.ts, ALERTS_APPROVED).
+    seededApproved: (slug) => (slug === ALERTS_ROADMAP_SLUG ? 1 : null),
+    newVersion: (doc, base, body) => {
+      const row = db.versions.find((v) => v.id === base.id)!;
+      const document = db.documents.find((d) => d.id === doc.id)!;
+      const kept = row.sections.filter((s) => s.section_key !== "plan-changes");
+      const at = kept.findIndex((s) => s.section_key === "sources");
+      const added = {
+        ...kept[0], id: uuid(), section_key: "plan-changes", level: 2, heading: "Plan changes", body_md: body,
+        body_text: plainText(body), content_hash: hash("Plan changes\n" + body), citation_keys: [], layer: "detail" as const, notes: null, spec_states: [],
+      };
+      const sections = (at < 0 ? [...kept, added] : [...kept.slice(0, at), added, ...kept.slice(at)]).map((s, ordinal) => ({ ...s, ordinal }));
+      const number = Math.max(...docVersions(db, document).map((v) => v.number)) + 1;
+      const next: VersionRow = {
+        ...structuredClone(row), id: uuid(), number, approved_at: null, approval_lapses: [], created_at: now(),
+        imported_by: me.id, sections, content_hash: hash(sections.map((s) => s.content_hash).join("")),
+      };
+      db.versions.push(next);
+      document.status = "in_review";
+      document.updated_at = now();
+      return next;
+    },
+  };
+}
+
 /** The v2 review mock's view of the db; a section save copies the latest version. */
 function reviewV2Context(db: Db, userId: string, role: Role) {
   return {
@@ -2382,7 +2465,16 @@ async function route(db: Db, req: Request): Promise<Response> {
   // v2 review routes (./review-v2.ts) check roles themselves.
   if (!db.review_v2) {
     const prd = db.documents.find((d) => d.kind === "prd");
-    db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id);
+    db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
+    // The "plan-decider" scenario (#346): the approver is usage-alerts-roadmap's designated decider.
+    const roadmapDoc = db.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
+    const decider = db.members.find((x) => x.email === "approver@example.com");
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "plan-decider" && roadmapDoc && decider) {
+      db.review_v2.policies.push({
+        document_id: roadmapDoc.id, decider_id: decider.id, mandatory_reviewer_ids: [], required_section_keys: [],
+        section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
+      });
+    }
   }
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
@@ -2481,7 +2573,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
     };
     const memberEmail = (userId: string) => db.members.find((m) => m.id === userId)?.email ?? null;
-    return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf, memberEmail }, req, p.slice(2), q);
+    return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf, memberEmail, sourceItem }, req, p.slice(2), q);
   }
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) {
@@ -2708,11 +2800,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     versions: db.versions,
   };
   db.roadmap ??= seedRoadmap(roadmapCtx, localStorage.getItem(MOCK_SCENARIO_KEY));
+  db.plan_edits ??= emptyPlanEdits();
+  const editsRes = await routeChangeSets(planEditsContext(db, me), db.plan_edits, req, p, q);
+  if (editsRes) return editsRes;
   const roadmapRes = await routeRoadmap(roadmapCtx, db.roadmap, req, p, q);
   if (roadmapRes) return roadmapRes;
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
   const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
-  const planRes = routePlan({ ...roadmapCtx, goals }, db.roadmap, req, p, q);
+  const planRes = routePlan({ ...roadmapCtx, goals, edits: db.plan_edits }, db.roadmap, req, p, q);
   if (planRes) return planRes;
   if (p[1] === "tracks" && p[3] === "roadmap-run" && m === "POST") {
     if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
@@ -2943,9 +3038,15 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, { document_id: doc.id, version: v.number, items, counts });
   }
   if (sub === "approve" && m === "POST") {
+    // F2: the designated decider, when the review policy names one, is the only one who approves.
+    const decider = db.review_v2?.policies.find((x) => x.document_id === doc.id)?.decider_id;
+    if (decider && decider !== me.id) return json(403, { detail: "Only the designated decider approves this document's versions" });
     // H4: a vision or a product strategy is an owner's to approve.
     const words = doc.kind === "vision" ? "a vision" : doc.kind === "strategy" ? "a product strategy" : doc.kind === "update" ? "an update" : null;
     if (words && me.role !== "owner") return json(403, { detail: `Only an owner can approve ${words}` });
+    // #346: a proposal a later one superseded can't be approved, and says why.
+    const superseded = doc.kind === "roadmap" && db.plan_edits && !v.approved_at ? supersededRefusal(db.plan_edits, doc.slug, v.number) : null;
+    if (superseded) return json(409, { detail: superseded });
     // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
     if (doc.kind === "prd") {
       // #254: a version that is still only its template's text is never approved.
@@ -3052,6 +3153,10 @@ export async function mockFetch(req: Request): Promise<Response> {
   if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_FAIL_KEY)) {
     return new Response(JSON.stringify({ detail: "Mock failure" }), { status: 500, headers: { "content-type": "application/json" } });
   }
+  if (localStorage.getItem(MOCK_FAIL_ONCE_KEY) === `${req.method} ${url.pathname}`) {
+    localStorage.removeItem(MOCK_FAIL_ONCE_KEY);
+    return new Response(JSON.stringify({ detail: "Mock failure" }), { status: 500, headers: { "content-type": "application/json" } });
+  }
   const next = queue.then(async () => {
     const db = load();
     const res = await route(db, req);
@@ -3059,5 +3164,8 @@ export async function mockFetch(req: Request): Promise<Response> {
     return res;
   });
   queue = next.catch(() => undefined);
+  if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_SLOW_KEY)) {
+    return next.then((res) => new Promise<Response>((r) => setTimeout(() => r(res), MOCK_SLOW_MS)));
+  }
   return next;
 }

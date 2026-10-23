@@ -38,6 +38,7 @@ from oracle.decisions.schemas import (
     ReviewIn,
 )
 from oracle.jobs.models import LlmJob
+from oracle.models import AuditEvent
 from oracle.quality.models import OutcomeRecord
 from oracle.runs.schemas import InboxDecision
 from oracle.tenancy import current_tenant
@@ -183,6 +184,7 @@ async def out(db: AsyncSession, principal: Principal | None, d: Decision) -> Dec
         {d.approver_id, d.decided_by, *(r.reviewed_by for r in reviews)},  # type: ignore[arg-type]
     )
     revisit = await _revisit_of(db, d)
+    withdrawn = await _withdrawn(db, d)
     base = summary(d, emails).model_dump(by_alias=False)
     can = _abilities(principal, d)
     return DecisionOut(
@@ -208,6 +210,7 @@ async def out(db: AsyncSession, principal: Principal | None, d: Decision) -> Dec
         decided_by=d.decided_by,
         decided_by_email=emails.get(d.decided_by) if d.decided_by else None,
         decided_actor=d.decided_actor,
+        **withdrawn,
         created_by=d.created_by,
         updated_at=d.updated_at,
         lock_version=d.lock_version,
@@ -219,6 +222,36 @@ async def out(db: AsyncSession, principal: Principal | None, d: Decision) -> Dec
         ],
         **can,
     )
+
+
+async def _withdrawn(db: AsyncSession, d: Decision) -> dict[str, Any]:
+    """Who withdrew a withdrawn proposal, when and why: its ``decision.withdrawn`` event."""
+    if d.status != "withdrawn":
+        return {}
+    event = (
+        await db.execute(
+            select(AuditEvent.created_at, AuditEvent.actor, AuditEvent.data)
+            .where(
+                AuditEvent.action == "decision.withdrawn",
+                AuditEvent.entity == "decision",
+                AuditEvent.entity_id == d.id,
+            )
+            .order_by(AuditEvent.created_at.desc())
+            .limit(1)
+        )
+    ).first()
+    if event is None:
+        return {}
+    by = event.data.get("by")
+    if by is None and event.actor.startswith("user:"):
+        by = event.actor.removeprefix("user:")
+    by_id = uuid.UUID(by) if by else None
+    return {
+        "withdrawn_at": event.created_at,
+        "withdrawn_by": by_id,
+        "withdrawn_by_email": (await _emails(db, {by_id})).get(by_id) if by_id else None,
+        "withdrawn_reason": event.data.get("reason") or None,
+    }
 
 
 def _abilities(principal: Principal | None, d: Decision) -> dict[str, bool]:
@@ -664,7 +697,12 @@ async def withdraw(db: AsyncSession, principal: Principal, d: Decision, reason: 
     d.status = "withdrawn"
     await flush_or_conflict(db)
     await audit.record(
-        db, principal, "decision.withdrawn", "decision", d.id, {"reason": reason.strip()}
+        db,
+        principal,
+        "decision.withdrawn",
+        "decision",
+        d.id,
+        {"reason": reason.strip(), "by": str(_who(principal))},
     )
     return d
 

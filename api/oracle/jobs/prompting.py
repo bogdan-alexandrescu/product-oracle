@@ -27,12 +27,12 @@ PROMPTS = Path(__file__).resolve().parent / "prompts"
 
 #: The prompt each job kind runs with.
 CURRENT = {
-    "review_comments": "review_comments.v1",
+    "review_comments": "review_comments.v2",
     "reporting": "reporting.v1",
-    "refinement": "refinement.v1",
+    "refinement": "refinement.v2",
     "intake_analysis": "intake_analysis.v2",
     "quality_review": "quality_review.v1",
-    "refinement_batch": "refinement_batch.v2",
+    "refinement_batch": "refinement_batch.v3",
     "decision_options": "decision_options.v1",
     "discussion_reply": "discussion_reply.v1",
 }

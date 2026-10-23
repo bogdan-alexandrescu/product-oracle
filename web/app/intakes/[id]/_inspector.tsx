@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button, Chip, Inspector, InspectorRow, InspectorSection } from "@/components/ds";
+import { Button, Chip, CodeChip, Inspector, InspectorRow, InspectorSection } from "@/components/ds";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { assess, goalViews } from "@/app/home/_goals";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -114,16 +114,16 @@ function IntakeGoals({ summary: s }: { summary: Summary }) {
       const view = views.get(id);
       const link = s.goals.find((g) => g.entity_id === id);
       const title = view?.title ?? link?.title;
-      return title ? { id, title, key: link?.key ?? view?.tag ?? "Goal", progress: view ? assess(view) : null } : null;
+      return title ? { id, title, key: link?.key, progress: view ? assess(view) : null } : null;
     })
     .filter((g) => g !== null);
   if (goals.length)
     return goals.map((g) => (
       <InspectorRow
         key={g.id}
-        value={g.progress && (g.progress.state === "togo" || g.progress.state === "met") ? <span className="text-text2">{g.progress.text}</span> : <Chip kind="acc">{g.key}</Chip>}
+        value={g.progress && (g.progress.state === "togo" || g.progress.state === "met") ? <span className="text-text2">{g.progress.text}</span> : undefined}
       >
-        {g.title}
+        <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} />
       </InspectorRow>
     ));
   if (confirmed.loading) return null;

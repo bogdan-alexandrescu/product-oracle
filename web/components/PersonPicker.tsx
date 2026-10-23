@@ -25,16 +25,19 @@ export async function peopleByIds(ids: readonly (string | null | undefined)[]): 
 /**
  * The member picker every non-owner uses (C2): a search box over GET /v1/people and the
  * people it finds, by name and email. `writersOnly` lists only those who can answer or
- * comment (commenter and above); `exclude` leaves out ids (the person already asked).
+ * comment (commenter and above); `approversOnly` only those who can approve (approver and
+ * owner); `exclude` leaves out ids (the person already asked).
  */
 export function PersonPicker({
   onPick,
   writersOnly = true,
+  approversOnly = false,
   exclude = [],
   autoFocus = false,
 }: {
   onPick: (person: Person) => void;
   writersOnly?: boolean;
+  approversOnly?: boolean;
   exclude?: readonly string[];
   autoFocus?: boolean;
 }) {
@@ -57,7 +60,7 @@ export function PersonPicker({
     };
   }, [q]);
 
-  const shown = (people ?? []).filter((p) => (!writersOnly || p.can_write) && !exclude.includes(p.user_id));
+  const shown = (people ?? []).filter((p) => (!writersOnly || p.can_write) && (!approversOnly || p.role === "approver" || p.role === "owner") && !exclude.includes(p.user_id));
   return (
     <div className="flex min-w-0 flex-col gap-1.5" data-testid="person-picker">
       <input

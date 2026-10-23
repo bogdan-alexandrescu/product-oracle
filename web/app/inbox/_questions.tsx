@@ -56,6 +56,7 @@ export function useQuestionRows(questions: InboxQuestion[], reload: () => Promis
       key: q.question.id,
       icon: "ask",
       kind: `${askerName(q)} asks`,
+      quote: q.asked_by.kind === "oracle" ? prompt : null,
       item: (
         <>
           <span className="min-w-0 truncate" title={prompt}>

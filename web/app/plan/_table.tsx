@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { Button, Chip, DataTable, GoalTag, type Column } from "@/components/ds";
+import { Button, Chip, CodeChip, DataTable, type Column } from "@/components/ds";
+import { namedText } from "@/lib/codes";
 
 import type { GoalView } from "../home/_goals";
 import { engineeringLine, HORIZON_LABEL, HORIZONS, prdLabel, stateChip, whoLabel, type PlanItem } from "./_lib";
@@ -60,13 +61,17 @@ function NextCell({ item, me, onLink }: { item: PlanItem; me: string | null | un
 
 /** Rows in their group's order, and each row's group (Horizon, Goal or PRD). */
 export function grouped(items: PlanItem[], by: GroupBy, tags: Map<string, GoalView>, prdOrder: string[]) {
-  const goalOf = (i: PlanItem) => i.goal_ids.map((id) => tags.get(id)?.tag).find(Boolean) ?? NO_GOAL;
-  const group = (i: PlanItem) => (by === "horizon" ? HORIZON_LABEL[i.horizon] : by === "goal" ? goalOf(i) : (i.prd?.title ?? "—"));
+  const goalOf = (i: PlanItem) => i.goal_ids.map((id) => tags.get(id)).find(Boolean);
+  const goalLabel = (i: PlanItem) => {
+    const g = goalOf(i);
+    return g ? namedText(g) : NO_GOAL;
+  };
+  const group = (i: PlanItem) => (by === "horizon" ? HORIZON_LABEL[i.horizon] : by === "goal" ? goalLabel(i) : (i.prd?.title ?? "—"));
   const rank = (i: PlanItem): number => {
     if (by === "horizon") return HORIZONS.indexOf(i.horizon);
     if (by === "goal") {
-      const t = goalOf(i);
-      return t === NO_GOAL ? 1e6 : Number(t.slice(1));
+      const g = goalOf(i);
+      return g ? Number(g.tag.slice(1)) : 1e6;
     }
     const at = prdOrder.indexOf(i.prd?.slug ?? "");
     return at < 0 ? 1e6 : at;
@@ -125,13 +130,13 @@ export function PlanTable({
     {
       key: "goal",
       header: "Goal",
-      width: "64px",
+      width: "112px",
       cell: (i) => {
         const goals = i.goal_ids.map((id) => tags.get(id)).filter((g): g is GoalView => !!g);
         return (
-          <span data-testid="plan-goal" className="inline-flex items-center gap-1">
+          <span data-testid="plan-goal" className="flex max-w-full min-w-0 items-center gap-1">
             {goals.length ? (
-              goals.map((g) => <GoalTag key={g.id} id={g.tag} proposed={g.proposed} title={`${g.tag} · ${g.title}`} />)
+              goals.map((g) => <CodeChip key={g.id} kind="goal" entityId={g.id} title={g.title} proposed={g.proposed} />)
             ) : (
               <span className="text-sm font-semibold text-warn">{NO_GOAL}</span>
             )}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Button, Chip, GoalTag, Inspector, InspectorSection, LinkButton, Notice, ToGo } from "@/components/ds";
+import { Button, Chip, CodeChip, Inspector, InspectorSection, LinkButton, Notice, ToGo } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -162,8 +162,9 @@ export function PlanInspector({
               const p = assess(g, history.get(g.id));
               return (
                 <li key={g.id} className="flex min-w-0 items-center gap-2 text-[15px]">
-                  <GoalTag id={g.tag} proposed={g.proposed} />
-                  <span className="min-w-0 flex-1 truncate">{g.title}</span>
+                  <span className="flex min-w-0 flex-1">
+                    <CodeChip kind="goal" entityId={g.id} title={g.title} proposed={g.proposed} />
+                  </span>
                   <span className="flex-none text-text2">{p.state === "togo" ? <ToGo amount={p.amount!} unit={p.unit} /> : p.text}</span>
                 </li>
               );

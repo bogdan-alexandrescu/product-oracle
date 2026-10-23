@@ -159,6 +159,13 @@ class DiscussionOut(DiscussionSummary):
     exposure: DiscussionExposure | None = None
 
 
+class DiscussionStarted(DiscussionOut):
+    """A new discussion, and Oracle's ``pending`` reply to its first message when the rule
+    calls for one (``complete`` or ``failed`` with ``wait``)."""
+
+    reply: "DiscussionMessageOut | None" = None
+
+
 class HiddenDiscussion(BaseModel):
     """A private discussion the caller is not in: only that it exists, and its summary
     when the starter shared it."""
@@ -214,6 +221,9 @@ class DiscussionMessagePosted(BaseModel):
 
     message: DiscussionMessageOut
     reply: DiscussionMessageOut | None = None
+
+
+DiscussionStarted.model_rebuild()
 
 
 class DiscussionMessagePage(BaseModel):

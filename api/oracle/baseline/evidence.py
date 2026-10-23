@@ -267,7 +267,9 @@ def evidence_snapshot(ev: Evidence) -> dict[str, Any]:
     }
 
 
-async def detach(db: AsyncSession, principal: Principal, evidence_id: uuid.UUID) -> None:
+async def detach(
+    db: AsyncSession, principal: Principal, evidence_id: uuid.UUID, *, reason: str | None = None
+) -> None:
     ev = await db.get(Evidence, evidence_id)
     if ev is None:
         raise NotFoundError("Evidence not found")
@@ -284,7 +286,7 @@ async def detach(db: AsyncSession, principal: Principal, evidence_id: uuid.UUID)
         "baseline.evidence.removed",
         "evidence",
         ev.id,
-        {"url": ev.url, "ref": ev.ref, "excerpt": ev.excerpt},
+        {"url": ev.url, "ref": ev.ref, "excerpt": ev.excerpt, "reason": reason},
     )
     # v2 hook, before the delete: what rests on it, and the section links citing it, are
     # found while it exists (oracle.trace). Then a link citing it keeps its other target

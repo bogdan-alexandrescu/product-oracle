@@ -15,7 +15,8 @@ import { routeEvidenceLinks } from "./public-links";
 type Role = Schemas["Me"]["role"];
 type EntityRow = Omit<Schemas["EntityOut"], "evidence_count">;
 type EdgeRow = Omit<Schemas["EdgeOut"], "evidence_count">;
-type EvidenceRow = Schemas["EvidenceOut"];
+/** Stored with who added it: a commenter removes only the link evidence they added (C2c). */
+type EvidenceRow = Schemas["EvidenceOut"] & { added_by?: string | null };
 type ConflictRow = Schemas["ConflictOut"];
 /** Stored as the API stores it: the sentence and who made it are written when it is read (B4). */
 type ProposalRow = Omit<Schemas["ProposalOut"], "summary" | "proposer" | "run">;
@@ -38,6 +39,20 @@ export type BaselineCaller = {
   runOf?: (runId: string) => Schemas["ProposalRun"] | null;
   /** A member's email, for the proposer's name (B4); null when there is no such member. */
   memberEmail?: (userId: string) => string | null;
+  /** One of the caller's own source items (./sources.ts), to cite as evidence; null when it is not theirs. */
+  sourceItem?: (itemId: string) => CitedItem | null;
+};
+
+/** What citing a source item copies from it. */
+export type CitedItem = {
+  id: string;
+  source_id: string;
+  source_kind: string;
+  kind: string;
+  title: string | null;
+  url: string | null;
+  content: string;
+  fetched_at: string;
 };
 
 /** The accepted intake constraint the seed keeps as a suggested blocker (B4). */
@@ -149,14 +164,14 @@ export function seedBaseline(uuid: () => string): BaselineState {
     s.entities.push(row);
     return row;
   };
-  const edge = (src: EntityRow, type: EdgeRow["type"], dst: EntityRow, attrs: Attrs = {}) => {
+  const edge = (src: EntityRow, type: EdgeRow["type"], dst: EntityRow, attrs: Attrs = {}, status: EdgeRow["status"] = "confirmed") => {
     const row: EdgeRow = {
       id: uuid(),
       src_id: src.id,
       dst_id: dst.id,
       type,
       attrs,
-      status: "confirmed",
+      status,
       origin: "agent",
       locked: false,
       locked_by: null,
@@ -495,6 +510,8 @@ export function seedBaseline(uuid: () => string): BaselineState {
     retrieved_at: "2026-10-18T10:00:00Z",
     itemTitle: "Carrier terms summary",
   });
+  // A link an agent proposed (#338): the drawer confirms it.
+  edge(carts, "depends_on", invites, {}, "proposed");
 
   return s;
 }
@@ -672,6 +689,157 @@ function updateEntity(
   return null;
 }
 
+const KEY_RE = /^[a-z0-9][a-z0-9._-]*$/;
+
+/** A person's new entity, as service.create_entity: confirmed and locked, a goal proposed (B2). */
+function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: string): EntityRow {
+  if (!input.title?.trim()) throw new MockError(422, "title must not be empty");
+  if (!input.key || input.key.length > 120 || !KEY_RE.test(input.key)) throw new MockError(422, "key: lowercase letters, digits, . _ -");
+  if (s.entities.some((e) => e.type === input.type && e.key === input.key)) throw new MockError(409, `${input.type}:${input.key} already exists`);
+  if (input.type === "goal" && input.status === "confirmed") {
+    throw new MockError(422, "goals start proposed; confirm them with POST .../confirm");
+  }
+  const at = now();
+  const e: EntityRow = {
+    id: newId(),
+    type: input.type,
+    key: input.key,
+    title: input.title,
+    body: input.body ?? null,
+    attrs: { ...(input.attrs ?? {}) },
+    status: input.status ?? (input.type === "goal" ? "proposed" : "confirmed"),
+    origin: "user",
+    locked: false,
+    locked_by: null,
+    locked_at: null,
+    confidence: null,
+    run_id: null,
+    created_at: at,
+    updated_at: at,
+  };
+  lock(e, userId);
+  s.entities.push(e);
+  (s.revisions ??= []).push({
+    id: newId(),
+    entity_id: e.id,
+    edge_id: null,
+    before: null,
+    after: entitySnapshot(e),
+    actor: `user:${userId}`,
+    reason: input.reason ?? null,
+    created_at: at,
+  });
+  return e;
+}
+
+/** A person's new link, as service.create_edge: both ends exist, a supports link carries its contribution 0-3. */
+function createEdge(s: BaselineState, input: Schemas["EdgeCreate"], userId: string): EdgeRow {
+  if (!s.entities.some((e) => e.id === input.src_id) || !s.entities.some((e) => e.id === input.dst_id)) {
+    throw new MockError(404, "Entity not found");
+  }
+  const c = input.attrs?.contribution;
+  if (input.type === "supports" && !(typeof c === "number" && Number.isInteger(c) && c >= 0 && c <= 3)) {
+    throw new MockError(422, "a supports edge needs attrs.contribution, an integer 0-3");
+  }
+  if (s.edges.some((e) => e.src_id === input.src_id && e.dst_id === input.dst_id && e.type === input.type)) {
+    throw new MockError(409, "That link already exists");
+  }
+  const at = now();
+  const e: EdgeRow = {
+    id: newId(),
+    src_id: input.src_id,
+    dst_id: input.dst_id,
+    type: input.type,
+    attrs: { ...(input.attrs ?? {}) },
+    status: input.status ?? "confirmed",
+    origin: "user",
+    locked: false,
+    locked_by: null,
+    locked_at: null,
+    confidence: null,
+    run_id: null,
+    created_at: at,
+    updated_at: at,
+  };
+  lock(e, userId);
+  s.edges.push(e);
+  return e;
+}
+
+/** A person's change to a link, as service.update_edge: attrs merge, a supports link keeps a contribution 0-3, and it locks. */
+function updateEdge(e: EdgeRow, input: Schemas["EdgePatch"], userId: string) {
+  const attrs = input.attrs != null ? mergeAttrs(e.attrs, input.attrs) : e.attrs;
+  const c = attrs.contribution;
+  if (e.type === "supports" && !(typeof c === "number" && Number.isInteger(c) && c >= 0 && c <= 3)) {
+    throw new MockError(422, "a supports edge needs attrs.contribution, an integer 0-3");
+  }
+  const status = input.status ?? e.status;
+  if (same(attrs, e.attrs) && status === e.status) return;
+  Object.assign(e, { attrs, status, updated_at: now() });
+  lock(e, userId);
+}
+
+/** An entity's confidence from its evidence: independent support raises it (confidence.aggregate). */
+function rescoreEntity(s: BaselineState, entityId: string | null | undefined) {
+  const target = s.entities.find((e) => e.id === entityId);
+  if (!target) return;
+  const scores = s.evidence.filter((e) => e.entity_id === target.id).map((e) => e.confidence ?? 0);
+  target.confidence = scores.length ? Math.round((1 - scores.reduce((p, c) => p * (1 - c), 1)) * 1000) / 1000 : null;
+}
+
+/** POST .../evidence: cite one of the caller's own source items (its url, title and an excerpt are copied), or a url / ref / excerpt. */
+function attachEvidence(
+  s: BaselineState,
+  caller: BaselineCaller,
+  input: Schemas["EvidenceCreate"],
+  target: { entity_id: string } | { edge_id: string },
+): EvidenceRow {
+  const at = now();
+  const entityId = "entity_id" in target ? target.entity_id : null;
+  const edgeId = "edge_id" in target ? target.edge_id : null;
+  let row: EvidenceRow;
+  if (input.source_item_id) {
+    const item = caller.sourceItem?.(input.source_item_id);
+    if (!item) throw new MockError(404, "Source item not found");
+    const supports = s.edges.some((e) => e.src_id === entityId && e.type === "supports");
+    row = {
+      id: newId(),
+      entity_id: entityId,
+      edge_id: edgeId,
+      url: input.url ?? item.url,
+      excerpt: input.excerpt ?? item.content.slice(0, 500),
+      ref: input.ref ?? item.title,
+      retrieved_at: input.retrieved_at ?? item.fetched_at,
+      source_kind: `${item.source_kind}:${item.kind}`,
+      source_item: { id: item.id, source_id: item.source_id, source_kind: item.source_kind, kind: item.kind, title: item.title, url: item.url },
+      source_item_private: false,
+      source_removed: false,
+      ...scored({ source: 0.7, freshness: 0.8, mentions: 0.5, goal_impact: supports ? 0.85 : 0.5 }, item.fetched_at),
+      created_at: at,
+    };
+  } else {
+    if (!(input.url || input.excerpt || input.ref)) throw new MockError(422, "evidence needs a source item, or a url, ref or excerpt");
+    row = {
+      id: newId(),
+      entity_id: entityId,
+      edge_id: edgeId,
+      url: input.url ?? null,
+      excerpt: input.excerpt ?? null,
+      ref: input.ref ?? null,
+      retrieved_at: input.retrieved_at ?? at,
+      source_kind: "manual",
+      source_item: null,
+      source_item_private: false,
+      source_removed: false,
+      ...scored({ source: 0.4, freshness: 1, mentions: 0.5, goal_impact: 0.5 }, at),
+      created_at: at,
+    };
+  }
+  s.evidence.push({ ...row, added_by: caller.userId });
+  rescoreEntity(s, entityId);
+  return row;
+}
+
 /** service.entity_snapshot: what a revision keeps of an entity. */
 function entitySnapshot(e: EntityRow): Record<string, unknown> {
   return { type: e.type, key: e.key, title: e.title, body: e.body ?? null, attrs: { ...e.attrs }, status: e.status };
@@ -689,6 +857,12 @@ function json(status: number, body: unknown): Response {
 }
 
 const fail = (status: number, detail: string) => json(status, { detail });
+
+/** EvidenceOut: who added it stays in the store, as in the API. */
+function evidenceOut({ added_by, ...ev }: EvidenceRow): Schemas["EvidenceOut"] {
+  void added_by;
+  return ev;
+}
 
 function withCount<T extends { id: string }>(s: BaselineState, row: T, key: "entity_id" | "edge_id") {
   return { ...row, evidence_count: s.evidence.filter((ev) => ev[key] === row.id).length };
@@ -726,6 +900,20 @@ export async function routeBaseline(
   const link = await routeEvidenceLinks(s, caller, req, rest);
   if (link) return link;
 
+  // Removing evidence: approvers remove any; a commenter only link evidence they added (C2c).
+  if (rest[0] === "evidence" && rest[1] && !rest[2] && m === "DELETE") {
+    const ev = s.evidence.find((x) => x.id === rest[1]);
+    if (!ev) return fail(404, "Evidence not found");
+    const approver = ROLE_ORDER.indexOf(caller.role) >= ROLE_ORDER.indexOf("approver");
+    if (!approver && !(ev.kind && ev.added_by === caller.userId)) {
+      return fail(403, "Only approvers, or the person who added this link, can remove it.");
+    }
+    if ((q.get("reason") ?? "").length > 1000) return fail(422, "reason: at most 1000 characters");
+    s.evidence = s.evidence.filter((x) => x.id !== ev.id);
+    rescoreEntity(s, ev.entity_id);
+    return new Response(null, { status: 204 });
+  }
+
   if (m !== "GET" && ROLE_ORDER.indexOf(caller.role) < ROLE_ORDER.indexOf("approver")) {
     return fail(403, "Requires the approver role");
   }
@@ -748,13 +936,48 @@ export async function routeBaseline(
       );
     }
 
+    if (head === "entities" && !id && m === "POST") {
+      const input = await body<Schemas["EntityCreate"]>();
+      const e = createEntity(s, input, caller.userId);
+      const out: Schemas["EntityWriteOut"] = { applied: true, entity: entityOut(e), proposal: null };
+      return json(201, out);
+    }
+    if (head === "edges" && !id && m === "POST") {
+      const input = await body<Schemas["EdgeCreate"]>();
+      const e = createEdge(s, input, caller.userId);
+      const out: Schemas["EdgeWriteOut"] = { applied: true, edge: edgeOut(e), proposal: null };
+      return json(201, out);
+    }
+
+    if (head === "edges" && id) {
+      const e = s.edges.find((x) => x.id === id);
+      if (!e) return fail(404, "Edge not found");
+      if (!action && m === "PATCH") {
+        updateEdge(e, await body<Schemas["EdgePatch"]>(), caller.userId);
+        const out: Schemas["EdgeWriteOut"] = { applied: true, edge: edgeOut(e), proposal: null };
+        return json(200, out);
+      }
+      if (!action && m === "DELETE") {
+        s.edges = s.edges.filter((x) => x.id !== e.id);
+        s.evidence = s.evidence.filter((x) => x.edge_id !== e.id);
+        return new Response(null, { status: 204 });
+      }
+      if (action === "unlock" && m === "POST") {
+        Object.assign(e, { locked: false, locked_by: null, locked_at: null });
+        return json(200, edgeOut(e));
+      }
+      if (action === "evidence" && m === "POST") {
+        return json(201, evidenceOut(attachEvidence(s, caller, await body<Schemas["EvidenceCreate"]>(), { edge_id: e.id })));
+      }
+    }
+
     if (head === "entities" && id) {
       const e = findEntity(id);
       if (!e) return fail(404, "Entity not found");
       if (!action && m === "GET") {
         const detail: Schemas["EntityDetail"] = {
           ...entityOut(e),
-          evidence: s.evidence.filter((ev) => ev.entity_id === e.id),
+          evidence: s.evidence.filter((ev) => ev.entity_id === e.id).map(evidenceOut),
           edges_out: s.edges.filter((x) => x.src_id === e.id).map(edgeOut),
           edges_in: s.edges.filter((x) => x.dst_id === e.id).map(edgeOut),
           open_proposals: s.proposals.filter((p) => p.status === "open" && p.entity_id === e.id).length,
@@ -774,16 +997,32 @@ export async function routeBaseline(
       }
       if ((action === "confirm" || action === "reject") && m === "POST") {
         const status = action === "confirm" ? "confirmed" : "rejected";
+        const note = (await body<Schemas["ProposalDecision"] | null>())?.note;
         if (e.status !== status) {
+          // As service.set_entity_status: a person's decision locks, with a revision and its reason.
+          const before = entitySnapshot(e);
           e.status = status;
           e.updated_at = now();
           lock(e, caller.userId);
+          (s.revisions ??= []).push({
+            id: newId(),
+            entity_id: e.id,
+            edge_id: null,
+            before,
+            after: entitySnapshot(e),
+            actor: `user:${caller.userId}`,
+            reason: note || `${status} by user:${caller.userId}`,
+            created_at: e.updated_at,
+          });
         }
         return json(200, entityOut(e));
       }
       if (action === "unlock" && m === "POST") {
         Object.assign(e, { locked: false, locked_by: null, locked_at: null });
         return json(200, entityOut(e));
+      }
+      if (action === "evidence" && m === "POST") {
+        return json(201, evidenceOut(attachEvidence(s, caller, await body<Schemas["EvidenceCreate"]>(), { entity_id: e.id })));
       }
       if (action === "revisions" && m === "GET") {
         // Newest first, as the API lists them.
@@ -943,4 +1182,20 @@ export function addNoisyProposals(s: BaselineState, uuid: () => string) {
 export function attributeCommenterProposal(s: BaselineState, userId: string) {
   const p = s.proposals.find((x) => x.id === COMMENTER_PROPOSAL);
   if (p) p.actor = `user:${userId}`;
+}
+
+/**
+ * The "named-codes" scenario (#304): the company writes its own code before each goal's
+ * name ("G-B Growth"), the way it numbers goals in its plans. One name is long, so narrow
+ * cells cut it. Growth has no current value yet, so it has no distance to go.
+ */
+export function addGoalCodes(s: BaselineState) {
+  const titles: Record<string, string> = {
+    "g.activation": "G-A Activation",
+    "g.paid-conversion": "G-B Growth",
+    "g.early-churn": "G-C Fewer accounts leaving in their first ninety days",
+  };
+  for (const e of s.entities) if (e.type === "goal" && titles[e.key]) e.title = titles[e.key];
+  const growth = s.entities.find((e) => e.key === "g.paid-conversion");
+  if (growth) delete growth.attrs.current;
 }
