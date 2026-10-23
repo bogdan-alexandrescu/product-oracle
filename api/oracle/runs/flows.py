@@ -161,6 +161,9 @@ class SegmentDef:
     # Hand the segment's files to an importer a lane registered (oracle.runs.extensions)
     # when the segment succeeds; its result is the checkpoint's "import".
     importer: str | None = None
+    # F4: with its stop turned off the whole segment is skipped (no step runs, nothing is
+    # spent), instead of running with the stop skipped.
+    skip_when_off: bool = False
 
     def outputs_for(self, kind: str) -> tuple[str, ...]:
         """The files the segment writes for a target document of ``kind``."""
@@ -316,7 +319,8 @@ FLOWS: dict[str, FlowDef] = {
         FlowDef(
             key="baseline_to_prd",
             title="Baseline to PRD",
-            description="Baseline proposal, feature set and design, priority order, PRD draft.",
+            description="Baseline proposal, feature set and design, engineering check, priority "
+            "order, PRD draft.",
             # C4 One New PRD door: a PRD run starts from New PRD's brief (POST /v1/runs
             # keeps the flow for agents and the CLI).
             in_new_run_dialog=False,
@@ -351,6 +355,27 @@ FLOWS: dict[str, FlowDef] = {
                         "propose_change",
                         "get_checkpoint_review",
                         "get_autonomy",
+                    ),
+                ),
+                SegmentDef(
+                    name="eng_review",
+                    title="Engineering check",
+                    roles=("architect",),
+                    scopes=(*READ, "read:documents"),
+                    outputs=(BRIEFS_FILE,),
+                    checkpoint="eng_review",
+                    skip_when_off=True,
+                    task=TECH_BRIEF_TASK,
+                    tools=(
+                        "get_baseline",
+                        "get_prd_scope",
+                        "trace_feature",
+                        "search",
+                        "get_source_item",
+                        "get_run_output",
+                        "list_code_maps",
+                        "get_code_map",
+                        "get_checkpoint_review",
                     ),
                 ),
                 SegmentDef(

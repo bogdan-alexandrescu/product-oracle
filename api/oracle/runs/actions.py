@@ -36,6 +36,14 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.docs.models import DocumentVersion
+from oracle.engineering import check as eng_check
+from oracle.members.leads import (
+    ENGINEERING_KINDS,
+    engineering_leads,
+    lead_refusal,
+    lead_stop,
+    may_decide,
+)
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
 from oracle.runs import gate, reasons, roadmap, service
@@ -82,6 +90,7 @@ KIND_WORDS = {
     "priority_order": "priority order",
     "prd_review": "PRD review",
     "eng_review": "Engineering review",
+    "eng_dates": "Engineering dates",
     "roadmap_items": "roadmap items",
     "roadmap_review": "roadmap review",
     "request_triage": "request triage",
@@ -212,24 +221,28 @@ def _roadmap_items(body: ActionIn, ctx: ValidationContext) -> None:
         if body.kind == "merge":
             _known(ids, ctx, "merge")
     elif body.kind == "question":
-        v = body.value if isinstance(body.value, dict) else {}
-        text = v.get("text")
-        try:
-            uuid.UUID(str(v.get("asked_to")))
-        except ValueError:
-            text = None
-        if (
-            body.field is not None
-            or not isinstance(text, str)
-            or not text.strip()
-            or len(text) > QUESTION_TEXT
-            or set(v) != {"asked_to", "text"}
-        ):
-            raise InvalidAction(
-                f"question needs asked_to (a member id) and text (1 to {QUESTION_TEXT} characters)"
-            )
+        _question(body)
     elif body.kind == "waive":
         _waive_reason(body)
+
+
+def _question(body: ActionIn) -> None:
+    v = body.value if isinstance(body.value, dict) else {}
+    text = v.get("text")
+    try:
+        uuid.UUID(str(v.get("asked_to")))
+    except ValueError:
+        text = None
+    if (
+        body.field is not None
+        or not isinstance(text, str)
+        or not text.strip()
+        or len(text) > QUESTION_TEXT
+        or set(v) != {"asked_to", "text"}
+    ):
+        raise InvalidAction(
+            f"question needs asked_to (a member id) and text (1 to {QUESTION_TEXT} characters)"
+        )
 
 
 def _waive_reason(body: ActionIn) -> None:
@@ -248,8 +261,23 @@ def _feature_set(body: ActionIn, ctx: ValidationContext) -> None:
     _waive_reason(body)
 
 
+def _eng_review(body: ActionIn, ctx: ValidationContext) -> None:
+    """F4 Engineering check: a verdict, a size or an answer per feature, or a question."""
+    asked = {k: set(v.get("questions") or ()) for k, v in ctx.items.items()}
+    try:
+        eng_check.validate(body.kind, body.item_key, body.field, body.value, ctx.item_keys, asked)
+    except eng_check.Invalid as exc:
+        raise InvalidAction(str(exc)) from None
+    if body.kind == "question":
+        _question(body)
+
+
 # The spec owning each checkpoint kind registers its vocabulary here.
-VOCABULARY: dict[str, Validator] = {"roadmap_items": _roadmap_items, "feature_set": _feature_set}
+VOCABULARY: dict[str, Validator] = {
+    "roadmap_items": _roadmap_items,
+    "feature_set": _feature_set,
+    "eng_review": _eng_review,
+}
 
 
 def validate(checkpoint_kind: str, body: ActionIn, ctx: ValidationContext) -> None:
@@ -306,7 +334,14 @@ def _context(found: _File | None) -> ValidationContext:
 
 
 def _gate_context(cp: Checkpoint) -> ValidationContext:
-    """A kind with no item file: its items are those its approve gate's reasons name."""
+    """A kind with no item file: its items are those its approve gate's reasons name (the
+    Engineering check: its briefs' features, with their question ids)."""
+    if cp.kind == eng_check.KIND:
+        asked = eng_check.questions(cp)
+        return ValidationContext(
+            item_keys=eng_check.item_keys(cp),
+            items={k: {"questions": sorted(v)} for k, v in asked.items()},
+        )
     source = gate.BLOCKING_SOURCES.get(cp.kind)
     reasons = source.read(cp)[0] if source is not None else []
     return ValidationContext(item_keys=frozenset(r["item"] for r in reasons))
@@ -477,12 +512,21 @@ async def put_action(
         validate(cp.kind, body, ctx)
     except InvalidAction as exc:
         raise service.Invalid(str(exc)) from None
-    stages = _stages(principal, cp) and not suggest_only
+    leads = await engineering_leads(db) if cp.kind in ENGINEERING_KINDS else frozenset()
+    by_lead = lead_stop(cp.kind, run.flow, leads)
+    # F4: with an engineering lead named, the leads and owners stage at its stops; anyone
+    # else's choice is a suggestion (c6).
+    may_stage = may_decide(principal, cp, run.flow, leads) if by_lead else _stages(principal, cp)
+    stages = may_stage and not suggest_only
     if body.kind == "waive":
         _waivable(cp, body, found, stages)
     if stages:
-        # A staged action counts: the approver role, re-read under the gate.
-        refusal = await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+        # A staged action counts: the approver role (or the flag), re-read under the gate.
+        refusal = (
+            await lead_refusal(db, principal)
+            if by_lead
+            else await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+        )
         if refusal is not None:
             raise service.Forbidden(refusal)
     existing = await db.scalar(
@@ -493,7 +537,7 @@ async def put_action(
             func.coalesce(CheckpointAction.field, "") == (body.field or ""),
         )
     )
-    if existing is not None and not _stages(principal, cp) and existing.created_by != principal.id:
+    if existing is not None and not may_stage and existing.created_by != principal.id:
         raise service.Forbidden("Only its author or an approver can change this action")
     replaced = existing.discussion_change_id if existing is not None else None
     question_id = None

@@ -49625,6 +49625,15 @@
               "owner"
             ],
             "title": "Approver Role"
+          },
+          "decider": {
+            "type": "string",
+            "enum": [
+              "role",
+              "engineering_lead"
+            ],
+            "title": "Decider",
+            "default": "role"
           }
         },
         "type": "object",
@@ -50054,6 +50063,17 @@
           "waivable": {
             "type": "boolean",
             "title": "Waivable"
+          },
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id"
           }
         },
         "type": "object",

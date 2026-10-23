@@ -87,9 +87,7 @@ async def _at_check(client, auth, **knobs) -> dict:
 
 async def _state(tenant_id, field: str) -> str:
     async with tenant_session(tenant_id) as s:
-        return await s.scalar(
-            select(CheckpointAction.state).where(CheckpointAction.field == field)
-        )
+        return await s.scalar(select(CheckpointAction.state).where(CheckpointAction.field == field))
 
 
 async def _decide_all(client, headers, run, size="m"):
