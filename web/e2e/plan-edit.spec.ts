@@ -100,3 +100,60 @@ test("Edit plan: move, cut and add, propose, the decider approves, the plan show
   expect(where["Spend alerts by email"]).toBe("Later");
   expect(where["Threshold alerts on spend"]).toBe("Now");
 });
+
+// protects = (#346 fixes 3) a second proposal made while version 2 waits supersedes it: the Plan
+// says "Version 2 superseded by version 3", the decider's Approve version 2 is disabled with that
+// reason and version 3 is the one approved; members who can never approve (the owner, not the
+// decider) and members who can never edit (a commenter) see no such control at all (#370: hidden,
+// not disabled); fails_when = version 2 still reads as waiting, its Approve is offered and fails,
+// or a control a role can never use shows disabled; no_claim = the API's refusal
+// (test_a_later_proposal_supersedes_the_waiting_one).
+test("Edit plan: a later proposal supersedes the waiting one, which can't be approved", async ({ page }) => {
+  await withDecider(page);
+  await openPlan(page);
+
+  // Version 2: Usage dashboard to Next.
+  await page.getByTestId("plan-edit").click();
+  await editItem(page, "Usage dashboard").getByLabel("Horizon of Usage dashboard").selectOption("next");
+  await expect(lane(page, "next")).toContainText("Usage dashboard");
+  await changes(page).getByRole("button", { name: "Propose changes" }).click();
+  await expect(changes(page).getByTestId("plan-proposal")).toContainText("Version 2 proposed");
+
+  // Edit the plan again while version 2 waits: version 3 cuts Budgets per team.
+  await page.getByTestId("plan-edit").click();
+  await expect(changes(page)).toContainText("Changes to approved version 1");
+  await editItem(page, "Budgets per team").getByRole("button", { name: "Cut", exact: true }).click();
+  await page.getByLabel("Why cut Budgets per team").fill("Teams share one budget this year");
+  await editItem(page, "Budgets per team").getByRole("button", { name: "Cut item" }).click();
+  await expect(changes(page).getByTestId("edit-cut")).toHaveCount(1);
+  await changes(page).getByRole("button", { name: "Propose changes" }).click();
+
+  const waiting = changes(page).getByTestId("plan-proposal");
+  await expect(waiting).toHaveCount(1);
+  await expect(waiting).toContainText("Version 3 proposed from approved version 1 · waiting for the decider");
+  const superseded = changes(page).getByTestId("plan-superseded");
+  await expect(superseded).toHaveCount(1);
+  await expect(superseded).toContainText("Version 2 superseded by version 3 · it can't be approved");
+  // The owner is not the decider: no Approve anywhere, not even a disabled one.
+  await expect(changes(page).getByRole("button", { name: /Approve/ })).toHaveCount(0);
+
+  // A commenter can never edit or approve: neither Edit plan nor Approve is shown.
+  await signOut(page);
+  await openPlan(page, "commenter@example.com");
+  await expect(page.getByTestId("plan-edit")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Approve version/ })).toHaveCount(0);
+
+  // The decider: version 2's Approve is disabled with the reason; version 3 is approved.
+  await signOut(page);
+  await openPlan(page, "approver@example.com");
+  const old = changes(page).getByTestId("plan-superseded");
+  const approveOld = old.getByRole("button", { name: "Approve version 2" });
+  await expect(approveOld).toBeDisabled();
+  await expect(approveOld).toHaveAccessibleDescription("Superseded by version 3: approve version 3 instead.");
+  await changes(page).getByTestId("plan-proposal").getByRole("button", { name: "Approve version 3" }).click();
+  await expect(page.getByTestId("plan-live")).toHaveText("Version 3 is the live plan.");
+  await expect(page.getByTestId("plan-live-version")).toHaveText("usage-alerts-roadmap v3");
+  await expect(changes(page).getByTestId("plan-superseded")).toHaveCount(0);
+  await expect(rows(page).filter({ hasText: "Budgets per team" })).toHaveCount(0);
+  expect((await horizonOf(page))["Usage dashboard"]).toBe("Now");
+});

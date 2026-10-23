@@ -273,3 +273,61 @@ async def test_roles_and_companies(client, owner, runtime):  # noqa: F811
     other = await other_company()
     assert (await client.get(f"{SETS}/{out['id']}", headers=other)).status_code == 404
     assert (await client.post(SETS, headers=other)).status_code == 404
+
+
+SUPERSEDED = (
+    "Version 2 was superseded by version 3, a later proposal of plan changes: it can't be "
+    "approved. Approve version 3 instead."
+)
+
+
+async def test_a_later_proposal_supersedes_the_waiting_one(client, owner, runtime):  # noqa: F811
+    """protects=proposing a second change set while version 2 waits marks the first
+    ``superseded`` (by version 3, audited), it leaves the waiting list, and approving version
+    2 is a 409 saying it was superseded; version 3 is approved and is the plan;
+    fails_when=version 2 still reads as waiting, or its approval fails with a message that
+    does not say why; no_claim=the Plan's UI (e2e/plan-edit.spec.ts)."""
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    first = (await client.post(SETS, headers=auth)).json()
+    await patch(client, auth, first, CHANGES[:1])
+    assert (await client.post(f"{SETS}/{first['id']}/propose", headers=auth)).status_code == 200
+    # Version 2 waits; the plan is edited again on version 1 and proposed as version 3.
+    second = await client.post(SETS, headers=auth)
+    assert second.status_code == 201, second.text
+    second = second.json()
+    assert second["base_version"] == 1
+    await patch(client, auth, second, CHANGES[1:2])
+    resp = await client.post(f"{SETS}/{second['id']}/propose", headers=auth)
+    assert resp.status_code == 200 and resp.json()["proposed_version"] == 3
+
+    old = (await client.get(f"{SETS}/{first['id']}", headers=auth)).json()
+    assert (old["status"], old["proposed_version"], old["superseded_by_version"]) == (
+        "superseded",
+        2,
+        3,
+    )
+    assert old["approved"] is False
+    waiting = (await client.get(SETS, params={"status": "proposed"}, headers=auth)).json()
+    assert [s["id"] for s in waiting] == [second["id"]]
+    assert waiting[0]["superseded_by_version"] is None
+    listed = (await client.get(SETS, params={"status": "superseded"}, headers=auth)).json()
+    assert [s["id"] for s in listed] == [first["id"]]
+
+    refused = await client.post(f"/v1/documents/{ROADMAP}/versions/2/approve", headers=auth)
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == SUPERSEDED
+    ok = await client.post(f"/v1/documents/{ROADMAP}/versions/3/approve", headers=auth)
+    assert ok.status_code == 200, ok.text
+    plan = (await client.get("/v1/plan", params={"scope": "approved"}, headers=auth)).json()
+    assert {i["roadmap"]["version"] for i in plan["items"]} == {3}
+    # Superseded is final: it is not edited, proposed or discarded.
+    assert (await client.post(f"{SETS}/{first['id']}/propose", headers=auth)).status_code == 409
+    assert (await client.delete(f"{SETS}/{first['id']}", headers=auth)).status_code == 409
+
+    async with tenant_session(tenant_id) as s:
+        event = await s.scalar(
+            select(AuditEvent).where(AuditEvent.action == "roadmap.change_set_superseded")
+        )
+    assert event is not None and event.entity_id == uuid.UUID(first["id"])
+    assert (event.data["version"], event.data["superseded_by_version"]) == (2, 3)
