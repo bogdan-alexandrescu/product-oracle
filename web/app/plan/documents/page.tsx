@@ -17,12 +17,13 @@ import {
   PageHeader,
   Panel,
   Split,
+  ViewOnly,
   type ChipKind,
   type Column,
 } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { DOC_STATUS_LABEL, formatDateTime } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
 
@@ -126,8 +127,8 @@ export default function RoadmapDocumentsPage() {
   const q = useQuery("documents|roadmap", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "roadmap" } } })));
   const prds = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const latestReport = useQuery("alignment-reports|latest", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 1 } } })));
-  const { role } = useMe();
-  const canBuild = hasRole(role, "approver");
+  const { can, capsReady } = useMe();
+  const canBuild = can("create_run");
   const [selected, setSelected] = useState<string | null>(null);
   const roadmaps = [...(q.data ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   const approved = (prds.data ?? []).filter((d) => d.approved_version != null);
@@ -237,6 +238,7 @@ export default function RoadmapDocumentsPage() {
         status={
           q.data && (
             <>
+              {capsReady && !canBuild && <ViewOnly />}
               <Chip kind="acc">{roadmaps.length} {roadmaps.length === 1 ? "roadmap" : "roadmaps"}</Chip>
               {inReview > 0 && <Chip kind="acc">{inReview} in review</Chip>}
               <InfoTip label="Roadmap documents" align="start" side="bottom">
@@ -291,11 +293,10 @@ export default function RoadmapDocumentsPage() {
               empty="No roadmaps yet"
               rowProps={(r) => ({ "data-testid": r.kind === "roadmap" ? "roadmap-row" : "approved-prd" })}
             />
-            {!loading && (!canBuild || approved.length === 0 || (rows.length > 0 && roadmaps.length === 0)) && (
+            {!loading && (approved.length === 0 || (rows.length > 0 && roadmaps.length === 0)) && (
               <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5 text-sm text-text2 max-[600px]:px-3">
                 {rows.length > 0 && roadmaps.length === 0 && <Chip kind="na">No roadmaps yet</Chip>}
                 {approved.length === 0 && <Chip kind="na">No approved PRDs</Chip>}
-                {!canBuild && <span>Approvers and owners start these runs.</span>}
               </div>
             )}
           </Panel>

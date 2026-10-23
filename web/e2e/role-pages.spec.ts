@@ -12,7 +12,8 @@ type Role = "owner" | "approver" | "commenter" | "viewer";
 const ROLES: Role[] = ["owner", "approver", "commenter", "viewer"];
 const email = (role: Role) => (role === "owner" ? "admin@example.com" : `${role}@example.com`);
 
-const viewOnly = (page: Page) => page.getByTestId("view-only");
+// Next keeps recently visited routes mounted but hidden, so only the page on screen counts.
+const viewOnly = (page: Page) => page.getByTestId("view-only").filter({ visible: true });
 const header = (page: Page, title: string) => page.getByRole("heading", { level: 1, name: title });
 
 async function open(page: Page, path: string, title: string) {
