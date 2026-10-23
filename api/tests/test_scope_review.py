@@ -44,6 +44,10 @@ Test cards (protects / fails_when / no_claim):
   a feature not in the baseline yet; fails_when=the added requirement has no part_of edge
   to its feature after Approve with edits; no_claim=confirming the new feature itself (it
   stays proposed for a person to confirm).
+- test_capabilities_agree_with_the_scope_routes: protects=#370 for /v1/prd-scopes (#156
+  fixes 1); fails_when=a commenter's or viewer's capabilities (can(): the operation and its
+  per-item role) say yes to a write the API answers 403, or an approver's say no;
+  no_claim=the D8 suggestions a commenter makes instead.
 - test_mcp_refuses_approval_while_a_reason_is_open: protects=criterion 2 on MCP;
   fails_when=decide_checkpoint approves with a person's exclusion leaving an open
   depends_on_excluded, or still refuses after the waiver; no_claim=the reason texts.
@@ -644,3 +648,46 @@ async def test_mcp_refuses_approval_while_a_reason_is_open(client, owner, runtim
     async with tenant_session(tenant_id) as s:
         event = await s.scalar(select(AuditEvent).where(AuditEvent.action == "prd_scope.approved"))
     assert event.data["waived"] == ["depends_on_excluded"]
+
+
+SCOPE_WRITES = (
+    "patch_scope_item",
+    "add_scope_requirement",
+    "delete_scope_item",
+    "enhance_scope_requirement",
+    "accept_scope_enhancement",
+)
+
+
+async def test_capabilities_agree_with_the_scope_routes(client, owner, runtime):  # noqa: F811
+    """What GET /v1/me/capabilities tells the web app's can() matches what the scope routes
+    answer: every member reads, the checkpoint's approver role (approver) writes."""
+    from oracle.auth.models import ROLES
+
+    tenant_id, _ = owner
+    _, _, scope_id = await _open(client, owner, runtime)
+    for role in ("viewer", "commenter", "approver"):
+        headers = await as_user(tenant_id, role)
+        resp = await client.get("/v1/me/capabilities", headers=headers)
+        assert resp.status_code == 200, resp.text
+        caps = resp.json()
+        assert caps["operations"]["get_prd_scope_review"] is True
+        assert "get_prd_scope_review" not in caps["per_item"]
+        scope = await _read(client, headers, scope_id)
+        writes = role == "approver"
+        for op in SCOPE_WRITES:
+            need = caps["per_item"].get(op, "missing")
+            assert need == "approver", (op, need)
+            can = caps["operations"][op] and ROLES.index(role) >= ROLES.index(need)
+            assert can is writes, (role, op)
+        bulk = _row(scope, "bulk-edit")
+        if not writes:
+            resp = await _patch(client, headers, scope_id, bulk, decision="exclude")
+            assert resp.status_code == 403, resp.text
+        resp = await client.post(
+            f"/v1/prd-scopes/{scope_id}/items",
+            json={"parent_id": bulk["id"], "text": "Exports the edited rows as a file"},
+            headers=headers,
+        )
+        assert (resp.status_code == 201) is writes, resp.text
+        assert (resp.status_code == 403) is not writes, resp.text

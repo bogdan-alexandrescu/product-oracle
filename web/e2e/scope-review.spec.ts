@@ -256,3 +256,28 @@ test("a held console approval is confirmed once the blocking row is waived", asy
   await confirm.click();
   await expect(page.getByTestId("checkpoint-feature_set")).toContainText("Approved");
 });
+
+// Card #156 fixes 1: protects = #370's rule on the scope review: the row writes show only when
+// can() says the role may make them (GET /v1/me/capabilities: the approver role, per item);
+// fails_when = a commenter or viewer sees Cut, Edit, Enhance or Add requirement, or an approver
+// does not; no_claim = the API's own 403 (api/tests/test_scope_review.py).
+for (const [email, who, writes, suggests] of [
+  [APPROVER, "an approver", true, false],
+  [COMMENTER, "a commenter", false, true],
+  ["viewer@example.com", "a viewer", false, false],
+] as const) {
+  test(`${who} sees the row edits only if their role may make them`, async ({ page }) => {
+    await seeded(page, email);
+    await openReview(page, "saved-addresses");
+    const pick = row(page, "Pick address in one step");
+    await pick.getByRole("button", { name: "Requirements of Pick address in one step" }).click();
+    const req = pick.getByTestId("requirement-pick-address-one-screen");
+    await expect(req.getByTestId("requirement-text")).toBeVisible();
+    for (const name of ["Cut", "Edit", "Enhance"]) await expect(req.getByRole("button", { name, exact: true })).toHaveCount(writes ? 1 : 0);
+    await expect(req.getByRole("button", { name: "Suggest Cut" })).toHaveCount(suggests ? 1 : 0);
+    await pick.getByTestId("feature-title").click();
+    const inspector = page.getByTestId("scope-inspector");
+    await expect(inspector).toContainText("Pick address in one step");
+    await expect(inspector.getByRole("button", { name: "Add requirement" })).toHaveCount(writes ? 1 : 0);
+  });
+}
