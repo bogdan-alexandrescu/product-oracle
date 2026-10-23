@@ -25,6 +25,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     Numeric,
@@ -158,6 +159,8 @@ class TrackerRecord(TenantScoped, Base):
         CheckConstraint(_in("tracker", TRACKERS), name="tracker"),
         CheckConstraint(_in("state", TRACKER_STATES), name="state"),
         CheckConstraint("estimate IS NULL OR estimate >= 0", name="estimate"),
+        Index("ix_tracker_records_prd_item", "tenant_id", "prd_document_id", "item_key"),
+        Index("ix_tracker_records_source_item", "source_item_id"),
     )
 
     tracker: Mapped[str] = mapped_column(Text, nullable=False)
@@ -174,6 +177,18 @@ class TrackerRecord(TenantScoped, Base):
     target_date: Mapped[date | None] = mapped_column(Date)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     recorded_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # F7 Link tracker issues: the PRD whose item it is matched to (by PRD and item key
+    # while the record has no track), the synced issue it was linked from and is
+    # refreshed from, who linked it, and when that source item went away for good.
+    prd_document_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="SET NULL")
+    )
+    source_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("source_items.id", ondelete="SET NULL")
+    )
+    linked_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    linked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    refresh_lost_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = _updated_at()
 
 

@@ -3,9 +3,10 @@
 Oracle reads engineering's state back and compares it with the roadmap; it does not write
 to a tracker. Tracker records arrive through ``POST /v1/tracker/records`` from a person
 with the approver role (an export, the CLI, or an MCP client acting for that person) and
-are upserted by tracker and issue key. A SwarmCloud run's token reaches no roadmap route,
-so a run's agent cannot post them. The read-only alignment report (oracle.roadmap.views)
-is the path that works without write permission.
+are upserted by tracker and issue key, or are linked from a person's synced GitHub issues
+and kept fresh by the sync (oracle.roadmap.links, F7). A SwarmCloud run's token reaches
+no roadmap route, so a run's agent cannot post them. The read-only alignment report
+(oracle.roadmap.views) is the path that works without write permission.
 
 The two-way connector (approved PRD -> epics and issues) stays behind a gate that is off
 (``ORACLE_TRACKER_TWO_WAY_ENABLED``). Even on, no connector is verified yet, so a push is
@@ -146,6 +147,7 @@ async def import_records(
 
 def ref(r: TrackerRecord) -> TrackerRecordRef:
     return TrackerRecordRef(
+        id=r.id,
         tracker=r.tracker,  # type: ignore[arg-type]
         external_ref=r.external_ref,
         state=r.state,  # type: ignore[arg-type]
@@ -153,6 +155,7 @@ def ref(r: TrackerRecord) -> TrackerRecordRef:
         target_date=r.target_date,
         estimate=r.estimate,
         url=r.url,
+        refresh_lost_at=r.refresh_lost_at,
     )
 
 

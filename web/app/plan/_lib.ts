@@ -40,9 +40,13 @@ export function engineeringLine(i: PlanItem): string {
   else if (e.date_status === "verified" && e.date) day = `${formatDay(`${e.date}T12:00:00Z`)} ✓`;
   else if (e.date_status === "unverified") day = "unverified";
   else if (e.date_status === "withdrawn") day = "date withdrawn";
+  else if (target(i)) day = `${formatDay(`${target(i)}T12:00:00Z`)} ✓`;
   else if (keys.length && !e.date) day = "no date";
   return [issue, day].filter(Boolean).join(" · ") || "—";
 }
+
+/** F7: the first linked record's target date (a GitHub issue's milestone due date), when the item has none of its own. */
+const target = (i: PlanItem) => i.engineering.records.find((r) => r.target_date)?.target_date ?? null;
 
 /** Who makes the next decision: a person when one is named (the viewer reads "you"), else the role. */
 export function whoLabel(who: Schemas["PlanWho"] | null | undefined, me: string | null | undefined): string | null {

@@ -838,6 +838,7 @@ async def delete_source(
         await db.scalars(select(SourceItem.id).where(SourceItem.source_id == source.id))
     ).all()
     await links.release(db, source_item_ids=set(item_ids))
+    await store.release_links(db, set(item_ids))
     await db.delete(source)
     await db.commit()
 
