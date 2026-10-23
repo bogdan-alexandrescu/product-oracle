@@ -200,6 +200,7 @@ export type NeedGroup =
   | "revising"
   | "decisions"
   | "launches"
+  | "rituals"
   | "shipped";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
 
@@ -987,6 +988,52 @@ export function launchNeeds(inbox: InboxOut): { counted: Need[]; shipped: Need[]
   return { counted: rows.filter((r) => r.counted).map(need), shipped: rows.filter((r) => !r.counted).map(need) };
 }
 
+const ritualWhen = new Intl.DateTimeFormat("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
+
+/**
+ * H2 ritual rows: Pre-read ready (the owner and attendees, until they open it), Record notes
+ * (the ritual's owner, after the end) and Ritual failed to prepare (owners, with Retry). Each
+ * opens the occurrence; a failed one opens Company › Rituals.
+ */
+export function ritualNeeds(inbox: InboxOut, busy: string | null, act: Act): StatedNeed[] {
+  return (inbox.rituals ?? []).map((r) => {
+    const label =
+      r.reason === "pre_read"
+        ? `Pre-read ready · ${r.title} · ${ritualWhen.format(new Date(r.due_at))}`
+        : r.reason === "record_notes"
+          ? `Record notes · ${r.title}`
+          : `Ritual failed to prepare · ${r.title}`;
+    return {
+      key: `ritual-${r.reason}-${r.occurrence_id}`,
+      icon: "company",
+      kind: "Ritual",
+      item: (
+        <span className="truncate" title={label} data-testid="ritual-need">
+          {label}
+        </span>
+      ),
+      context: <span className="block truncate text-text2">Rituals</span>,
+      at: r.due_at,
+      action:
+        r.reason === "failed" ? (
+          <Button
+            disabled={busy !== null}
+            onClick={() => act(`ritual-retry-${r.ritual_id}`, () => unwrap(api.POST("/v1/rituals/{ritual_id}/prepare", { params: { path: { ritual_id: r.ritual_id } } })))}
+          >
+            Retry
+          </Button>
+        ) : (
+          <LinkButton variant="secondary" href={`/company/rituals/${r.occurrence_id}`} aria-label="Open">
+            Open
+          </LinkButton>
+        ),
+      state: r.state,
+      counted: r.counts,
+      group: "rituals" as const,
+    };
+  });
+}
+
 /**
  * Every row of the one Inbox, each in its state (owner, 2026-10-20): checkpoints, cost
  * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke and access changes still failing (owners), feedback items and the questions asked
@@ -1024,6 +1071,7 @@ export function allNeeds(
     ...reportNeeds(inbox.reports ?? [], seenBefore),
     ...stated(strategyNeeds(inbox.strategy), "strategy"),
     ...stated(launches.counted, "launches"),
+    ...ritualNeeds(inbox, busy, act),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),
     ...decisionNeeds(inbox, busy, act, seenBefore),

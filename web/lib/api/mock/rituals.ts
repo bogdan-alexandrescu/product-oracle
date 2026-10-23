@@ -1,0 +1,543 @@
+/**
+ * Mock of the cadence engine (H2, /v1/rituals and /v1/ritual-occurrences) and its Inbox
+ * rows. Synthetic data only. The built-in rituals are seeded in every company (the API's
+ * first tick does that); the "rituals" scenario adds a Monthly roadmap refresh pre-read an
+ * owner prepared early and last week's goals check-in, held, whose summary run failed. No
+ * other scenario has occurrences, so other specs' Inbox counts stay as they were.
+ *
+ * The schedule maths is the API's (api/oracle/rituals/schedule.py): wall-clock times in the
+ * schedule's IANA zone, stored in UTC.
+ */
+import type { Schemas } from "@/lib/api/client";
+
+type RitualOut = Schemas["RitualOut"];
+type OccurrenceOut = Schemas["OccurrenceOut"];
+type Schedule = Schemas["Schedule"];
+type Role = "viewer" | "commenter" | "approver" | "owner";
+type Member = { id: string; email: string; role: Role; status?: string };
+
+/** A stored ritual: the API's record without what is derived on the way out. */
+type Ritual = Omit<RitualOut, "last_pre_read" | "schedule"> & { schedule: Schedule; created_at: string };
+/** A stored occurrence; the summary run finishes on its owner's `summary_reads`-th read. */
+type Occurrence = Omit<OccurrenceOut, "kind" | "title" | "duration_min" | "owner_id" | "attendee_ids" | "timezone" | "read_by_me"> & {
+  summary_reads?: number;
+  read_by: string[];
+};
+
+export interface RitualsDb {
+  rituals: Ritual[];
+  occurrences: Occurrence[];
+  mode: "on_demand" | "always";
+}
+
+export interface RitualsContext {
+  me: Member;
+  members: Member[];
+  uuid: () => string;
+}
+
+const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
+const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
+const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+const fail = (status: number, detail: string) => json(status, { detail });
+const now = () => new Date();
+
+// --- schedule maths (schedule.py) -----------------------------------------------------------
+
+const DAY_MS = 86_400_000;
+/** A Monday: week 0 of every every_n_weeks series. */
+const EPOCH = Date.UTC(2024, 0, 1);
+const PER_SUMMARY_USD = 3;
+/** Kinds whose pre-read is figures and lists (summaries.py COVERED). */
+const COVERED = new Set(["goals_checkin", "roadmap_refresh", "goals_review", "decision_review", "strategy_review", "alignment_report", "custom"]);
+const MISSED_AFTER_MS = 7 * DAY_MS;
+
+/** The calendar day (as a UTC-midnight number) of `at` in `tz`. */
+function localDay(at: Date, tz: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "numeric", day: "numeric" }).formatToParts(at);
+  const n = (t: string) => Number(parts.find((p) => p.type === t)!.value);
+  return Date.UTC(n("year"), n("month") - 1, n("day"));
+}
+
+/** `tz`'s offset from UTC at `at`, in ms. */
+function offset(at: number, tz: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+  }).formatToParts(new Date(at));
+  const n = (t: string) => Number(parts.find((p) => p.type === t)!.value);
+  return Date.UTC(n("year"), n("month") - 1, n("day"), n("hour"), n("minute"), n("second")) - Math.floor(at / 1000) * 1000;
+}
+
+/** The UTC instant of `time` on `day` in the schedule's zone. */
+function at(day: number, s: Schedule): number {
+  const [h, m] = s.time.split(":").map(Number);
+  const wall = day + (h * 60 + m) * 60_000;
+  let utc = wall - offset(wall, s.timezone);
+  utc = wall - offset(utc, s.timezone);
+  return utc;
+}
+
+const weekday = (day: number) => (new Date(day).getUTCDay() + 6) % 7;
+
+function nthWeekday(year: number, month: number, wd: number, nth: number): number {
+  if (nth === -1) {
+    const last = Date.UTC(year, month, 0);
+    return last - ((weekday(last) - wd + 7) % 7) * DAY_MS;
+  }
+  const first = Date.UTC(year, month - 1, 1);
+  return first + (((wd - weekday(first) + 7) % 7) + 7 * (nth - 1)) * DAY_MS;
+}
+
+/** The first due time of `s` strictly after `after`. */
+export function nextOccurrence(s: Schedule, after: Date): Date {
+  const local = localDay(after, s.timezone);
+  if (s.freq === "weekly" || s.freq === "every_n_weeks") {
+    const step = s.freq === "every_n_weeks" ? s.interval : 1;
+    let day = local - DAY_MS;
+    for (let i = 0; i < 7 * step + 8; i++, day += DAY_MS) {
+      if (weekday(day) === s.weekday && Math.floor((day - EPOCH) / DAY_MS / 7) % step === 0) {
+        const t = at(day, s);
+        if (t > after.getTime()) return new Date(t);
+      }
+    }
+  } else {
+    const months = s.freq === "monthly" ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : s.freq === "quarterly" ? [0, 1, 2, 3].map((q) => s.month + 3 * q) : [s.month];
+    const d = new Date(local);
+    let year = d.getUTCFullYear();
+    let month = d.getUTCMonth();
+    if (month === 0) [year, month] = [year - 1, 12];
+    for (let i = 0; i < 26; i++) {
+      if (months.includes(month)) {
+        const t = at(nthWeekday(year, month, s.weekday, s.week_of_month), s);
+        if (t > after.getTime()) return new Date(t);
+      }
+      [year, month] = month === 12 ? [year + 1, 1] : [year, month + 1];
+    }
+  }
+  throw new Error("no next occurrence");
+}
+
+function runsPerMonth(s: Schedule): number {
+  if (s.freq === "every_n_weeks") return Math.round((4.33 / s.interval) * 100) / 100;
+  return { weekly: 4.33, monthly: 1, quarterly: 0.33, yearly: 0.08 }[s.freq];
+}
+
+function validZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The API's 422s for a schedule (Schedule's validators), or null. */
+function scheduleError(s: Schedule): string | null {
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(s.time)) return "schedule.time: time must be HH:MM (00:00 to 23:59)";
+  if (!validZone(s.timezone)) return `schedule.timezone: unknown time zone '${s.timezone}'`;
+  if (![-1, 1, 2, 3, 4].includes(s.week_of_month)) return "schedule.week_of_month: week_of_month must be 1 to 4, or -1 for the last";
+  if (s.freq === "every_n_weeks" && !(s.interval >= 2 && s.interval <= 12)) return "schedule.interval: every_n_weeks repeats every 2 to 12 weeks";
+  if (s.freq === "quarterly" && s.month > 3) return "schedule.month: a quarter starts in its month 1, 2 or 3";
+  return null;
+}
+
+// --- kinds and seed ----------------------------------------------------------------------
+
+const sched = (freq: Schedule["freq"], fields: Partial<Schedule>): Schedule => ({
+  freq,
+  interval: 1,
+  weekday: 0,
+  week_of_month: 1,
+  month: 1,
+  time: "09:00",
+  timezone: "UTC",
+  ...fields,
+});
+
+/** The built-in kinds the mock company has (kinds.py), in the API's order. */
+const BUILTINS = [
+  { kind: "goals_checkin", title: "Weekly goals check-in", schedule: sched("weekly", { weekday: 0, time: "09:00" }), duration_min: 30, prep_hours: 12, on: true },
+  { kind: "roadmap_refresh", title: "Monthly roadmap refresh", schedule: sched("monthly", { week_of_month: 1, weekday: 1, time: "10:00" }), duration_min: 60, prep_hours: 24, on: true },
+  { kind: "goals_review", title: "Quarterly goals review", schedule: sched("quarterly", { month: 1, week_of_month: 1, weekday: 2, time: "10:00" }), duration_min: 90, prep_hours: 48, on: true },
+  { kind: "investor_update", title: "Investor update", schedule: sched("monthly", { week_of_month: 1, weekday: 0, time: "09:00" }), duration_min: 30, prep_hours: 72, on: false },
+];
+
+const BLOCK_TITLES: Record<string, string> = {
+  goals: "Goals",
+  since_last: "Since last time",
+  outcomes_due: "Outcomes due for a check",
+  needs_decision: "Needs a decision",
+  tracks: "Tracks",
+  slips: "Date slips",
+  stale_items: "Potentially stale items",
+  done_items: "Done in the window",
+  priority_changes: "Priority changes",
+  suggested_next: "Suggested next",
+};
+
+type Row = { text: string; href?: string | null; method?: string; label?: string };
+
+function block(key: string, asOf: string, rows: Row[]) {
+  return { key, title: BLOCK_TITLES[key] ?? key, as_of: asOf, rows };
+}
+
+/** The pre-read the roadmap refresh's builders make from the mock company's roadmap. */
+function roadmapBlocks(asOf: string, trackId: string) {
+  return [
+    block("tracks", asOf, [
+      { text: "Usage alerts PRD: at risk, 2 at risk", href: `/roadmap?track=${trackId}` },
+      { text: "Team onboarding PRD: on track, 0 at risk", href: "/roadmap" },
+    ]),
+    block("slips", asOf, [{ text: "Threshold alerts beta: 2026-11-10 -> 2026-11-24", href: `/roadmap?track=${trackId}` }]),
+    block("stale_items", asOf, [{ text: "Digest emails", href: "/roadmap?item=usage-alerts:digest-emails" }]),
+    block("done_items", asOf, [{ text: "ENG-401 Alert settings page", href: `/roadmap?track=${trackId}` }]),
+    block("priority_changes", asOf, [{ text: "Usage alerts: #5 -> #2", href: "/priorities" }]),
+    block("suggested_next", asOf, [
+      { label: "Start a roadmap run from Usage alerts PRD", method: "POST", href: `/v1/tracks/${trackId}/roadmap-run`, text: "Start a roadmap run from Usage alerts PRD" },
+      { label: "Review goals", href: "/baseline", text: "Review goals" },
+      { label: "Open priorities", href: "/priorities", text: "Open priorities" },
+    ]),
+  ];
+}
+
+function goalsBlocks(asOf: string) {
+  return [
+    block("goals", asOf, [
+      { text: "Raise activation: 38% of 45%, 7 pts to go", href: "/baseline" },
+      { text: "Grow paid conversion: No current value", href: "/baseline" },
+    ]),
+    block("since_last", asOf, [
+      { text: "PRD versions approved: 1", href: "/plan" },
+      { text: "Runs finished: 3", href: "/runs" },
+    ]),
+    block("outcomes_due", asOf, []),
+    block("needs_decision", asOf, [{ text: "D-5 Ship usage caps before anomaly detection", href: "/company/decisions?d=5" }]),
+  ];
+}
+
+function blocksFor(kind: string, asOf: string, trackId: string) {
+  if (kind === "roadmap_refresh") return roadmapBlocks(asOf, trackId);
+  if (kind === "goals_checkin" || kind === "goals_review") return goalsBlocks(asOf);
+  return [block("since_last", asOf, [{ text: "Runs finished: 3", href: "/runs" }]), block("needs_decision", asOf, [])];
+}
+
+const TRACK_ID = "5b0c1a7e-3d2f-4e8a-9c61-2f7d8e4b1a90";
+
+/** The company's built-in rituals; with `scenario`, the two occurrences described above. */
+export function seedRituals(ctx: RitualsContext, scenario: boolean): RitualsDb {
+  const owner = ctx.members.find((m) => m.role === "owner" && m.status !== "disabled")!;
+  const attendees = ctx.members.filter((m) => (m.role === "owner" || m.role === "approver") && m.status !== "disabled").map((m) => m.id);
+  const t = now();
+  const db: RitualsDb = { rituals: [], occurrences: [], mode: "on_demand" };
+  for (const b of BUILTINS) {
+    db.rituals.push({
+      id: ctx.uuid(),
+      kind: b.kind,
+      title: b.title,
+      builtin: true,
+      schedule: b.schedule,
+      duration_min: b.duration_min,
+      prep_hours: b.prep_hours,
+      owner_id: owner.id,
+      attendee_ids: attendees,
+      status: b.on ? "active" : "paused",
+      next_due_at: nextOccurrence(b.schedule, t).toISOString(),
+      lock_version: 1,
+      created_at: t.toISOString(),
+    });
+  }
+  if (!scenario) return db;
+  const asOf = t.toISOString();
+  // Prepare now on the roadmap refresh: its next occurrence is ready, the ritual moves on.
+  const refresh = db.rituals.find((r) => r.kind === "roadmap_refresh")!;
+  const due = new Date(refresh.next_due_at!);
+  db.occurrences.push(occurrence(ctx, refresh, due, { status: "ready", pre_read: { built_at: asOf, blocks: roadmapBlocks(asOf, TRACK_ID) } }));
+  refresh.next_due_at = nextOccurrence(refresh.schedule, due).toISOString();
+  // Last week's goals check-in: held, and its Every pre-read summary failed.
+  const checkin = db.rituals.find((r) => r.kind === "goals_checkin")!;
+  const last = nextOccurrence(checkin.schedule, new Date(t.getTime() - 8 * DAY_MS));
+  db.occurrences.push(
+    occurrence(ctx, checkin, last, {
+      status: "held",
+      notes: "Activation is on pace; conversion still has no current value.",
+      pre_read: { built_at: new Date(last.getTime() - 12 * 3_600_000).toISOString(), blocks: goalsBlocks(asOf) },
+      summary_state: "failed",
+      summary_note: "Summary failed · Summarize with Oracle to retry",
+    }),
+  );
+  return db;
+}
+
+function occurrence(ctx: RitualsContext, r: Ritual, due: Date, fields: Partial<Occurrence>): Occurrence {
+  return {
+    id: ctx.uuid(),
+    ritual_id: r.id,
+    due_at: due.toISOString(),
+    ends_at: new Date(due.getTime() + r.duration_min * 60_000).toISOString(),
+    status: "scheduled",
+    period: { from: null, to: due.toISOString() },
+    pre_read: { built_at: null, blocks: [] },
+    attempts: 0,
+    error: null,
+    notes: null,
+    skip_reason: null,
+    decision_ids: [],
+    summary_run_id: null,
+    summary: null,
+    summary_state: "none",
+    summary_note: null,
+    read_by: [],
+    ...fields,
+  };
+}
+
+// --- derived ------------------------------------------------------------------------------
+
+/** Marks ready occurrences missed 7 days after their end (the ticker's step 2). */
+function tick(db: RitualsDb) {
+  const t = now().getTime();
+  for (const o of db.occurrences) {
+    if (o.status === "ready" && Date.parse(o.ends_at) + MISSED_AFTER_MS <= t) o.status = "missed";
+  }
+}
+
+function summaryOf(o: Occurrence): Schemas["OccurrenceSummary"] {
+  return { id: o.id, ritual_id: o.ritual_id, due_at: o.due_at, ends_at: o.ends_at, status: o.status };
+}
+
+function ritualOut(db: RitualsDb, r: Ritual): RitualOut {
+  const last = db.occurrences
+    .filter((o) => o.ritual_id === r.id && o.pre_read.built_at)
+    .sort((a, b) => b.due_at.localeCompare(a.due_at))[0];
+  const out: RitualOut & { created_at?: string } = { ...r, last_pre_read: last ? summaryOf(last) : null };
+  delete out.created_at;
+  return out;
+}
+
+function occurrenceOut(ctx: RitualsContext, r: Ritual, o: Occurrence): OccurrenceOut {
+  const out: Partial<Occurrence> = { ...o };
+  delete out.read_by;
+  delete out.summary_reads;
+  return {
+    ...(out as Omit<Occurrence, "read_by" | "summary_reads">),
+    kind: r.kind,
+    title: r.title,
+    duration_min: r.duration_min,
+    owner_id: r.owner_id,
+    attendee_ids: r.attendee_ids,
+    timezone: r.schedule.timezone,
+    read_by_me: o.read_by.includes(ctx.me.id),
+  };
+}
+
+function estimate(db: RitualsDb): Schemas["Estimate"] {
+  const rows = db.rituals
+    .filter((r) => r.status === "active" && COVERED.has(r.kind))
+    .map((r) => ({ ritual_id: r.id, title: r.title, runs_per_month: runsPerMonth(r.schedule) }));
+  const runs = Math.round(rows.reduce((n, r) => n + r.runs_per_month, 0) * 100) / 100;
+  return { per_summary_usd: PER_SUMMARY_USD, runs_per_month: runs, usd_per_month: Math.round(runs * PER_SUMMARY_USD * 100) / 100, rituals: rows };
+}
+
+/** The signed-in member's ritual rows of the Inbox (service.inbox_rows). */
+export function ritualInbox(ctx: RitualsContext, db: RitualsDb): Schemas["InboxRitual"][] {
+  tick(db);
+  const t = now().getTime();
+  const rows: Schemas["InboxRitual"][] = [];
+  const me = ctx.me.id;
+  for (const o of [...db.occurrences].sort((a, b) => a.due_at.localeCompare(b.due_at))) {
+    const r = db.rituals.find((x) => x.id === o.ritual_id)!;
+    const row = (reason: Schemas["InboxRitual"]["reason"], state: Schemas["InboxRitual"]["state"], counts: boolean) =>
+      rows.push({ occurrence_id: o.id, ritual_id: r.id, title: r.title, due_at: o.due_at, reason, state, counts });
+    if (o.status === "failed") {
+      if (r.status === "active" && atLeast(ctx.me.role, "owner")) row("failed", "open", true);
+    } else if (o.status !== "ready") continue;
+    else if (t < Date.parse(o.ends_at)) {
+      if (me === r.owner_id || r.attendee_ids.includes(me)) {
+        const done = o.read_by.includes(me);
+        row("pre_read", done ? "done" : "new", !done);
+      }
+    } else if (me === r.owner_id) row("record_notes", "open", true);
+  }
+  return rows;
+}
+
+// --- routes -------------------------------------------------------------------------------
+
+const SUMMARY_TEXT =
+  "One track is at risk: Usage alerts PRD, whose Threshold alerts beta slipped two weeks to Nov 24. Digest emails may be stale. Usage alerts rose from #5 to #2 in the priorities; a roadmap run from that track is the suggested next step.";
+
+/** Handles /v1/rituals* and /v1/ritual-occurrences*; null for any other path. */
+export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+  if (p[1] !== "rituals" && p[1] !== "ritual-occurrences") return null;
+  tick(db);
+  const m = req.method;
+  const role = ctx.me.role;
+  const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
+  const owner = atLeast(role, "owner");
+  const notOwner = () => fail(403, "Requires the owner role");
+  const memberIds = new Set(ctx.members.filter((x) => x.status !== "disabled").map((x) => x.id));
+
+  if (p[1] === "rituals") {
+    if (p[2] === "summaries" && p.length === 3) {
+      if (m === "PUT") {
+        if (!owner) return notOwner();
+        const { mode } = await body<{ mode: string }>();
+        if (mode !== "on_demand" && mode !== "always") return fail(422, "mode is on_demand or always");
+        db.mode = mode;
+      }
+      return json(200, { mode: db.mode, estimate: estimate(db) });
+    }
+    if (p.length === 2) {
+      if (m === "GET") {
+        const order = (r: Ritual) => (r.builtin ? 0 : 1);
+        return json(200, [...db.rituals].sort((a, b) => order(a) - order(b)).map((r) => ritualOut(db, r)));
+      }
+      if (m === "POST") {
+        if (!owner) return notOwner();
+        const input = await body<Schemas["RitualCreate"]>();
+        if (input.kind !== "custom") return fail(422, "kind: the mock adds custom rituals only");
+        if (!input.title?.trim()) return fail(422, "title: give the ritual a title");
+        const schedule = sched("weekly", { ...input.schedule });
+        const bad = scheduleError(schedule);
+        if (bad) return fail(422, bad);
+        const r: Ritual = {
+          id: ctx.uuid(),
+          kind: "custom",
+          title: input.title.trim(),
+          builtin: false,
+          schedule,
+          duration_min: input.duration_min ?? 30,
+          prep_hours: input.prep_hours ?? 12,
+          owner_id: input.owner_id ?? ctx.me.id,
+          attendee_ids: input.attendee_ids ?? [],
+          status: "active",
+          next_due_at: nextOccurrence(schedule, now()).toISOString(),
+          lock_version: 1,
+          created_at: now().toISOString(),
+        };
+        db.rituals.push(r);
+        return json(201, ritualOut(db, r));
+      }
+    }
+    const r = db.rituals.find((x) => x.id === p[2]);
+    if (!r) return fail(404, "Ritual not found");
+    if (p.length === 3) {
+      if (m === "GET") return json(200, ritualOut(db, r));
+      if (m === "DELETE") {
+        if (!owner) return notOwner();
+        if (r.builtin) return fail(409, "Built-in rituals pause; they are not deleted");
+        db.rituals = db.rituals.filter((x) => x !== r);
+        db.occurrences = db.occurrences.filter((o) => o.ritual_id !== r.id);
+        return new Response(null, { status: 204 });
+      }
+      if (m === "PATCH") {
+        if (!owner) return notOwner();
+        const input = await body<Schemas["RitualPatch"]>();
+        if (input.lock_version !== r.lock_version) return fail(409, "This ritual changed since you opened it. Reload to see the change.");
+        if (input.duration_min != null && (input.duration_min < 5 || input.duration_min > 480)) return fail(422, "duration_min: between 5 and 480 minutes");
+        if (input.prep_hours != null && (input.prep_hours < 0 || input.prep_hours > 168)) return fail(422, "prep_hours: between 0 and 168 hours");
+        if (input.attendee_ids?.some((id) => !memberIds.has(id))) return fail(422, "attendee_ids: every attendee is a member");
+        if (input.owner_id && !memberIds.has(input.owner_id)) return fail(422, "owner_id: the owner is a member");
+        if (input.schedule) {
+          const schedule = sched(input.schedule.freq, input.schedule);
+          const bad = scheduleError(schedule);
+          if (bad) return fail(422, bad);
+          r.schedule = schedule;
+          r.next_due_at = nextOccurrence(schedule, now()).toISOString();
+        }
+        if (input.title) r.title = input.title;
+        if (input.duration_min != null) r.duration_min = input.duration_min;
+        if (input.prep_hours != null) r.prep_hours = input.prep_hours;
+        if (input.owner_id) r.owner_id = input.owner_id;
+        if (input.attendee_ids) r.attendee_ids = input.attendee_ids;
+        r.lock_version += 1;
+        return json(200, ritualOut(db, r));
+      }
+    }
+    if (p.length === 4 && m === "POST" && (p[3] === "pause" || p[3] === "resume")) {
+      if (!owner) return notOwner();
+      r.status = p[3] === "pause" ? "paused" : "active";
+      if (r.status === "active") r.next_due_at = nextOccurrence(r.schedule, now()).toISOString();
+      r.lock_version += 1;
+      return json(200, ritualOut(db, r));
+    }
+    if (p.length === 4 && m === "POST" && p[3] === "prepare") {
+      if (!owner) return notOwner();
+      // Retry a failed one, or build the next occurrence's pre-read now.
+      const failed = db.occurrences.find((o) => o.ritual_id === r.id && o.status === "failed");
+      const due = failed ? new Date(failed.due_at) : new Date(r.next_due_at ?? nextOccurrence(r.schedule, now()).toISOString());
+      const asOf = now().toISOString();
+      let o = failed ?? db.occurrences.find((x) => x.ritual_id === r.id && x.due_at === due.toISOString());
+      if (!o) {
+        o = occurrence(ctx, r, due, {});
+        db.occurrences.push(o);
+      }
+      Object.assign(o, { status: "ready", error: null, pre_read: { built_at: asOf, blocks: blocksFor(r.kind, asOf, TRACK_ID) } });
+      if (!failed) r.next_due_at = nextOccurrence(r.schedule, due).toISOString();
+      return json(200, occurrenceOut(ctx, r, o));
+    }
+    if (p.length === 4 && m === "GET" && p[3] === "occurrences") {
+      const limit = Number(q.get("limit") ?? 20);
+      return json(
+        200,
+        db.occurrences
+          .filter((o) => o.ritual_id === r.id)
+          .sort((a, b) => b.due_at.localeCompare(a.due_at))
+          .slice(0, limit)
+          .map(summaryOf),
+      );
+    }
+    return fail(404, "Route not found");
+  }
+
+  const o = db.occurrences.find((x) => x.id === p[2]);
+  if (!o) return fail(404, "Occurrence not found");
+  const r = db.rituals.find((x) => x.id === o.ritual_id)!;
+  if (p.length === 3 && m === "GET") {
+    // The mock summary run finishes on the second read after it starts.
+    if (o.summary_state === "running" && (o.summary_reads = (o.summary_reads ?? 0) + 1) >= 2) {
+      Object.assign(o, { summary_state: "ready", summary: SUMMARY_TEXT, summary_note: null });
+    }
+    return json(200, occurrenceOut(ctx, r, o));
+  }
+  if (p.length === 4 && m === "GET" && p[3] === "pre-read.md") {
+    const lines = [`# ${r.title}`, ""];
+    for (const b of o.pre_read.blocks as { title: string; rows: Row[] }[]) {
+      lines.push(`## ${b.title}`, "", ...(b.rows.length ? b.rows.map((x) => (x.href ? `- [${x.text}](${x.href})` : `- ${x.text}`)) : ["- None"]), "");
+    }
+    return new Response(lines.join("\n"), { status: 200, headers: { "content-type": "text/markdown; charset=utf-8" } });
+  }
+  if (p.length === 4 && m === "POST" && p[3] === "read") {
+    if (!o.read_by.includes(ctx.me.id)) o.read_by.push(ctx.me.id);
+    return new Response(null, { status: 204 });
+  }
+  if (p.length === 4 && m === "POST" && (p[3] === "held" || p[3] === "skip")) {
+    if (ctx.me.id !== r.owner_id) return fail(403, "Only the ritual's owner records it");
+    if (o.status !== "ready" && o.status !== "missed") return fail(409, `This occurrence is ${o.status}`);
+    if (p[3] === "held") {
+      const input = await body<Schemas["HeldIn"]>();
+      if ((input.notes ?? "").length > 10_000) return fail(422, "notes: at most 10,000 characters");
+      Object.assign(o, { status: "held", notes: input.notes || null, decision_ids: input.decision_ids ?? [] });
+    } else {
+      const input = await body<Schemas["SkipIn"]>();
+      if (!input?.reason?.trim()) return fail(422, "reason: say why it was skipped");
+      Object.assign(o, { status: "skipped", skip_reason: input.reason });
+    }
+    return json(200, occurrenceOut(ctx, r, o));
+  }
+  if (p.length === 4 && m === "POST" && p[3] === "summary") {
+    if (!atLeast(role, "approver")) return fail(403, "Requires the approver role");
+    if (o.summary_state === "running") return fail(409, "A summary of this pre-read is being written");
+    const id = ctx.uuid();
+    Object.assign(o, { summary_state: "running", summary_run_id: id, summary_reads: 0, summary_note: null });
+    return json(201, { id, flow: "ritual_summary", status: "running", estimate_usd: PER_SUMMARY_USD });
+  }
+  return fail(404, "Route not found");
+}
