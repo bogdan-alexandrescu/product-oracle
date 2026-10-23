@@ -100,6 +100,7 @@ function SourcesNeedingAttention({ sources }: { sources: Source[] }) {
  */
 const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "checkpoints", title: "Checkpoints" },
+  { id: "tracks", title: "Track health" },
   {
     id: "deliveries",
     title: "Decision not delivered yet",

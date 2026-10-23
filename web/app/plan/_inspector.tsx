@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useId, useState } from "react";
 
 import { Button, Chip, GoalTag, Inspector, InspectorSection, LinkButton, Notice, ToGo } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
+import { acceptTrackAlertDate, alertSentence, keepTrackAlert, listTrackAlerts, reopenTrackAlert, type TrackAlertOut } from "@/lib/api/track-alerts";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { assess, type GoalView, type Point } from "../home/_goals";
@@ -95,6 +97,147 @@ function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
   );
 }
 
+/**
+ * F2: one card per open or kept track alert of the item, the alert in one sentence, then the
+ * actions the caller may take now (a viewer gets none, so the card has no buttons). Kept
+ * alerts say who kept them and why, with Reopen.
+ */
+function AlertCards({ item, onChanged }: { item: PlanItem; onChanged?: () => Promise<void> | void }) {
+  const trackId = item.track_id;
+  const q = useQuery(`plan|alerts|${trackId ?? "none"}`, () => (trackId ? listTrackAlerts({ state: "all", track_id: trackId }) : Promise.resolve([])));
+  const shown = (q.data ?? []).filter((a) => a.item_key === item.key && (a.state === "open" || a.state === "kept"));
+  if (!trackId || shown.length === 0) return null;
+  return (
+    <>
+      {shown.map((a) => (
+        <AlertCard
+          key={`${a.id}-${a.state}`}
+          a={a}
+          item={item}
+          onChanged={async () => {
+            await Promise.all([q.reload(), onChanged?.()]);
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+function AlertCard({ a, item, onChanged }: { a: TrackAlertOut; item: PlanItem; onChanged: () => Promise<void> }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [keeping, setKeeping] = useState(false);
+  const [note, setNote] = useState("");
+  const fieldId = useId();
+  async function run(call: () => Promise<unknown>, after?: (out: unknown) => void) {
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await call();
+      if (after) after(out);
+      else await onChanged();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const has = (x: TrackAlertOut["actions"][number]) => a.actions.includes(x);
+  return (
+    <div data-testid="plan-alert" data-kind={a.kind} data-state={a.state} className="flex flex-col gap-2 rounded-lg border border-line bg-surface2 px-3 py-2 text-[15px]">
+      <span data-testid="plan-alert-detail">{alertSentence(a)}</span>
+      {a.state === "kept" && (
+        <span data-testid="plan-alert-kept" className="text-text2">
+          Kept by {a.kept_by_name ?? "someone"}
+          {a.note ? ` · ${a.note}` : ""}
+        </span>
+      )}
+      {keeping ? (
+        <form
+          className="flex flex-col gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run(() => keepTrackAlert(a.id, note.trim() || null));
+          }}
+        >
+          <label htmlFor={fieldId} className="text-[13px] leading-4 font-semibold text-text2">
+            Note (optional)
+          </label>
+          <input
+            id={fieldId}
+            autoFocus
+            value={note}
+            maxLength={500}
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setKeeping(false)}
+            className="h-8 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-sm"
+          />
+          <span className="flex flex-wrap gap-1.5">
+            <Button type="submit" disabled={busy}>
+              Keep watching
+            </Button>
+            <Button variant="ghost" disabled={busy} onClick={() => setKeeping(false)}>
+              Cancel
+            </Button>
+          </span>
+        </form>
+      ) : (
+        a.actions.length > 0 && (
+          <span className="flex flex-wrap gap-1.5">
+            {has("accept_date") && (
+              <Button disabled={busy} onClick={() => void run(() => acceptTrackAlertDate(a.id))}>
+                Accept new date
+              </Button>
+            )}
+            {has("replan") && (
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  void run(
+                    () => unwrap(api.POST("/v1/tracks/{track_id}/roadmap-run", { params: { path: { track_id: a.track_id } } })),
+                    (r) => router.push(`/runs/${(r as { id: string }).id}`),
+                  )
+                }
+              >
+                Re-plan
+              </Button>
+            )}
+            {(has("review") || has("reconcile")) && (
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  void run(() =>
+                    unwrap(
+                      api.POST("/v1/roadmaps/{doc}/items/staleness", {
+                        params: { path: { doc: item.roadmap.slug } },
+                        body: { action: "review", item_keys: [item.key] },
+                      }),
+                    ),
+                  )
+                }
+              >
+                Review
+              </Button>
+            )}
+            {has("keep") && (
+              <Button variant="ghost" disabled={busy} onClick={() => setKeeping(true)}>
+                Keep watching
+              </Button>
+            )}
+            {has("reopen") && (
+              <Button variant="ghost" disabled={busy} onClick={() => void run(() => reopenTrackAlert(a.id))}>
+                Reopen
+              </Button>
+            )}
+          </span>
+        )
+      )}
+      {error && <Notice tone="error">{error}</Notice>}
+    </div>
+  );
+}
+
 /** The selected item (F1 §8): why it needs someone, its history, its goals, and where to open it. */
 export function PlanInspector({
   item,
@@ -102,12 +245,15 @@ export function PlanInspector({
   history,
   me,
   links,
+  onChanged,
 }: {
   item: PlanItem;
   goals: Map<string, GoalView>;
   history: Map<string, Point[]>;
   me: string | null | undefined;
   links?: PlanLinks;
+  /** F2: an alert's action changed the plan (Accept new date); reload it. */
+  onChanged?: () => Promise<void> | void;
 }) {
   const state = stateChip(item);
   const served = item.goal_ids.map((id) => goals.get(id)).filter((g): g is GoalView => !!g);
@@ -132,6 +278,7 @@ export function PlanInspector({
     >
       <InspectorSection label="Why it needs you" testId="plan-why">
         <div className="flex flex-col gap-2">
+          <AlertCards item={item} onChanged={onChanged} />
           {item.reasons.map((r, n) => (
             <div key={n} className="rounded-lg border border-line bg-surface2 px-3 py-2 text-[15px]">
               {r.detail}

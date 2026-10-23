@@ -7955,6 +7955,113 @@ export interface paths {
         patch: operations["update_milestone"];
         trace?: never;
     };
+    "/v1/track-alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Track Alerts
+         * @description A track's situations that need someone (F2): slips, drift both ways, blockers,
+         *     stale items, a moved PRD. ``actions``: only what the caller may do now.
+         */
+        get: operations["list_track_alerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/track-alerts/{alert_id}/keep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep Track Alert
+         * @description Keep watching: the alert leaves the Inbox until its facts change (the people it
+         *     goes to). 409 when it is not open.
+         */
+        post: operations["keep_track_alert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/track-alerts/{alert_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Track Alert
+         * @description Put a kept alert back in the Inbox. 409 when it is not kept.
+         */
+        post: operations["reopen_track_alert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/track-alerts/{alert_id}/accept-date": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Track Alert Date
+         * @description Accept a slipped date, in one transaction: a verified basis from the tracker
+         *     record, the planned Now milestones resting on the old date moved to the new one, the
+         *     old bases withdrawn, the track monitored again. Engineering leads and owners; approvers
+         *     while no lead is named (F3). 409 when the alert is not an open date slip or the
+         *     tracker date changed since it opened; 422 when the new date breaks Now's rules.
+         */
+        post: operations["accept_track_alert_date"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracker/records/{record_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tracker Record Events
+         * @description What an import changed on a tracker record: state, target date, estimate and the
+         *     tracker's own status, before and after (F2).
+         */
+        get: operations["list_tracker_record_events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/alignment-reports": {
         parameters: {
             query?: never;
@@ -9108,6 +9215,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcceptDateOut */
+        AcceptDateOut: {
+            alert: components["schemas"]["TrackAlertOut"];
+            basis: components["schemas"]["ScheduleBasisOut"];
+            /** Withdrawn Basis Ids */
+            withdrawn_basis_ids: string[];
+            /** Milestones Moved */
+            milestones_moved: components["schemas"]["MilestoneMoved"][];
+            /** Stale Item Ids */
+            stale_item_ids: string[];
+        };
         /** AcceptSuggestionIn */
         AcceptSuggestionIn: {
             /** Lock Version */
@@ -16525,6 +16643,11 @@ export interface components {
             launches: components["schemas"]["InboxLaunch"][];
             /** Last Seen At */
             last_seen_at?: string | null;
+            /**
+             * Tracks
+             * @default []
+             */
+            tracks: components["schemas"]["InboxTrack"][];
         };
         /** InboxQuestion */
         InboxQuestion: {
@@ -16771,6 +16894,54 @@ export interface components {
              * @default false
              */
             console_held: boolean;
+        };
+        /**
+         * InboxTrack
+         * @description One track's Inbox row (F2): its open alerts for the caller (up to three, newest
+         *     first), how many more, and the kept and resolved ones of the last 30 days (Done).
+         */
+        InboxTrack: {
+            /**
+             * Track Id
+             * Format: uuid
+             */
+            track_id: string;
+            prd: components["schemas"]["TrackAlertPrd"];
+            /** Health */
+            health: string | null;
+            counts: components["schemas"]["InboxTrackCounts"];
+            /** Newest At */
+            newest_at: string | null;
+            /** Alerts */
+            alerts: components["schemas"]["TrackAlertOut"][];
+            /**
+             * More
+             * @default 0
+             */
+            more: number;
+            /**
+             * Done
+             * @default []
+             */
+            done: components["schemas"]["TrackAlertOut"][];
+        };
+        /** InboxTrackCounts */
+        InboxTrackCounts: {
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+            /**
+             * New
+             * @default 0
+             */
+            new: number;
+            /**
+             * Kept
+             * @default 0
+             */
+            kept: number;
         };
         /** InspectedModule */
         InspectedModule: {
@@ -18596,6 +18767,21 @@ export interface components {
             basis_ids?: string[];
             /** Item Keys */
             item_keys?: string[];
+        };
+        /** MilestoneMoved */
+        MilestoneMoved: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** From */
+            from: string | null;
+            /**
+             * To
+             * Format: date
+             */
+            to: string;
         };
         /** MilestoneOut */
         MilestoneOut: {
@@ -27199,6 +27385,80 @@ export interface components {
             /** Entity Id */
             entity_id?: string | null;
         };
+        /** TrackAlertAccept */
+        TrackAlertAccept: {
+            /** Reason */
+            reason?: string | null;
+        };
+        /** TrackAlertKeep */
+        TrackAlertKeep: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * TrackAlertOut
+         * @description One situation on one track. ``actions``: only what the caller may do now.
+         *     ``inbox_state``: in the Inbox only (new, open, done; C1e).
+         */
+        TrackAlertOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Track Id
+             * Format: uuid
+             */
+            track_id: string;
+            prd: components["schemas"]["TrackAlertPrd"];
+            /** Item Key */
+            item_key: string | null;
+            /** Item Title */
+            item_title: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "date_slip" | "overdue" | "cancelled" | "ahead" | "unplanned" | "blocked" | "stale" | "prd_moved";
+            /** Detail */
+            detail: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "open" | "kept" | "resolved";
+            /** Inbox State */
+            inbox_state?: ("new" | "open" | "done") | null;
+            /**
+             * Opened At
+             * Format: date-time
+             */
+            opened_at: string;
+            /** Kept By */
+            kept_by: string | null;
+            /** Kept By Name */
+            kept_by_name?: string | null;
+            /** Kept At */
+            kept_at: string | null;
+            /** Note */
+            note: string | null;
+            /** Resolved At */
+            resolved_at: string | null;
+            /** Actions */
+            actions: ("accept_date" | "replan" | "review" | "reconcile" | "open_blocker" | "link" | "keep" | "reopen")[];
+        };
+        /** TrackAlertPrd */
+        TrackAlertPrd: {
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
         /** TrackChange */
         TrackChange: {
             /**
@@ -27472,6 +27732,23 @@ export interface components {
             connector: components["schemas"]["TrackerConnectorOut"];
             /** Epics */
             epics: components["schemas"]["TrackerPlanEpic"][];
+        };
+        /** TrackerRecordEventOut */
+        TrackerRecordEventOut: {
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "state" | "target_date" | "estimate" | "raw_status";
+            /** Before */
+            before: string | null;
+            /** After */
+            after: string | null;
         };
         /** TrackerRecordIn */
         TrackerRecordIn: {
@@ -43445,6 +43722,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MilestoneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_track_alerts: {
+        parameters: {
+            query?: {
+                state?: ("open" | "kept" | "resolved") | "all";
+                track_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackAlertOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    keep_track_alert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TrackAlertKeep"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackAlertOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_track_alert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackAlertOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_track_alert_date: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TrackAlertAccept"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptDateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tracker_record_events: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerRecordEventOut"][];
                 };
             };
             /** @description Validation Error */

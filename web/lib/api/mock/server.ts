@@ -35,7 +35,7 @@ import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } fr
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
-import { DIFF_SCENARIO, dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { DIFF_SCENARIO, dateMarks, inboxTracks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
@@ -2719,6 +2719,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     userId: me.id,
     role: me.role,
     engineeringLead: engineeringLeads(db).includes(me.id),
+    userName: me.email,
     documents: db.documents,
     versions: db.versions,
   };
@@ -2787,15 +2788,18 @@ async function route(db: Db, req: Request): Promise<Response> {
     const strategy = inboxStrategy(db.strategy, me.role);
     const did = inboxActions((db.autonomy ??= emptyAutonomy()), me.id);
     const open = did.filter((a) => a.counts).length;
+    // F2: the track group (the track's owner, else every owner); its new and open alerts count.
+    const tracked = inboxTracks(roadmapCtx, db.roadmap, seenBefore);
     return json(200, {
       ...inbox,
+      tracks: tracked.tracks,
       revoke_failures: failures,
       access_failures: accessFailures,
       reports: reported.reports,
       report_failures: reported.report_failures,
       strategy,
       oracle_actions: did,
-      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open,
+      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + tracked.total,
     });
   }
   if (runs) return runs;

@@ -10,6 +10,7 @@
  * Synthetic placeholders only. Reads need a viewer; writes an approver, as in the API.
  */
 import type { Schemas } from "@/lib/api/client";
+import type { AcceptDateOut, InboxTrack, TrackAlertAction, TrackAlertOut, TrackerRecordEventOut } from "@/lib/api/track-alerts";
 
 import { mockUuid, seeded, stableUuid } from "./ids";
 import { diffItems, snapshot } from "./roadmap-diff";
@@ -49,6 +50,12 @@ export interface RoadmapDb {
   bases: Basis[];
   records: TrackerRecord[];
   changes: Change[];
+  /** F2: track alerts (seeded only in the "track-alerts" scenario, so other specs' Inbox counts stay). */
+  alerts?: StoredAlert[];
+  /** F2: tracker record history, one row per changed field. */
+  recordEvents?: (TrackerRecordEventOut & { record_id: string })[];
+  /** F2: dates accepted from the tracker, by item key (the Plan row reads them). */
+  accepted?: Record<string, string>;
 }
 
 export interface RoadmapContext {
@@ -56,6 +63,8 @@ export interface RoadmapContext {
   role: Role;
   /** A3: the caller carries the engineering lead flag (they may record and withdraw date bases). */
   engineeringLead?: boolean;
+  /** How the caller is named (F2: "Kept by <name>"). */
+  userName?: string;
   documents: Doc[];
   versions: Version[];
 }
@@ -180,6 +189,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
     db.records.push(issueRecord(SYNCED_ISSUES[1], prd.id, "spend-forecast", ctx.userId));
     if (withItems && rv) db.items[rv.id] = db.items[rv.id].map((i) => fromFixture(db, i));
     if (withDiff && roadmap) seedDiff(ctx, db, roadmap.id, track.id);
+    if (scenario === TRACK_ALERTS_SCENARIO) seedAlerts(db, track.id);
     return db;
   });
 }
@@ -501,6 +511,9 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
     return null;
   }
 
+  // F2: /v1/track-alerts[/{id}/keep|reopen|accept-date]
+  if (p[1] === "track-alerts") return trackAlerts(ctx, db, m, p, q, body);
+
   // /v1/schedule-bases[/{id}/withdraw]
   if (p[1] === "schedule-bases") {
     if (!p[2] && m === "GET") {
@@ -550,6 +563,11 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
       return trackerLinks(ctx, db, m, p, q, body);
     }
     if (p[2] === "connector" && m === "GET") return json(200, connector());
+    // F2: a tracker record's history.
+    if (p[2] === "records" && p[3] && p[4] === "events" && !p[5] && m === "GET") {
+      if (!db.records.some((r) => r.id === p[3]) && !(db.recordEvents ?? []).some((e) => e.record_id === p[3])) return notFound("Tracker record");
+      return json(200, (db.recordEvents ?? []).filter((e) => e.record_id === p[3]).map(({ observed_at, field, before, after }) => ({ observed_at, field, before, after })));
+    }
     if (p[2] === "records" && m === "GET") return json(200, db.records.filter((r) => !q.get("track_id") || r.track_id === q.get("track_id")));
     if (p[2] === "records" && m === "POST") {
       if (!can("approver")) return forbidden();
@@ -892,6 +910,9 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
         .map((r) => ({ id: r.id, tracker: r.tracker, external_ref: r.external_ref, state: r.state, raw_status: r.raw_status, target_date: r.target_date, estimate: r.estimate, url: r.url })),
     ];
     const href = `/documents/${prd.slug}/v/${prdVersion}`;
+    // F2: a slip accepted from its alert: the item rests on the tracker's date now.
+    const acceptedDay = origin === "approved" && prd.slug === "usage-alerts" ? db.accepted?.[s.key] : undefined;
+    if (acceptedDay) s = { ...s, date: acceptedDay, dateStatus: "verified", slipDays: undefined, state: "on_track", reasons: [], next: undefined };
     const next: Schemas["PlanNext"] =
       origin === "draft"
         ? { action: "review_prd", label: "PRD review", who: { role: "approver", user_id: null }, href, viewer_may: may("approver") }
@@ -1107,4 +1128,164 @@ function trackerLinks(
     return new Response(null, { status: 204 });
   }
   return null;
+}
+
+// --- F2 Track health: track alerts, their actions and the Inbox's track group -------------
+
+/** The mock scenario (MOCK_SCENARIO_KEY) with one open date slip on Usage alerts (F2). */
+export const TRACK_ALERTS_SCENARIO = "track-alerts";
+type StoredAlert = Omit<TrackAlertOut, "prd" | "actions" | "inbox_state">;
+/** The Plan's ENG-405 record (routePlan seeds it as plan:record:ENG-405). */
+const SLIP_RECORD_ID = stableUuid("plan:record:ENG-405#0");
+const DONE_DAYS = 30;
+
+/** One open date slip: ENG-405 (Daily alert digest email) moved from Nov 30 to Dec 9; Beta rests on Nov 30. */
+function seedAlerts(db: RoadmapDb, trackId: string) {
+  db.alerts = [
+    {
+      id: stableUuid("track-alert/alert-digest/date_slip"), track_id: trackId, item_key: "alert-digest", item_title: "Daily alert digest email",
+      kind: "date_slip", detail: "ENG-405 moved to 2026-12-09; Beta rests on 2026-11-30",
+      data: {
+        tracker_ref: "ENG-405", tracker_date: "2026-12-09", milestone_date: "2026-11-30", milestone_name: "Beta", slip_days: 9,
+        previous_tracker_date: "2026-11-30", changed_at: "2026-10-20T15:00:00Z", record_id: SLIP_RECORD_ID,
+      },
+      state: "open", opened_at: "2026-10-20T15:02:00Z", kept_by: null, kept_by_name: null, kept_at: null, note: null, resolved_at: null,
+    },
+  ];
+  db.recordEvents = [{ record_id: SLIP_RECORD_ID, observed_at: "2026-10-20T15:00:00Z", field: "target_date", before: "2026-11-30", after: "2026-12-09" }];
+}
+
+/** What the caller may do on the alert now: approvers and owners act; viewers and commenters only read. */
+function alertActions(ctx: RoadmapContext, a: StoredAlert): TrackAlertAction[] {
+  if (RANK[ctx.role] < RANK.approver) return [];
+  if (a.state === "kept") return ["reopen"];
+  if (a.state !== "open") return [];
+  const first: Record<StoredAlert["kind"], TrackAlertAction[]> = {
+    date_slip: ["accept_date", "replan"],
+    overdue: ["replan"],
+    cancelled: ["replan"],
+    ahead: ["replan"],
+    unplanned: ["link"],
+    blocked: ["open_blocker"],
+    stale: ["review"],
+    prd_moved: ["replan"],
+  };
+  return [...first[a.kind], "keep"];
+}
+
+function alertOut(ctx: RoadmapContext, db: RoadmapDb, a: StoredAlert, seen?: string | null): TrackAlertOut {
+  const t = db.tracks.find((x) => x.id === a.track_id);
+  const prd = t && ctx.documents.find((d) => d.id === t.prd_id);
+  const inbox: TrackAlertOut["inbox_state"] =
+    seen === undefined ? null : a.state !== "open" ? "done" : seen === null || a.opened_at > seen ? "new" : "open";
+  return { ...a, prd: { slug: prd?.slug ?? "", title: prd?.title ?? "" }, actions: alertActions(ctx, a), inbox_state: inbox };
+}
+
+function trackAlerts(
+  ctx: RoadmapContext,
+  db: RoadmapDb,
+  m: string,
+  p: string[],
+  q: URLSearchParams,
+  body: <T>() => Promise<T>,
+): Response | Promise<Response> | null {
+  const alerts = (db.alerts ??= []);
+  if (!p[2] && m === "GET") {
+    const state = q.get("state") ?? "open";
+    if (!["open", "kept", "resolved", "all"].includes(state)) return json(422, { detail: "state: open, kept, resolved or all" });
+    const track = q.get("track_id");
+    if (track && !db.tracks.some((t) => t.id === track)) return notFound("Track");
+    return json(
+      200,
+      alerts
+        .filter((a) => (state === "all" || a.state === state) && (!track || a.track_id === track))
+        .sort((a, b) => b.opened_at.localeCompare(a.opened_at))
+        .map((a) => alertOut(ctx, db, a)),
+    );
+  }
+  if (!p[2] || !p[3] || p[4] || m !== "POST") return null;
+  const a = alerts.find((x) => x.id === p[2]);
+  if (!a) return notFound("Track alert");
+  const verb = p[3];
+  if (verb === "keep") {
+    if (RANK[ctx.role] < RANK.approver) return json(403, { detail: "Requires the approver role" });
+    if (a.state !== "open") return json(409, { detail: "Only an open alert can be kept" });
+    return body<{ note?: string | null } | null>().then((b) => {
+      const note = b?.note?.trim() || null;
+      if (note && note.length > 500) return json(422, { detail: "note: at most 500 characters" });
+      Object.assign(a, { state: "kept", kept_by: ctx.userId, kept_by_name: ctx.userName ?? null, kept_at: now(), note });
+      return json(200, alertOut(ctx, db, a));
+    });
+  }
+  if (verb === "reopen") {
+    if (RANK[ctx.role] < RANK.approver) return json(403, { detail: "Requires the approver role" });
+    if (a.state !== "kept") return json(409, { detail: "Only a kept alert can be reopened" });
+    Object.assign(a, { state: "open", kept_by: null, kept_by_name: null, kept_at: null, note: null });
+    return json(200, alertOut(ctx, db, a));
+  }
+  if (verb === "accept-date") {
+    const verifies = RANK[ctx.role] >= RANK.approver || (!!ctx.engineeringLead && RANK[ctx.role] >= RANK.commenter);
+    if (!verifies) return json(403, { detail: "Requires the approver role or the engineering lead" });
+    if (a.state !== "open" || a.kind !== "date_slip") return json(409, { detail: "Only an open date slip can take its new date" });
+    return body<{ reason?: string | null } | null>().then(() => {
+      const t = db.tracks.find((x) => x.id === a.track_id)!;
+      const day = String(a.data.tracker_date);
+      const from = String(a.data.milestone_date);
+      const ref = String(a.data.tracker_ref);
+      const basis: Basis = {
+        id: mockUuid(), kind: "estimate", reference: ref, supports_date: day, detail: null, prd_document_id: t.prd_id,
+        item_key: a.item_key, tracker_key: null, tracker_record_id: String(a.data.record_id ?? "") || null, status: "verified",
+        verified_by: ctx.userId, verified_at: now(), withdrawn_by: null, withdrawn_at: null, created_at: now(),
+      };
+      // The bases the old date rested on are withdrawn; the new one supports the tracker's date.
+      const withdrawn = db.bases.filter((b) => b.prd_document_id === t.prd_id && b.status === "verified" && b.supports_date === from);
+      for (const b of withdrawn) Object.assign(b, { status: "withdrawn", withdrawn_by: ctx.userId, withdrawn_at: now() });
+      db.bases.push(basis);
+      const moved: AcceptDateOut["milestones_moved"] = [];
+      for (const ms of db.milestones.filter((x) => x.track_id === t.id && x.status === "planned" && x.target_date === from && a.item_key && x.item_keys.includes(a.item_key))) {
+        moved.push({ id: ms.id, from, to: day });
+        Object.assign(ms, { target_date: day, basis_ids: [basis.id], lock_version: ms.lock_version + 1, updated_at: now() });
+      }
+      if (a.item_key) (db.accepted ??= {})[a.item_key] = day;
+      Object.assign(a, { state: "resolved", resolved_at: now() });
+      const out: AcceptDateOut = {
+        alert: alertOut(ctx, db, a), basis, withdrawn_basis_ids: withdrawn.map((b) => b.id), milestones_moved: moved, stale_item_ids: [],
+      };
+      return json(200, out);
+    });
+  }
+  return null;
+}
+
+/**
+ * The Inbox's track group (F2 §4): for the track's owner, else every owner, one entry per
+ * track with open alerts or alerts done in the last 30 days. `total` counts the new and open.
+ */
+export function inboxTracks(ctx: RoadmapContext, db: RoadmapDb, seen: string | null): { tracks: InboxTrack[]; total: number } {
+  const tracks: InboxTrack[] = [];
+  let total = 0;
+  const since = new Date(Date.now() - DONE_DAYS * 86_400_000).toISOString();
+  for (const t of db.tracks) {
+    const audience = t.owner_id ? t.owner_id === ctx.userId : ctx.role === "owner";
+    if (!audience) continue;
+    const mine = (db.alerts ?? []).filter((a) => a.track_id === t.id).map((a) => alertOut(ctx, db, a, seen));
+    const open = mine.filter((a) => a.state === "open").sort((a, b) => b.opened_at.localeCompare(a.opened_at));
+    const done = mine.filter((a) => a.state !== "open" && (a.kept_at ?? a.resolved_at ?? a.opened_at) >= since);
+    if (!open.length && !done.length) continue;
+    const fresh = open.filter((a) => a.inbox_state === "new").length;
+    const health = overview(ctx, db, t).health;
+    tracks.push({
+      track_id: t.id,
+      prd: open[0]?.prd ?? done[0].prd,
+      // An open alert puts an on-track track at risk.
+      health: open.length && health === "on_track" ? "at_risk" : health,
+      counts: { open: open.length - fresh, new: fresh, kept: mine.filter((a) => a.state === "kept").length },
+      newest_at: open[0]?.opened_at ?? null,
+      alerts: open.slice(0, 3),
+      more: Math.max(0, open.length - 3),
+      done,
+    });
+    total += open.length;
+  }
+  return { tracks, total };
 }
