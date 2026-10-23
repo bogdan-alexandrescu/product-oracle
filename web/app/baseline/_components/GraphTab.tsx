@@ -5,7 +5,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { Button, Chip, DataTable, GoalTag, InfoTip, Panel, type Column } from "@/components/ds";
 import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from "@/lib/api/client";
 
-import { ADD_REASON, type AddKind } from "./AddItem";
+import type { AddKind } from "./AddItem";
 import {
   ConfidenceRing,
   contributionOf,
@@ -188,11 +188,13 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
     });
   }
 
-  const add = (kind: AddKind) => (
-    <Button icon="plus" disabled={!canWrite} title={canWrite ? undefined : ADD_REASON} onClick={() => onAdd(kind)}>
-      Add
-    </Button>
-  );
+  // Only a role that can add sees Add (#370).
+  const add = (kind: AddKind) =>
+    canWrite ? (
+      <Button icon="plus" onClick={() => onAdd(kind)}>
+        Add
+      </Button>
+    ) : undefined;
 
   return (
     <div className="flex flex-col gap-4">

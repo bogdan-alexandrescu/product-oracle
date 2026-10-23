@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { Button, GoalTag, Notice } from "@/components/ds";
 import { INPUT } from "@/components/ui";
@@ -22,9 +22,6 @@ export const ADD_KINDS = [
 ] as const satisfies readonly { value: EntityOut["type"]; label: string }[];
 
 export type AddKind = (typeof ADD_KINDS)[number]["value"];
-
-/** Why a viewer or commenter sees the add buttons disabled. */
-export const ADD_REASON = "Only approvers and owners add items to the baseline.";
 
 const CONTRIBUTION = [
   { value: "", label: "No link" },
@@ -73,16 +70,25 @@ export function AddItemSheet({
   const [goals, setGoals] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Once the item is made, a retry makes only the links still missing: never a second item.
+  const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
+  const linked = useRef(new Set<string>());
+
+  // Closing after the item is made still refreshes the page, so the item shows.
+  const close = useCallback(
+    () => (created ? onAdded(`Added ${created.name}, without all of the links you picked.`) : onClose()),
+    [created, onAdded, onClose],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
-      onClose();
+      close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [close]);
 
   const live = (graph?.entities ?? []).filter((e) => e.status !== "rejected");
   const products = live.filter((e) => e.type === "product").sort(byTitle);
@@ -96,27 +102,35 @@ export function AddItemSheet({
     }
     setBusy(true);
     setError(null);
+    let item = created;
     try {
-      const out = await unwrap(
-        api.POST("/v1/baseline/entities", {
-          body: { type: kind, key: newKey(title.trim()), title: title.trim(), body: body.trim() || null, attrs: {}, origin: "user" },
-        }),
-      );
-      const name = `“${title.trim()}”`;
-      if (!out.entity) {
-        onAdded(`${name} was saved as a proposal for an approver.`);
-        return;
+      if (!item) {
+        const out = await unwrap(
+          api.POST("/v1/baseline/entities", {
+            body: { type: kind, key: newKey(title.trim()), title: title.trim(), body: body.trim() || null, attrs: {}, origin: "user" },
+          }),
+        );
+        if (!out.entity) {
+          onAdded(`“${title.trim()}” was saved as a proposal for an approver.`);
+          return;
+        }
+        item = { id: out.entity.id, name: `“${title.trim()}”` };
+        setCreated(item);
       }
+      const name = item.name;
       if (kind === "feature") {
-        const src_id = out.entity.id;
-        if (product) await unwrap(api.POST("/v1/baseline/edges", { body: { src_id, dst_id: product, type: "part_of", attrs: {}, origin: "user" } }));
-        for (const [goal, c] of Object.entries(goals)) {
-          if (!c) continue;
-          await unwrap(
-            api.POST("/v1/baseline/edges", {
-              body: { src_id, dst_id: goal, type: "supports", attrs: { contribution: Number(c) }, origin: "user" },
-            }),
-          );
+        const src_id = item.id;
+        const links = [
+          ...(product ? [{ dst_id: product, type: "part_of" as const, attrs: {} }] : []),
+          ...Object.entries(goals)
+            .filter(([, c]) => c)
+            .map(([goal, c]) => ({ dst_id: goal, type: "supports" as const, attrs: { contribution: Number(c) } })),
+        ];
+        for (const link of links) {
+          const done = `${link.type}:${link.dst_id}`;
+          if (linked.current.has(done)) continue;
+          await unwrap(api.POST("/v1/baseline/edges", { body: { src_id, ...link, origin: "user" } }));
+          linked.current.add(done);
         }
       }
       onAdded(
@@ -125,7 +139,9 @@ export function AddItemSheet({
           : `Added ${name}. It is confirmed and locked against agent changes.`,
       );
     } catch (err) {
-      if (!onAuth(err)) setError(errorMessage(err));
+      if (!onAuth(err)) {
+        setError(item ? `${item.name} was added, but a link failed (${errorMessage(err)}). Try again to make the rest.` : errorMessage(err));
+      }
       setBusy(false);
     }
   }
@@ -144,12 +160,12 @@ export function AddItemSheet({
           <h2 id={`${id}-title`} className="min-w-0 flex-1 font-display text-xl font-bold tracking-heading">
             Add an item
           </h2>
-          <Button variant="ghost" icon="x" onClick={onClose} aria-label="Close" />
+          <Button variant="ghost" icon="x" onClick={close} aria-label="Close" />
         </div>
         <div className="flex-1 space-y-4 px-5 py-4 text-[15px] max-[600px]:px-4">
           <div className={label}>
             <label htmlFor={`${id}-kind`}>Kind</label>
-            <select id={`${id}-kind`} className={INPUT} value={kind} onChange={(e) => setKind(e.target.value as AddKind)}>
+            <select id={`${id}-kind`} className={INPUT} value={kind} disabled={!!created} onChange={(e) => setKind(e.target.value as AddKind)}>
               {ADD_KINDS.map((k) => (
                 <option key={k.value} value={k.value}>
                   {k.label}
@@ -159,11 +175,11 @@ export function AddItemSheet({
           </div>
           <label className={label}>
             Title
-            <input className={INPUT} value={title} data-autofocus autoFocus onChange={(e) => setTitle(e.target.value)} />
+            <input className={INPUT} value={title} disabled={!!created} data-autofocus autoFocus onChange={(e) => setTitle(e.target.value)} />
           </label>
           <label className={label}>
             Description
-            <textarea className={INPUT} rows={3} value={body} onChange={(e) => setBody(e.target.value)} />
+            <textarea className={INPUT} rows={3} value={body} disabled={!!created} onChange={(e) => setBody(e.target.value)} />
           </label>
           {kind === "feature" && (
             <>
@@ -213,11 +229,11 @@ export function AddItemSheet({
           {error && <Notice tone="error">{error}</Notice>}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:sticky max-[600px]:bottom-0 max-[600px]:bg-surface max-[600px]:px-4">
-          <Button variant="ghost" onClick={onClose} disabled={busy}>
+          <Button variant="ghost" onClick={close} disabled={busy}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" disabled={busy}>
-            Add
+            {created ? "Try again" : "Add"}
           </Button>
         </div>
       </form>

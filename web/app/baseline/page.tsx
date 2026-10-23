@@ -9,7 +9,7 @@ import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from 
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
-import { ADD_REASON, AddItemSheet, type AddKind } from "./_components/AddItem";
+import { AddItemSheet, type AddKind } from "./_components/AddItem";
 import { BuildBanner, BuildBaselineSheet, BuildChip, currentBuild } from "./_components/BuildBaseline";
 import { goalTags, KPI_PHONE } from "./_components/common";
 import { ConflictsTab } from "./_components/ConflictsTab";
@@ -225,14 +225,8 @@ export default function BaselinePage() {
         title="Baseline"
         action={
           <span className="flex flex-wrap items-center gap-2">
-            {role && (
-              <Button
-                icon="plus"
-                className="h-10"
-                disabled={!canWrite}
-                title={canWrite ? undefined : ADD_REASON}
-                onClick={() => setAdding("goal")}
-              >
+            {canWrite && (
+              <Button icon="plus" className="h-10" onClick={() => setAdding("goal")}>
                 Add item
               </Button>
             )}

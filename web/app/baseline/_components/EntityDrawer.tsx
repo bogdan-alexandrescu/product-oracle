@@ -375,43 +375,35 @@ export function EntityDrawer({
               )}
             </InspectorSection>
 
-            {!editing && !(promoting && suggestion) && (
+            {/* Only a role that can decide sees these controls (#370); busy disables them for the moment. */}
+            {canWrite && !editing && !(promoting && suggestion) && (
               <InspectorSection>
                 {asking ? (
                   <AskReason action={asking} busy={busy} onBack={() => setAsking(null)} onSubmit={(note) => decide(asking, note)} />
                 ) : (
-                  <div className="flex flex-col gap-2">
-                    <div className="flex flex-wrap gap-2">
-                      {d.status === "proposed" && (
-                        <>
-                          <Button variant="solid" disabled={!canWrite || busy} onClick={() => decide("confirm")}>
-                            Confirm
-                          </Button>
-                          <Button disabled={!canWrite || busy} onClick={() => setAsking("reject")}>
-                            Reject
-                          </Button>
-                        </>
-                      )}
-                      {canWrite && (
-                        <Button
-                          onClick={() => {
-                            setNotice(null);
-                            setEditing(true);
-                          }}
-                        >
-                          Edit
+                  <div className="flex flex-wrap gap-2">
+                    {d.status === "proposed" && (
+                      <>
+                        <Button variant="solid" disabled={busy} onClick={() => decide("confirm")}>
+                          Confirm
                         </Button>
-                      )}
-                      {d.status === "confirmed" && (
-                        <Button variant="danger" disabled={!canWrite || busy} onClick={() => setAsking("archive")}>
-                          Archive
+                        <Button disabled={busy} onClick={() => setAsking("reject")}>
+                          Reject
                         </Button>
-                      )}
-                    </div>
-                    {!canWrite && d.status !== "rejected" && (
-                      <p className="text-sm text-text2" data-testid="decide-note">
-                        Only approvers and owners confirm, reject or archive items.
-                      </p>
+                      </>
+                    )}
+                    <Button
+                      onClick={() => {
+                        setNotice(null);
+                        setEditing(true);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    {d.status === "confirmed" && (
+                      <Button variant="danger" disabled={busy} onClick={() => setAsking("archive")}>
+                        Archive
+                      </Button>
                     )}
                   </div>
                 )}

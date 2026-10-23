@@ -111,7 +111,7 @@ test("baseline: a viewer sees no Add, Confirm, Reject or Archive (#370: a role t
 });
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`baseline: a failed goal link keeps the new feature and Try again only adds the missing link (${scheme})`, async ({ page }) => {
+  test(`baseline: a failed link keeps the new feature and Try again makes only the missing links (${scheme})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
     await openBaseline(page);
     await page.getByRole("region", { name: "Feature × goal", exact: true }).getByRole("button", { name: "Add" }).click();

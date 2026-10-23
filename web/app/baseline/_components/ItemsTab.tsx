@@ -6,7 +6,7 @@ import { Button, DataTable, FilterChips, Panel, type Column } from "@/components
 import type { EntityOut, GraphOut } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 
-import { ADD_REASON, type AddKind } from "./AddItem";
+import type { AddKind } from "./AddItem";
 import { LockMark, NodeStatusBadge } from "./common";
 import { byTitle } from "./order";
 
@@ -82,14 +82,11 @@ export function ItemsTab({
       title="Items"
       count={items.length}
       tools={
-        <Button
-          icon="plus"
-          disabled={!canWrite}
-          title={canWrite ? undefined : ADD_REASON}
-          onClick={() => onAdd(filter === "all" ? "risk" : filter)}
-        >
-          Add
-        </Button>
+        canWrite ? (
+          <Button icon="plus" onClick={() => onAdd(filter === "all" ? "risk" : filter)}>
+            Add
+          </Button>
+        ) : undefined
       }
     >
       <div className="border-b border-line px-4 py-2.5 max-[600px]:px-3">
