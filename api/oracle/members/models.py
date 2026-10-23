@@ -126,7 +126,8 @@ class Invite(TenantScoped, Base):
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(UTC) + INVITE_TTL,
-        server_default=text("now() + interval '14 days'"),
+        # 14 days as an exact span: a '14 days' interval follows the session's zone over DST.
+        server_default=text("now() + interval '336 hours'"),
     )
     resent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resend_count: Mapped[int] = mapped_column(

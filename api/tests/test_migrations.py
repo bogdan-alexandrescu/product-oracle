@@ -241,9 +241,9 @@ def test_revision_run_up_down_up(scratch_db):
 
     cfg = _cfg()
     script = ScriptDirectory.from_config(cfg)
-    assert script.get_heads() == [REVISION_RUN]
+    assert REVISION_RUN in {r.revision for r in script.walk_revisions()}
     previous = script.get_revision(REVISION_RUN).down_revision
-    assert previous == "0041_subgoals"
+    assert previous == "0043_invite_message"
     command.upgrade(cfg, REVISION_RUN)
     assert "run_id" in _columns("entity_revisions")
     command.downgrade(cfg, previous)

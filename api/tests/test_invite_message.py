@@ -334,10 +334,10 @@ async def test_a_message_over_500_characters_is_refused(client, owner, iap, mail
 
 
 async def test_a_non_owner_is_refused_as_before(client, owner, iap, mail):  # noqa: F811
-    """protects=owners only; fails_when=an approver's invite with a message is accepted;
-    no_claim=A5 part 1's approver invites."""
+    """protects=only those who may invite (A5: owners and approvers) send a message;
+    fails_when=a commenter's or viewer's invite with a message is accepted."""
     tenant_id, _ = owner
-    for role in ("approver", "commenter", "viewer"):
+    for role in ("commenter", "viewer"):
         headers = await token_with_role(tenant_id, role)
         resp = await client.post(
             "/v1/invites",

@@ -80,14 +80,14 @@ def upgrade() -> None:
     op.add_column("invites", sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True))
     op.execute(
         "UPDATE invites SET expires_at = CASE"
-        " WHEN accepted_at IS NULL AND revoked_at IS NULL THEN now() + interval '14 days'"
-        " ELSE created_at + interval '14 days' END"
+        " WHEN accepted_at IS NULL AND revoked_at IS NULL THEN now() + interval '336 hours'"
+        " ELSE created_at + interval '336 hours' END"
     )
     op.alter_column(
         "invites",
         "expires_at",
         nullable=False,
-        server_default=sa.text("now() + interval '14 days'"),
+        server_default=sa.text("now() + interval '336 hours'"),
     )
     op.add_column("invites", sa.Column("resent_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column(
