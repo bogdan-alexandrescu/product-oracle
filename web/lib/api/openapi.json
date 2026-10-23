@@ -20053,6 +20053,410 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/prd-scopes/{scope_id}": {
+      "get": {
+        "tags": [
+          "scope"
+        ],
+        "summary": "Get Prd Scope Review",
+        "description": "A PRD scope as its review screen reads it, any member: each feature with its\nrequirements, reasons (blocking and to confirm, answered by D8 waivers and accepts)\nand history, the tally, and the previous attempt's decisions for the Changed filter.",
+        "operationId": "get_prd_scope_review",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scope Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrdScopeReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/prd-scopes/{scope_id}/items/{item_id}": {
+      "patch": {
+        "tags": [
+          "scope"
+        ],
+        "summary": "Patch Scope Item",
+        "description": "Decide or edit one row (approver role or above): a feature's decision (a left-out\none with its reason), goals (confirmed goals only), dependencies and blockers; a\nrequirement's decision, text and acceptance; ``revert`` puts the agent's values back.\nThe scope is re-checked: the answer carries the new tally.",
+        "operationId": "patch_scope_item",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scope Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScopeItemPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      },
+      "delete": {
+        "tags": [
+          "scope"
+        ],
+        "summary": "Delete Scope Item",
+        "description": "Remove a requirement a person added (approver role or above); 409 for a row the\nagents wrote (cut it instead).",
+        "operationId": "delete_scope_item",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scope Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/prd-scopes/{scope_id}/items": {
+      "post": {
+        "tags": [
+          "scope"
+        ],
+        "summary": "Add Scope Requirement",
+        "description": "Add a requirement to a feature (approver role or above): ``origin: person``; its\ngoals default to the feature's. Approving writes it to the baseline as the approver's.",
+        "operationId": "add_scope_requirement",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scope Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScopeRequirementIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/prd-scopes/{scope_id}/items/{item_id}/enhance": {
+      "post": {
+        "tags": [
+          "scope"
+        ],
+        "summary": "Enhance Scope Requirement",
+        "description": "Ask Oracle to deepen a requirement (approver role or above): a queued\n``scope_enhance`` job on Oracle's own model; poll ``GET /v1/llm-jobs/{job_id}``. Its\noutput is a suggestion: nothing changes until it is accepted.",
+        "operationId": "enhance_scope_requirement",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scope Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScopeEnhanceIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/prd-scopes/{scope_id}/items/{item_id}/enhance/{job_id}/accept": {
+      "post": {
+        "tags": [
+          "scope"
+        ],
+        "summary": "Accept Scope Enhancement",
+        "description": "Accept an enhancement (approver role or above), as Oracle wrote it or edited: the\nrequirement's text and acceptance become the person's.",
+        "operationId": "accept_scope_enhancement",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scope Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScopeEnhanceAccept"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
     "/v1/modules": {
       "get": {
         "tags": [
@@ -67474,7 +67878,8 @@
               "quality_review",
               "refinement_batch",
               "intake_analysis",
-              "decision_options"
+              "decision_options",
+              "scope_enhance"
             ],
             "title": "Kind"
           },
@@ -67513,6 +67918,18 @@
               }
             ],
             "title": "Decision Id"
+          },
+          "scope_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Id"
           },
           "version_number": {
             "anyOf": [
@@ -73359,6 +73776,171 @@
         ],
         "title": "PrdScopeOut",
         "description": "A PRD scope (C6): the features and requirements a feature-set stop approves for one\nPRD, in file order. Later segments and the document's next drafts read the approved\none."
+      },
+      "PrdScopeReview": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "segment_seq": {
+            "type": "integer",
+            "title": "Segment Seq"
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "approved",
+              "superseded"
+            ],
+            "title": "Status"
+          },
+          "check": {
+            "$ref": "#/components/schemas/FeatureSetCheck"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeReviewFeature"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "checkpoint_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ScopeSummary"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous"
+          },
+          "previous_requirements": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Requirements"
+          },
+          "goals_available": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeGoalChoice"
+            },
+            "type": "array",
+            "title": "Goals Available",
+            "default": []
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "segment_seq",
+          "attempt",
+          "status",
+          "check",
+          "features",
+          "lock_version",
+          "summary"
+        ],
+        "title": "PrdScopeReview",
+        "description": "A PRD scope as its review screen reads it (C7): each feature's reasons and\nhistory, the tally, the previous attempt's decisions (key -> decision) and kept\nrequirements (key -> requirement keys) for the Changed filter, and the confirmed goals\na person may pick. Suggestions, waivers and accepts come from the D8 review read."
       },
       "PreRead": {
         "properties": {
@@ -84758,6 +85340,61 @@
         ],
         "title": "ScheduleBasisWithdraw"
       },
+      "ScopeEnhanceAccept": {
+        "properties": {
+          "text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "acceptance": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 500,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acceptance"
+          }
+        },
+        "type": "object",
+        "title": "ScopeEnhanceAccept",
+        "description": "The enhanced text and acceptance as the approver accepts them (edited, or the\njob's own when absent)."
+      },
+      "ScopeEnhanceIn": {
+        "properties": {
+          "instruction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instruction"
+          }
+        },
+        "type": "object",
+        "title": "ScopeEnhanceIn"
+      },
       "ScopeFeatureOut": {
         "properties": {
           "id": {
@@ -84923,6 +85560,383 @@
         ],
         "title": "ScopeGoal"
       },
+      "ScopeGoalChoice": {
+        "properties": {
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal_id",
+          "key",
+          "title"
+        ],
+        "title": "ScopeGoalChoice"
+      },
+      "ScopeGoalIn": {
+        "properties": {
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          },
+          "contribution": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Contribution",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal_id"
+        ],
+        "title": "ScopeGoalIn"
+      },
+      "ScopeHistory": {
+        "properties": {
+          "original": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Original",
+            "default": {}
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          }
+        },
+        "type": "object",
+        "title": "ScopeHistory",
+        "description": "The agent's value of a row and who changed it last."
+      },
+      "ScopeItemOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "feature",
+              "requirement"
+            ],
+            "title": "Kind"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "acceptance": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Acceptance",
+            "default": []
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "include",
+              "exclude",
+              "defer",
+              "keep",
+              "cut"
+            ],
+            "title": "Decision"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "person"
+            ],
+            "title": "Origin"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeGoal"
+            },
+            "type": "array",
+            "title": "Goals",
+            "default": []
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On",
+            "default": []
+          },
+          "blocker_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blocker Keys",
+            "default": []
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "edited": {
+            "type": "boolean",
+            "title": "Edited",
+            "default": false
+          },
+          "added": {
+            "type": "boolean",
+            "title": "Added",
+            "default": false
+          },
+          "original": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Original",
+            "default": {}
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ScopeSummary"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "scope_lock_version": {
+            "type": "integer",
+            "title": "Scope Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "key",
+          "title",
+          "decision",
+          "origin",
+          "lock_version",
+          "summary",
+          "revision",
+          "scope_lock_version"
+        ],
+        "title": "ScopeItemOut",
+        "description": "One scope row after a write (C7), with the scope's new tally and the checkpoint's\ndraft revision (D8) to decide with."
+      },
+      "ScopeItemPatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "include",
+                  "exclude",
+                  "defer",
+                  "keep",
+                  "cut"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "acceptance": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 500,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acceptance"
+          },
+          "goals": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ScopeGoalIn"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goals"
+          },
+          "depends_on": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depends On"
+          },
+          "blocker_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocker Keys"
+          },
+          "revert": {
+            "type": "boolean",
+            "title": "Revert",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "ScopeItemPatch",
+        "description": "One person's change to one scope row (C7); every field optional. ``revert`` puts\nthe row back to the agent's values. ``decision_reason`` of a left-out feature:\nno_goal | not_now | out_of_scope | duplicate | other:<text>."
+      },
       "ScopeOut": {
         "properties": {
           "name": {
@@ -84940,6 +85954,103 @@
           "description"
         ],
         "title": "ScopeOut"
+      },
+      "ScopeReason": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "to_confirm"
+            ],
+            "title": "Severity"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "requirement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement"
+          },
+          "waivable": {
+            "type": "boolean",
+            "title": "Waivable",
+            "default": false
+          },
+          "answered": {
+            "type": "boolean",
+            "title": "Answered",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "label"
+        ],
+        "title": "ScopeReason",
+        "description": "Why a feature needs a person (C7): a blocking problem of the scope's check, or a\nflag to confirm. ``answered``: a staged D8 waiver (blocking) or accept (to confirm)\nanswers it."
+      },
+      "ScopeRequirementIn": {
+        "properties": {
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Parent Id"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "acceptance": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Acceptance",
+            "default": []
+          },
+          "goals": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ScopeGoalIn"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "parent_id",
+          "text"
+        ],
+        "title": "ScopeRequirementIn",
+        "description": "A requirement a person adds to a feature (C7); its goals default to the\nfeature's."
       },
       "ScopeRequirementOut": {
         "properties": {
@@ -85036,6 +86147,359 @@
           "origin"
         ],
         "title": "ScopeRequirementOut"
+      },
+      "ScopeReviewFeature": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "include",
+              "exclude",
+              "defer"
+            ],
+            "title": "Decision"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "person"
+            ],
+            "title": "Origin"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeGoal"
+            },
+            "type": "array",
+            "title": "Goals",
+            "default": []
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On",
+            "default": []
+          },
+          "blocker_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blocker Keys",
+            "default": []
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags",
+            "default": []
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeReviewRequirement"
+            },
+            "type": "array",
+            "title": "Requirements",
+            "default": []
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Evidence Ids",
+            "default": []
+          },
+          "edited": {
+            "type": "boolean",
+            "title": "Edited",
+            "default": false
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeReason"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          },
+          "needs_you": {
+            "type": "boolean",
+            "title": "Needs You",
+            "default": false
+          },
+          "history": {
+            "$ref": "#/components/schemas/ScopeHistory",
+            "default": {
+              "original": {}
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title",
+          "decision",
+          "origin",
+          "position",
+          "lock_version"
+        ],
+        "title": "ScopeReviewFeature"
+      },
+      "ScopeReviewRequirement": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "acceptance": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Acceptance",
+            "default": []
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "cut"
+            ],
+            "title": "Decision"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "person"
+            ],
+            "title": "Origin"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Parent Id"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "edited": {
+            "type": "boolean",
+            "title": "Edited",
+            "default": false
+          },
+          "added": {
+            "type": "boolean",
+            "title": "Added",
+            "default": false
+          },
+          "history": {
+            "$ref": "#/components/schemas/ScopeHistory",
+            "default": {
+              "original": {}
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title",
+          "decision",
+          "origin",
+          "parent_id",
+          "position",
+          "lock_version"
+        ],
+        "title": "ScopeReviewRequirement"
+      },
+      "ScopeSummary": {
+        "properties": {
+          "features": {
+            "type": "integer",
+            "title": "Features",
+            "default": 0
+          },
+          "needs_you": {
+            "type": "integer",
+            "title": "Needs You",
+            "default": 0
+          },
+          "blocking": {
+            "type": "integer",
+            "title": "Blocking",
+            "default": 0
+          },
+          "to_confirm": {
+            "type": "integer",
+            "title": "To Confirm",
+            "default": 0
+          },
+          "handled": {
+            "type": "integer",
+            "title": "Handled",
+            "default": 0
+          },
+          "edits": {
+            "type": "integer",
+            "title": "Edits",
+            "default": 0
+          },
+          "suggestions_open": {
+            "type": "integer",
+            "title": "Suggestions Open",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ScopeSummary",
+        "description": "The scope's tally (C7): features, those that need a person, open blocking and\nto-confirm reasons, those handled, rows a person changed and suggestions waiting."
       },
       "SearchHit": {
         "properties": {

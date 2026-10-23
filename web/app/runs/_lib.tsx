@@ -152,6 +152,11 @@ export function orderHref(cp: { kind: CheckpointKind; payload?: Record<string, u
   return typeof id === "string" ? `/priorities?snapshot=${id}` : null;
 }
 
+/** C7: a checkpoint kind with its own review screen opens it (/runs/<id>/review/<checkpoint id>). */
+export function reviewHref(cp: { id: string; run_id: string; kind: CheckpointKind }): string | null {
+  return cp.kind === "feature_set" ? `/runs/${cp.run_id}/review/${cp.id}` : null;
+}
+
 export const FINAL_STATUSES: RunStatus[] = ["succeeded", "failed", "cancelled"];
 
 /** Asked before Retry on a lost submission: if the lost one landed, both run (and are paid for) until Oracle finds and cancels it. */

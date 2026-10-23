@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 
 import { Button, Chip, CodeChip, DataTable, InfoTip, Panel, type Column } from "@/components/ds";
 import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from "@/lib/api/client";
@@ -162,6 +162,13 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
   for (const e of graph.edges) {
     if (e.type !== "part_of" || e.status === "rejected") continue;
     if (products.some((p) => p.id === e.dst_id) && !productOf.has(e.src_id)) productOf.set(e.src_id, e.dst_id);
+  }
+  // C7: a feature's requirements (part_of the feature), each under its feature.
+  const requirementsOf = new Map<string, EntityOut[]>();
+  for (const e of graph.edges) {
+    if (e.type !== "part_of" || e.status === "rejected") continue;
+    const r = live.find((x) => x.id === e.src_id && x.type === "requirement");
+    if (r) requirementsOf.set(e.dst_id, [...(requirementsOf.get(e.dst_id) ?? []), r]);
   }
   /** feature id -> goal id -> its supports edge */
   const links = new Map<string, Map<string, EdgeOut>>();
@@ -418,6 +425,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
             tags={tags}
             codes={codes}
             links={links}
+            requirementsOf={requirementsOf}
             traceById={traceById}
             low={low}
             meId={meId}
@@ -492,12 +500,14 @@ function Ledger({
   tags,
   codes,
   links,
+  requirementsOf,
   traceById,
   low,
   meId,
   selectedId,
   onOpen,
 }: {
+  requirementsOf: Map<string, EntityOut[]>;
   goals: EntityOut[];
   groups: { id: string; product: EntityOut | null; features: EntityOut[] }[];
   tags: Map<string, string>;
@@ -603,6 +613,7 @@ function Ledger({
               </th>
             </tr>
             {group.features.map((f) => (
+              <Fragment key={f.id}>
               <FeatureRow
                 key={f.id}
                 feature={f}
@@ -615,6 +626,18 @@ function Ledger({
                 selected={selectedId === f.id}
                 onOpen={onOpen}
               />
+              {(requirementsOf.get(f.id) ?? []).map((r) => (
+                <tr key={r.id} role="row" data-testid={`requirement-${r.key}`} className="border-t border-line max-[600px]:block">
+                  <td role="cell" colSpan={cols} className="px-2 py-1.5 pl-10 text-sm max-[600px]:block max-[600px]:pl-6">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="text-text2">Requirement</span>
+                      <TitleButton entity={r} onOpen={onOpen} className="max-[600px]:whitespace-normal" />
+                      <LockMark entity={r} meId={meId} />
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              </Fragment>
             ))}
           </tbody>
         ))}

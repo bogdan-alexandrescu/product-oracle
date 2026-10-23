@@ -951,6 +951,14 @@ function SegmentItem({
             <AppliedEditsLine key={cp.id} cp={cp} />
           ))}
           {s.feature_set_check && <FeatureSetCheckLine check={s.feature_set_check} />}
+          {waitingCp && reviewHref(waitingCp) && !deciding.includes(waitingCp) && (
+            // C7: commenters suggest and viewers read on the review screen too.
+            <p className="mt-2" data-testid="review-link">
+              <LinkButton href={reviewHref(waitingCp)!} icon="flag">
+                Review feature set
+              </LinkButton>
+            </p>
+          )}
           {s.draft_import && (
             <DraftImportLine
               imp={s.draft_import}
@@ -1876,6 +1884,14 @@ function CheckpointRow({
       {!other && agentsOnly && (
         <p className="mt-2 text-sm text-warn" data-testid="needs-agents">
           {agentsOnly}
+        </p>
+      )}
+      {reviewHref(cp) && cp.status === "pending" && (
+        // C7: the feature set is reviewed row by row on its own screen; the raw files stay below.
+        <p className="mt-2">
+          <LinkButton href={reviewHref(cp)!} variant="solid" icon="flag">
+            Review feature set
+          </LinkButton>
         </p>
       )}
       {orderHref(cp) && (
