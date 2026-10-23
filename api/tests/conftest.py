@@ -93,6 +93,17 @@ async def _truncate_after_test(migrated_db):
         await conn.execute(text(f"TRUNCATE {tables} CASCADE"))
 
 
+@pytest.fixture(autouse=True)
+def _forget_items_checks():
+    """Each test checks its roadmap_items.yaml afresh: the checks one test kept
+    (oracle.runs.roadmap._Checks) are not another's."""
+    from oracle.runs import roadmap
+
+    roadmap._checks.clear()
+    yield
+    roadmap._checks.clear()
+
+
 async def make_tenant(name: str = "Example Co") -> uuid.UUID:
     async with unscoped_session() as s:
         tenant = Tenant(name=name)

@@ -38,10 +38,22 @@ Every refusal is an :class:`ItemsYamlError`, never any other exception. Async ca
 :func:`check_items_async`, which checks on the parse pool
 (:func:`oracle.safe_yaml.run_parse_within`), at most ``PARSE_SECONDS``: a bad file is a
 failed check, never a stalled event loop or a tick exception.
+
+A check is a pure function of the text and the inputs it is given, so
+:func:`check_items_async` keeps its last checks by the text's hash and those inputs
+(:class:`_Checks`, at most ``CHECKS_KEPT`` files and ``CHECKS_KEPT_BYTES`` of text): the
+Inbox re-reads every pending checkpoint's file on each call (D9), and a file checked before
+with the same inputs is neither parsed again nor sent to the parse pool. A check that timed
+out or could not read the file is not kept.
 """
 
+import copy
+import hashlib
 import json
 import re
+import threading
+from collections import OrderedDict
+from collections.abc import Hashable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
@@ -59,6 +71,9 @@ KEY_LISTS = ("requirements", "blockers")
 MAX_STORED_BYTES = 1_000_000
 # The parse and check run on the parse pool, never in the event loop, at most this long.
 PARSE_SECONDS = safe_yaml.PARSE_SECONDS
+# The checks kept (_Checks): at most this many, and this much of their files' text.
+CHECKS_KEPT = 256
+CHECKS_KEPT_BYTES = 16 * 1024 * 1024
 
 # A cross-document link to a document version's section, as the roadmap draft writes it
 # (oracle.runs.flows.prd_link): /documents/<slug>/v/<n>#<section>.
@@ -249,12 +264,74 @@ def check_items(
     return out
 
 
+class _Checks:
+    """The last checks of roadmap_items.yaml, by the SHA-256 of the text and the check's
+    inputs, least recently used dropped first. Each caller gets its own copy, so no caller
+    sees another's changes."""
+
+    def __init__(self, keep: int, keep_bytes: int) -> None:
+        self.keep, self.keep_bytes = keep, keep_bytes
+        self._lock = threading.Lock()
+        self._kept: OrderedDict[Hashable, tuple[int, ItemsCheck]] = OrderedDict()
+        self._bytes = 0
+
+    @staticmethod
+    def key(text: str, kwargs: dict[str, Any]) -> Hashable:
+        digest = hashlib.sha256(text.encode("utf-8", "surrogatepass")).digest()
+        inputs = []
+        for name, value in sorted(kwargs.items()):
+            if isinstance(value, set | frozenset):
+                value = ("set", frozenset(value))
+            elif isinstance(value, list):
+                value = ("list", tuple(value))
+            inputs.append((name, value))
+        return digest, tuple(inputs)
+
+    def get(self, key: Hashable) -> ItemsCheck | None:
+        with self._lock:
+            found = self._kept.get(key)
+            if found is None:
+                return None
+            self._kept.move_to_end(key)
+        return copy.deepcopy(found[1])
+
+    def put(self, key: Hashable, size: int, check: ItemsCheck) -> None:
+        if size > self.keep_bytes:
+            return
+        check = copy.deepcopy(check)
+        with self._lock:
+            old = self._kept.pop(key, None)
+            if old is not None:
+                self._bytes -= old[0]
+            self._kept[key] = (size, check)
+            self._bytes += size
+            while len(self._kept) > self.keep or self._bytes > self.keep_bytes:
+                _, (dropped, _) = self._kept.popitem(last=False)
+                self._bytes -= dropped
+
+    def clear(self) -> None:
+        with self._lock:
+            self._kept.clear()
+            self._bytes = 0
+
+
+_checks = _Checks(CHECKS_KEPT, CHECKS_KEPT_BYTES)
+
+
 async def check_items_async(text: str, **kwargs: Any) -> ItemsCheck:
     """:func:`check_items` in a worker thread, at most ``PARSE_SECONDS``: the event loop
     (every company's requests and ticks) never waits on agent output. A check that takes
-    longer, or fails in any way, is a problem, never an exception."""
+    longer, or fails in any way, is a problem, never an exception. A check made before with
+    the same text and inputs is returned as it was (:class:`_Checks`)."""
     try:
-        return await safe_yaml.run_parse_within(
+        key = _Checks.key(text, kwargs)
+        hash(key)
+    except TypeError:  # an input that can not be a key: checked, not kept
+        key = None
+    if key is not None and (kept := _checks.get(key)) is not None:
+        return kept
+    try:
+        check = await safe_yaml.run_parse_within(
             check_items, text, name="roadmap_items.yaml", seconds=PARSE_SECONDS, **kwargs
         )
     except safe_yaml.ParseBusy:
@@ -272,6 +349,10 @@ async def check_items_async(text: str, **kwargs: Any) -> ItemsCheck:
         name = type(exc).__name__
         out.add("unreadable_yaml", f"roadmap_items.yaml could not be checked ({name})")
         return out
+    # A file that could not be read may read next time (memory): not kept.
+    if key is not None and not any(p["code"] == "unreadable_yaml" for p in check.problems):
+        _checks.put(key, len(text), check)
+    return check
 
 
 def _check_trace_fields(out: ItemsCheck, item_id: str, raw: dict[str, Any]) -> None:
