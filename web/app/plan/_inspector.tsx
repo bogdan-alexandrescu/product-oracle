@@ -1,12 +1,16 @@
 "use client";
 
-import { Chip, GoalTag, Inspector, InspectorSection, LinkButton, ToGo } from "@/components/ds";
+import { useEffect, useState } from "react";
+
+import { DateBasisDialog, shortDay, useDateRights } from "@/components/DateBasisDialog";
+import { Button, Chip, GoalTag, Inspector, InspectorSection, LinkButton, ToGo } from "@/components/ds";
+import { peopleByIds } from "@/components/PersonPicker";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 
 import { assess, type GoalView, type Point } from "../home/_goals";
-import { HORIZON_LABEL, roadmapHref, stateChip, whoLabel, type PlanItem } from "./_lib";
+import { dateBasis, HORIZON_LABEL, roadmapHref, stateChip, whoLabel, type PlanItem } from "./_lib";
 
 function History({ item }: { item: PlanItem }) {
   const q = useQuery(`plan|history|${item.roadmap.slug}|${item.key}`, () =>
@@ -27,17 +31,86 @@ function History({ item }: { item: PlanItem }) {
   );
 }
 
+/**
+ * F3: the item's date and what it rests on: "Nov 30 ✓ ENG-412, verified by <name>", "Nov 30 ·
+ * unverified" with Verify date, or the struck date, "date withdrawn" and the reason with Re-verify date.
+ */
+function DateLine({ item, onChanged }: { item: PlanItem; onChanged?: () => void }) {
+  const { date, date_status } = item.engineering;
+  const prd = item.prd?.id;
+  const bases = useQuery(`schedule-bases|prd|${prd}`, () => unwrap(api.GET("/v1/schedule-bases", { params: { query: { prd } } })));
+  const rights = useDateRights();
+  const basis = dateBasis(item, bases.data ?? []);
+  const by = basis && (date_status === "withdrawn" ? basis.withdrawn_by : basis.verified_by);
+  const [name, setName] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!by) return;
+    peopleByIds([by])
+      .then((people) => setName(people.get(by)?.name ?? null))
+      .catch(() => setName(null));
+  }, [by]);
+  if (!date) return null;
+  const day = shortDay(date);
+  const may = !!rights.data?.rights && !!prd;
+  const action = date_status === "unverified" ? "Verify date" : date_status === "withdrawn" ? "Re-verify date" : null;
+  return (
+    <InspectorSection label="Date" testId="plan-date">
+      <div className="flex flex-col gap-2 text-[15px]">
+        {date_status === "withdrawn" ? (
+          <p>
+            <s className="tnum">{day}</s> <span className="font-semibold text-warn">date withdrawn</span>
+            {basis?.withdrawn_reason && (
+              <span className="block text-text2">
+                {basis.reference}: {basis.withdrawn_reason}
+              </span>
+            )}
+          </p>
+        ) : date_status === "verified" ? (
+          <p className="tnum">
+            {day} ✓{basis && ` ${basis.reference}, verified by ${name ?? "a member"}`}
+          </p>
+        ) : (
+          <p className="tnum">
+            {day} · {date_status ?? "no basis"}
+          </p>
+        )}
+        {action && may && (
+          <div>
+            <Button onClick={() => setOpen(true)}>{action}</Button>
+          </div>
+        )}
+      </div>
+      {open && rights.data && (
+        <DateBasisDialog
+          prefill={{ prd, supports_date: date, item_key: item.key }}
+          rights={rights.data}
+          onClose={() => setOpen(false)}
+          onSaved={async () => {
+            setOpen(false);
+            await bases.reload();
+            onChanged?.();
+          }}
+        />
+      )}
+    </InspectorSection>
+  );
+}
+
 /** The selected item (F1 §8): why it needs someone, its history, its goals, and where to open it. */
 export function PlanInspector({
   item,
   goals,
   history,
   me,
+  onChanged,
 }: {
   item: PlanItem;
   goals: Map<string, GoalView>;
   history: Map<string, Point[]>;
   me: string | null | undefined;
+  /** A date basis was recorded from the inspector: the plan reloads. */
+  onChanged?: () => void;
 }) {
   const state = stateChip(item);
   const served = item.goal_ids.map((id) => goals.get(id)).filter((g): g is GoalView => !!g);
@@ -77,6 +150,7 @@ export function PlanInspector({
           )}
         </div>
       </InspectorSection>
+      <DateLine item={item} onChanged={onChanged} />
       <InspectorSection label="History" testId="plan-history">
         <History key={`${item.roadmap.slug}|${item.key}`} item={item} />
       </InspectorSection>
