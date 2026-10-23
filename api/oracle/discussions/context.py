@@ -224,7 +224,7 @@ async def _subject(db: AsyncSession, ctx: Context, d: Discussion) -> set[uuid.UU
 
 # G7 Head-of-product panel (3.4): a ``screen`` subject's page names, by first path segment.
 PAGES = {
-    "": "Home", "home": "Home", "requests": "Requests", "baseline": "Baseline",
+    "home": "Home", "requests": "Requests", "baseline": "Baseline",
     "documents": "PRDs", "priorities": "Priorities", "plan": "Plan", "roadmap": "Plan",
     "runs": "Runs", "inbox": "Inbox", "company": "Company", "sources": "Sources",
     "settings": "Settings",
@@ -233,9 +233,12 @@ OPEN_RUNS = ("awaiting_approval", "running", "awaiting_checkpoint", "paused_over
 
 
 def page_name(path: str) -> str:
-    """ "Settings · Members" for ``/settings/members``; the path itself for an unknown page."""
+    """ "Settings · Members" for ``/settings/members``, "General" for ``/`` (the panel's
+    General chat); the path itself for an unknown page."""
     parts = [p for p in path.split("?")[0].split("/") if p]
-    head = parts[0] if parts else ""
+    if not parts:
+        return "General"
+    head = parts[0]
     if head not in PAGES:
         return path
     name = PAGES[head]
@@ -325,7 +328,7 @@ async def _screen(db: AsyncSession, ctx: Context, path: str) -> None:
     board and investor drafts are hidden from commenters and viewers (H8): the page name."""
     ctx.note(f"The page: {page_name(path)}")
     head = path.split("?")[0].rstrip("/")
-    if head in ("", "/home"):
+    if head in ("", "/home"):  # General reads what Home shows
         await _home(db, ctx)
     elif head == "/documents":
         await _documents(db, ctx)

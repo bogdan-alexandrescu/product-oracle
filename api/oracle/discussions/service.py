@@ -417,7 +417,9 @@ class Labels:
             return (f"{label} · {s['milestone']}" if s.get("milestone") else label), "/plan"
         if kind == "priorities":
             return "Priority order", "/priorities"
-        return s["path"], s["path"]
+        from oracle.discussions.context import page_name
+
+        return page_name(s["path"]), s["path"]
 
 
 # --- people -------------------------------------------------------------------------------

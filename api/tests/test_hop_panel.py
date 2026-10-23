@@ -258,3 +258,17 @@ async def test_documents_and_runs_contexts(client):
     text = data_of(await screen_context(client, ctx, "/runs"))
     assert "running" in text and "succeeded" not in text
     assert SOURCE_LINE not in text
+
+
+# protects=3.1: a screen subject reads as its page ("General" for the panel's General chat);
+# fails_when=the header shows a raw path; no_claim=the panel's own label for the open page.
+async def test_a_screen_subject_is_labelled_by_its_page(client):
+    ctx, _doc = await company(client)
+    for path, label in (("/", "General"), ("/settings/members", "Settings · Members")):
+        resp = await client.post(
+            "/v1/discussions",
+            json={"subject_kind": "screen", "subject": {"path": path}, "origin": "panel"},
+            headers=ctx.as_("commenter"),
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["subject_label"] == label and resp.json()["title"] == label
