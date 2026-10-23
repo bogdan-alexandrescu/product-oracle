@@ -121,7 +121,8 @@ test("phone: the dialog fits 390 px and its results are tappable rows", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   await page.goto("/plan");
-  await row(page, "Usage dashboard").click();
+  // A tap on the title (a tap on the goal chip opens the goal's card instead).
+  await row(page, "Usage dashboard").getByTestId("plan-title").click();
   const sheet = page.getByTestId("sheet-plan-item");
   await sheet.getByRole("button", { name: "+ Link issue" }).click();
   await expect(dialog(page)).toBeVisible();

@@ -2,7 +2,7 @@
 
 import type { MouseEvent, ReactNode } from "react";
 
-import { Button, Chip, DataTable, GoalTag, InfoTip, Panel, type Column } from "@/components/ds";
+import { Button, Chip, CodeChip, DataTable, InfoTip, Panel, type Column } from "@/components/ds";
 import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from "@/lib/api/client";
 
 import type { AddKind } from "./AddItem";
@@ -35,7 +35,18 @@ type Props = {
 };
 
 /** A title that opens the item in the inspector; one line. */
-function TitleButton({ entity, onOpen, className = "" }: { entity: EntityOut; onOpen: (id: string) => void; className?: string }) {
+function TitleButton({
+  entity,
+  onOpen,
+  className = "",
+  name,
+}: {
+  entity: EntityOut;
+  onOpen: (id: string) => void;
+  className?: string;
+  /** The words to show (a goal's name after its code chip); the title by default. */
+  name?: string;
+}) {
   return (
     <button
       type="button"
@@ -45,7 +56,7 @@ function TitleButton({ entity, onOpen, className = "" }: { entity: EntityOut; on
       }}
       className={`min-w-0 truncate text-left hover:underline ${className}`}
     >
-      {entity.title}
+      {name ?? entity.title}
     </button>
   );
 }
@@ -91,8 +102,8 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       header: "Goal",
       cell: (g) => (
         <span className="flex min-w-0 items-center gap-2">
-          <GoalTag id={tags.get(g.id) ?? "G"} proposed={g.status === "proposed"} />
-          <TitleButton entity={g} onOpen={onOpen} className="font-medium" />
+          <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} proposed={g.status === "proposed"} codeOnly />
+          <TitleButton entity={g} name={tags.get(g.id)} onOpen={onOpen} className="font-medium" />
           <LockMark entity={g} meId={meId} />
         </span>
       ),
@@ -299,13 +310,15 @@ function Ledger({
                 className={`${th} border-l border-line py-2.5 text-left align-top last:pr-4 max-[600px]:px-1 max-[600px]:text-center max-[600px]:last:pr-1`}
               >
                 <span className="flex flex-col gap-1.5 max-[600px]:items-center">
-                  <GoalTag id={tags.get(g.id) ?? "G"} proposed={g.status === "proposed"} title={g.title} />
+                  <span className="max-[600px]:hidden">
+                    <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} proposed={g.status === "proposed"} codeOnly />
+                  </span>
                   <button
                     type="button"
                     onClick={() => onOpen(g.id)}
                     className="line-clamp-2 text-left font-semibold text-text hover:underline max-[600px]:sr-only"
                   >
-                    {g.title}
+                    {tags.get(g.id) ?? g.title}
                   </button>
                   {g.attrs?.target != null && (
                     <span className="tnum text-text2 max-[600px]:hidden">
@@ -356,7 +369,6 @@ function Ledger({
                 key={f.id}
                 feature={f}
                 goals={goals}
-                tags={tags}
                 links={links.get(f.id)}
                 trace={traceById.get(f.id)}
                 low={low}
@@ -375,7 +387,6 @@ function Ledger({
 function FeatureRow({
   feature,
   goals,
-  tags,
   links,
   trace,
   low,
@@ -385,7 +396,6 @@ function FeatureRow({
 }: {
   feature: EntityOut;
   goals: EntityOut[];
-  tags: Map<string, string>;
   links: Map<string, EdgeOut> | undefined;
   trace: TraceFeature | undefined;
   low: number;
@@ -439,7 +449,7 @@ function FeatureRow({
             <span className="max-[600px]:hidden">{e ? <LinkCell edge={e} low={low} /> : <Dot />}</span>
             {e && (
               <span className="hidden items-center gap-1.5 rounded-goal border border-line py-0.5 pr-2 pl-0.5 max-[600px]:inline-flex">
-                <GoalTag id={tags.get(g.id) ?? "G"} proposed={g.status === "proposed"} title={g.title} />
+                <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} proposed={g.status === "proposed"} wrap />
                 <ContributionPips value={contributionOf(e.attrs)} proposed={e.status === "proposed"} />
               </span>
             )}

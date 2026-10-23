@@ -6,8 +6,8 @@ import type { ReactNode } from "react";
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import {
   Chip,
+  CodeChip,
   DataTable,
-  GoalTag,
   Icon,
   Inspector,
   InspectorRow,
@@ -34,7 +34,7 @@ import {
 } from "../runs/_lib";
 
 /** A goal a row serves: its G tag, and whether the goal is still proposed. */
-export type RowGoal = { tag: string; title: string; proposed: boolean };
+export type RowGoal = { id: string; tag: string; title: string; proposed: boolean };
 
 /**
  * One line of In flight: a PRD in review, or a run in progress. Everything a line shows
@@ -61,16 +61,6 @@ function title(f: Flight) {
   return f.kind === "prd" ? f.doc.title : (f.run.document_slug ?? f.run.flow_title);
 }
 
-function GoalTags({ goals }: { goals: RowGoal[] }) {
-  if (goals.length === 0) return <span className="text-text2">–</span>;
-  return (
-    <span className="inline-flex flex-wrap gap-1.5" data-testid="row-goals">
-      {goals.map((g) => (
-        <GoalTag key={g.tag} id={g.tag} proposed={g.proposed} title={`${g.tag} · ${g.title}${g.proposed ? " · proposed" : ""}`} />
-      ))}
-    </span>
-  );
-}
 
 export function flightColumns(phoneHeader: ReactNode): Column<Flight>[] {
   return [
@@ -163,10 +153,14 @@ function useTracedGoals(slug: string | null | undefined, n: number | null | unde
 function GoalsSection({ goals }: { goals: RowGoal[] | undefined }) {
   if (!goals || goals.length === 0) return null;
   return (
-    <InspectorSection label="Goals" testId="inspector-goals" tools={<GoalTags goals={goals} />}>
-      {goals.map((g) => (
-        <InspectorRow key={g.tag}>{g.title}</InspectorRow>
-      ))}
+    <InspectorSection label="Goals" testId="inspector-goals">
+      <span data-testid="row-goals" className="contents">
+        {goals.map((g) => (
+          <InspectorRow key={g.tag}>
+            <CodeChip kind="goal" entityId={g.id} title={g.title} proposed={g.proposed} />
+          </InspectorRow>
+        ))}
+      </span>
     </InspectorSection>
   );
 }

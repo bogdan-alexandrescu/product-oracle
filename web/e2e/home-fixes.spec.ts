@@ -229,7 +229,7 @@ test("Home: Enter on an In flight row selects it; the inspector's Open opens it"
   await expect(page.getByTestId("home-inspector")).toContainText(name.replace(/v\d+$/, "").trim().slice(0, 12));
   // The inspector shows the selected PRD's goals (loaded for that row only).
   await flights.filter({ hasText: "Checkout redesign PRD" }).click();
-  await expect(page.getByTestId("home-inspector").getByTestId("row-goals")).toHaveText("G1G2");
+  await expect(page.getByTestId("home-inspector").getByTestId("row-goals")).toHaveText("Raise activationGrow paid conversion");
 });
 
 test("Home for a viewer: no New PRD, no Build the baseline", async ({ page }) => {
@@ -237,7 +237,7 @@ test("Home for a viewer: no New PRD, no Build the baseline", async ({ page }) =>
   await openHome(page);
   await expect(page.getByTestId("home-goal-G1")).toBeVisible();
   await expect(page.getByRole("link", { name: "New PRD" })).toHaveCount(0);
-  await expect(page.getByTestId("home-goal-G1").getByTestId("goal-trend").getByRole("img")).toHaveAttribute("aria-label", "G1 trend");
+  await expect(page.getByTestId("home-goal-G1").getByTestId("goal-trend").getByRole("img")).toHaveAttribute("aria-label", "Raise activation trend");
 });
 
 test("Home for a viewer of a new company: one line per block, no actions they cannot take", async ({ page }) => {

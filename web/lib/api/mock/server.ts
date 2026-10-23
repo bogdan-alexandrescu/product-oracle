@@ -8,8 +8,9 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { mockUuid, seeded } from "./ids";
-import { addNoisyProposals, attributeCommenterProposal, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { addGoalCodes, addNoisyProposals, attributeCommenterProposal, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
+import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
@@ -849,6 +850,25 @@ function seedNextDraft(costly: boolean): Db {
   return db;
 }
 
+/** The "named-codes" scenario's PRD (#305): agent-written text with bare codes (./named-codes.ts). */
+function addCodedPrd(db: Db) {
+  const at = CODED_PRD.versions[0].created_at;
+  const row: DocumentRow = {
+    id: uuid(),
+    slug: CODED_PRD.slug,
+    title: CODED_PRD.title,
+    status: "in_review",
+    kind: "prd",
+    template: CODED_PRD.template ?? null,
+    template_version: CODED_PRD.template_version ?? null,
+    theme: null,
+    created_at: at,
+    updated_at: at,
+  };
+  db.documents.push(row);
+  db.versions.push(buildVersion(row, CODED_PRD.versions[0]));
+}
+
 /** The default seed plus one PRD of 100+ sections in nested chapters (./big-prd.ts). */
 function seedBigPrd(): Db {
   const db = seed();
@@ -1511,6 +1531,12 @@ function load(): Db {
         base_hash: hash("launch-checklist"), body_md: "Tell support a day before the cart change ships.",
       });
     }
+  }
+  if (scenario === "named-codes") {
+    addGoalCodes(db.baseline);
+    addCodedPrd(db);
+    // An Inbox row quoting Oracle's text with a known code (G-B) and an unknown one (G-Z).
+    db.autonomy.actions.push(seedOracleDid(db.user_id, uuid(), "Moved 'Saved addresses' up 2 within G-B, ahead of G-Z"));
   }
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
   save(db);
