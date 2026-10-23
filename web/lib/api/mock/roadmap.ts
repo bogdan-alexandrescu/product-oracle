@@ -756,6 +756,8 @@ type PlanSeedItem = {
   records?: { ref: string; state: "todo" | "in_progress" | "done"; target?: string }[];
   date?: string;
   dateStatus?: "verified" | "unverified" | "withdrawn";
+  /** The milestone's date_source: the text that names the basis references the date rests on. */
+  dateSource?: string;
   slipDays?: number;
   reasons?: { kind: string; detail: string }[];
   next?: { action: NonNullable<Schemas["PlanNext"]["action"]>; who: Who["role"] };
@@ -777,14 +779,14 @@ const NEXT_LABEL: Record<NonNullable<Schemas["PlanNext"]["action"]>, string> = {
 /** The tracked PRD's approved roadmap (usage-alerts-roadmap v1, from Usage alerts PRD v1). */
 const ALERTS_APPROVED: PlanSeedItem[] = [
   { key: "threshold-alerts", title: "Threshold alerts on spend", horizon: "now", goals: ["g.activation"], state: "on_track", section: "behaviour",
-    records: [{ ref: "ENG-402", state: "in_progress" }], date: "2026-11-20", dateStatus: "verified" },
+    records: [{ ref: "ENG-402", state: "in_progress" }], date: "2026-11-20", dateStatus: "verified", dateSource: "ENG-402" },
   { key: "alert-digest", title: "Daily alert digest email", horizon: "now", goals: ["g.paid-conversion"], state: "at_risk", section: "behaviour",
-    records: [{ ref: "ENG-405", state: "in_progress", target: "2026-12-09" }], date: "2026-11-30", dateStatus: "verified", slipDays: 9,
+    records: [{ ref: "ENG-405", state: "in_progress", target: "2026-12-09" }], date: "2026-11-30", dateStatus: "verified", dateSource: "ENG-412", slipDays: 9,
     reasons: [{ kind: "slipping", detail: "ENG-405 targets 2026-12-09, after the milestone date 2026-11-30." }], next: { action: "decide_slip", who: "owner" } },
   { key: "alert-rules-api", title: "Alert rules API", horizon: "now", goals: ["g.activation"], state: "done", section: "behaviour",
     records: [{ ref: "ENG-398", state: "done" }] },
   { key: "slack-alerts", title: "Alerts in the team chat", horizon: "now", goals: ["g.activation"], state: "on_track", section: "behaviour",
-    records: [{ ref: "ENG-431", state: "todo" }], date: "2026-12-15", dateStatus: "unverified", next: { action: "verify_date", who: "approver" } },
+    records: [{ ref: "ENG-431", state: "todo" }], date: "2026-12-15", dateStatus: "unverified", dateSource: "ENG-431", next: { action: "verify_date", who: "approver" } },
   { key: "usage-dashboard", title: "Usage dashboard", horizon: "now", goals: ["g.activation"], state: "planned", section: "behaviour",
     next: { action: "link_issue", who: "approver" } },
   { key: "spend-forecast", title: "Spend forecast for the month", horizon: "next", state: "planned", section: "behaviour",
@@ -823,15 +825,38 @@ export function routePlan(ctx: PlanContext, db: RoadmapDb, req: Request, p: stri
 }
 
 /**
- * F3: the seeded date status as the bases now stand: a verified basis for the PRD, the date and
- * the whole PRD or this item verifies it; a verified date whose only bases were withdrawn is withdrawn.
+ * Whether `text` names `reference` as an exact token, case-insensitively, as the API's
+ * schedule._names: not inside a longer key (ENG-41 is not named by ENG-41-2, ENG-41.2,
+ * A-ENG-41 or ENG-412); trailing punctuation (ENG-41.) is not part of it.
+ */
+function namesReference(reference: string, text: string): boolean {
+  const ref = reference.trim();
+  if (!ref) return false;
+  const escaped = ref.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![A-Za-z0-9_])(?<![A-Za-z0-9][-./])${escaped}(?![A-Za-z0-9_])(?![-./][A-Za-z0-9])`, "i").test(text);
+}
+
+/**
+ * F3: the seeded date status as the bases now stand, as the API's plan reads it
+ * (schedule.supporting, then plan._engineering): verified while, in Now, a verified basis of the PRD
+ * supports exactly the date, covers this item (the whole PRD, this item, or a tracker issue
+ * matched to it) and is named in the date's source; otherwise withdrawn when a withdrawn basis
+ * of the PRD is named there, else unverified. A date whose source names no basis the mock knows
+ * keeps its seeded status (the seed has no basis for every date).
  */
 function dateStatus(db: RoadmapDb, prdId: string, s: PlanSeedItem): NonNullable<PlanSeedItem["dateStatus"]> | null {
   if (!s.date) return s.dateStatus ?? null;
-  const on = db.bases.filter((b) => b.prd_document_id === prdId && b.supports_date === s.date && (!b.item_key || b.item_key === s.key));
-  if (on.some((b) => b.status === "verified")) return "verified";
-  if (s.dateStatus === "verified" && on.some((b) => b.status === "withdrawn")) return "withdrawn";
-  return s.dateStatus ?? null;
+  const source = s.dateSource ?? "";
+  const named = db.bases.filter((b) => b.prd_document_id === prdId && namesReference(b.reference, source));
+  if (!named.length) return s.dateStatus ?? null;
+  const covers = (b: Basis) =>
+    b.item_key
+      ? b.item_key === s.key
+      : b.tracker_key
+        ? db.records.some((r) => r.external_ref === b.tracker_key && r.item_key === s.key && db.tracks.find((t) => t.id === r.track_id)?.prd_id === prdId)
+        : true;
+  if (s.horizon === "now" && named.some((b) => b.status === "verified" && b.supports_date === s.date && covers(b))) return "verified";
+  return named.some((b) => b.status === "withdrawn") ? "withdrawn" : "unverified";
 }
 
 function planHistory(q: URLSearchParams): Response {
