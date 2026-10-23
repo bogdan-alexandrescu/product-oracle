@@ -113,7 +113,7 @@ async def test_a_failing_builder_retries_three_times_then_fails_into_the_inbox(
         raise RuntimeError("tracks unavailable")
 
     monkeypatch.setitem(blocks.BUILDERS, "tracks", broken)
-    at(max(r.next_due_at for r in seeded.values()))
+    at(max(seeded[k].next_due_at for k in ("goals_checkin", "roadmap_refresh", "goals_review")))
     await tick(ctx.tenant_id)
     by_ritual = {o.ritual_id: o for o in await occurrences_of(ctx.tenant_id)}
     refresh = by_ritual[seeded["roadmap_refresh"].id]

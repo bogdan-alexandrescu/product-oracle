@@ -274,18 +274,19 @@ async def tick_due(db: AsyncSession) -> dict[str, int]:
             .with_for_update(skip_locked=True)
         )
     )
-    built: list[tuple[RitualOccurrence, Ritual]] = []
+    # Ids, not objects: each summary start commits, which expires the session's objects.
+    built: list[tuple[uuid.UUID, uuid.UUID]] = []
     for occ in scheduled:
         ritual = await db.get(Ritual, occ.ritual_id)
         assert ritual is not None
         if await _build(db, occ, ritual):
-            built.append((occ, ritual))
+            built.append((occ.id, ritual.id))
             out["ready"] += 1
         elif occ.status == "failed":
             out["failed"] += 1
     await db.commit()
-    for occ, ritual in built:
-        await summaries.after_ready(db, occ.id, ritual.id)
+    for occ_id, ritual_id in built:
+        await summaries.after_ready(db, occ_id, ritual_id)
 
     for occ in await db.scalars(
         select(RitualOccurrence).where(
