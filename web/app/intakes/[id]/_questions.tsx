@@ -7,7 +7,7 @@ import { Avatar, Button, Chip, Empty, InfoTip, Mark, Panel, SegmentedControl } f
 import { PersonPicker, findPeople, peopleByIds, type Person } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, type Role } from "@/lib/me";
+import { useMe, type Role } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
 import { DecideForm, mayReview } from "./_inspector";
@@ -186,8 +186,11 @@ function QuestionBubble({
   }
   const open = q.status === "asked" || q.status === "delegated";
   const mine = q.asked_to === me.id;
-  const approver = hasRole(me.role, "approver");
-  const mayMove = q.asked_by === me.id || s.intake.author_id === me.id || approver;
+  const { can } = useMe();
+  // #370: who asked and the intake's author may move a question; at the handler's role
+  // (approver), anyone may, and may answer a question asked of someone else.
+  const mayMove = can("update_question", q.asked_by === me.id || s.intake.author_id === me.id);
+  const mayAnswer = can("answer_question", mine || can("update_question"));
   const waitingReview = gap?.status === "answered_pending_review";
 
   async function reassign(p: Person) {
@@ -250,7 +253,7 @@ function QuestionBubble({
             <Chip kind="warn" dot>
               Waiting for review
             </Chip>
-            {mayReview(me.role, gap) && mode !== "review" && <Button onClick={() => setMode("review")}>Review</Button>}
+            {mayReview(can, gap) && mode !== "review" && <Button onClick={() => setMode("review")}>Review</Button>}
           </div>
         )}
         {mode === "review" && gap && (
@@ -269,7 +272,7 @@ function QuestionBubble({
         {open && !waiting && (
           <div className="flex flex-wrap items-center gap-2">
             {!mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
-            {(mine || approver) && mode !== "answer" && (
+            {mayAnswer && mode !== "answer" && (
               <Button variant={mine ? "solid" : "secondary"} onClick={() => setMode("answer")}>
                 Answer
               </Button>
@@ -436,9 +439,11 @@ export function QuestionsTab({
       live = false;
     };
   }, [key]);
-  const asker = s.intake.author_id === me.id || hasRole(me.role, "approver");
-  // C3 team follow-ups: my team interview on this brief holds Oracle's follow-ups and my replies.
-  const member = hasRole(me.role, "commenter");
+  const { can } = useMe();
+  const asker = can("ask_next_question_batch", s.intake.author_id === me.id);
+  // C3 team follow-ups: my team interview on this brief holds Oracle's follow-ups and my replies
+  // (#370: shown to a role that can answer in it).
+  const member = can("open_team_interview");
   const [followUp, setFollowUp] = useState(() => typeof window === "undefined" || localStorage.getItem(FOLLOW_UP_KEY) !== "off");
   const [interview, setInterview] = useState<{ id: string; messages: Message[] } | null>(null);
   const [focus, setFocus] = useState<string | null>(null);

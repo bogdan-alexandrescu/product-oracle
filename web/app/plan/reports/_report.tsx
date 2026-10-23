@@ -7,7 +7,7 @@ import { Button, Chip, InfoTip, Label, Notice, Page, PageHeader, Panel } from "@
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -232,11 +232,11 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
 }
 
 function SlackPanel({ report, onChange }: { report: Report; onChange: () => Promise<void> }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const s = report.slack;
-  const canRetry = hasRole(role, "owner") && (s.status === "failed" || s.status === "pending");
+  const canRetry = can("retry_alignment_report_slack") && (s.status === "failed" || s.status === "pending");
   async function retry() {
     setBusy(true);
     setError(null);

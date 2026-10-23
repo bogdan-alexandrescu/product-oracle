@@ -2,12 +2,12 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 
-import { Button, Chip, InfoTip, Inspector, InspectorSection, Notice, type ChipKind } from "@/components/ds";
+import { Button, Chip, InfoTip, Inspector, InspectorSection, Notice, ViewOnly, type ChipKind } from "@/components/ds";
 import { findPeople, type Person } from "@/components/PersonPicker";
 import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { addDays, todayIn, useCompanyZone, zoneDateTime, zoneDay, zoneInstant } from "@/lib/dates";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useRiskPolicy } from "@/lib/risk-policy";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
@@ -102,18 +102,17 @@ const live = (x: Experiment) => x.status === "planned" || x.status === "running"
 
 /** Runs a write, then reloads; resolves to the error to show (null when it worked). */
 type Act = (run: () => Promise<unknown>, message: string) => Promise<string | null>;
-/** Why a control is disabled for this role, or null when it is not. */
+/** Why the item's state blocks a control the role could use, or null when it does not. */
 type Denied = string | null;
-
-const VIEWER = "Viewers can read blockers. Approvers and owners change them; commenters can propose options.";
-const COMMENTER = "Commenters can propose options. Approvers and owners change blockers.";
-const DECIDERS = "Approvers and owners change blockers";
+/** #370: what the signed-in role may ever do in the inspector; a control it may not is hidden. */
+type May = Record<"status" | "edit" | "propose" | "editOption" | "select" | "fallback" | "reject" | "plan" | "run" | "scope", boolean>;
 
 /**
  * The blocker inspector (#340): status, owner and description; the solution options
  * (propose, review, select, fallback, reject); the feasibility scope; the experiments and
  * their results; and the blocker's history. Every write is the blocker route's own, so
- * its roles and checks apply; a control a role cannot use is disabled, with the reason.
+ * its roles and checks apply. A control the role can never use is hidden (#370); one the
+ * item's state blocks is disabled, with the reason; a role that can do nothing sees View only.
  */
 export function BlockerInspector({
   blockerId,
@@ -125,7 +124,7 @@ export function BlockerInspector({
   /** Called after a write, so the lists behind the inspector refresh. */
   onChanged: () => void;
 }) {
-  const { me, role } = useMe();
+  const { me, can, capsReady } = useMe();
   const zone = useCompanyZone();
   const policy = useRiskPolicy();
   const onAuth = useAuthRedirect();
@@ -167,8 +166,20 @@ export function BlockerInspector({
 
   const s = q.data;
   const b = s?.blocker;
-  const decide: Denied = hasRole(role, "approver") ? null : DECIDERS;
-  const propose: Denied = hasRole(role, "commenter") ? null : "Commenters and above propose options";
+  // #370: what the role may do comes from can(); lowering a gating blocker takes an owner, the API says so.
+  const may: May = {
+    status: can("set_blocker_status", true),
+    edit: can("update_blocker", true),
+    propose: can("create_blocker_option"),
+    editOption: can("update_blocker_option"),
+    select: can("select_blocker_option"),
+    fallback: can("mark_blocker_option_fallback"),
+    reject: can("reject_blocker_option"),
+    plan: can("create_feasibility_experiment"),
+    run: can("update_feasibility_experiment"),
+    scope: can("approve_feasibility_scope", true),
+  };
+  const viewOnly = capsReady && !Object.values(may).some(Boolean);
   const name = (id: string | null | undefined) =>
     !id ? "No owner" : id === me?.user_id ? "You" : (people?.find((p) => p.user_id === id)?.name ?? `Member ${id.slice(0, 8)}`);
 
@@ -200,6 +211,7 @@ export function BlockerInspector({
                   Locked
                 </Chip>
               )}
+              {viewOnly && <ViewOnly hero />}
             </>
           )
         }
@@ -216,32 +228,28 @@ export function BlockerInspector({
           ]
         }
       >
-        {(q.error || notice || (q.loading && !s) || (role && decide)) && (
+        {(q.error || notice || (q.loading && !s)) && (
           <InspectorSection>
             <div className="flex flex-col gap-2">
               {q.error && <Notice tone="error">{q.error}</Notice>}
               {q.loading && !s && <Loading />}
               {notice && <Notice>{notice}</Notice>}
-              {role && decide && (
-                <p className="text-sm text-text2" data-testid="blocker-readonly">
-                  {propose ? VIEWER : COMMENTER}
-                </p>
-              )}
             </div>
           </InspectorSection>
         )}
         {s && b && (
           <>
-            <StatusSection blocker={b} busy={busy} denied={decide} act={act} />
-            <Details blocker={b} people={people} name={name} busy={busy} denied={decide} act={act} />
-            <Options strategy={s} busy={busy} propose={propose} decide={decide} act={act} />
+            <StatusSection blocker={b} busy={busy} may={may.status} act={act} />
+            <Details blocker={b} people={people} name={name} busy={busy} may={may.edit} act={act} />
+            <Options strategy={s} busy={busy} may={may} act={act} />
             <Scope
               strategy={s}
               busy={busy}
-              denied={decide ?? (gating(b) && !hasRole(role, policy.role) ? `${policy.role === "owner" ? "Only an owner" : "Only approvers and owners"} can approve this feasibility scope` : null)}
+              may={may.scope}
+              denied={gating(b) && !can("approve_feasibility_scope", policy.role !== "owner") ? `${policy.role === "owner" ? "Only an owner" : "Only approvers and owners"} can approve this feasibility scope` : null}
               act={act}
             />
-            <Experiments strategy={s} people={people} meId={me?.user_id} name={name} busy={busy} denied={decide} act={act} />
+            <Experiments strategy={s} people={people} meId={me?.user_id} name={name} busy={busy} may={may} act={act} />
             <InspectorSection label="History">
               {s.events.length === 0 ? (
                 <p className="text-text2">No changes recorded</p>
@@ -331,7 +339,7 @@ function Actions({ children }: { children: ReactNode }) {
 
 // --- sections -------------------------------------------------------------------------------
 
-function StatusSection({ blocker: b, busy, denied, act }: { blocker: Blocker; busy: boolean; denied: Denied; act: Act }) {
+function StatusSection({ blocker: b, busy, may, act }: { blocker: Blocker; busy: boolean; may: boolean; act: Act }) {
   const [status, setStatus] = useState<Plain>(PLAIN.find(([v]) => v === b.status)?.[0] ?? "open");
   const [reason, setReason] = useState("");
   const { error, submit } = useSubmit(act);
@@ -358,23 +366,25 @@ function StatusSection({ blocker: b, busy, denied, act }: { blocker: Blocker; bu
         </Chip>
       }
     >
-      <p className="mb-3 text-sm text-text2">{b.gate.rationale}</p>
-      <form onSubmit={save} aria-label="Change status" className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
-          <Select name="Status" value={status} options={PLAIN} onChange={setStatus} />
-          <Text name="Reason" value={reason} onChange={setReason} />
-        </div>
-        {error && <Notice tone="error">{error}</Notice>}
-        <Actions>
-          <Button type="submit" variant="solid" disabled={busy || !!denied} title={denied ?? undefined}>
-            Set status
-          </Button>
-          <InfoTip label="status" align="start">
-            Resolving needs a reason. Accepted risk and feasibility only are set by accepting the risk or approving a
-            feasibility scope.
-          </InfoTip>
-        </Actions>
-      </form>
+      <p className={may ? "mb-3 text-sm text-text2" : "text-sm text-text2"}>{b.gate.rationale}</p>
+      {may && (
+        <form onSubmit={save} aria-label="Change status" className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
+            <Select name="Status" value={status} options={PLAIN} onChange={setStatus} />
+            <Text name="Reason" value={reason} onChange={setReason} />
+          </div>
+          {error && <Notice tone="error">{error}</Notice>}
+          <Actions>
+            <Button type="submit" variant="solid" disabled={busy}>
+              Set status
+            </Button>
+            <InfoTip label="status" align="start">
+              Resolving needs a reason. Accepted risk and feasibility only are set by accepting the risk or approving a
+              feasibility scope.
+            </InfoTip>
+          </Actions>
+        </form>
+      )}
     </InspectorSection>
   );
 }
@@ -384,14 +394,14 @@ function Details({
   people,
   name,
   busy,
-  denied,
+  may,
   act,
 }: {
   blocker: Blocker;
   people: Person[] | undefined;
   name: (id: string | null | undefined) => string;
   busy: boolean;
-  denied: Denied;
+  may: boolean;
   act: Act;
 }) {
   const [editing, setEditing] = useState(false);
@@ -407,8 +417,9 @@ function Details({
     <InspectorSection
       label="Details"
       tools={
+        may &&
         !editing && (
-          <Button onClick={() => setEditing(true)} disabled={busy || !!denied} title={denied ?? undefined}>
+          <Button onClick={() => setEditing(true)} disabled={busy}>
             Edit blocker
           </Button>
         )
@@ -506,14 +517,15 @@ function EditBlocker({
   );
 }
 
-function Options({ strategy: s, busy, propose, decide, act }: { strategy: Strategy; busy: boolean; propose: Denied; decide: Denied; act: Act }) {
+function Options({ strategy: s, busy, may, act }: { strategy: Strategy; busy: boolean; may: May; act: Act }) {
   const [adding, setAdding] = useState(false);
   return (
     <InspectorSection
       label="Options"
       tools={
+        may.propose &&
         !adding && (
-          <Button onClick={() => setAdding(true)} disabled={busy || !!propose} title={propose ?? undefined}>
+          <Button onClick={() => setAdding(true)} disabled={busy}>
             Propose option
           </Button>
         )
@@ -525,7 +537,7 @@ function Options({ strategy: s, busy, propose, decide, act }: { strategy: Strate
       ) : (
         <ul className="flex flex-col divide-y divide-line" aria-label="Options">
           {s.options.map((o) => (
-            <OptionRow key={o.id} option={o} busy={busy} decide={decide} act={act} />
+            <OptionRow key={o.id} option={o} busy={busy} may={may} act={act} />
           ))}
         </ul>
       )}
@@ -580,13 +592,15 @@ function ProposeOption({ strategy: s, busy, act, onDone }: { strategy: Strategy;
   );
 }
 
-function OptionRow({ option: o, busy, decide, act }: { option: Option; busy: boolean; decide: Denied; act: Act }) {
+function OptionRow({ option: o, busy, may, act }: { option: Option; busy: boolean; may: May; act: Act }) {
   const [mode, setMode] = useState<null | "select" | "reject" | "edit">(null);
   const [reason, setReason] = useState("");
   const { error, setError, submit } = useSubmit(act);
   const [status, kind] = OPTION_STATUS[o.status];
   const chosen = o.compliance === "compliant" && o.policy_flags.length === 0;
-  const notChosen = decide ?? (chosen ? null : "Only an option reviewed as compliant can be chosen");
+  const notChosen: Denied = chosen ? null : "Only an option reviewed as compliant can be chosen";
+  const canSelect = may.select && o.status !== "selected";
+  const canFallback = may.fallback && o.status !== "selected" && o.status !== "fallback";
   const path = { params: { path: { item_id: o.id } } };
   const done = () => {
     setMode(null);
@@ -644,26 +658,31 @@ function OptionRow({ option: o, busy, decide, act }: { option: Option; busy: boo
           </Actions>
         </form>
       ) : (
-        o.status !== "rejected" && (
+        o.status !== "rejected" &&
+        (canSelect || canFallback || may.reject || may.editOption) && (
           <>
             {error && <Notice tone="error">{error}</Notice>}
             <Actions>
-              {o.status !== "selected" && (
+              {canSelect && (
                 <Button onClick={() => setMode("select")} disabled={busy || !!notChosen} title={notChosen ?? undefined}>
                   Select
                 </Button>
               )}
-              {o.status !== "selected" && o.status !== "fallback" && (
+              {canFallback && (
                 <Button onClick={fallback} disabled={busy || !!notChosen} title={notChosen ?? undefined}>
                   Fallback
                 </Button>
               )}
-              <Button onClick={() => setMode("reject")} disabled={busy || !!decide} title={decide ?? undefined}>
-                Reject
-              </Button>
-              <Button variant="ghost" onClick={() => setMode("edit")} disabled={busy || !!decide} title={decide ?? undefined}>
-                Edit
-              </Button>
+              {may.reject && (
+                <Button onClick={() => setMode("reject")} disabled={busy}>
+                  Reject
+                </Button>
+              )}
+              {may.editOption && (
+                <Button variant="ghost" onClick={() => setMode("edit")} disabled={busy}>
+                  Edit
+                </Button>
+              )}
             </Actions>
           </>
         )
@@ -720,7 +739,7 @@ function EditOption({ option: o, busy, act, onDone }: { option: Option; busy: bo
   );
 }
 
-function Scope({ strategy: s, busy, denied, act }: { strategy: Strategy; busy: boolean; denied: Denied; act: Act }) {
+function Scope({ strategy: s, busy, may, denied, act }: { strategy: Strategy; busy: boolean; may: boolean; denied: Denied; act: Act }) {
   const b = s.blocker;
   const choices = s.experiments.filter(live);
   const [picked, setPicked] = useState("");
@@ -758,6 +777,8 @@ function Scope({ strategy: s, busy, denied, act }: { strategy: Strategy; busy: b
         </p>
       ) : b.status === "resolved" ? (
         <p className="text-text2">The blocker is resolved; it needs no feasibility scope.</p>
+      ) : !may ? (
+        <p className="text-text2">No feasibility scope approved</p>
       ) : (
         <form onSubmit={save} aria-label="Feasibility scope" className="flex flex-col gap-3">
           <p className="text-sm text-text2">
@@ -772,7 +793,7 @@ function Scope({ strategy: s, busy, denied, act }: { strategy: Strategy; busy: b
               <Text name="Reason" value={reason} onChange={setReason} />
             </div>
           )}
-          {denied && denied !== DECIDERS && <p className="text-sm font-medium">{denied}</p>}
+          {denied && <p className="text-sm font-medium">{denied}</p>}
           {error && <Notice tone="error">{error}</Notice>}
           <Actions>
             <Button type="submit" variant="solid" disabled={busy || !!denied || choices.length === 0} title={denied ?? undefined}>
@@ -791,7 +812,7 @@ function Experiments({
   meId,
   name,
   busy,
-  denied,
+  may,
   act,
 }: {
   strategy: Strategy;
@@ -799,7 +820,7 @@ function Experiments({
   meId?: string | null;
   name: (id: string | null | undefined) => string;
   busy: boolean;
-  denied: Denied;
+  may: May;
   act: Act;
 }) {
   const [adding, setAdding] = useState(false);
@@ -807,8 +828,9 @@ function Experiments({
     <InspectorSection
       label="Experiments"
       tools={
+        may.plan &&
         !adding && (
-          <Button onClick={() => setAdding(true)} disabled={busy || !!denied} title={denied ?? undefined}>
+          <Button onClick={() => setAdding(true)} disabled={busy}>
             Plan experiment
           </Button>
         )
@@ -820,7 +842,7 @@ function Experiments({
       ) : (
         <ul className="flex flex-col divide-y divide-line" aria-label="Experiments">
           {s.experiments.map((x) => (
-            <ExperimentRow key={x.id} experiment={x} name={name} busy={busy} denied={denied} act={act} />
+            <ExperimentRow key={x.id} experiment={x} name={name} busy={busy} may={may.run} act={act} />
           ))}
         </ul>
       )}
@@ -908,13 +930,13 @@ function ExperimentRow({
   experiment: x,
   name,
   busy,
-  denied,
+  may,
   act,
 }: {
   experiment: Experiment;
   name: (id: string | null | undefined) => string;
   busy: boolean;
-  denied: Denied;
+  may: boolean;
   act: Act;
 }) {
   const zone = useCompanyZone();
@@ -980,16 +1002,17 @@ function ExperimentRow({
           </Actions>
         </form>
       ) : (
+        may &&
         live(x) && (
           <>
             {error && <Notice tone="error">{error}</Notice>}
             <Actions>
               {x.status === "planned" && (
-                <Button onClick={() => patch({ status: "running" }, "Experiment started.")} disabled={busy || !!denied} title={denied ?? undefined}>
+                <Button onClick={() => patch({ status: "running" }, "Experiment started.")} disabled={busy}>
                   Start
                 </Button>
               )}
-              <Button onClick={() => setConcluding(true)} disabled={busy || !!denied} title={denied ?? undefined}>
+              <Button onClick={() => setConcluding(true)} disabled={busy}>
                 Conclude
               </Button>
             </Actions>

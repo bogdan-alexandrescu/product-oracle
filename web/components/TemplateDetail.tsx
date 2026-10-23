@@ -13,6 +13,7 @@ import {
   Label,
   Notice,
   PageHeader,
+  ViewOnly,
   Panel,
   Split,
 } from "@/components/ds";
@@ -22,6 +23,7 @@ import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type TemplateOut = Schemas["TemplateOut"];
@@ -40,6 +42,9 @@ const BACK = (
 export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
   const q = useQuery(`template|${key}`, () => unwrap(api.GET("/v1/templates/{key}", { params: { path: { key } } })));
   const t = q.data;
+  // #370: approvers and owners change templates; other roles read them, with no editors.
+  const { can, capsReady } = useMe();
+  const canEdit = can("update_template");
   const [viewed, setViewed] = useState<number | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const [name, setName] = useState<string | null>(null);
@@ -164,21 +169,23 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
         { label: "Sections", value: latest.required_sections.length },
       ]}
     >
-      <InspectorSection label="Details">
-        <div className="flex flex-col gap-3">
-          <Field label="Name">
-            <input className={INPUT} value={nameValue} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          <Field label="Description">
-            <input className={INPUT} value={descriptionValue} onChange={(e) => setDescription(e.target.value)} />
-          </Field>
-          <div>
-            <Button onClick={saveDetails} disabled={!detailsChanged || !nameValue.trim() || busy !== null}>
-              {busy === "details" ? "Saving…" : "Save details"}
-            </Button>
+      {canEdit && (
+        <InspectorSection label="Details">
+          <div className="flex flex-col gap-3">
+            <Field label="Name">
+              <input className={INPUT} value={nameValue} onChange={(e) => setName(e.target.value)} />
+            </Field>
+            <Field label="Description">
+              <input className={INPUT} value={descriptionValue} onChange={(e) => setDescription(e.target.value)} />
+            </Field>
+            <div>
+              <Button onClick={saveDetails} disabled={!detailsChanged || !nameValue.trim() || busy !== null}>
+                {busy === "details" ? "Saving…" : "Save details"}
+              </Button>
+            </div>
           </div>
-        </div>
-      </InspectorSection>
+        </InspectorSection>
+      )}
       <InspectorSection label="Facts">
         <InspectorRow value={<span className="font-mono text-sm font-medium">{t.key}</span>}>Key</InspectorRow>
         <InspectorRow value={<span className="font-mono text-sm font-medium">{t.suggested_theme ?? "—"}</span>}>
@@ -193,17 +200,19 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
           </div>
         )}
       </InspectorSection>
-      <InspectorSection>
-        {t.archived_at ? (
-          <Button onClick={restore} disabled={busy !== null}>
-            {busy === "restore" ? "Restoring…" : "Restore"}
-          </Button>
-        ) : (
-          <Button onClick={archive} disabled={busy !== null}>
-            {busy === "archive" ? "Archiving…" : "Archive"}
-          </Button>
-        )}
-      </InspectorSection>
+      {canEdit && (
+        <InspectorSection>
+          {t.archived_at ? (
+            <Button onClick={restore} disabled={busy !== null}>
+              {busy === "restore" ? "Restoring…" : "Restore"}
+            </Button>
+          ) : (
+            <Button onClick={archive} disabled={busy !== null}>
+              {busy === "archive" ? "Archiving…" : "Archive"}
+            </Button>
+          )}
+        </InspectorSection>
+      )}
     </Inspector>
   );
 
@@ -218,24 +227,27 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
             <Chip kind="acc" data-testid="latest-version">{`v${t.latest_version}`}</Chip>
             {t.builtin && <Chip kind="na">Built-in</Chip>}
             {t.archived_at && <Chip kind="warn">Archived</Chip>}
+            {capsReady && !canEdit && <ViewOnly />}
           </>
         }
         action={
-          <>
-            {dirty && (
-              <Button variant="ghost" onClick={() => setDraft(null)}>
-                Discard changes
+          canEdit && (
+            <>
+              {dirty && (
+                <Button variant="ghost" onClick={() => setDraft(null)}>
+                  Discard changes
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                icon="check"
+                onClick={saveVersion}
+                disabled={busy !== null || live.pending || !check?.valid || body === latest.body}
+              >
+                {busy === "version" ? "Saving…" : "Save as new version"}
               </Button>
-            )}
-            <Button
-              variant="primary"
-              icon="check"
-              onClick={saveVersion}
-              disabled={busy !== null || live.pending || !check?.valid || body === latest.body}
-            >
-              {busy === "version" ? "Saving…" : "Save as new version"}
-            </Button>
-          </>
+            </>
+          )
         }
       />
       <Split inspector={inspector}>
@@ -246,15 +258,17 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
             {problems.length > 0 && <ProblemList problems={problems} testId="save-problems" />}
           </div>
         )}
-        <Panel title="Next version" bodyClassName="p-4 max-[600px]:p-3">
-          <TemplateBodyEditor value={body} onChange={setDraft} label="Template body" live={live} />
-        </Panel>
+        {canEdit && (
+          <Panel title="Next version" bodyClassName="p-4 max-[600px]:p-3">
+            <TemplateBodyEditor value={body} onChange={setDraft} label="Template body" live={live} />
+          </Panel>
+        )}
         <Panel
           title="Versions"
           count={t.versions.length}
           tools={
             <>
-              {shown.version !== latest.version && (
+              {canEdit && shown.version !== latest.version && (
                 <Button variant="ghost" onClick={() => setDraft(shown.body)}>
                   Copy into editor
                 </Button>

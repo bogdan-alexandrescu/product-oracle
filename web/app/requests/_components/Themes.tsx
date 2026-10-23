@@ -5,7 +5,7 @@ import { useState, type FormEvent } from "react";
 import { Button, Chip, Empty } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
 type Theme = Schemas["RequestThemeOut"];
@@ -16,8 +16,10 @@ type Theme = Schemas["RequestThemeOut"];
  * Every change hands the saved theme to `onChange`.
  */
 export function Themes({ themes, onChange }: { themes: Theme[]; onChange: (theme: Theme) => void }) {
-  const { role } = useMe();
-  const approver = hasRole(role, "approver");
+  const { can } = useMe();
+  // #370: the theme routes' own role decides who creates, renames and archives.
+  const canCreate = can("create_request_theme");
+  const approver = can("update_request_theme");
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +45,7 @@ export function Themes({ themes, onChange }: { themes: Theme[]; onChange: (theme
 
   return (
     <div className="flex flex-col">
-      {approver && (
+      {canCreate && (
         <form className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3" onSubmit={create}>
           <label className="flex min-w-0 flex-1 basis-56 flex-col gap-1 text-sm font-semibold text-text2">
             New theme

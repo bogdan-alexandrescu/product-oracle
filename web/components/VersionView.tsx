@@ -8,7 +8,7 @@ import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { CommentPopover, SelectionButton, type PageRect } from "@/components/CommentPopover";
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { DocCrumb } from "@/components/DocToolbar";
-import { Button, Chip, Empty, Icon, InfoTip, LinkButton, Page, PageHeader, SegmentedControl, Sheet } from "@/components/ds";
+import { Button, Chip, Empty, Icon, InfoTip, LinkButton, Page, PageHeader, SegmentedControl, Sheet, ViewOnly } from "@/components/ds";
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { StartDiscussion, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
 import { SectionQuestions, type GoTo } from "@/components/FeedbackPanel";
@@ -25,7 +25,6 @@ import {
 import { Kbd } from "@/components/review/parts";
 import { ReviewPanel, type PanelTab } from "@/components/review/ReviewPanel";
 import { RunReviewBar } from "@/components/review/RunReviewBar";
-import { RoleNote } from "@/components/RoleNote";
 import { useDateRights } from "@/components/DateBasisDialog";
 import { DateMarkContext, type DateMarkCtx } from "@/components/DateMarker";
 import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
@@ -46,7 +45,8 @@ import { draftRoadmapOf } from "@/lib/api/draft-roadmap";
 import { feedbackEntries, openBySection } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
 import { blocksText, parseBlocks } from "@/lib/markdown";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
+import { OWNER_APPROVES } from "@/lib/owner-kinds";
 import { useDocumentView, type DocumentView } from "@/lib/preferences";
 import { keyFromHash, sectionHref } from "@/lib/section-link";
 import { useQuery } from "@/lib/use-query";
@@ -96,9 +96,6 @@ function readSelection(): Selection | null {
   };
 }
 
-/** Document kinds only an owner approves (H4, H8), in the words the page uses. */
-const OWNER_APPROVES: Partial<Record<string, string>> = { vision: "a vision", strategy: "a product strategy", update: "an update" };
-
 /**
  * A version under review, ONE SECTION AT A TIME (I3, 2026-10-19), with the navigation the
  * owner picked on 2026-10-20: an outline rail left of the section (>= 1280 px), a section
@@ -114,10 +111,11 @@ const OWNER_APPROVES: Partial<Record<string, string>> = { vision: "a vision", st
 export function VersionView({ doc, n, pane = "document" }: { doc: string; n: number; pane?: "document" | "items" | "roadmap" }) {
   const router = useRouter();
   const onDocument = pane === "document";
-  const { me, role } = useMe();
-  // Viewers read; commenters also comment; approvers also set verdicts and approve.
-  const canComment = hasRole(role, "commenter");
-  const canDecide = hasRole(role, "approver");
+  const { me, can, capsReady } = useMe();
+  // #370: what the signed-in person may call. Comments (create_comment); section verdicts
+  // (review_section), which also stand for the other decisions on a version.
+  const canComment = can("create_comment");
+  const canDecide = can("review_section");
   const docQ = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
   const verQ = useQuery(`ver|${doc}|${n}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })),
@@ -674,7 +672,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   // H4: a vision or a product strategy is an owner's to approve; approvers still set
   // section verdicts and comment.
   const ownerApproves = document_ ? OWNER_APPROVES[document_.kind] : undefined;
-  const canApprove = canDecide && (!ownerApproves || hasRole(role, "owner"));
+  // The API checks the owner by the document's kind (MIN_APPROVER_ROLE): approve_version's
+  // per-item role (owner) passes any kind, an approver only the other kinds.
+  const canApprove = can("approve_version", !ownerApproves);
   /** Opens the Feedback tab on a new discussion of `subject` (on a phone, in the Review sheet). */
   const discuss = useCallback((subject: DiscussionSubject) => {
     setTab("feedback");
@@ -723,7 +723,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     ));
 
   // H8: on an update, approvers comment and suggest; owners also set section verdicts.
-  const canVerdict = canDecide && (!isUpdate || hasRole(role, "owner"));
+  // As canApprove: the API's MIN_VERDICT_ROLE; put_review_policy stands for an owner.
+  const canVerdict = canDecide && (!isUpdate || can("put_review_policy"));
   const sectionProps = (s: SectionOut) => ({
     section: s,
     blocks: parsed.get(s.section_key)!.blocks,
@@ -974,7 +975,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                   {warnings.length} warning{warnings.length === 1 ? "" : "s"}
                 </Chip>
               )}
-              {!readOnly && <RoleNote role={role} />}
+              {/* #370: someone who can do nothing on the version reads it with View only. */}
+              {capsReady && !canComment && !canDecide && !canApprove && <ViewOnly />}
             </>
           }
           action={
@@ -994,11 +996,6 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               {/* C1e: accepted changes staged for the next draft, built in one job. */}
               {document_?.kind === "prd" && <BuildDraftButton doc={doc} />}
               {templateOnly && document_ && <DraftWithOracleButton slug={document_.slug} />}
-              {version && canDecide && !canApprove && !version.approved_at && (
-                <span className="text-sm font-medium text-text2" data-testid="owner-approves-note">
-                  Only an owner approves {ownerApproves}
-                </span>
-              )}
               {version &&
                 (version.approved_at || canApprove) &&
                 (document_?.kind === "prd" && !version.approved_at ? (
@@ -1195,7 +1192,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             latest={latest ?? n}
             sections={sections}
             canDerive={canDecide}
-            isOwner={hasRole(role, "owner")}
+            isOwner={can("put_draft_roadmap_settings")}
             onStatus={verQ.reload}
           />
         )}

@@ -27,6 +27,7 @@ import {
   Label,
   Notice,
   PageHeader,
+  ViewOnly,
   Panel,
   Split,
   type ChipKind,
@@ -36,7 +37,7 @@ import {
 import { ClaudeOffNotice, limitWord } from "@/components/ClaudeOffNotice";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime, inWords } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, TEXTAREA } from "../_components/fields";
@@ -72,8 +73,8 @@ const Dot = () => <span className="sr-only"> · </span>;
 
 export function ClaudeAccounts() {
   const q = useQuery("claude-accounts", () => unwrap(api.GET("/v1/claude-accounts")));
-  const { role } = useMe();
-  const owner = hasRole(role, "owner");
+  const { can, capsReady } = useMe();
+  const owner = can("add_claude_account");
   const [chosen, setChosen] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [fallbackOpen, setFallbackOpen] = useState(false);
@@ -95,6 +96,7 @@ export function ClaudeAccounts() {
               workflows run in SwarmCloud on SwarmCloud&apos;s own accounts.
             </InfoTip>
             {q.data && <SummaryChips page={q.data} />}
+            {capsReady && !owner && <ViewOnly />}
           </>
         }
         action={
@@ -701,11 +703,7 @@ function Detail({
           </InspectorSection>
           <Remove account={account} reload={reload} />
         </>
-      ) : (
-        <InspectorSection>
-          <p className="text-sm text-text2">Only an owner changes accounts.</p>
-        </InspectorSection>
-      )}
+      ) : null}
     </Inspector>
   );
 }

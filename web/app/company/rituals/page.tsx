@@ -6,7 +6,7 @@ import { Suspense, useState } from "react";
 import { Button, Chip, DataTable, Empty, InfoTip, PageHeader, Panel, SegmentedControl, Split, type Column } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { RitualInspector } from "./_components/RitualInspector";
@@ -27,8 +27,9 @@ export default function RitualsPage() {
  * with the ritual's zone in a tooltip.
  */
 function Rituals() {
-  const { role } = useMe();
-  const owner = hasRole(role, "owner");
+  const { can } = useMe();
+  // #370: editing rituals is the ritual routes' role (owners).
+  const owner = can("update_ritual");
   const ritualsQ = useQuery("rituals", () => unwrap(api.GET("/v1/rituals")));
   const settingsQ = useQuery("rituals|summaries", () => unwrap(api.GET("/v1/rituals/summaries")));
   // The owner's member pickers read the member list (owners only); every name on the page

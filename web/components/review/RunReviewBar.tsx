@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { Button, Sheet } from "@/components/ds";
 import { api, ApiError, unwrap } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -19,7 +19,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
  * run review points at this version (404).
  */
 export function RunReviewBar({ doc, n, refreshKey, onDecided }: { doc: string; n: number; refreshKey: string; onDecided: () => void }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const q = useQuery(
     `run-review|${doc}|${n}|${refreshKey}`,
     async () => {
@@ -42,7 +42,8 @@ export function RunReviewBar({ doc, n, refreshKey, onDecided }: { doc: string; n
 
   const { total, reviewed } = r.sections;
   const unreviewed = total - reviewed;
-  const deciding = r.status === "pending" && r.can_decide && hasRole(role, r.approver_role);
+  // #370: the API answers whether this person decides this stop (its role, flow and decider).
+  const deciding = r.status === "pending" && r.can_decide && can("decide_checkpoint", r.can_decide);
   const hours = r.wait.state === "open" && r.wait.seconds_left != null ? Math.max(1, Math.round(r.wait.seconds_left / 3600)) : null;
 
   async function decide(decision: "approved" | "changes_requested", text?: string) {

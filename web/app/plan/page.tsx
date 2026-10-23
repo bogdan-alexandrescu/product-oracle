@@ -5,9 +5,9 @@ import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 
 import { BuildRoadmapButton } from "@/components/BuildRoadmap";
 import { LinkIssueDialog } from "@/components/LinkIssueDialog";
-import { Chip, InfoTip, LinkButton, Notice, PageHeader, Panel, SegmentedControl, Sheet, Split } from "@/components/ds";
+import { Chip, InfoTip, LinkButton, Notice, PageHeader, Panel, SegmentedControl, Sheet, Split, ViewOnly } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { usePlanScope, type PlanScope } from "@/lib/preferences";
 import { useQuery } from "@/lib/use-query";
 
@@ -67,11 +67,18 @@ function BuildRoadmaps() {
 const noSubscribe = () => () => {};
 
 export default function PlanPage() {
-  const { me, role, engineeringLead } = useMe();
+  const { me, can, capsReady } = useMe();
   const userId = me?.user_id ?? null;
-  const canWrite = hasRole(role, "approver");
+  // #370: approvers start PRDs (a PRD is any approver's; only a vision, strategy or update
+  // is an owner's) and build the baseline; below that the Plan is read only.
+  const canWrite = can("start_draft", true);
+  // create_run's handler wants an owner only to update a draft run; any other run lets
+  // approvers in.
+  const canBuild = can("create_run", true);
+  // Import goes to /baseline?build=1, whose Build baseline shows with confirm_entity.
+  const canBaseline = can("confirm_entity");
   // F7: approvers, owners and engineering leads link and unlink tracker issues.
-  const canLink = canWrite || (engineeringLead && hasRole(role, "commenter"));
+  const canLink = can("link_tracker_issue");
   const [scope, setScope, ready] = usePlanScope(userId ?? (me ? "token" : null));
   const q = useQuery(
     `plan|${ready ? scope : "wait"}`,
@@ -139,7 +146,9 @@ export default function PlanPage() {
       <PageHeader
         title="Plan"
         status={
-          counts && (
+          <>
+            {capsReady && !canWrite && !canBuild && <ViewOnly />}
+            {counts && (
             <>
               <Chip kind="acc" data-testid="plan-count-prds">
                 {counts.prds} {counts.prds === 1 ? "PRD" : "PRDs"}
@@ -155,7 +164,8 @@ export default function PlanPage() {
                 </Chip>
               )}
             </>
-          )
+            )}
+          </>
         }
         action={
           <>
@@ -178,7 +188,7 @@ export default function PlanPage() {
       />
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
         {q.error && <Notice tone="error">{q.error}</Notice>}
-        <GoalsBand canImport={canWrite} />
+        <GoalsBand canImport={canBaseline} />
         <PrdCards prds={data?.prds} canWrite={canWrite} />
         {roadmaps.map((r) => (
           <PlanChanges

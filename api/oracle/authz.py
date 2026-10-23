@@ -49,6 +49,8 @@ def require_role(min_role: Role) -> Callable[[Principal], Awaitable[Principal]]:
             raise HTTPException(status.HTTP_403_FORBIDDEN, f"Requires the {min_role} role")
         return principal
 
+    # Read by oracle.capabilities: what each route needs, so the web app can hide the rest.
+    check_role.min_role = min_role  # type: ignore[attr-defined]
     return check_role
 
 

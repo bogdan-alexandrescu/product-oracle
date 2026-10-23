@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 
-import { Button, Chip, Icon, InfoTip, Notice, PageHeader, Panel, Sheet } from "@/components/ds";
+import { Button, Chip, Icon, InfoTip, Notice, PageHeader, Panel, Sheet, ViewOnly } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, TEXTAREA } from "../_components/fields";
@@ -34,11 +34,12 @@ const propsOf = (item: Item) => ((item.limits_schema?.properties ?? {}) as Recor
 /**
  * Settings › Autonomy (H11): how far Oracle goes on its own, per responsibility. Everyone
  * reads it; only an owner changes a level, in a sheet that says what changes and asks why.
+ * Other roles see each level as a chip, and View only (#370).
  */
 export function AutonomySettings() {
   const q = useQuery("autonomy", () => unwrap(api.GET("/v1/autonomy")));
-  const { role } = useMe();
-  const owner = hasRole(role, "owner");
+  const { can, capsReady } = useMe();
+  const owner = can("set_autonomy");
   const [change, setChange] = useState<{ item: Item; level: Level } | null>(null);
   const [saved, setSaved] = useState(false);
   const items = q.data?.items ?? [];
@@ -48,20 +49,20 @@ export function AutonomySettings() {
       <PageHeader
         title="Autonomy"
         status={
-          <InfoTip label="autonomy" align="start" side="bottom">
-            {LEVELS.map((l) => (
-              <span key={l.value} className="block">
-                <b>{l.title}:</b> {LEVEL_COPY[l.value]}
-              </span>
-            ))}
-          </InfoTip>
+          <>
+            <InfoTip label="autonomy" align="start" side="bottom">
+              {LEVELS.map((l) => (
+                <span key={l.value} className="block">
+                  <b>{l.title}:</b> {LEVEL_COPY[l.value]}
+                </span>
+              ))}
+            </InfoTip>
+            {capsReady && !owner && <ViewOnly />}
+          </>
         }
       />
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
         <p className="text-[15px] text-text2">How far Oracle goes on its own. You can change this any time.</p>
-        {!owner && q.data && (
-          <Notice testId="autonomy-owner-only">Only an owner can change this</Notice>
-        )}
         {saved && <Notice tone="pass">Saved. Oracle follows this from now on.</Notice>}
         {q.error && <Notice tone="error">{q.error}</Notice>}
         {q.data &&
@@ -130,7 +131,13 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
           </Chip>
         )}
       </div>
-      <Steps item={item} owner={owner} onPick={onPick} />
+      {owner ? (
+        <Steps item={item} onPick={onPick} />
+      ) : (
+        <Chip kind="acc" data-testid="autonomy-level">
+          {LEVELS.find((l) => l.value === item.level)?.label ?? item.level}
+        </Chip>
+      )}
       <p className="col-span-full flex min-w-0 flex-wrap items-center gap-x-2 text-[15px] text-text2">
         <span data-testid="autonomy-sentence">{item.levels[item.level]}</span>
         {showLimits && (
@@ -144,7 +151,7 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
 }
 
 /** Observe · Draft · Recommend · Act: one line, steps above the ceiling locked. */
-function Steps({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (level: Level) => void }) {
+function Steps({ item, onPick }: { item: Item; onPick: (level: Level) => void }) {
   return (
     <div role="group" aria-label={`${item.title}: level`} className="inline-flex flex-none rounded-button border border-line-strong bg-surface">
       {LEVELS.map((l) => {
@@ -157,7 +164,7 @@ function Steps({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (l
             key={l.value}
             type="button"
             aria-pressed={on}
-            disabled={locked || !owner}
+            disabled={locked}
             title={locked ? `Stays with people: ${item.ceiling_reason ?? "above this responsibility's ceiling"}` : undefined}
             onClick={() => !idle && onPick(l.value)}
             className={`flex h-8 items-center gap-1 border-r border-line px-3 text-sm font-medium whitespace-nowrap last:border-r-0 max-[600px]:px-2 ${

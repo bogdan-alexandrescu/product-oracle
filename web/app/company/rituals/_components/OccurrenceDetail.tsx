@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { Button, Chip, LinkButton, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -25,7 +25,7 @@ const NOTES_MAX = 10_000;
  * read for me (its Inbox row is done).
  */
 export function OccurrenceDetail({ id }: { id: string }) {
-  const { me, role } = useMe();
+  const { me, can } = useMe();
   // Read with the time it was read: the meeting has ended when the owner records it.
   const q = useQuery(`ritual-occurrence|${id}`, async () => {
     const occ = await unwrap(api.GET("/v1/ritual-occurrences/{occurrence_id}", { params: { path: { occurrence_id: id } } }));
@@ -85,7 +85,7 @@ export function OccurrenceDetail({ id }: { id: string }) {
         </span>
       </p>
       <div className="flex flex-col gap-3">
-        <SummaryCard occ={occ} canAsk={hasRole(role, "approver")} onChanged={reload} />
+        <SummaryCard occ={occ} canAsk={can("summarize_ritual_occurrence")} onChanged={reload} />
         {blocks.length === 0 ? (
           <Panel title="Pre-read">
             <p className="px-4 py-3 text-sm text-text2">The pre-read is not ready yet</p>

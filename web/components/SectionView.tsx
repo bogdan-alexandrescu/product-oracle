@@ -16,7 +16,7 @@ import { SpecStateBadge } from "@/components/ui";
 import { IGNORE_ATTR } from "@/lib/anchor";
 import type { CitationOut, DateMarkOut, EntityOut, SectionOut, Verdict } from "@/lib/api/client";
 import { blocksText, type Block } from "@/lib/markdown";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 
 const HEADING_CLASS: Record<number, string> = {
   1: "font-display text-[26px] leading-8 font-bold tracking-heading max-[600px]:text-[22px] max-[600px]:leading-7",
@@ -124,10 +124,11 @@ export const SectionView = memo(function SectionView({
     return (named(section.heading) ?? named(section.body_text))?.id ?? null;
   }, [evidenceTargets, section.heading, section.body_text]);
   const canRefine = !!refine && !locked;
-  // H1: commenters and above record a decision about this section (Propose decision).
-  const { role } = useMe();
+  // H1: a decision about this section can be recorded (Propose decision).
+  const { can } = useMe();
   const router = useRouter();
-  const mayDecide = hasRole(role, "commenter") && !!section.id;
+  // #370: proposing it is POST /v1/decisions.
+  const mayDecide = can("create_decision") && !!section.id;
   const unplaced = useMemo(() => unplacedMarks(blocks, dateMarks), [blocks, dateMarks]);
   const pick = (kind: Tool) => setTool((t) => ({ kind, n: (t?.n ?? 0) + 1 }));
   const close = () => setTool(null);

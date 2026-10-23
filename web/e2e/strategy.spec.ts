@@ -68,7 +68,8 @@ test("strategy: an approver reviews a strategy's sections but cannot approve it"
 
   await expect(header.getByRole("button", { name: "Approve version" })).toHaveCount(0);
   await expect(header.getByRole("link", { name: "Publish", exact: true })).toHaveCount(0);
-  await expect(page.getByTestId("owner-approves-note")).toContainText("Only an owner approves a product strategy");
+  // #370: an approver can never approve a strategy, so no note about it either.
+  await expect(page.getByTestId("owner-approves-note")).toHaveCount(0);
 });
 
 // protects=an owner approves a product strategy from its version page; fails_when=the owner

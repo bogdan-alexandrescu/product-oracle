@@ -152,24 +152,27 @@ test("experiments and feasibility scope: plan, approve the scope, start, conclud
   await expect(insp.getByTestId("blocker-status")).toHaveText("Open");
 });
 
-test("a viewer sees every control disabled, with the reason", async ({ page }) => {
+// #370: a control a role can never use is hidden; a person who can act on nothing sees View only.
+const EDITS = ["Set status", "Edit blocker", "Plan experiment", "Approve scope", "Select", "Fallback", "Reject", "Edit", "Start", "Conclude"];
+
+test("a viewer sees no edit control, and View only", async ({ page }) => {
   await openBlockers(page, "viewer");
-  const insp = await openBlocker(page, DEPOSITS);
-  await expect(insp.getByTestId("blocker-readonly")).toHaveText(
-    "Viewers can read blockers. Approvers and owners change them; commenters can propose options.",
-  );
-  await expect(insp.getByRole("form", { name: "Change status" }).getByRole("button", { name: "Set status" })).toBeDisabled();
-  await expect(insp.getByRole("button", { name: "Edit blocker" })).toBeDisabled();
-  await expect(insp.getByRole("button", { name: "Propose option" })).toBeDisabled();
-  await expect(insp.getByRole("button", { name: "Plan experiment" })).toBeDisabled();
-  await expect(insp.getByRole("form", { name: "Feasibility scope" }).getByRole("button", { name: "Approve scope" })).toBeDisabled();
+  for (const statement of [DEPOSITS, LOOKUP]) {
+    const insp = await openBlocker(page, statement);
+    await expect(insp.getByTestId("view-only")).toHaveText("View only");
+    for (const name of [...EDITS, "Propose option"]) await expect(insp.getByRole("button", { name, exact: true })).toHaveCount(0);
+    await expect(insp.getByRole("form")).toHaveCount(0);
+    await expect(insp.getByTestId("blocker-readonly")).toHaveCount(0);
+  }
+  // What the viewer reads stays: the options and the history.
+  await expect(page.getByTestId("blocker-inspector").getByTestId("blocker-option").first()).toContainText("Batch address lookups within the published quota");
 });
 
-test("a commenter proposes an option but cannot decide; an approver cannot scope a gating blocker", async ({ page }) => {
+test("a commenter proposes an option and sees no decision control", async ({ page }) => {
   await openBlockers(page, "commenter");
   const insp = await openBlocker(page, DEPOSITS);
-  await expect(insp.getByRole("button", { name: "Propose option" })).toBeEnabled();
-  await expect(insp.getByRole("button", { name: "Edit blocker" })).toBeDisabled();
+  await expect(insp.getByTestId("view-only")).toHaveCount(0);
+  for (const name of EDITS) await expect(insp.getByRole("button", { name, exact: true })).toHaveCount(0);
   await insp.getByRole("button", { name: "Propose option" }).click();
   const form = insp.getByRole("form", { name: "Propose option" });
   await form.getByLabel("Title").fill("Hold the deposit until the next morning");
@@ -177,16 +180,21 @@ test("a commenter proposes an option but cannot decide; an approver cannot scope
   await form.getByRole("button", { name: "Propose" }).click();
   const row = insp.getByTestId("blocker-option").filter({ hasText: "Hold the deposit until the next morning" });
   await expect(row).toContainText("Proposed");
-  await expect(row.getByRole("button", { name: "Reject" })).toBeDisabled();
+  await expect(row.getByRole("button")).toHaveCount(0);
 });
 
-test("an approver: the gating blocker's feasibility scope is the owner's", async ({ page }) => {
+test("an approver sees the edit controls; the gating blocker's feasibility scope is the owner's", async ({ page }) => {
   await openBlockers(page, "approver");
   const insp = await openBlocker(page, LOOKUP);
+  await expect(insp.getByTestId("view-only")).toHaveCount(0);
+  for (const name of ["Set status", "Edit blocker", "Propose option", "Plan experiment"]) await expect(insp.getByRole("button", { name, exact: true })).toBeEnabled();
+  await expect(insp.getByTestId("blocker-option").first().getByRole("button", { name: "Reject" })).toBeEnabled();
+  // A state block keeps its reason: this blocker gates publishing, so its scope takes an owner.
   const scope = insp.getByRole("form", { name: "Feasibility scope" });
   await expect(scope).toContainText("Only an owner can approve this feasibility scope");
   await expect(scope.getByRole("button", { name: "Approve scope" })).toBeDisabled();
-  await expect(insp.getByRole("button", { name: "Edit blocker" })).toBeEnabled();
+  await insp.getByRole("button", { name: "Edit blocker" }).click();
+  await expect(insp.getByRole("form", { name: "Edit blocker" })).toBeVisible();
 });
 
 test("opens from the Baseline drawer", async ({ page }) => {

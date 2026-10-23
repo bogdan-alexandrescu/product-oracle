@@ -6,7 +6,7 @@ import { Button, Chip, Empty, type ChipKind } from "@/components/ds";
 import { PersonPicker, peopleByIds, type Person } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, type Role } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { CATEGORY_LABEL, OPEN_GAP, type Category, type Summary } from "./_lib";
@@ -207,21 +207,21 @@ function Triage({
 function GapRow({
   gap,
   owner,
-  role,
   researching,
   onChanged,
 }: {
   gap: RankedGap;
   owner: Person | undefined;
-  role: Role | null;
   researching: boolean;
   onChanged: () => void;
 }) {
   const [triaging, setTriaging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const approver = hasRole(role, "approver");
-  const commenter = hasRole(role, "commenter");
+  const { can } = useMe();
+  // Lowering a critical gap takes an owner; the API says so in place.
+  const approver = can("update_knowledge_gap", true);
+  const commenter = can("propose_gap_research");
   const open = OPEN_GAP.has(gap.status);
   const status = GAP_STATUS[gap.status];
   const importance = IMPORTANCE_OF[gap.importance];
@@ -298,9 +298,9 @@ function GapRow({
 }
 
 /** Who acts on the gap controls the signed-in role does not see; nothing for approvers and owners. */
-function roleNote(role: Role | null): string | null {
-  if (!hasRole(role, "commenter")) return `You can read the gaps. ${ADD_REASON} and asks for research; an approver triages them.`;
-  if (!hasRole(role, "approver")) return `${TRIAGE_REASON}: importance, owner, sections, stop condition, defer and reopen.`;
+function roleNote(canAdd: boolean, canTriage: boolean): string | null {
+  if (!canAdd) return `You can read the gaps. ${ADD_REASON} and asks for research; an approver triages them.`;
+  if (!canTriage) return `${TRIAGE_REASON}: importance, owner, sections, stop condition, defer and reopen.`;
   return null;
 }
 
@@ -309,13 +309,14 @@ function roleNote(role: Role | null): string | null {
  * importance, owner, sections, stop condition, defer, reopen; lowering a critical one takes
  * an owner, the API says so in place), and Research this (commenter), which proposes a run.
  */
-export function GapsTab({ summary: s, role, onChanged }: { summary: Summary; role: Role | null; onChanged: () => void }) {
+export function GapsTab({ summary: s, onChanged }: { summary: Summary; onChanged: () => void }) {
+  const { can, capsReady } = useMe();
   const [adding, setAdding] = useState(false);
   const ownerIds = s.gaps.map((g) => g.owner_id).filter((id): id is string => !!id);
   const owners = useQuery(`gap-owners|${[...new Set(ownerIds)].sort().join(",")}`, () => peopleByIds(ownerIds), { keepPrevious: true });
   const researching = new Set(s.proposals.filter((p) => p.kind === "research_run" && p.status === "proposed").map((p) => p.gap_id));
-  const commenter = hasRole(role, "commenter");
-  const note = roleNote(role);
+  const commenter = can("create_knowledge_gap");
+  const note = capsReady ? roleNote(commenter, can("update_knowledge_gap", true)) : null;
   return (
     <div data-testid="intake-gaps" className="flex min-w-0 flex-col gap-3 pt-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -349,7 +350,6 @@ export function GapsTab({ summary: s, role, onChanged }: { summary: Summary; rol
               key={`${g.id}-${g.lock_version}`}
               gap={g}
               owner={g.owner_id ? owners.data?.get(g.owner_id) : undefined}
-              role={role}
               researching={researching.has(g.id)}
               onChanged={onChanged}
             />

@@ -1,7 +1,7 @@
 "use client";
 
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 type Role = Schemas["Me"]["role"];
@@ -15,9 +15,10 @@ export const RISK_DEFAULTS = { role: "owner" as Role, maxDays: 90 };
  * owner-readable; anyone else gets the defaults.
  */
 export function useRiskPolicy(): { role: Role; maxDays: number } {
-  const { role } = useMe();
-  const q = useQuery(`risk-policy|${role}`, async () => {
-    if (!hasRole(role, "approver")) return RISK_DEFAULTS;
+  const { can } = useMe();
+  const canRead = can("get_setting_endpoint");
+  const q = useQuery(`risk-policy|${canRead}`, async () => {
+    if (!canRead) return RISK_DEFAULTS;
     const read = (key: string) => unwrap(api.GET("/v1/settings/{key}", { params: { path: { key } } })).then((s) => s.value);
     const [who, days] = await Promise.all([read("blocker_risk_acceptance_role"), read("blocker_risk_review_max_days")]).catch(() => [null, null]);
     return {

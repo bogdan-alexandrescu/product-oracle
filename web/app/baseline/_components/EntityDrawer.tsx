@@ -9,7 +9,7 @@ import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type GraphOut, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { named } from "@/lib/codes";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { EvidenceChip } from "./EvidenceChip";
@@ -1036,10 +1036,10 @@ function History({ entityId, updatedAt }: { entityId: string; updatedAt: string 
   );
 }
 
-/** H1: commenters and above record a decision about a blocker (Propose decision, about it). */
+/** H1: who may record a decision records one about a blocker (Propose decision, about it). */
 function RecordDecision({ entity }: { entity: EntityOut }) {
-  const { role } = useMe();
-  if (!hasRole(role, "commenter")) return null;
+  const { can } = useMe();
+  if (!can("create_decision")) return null;
   const href = `/company/decisions?subject=${encodeURIComponent(`blocker:${entity.id}`)}&ref=${encodeURIComponent(entity.title)}&propose=1`;
   return (
     <InspectorSection label="Decisions">
