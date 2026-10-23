@@ -39,6 +39,7 @@ import {
   outcomeInboxRows,
   publishRefusal,
   routeQuality,
+  seedLearnings,
   seedOracleRecorded,
   seedOutcomes,
   seedQuality,
@@ -1525,7 +1526,7 @@ function load(): Db {
     const goal = db.baseline.entities.find((e) => e.type === "goal" && e.title === "Raise activation");
     const outcomes = goal ? seedOutcomes(db.user_id, goal.id, null) : [];
     if (goal && scenario === "outcomes-recorded") outcomes.push(seedOracleRecorded(db.user_id, goal.id));
-    if (goal) db.quality = { outcomes, learnings: [] };
+    if (goal) db.quality = { outcomes, learnings: seedLearnings(db.user_id) };
   }
   db.autonomy = emptyAutonomy();
   // Discussions (G1): one private discussion in the "discussions" scenario; none otherwise,

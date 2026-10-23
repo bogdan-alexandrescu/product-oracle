@@ -204,6 +204,16 @@ function draftLearnings(o: Outcome, verdict: Schemas["AssessmentIn"]["verdict"])
   ];
 }
 
+/** The "outcomes" scenarios' learning on record (synthetic): one a person kept by hand. */
+export function seedLearnings(owner: string): Learning[] {
+  const at = "2026-09-14T10:00:00Z";
+  return [{
+    id: "00000000-0000-4000-8000-0000000003a1", outcome_id: null, statement: "Ask for the metric's baseline before drafting",
+    applies_to: "question_category", target: "success_metric", direction: "recommend_more", weight: 1, status: "active",
+    retired_reason: null, created_by: owner, retired_by: null, retired_at: null, created_at: at, updated_at: at,
+  }];
+}
+
 /** "outcomes-recorded" adds what H11 at Act within limits leaves: Oracle recorded Weekly digest email partly held. */
 export function seedOracleRecorded(owner: string, goalId: string): Outcome {
   const now = Date.now();
@@ -482,14 +492,17 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
     if (m === "POST" && !p[2]) {
       const data = await body<Schemas["OutcomeCreate"]>();
       if (!data?.goal_id || !data.prediction) return fail(422, "goal_id and prediction are required");
+      if (data.roadmap_item_id && ctx.db.outcomes.some((x) => x.roadmap_item_id === data.roadmap_item_id))
+        return fail(409, "That roadmap item already has an outcome record");
       const now = new Date().toISOString();
       const o: Outcome = {
         id: uuid(), title: data.title, goal_id: data.goal_id, outcome_entity_id: data.outcome_entity_id ?? null,
         document_id: null, prd_version_id: data.prd_version_id ?? null, roadmap_version_id: data.roadmap_version_id ?? null,
         roadmap_item_key: data.roadmap_item_key ?? null, experiment_id: data.experiment_id ?? null,
+        roadmap_item_id: data.roadmap_item_id ?? null,
         prediction: { baseline: null, threshold: null, by: null, ...data.prediction },
         module_keys: data.module_keys ?? [], gap_categories: data.gap_categories ?? [], status: "tracking", observed: null,
-        needs_prediction: false,
+        needs_prediction: data.prediction.predicted_value == null && !!data.roadmap_item_id,
         assessments: [], owner_id: data.owner_id ?? ctx.userId, created_by: ctx.userId, assessed_at: null, lock_version: 1,
         created_at: now, updated_at: now,
       };
