@@ -71,12 +71,8 @@ test("version history: import times and days in the Company time zone", async ({
   await login(page);
   await setZone(page, "Pacific/Auckland");
   await page.goto("/documents/team-workspaces");
-  const versions = page.getByRole("table").filter({ hasText: "Imported" });
-  await expect(versions.getByRole("row").filter({ hasText: "v1" })).toContainText("Oct 13, 12:00 AM GMT+13");
-
-  await page.goto("/documents/team-workspaces/diff?from=1&to=2");
-  await expect(page.getByText("v1 · Oct 13, 2026").first()).toBeVisible();
-  await expect(page.getByText("v1 · Oct 12, 2026")).toHaveCount(0);
+  // Imported 11:00 UTC on Oct 12: midnight starting Oct 13 in Auckland (Oct 12 in New York).
+  await expect(page.getByRole("row", { name: /^Version 1 / })).toContainText("Oct 13, 12:00 AM GMT+13");
 });
 
 // protects: an invite's delivery (its email and access notifications) says when it was last

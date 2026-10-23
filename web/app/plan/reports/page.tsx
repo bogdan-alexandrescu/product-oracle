@@ -7,10 +7,11 @@ import { useRef, useState } from "react";
 import { Button, Chip, DataTable, Empty, Notice, Page, PageHeader, Panel, useFocusTrap, type Column } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
+import { formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { inZone, type ReportItem } from "./_lib";
+import { type ReportItem } from "./_lib";
 
 const SLACK_KIND = { posted: "pass", failed: "crit", pending: "warn", not_configured: "na", not_requested: "na" } as const;
 const SLACK_LABEL = { posted: "Posted", failed: "Not posted", pending: "Retrying", not_configured: "No Slack", not_requested: "Not posted" } as const;
@@ -54,7 +55,7 @@ const COLUMNS: Column<ReportItem>[] = [
     width: "190px",
     align: "right",
     phone: "meta",
-    cell: (r) => <span className="tnum text-text2">{inZone(r.generated_at, r.timezone)}</span>,
+    cell: (r) => <span className="tnum text-text2">{formatDateTime(r.generated_at)}</span>,
   },
 ];
 

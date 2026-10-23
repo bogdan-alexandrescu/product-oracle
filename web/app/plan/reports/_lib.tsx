@@ -1,6 +1,7 @@
 import { Chip, type ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { inZone } from "@/lib/format";
+import { zoneDateTime } from "@/lib/dates";
+import { formatDateTime } from "@/lib/format";
 
 export type Report = Schemas["AlignmentReportOut"];
 export type ReportItem = Schemas["AlignmentReportListItem"];
@@ -36,14 +37,18 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 /** "Nov 30" from "2026-11-30" (a calendar date, no time zone). */
 export const shortDay = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
 
-export { inZone };
+/**
+ * A bound of the week a report covers, in the zone the report was made in: its bounds are
+ * midnights there, so another zone would show them as odd hours.
+ */
+export const periodBound = (iso: string, r: Pick<Report, "timezone">) => zoneDateTime(iso, r.timezone);
 
 /** The report's Slack line: posted, waiting, refused, or not posted. */
 export function slackText(r: Pick<Report, "slack" | "timezone">): string {
   const s = r.slack;
   const channel = s.channel ? `#${s.channel.name}` : "Slack";
-  if (s.status === "posted" && s.posted_at) return `Posted to ${channel} on ${inZone(s.posted_at, r.timezone)}`;
-  if (s.status === "pending") return `Not posted to ${channel} yet: ${s.error ?? "waiting"}. Oracle tries again${s.next_attempt_at ? ` at ${inZone(s.next_attempt_at, r.timezone)}` : ""}.`;
+  if (s.status === "posted" && s.posted_at) return `Posted to ${channel} on ${formatDateTime(s.posted_at)}`;
+  if (s.status === "pending") return `Not posted to ${channel} yet: ${s.error ?? "waiting"}. Oracle tries again${s.next_attempt_at ? ` at ${formatDateTime(s.next_attempt_at)}` : ""}.`;
   if (s.status === "failed") return `Not posted to ${channel}: ${s.error ?? "Slack refused it"}.`;
   if (s.status === "not_configured") return "Not posted: Slack is not connected for notifications, or no channel is picked.";
   return "Not posted to Slack.";
