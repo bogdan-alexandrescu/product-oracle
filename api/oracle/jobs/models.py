@@ -43,7 +43,9 @@ JOB_KINDS = ("review_comments", "reporting", "refinement", "quality_review", "re
 INTAKE_JOB_KINDS = ("intake_analysis",)
 # A decision's options (H1, migration 0020_decisions): no document, ``decision_id`` instead.
 DECISION_JOB_KINDS = ("decision_options",)
-ALL_JOB_KINDS = JOB_KINDS + INTAKE_JOB_KINDS + DECISION_JOB_KINDS
+# An interview's guide and snapshot (C3, migration 0030_interviews): ``interview_id``.
+INTERVIEW_JOB_KINDS = ("interview_guide", "interview_snapshot")
+ALL_JOB_KINDS = JOB_KINDS + INTAKE_JOB_KINDS + DECISION_JOB_KINDS + INTERVIEW_JOB_KINDS
 JOB_STATUSES = ("queued", "running", "succeeded", "failed", "cancelled")
 CLASSIFICATIONS = ("question", "change_request", "factual_correction", "approval", "other")
 SUGGESTION_KINDS = ("section_text", "answer", "none", "duplicate")
@@ -56,7 +58,8 @@ class LlmJob(TenantScoped, Base):
         CheckConstraint(_in("kind", ALL_JOB_KINDS), name="kind"),
         CheckConstraint(_in("status", JOB_STATUSES), name="status"),
         CheckConstraint(
-            "document_id IS NOT NULL OR intake_id IS NOT NULL OR decision_id IS NOT NULL",
+            "document_id IS NOT NULL OR intake_id IS NOT NULL OR decision_id IS NOT NULL "
+            "OR interview_id IS NOT NULL",
             name="subject",
         ),
         Index("ix_llm_jobs_document_status", "document_id", "status"),
@@ -64,7 +67,7 @@ class LlmJob(TenantScoped, Base):
     )
 
     kind: Mapped[str] = mapped_column(Text, nullable=False)
-    # Null for intake and decision jobs, which carry intake_id or decision_id instead.
+    # Null for intake, decision and interview jobs, which carry their own subject instead.
     document_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("documents.id", ondelete="CASCADE")
     )
@@ -73,6 +76,9 @@ class LlmJob(TenantScoped, Base):
     )
     decision_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("decisions.id", ondelete="CASCADE"), index=True
+    )
+    interview_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("interviews.id", ondelete="CASCADE"), index=True
     )
     version_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("document_versions.id", ondelete="CASCADE"), index=True

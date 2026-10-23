@@ -75,6 +75,11 @@ JOBS = (
     "decision_options",
     # C9: Oracle reads a person's reason for a move or pin against the evidence.
     "override_reason_check",
+    # C3 Interviews: a customer interview's guide and snapshot (queued) and its turns
+    # (inline, in the customer's request).
+    "interview_guide",
+    "interview_turn",
+    "interview_snapshot",
     # G2 Live replies: what a person waits for in a discussion.
     "discussion_reply",
 )
@@ -244,7 +249,11 @@ async def _run(
 
     got = await _assign(tenant_id, job=job, attempt_id=attempt_id)
     if isinstance(got, pool.NoAccount):
-        spare = await fallback.load(session) if fallback.covers(got.reason) else None
+        spare = None
+        if fallback.covers(got.reason):
+            # Its own short session: the caller's connection is not held across the call.
+            async with tenant_session(tenant_id) as read:
+                spare = await fallback.load(read)
         if spare is None and got.is_pool_absent:
             raise NoClaudeAccount(NO_ACCOUNT_MESSAGE, got.reason.value)
         if spare is None:

@@ -33,6 +33,8 @@ const WAITING_ON_APPROVER = "What shows this pain is real, and how often does it
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     if (!localStorage.getItem("po-mock-scenario")) localStorage.setItem("po-mock-scenario", "before-drafting");
+    // These tests drive the plain answer path; C3 lane 2's follow-ups are in interviews-team.spec.ts.
+    localStorage.setItem("po-interview-follow-up", "off");
   });
 });
 

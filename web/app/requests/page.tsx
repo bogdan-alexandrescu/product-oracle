@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 
-import { Empty, Page, PageHeader, Panel, SegmentedControl, Split } from "@/components/ds";
+import { Button, Empty, Page, PageHeader, Panel, SegmentedControl, Split } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { FoundInSources } from "./_components/FoundInSources";
+import { InterviewDialog } from "./_components/InterviewDialog";
 import { NewRequestButton } from "./_components/NewRequest";
 import { RequestInspector } from "./_components/RequestInspector";
 import { RequestList, STATE } from "./_components/RequestList";
@@ -23,6 +24,7 @@ import { ClassifyNow, DailyTriageSwitch, TriageStatusLine, useTriage } from "./_
  * The queue (#348) filters by state, goal and theme and searches titles and words; the
  * selected request opens in the inspector. The Themes tab lists, creates, renames and
  * archives themes.
+ * Interview a customer (C3, commenters and up).
  */
 export default function RequestsPage() {
   const { role } = useMe();
@@ -66,6 +68,7 @@ export default function RequestsPage() {
   );
   const current = all.find((r) => r.id === selected);
   const liveThemes = (themes.data ?? []).filter((t) => !t.archived);
+  const [interviewing, setInterviewing] = useState(false);
   return (
     <Page>
       <PageHeader
@@ -75,6 +78,7 @@ export default function RequestsPage() {
           <>
             <DailyTriageSwitch triage={triage} canChange={hasRole(role, "approver")} />
             {hasRole(role, "approver") && <ClassifyNow triage={triage} />}
+            {hasRole(role, "commenter") && <Button onClick={() => setInterviewing(true)}>Interview a customer</Button>}
             <NewRequestButton onFiled={filed} />
           </>
         }
@@ -171,6 +175,7 @@ export default function RequestsPage() {
           </Split>
         )}
       </div>
+      {interviewing && <InterviewDialog onClose={() => setInterviewing(false)} />}
     </Page>
   );
 }

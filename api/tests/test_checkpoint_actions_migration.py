@@ -71,7 +71,7 @@ def _has_table() -> bool:
 
 def test_the_chain_ends_here_after_agent_staging():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0031_basis_verification"]
+    assert script.get_heads() == ["0032_interviews"]
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
