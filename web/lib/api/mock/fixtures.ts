@@ -852,6 +852,20 @@ const fleetSections = (problem: string): SectionSeed[] => [
   { key: "problem", level: 2, heading: "Problem", body: problem },
   { key: "features", level: 2, heading: "Features", body: "Six features, in delivery order." },
   ...FLEET_FEATURES.map(([key, heading, body]) => ({ key, level: 3, heading, body })),
+  // #306 Named codes: milestones titled with their dates; three or more codes as a list.
+  { key: "delivery-plan", level: 2, heading: "Delivery plan", body: "Two milestones; each ships the features listed under it." },
+  {
+    key: "m1",
+    level: 3,
+    heading: "M1 · Oct 19 – Nov 13",
+    body: "Ships:\n\n- F-31 Route planner\n- F-32 Live arrival times\n- F-33 Proof of delivery",
+  },
+  {
+    key: "m2",
+    level: 3,
+    heading: "M2 · Nov 16 – Dec 11",
+    body: "Ships:\n\n- F-34 Failed delivery flow\n- F-35 Driver shift summary\n- F-36 Depot handover\n\nF-36 needs F-34 live first.",
+  },
   {
     key: "metrics",
     level: 2,

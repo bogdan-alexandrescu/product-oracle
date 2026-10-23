@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, changes, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
-from oracle.docs import layers
+from oracle.docs import layers, named_codes
 from oracle.docs.diff import diff_sections
 from oracle.docs.models import DOCUMENT_KINDS, Citation, Document, DocumentVersion, Section
 from oracle.docs.parser import (
@@ -1047,6 +1047,9 @@ async def import_draft(
         except DraftError:
             await db.rollback()
             raise
+    if origin == "run" and document.kind == "prd":
+        # #306: an agent names the codes it writes; a draft that does not is flagged.
+        warnings += named_codes.check(draft.sections)
     if previous is not None:
         locked = await review_service.locked_section_keys(db, previous.id)
         if locked:
