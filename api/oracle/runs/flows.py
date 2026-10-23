@@ -107,6 +107,25 @@ DECISIONS_TASK = (
     "the draft departs from a decided call, say so and name its D-number."
 )
 
+# #306 Named codes: the text of the steps that write PRD sections, proposals and notes for
+# a checkpoint reads well on its own, in the app and in exports (named_codes_apply). The
+# roadmap prompts stay as they were (pinned in test_runs_prd_template).
+NAMED_CODES = (
+    "Codes: the first time a section or note uses a code (a feature, requirement, goal, "
+    "decision or milestone key), write it with its name: F-28 Retire the legacy deploy "
+    "path, not F-28; later mentions in the same section may use the code alone. Write "
+    "three or more codes as a list, one per line, each with its name, never as a "
+    "comma-separated run of codes. Title a milestone section with its dates, e.g. "
+    "M1 · Oct 19 – Nov 13, not just M1. Never invent a code to stand for something; a "
+    "thing without a code goes by its name."
+)
+
+
+def named_codes_apply(segment: "SegmentDef", ctx: "PromptContext") -> bool:
+    """True for the steps that write PRD sections (a PRD run's drafts and checkpoint notes)
+    or proposals (#306)."""
+    return ctx.kind == "prd" or "write:proposals" in segment.scopes
+
 
 @dataclass(frozen=True)
 class AgentRole:
@@ -1116,6 +1135,8 @@ def step_prompt(
         "two disagree, and flag every claim whose best evidence is below "
         f"{ctx.low_confidence:g} as low confidence instead of stating it as fact.",
     ]
+    if named_codes_apply(segment, ctx):
+        lines.append(NAMED_CODES)
     if last:
         lines.append(
             "Write these files as artifacts: " + ", ".join(segment.outputs_for(ctx.kind)) + "."

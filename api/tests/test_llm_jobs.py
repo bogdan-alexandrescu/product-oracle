@@ -239,7 +239,7 @@ async def test_feedback_queues_one_job_that_classifies_groups_and_suggests(clien
     assert job["status"] == "succeeded"
     assert job["account_label"] == "personal" and job["via"] == "account"
     assert (job["input_tokens"], job["output_tokens"], job["cost_usd"]) == (1200, 300, 0.0421)
-    assert job["input"]["prompt"] == "review_comments.v1"
+    assert job["input"]["prompt"] == "review_comments.v2"
     assert job["output"]["handled"] == 5
     assert job["output"]["classifications"] == {
         "change_request": 3,
