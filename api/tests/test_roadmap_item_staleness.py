@@ -2,7 +2,11 @@
 to it potentially_stale (oracle.changes), never rewriting them; people review or
 reconcile. Against Postgres with the FakeRuntime."""
 
+import uuid
+
 from sqlalchemy import select
+
+from oracle import changes
 
 from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
@@ -174,3 +178,40 @@ async def test_review_and_reconcile(client, owner, runtime):  # noqa: F811
     assert v3 != prd_v2()
     assert (await import_draft(client, auth, v3)).status_code == 201
     assert (await items(client, auth))["shipping-step"]["freshness"] == "reconciled"
+
+
+async def test_bulk_changes_name_the_count_that_applies_to_the_item_once(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """#505: two bulk writes (42 items, then 11) that each touch the payment step's
+    requirement say what changed once, with the payment step's own count; never
+    "42 baseline items changed; 11 baseline items changed"."""
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await seed_baseline(tenant_id)
+    ids = await seed_trace(tenant_id)
+    await built_roadmap(client, auth, runtime)
+
+    async def bulk(n: int) -> None:
+        roots = [{"id": str(ids["requirement"]), "ref": "requirement:saved-cards"}] + [
+            {"id": str(uuid.uuid4()), "ref": f"feature:other-{i}"} for i in range(n - 1)
+        ]
+        async with tenant_session(tenant_id) as s:
+            await changes.record_change(
+                s,
+                "entity",
+                cause="entity_updated",
+                actor=None,
+                subject_ref=f"{n} baseline items",
+                data={"roots": roots, "entity_ids": [r["id"] for r in roots]},
+            )
+            await s.commit()
+
+    await bulk(42)
+    await bulk(11)
+    reasons = (await items(client, auth))["payment-step"]["stale_reasons"]
+    assert len(reasons) == 1, reasons
+    assert "42" not in reasons[0] and "11" not in reasons[0], reasons
+    assert reasons[0].endswith("changed"), reasons

@@ -987,7 +987,12 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
     records: [{ ref: "ENG-402", state: "in_progress" }], date: "2026-11-20", dateStatus: "verified", dateSource: "ENG-402" },
   { key: "alert-digest", title: "Daily alert digest email", horizon: "now", goals: ["g.paid-conversion"], state: "at_risk", section: "behaviour",
     records: [{ ref: "ENG-405", state: "in_progress", target: "2026-12-09" }], date: "2026-11-30", dateStatus: "verified", dateSource: "ENG-412", slipDays: 9,
-    reasons: [{ kind: "slipping", detail: "ENG-405 targets 2026-12-09, after the milestone date 2026-11-30." }], next: { action: "decide_slip", who: "owner" } },
+    reasons: [
+      // #505: two bulk baseline writes marked it stale, as the API's stale reasons read.
+      { kind: "stale", detail: ["42 baseline items changed", "11 baseline items changed"].join("; ") },
+      { kind: "slipping", detail: "ENG-405 targets 2026-12-09, after the milestone date 2026-11-30." },
+    ],
+    next: { action: "decide_slip", who: "owner" } },
   { key: "alert-rules-api", title: "Alert rules API", horizon: "now", goals: ["g.activation"], state: "done", section: "behaviour",
     records: [{ ref: "ENG-398", state: "done" }] },
   { key: "slack-alerts", title: "Alerts in the team chat", horizon: "now", goals: ["g.activation"], state: "on_track", section: "behaviour",

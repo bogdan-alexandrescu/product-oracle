@@ -156,17 +156,15 @@ test("check now, push to tracker and draft a roadmap from the track", async ({
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 });
 
-// protects = viewers see every track control disabled, with the reason; fails_when = a viewer
-// is offered a control the API refuses.
-test("viewers see the track controls disabled, with the reason", async ({
+// protects = #370 (#505): viewers see no track control, since they can never change a track;
+// fails_when = a viewer is offered a control the API refuses.
+test("viewers see no track controls", async ({
   page,
 }) => {
   await asRole(page, "viewer");
   await openPlan(page);
   const t = track(page);
-  await expect(t.getByTestId("track-readonly")).toContainText(
-    "needs the approver role",
-  );
+  await expect(t.getByTestId("track-owner")).toBeVisible();
   for (const name of [
     "Rename",
     "Change owner",
@@ -175,7 +173,7 @@ test("viewers see the track controls disabled, with the reason", async ({
     "Draft roadmap from this track",
     "Push to tracker",
   ]) {
-    await expect(t.getByRole("button", { name })).toBeDisabled();
+    await expect(t.getByRole("button", { name })).toHaveCount(0);
   }
   await t.getByTestId("track-milestone").first().click();
   await expect(
