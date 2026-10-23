@@ -10,6 +10,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
+from oracle import wording
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import require_role, require_role_now
 from oracle.docs.schemas import VersionSummary
@@ -56,6 +57,8 @@ async def _call[T](op: Awaitable[T]) -> T:
     try:
         return await op
     except service.ReviewError as e:
+        if e.refs:
+            raise wording.Refused(_STATUS[e.kind], e.message, e.refs) from e
         raise HTTPException(_STATUS[e.kind], e.message) from e
 
 

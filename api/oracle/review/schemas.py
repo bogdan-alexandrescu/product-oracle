@@ -595,6 +595,7 @@ class PublishBlock(BaseModel):
     # The blocker's id for ``critical_blockers``; otherwise the check's key.
     id: str
     title: str
+    # In the app's words (#396, oracle.wording); the ids are in ``key`` and ``id``.
     rationale: str
 
 

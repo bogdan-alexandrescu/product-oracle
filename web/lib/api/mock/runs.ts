@@ -1675,7 +1675,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (action === "cancel-again" && m === "POST") {
     const { workflow_id } = await body<Schemas["CancelAgain"]>();
     if (!(r.cancel_again ?? []).includes(workflow_id)) {
-      return fail(409, `nothing to cancel again: workflow ${workflow_id} is not one Oracle stopped cancelling for this run`);
+      // #396: the refusal a person reads names no workflow id; the id stays in refs, as in the API.
+      return json(409, { detail: "nothing to cancel again: that workflow is not one Oracle stopped cancelling for this run", refs: { workflow: workflow_id } });
     }
     r.cancel_again = (r.cancel_again ?? []).filter((w) => w !== workflow_id);
     return done();

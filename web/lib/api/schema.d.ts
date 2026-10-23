@@ -17826,6 +17826,13 @@ export interface components {
             cite_key?: string | null;
             /** Line */
             line?: number | null;
+            /**
+             * Refs
+             * @default {}
+             */
+            refs: {
+                [key: string]: string | string[];
+            };
         };
         /**
          * InboxAccessFailure
@@ -31295,6 +31302,13 @@ export interface components {
              * @default []
              */
             section_keys: string[];
+            /**
+             * Refs
+             * @default {}
+             */
+            refs: {
+                [key: string]: string | string[];
+            };
         };
         /**
          * VisibilityIn

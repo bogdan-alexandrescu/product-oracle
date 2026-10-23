@@ -443,6 +443,7 @@ def _parse_citations(raw: Any, problems: list[ImportProblem]) -> list[CitationIn
                     code="duplicate_citation",
                     message=f"citation id '{citation.id}' is defined more than once",
                     cite_key=citation.id,
+                    refs={"cite_key": citation.id},
                 )
             )
             continue

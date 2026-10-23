@@ -19,13 +19,14 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import readiness
+from oracle import readiness, wording
 from oracle.baseline.models import Entity
 from oracle.docs import written
 from oracle.docs.models import Document, DocumentVersion
 from oracle.quality import criteria
 from oracle.readiness import ReadinessContext
 from oracle.review.schemas import PublishBlock as Block
+from oracle.roadmap import doc_dates
 
 # The blockers lane's hard check (oracle/blockers/readiness.py): its evidence ids are the
 # critical blockers, one block each, as the Publish screen lists them.
@@ -107,7 +108,6 @@ async def check_roadmap_dates(db: AsyncSession, version: DocumentVersion) -> Non
     if version.approved_at is not None:
         return
     from oracle.docs.models import Section
-    from oracle.roadmap import doc_dates
 
     sections = list(
         await db.scalars(
@@ -117,21 +117,34 @@ async def check_roadmap_dates(db: AsyncSession, version: DocumentVersion) -> Non
     marks = doc_dates.flagged(await doc_dates.marks_for_version(db, version, sections))
     if not marks:
         return
-    listed = ", ".join(f"{m.text} ({m.section_key or 'title'}: {m.label})" for m in marks)
+    detail, blocks = dates_refusal(marks, {s.section_key: s.heading for s in sections})
+    raise PublishBlocked(detail, blocks, [m.as_json() for m in marks])
+
+
+def dates_refusal(marks: list[doc_dates.Mark], headings: dict[str, str]) -> tuple[str, list[Block]]:
+    """The 409's detail and blocks for these marked dates, in the app's words (#396): each
+    date's section by its heading; the section key and date stay in the block's ``id``."""
+
+    def where(m: doc_dates.Mark) -> str:
+        if not m.section_key:
+            return "the title"
+        return wording.quoted(headings.get(m.section_key), "an untitled section")
+
+    listed = ", ".join(f"{m.text} ({where(m)}: {m.label})" for m in marks)
     noun = "date rests" if len(marks) == 1 else "dates rest"
-    raise PublishBlocked(
-        f"{len(marks)} {noun} on no verified basis: {listed}. Record a basis "
-        "(POST /v1/schedule-bases) or import a draft without them",
-        [
-            Block(
-                key="unverified_date",
-                id=f"{m.section_key}:{m.text}",
-                title=m.text,
-                rationale=doc_dates.problem_message(m, None)
-                if m.status == "withdrawn"
-                else f"{m.text} ({m.section_key or 'title'}) is marked {m.label}",
-            )
-            for m in marks
-        ],
-        [m.as_json() for m in marks],
+    detail = (
+        f"{len(marks)} {noun} on no verified basis: {listed}. Record a date basis for each "
+        "on Plan › Dates (or ask the engineering lead to), or import a draft without them"
     )
+    blocks = [
+        Block(
+            key="unverified_date",
+            id=f"{m.section_key}:{m.text}",
+            title=m.text,
+            rationale=doc_dates.problem_message(m, None, heading=headings.get(m.section_key))
+            if m.status == "withdrawn"
+            else f"{m.text} ({where(m)}) is marked {m.label}",
+        )
+        for m in marks
+    ]
+    return detail, blocks

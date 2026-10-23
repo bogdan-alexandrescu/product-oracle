@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, wording
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.jobs.schemas import SuggestionOut
@@ -56,11 +56,19 @@ class UnknownFeedbackItemsError(ValueError):
 class ReviewError(Exception):
     """A request the review service refuses; the router maps ``kind`` to an HTTP status."""
 
-    def __init__(self, kind: str, message: str, conflict: dict | None = None):
+    def __init__(
+        self,
+        kind: str,
+        message: str,
+        conflict: dict | None = None,
+        refs: wording.Refs | None = None,
+    ):
         self.kind = kind  # "not_found" | "invalid" | "forbidden" | "conflict"
         self.message = message
         # For "conflict": a ConflictResponse body (oracle.review.schemas).
         self.conflict = conflict
+        # #396: the ids agents need beside a message a person reads (oracle.wording).
+        self.refs = refs
         super().__init__(message)
 
 

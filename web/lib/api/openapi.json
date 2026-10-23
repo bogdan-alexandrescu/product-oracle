@@ -57238,6 +57238,24 @@
               }
             ],
             "title": "Line"
+          },
+          "refs": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Refs",
+            "default": {}
           }
         },
         "type": "object",
@@ -94935,6 +94953,24 @@
             "type": "array",
             "title": "Section Keys",
             "default": []
+          },
+          "refs": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Refs",
+            "default": {}
           }
         },
         "type": "object",

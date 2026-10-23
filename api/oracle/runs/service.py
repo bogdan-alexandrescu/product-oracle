@@ -132,7 +132,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, autonomy, confidence, safe_yaml
+from oracle import audit, autonomy, confidence, safe_yaml, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -302,6 +302,11 @@ ITEMS_FILE = "roadmap_items.yaml"
 
 class RunError(Exception):
     status = 409
+
+    def __init__(self, *args: object, refs: wording.Refs | None = None) -> None:
+        super().__init__(*args)
+        # #396: the ids agents need beside a message a person reads (oracle.wording).
+        self.refs = refs
 
 
 class NotFound(RunError):
@@ -1805,8 +1810,8 @@ async def create_run(
         raise Invalid(f"start a {flow.title} run from {flow.entry}")
     if flow.key == "launch_kit" and not (oracle_knobs or {}).get("launch_id"):
         raise Invalid(
-            "the Launch kit flow starts from a launch: Draft on the launch "
-            "(POST /v1/launches/{id}/draft)"
+            "the Launch kit flow starts from a launch: open it on Roadmap › Launches and "
+            "choose Draft with Oracle"
         )
     if flow.key == "update_draft" and not has_role(principal.role, "owner"):
         # H8: the CEO decides what is said to the board and investors.
@@ -2006,7 +2011,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
     if run.status != "draft":
         raise RunError(f"run is {run.status}, not a draft")
     if run.estimate_usd is None:
-        raise RunError("estimate the run first: POST /v1/runs/{id}/estimate")
+        raise RunError("estimate the run first: press Estimate, then Start run")
     await _recheck_reuse(db, run)
     await _one_build_at_a_time(db, _flow(run))
     knobs = _knobs(run)
@@ -8719,8 +8724,9 @@ async def cancel_again(
     e = next((x for x in entries if x.get("id") == workflow_id and x.get("cancel") is False), None)
     if e is None or workflow_id not in _cancel_again_ids(run):
         raise RunError(
-            f"nothing to cancel again: workflow {workflow_id} is not one Oracle stopped "
-            "cancelling for this run"
+            "nothing to cancel again: that workflow is not one Oracle stopped cancelling for "
+            "this run",
+            refs={"workflow": workflow_id},
         )
     for key in ("cancel", "cancel_tried_at", "cancelled"):
         e.pop(key, None)
@@ -8731,8 +8737,8 @@ async def cancel_again(
     if target is not None:
         _note(
             target,
-            f"Cancel again: Oracle cancels workflow {workflow_id} again (its cancel calls were "
-            "stopped), and keeps reading its status and cost until it ends.",
+            "Cancel again: Oracle cancels the workflow again (its cancel calls were stopped), "
+            "and keeps reading its status and cost until it ends.",
         )
     await audit.record(
         db, principal, "run.cancel_again", "run", run.id, {"workflow_id": workflow_id}

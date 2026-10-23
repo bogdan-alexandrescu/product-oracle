@@ -182,6 +182,7 @@ async def check_import(
                 ImportProblem(
                     code="choice_without_section",
                     message=f"choice '{c.id}' has no {{#{c.section_key}}} section",
+                    refs={"choice": c.id},
                 )
                 for c in no_section
             ]

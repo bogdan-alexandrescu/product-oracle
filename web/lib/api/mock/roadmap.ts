@@ -90,13 +90,17 @@ const AT = "2026-10-19T09:00:00Z";
 const OFF_REASON = "Two-way tracker sync is off: Oracle makes no tracker writes. Use the read-only alignment report.";
 const UNVERIFIED = "a dated milestone needs a verified estimate, capacity or commitment (basis_ids); Oracle never invents dates";
 // The API's texts for an item's refused date (api/oracle/roadmap/schedule.py).
+// #396: where a person records a date basis (api/oracle/wording.py RECORD_DATE_BASIS).
+const RECORD_DATE_BASIS = "record a date basis on Plan › Dates (or ask the engineering lead to)";
 const DATE_UNVERIFIED =
-  "a date needs a verified estimate, capacity or commitment recorded for this PRD (and item) that supports it (record one with POST /v1/schedule-bases); Oracle never invents dates";
+  `a date needs a verified estimate, capacity or commitment recorded for this PRD (and item) that supports it (${RECORD_DATE_BASIS}); Oracle never invents dates`;
 const OUTSIDE_NOW = "dated milestones belong only in now; the date was dropped";
 /** The mock scenario (MOCK_SCENARIO_KEY) whose roadmap items carry every field the Items tab shows (E2). */
 export const ITEMS_SCENARIO = "roadmap-items";
 /** F3 Date bases: commenter@example.com is the engineering lead, a basis waits for them. */
 export const DATE_BASES_SCENARIO = "date-bases";
+/** #396: the default company, GA's date with no basis, and usage-alerts-roadmap v1 carrying the API's date and citation warnings. */
+export const VERSION_WARNINGS_SCENARIO = "version-warnings";
 /** The mock scenario whose usage-alerts-roadmap v2 moved, added and dropped one item each since the approved v1 (E3). */
 export const DIFF_SCENARIO = "roadmap-diff";
 /** The mock scenario whose usage-alerts v2 draft moved and added one item against the approved usage-alerts-roadmap v1 (E3b). */
@@ -177,7 +181,8 @@ function itemsFor(ctx: RoadmapContext, roadmap: Version, trackId: string | null)
 export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): RoadmapDb {
   const withItems = scenario === ITEMS_SCENARIO;
   const withDiff = scenario === DIFF_SCENARIO;
-  const key = withItems || withDiff || scenario === DATE_BASES_SCENARIO ? `roadmap:${scenario}` : "roadmap";
+  const noGaBasis = scenario === DATE_BASES_SCENARIO || scenario === VERSION_WARNINGS_SCENARIO;
+  const key = withItems || withDiff || noGaBasis ? `roadmap:${scenario}` : "roadmap";
   return seeded(key, () => {
     const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [] };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
@@ -199,7 +204,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
     // ENG-420 waits for the engineering lead.
     const ga = scenario === "plan-decider" ? "verified" : "withdrawn";
     const seeds =
-      scenario === DATE_BASES_SCENARIO
+      noGaBasis
         ? ([["ENG-412", "2026-11-30", "verified"], ["ENG-420", "2027-01-15", "proposed"]] as const)
         : ([["ENG-412", "2026-11-30", "verified"], ["ENG-413", "2026-12-15", ga]] as const);
     for (const [reference, day, status] of seeds) {
@@ -1521,4 +1526,34 @@ export function inboxTracks(ctx: RoadmapContext, db: RoadmapDb, seen: string | n
     total += open.length;
   }
   return { tracks, total };
+}
+
+/**
+ * #396: the warnings the API stores on a roadmap version for GA's date with no basis, a
+ * citation whose source item Oracle no longer has and the feedback an agent's draft left open,
+ * worded as api/oracle/roadmap/doc_dates.py problem_message and api/oracle/wording.py
+ * unknown_source_item and feedback_left_open write them; the ids in refs.
+ */
+export function versionWarnings(prdTitle: string, prdSlug: string): Schemas["VersionWarning"][] {
+  return [
+    {
+      code: "unverified_date",
+      message: `the date 2026-12-15 ("Behaviour", line 1) rests on no verified estimate, capacity or commitment of the PRD "${prdTitle}" for this item; ${RECORD_DATE_BASIS} or drop the date. Oracle never invents dates`,
+      section_keys: ["item-behaviour"],
+      refs: { date: "2026-12-15", prd: prdSlug },
+    },
+    {
+      code: "unknown_citation_item",
+      message: 'a citation in "Summary" names a source item Oracle no longer has; the citation is kept without it',
+      section_keys: ["summary"],
+      refs: { cite_key: "c-usage", source_item: "00000000-0000-4000-8000-000000000396" },
+    },
+    {
+      code: "resolution_not_applied",
+      message:
+        'an agent\'s draft closes feedback only as addressed, and only on a section whose text or evidence it changed in this version; 2 feedback items stay open: on "Summary" and "Behaviour"',
+      section_keys: ["item-behaviour", "summary"],
+      refs: { feedback_items: ["00000000-0000-4000-8000-000000000397", "00000000-0000-4000-8000-000000000398"] },
+    },
+  ];
 }

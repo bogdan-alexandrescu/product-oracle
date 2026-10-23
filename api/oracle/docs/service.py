@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, changes, safe_yaml
+from oracle import audit, changes, safe_yaml, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.docs import layers, named_codes
@@ -667,14 +667,26 @@ async def _check_document_dates(
     ]
     if not bad and not problems:
         return [], dates
-    prd_slug = (
-        await db.scalar(select(Document.slug).where(Document.id == prd_id)) if prd_id else None
+    prd = (
+        (await db.execute(select(Document.slug, Document.title).where(Document.id == prd_id)))
+        .tuples()
+        .first()
+        if prd_id
+        else None
     )
+    prd_slug, prd_title = prd or (None, None)
+    headings = {sec.section_key: sec.heading for sec in draft.sections}
     problems += [
         ImportProblem(
             code="unverified_date",
-            message=doc_dates.problem_message(m, prd_slug, update=document.kind == "update"),
+            message=doc_dates.problem_message(
+                m,
+                prd_title,
+                update=document.kind == "update",
+                heading=headings.get(m.section_key),
+            ),
             section_key=m.section_key or None,
+            refs=doc_dates.problem_refs(m, prd_slug),
         )
         for m in bad
     ]
@@ -686,6 +698,7 @@ async def _check_document_dates(
             code=p.code,
             message=p.message,
             section_keys=[p.section_key] if p.section_key else [],
+            refs=p.refs,
         )
         for p in problems
     ], dates
@@ -705,17 +718,30 @@ async def _citation_items(
         if ids
         else set()
     )
-    warnings = [
-        VersionWarning(
-            code="unknown_citation_item",
-            message=f"citation '{key}' names source item '{value}', which this company "
-            "does not have; the citation is kept without it",
-            section_keys=[s.section_key for s in draft.sections if key in s.citation_keys],
+    warnings = []
+    for key, value in named.items():
+        if ids.get(key) in found:
+            continue
+        citing = [s for s in draft.sections if key in s.citation_keys]
+        warnings.append(
+            VersionWarning(
+                code="unknown_citation_item",
+                message=wording.unknown_source_item([s.heading for s in citing]),
+                section_keys=[s.section_key for s in citing],
+                refs={"cite_key": key, "source_item": value},
+            )
         )
-        for key, value in named.items()
-        if ids.get(key) not in found
-    ]
     return {key: item for key, item in ids.items() if item in found}, warnings
+
+
+def unknown_feedback_item(fid: uuid.UUID) -> ImportProblem:
+    """A resolution naming feedback the document does not have: the import's refusal to
+    the agent that wrote it, which echoes the id it sent (and keeps it in ``refs``)."""
+    return ImportProblem(
+        code="unknown_feedback_item",
+        message=f"resolution references unknown feedback item {fid}",
+        refs={"feedback_item": str(fid)},
+    )
 
 
 def _document_mismatch(slug: str, draft: ParsedDraft) -> DraftError:
@@ -977,13 +1003,16 @@ async def import_draft(
     if origin == "run" and previous is not None and resolutions:
         resolutions, skipped = await _run_resolutions(db, document, previous, draft, revisions)
         if skipped:
+            # #396: the sections by heading; the feedback ids in refs.
+            message, refs = wording.feedback_left_open(
+                skipped, {s.section_key: s.heading for s in draft.sections}
+            )
             warnings.append(
                 VersionWarning(
                     code="resolution_not_applied",
-                    message="an agent's draft closes feedback only as addressed, and only "
-                    "on a section whose text or evidence it changed in this version; "
-                    f"these stay open: {', '.join(skipped)}",
+                    message=message,
                     section_keys=sorted({k for k in skipped.values() if k}),
+                    refs=refs,
                 )
             )
     notes: list[VersionWarning] = []
@@ -1146,15 +1175,7 @@ async def import_draft(
         )
     except review_service.UnknownFeedbackItemsError as exc:
         await db.rollback()
-        raise DraftError(
-            [
-                ImportProblem(
-                    code="unknown_feedback_item",
-                    message=f"resolution references unknown feedback item {fid}",
-                )
-                for fid in exc.feedback_ids
-            ]
-        ) from exc
+        raise DraftError([unknown_feedback_item(fid) for fid in exc.feedback_ids]) from exc
 
     from oracle.review import patches, state
 
