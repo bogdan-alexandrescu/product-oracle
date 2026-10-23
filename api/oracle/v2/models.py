@@ -40,6 +40,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
+from oracle.trash.models import Trashable, trashed_index
 
 # --- value sets (the Pydantic Literals in oracle.v2.schemas mirror these) -------------
 
@@ -344,11 +345,14 @@ class CompositionRevision(TenantScoped, Base):
 # --- intake, gaps, questions (§5) -------------------------------------------------------
 
 
-class ProductIntake(TenantScoped, Base):
+class ProductIntake(Trashable, TenantScoped, Base):
     """A short product brief and what Oracle made of it, pinned to source snapshots."""
 
     __tablename__ = "product_intakes"
-    __table_args__ = (CheckConstraint(_in("status", INTAKE_STATUSES), name="status"),)
+    __table_args__ = (
+        CheckConstraint(_in("status", INTAKE_STATUSES), name="status"),
+        trashed_index("product_intakes"),
+    )
 
     title: Mapped[str] = mapped_column(Text, nullable=False)
     brief: Mapped[str] = mapped_column(Text, nullable=False)

@@ -24,6 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from oracle.auth.models import ROLES
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
+from oracle.trash.models import Trashable, trashed_index
 
 # request_triage: C1 Requests' triage run (oracle.requests.triage, migration 0020_requests).
 FLOWS = (
@@ -94,11 +95,12 @@ ACTION_ORIGINS = ("row", "discussion")
 Usd = Numeric(12, 4)
 
 
-class Run(TenantScoped, Base):
+class Run(Trashable, TenantScoped, Base):
     __tablename__ = "runs"
     __table_args__ = (
         CheckConstraint(_in("flow", FLOWS), name="flow"),
         CheckConstraint(_in("status", RUN_STATUSES), name="status"),
+        trashed_index("runs"),
     )
 
     flow: Mapped[str] = mapped_column(Text, nullable=False)

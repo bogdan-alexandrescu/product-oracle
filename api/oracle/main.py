@@ -79,6 +79,7 @@ from oracle.tenant_settings_api import router as settings_router
 from oracle.ticker.router import HARD_LIMIT_SECONDS
 from oracle.ticker.router import router as ticker_router
 from oracle.trace.router import router as trace_router
+from oracle.trash.router import router as trash_router
 from oracle.v2.router import router as v2_router
 
 log = logging.getLogger(__name__)
@@ -201,6 +202,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(preferences_router)
+    app.include_router(trash_router)
     app.include_router(docs_router)
     app.include_router(review_router)
     # G1: one thread per subject, open by default, private when its starter says so.

@@ -24,6 +24,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from oracle.db import Base, TenantScoped
+from oracle.trash.models import Trashable, trashed_index
 
 DOCUMENT_STATUSES = ("draft", "in_review", "approved")
 # "spec": a technical brief or engineering spec built from an approved PRD (CR-09).
@@ -45,13 +46,14 @@ def _in(column: str, values: tuple[str, ...]) -> str:
     return f"{column} IN ({', '.join(repr(v) for v in values)})"
 
 
-class Document(TenantScoped, Base):
+class Document(Trashable, TenantScoped, Base):
     __tablename__ = "documents"
     __table_args__ = (
         UniqueConstraint("tenant_id", "slug"),
         CheckConstraint(_in("status", DOCUMENT_STATUSES), name="status"),
         CheckConstraint(_in("kind", DOCUMENT_KINDS), name="kind"),
         CheckConstraint(_in("visibility", DOCUMENT_VISIBILITIES), name="visibility"),
+        trashed_index("documents"),
         # The few documents that are not company-wide (oracle.docs.visibility).
         Index(
             "ix_documents_visibility",
