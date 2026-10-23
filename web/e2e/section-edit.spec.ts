@@ -27,11 +27,13 @@ test("edit a section by hand: the preview keeps citation chips, Save makes the n
   await bar.getByRole("button", { name: /^Save/ }).click();
   await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
 
+  const chips = await problem.locator("[data-section-body]").getByRole("button", { name: /^Citation/ }).count();
+  expect(chips).toBeGreaterThan(1);
   const { editor } = await openEditor(page, "problem", "2. Problem");
   const text = editor.getByLabel("Section text (markdown)");
   await expect(text).toHaveValue(/Buyers leave checkout when the total changes late/);
   const preview = editor.getByTestId("section-edit-preview");
-  await expect(preview.getByRole("button", { name: /^Citation/ })).toHaveCount(3);
+  await expect(preview.getByRole("button", { name: /^Citation/ })).toHaveCount(chips);
 
   await text.fill(NEW_TEXT);
   await expect(preview).toContainText("Show the full total on the cart.");
