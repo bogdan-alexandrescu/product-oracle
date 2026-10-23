@@ -111,7 +111,6 @@ test("inspector: the selected block, its question, and what publishing does", as
 test("accept risk: owners accept it, and the block goes", async ({ page }) => {
   await openPublish(page, "online-deposits");
   const risk = inspector(page).getByTestId("block-risk");
-  await expect(risk).toContainText("Owners only");
   await risk.getByRole("button", { name: "Accept risk" }).click();
   await expect(risk.getByLabel("Review by")).toHaveAccessibleDescription("Within 90 days");
   await risk.getByRole("button", { name: "Cancel" }).click();
@@ -129,7 +128,6 @@ test("accept risk: the company's acceptance role and review limit, when the owne
   await setCompanySetting(page, "blocker_risk_review_max_days", 14);
   await openPublish(page, "online-deposits");
   const risk = inspector(page).getByTestId("block-risk");
-  await expect(risk).toContainText("Approvers and owners");
   await risk.getByRole("button", { name: "Accept risk" }).click();
   const review = risk.getByLabel("Review by");
   await expect(review).toHaveAccessibleDescription("Within 14 days");
@@ -147,16 +145,21 @@ test("accept risk: an approver cannot read the settings, so the owner default st
   await setCompanySetting(page, "blocker_risk_acceptance_role", "approver");
   await asRole(page, "approver");
   await openPublish(page, "online-deposits");
-  await expect(inspector(page).getByTestId("block-risk")).toContainText("Only an owner can accept this risk");
+  // #370: a control the role cannot use is hidden, with no role note.
+  const risk = inspector(page).getByTestId("block-risk");
+  await expect(risk).toBeVisible();
+  await expect(risk.getByRole("button", { name: "Accept risk" })).toHaveCount(0);
+  await expect(risk).not.toContainText("Only an owner");
 });
 
 for (const role of ["approver", "viewer"] as const) {
-  test(`accept risk: ${role}s see that only an owner can`, async ({ page }) => {
+  test(`accept risk: ${role}s are not offered it (#370)`, async ({ page }) => {
     await asRole(page, role);
     await openPublish(page, "online-deposits");
     const risk = inspector(page).getByTestId("block-risk");
-    await expect(risk).toContainText("Only an owner can accept this risk");
+    await expect(risk).toBeVisible();
     await expect(risk.getByRole("button", { name: "Accept risk" })).toHaveCount(0);
+    await expect(risk).not.toContainText("Only an owner");
   });
 }
 
@@ -187,9 +190,9 @@ test("ready: one line, the button enabled, a confirm step, then published", asyn
 test("ready: commenters check readiness but cannot publish", async ({ page }) => {
   await asRole(page, "commenter");
   await openPublish(page, "visit-reminders");
-  await expect(page.getByTestId("publish-button")).toBeDisabled();
-  await expect(page.getByTestId("publish-header")).toContainText("Approvers only");
-  await expectDescribedBy(page.getByTestId("publish-button"), "Approvers only");
+  // #370: a commenter can never publish, so the button is not drawn.
+  await expect(page.getByTestId("publish-button")).toHaveCount(0);
+  await expect(page.getByTestId("publish-header")).not.toContainText("Approvers only");
 });
 
 test("409 in the dialog: a block that appears after the page loaded is named in the dialog", async ({ page }) => {

@@ -132,7 +132,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, autonomy, confidence, safe_yaml
+from oracle import audit, autonomy, company_time, confidence, safe_yaml, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -176,6 +176,7 @@ from oracle.runs import (
     reasons,
     rejection,
     reuse,
+    review_link,
     roadmap,
     workflow,
 )
@@ -301,6 +302,11 @@ ITEMS_FILE = "roadmap_items.yaml"
 
 class RunError(Exception):
     status = 409
+
+    def __init__(self, *args: object, refs: wording.Refs | None = None) -> None:
+        super().__init__(*args)
+        # #396: the ids agents need beside a message a person reads (oracle.wording).
+        self.refs = refs
 
 
 class NotFound(RunError):
@@ -538,6 +544,7 @@ def _summary(
         started_at=run.started_at,
         finished_at=run.finished_at,
         waiting_on=waiting.kind if waiting else None,  # type: ignore[arg-type]
+        review_link=review_link.link(waiting) if waiting else None,
         error=run.error,
         stuck=_stuck(run),
         can_retry=_can_retry(run),
@@ -841,6 +848,7 @@ def _checkpoint_out(
         delivery=delivery,
         approve_label=apply_edits.label(apply_edits.edit_count(mine) if edits else 0),
         needs_agents=[NeedsAgents(action_id=a.id, item=a.item_key, kind=a.kind) for a in blocked],
+        review_link=review_link.link(cp),
     )
 
 
@@ -1802,8 +1810,8 @@ async def create_run(
         raise Invalid(f"start a {flow.title} run from {flow.entry}")
     if flow.key == "launch_kit" and not (oracle_knobs or {}).get("launch_id"):
         raise Invalid(
-            "the Launch kit flow starts from a launch: Draft on the launch "
-            "(POST /v1/launches/{id}/draft)"
+            "the Launch kit flow starts from a launch: open it on Roadmap › Launches and "
+            "choose Draft with Oracle"
         )
     if flow.key == "update_draft" and not has_role(principal.role, "owner"):
         # H8: the CEO decides what is said to the board and investors.
@@ -1958,6 +1966,7 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
     await _recheck_reuse(db, run)
     flow, knobs = _flow(run), _knobs(run)
     reused = (run.knobs or {}).get("reuse_baseline")
+    zone = await company_time.company_time_zone(db) if reused else company_time.DEFAULT_ZONE
     segments = {s.name: s for s in await _segments(db, run.id)}
     rows = []
     for i, sdef in enumerate(flow.segments, start=1):
@@ -1974,7 +1983,7 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
                 roles=knobs.roles[sdef.name],
                 estimate_usd=float(amount),
                 reused=skip,
-                note=f"Current baseline, approved {reuse.short_date(reused['approved_at'])}"
+                note=f"Current baseline, approved {reuse.short_date(reused['approved_at'], zone)}"
                 if skip
                 else None,
             )
@@ -2003,7 +2012,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
     if run.status != "draft":
         raise RunError(f"run is {run.status}, not a draft")
     if run.estimate_usd is None:
-        raise RunError("estimate the run first: POST /v1/runs/{id}/estimate")
+        raise RunError("estimate the run first: press Estimate, then Start run")
     await _recheck_reuse(db, run)
     await _one_build_at_a_time(db, _flow(run))
     knobs = _knobs(run)
@@ -2104,7 +2113,8 @@ async def _skip_reused_baseline(
 ) -> None:
     """C4: the run uses the current baseline. Its baseline segment is recorded skipped at
     no cost and its Confirm the baseline stop skipped; nothing runs for them."""
-    note = f"Reused the baseline approved {reuse.short_date(reused['approved_at'])}"
+    zone = await company_time.company_time_zone(db)
+    note = f"Reused the baseline approved {reuse.short_date(reused['approved_at'], zone)}"
     now = _now()
     art = _art(segment)
     art["reused"] = reused
@@ -2271,6 +2281,10 @@ async def _prompt_context(
         )
         if latest is not None:
             locked = sorted(await locked_section_keys(db, latest.id))
+    from oracle.discussions import agent_view
+
+    # G5: what people discussed about the run, as its agents see it.
+    discussions = await agent_view.for_prompt(db, run)
     scope_yaml = None
     if not attached and "get_prd_scope" in _flow(run).segment(segment.name).tools:
         scope = await feature_set.approved_scope(db, run_id=run.id, document_id=run.document_id)
@@ -2308,7 +2322,10 @@ async def _prompt_context(
         scope_yaml=scope_yaml,
         launch_id=run.knobs.get("launch_id"),
         target_goals=[(g["key"], g["title"]) for g in run.knobs.get("target_goals") or []],
-        baseline_reused=reuse.short_date(reused["approved_at"])
+        discussions=discussions,
+        baseline_reused=reuse.short_date(
+            reused["approved_at"], await company_time.company_time_zone(db)
+        )
         if (reused := run.knobs.get("reuse_baseline")) and segment.name != "baseline"
         else None,
     )
@@ -2370,14 +2387,16 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
     )
     if stored is not None:
         at = stored.decided_at or stored.created_at
-        method = f"{stored.method}, this PRD's approved order of {at.day} {at:%b}"
+        on = company_time.day_first_in_words(at, await company_time.company_time_zone(db))
+        method = f"{stored.method}, this PRD's approved order of {on}"
         ranking = list(stored.ranking or [])
     elif (
         stored := await db.scalar(
             saved.where(PrioritySnapshot.run_id.is_(None)).order_by(newest).limit(1)
         )
     ) is not None:
-        method = f"{stored.method}, priority snapshot of {stored.created_at:%Y-%m-%d}"
+        on = company_time.day(stored.created_at, await company_time.company_time_zone(db))
+        method = f"{stored.method}, priority snapshot of {on.isoformat()}"
         ranking = list(stored.ranking or [])
     else:
         live = await priorities_service.compute(db, "goal_weighted")
@@ -6671,7 +6690,9 @@ async def decide_checkpoint(
     decision: str,
     note: str | None,
     expected_revision: int | None = None,
+    audit_via: str | None = None,
 ) -> None:
+    """``audit_via``: ``document_review`` when the version's review decided it (D10)."""
     from oracle.auth.service import caller_refusal
     from oracle.review import publish
 
@@ -6699,6 +6720,13 @@ async def decide_checkpoint(
     )
     if refusal is not None:
         raise Forbidden(refusal)
+    if (
+        audit_via is None
+        and cp.kind in review_link.KINDS
+        and not review_link.is_decider(principal, await review_link.decider_of(db, cp))
+    ):
+        # D10: Approve draft and Send back are the designated decider's, as approve_version.
+        raise Forbidden(review_link.DECIDER_ONLY)
     if cp.status in DECIDED:
         # A recorded decision is final (owner, 2026-10-20), delivered to the run or not
         # yet: the same decision again, or the other one, changes nothing. A different
@@ -6780,7 +6808,12 @@ async def decide_checkpoint(
         if decision == "approved" and via == "swarmcloud_console"
         else 0
     )
-    if decision == "changes_requested" and not note:
+    # D10: a PRD or roadmap review sends back D4's review of the document's own feedback,
+    # the note optional (cp.note stays the person's).
+    document_review = (
+        await review_link.review_file(db, cp, note) if decision == "changes_requested" else None
+    )
+    if decision == "changes_requested" and not note and document_review is None:
         if not send_back:
             raise Invalid("say what to change: a note is required to request changes")
         staged = await db.scalar(
@@ -6804,7 +6837,9 @@ async def decide_checkpoint(
     cp.decided_by = principal.id
     cp.decided_at = _now()
     cp.note = note
-    if send_back:
+    if document_review is not None:
+        cp.review = document_review
+    elif send_back:
         from oracle.runs import review_file
 
         cp.review = await review_file.sent_review(db, principal, run, cp, note)
@@ -6816,6 +6851,8 @@ async def decide_checkpoint(
     data: dict[str, Any] = {"run_id": str(run.id), "kind": cp.kind}
     if edited is not None:
         data.update(edited.audit)
+    if audit_via is not None:
+        data["via"] = audit_via
     if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW:
         # F4 Engineering review stop reads whether a lead was named when it was decided.
         data["engineering_lead_named"] = bool(leads)
@@ -7061,7 +7098,8 @@ async def read_review_file(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: u
         raise NotFound(f"checkpoint {checkpoint_id} not found")
     if cp.status == "pending" or not cp.review or cp.review.get("kind") == "edits":
         raise NotFound("no review was sent back at this checkpoint")
-    return review_file.render_yaml(cp.review, cp.decided_at)
+    zone = await company_time.company_time_zone(db)
+    return review_file.render_yaml(cp.review, cp.decided_at, zone)
 
 
 async def _continue_decided(
@@ -7101,7 +7139,8 @@ async def _continue_decided(
     if decision != "approved" and cp.review:
         from oracle.runs import review_file
 
-        review = review_file.change_request(cp.review, cp.decided_at)
+        zone = await company_time.company_time_zone(db)
+        review = review_file.change_request(cp.review, cp.decided_at, zone)
     await _submit(db, run, target, segments, change_request=note, review=review)
 
 
@@ -8698,8 +8737,9 @@ async def cancel_again(
     e = next((x for x in entries if x.get("id") == workflow_id and x.get("cancel") is False), None)
     if e is None or workflow_id not in _cancel_again_ids(run):
         raise RunError(
-            f"nothing to cancel again: workflow {workflow_id} is not one Oracle stopped "
-            "cancelling for this run"
+            "nothing to cancel again: that workflow is not one Oracle stopped cancelling for "
+            "this run",
+            refs={"workflow": workflow_id},
         )
     for key in ("cancel", "cancel_tried_at", "cancelled"):
         e.pop(key, None)
@@ -8710,8 +8750,8 @@ async def cancel_again(
     if target is not None:
         _note(
             target,
-            f"Cancel again: Oracle cancels workflow {workflow_id} again (its cancel calls were "
-            "stopped), and keeps reading its status and cost until it ends.",
+            "Cancel again: Oracle cancels the workflow again (its cancel calls were stopped), "
+            "and keeps reading its status and cost until it ends.",
         )
     await audit.record(
         db, principal, "run.cancel_again", "run", run.id, {"workflow_id": workflow_id}

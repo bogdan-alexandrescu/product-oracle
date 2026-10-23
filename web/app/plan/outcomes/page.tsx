@@ -24,7 +24,7 @@ import {
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -159,8 +159,9 @@ function Outcomes() {
   const recordQ = useQuery("outcomes|calibration", () =>
     unwrap(api.GET("/v1/priorities/calibration")),
   );
-  const { role } = useMe();
-  const canApprove = hasRole(role, "approver");
+  const { can } = useMe();
+  // #370: tracking, shipping and assessing an outcome are the outcome routes' role.
+  const canApprove = can("update_outcome");
   const phone = useIsPhone();
   const [filter, setFilter] = useState<Filter | null>(null);
   const [selected, setSelected] = useState<string | null>(linked);

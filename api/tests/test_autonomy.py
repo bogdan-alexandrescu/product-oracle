@@ -332,7 +332,8 @@ async def test_the_settings_route_only_resets_autonomy(client, tenant_id, owner)
         json={"value": {"vision": {"level": "act"}}},
         headers=owner.headers,
     )
-    assert r.status_code == 422 and "/v1/autonomy" in r.json()["detail"]
+    # #396: the refusal names the screen a person uses, not the route.
+    assert r.status_code == 422 and "Settings › Autonomy" in r.json()["detail"]
     await put(client, owner, "baseline", level="recommend", reason="Ask first")
     r = await client.put("/v1/settings/autonomy", json={"value": None}, headers=owner.headers)
     assert r.status_code == 200 and r.json()["value"] == {}

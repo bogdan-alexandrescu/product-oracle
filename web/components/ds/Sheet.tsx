@@ -35,6 +35,7 @@ export function Sheet({
   testId,
   tools,
   scroll = true,
+  full = false,
 }: {
   open: boolean;
   title: string;
@@ -45,6 +46,8 @@ export function Sheet({
   tools?: ReactNode;
   /** The body scrolls (default); false: the content scrolls a part of itself (a list under its filters). */
   scroll?: boolean;
+  /** Full height (the head-of-product panel on a phone). */
+  full?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; dy: number } | null>(null);
@@ -118,7 +121,7 @@ export function Sheet({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="relative flex max-h-[85dvh] min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none"
+        className={`relative flex ${full ? "h-dvh max-h-dvh" : "max-h-[85dvh]"} min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none`}
       >
         <div
           data-testid="sheet-handle"

@@ -3,10 +3,10 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button, Chip, InfoTip, KpiStrip, Notice, Page, PageHeader, Split, type Kpi } from "@/components/ds";
+import { Button, Chip, InfoTip, KpiStrip, Notice, Page, PageHeader, Split, ViewOnly, type Kpi } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { AddItemSheet, type AddKind } from "./_components/AddItem";
@@ -62,9 +62,10 @@ function OpenFromUrl({ onOpen, onBlocker }: { onOpen: (id: string) => void; onBl
 }
 
 export default function BaselinePage() {
-  const { me, role } = useMe();
-  const canWrite = hasRole(role, "approver");
-  const canComment = hasRole(role, "commenter");
+  const { me, can, capsReady } = useMe();
+  // #370: approvers change the baseline, commenters propose; a viewer only reads it.
+  const canWrite = can("confirm_entity");
+  const canComment = can("create_proposal");
   const onAuth = useAuthRedirect();
 
   const graph = useQuery("baseline-graph", () => unwrap(api.GET("/v1/baseline/graph")));
@@ -173,6 +174,32 @@ export default function BaselinePage() {
       return `Confirmed “${goal.title}”.`;
     });
 
+  /** #345: a new subgoal under `parent`, proposed like any goal; its target is set in its drawer. */
+  async function addSubgoal(parent: EntityOut, title: string): Promise<boolean> {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "subgoal";
+      const taken = new Set((graph.data?.entities ?? []).filter((e) => e.type === "goal").map((e) => e.key));
+      let key = `${parent.key}.${slug}`.slice(0, 120);
+      for (let n = 2; taken.has(key); n++) key = `${parent.key}.${slug}-${n}`.slice(0, 120);
+      await unwrap(
+        api.POST("/v1/baseline/entities", {
+          body: { type: "goal", key, title, attrs: {}, parent_id: parent.id, origin: "user" },
+        }),
+      );
+      setNotice(`Added “${title}” under “${parent.title}”.`);
+      refresh();
+      return true;
+    } catch (e) {
+      if (!onAuth(e)) setError(errorMessage(e));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const fillFromText = () =>
     act(async () => fillNotice(await unwrap(api.POST("/v1/baseline/goals/fill-from-text"))));
 
@@ -278,14 +305,7 @@ export default function BaselinePage() {
                 {s.confirmed_goals} confirmed
               </Chip>
             )}
-            {!canWrite && role && (
-              <>
-                <Chip kind="na">Read only</Chip>
-                <InfoTip label="Read only" align="start" side="bottom">
-                  You can read the baseline; approvers make changes.
-                </InfoTip>
-              </>
-            )}
+            {capsReady && !canComment && <ViewOnly />}
             <InfoTip label="Baseline" align="start" side="bottom">
               Goals, products and features the product is built on, each linked to its evidence.
             </InfoTip>
@@ -347,6 +367,7 @@ export default function BaselinePage() {
                   onConfirm={confirmGoal}
                   onFill={fillFromText}
                   onAdd={setAdding}
+                  onAddSubgoal={canWrite ? addSubgoal : undefined}
                 />
               )}
             </>

@@ -6,7 +6,8 @@ import { useId, useRef, useState } from "react";
 import { Button, Chip, CodeText, Panel } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import type { GraphOut, ProposalOut, Schemas } from "@/lib/api/client";
-import { formatDateTime, formatDay } from "@/lib/format";
+import { useCompanyZone, zoneDay } from "@/lib/dates";
+import { formatDateTime } from "@/lib/format";
 
 import { formatValue, titleOf } from "./common";
 import { LIMIT_LABEL, suggestedBlocker } from "./PromoteBlocker";
@@ -25,7 +26,8 @@ function flatFields(fields: Record<string, unknown> = {}): [string, unknown][] {
 type ProposalRun = Schemas["ProposalRun"];
 
 /** A run in plain words: "Baseline to PRD · Oct 16". */
-export const runLabel = (run: ProposalRun) => `${run.flow_title} · ${formatDay(run.created_at)}`;
+/** "Baseline to PRD · Oct 16": the day the run started in the Company time zone, as the API names it (#463). */
+export const runLabel = (run: ProposalRun, zone: string) => `${run.flow_title} · ${zoneDay(run.created_at, zone)}`;
 
 /** The From filter: "" (all), "none" (people and intake answers) or a run's id. */
 export type FromFilter = string;
@@ -120,6 +122,7 @@ export function ProposalsTab({
 /** The From select: all proposals, those of no run, or one run's. */
 function FromSelect({ runs, from, onFrom }: { runs: ProposalRun[]; from: FromFilter; onFrom: (from: FromFilter) => void }) {
   const id = useId();
+  const zone = useCompanyZone();
   return (
     <div className="ml-auto flex min-w-0 items-center gap-2 max-[600px]:ml-0 max-[600px]:w-full">
       <label htmlFor={id} className="text-[13px] font-semibold text-text2">
@@ -135,7 +138,7 @@ function FromSelect({ runs, from, onFrom }: { runs: ProposalRun[]; from: FromFil
         <option value="none">People and intake answers</option>
         {runs.map((r) => (
           <option key={r.id} value={r.id}>
-            {runLabel(r)}
+            {runLabel(r, zone)}
           </option>
         ))}
       </select>
@@ -145,12 +148,13 @@ function FromSelect({ runs, from, onFrom }: { runs: ProposalRun[]; from: FromFil
 
 /** Who made it and when: the run that made it, as a link; else the person (You), token or Oracle. */
 function Source({ p, meId }: { p: ProposalOut; meId?: string | null }) {
+  const zone = useCompanyZone();
   const line = "tnum truncate text-[13px] text-text2";
   if (p.run)
     return (
       <p className={line} data-testid="proposal-by">
         <Link href={`/runs/${p.run.id}`} className="text-accent-ink hover:underline">
-          From run · {runLabel(p.run)}
+          From run · {runLabel(p.run, zone)}
         </Link>
       </p>
     );
@@ -292,13 +296,14 @@ function ProposalList({
     setHighlighted(ids);
     cards.current.get(ids[0])?.scrollIntoView({ block: "center", behavior: "smooth" });
   };
+  const zone = useCompanyZone();
   const byRun = from !== "" && from !== "none";
   const run = byRun ? runs.find((r) => r.id === from) : undefined;
   return (
     <Panel title="Proposals" count={proposals.length} tools={<FromSelect runs={runs} from={from} onFrom={onFrom} />}>
       {byRun && (
         <p data-testid="run-filter-line" className="border-b border-line px-4 py-2 text-sm text-text2">
-          Proposals from {run ? runLabel(run) : "this run"} ·{" "}
+          Proposals from {run ? runLabel(run, zone) : "this run"} ·{" "}
           <Link href={`/runs/${from}`} className="font-semibold text-accent-ink hover:underline">
             Open run
           </Link>

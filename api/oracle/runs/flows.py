@@ -83,7 +83,11 @@ MCP_TOOLS = {
     "(verified, unverified or withdrawn)",
     "list_launches": "launches: what shipped or is about to, with their items",
     "get_ritual_occurrence_pre_read": "a ritual occurrence's pre-read as markdown (H2)",
+    "get_run_discussions": "summaries and staged changes from the people's discussions about "
+    "this run",
 }
+# G5: every segment's agents may read the discussions about their run.
+RUN_DISCUSSIONS_TOOL = "get_run_discussions"
 # Stated in the tasks of segments that pick features or items (H4).
 STRATEGY_FLAG = (
     " Flag any feature or item outside the strategy's focus or on its stop list; never drop "
@@ -183,6 +187,10 @@ class SegmentDef:
     # Hand the segment's files to an importer a lane registered (oracle.runs.extensions)
     # when the segment succeeds; its result is the checkpoint's "import".
     importer: str | None = None
+
+    def __post_init__(self) -> None:
+        if RUN_DISCUSSIONS_TOOL not in self.tools:
+            object.__setattr__(self, "tools", (*self.tools, RUN_DISCUSSIONS_TOOL))
 
     def outputs_for(self, kind: str) -> tuple[str, ...]:
         """The files the segment writes for a target document of ``kind``."""
@@ -1114,6 +1122,9 @@ class PromptContext:
     baseline_reused: str | None = None
     # #260: a Baseline to PRD run's target goals, (key, title) in the order named.
     target_goals: list[tuple[str, str]] = field(default_factory=list)
+    # G5: the agents' view of the discussions about this run
+    # (oracle.discussions.agent_view), newest activity first.
+    discussions: list[dict[str, Any]] = field(default_factory=list)
 
 
 # #260: what each Baseline to PRD segment does with the run's target goals.
@@ -1150,6 +1161,46 @@ def goal_trace_missing(markdown: str, targets: list[tuple[str, str]]) -> list[st
 
 MAX_PRIOR_CHARS = 20_000
 MAX_SOURCE_CHARS = 30_000
+MAX_DISCUSSION_CHARS = 8_000
+
+
+def _count(n: int, word: str) -> str:
+    return f"{n} {word}" + ("" if n == 1 else "s")
+
+
+def discussion_lines(ctx: PromptContext) -> list[str]:
+    """G5: what people discussed about the run. With MCP attached, the counts and the tool;
+    without, the staged changes and the summaries the agents may read, pasted, at most
+    ``MAX_DISCUSSION_CHARS``."""
+    if not ctx.discussions:
+        return []
+    changes = [(c, d) for d in ctx.discussions for c in d.get("staged_changes") or []]
+    if ctx.mcp_attached:
+        return [
+            "",
+            f"People discussed this run: {_count(len(ctx.discussions), 'discussion')}, "
+            f"{_count(len(changes), 'staged change')}. Read them with get_run_discussions "
+            "before you start. Apply each staged change, or say in your notes why not.",
+        ]
+    pasted: list[str] = []
+    if changes:
+        pasted.append("Staged changes from discussions:")
+        for c, d in changes:
+            reason = f" ({c['reason']})" if c.get("reason") else ""
+            pasted.append(f"- {c['label']}{reason} [discussion {d['link']}]")
+    for d in ctx.discussions:
+        if d.get("summary"):
+            pasted.append(f"Summary of {d.get('title') or 'a private discussion'}: {d['summary']}")
+    if pasted and changes:
+        pasted.append("Apply each staged change, or say in your notes why not.")
+    lines, used = [""], 0
+    for i, line in enumerate(pasted):
+        if used + len(line) + 1 > MAX_DISCUSSION_CHARS:
+            lines.append(f"{len(pasted) - i} more in Oracle.")
+            break
+        lines.append(line)
+        used += len(line) + 1
+    return lines if len(lines) > 1 else []
 
 
 def step_prompt(
@@ -1247,6 +1298,7 @@ def step_prompt(
     if ctx.reviewer_notes:
         lines += ["", "Reviewer notes from earlier checkpoints:"]
         lines += [f"- {n}" for n in ctx.reviewer_notes]
+    lines += discussion_lines(ctx)
     if ctx.feedback:
         lines += [
             "",

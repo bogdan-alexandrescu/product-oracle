@@ -54,12 +54,12 @@ async function openLastPreRead(page: Page, title: string) {
   await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
 }
 
-test("12a: an owner moves the roadmap refresh to the last Friday at 16:00 and Next shows the new local time", async ({ page }) => {
+test("12a: an owner moves the roadmap refresh to the last Friday at 16:00 and Next shows it in the Company time zone", async ({ page }) => {
   // protects=AC12a, Company › Rituals as the Rituals tab of the Company rail item, the
-  // inspector's schedule picker and the Next column in the viewer's zone; fails_when=the tab
-  // is missing or not third, the schedule is not saved, or Next keeps the old date or shows
-  // the company's time instead of New York time (Oct 30 16:00 in Los Angeles is 7:00 PM
-  // there); no_claim=the API's DST
+  // inspector's schedule picker and the Next column in the Company time zone (#447), even with
+  // the browser in New York; fails_when=the tab is missing or not third, the schedule is not
+  // saved, or Next keeps the old date or shows New York time (7:00 PM) instead of the
+  // Company's (Oct 30 16:00 in Los Angeles, PDT); no_claim=the API's DST
   // maths (test_rituals_schedule.py).
   await withRituals(page);
   await login(page);
@@ -76,7 +76,7 @@ test("12a: an owner moves the roadmap refresh to the last Friday at 16:00 and Ne
   await panel.getByLabel("Time", { exact: true }).fill("16:00");
   await panel.getByRole("button", { name: "Save" }).click();
   await expect(row).toContainText("Last Friday of the month, 16:00");
-  await expect(row.locator('[data-col="next"]')).toHaveText("Fri, Oct 30, 7:00 PM");
+  await expect(row.locator('[data-col="next"]')).toHaveText("Fri, Oct 30, 4:00 PM PDT");
   // Oracle's words: a company, never a workspace or tenant.
   await expect(page.getByTestId("rituals-panel")).not.toContainText(/workspace|tenant/i);
   await expect(panel).not.toContainText(/workspace|tenant/i);

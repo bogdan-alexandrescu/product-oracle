@@ -89,7 +89,7 @@ async function openElsewhere(context: BrowserContext): Promise<string> {
 test("criterion 12: a commenter drafts questions, edits them and creates the link", async ({ page }) => {
   // protects=criterion 12 (Requests → Interview a customer → name → Draft questions shows
   // Oracle's four questions; a deleted and an edited question are what is saved; Create link
-  // shows the link once, "Works once · expires … PT"; the Interviews tab lists it as Invited);
+  // shows the link once, "Works once · expires … PDT" (#447: the Company time zone); the Interviews tab lists it as Invited);
   // fails_when=the button is missing for a commenter, the guide never arrives, an edit or a
   // delete is lost, or the interview is not Invited; no_claim=the real model's questions and
   // the API's token hashing (api/tests/test_interviews*.py).
@@ -117,7 +117,7 @@ test("criterion 12: a commenter drafts questions, edits them and creates the lin
   const created = page.getByRole("dialog", { name: "Link created" });
   await expect(created.getByLabel("Interview link")).toHaveValue(/^https?:\/\/[^/]+\/i\/i-[0-9a-f]+$/);
   await expect(created.getByRole("button", { name: "Copy" })).toBeVisible();
-  await expect(created.getByTestId("interview-link-terms")).toHaveText(/^Works once · expires .+ PT$/);
+  await expect(created.getByTestId("interview-link-terms")).toHaveText(/^Works once · expires .+ (P[DS]T|GMT[+-]\d+)$/);
   await created.getByRole("button", { name: "Done" }).click();
   await expect(created).toHaveCount(0);
 

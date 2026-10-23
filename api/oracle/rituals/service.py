@@ -33,7 +33,7 @@ from sqlalchemy import func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, company_time
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
@@ -286,7 +286,9 @@ async def _build(
     occ.pre_read = {
         "built_at": now.isoformat(),
         "blocks": built,
-        "markdown": blocks.markdown(ritual.title, occ.due_at, built),
+        "markdown": blocks.markdown(
+            ritual.title, occ.due_at, built, await company_time.company_time_zone(db)
+        ),
     }
     occ.pre_read_built_at = now
     occ.status = "ready"

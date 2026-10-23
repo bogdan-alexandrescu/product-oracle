@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 
-import { Button, confirmInPage, InfoTip, Notice, PageHeader, Panel } from "@/components/ds";
+import { Button, confirmInPage, InfoTip, Notice, PageHeader, Panel, ViewOnly } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { INPUT, SELECT_FIELD } from "../_components/fields";
@@ -191,8 +191,11 @@ function zones(current: string): string[] {
   return [...new Set([current, ...ZONES, ...all])];
 }
 
-/** The Company time zone (one setting, America/Los_Angeles by default): every date and time on screen, goals' today, the weekly report and rituals. */
-function TimezonePanel() {
+/**
+ * The Company time zone (one setting, America/Los_Angeles by default): every date and time on screen, goals' today, the weekly report and rituals.
+ * #370: only a role that can change it (owners) gets the form; others read the zone.
+ */
+function TimezonePanel({ canChange }: { canChange: boolean }) {
   const { refresh } = useMe();
   const settingQ = useQuery("settings|company_timezone", () =>
     unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "company_timezone" } } })),
@@ -241,7 +244,13 @@ function TimezonePanel() {
             <Notice tone="error">{settingQ.error}</Notice>
           </div>
         )}
-        {zone && (
+        {zone && !canChange && (
+          <div className={ROW.replace("88px", "160px")} data-testid="timezone-value">
+            <span className={ROW_LABEL}>Company time zone</span>
+            <span className="text-[15px]">{zone}</span>
+          </div>
+        )}
+        {zone && canChange && (
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -292,29 +301,19 @@ function TimezonePanel() {
 
 /** Settings > Company: the company-wide choices an owner makes: the planning horizons and the Company time zone. */
 export default function CompanySettingsPage() {
-  const { role, loading } = useMe();
-  const isOwner = hasRole(role, "owner");
+  // #370: Settings' gate answers a role that cannot read the company settings.
+  const { can, capsReady } = useMe();
+  // #401: the time zone is an owner's to change; a role that reads the page but changes nothing sees View only.
+  const canChange = can("put_setting");
   return (
     <>
-      <PageHeader title="Company" />
-      {!loading &&
-        (isOwner ? (
-          <div className="flex min-w-0 flex-col gap-4">
-            <HorizonsPanel />
-            <TimezonePanel />
-          </div>
-        ) : (
-          <p
-            role="note"
-            data-testid="role-note"
-            className="flex flex-wrap items-center gap-2 rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink"
-          >
-            <span>
-              Your role is <b>{role ?? "unknown"}</b>.
-            </span>
-            <span>Only owners change company settings.</span>
-          </p>
-        ))}
+      <PageHeader title="Company" status={capsReady && can("get_setting_endpoint") && !canChange ? <ViewOnly /> : undefined} />
+      {can("get_setting_endpoint") && (
+        <div className="flex min-w-0 flex-col gap-4">
+          <HorizonsPanel />
+          <TimezonePanel canChange={canChange} />
+        </div>
+      )}
     </>
   );
 }

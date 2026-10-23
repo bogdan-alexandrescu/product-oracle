@@ -22,8 +22,10 @@ import {
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { addDays, todayIn, useCompanyZone, zoneInstant } from "@/lib/dates";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
+import { OWNER_APPROVES } from "@/lib/owner-kinds";
 import { useRiskPolicy } from "@/lib/risk-policy";
+import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 import { sectionHref } from "@/lib/section-link";
 
@@ -143,9 +145,9 @@ function OnPublish({ n }: { n: number }) {
   );
 }
 
-/** Accept a blocker's risk: the company's acceptance role (B4, owners by default); others are told so. */
+/** Accept a blocker's risk: the company's acceptance role (B4, owners by default); hidden from anyone else. */
 function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: string) => void }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const policy = useRiskPolicy();
   const onAuth = useAuthRedirect();
   const [open, setOpen] = useState(false);
@@ -157,16 +159,11 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
   const review = picked ?? addDays(today, Math.max(1, Math.min(30, policy.maxDays - 1)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const who = policy.role === "owner" ? { only: "Only an owner", chip: "Owners only" } : { only: "Only approvers and owners", chip: "Approvers and owners" };
+  // #370: POST accept-risk; for a blocker that gates publishing the handler asks for the
+  // company's acceptance role too (its per-item role, owner): an approver passes when it is theirs.
+  const canAccept = can("accept_blocker_risk", policy.role !== "owner");
 
-  if (!hasRole(role, policy.role)) {
-    return (
-      <div data-testid="risk-owner-only" className="flex min-h-9 items-center gap-2 rounded-lg bg-surface2 px-2.5 font-medium">
-        <Icon name="lock" size={16} className="flex-none text-text2" />
-        <span className="min-w-0">{who.only} can accept this risk</span>
-      </div>
-    );
-  }
+  if (!canAccept) return null;
 
   async function accept() {
     setBusy(true);
@@ -195,10 +192,6 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
     return (
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={() => setOpen(true)}>Accept risk</Button>
-        <Chip kind="line">
-          <Icon name="lock" size={16} />
-          {who.chip}
-        </Chip>
       </div>
     );
   }
@@ -412,12 +405,14 @@ function AdvisoryRow({ item, index }: { item: Item; index: number }) {
 
 /** Publish (B1): blocks, hard checks and advisory on the left, the selected block right. */
 export function PublishView({ doc }: { doc: string }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const onAuth = useAuthRedirect();
   const phone = useIsPhone();
   const docQ = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
   const d = docQ.data;
   const n = d?.latest_version ?? null;
+  // G7 3.3: the panel is about this document (its latest version).
+  useScreenSubject(d && n != null ? { kind: "document", subject: { document_id: d.id, version: n } } : null, d?.title);
   const readinessQ = useQuery(`readiness|${doc}|${n}`, () =>
     n == null
       ? Promise.resolve(undefined)
@@ -454,7 +449,9 @@ export function PublishView({ doc }: { doc: string }) {
   const blocks = readiness && n != null ? blocksOf(doc, n, readiness, strategyQ.data) : [];
   const selected = blocks.find((b) => b.id === picked) ?? blocks[0] ?? null;
   const published = n != null && d?.approved_version === n;
-  const canPublish = hasRole(role, "approver");
+  // #370: Publish is POST .../approve; anyone who may not call it never sees the button. A
+  // vision, strategy or update is an owner's (its per-item role); any other kind an approver's.
+  const canPublish = can("approve_version", d != null && !OWNER_APPROVES[d.kind]);
   const hard = readiness?.items.filter((i) => i.hard) ?? [];
   const advisory = readiness?.items.filter((i) => !i.hard) ?? [];
   const failing = hard.filter((i) => i.status === "critical").length;
@@ -527,18 +524,15 @@ export function PublishView({ doc }: { doc: string }) {
     ? "Checking"
     : readiness.blocked
       ? `${blocks.length} block${blocks.length === 1 ? "" : "s"}`
-      : !canPublish
-        ? "Approvers only"
-        : null;
+      : null;
   const action =
     n == null ? null : published ? (
       <Chip kind="pass" className="h-10 px-4 text-[15px]" data-testid="published-chip">
         <Icon name="check" size={16} />
         Published v{n}
       </Chip>
-    ) : (
+    ) : !canPublish ? null : (
       <>
-        {reason === "Approvers only" && <Chip kind="line">{reason}</Chip>}
         <Button
           variant="primary"
           icon={reason ? "lock" : "check"}

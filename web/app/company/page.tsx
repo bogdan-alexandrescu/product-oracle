@@ -11,11 +11,11 @@ import { visibleTabs } from "./_nav";
 /** /company opens the first tab the member may see (Strategy). */
 export default function CompanyPage() {
   const router = useRouter();
-  const { role, loading } = useMe();
+  const { can, capsReady } = useMe();
   useEffect(() => {
-    if (loading) return;
-    const first = visibleTabs(role)[0];
+    if (!capsReady) return;
+    const first = visibleTabs(can)[0];
     if (first) router.replace(first.href);
-  }, [role, loading, router]);
+  }, [can, capsReady, router]);
   return <PageHeader title="Company" />;
 }

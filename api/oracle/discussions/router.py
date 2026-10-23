@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role
-from oracle.discussions import replies, service
+from oracle.discussions import agent_view, replies, service
 from oracle.discussions.schemas import (
     ChangeStatus,
     DiscussionChangeOut,
@@ -30,8 +30,10 @@ from oracle.discussions.schemas import (
     DiscussionParticipantsIn,
     DiscussionPatch,
     DiscussionReadIn,
+    DiscussionShareIn,
     DiscussionStarted,
     Origin,
+    RunDiscussionsOut,
     Status,
 )
 
@@ -109,6 +111,26 @@ async def list_discussions(
 
 
 @router.get(
+    "/runs/{run_id}/discussions",
+    response_model=RunDiscussionsOut,
+    responses={404: {"description": "No such run (a run's token reads its own run only)"}},
+)
+async def list_run_discussions(
+    run_id: uuid.UUID, principal: Viewer, db: TenantDB
+) -> RunDiscussionsOut:
+    """The discussions about a run (G5): its checkpoints', its intake's and, for a feedback
+    loop, its document's with staged next-draft changes; newest activity first, at most 50.
+    Each gives its summary and the changes staged from it, never its messages or people.
+    A private discussion shows its title and summary only to the people in it; a run's
+    agents (the get_run_discussions tool) get its staged changes, and its summary when the
+    starter shared it."""
+    try:
+        return await agent_view.run_discussions(db, principal, run_id)
+    except agent_view.RunNotFound:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"run {run_id} not found") from None
+
+
+@router.get(
     "/discussions/{discussion_id}",
     response_model=DiscussionOut,
     responses={403: PRIVATE, 404: GONE},
@@ -148,6 +170,29 @@ async def update_discussion(
         await db.rollback()
         conflict = DiscussionExposureConflict(detail=str(e), messages=e.messages, people=e.people)
         return JSONResponse(conflict.model_dump(), status.HTTP_409_CONFLICT)
+    await db.commit()
+    await db.refresh(d)
+    return await service.discussion_out(db, principal, d)
+
+
+@router.post(
+    "/discussions/{discussion_id}/share",
+    response_model=DiscussionOut,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        403: {"description": "Not the panel chat's starter"},
+        404: GONE,
+        422: {"description": "Not a panel chat, or no first message"},
+    },
+)
+async def share_discussion(
+    discussion_id: uuid.UUID, body: DiscussionShareIn, principal: Commenter, db: TenantDB
+) -> DiscussionOut:
+    """Share as discussion (G7 head-of-product panel): a new open discussion on the panel
+    chat's subject, ``origin: "discuss"``, whose first message is ``first_message`` (the
+    chat's summary as its starter edited it); the chat's open changes are copied as
+    ``suggested`` by the sharer. Only the chat's starter may; the chat stays private."""
+    d = await _call(service.share(db, principal, discussion_id, body))
     await db.commit()
     await db.refresh(d)
     return await service.discussion_out(db, principal, d)

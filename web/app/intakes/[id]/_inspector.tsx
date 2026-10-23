@@ -7,7 +7,7 @@ import { Button, Chip, CodeChip, Inspector, InspectorRow, InspectorSection } fro
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { assess, goalViews } from "@/app/home/_goals";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, type Role } from "@/lib/me";
+import { useMe, type Role } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { CATEGORY_LABEL, DECIDED_GAP, HARD_BLOCKERS, criticalCount, type Gap, type Summary } from "./_lib";
@@ -94,9 +94,12 @@ export function DecideForm({
   );
 }
 
-/** Who may decide a gap here: an approver, an owner for a hard blocker's validation (B4). */
-export function mayReview(role: Role | null, gap: Gap): boolean {
-  return hasRole(role, HARD_BLOCKERS.has(gap.category) ? "owner" : "approver");
+/**
+ * Who may decide a gap here (#370: `can` from useMe): whoever may decide gaps; below an
+ * owner, not a hard blocker (B4).
+ */
+export function mayReview(can: ReturnType<typeof useMe>["can"], gap: Gap): boolean {
+  return can("decide_knowledge_gap", !HARD_BLOCKERS.has(gap.category));
 }
 
 /**
@@ -138,13 +141,14 @@ function IntakeGoals({ summary: s }: { summary: Summary }) {
  */
 export function IntakeInspector({
   summary: s,
-  role,
   onChanged,
 }: {
   summary: Summary;
-  role: Role | null;
+  /** Unused (#370: the capabilities decide); kept for the intake shell. */
+  role?: Role | null;
   onChanged: () => void;
 }) {
+  const { can } = useMe();
   const [deciding, setDeciding] = useState<string | null>(null);
   const gate = s.readiness;
   const blocking = gate.blocking_gap_ids.map((id) => s.gaps.find((g) => g.id === id)).filter((g): g is Summary["gaps"][number] => !!g);
@@ -204,7 +208,8 @@ export function IntakeInspector({
                     <Chip kind="crit">{g.importance === "critical" ? "Critical" : g.importance}</Chip>
                   </div>
                   <span className="text-[13px] text-text2">{CATEGORY_LABEL[g.category]}</span>
-                  {hasRole(role, "approver") && deciding !== g.id && (
+                  {/* #370: an approver may still reject a critical gap; the form says what needs an owner. */}
+                  {can("decide_knowledge_gap", true) && deciding !== g.id && (
                     <div>
                       <Button onClick={() => setDeciding(g.id)}>Decide</Button>
                     </div>

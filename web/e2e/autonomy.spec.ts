@@ -72,16 +72,15 @@ test("autonomy: an owner sets Order priorities to Act within 2 places, with a re
   await expect(row(page, "priorities").getByTestId("autonomy-limits")).toHaveText("within one goal, up to 2 places");
 });
 
-// protects=10c: an approver sees the same page with every control disabled and the owner-only note;
-// fails_when=an approver can open the sheet; no_claim=the API's 403 (pytest covers it).
-test("autonomy: an approver sees the page with the controls disabled", async ({ page }) => {
+// protects=10c: an approver reads the page, View only, with no level picker (#370: hidden, not disabled);
+// fails_when=an approver sees a level button or the owner-only note; no_claim=the API's 403 (pytest covers it).
+test("autonomy: an approver reads the levels with no controls", async ({ page }) => {
   await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [MOCK_ROLE_KEY, "approver"] as const);
   await openAutonomy(page);
-  await expect(page.getByTestId("autonomy-owner-only")).toHaveText("Only an owner can change this");
+  await expect(page.getByTestId("view-only")).toHaveText("View only");
+  await expect(page.getByTestId("autonomy-owner-only")).toHaveCount(0);
   await expect(row(page, "priorities")).toContainText("Order priorities");
-  const steps = page.getByTestId(/^autonomy-row-/).getByRole("group").getByRole("button");
-  await expect(steps).toHaveCount(15 * 4);
-  for (const b of await steps.all()) await expect(b).toBeDisabled();
+  await expect(page.getByTestId(/^autonomy-row-/).getByRole("group").getByRole("button")).toHaveCount(0);
 });
 
 // protects=10d: a seeded "Oracle did" row opens, moves to Done, and the rail badge drops by 1;

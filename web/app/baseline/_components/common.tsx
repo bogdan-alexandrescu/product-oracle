@@ -1,10 +1,8 @@
 import { Chip, Ring, type ChipKind } from "@/components/ds";
-import { named } from "@/lib/codes";
 import { LockIcon } from "@/components/ui";
 import type { EntityOut, GraphOut, NodeStatus } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
-
-import { byTitle } from "./order";
+import { goalTree } from "@/lib/goal-tree";
 
 /** Default `low` threshold of the confidence settings; the trace report carries the company's. */
 export const DEFAULT_LOW = 0.4;
@@ -198,16 +196,20 @@ export function targetTitle(graph: GraphOut | undefined, entityId?: string | nul
   return "—";
 }
 
-/** Live goals, heaviest first: the order of the ledger's goal columns and of their G1, G2 tags. */
+/** Live goals as a tree, heaviest first, each followed by its subgoals (#345): the order
+ * of the ledger's goal columns and of their G1, G1.1, G2 tags. */
 export function sortedGoals(graph: GraphOut | undefined): EntityOut[] {
-  return (graph?.entities ?? [])
-    .filter((e) => e.type === "goal" && e.status !== "rejected")
-    .sort((a, b) => Number(b.attrs?.weight ?? 0) - Number(a.attrs?.weight ?? 0) || byTitle(a, b));
+  return goalTree(graph?.entities ?? []).map((n) => n.goal);
 }
 
 /** Goal id -> the goal's name without its company code ("G-B Growth" -> "Growth"), in ledger order (#304). */
 export function goalTags(graph: GraphOut | undefined): Map<string, string> {
-  return new Map(sortedGoals(graph).map((g) => [g.id, named(g.title, g.key).name]));
+  return new Map(goalTree(graph?.entities ?? []).map((n) => [n.goal.id, n.name]));
+}
+
+/** Goal id -> the code its chip shows: the company's ("G-B"), a subgoal's "G-B.1" (#345), or none. */
+export function goalCodes(graph: GraphOut | undefined): Map<string, string | null> {
+  return new Map(goalTree(graph?.entities ?? []).map((n) => [n.goal.id, n.code]));
 }
 
 /** Contribution of a supports edge, 0 (none) to 3 (strong). */

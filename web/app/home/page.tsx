@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { ClaudeOffNotice } from "@/components/ClaudeOffNotice";
 import { Chip, Empty, Icon, LinkButton, Notice, Page, PageHeader, Panel, Split } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
 
@@ -64,10 +64,12 @@ function pickNeeds(rows: StatedNeed[], max: number): Need[] {
  * Oracle's AI is off (#403).
  */
 export default function HomePage() {
-  const { role } = useMe();
-  const canWrite = hasRole(role, "approver");
-  const owner = hasRole(role, "owner");
-  // #403: only an owner's Home reads the pool, for the notice that Oracle's AI is off.
+  const { can } = useMe();
+  // #370: New PRD starts a draft (a PRD, any approver's); Build the baseline opens where the baseline's writers build it.
+  const canWrite = can("start_draft", true);
+  const canBuild = can("confirm_entity");
+  // #403: only a role that can act on the notice (add an account, set the fallback: owners) reads the pool.
+  const owner = can("add_claude_account");
   const poolQ = useQuery(owner ? "home|claude-pool" : "home|no-pool", () => (owner ? unwrap(api.GET("/v1/claude-accounts")) : Promise.resolve(null)));
 
   const inboxQ = useQuery("home|inbox", loadInbox);
@@ -194,7 +196,7 @@ export default function HomePage() {
         {setupError && <Notice tone="error">{setupError}</Notice>}
         {setup && !setup.hidden && <SetupPanel setup={setup} onHide={() => hideSetup(true)} busy={setupBusy} />}
 
-        <GoalsPanel goals={goals} history={history} error={goalsError} loading={goalsLoading} canImport={canWrite} />
+        <GoalsPanel goals={goals} history={history} error={goalsError} loading={goalsLoading} canImport={canBuild} />
 
         <Panel
           title="Needs you"

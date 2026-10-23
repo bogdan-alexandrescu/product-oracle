@@ -7,7 +7,7 @@ import pytest
 
 from tests.fixtures import seed_auth
 from tests.swarmcloud_fake import EGRESS, FakeSwarmCloud
-from tests.test_adapter_v2 import LB, REVIEW_LEAD, mcp_session, token_of, use
+from tests.test_adapter_v2 import LB, REVIEW_LEAD, doc_findings, mcp_session, token_of, use
 from tests.test_adapter_v2 import settings as _v2_settings
 from tests.test_draft_sent_back import BAD_PRD, WRITER, _feedback_run
 from tests.test_runs import decide, get, pending, started, tick
@@ -87,7 +87,8 @@ async def test_a_person_s_not_yet_posts_the_problems_after_the_note(client, owne
 
 
 async def test_a_person_s_not_yet_with_no_problems_posts_the_note_only(client, owner):
-    """AC6: no problems: the findings are the structured review (D4) and its note."""
+    """AC6: no problems: the findings are D4's structured review of the document's open
+    feedback (D10, one line per entry), then the note."""
     tenant_id, auth = owner
     swarm = FakeSwarmCloud(mcp=True, await_input=True, service_answer=True)
     run = await _feedback_run(client, auth, tenant_id, swarm)
@@ -95,9 +96,10 @@ async def test_a_person_s_not_yet_with_no_problems_posts_the_note_only(client, o
     run = await get(client, auth, run["id"])
     assert pending(run)["payload"]["import"]["version"] == 2
     await decide(client, auth, run, "changes_requested", note="Add a guardrail metric")
+    [item] = (await client.get("/v1/documents/checkout-redesign/feedback", headers=auth)).json()
     assert swarm.answers[-1]["payload"] == {
         "verdict": "NOT_YET",
-        "findings": [REVIEW_LEAD.format(attempt=1), "Note: Add a guardrail metric"],
+        "findings": doc_findings(item["id"], "Add a guardrail metric"),
     }
 
 

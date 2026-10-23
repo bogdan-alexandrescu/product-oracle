@@ -23,6 +23,7 @@ import {
   Panel,
   Ring,
   Split,
+  ViewOnly,
   type ChipKind,
   type Column,
 } from "@/components/ds";
@@ -30,7 +31,8 @@ import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { named, namedText } from "@/lib/codes";
 import { formatDate, formatDateTime } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
+import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import {
@@ -473,6 +475,11 @@ function FeatureInspector({
                     <div className="flex min-w-0 items-center gap-2.5">
                       <CodeChip kind="goal" entityKey={g.goal} title={g.title} />
                     </div>
+                    {g.parent && (
+                      <div className="mt-0.5 text-[13px] text-text2" data-testid="goal-via-parent">
+                        Subgoal of {g.parent_title ?? g.parent}: its weight is its share of the parent&apos;s
+                      </div>
+                    )}
                     <div className="tnum mt-1 flex flex-wrap items-center gap-x-1 font-mono text-[13px] text-text2">
                       weight {g.weight}
                       {g.weight_assumed && <AssumedMark />} × contribution {g.contribution}
@@ -709,7 +716,11 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
   );
 }
 
+const PRIORITIES_SUBJECT = { kind: "priorities" as const, subject: {} };
+
 export default function PrioritiesPage() {
+  // G7 3.3: the panel is about the priority order.
+  useScreenSubject(PRIORITIES_SUBJECT, "Priority order");
   // The query string is read on the client: the page streams in under Suspense.
   return (
     <Suspense fallback={null}>
@@ -744,11 +755,12 @@ function Priorities() {
   const [changed, setChanged] = useState<string | null>(null);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [changesKey, setChangesKey] = useState(0);
-  const { role } = useMe();
-  const canSnapshot = hasRole(role, "approver");
+  const { can, capsReady } = useMe();
+  const canSnapshot = can("create_priority_snapshot");
   // C9: approvers and owners move and pin features; everyone sees the changes. Not in run
   // mode (C8): a move or pin changes the live ranking, never a run's order.
-  const canChange = hasRole(role, "approver") && !snapshotId;
+  const canOverride = can("create_priority_override");
+  const canChange = canOverride && !snapshotId;
   const withChanges = order === "changes";
 
   const q = useQuery(`priorities|${method}|${order}`, () =>
@@ -1003,6 +1015,7 @@ function Priorities() {
         status={
           counts && (
             <>
+              {capsReady && !canSnapshot && !canOverride && <ViewOnly />}
               <Chip kind="acc">{counts.features} ranked</Chip>
               {counts.no_goal > 0 && <Chip kind="crit">{counts.no_goal} no goal</Chip>}
               {counts.unscored > 0 && <Chip kind="warn">{counts.unscored} unscored</Chip>}
@@ -1011,14 +1024,9 @@ function Priorities() {
           )
         }
         action={
-          !snapshotId && (
-            <Button
-              variant="primary"
-              icon="check"
-              onClick={saveSnapshot}
-              disabled={!canSnapshot || saving || !r}
-              title={canSnapshot ? "Keep a dated copy of this ranking" : "Approvers and owners can save snapshots"}
-            >
+          !snapshotId &&
+          canSnapshot && (
+            <Button variant="primary" icon="check" onClick={saveSnapshot} disabled={saving || !r} title="Keep a dated copy of this ranking">
               {saving ? "Saving…" : "Save snapshot"}
             </Button>
           )

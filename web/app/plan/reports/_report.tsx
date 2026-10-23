@@ -6,11 +6,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button, Chip, InfoTip, Label, Notice, Page, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { formatDateTime } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
-import { HealthChip, inZone, shortDay, slackText, type Report, type ReportTrack } from "./_lib";
+import { HealthChip, periodBound, shortDay, slackText, type Report, type ReportTrack } from "./_lib";
 
 const path = (id: string) => ({ params: { path: { report_id: id } } });
 
@@ -77,9 +78,9 @@ export function ReportDetail({ id }: { id: string }) {
             <Panel title="Covers">
               <div className="space-y-1 px-4 py-3 text-[15px]">
                 <p className="tnum">
-                  {inZone(report.period.from, report.timezone)} to {inZone(report.period.to, report.timezone)}
+                  {periodBound(report.period.from, report)} to {periodBound(report.period.to, report)}
                 </p>
-                <p className="text-sm text-text2">Made {inZone(report.generated_at, report.timezone)}</p>
+                <p className="text-sm text-text2">Made {formatDateTime(report.generated_at)}</p>
               </div>
             </Panel>
             <nav aria-label="Reports" className="flex flex-wrap gap-2">
@@ -231,11 +232,11 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
 }
 
 function SlackPanel({ report, onChange }: { report: Report; onChange: () => Promise<void> }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const s = report.slack;
-  const canRetry = hasRole(role, "owner") && (s.status === "failed" || s.status === "pending");
+  const canRetry = can("retry_alignment_report_slack") && (s.status === "failed" || s.status === "pending");
   async function retry() {
     setBusy(true);
     setError(null);

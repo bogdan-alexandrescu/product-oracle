@@ -19,6 +19,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from oracle import company_time
 from oracle.blockers.policy import LIMIT_KIND_LABELS
 from oracle.blockers.schemas import BlockerCitation, BlockerGate, BlockerModuleRender, BlockerSpec
 from oracle.docs.parser import CITATION_STRIP_RE
@@ -174,7 +175,8 @@ def _cell(text: str | None) -> str:
     return _inline(text).replace("|", "\\|") or "-"
 
 
-def _date(value: datetime | str | None) -> str:
+def _date(value: datetime | str | None, zone: str) -> str:
+    """The Company day of a review date or decision gate, as the gate rationale names it."""
     if value is None:
         return ""
     if isinstance(value, str):
@@ -182,23 +184,23 @@ def _date(value: datetime | str | None) -> str:
             value = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
             return _inline(value)
-    return value.date().isoformat()
+    return company_time.day(value, zone).isoformat()
 
 
 def _cap(text: str) -> str:
     return text[:1].upper() + text[1:] if text else text
 
 
-def _path(b: BlockerIn) -> str:
+def _path(b: BlockerIn, zone: str) -> str:
     selected = next((o for o in b.options if o.status == "selected"), None)
     if b.spec.status == "resolved":
         return "Resolved" + (f": {_inline(selected.title)}" if selected else "")
     if b.spec.status == "accepted_risk":
-        until = _date(b.spec.review_at)
+        until = _date(b.spec.review_at, zone)
         return "Risk accepted" + (f" until {until}" if until else "")
     if b.spec.status == "feasibility_only":
         gate = next((e.decision_gate_at for e in b.experiments if e.decision_gate_at), None)
-        return "Feasibility experiment" + (f", decision {_date(gate)}" if gate else "")
+        return "Feasibility experiment" + (f", decision {_date(gate, zone)}" if gate else "")
     if selected:
         return _inline(selected.title)
     return "No path selected yet"
@@ -211,7 +213,7 @@ def _kind(spec: BlockerSpec, *, lower: bool = False) -> str:
     return f"{label} ({_inline(spec.third_party)})" if spec.third_party else label
 
 
-def render_brief(blockers: list[BlockerIn]) -> str:
+def render_brief(blockers: list[BlockerIn], zone: str) -> str:
     lines = [f"## {BRIEF_HEADING} {{#{BRIEF_SECTION_ID}}}", ""]
     if not blockers:
         lines.append(
@@ -223,7 +225,8 @@ def render_brief(blockers: list[BlockerIn]) -> str:
         lines.append(
             f"| [{_cell(b.statement)}](#{section_id_for(b.key)}) "
             f"| {_cap(b.spec.type)}, {_cell(_kind(b.spec, lower=True))} "
-            f"| {_cap(b.spec.severity)} | {STATUS_LABELS[b.spec.status]} | {_cell(_path(b))} |"
+            f"| {_cap(b.spec.severity)} | {STATUS_LABELS[b.spec.status]} "
+            f"| {_cell(_path(b, zone))} |"
         )
     if len(blockers) > BRIEF_ROWS:
         lines += [
@@ -238,7 +241,7 @@ def _bullet(label: str, value: str | None) -> str | None:
     return f"- **{label}:** {value}" if value else None
 
 
-def _blocker_full(b: BlockerIn) -> list[str]:
+def _blocker_full(b: BlockerIn, zone: str) -> list[str]:
     s = b.spec
     out = [f"### {_inline(b.statement) or b.key} {{#{section_id_for(b.key)}}}", ""]
     bullets = [
@@ -248,7 +251,7 @@ def _blocker_full(b: BlockerIn) -> list[str]:
         _bullet("Threshold", s.threshold),
         _bullet("Impacts", "; ".join([*b.impacted, *s.impacted_users])),
         _bullet("Owner", b.owner),
-        _bullet("Review date", _date(s.review_at)),
+        _bullet("Review date", _date(s.review_at, zone)),
     ]
     out += [x for x in bullets if x]
     if detail := _inline(b.detail):
@@ -291,7 +294,7 @@ def _blocker_full(b: BlockerIn) -> list[str]:
             _bullet("Monitoring signal", d.get("monitoring_signal")),
             _bullet("Scaling trigger", d.get("scaling_trigger")),
             _bullet("Corrective action", d.get("corrective_action")),
-            _bullet("Review date", _date(d.get("review_at"))),
+            _bullet("Review date", _date(d.get("review_at"), zone)),
         ]
         if any(decision):
             out += [""] + [x for x in decision if x]
@@ -314,7 +317,7 @@ def _blocker_full(b: BlockerIn) -> list[str]:
             if e.owner:
                 parts.append(f"Owner: {_inline(e.owner)}")
             if e.decision_gate_at:
-                parts.append(f"Decision gate: {_date(e.decision_gate_at)}")
+                parts.append(f"Decision gate: {_date(e.decision_gate_at, zone)}")
             parts.append(f"Status: {_cap(e.status)}")
             if e.result:
                 parts.append(f"Result: {_inline(e.result)}")
@@ -327,7 +330,7 @@ def _blocker_full(b: BlockerIn) -> list[str]:
     return out
 
 
-def render_full(blockers: list[BlockerIn]) -> str:
+def render_full(blockers: list[BlockerIn], zone: str) -> str:
     lines = [f"## {FULL_HEADING} {{#{FULL_SECTION_ID}}}", ""]
     if not blockers:
         lines.append("No known blockers or constraints are recorded for this document.")
@@ -337,11 +340,12 @@ def render_full(blockers: list[BlockerIn]) -> str:
         "chosen and how it is validated, watched and revisited."
     )
     for b in blockers:
-        lines += ["", *_blocker_full(b)]
+        lines += ["", *_blocker_full(b, zone)]
     return "\n".join(lines)
 
 
-def render(blockers: list[BlockerIn]) -> BlockerModuleRender:
+def render(blockers: list[BlockerIn], zone: str) -> BlockerModuleRender:
+    """The module's sections; days are the Company day in ``zone`` (#463)."""
     citations: dict[str, BlockerCitation] = {}
     by_section: dict[str, list[str]] = {BRIEF_SECTION_ID: [], FULL_SECTION_ID: []}
     data_points: list[str] = []
@@ -384,8 +388,8 @@ def render(blockers: list[BlockerIn]) -> BlockerModuleRender:
         brief_section_id=BRIEF_SECTION_ID,
         full_section_id=FULL_SECTION_ID,
         section_ids=[BRIEF_SECTION_ID, FULL_SECTION_ID, *(section_id_for(b.key) for b in blockers)],
-        brief_markdown=render_brief(blockers),
-        full_markdown=render_full(blockers),
+        brief_markdown=render_brief(blockers, zone),
+        full_markdown=render_full(blockers, zone),
         citations=list(citations.values()),
         evidence_by_section=by_section,
         data_points=data_points,

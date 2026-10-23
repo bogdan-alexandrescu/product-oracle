@@ -20,8 +20,8 @@ import {
   Split,
 } from "@/components/ds";
 import { api, unwrap, type ApiToken, type TokenKind } from "@/lib/api/client";
-import { formatDate, formatDateTime } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { formatDate, formatDateTime, formatDay } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 export const KIND_LABEL: Record<TokenKind, string> = {
@@ -38,9 +38,8 @@ const KIND_TIP: Record<TokenKind, string> = {
 };
 const KINDS: TokenKind[] = ["personal", "service", "run", "mcp_client"];
 
-const shortFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 /** "Oct 18": a chip's date; the full one is in its title. */
-export const shortDate = (iso: string) => shortFmt.format(new Date(iso));
+export const shortDate = (iso: string) => formatDay(iso);
 
 export type TokenState = "active" | "revoked" | "expired";
 export function tokenState(t: Pick<ApiToken, "revoked_at" | "expires_at">): TokenState {
@@ -130,18 +129,9 @@ function revokeConsequences(t: ApiToken): Consequence[] {
 
 /** Settings > API tokens (owners): every credential of the company, filter by member and kind, revoke. */
 export function ApiTokensSettings({ initialMember }: { initialMember: string | null }) {
-  const { role, loading } = useMe();
-  if (loading) return <PageHeader title="API tokens" />;
-  if (!hasRole(role, "owner")) {
-    return (
-      <>
-        <PageHeader title="API tokens" />
-        <p role="note" data-testid="role-note" className="rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink">
-          Only owners see the company&apos;s tokens. Yours are in My account.
-        </p>
-      </>
-    );
-  }
+  const { can } = useMe();
+  // #370: the page reads every token (GET /v1/api-tokens); Settings never opens it for anyone else.
+  if (!can("list_api_tokens")) return <PageHeader title="API tokens" />;
   return <OwnerTokens initialMember={initialMember} />;
 }
 

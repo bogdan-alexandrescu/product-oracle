@@ -144,9 +144,9 @@ def _mark_expand(html: str) -> str:
 def _banner(ev: ExportVersion) -> str:
     parts = [ev.title, f"Version {ev.version.number}", ev.status.replace("_", " ")]
     if ev.version.approved_at is not None:
-        parts.append(f"approved {_format_dt(ev.version.approved_at)}")
+        parts.append(f"approved {_format_dt(ev.version.approved_at, ev.zone)}")
     else:
-        parts.append(f"imported {_format_dt(ev.version.created_at)}")
+        parts.append(f"imported {_format_dt(ev.version.created_at, ev.zone)}")
     if ev.source_label:
         parts.append(ev.source_label)
     return " · ".join(parts)
@@ -268,7 +268,7 @@ def build_deck(ev: ExportVersion) -> Deck:
                 i + 1,
                 by_cite[k].title or by_cite[k].ref,
                 by_cite[k].source,
-                _format_dt(by_cite[k].retrieved_at),
+                _format_dt(by_cite[k].retrieved_at, ev.zone),
             )
             for i, k in enumerate(k for k in order if k in by_cite)
         ]
@@ -314,7 +314,7 @@ def build_deck(ev: ExportVersion) -> Deck:
         number=ev.version.number,
         latest_number=ev.latest_number,
         status=ev.status,
-        as_of=ev.version.snapshot or _format_dt(ev.date),
+        as_of=ev.version.snapshot or _format_dt(ev.date, ev.zone),
         banner=_banner(ev),
         source_label=ev.source_label,
         theme_key=theme.key if theme else None,

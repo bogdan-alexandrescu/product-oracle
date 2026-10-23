@@ -102,6 +102,53 @@ export function mockSettingValue(key: string): unknown {
   return key in db.settings ? db.settings[key] : SETTING_DEFAULTS[key];
 }
 
+function companyZone(): string {
+  const zone = String(mockSettingValue("company_timezone") ?? "America/Los_Angeles");
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zone });
+    return zone;
+  } catch {
+    return "America/Los_Angeles";
+  }
+}
+
+function companyParts(at: string | Date): Record<string, string> {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: companyZone(),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZoneName: "short",
+  }).formatToParts(new Date(at));
+  return Object.fromEntries(parts.map((p) => [p.type, p.value]));
+}
+
+/** "2026-10-12": the Company time zone's day at `at`, as oracle.company_time.day (#463). */
+export function companyDayIso(at: string | Date): string {
+  const p = companyParts(at);
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+/** "2026-10-12 13:00 PDT": `at` in the Company time zone, as oracle.company_time.stamp (#463). */
+export function companyStamp(at: string | Date): string {
+  const p = companyParts(at);
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute} ${p.timeZoneName}`;
+}
+
+/** "Oct 12": the Company time zone's day at `at`, as the API words a day in text it writes (#463). */
+export function companyDayInWords(at: string | Date): string {
+  const options = { month: "short", day: "numeric" } as const;
+  try {
+    const timeZone = String(mockSettingValue("company_timezone") ?? "America/Los_Angeles");
+    return new Date(at).toLocaleDateString("en-US", { ...options, timeZone });
+  } catch {
+    return new Date(at).toLocaleDateString("en-US", { ...options, timeZone: "America/Los_Angeles" });
+  }
+}
+
 /** Stores a company setting's value, as PUT /v1/settings/{key} would. */
 export function setMockSetting(key: string, value: unknown) {
   const db = load();

@@ -13,7 +13,7 @@ import { Button, confirmInPage, Notice, PageHeader, Panel } from "@/components/d
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
@@ -40,18 +40,12 @@ const loadSetting = () => unwrap(api.GET("/v1/settings/{key}", KEY)).then((s) =>
 const saveSetting = (value: ReportSetting) => unwrap(api.PUT("/v1/settings/{key}", { ...KEY, body: { value } })).then((s) => s.value as ReportSetting);
 
 export function NotificationsSettings() {
-  const { role, loading } = useMe();
-  const owner = hasRole(role, "owner");
+  // #370: Settings' gate answers a role that cannot read the company's integrations.
+  const { can } = useMe();
   return (
     <>
       <PageHeader title="Notifications" />
-      {loading && !role ? (
-        <Loading />
-      ) : !owner ? (
-        <Notice>Owners manage notifications: Oracle&apos;s Slack app and the weekly alignment report.</Notice>
-      ) : (
-        <OwnerSettings />
-      )}
+      {can("list_company_integrations") && <OwnerSettings />}
     </>
   );
 }

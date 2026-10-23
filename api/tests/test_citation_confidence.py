@@ -107,9 +107,15 @@ async def test_an_unknown_or_other_company_item_is_a_warning_not_a_refusal(clien
     assert by_key["c1"]["confidence"] == 0.75
     warnings = [w for w in v["warnings"] if w["code"] == "unknown_citation_item"]
     assert len(warnings) == 3
-    messages = " ".join(w["message"] for w in warnings)
-    for key, value in (("c1", other), ("c2", unknown), ("c3", "not-a-uuid")):
-        assert f"'{key}'" in messages and str(value) in messages
+    # #396: a person reads "a source item Oracle no longer has"; agents get the ids in refs.
+    assert {(w["refs"]["cite_key"], w["refs"]["source_item"]) for w in warnings} == {
+        ("c1", str(other)),
+        ("c2", str(unknown)),
+        ("c3", "not-a-uuid"),
+    }
+    for w in warnings:
+        assert "a source item Oracle no longer has" in w["message"]
+        assert str(other) not in w["message"] and str(unknown) not in w["message"]
     # The warning names the sections citing it.
     assert {tuple(w["section_keys"]) for w in warnings} == {("problem",), ("decisions",)}
 

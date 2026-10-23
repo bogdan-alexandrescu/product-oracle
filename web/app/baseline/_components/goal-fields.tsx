@@ -7,7 +7,7 @@ import { Button, InfoTip, InspectorSection, Notice, SegmentedControl } from "@/c
 import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type EntityDetail, type EntityOut, type Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 /**
@@ -164,7 +164,7 @@ function FieldError({ field, problems }: { field: string; problems: GoalProblem[
 
 /** The goal owner: members of this Oracle only, searched by name or email (GET /v1/people). */
 function OwnerPicker({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const owners = useOwners(value ? [value] : []);
@@ -227,7 +227,7 @@ function OwnerPicker({ value, onChange }: { value: string | null; onChange: (id:
             ))}
           </ul>
           <p data-testid="owner-invite" className="text-[13px] font-normal tracking-normal text-text2">
-            {hasRole(role, "owner") ? (
+            {can("create_invite") ? (
               <>
                 Not a member yet?{" "}
                 <Link href="/settings/members?invite=1" className="font-medium text-accent-ink hover:underline">

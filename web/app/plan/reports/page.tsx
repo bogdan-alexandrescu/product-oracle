@@ -7,10 +7,11 @@ import { useRef, useState } from "react";
 import { Button, Chip, DataTable, Empty, Notice, Page, PageHeader, Panel, useFocusTrap, type Column } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { formatDateTime } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { inZone, type ReportItem } from "./_lib";
+import { type ReportItem } from "./_lib";
 
 const SLACK_KIND = { posted: "pass", failed: "crit", pending: "warn", not_configured: "na", not_requested: "na" } as const;
 const SLACK_LABEL = { posted: "Posted", failed: "Not posted", pending: "Retrying", not_configured: "No Slack", not_requested: "Not posted" } as const;
@@ -54,14 +55,14 @@ const COLUMNS: Column<ReportItem>[] = [
     width: "190px",
     align: "right",
     phone: "meta",
-    cell: (r) => <span className="tnum text-text2">{inZone(r.generated_at, r.timezone)}</span>,
+    cell: (r) => <span className="tnum text-text2">{formatDateTime(r.generated_at)}</span>,
   },
 ];
 
 /** Plan › Alignment reports: every report, newest first; owners Generate now. */
 export default function ReportsPage() {
   const q = useQuery("alignment-reports", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 200 } } })));
-  const { role } = useMe();
+  const { can } = useMe();
   const [open, setOpen] = useState(false);
   return (
     <Page>
@@ -69,7 +70,7 @@ export default function ReportsPage() {
         title="Alignment reports"
         back={<Link href="/roadmap" className="hover:underline">Roadmap</Link>}
         action={
-          hasRole(role, "owner") && (
+          can("create_alignment_report") && (
             <Button variant="primary" icon="plus" onClick={() => setOpen(true)}>
               Generate now
             </Button>

@@ -89,7 +89,7 @@ from markdown_it.token import Token
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import safe_yaml
+from oracle import safe_yaml, wording
 from oracle.docs import layers
 from oracle.docs.parser import DATE_MARK_COMMENT_RE
 from oracle.roadmap import schedule
@@ -1522,11 +1522,13 @@ def _refs(bases: list[schedule.Basis]) -> list[str]:
     return list(dict.fromkeys(b.reference for b in bases))
 
 
-def _where(mark: Mark) -> str:
+def _where(mark: Mark, heading: str | None) -> str:
+    """Where the date is, as a reader sees it (#396): the title, or the section by its
+    heading."""
     if mark.where == "title":
         return "the title"
-    place = "heading" if mark.line == 0 else f"line {mark.line}"
-    return f"section {mark.section_key}, {place}"
+    section = wording.quoted(heading, "an untitled section")
+    return f"the heading {section}" if mark.line == 0 else f"{section}, line {mark.line}"
 
 
 def _reads_as(mark: Mark) -> str:
@@ -1535,21 +1537,31 @@ def _reads_as(mark: Mark) -> str:
     return ""
 
 
-def problem_message(mark: Mark, prd_slug: str | None, *, update: bool = False) -> str:
+def problem_message(
+    mark: Mark, prd_title: str | None, *, update: bool = False, heading: str | None = None
+) -> str:
+    """What a person reads about a marked date (#396, in the app's words): the PRD by its
+    title, the section by its ``heading``, and where to record a basis."""
     if update:
         of = "any PRD with an active product track"
     else:
-        of = f"PRD {prd_slug}" if prd_slug else "the roadmap's PRD (none is known)"
+        of = f'the PRD "{prd_title}"' if prd_title else "the roadmap's PRD (none is known)"
     if mark.status == "withdrawn":
         return (
-            f"the date {mark.text} ({_where(mark)}) rested on {', '.join(mark.bases)}, which "
-            "was withdrawn; drop the date or record a new basis"
+            f"the date {mark.text} ({_where(mark, heading)}) rested on "
+            f"{', '.join(mark.bases)}, which was withdrawn; drop the date or "
+            f"{wording.RECORD_DATE_BASIS}"
         )
     return (
-        f"the date {mark.text}{_reads_as(mark)} ({_where(mark)}) rests on no verified "
-        f"estimate, capacity or commitment of {of} for this item; record one "
-        "(POST /v1/schedule-bases) or drop the date. Oracle never invents dates"
+        f"the date {mark.text}{_reads_as(mark)} ({_where(mark, heading)}) rests on no "
+        f"verified estimate, capacity or commitment of {of} for this item; "
+        f"{wording.RECORD_DATE_BASIS} or drop the date. Oracle never invents dates"
     )
+
+
+def problem_refs(mark: Mark, prd_slug: str | None) -> dict[str, str]:
+    """The ids an agent needs about a marked date (the message names none of them)."""
+    return {"date": mark.text, **({"prd": prd_slug} if prd_slug else {})}
 
 
 SOURCES_NOT_LAST = (

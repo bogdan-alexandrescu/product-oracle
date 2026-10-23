@@ -20,16 +20,17 @@ export function changeSummary(summary: Record<string, number>): string {
   return parts.length ? parts.join(" · ") : "no changes";
 }
 
-/** The base's name in "Since v1" and "What changed since v1". */
+/** The base's name in "Since v1" and "What changed since v1"; on a PRD draft "since draft v1" or "since the approved plan · roadmap v3". */
 export function baseName(diff: Schemas["ItemsDiffOut"], compare: Compare): string {
   const n = diff.base ? versionOf(diff.base.ref) : "";
+  if (diff.head.kind === "prd_draft") return compare === "approved" ? `the approved plan · roadmap v${n}` : `draft v${n}`;
   return compare === "approved" ? `approved v${n}` : `v${n}`;
 }
 
 /**
- * Above a roadmap version's items (E3): what the table is compared with, the previous
- * version or the approved plan, and what changed since. An option with nothing to compare
- * with is disabled, with a tip saying why.
+ * Above a roadmap version's items and a PRD draft's Roadmap tab (E3): what the table is
+ * compared with, the previous version (or draft) or the approved plan, and what changed
+ * since. An option with nothing to compare with is disabled, with a tip saying why.
  */
 export function CompareBar({
   diff,
@@ -41,6 +42,7 @@ export function CompareBar({
   onCompare: (c: Compare) => void;
 }) {
   const { previous, approved } = diff.options;
+  const draft = diff.head.kind === "prd_draft";
   return (
     <div data-testid="items-compare" className="flex min-w-0 flex-col gap-1.5">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -52,11 +54,27 @@ export function CompareBar({
           onChange={onCompare}
           items={[
             previous
-              ? { value: "previous", label: `v${versionOf(previous.ref)}`, testId: "compare-previous" }
-              : { value: "previous", label: "Previous version", testId: "compare-previous", disabled: true, title: "No earlier version with items" },
+              ? { value: "previous", label: draft ? previous.label : `v${versionOf(previous.ref)}`, testId: "compare-previous" }
+              : {
+                  value: "previous",
+                  label: draft ? "Previous draft" : "Previous version",
+                  testId: "compare-previous",
+                  disabled: true,
+                  title: draft ? "No earlier draft with items" : "No earlier version with items",
+                },
             approved
-              ? { value: "approved", label: `Approved v${versionOf(approved.ref)}`, testId: "compare-approved" }
-              : { value: "approved", label: "Approved plan", testId: "compare-approved", disabled: true, title: "No other approved version yet" },
+              ? {
+                  value: "approved",
+                  label: draft ? `Approved plan · roadmap v${versionOf(approved.ref)}` : `Approved v${versionOf(approved.ref)}`,
+                  testId: "compare-approved",
+                }
+              : {
+                  value: "approved",
+                  label: "Approved plan",
+                  testId: "compare-approved",
+                  disabled: true,
+                  title: draft ? "No approved roadmap for this PRD yet" : "No other approved version yet",
+                },
           ]}
         />
       </div>

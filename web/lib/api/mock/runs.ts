@@ -8,6 +8,7 @@ import type { Schemas } from "@/lib/api/client";
 import { displayName } from "@/lib/names";
 
 import { AGENT_RUN, baselineReviewStatus } from "./baseline";
+import { companyDayInWords, companyDayIso } from "./connections";
 import { ranking } from "./lane-f";
 
 type RunOut = Schemas["RunOut"];
@@ -88,6 +89,8 @@ export interface RunsContext {
    * one is named). Absent: anyone may, as the mock had it.
    */
   mayDecide?: (c: Pick<CheckpointOut, "kind" | "approver_role">, flow: RunOut["flow"]) => boolean;
+  /** D10: the designated decider of the document a run review reviews (its review policy), if any. */
+  reviewDecider?: (c: CheckpointOut) => string | null;
   /**
    * The "undelivered" scenario: SwarmCloud does not take a checkpoint decision until the
    * next tick. The decision is recorded (and final) but the decide call answers 503, as the
@@ -109,6 +112,10 @@ export interface RunsContext {
   suggestionStatus?: (feedbackId: string) => Schemas["SuggestionOut"]["status"] | null;
   /** C1e: the item's accepted suggestion is staged for the next draft (not open feedback). */
   staged?: (feedbackId: string) => boolean;
+  /** D10: the staged suggestion's text a send-back carries as accepted_text. */
+  stagedText?: (feedbackId: string) => string | null;
+  /** D10: a version's locked sections (approved), in the send-back's locked_sections. */
+  lockedSections?: (documentId: string, version: number) => string[];
   /** Section keys of a version (a roadmap's items check their PRD sections). */
   sectionKeys: (versionId: string) => string[];
   /** The approved version of a document a run reads (the one named, else the latest approved), or why not. */
@@ -298,7 +305,8 @@ function buildUnderWay(ctx: RunsContext, flowKey: string): Response | null {
   return first ? fail(409, `A baseline build is already under way (run ${first.id})`) : null;
 }
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const monthDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+// The Company time zone's day, as the API words it in notes (#463).
+const monthDay = (iso: string) => companyDayInWords(iso);
 
 /**
  * The "new-run-prd" scenario keeps Baseline to PRD in the New run dialog, as a catalog from
@@ -348,6 +356,7 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     started_at: r.started_at,
     finished_at: r.finished_at,
     waiting_on: r.waiting_on,
+    review_link: r.review_link ?? null,
     error: r.error,
     stuck: r.stuck,
     can_retry: r.can_retry,
@@ -697,6 +706,41 @@ function finishedReview(r: RunOut, s: SegmentOut): CheckpointOut | undefined {
   return r.checkpoints.filter((c) => c.segment_seq === s.seq && c.status !== "pending").pop();
 }
 
+/** D10: the kinds decided in their version (as oracle.runs.review_link.KINDS). */
+const RUN_REVIEW_KINDS: readonly string[] = ["prd_review", "roadmap_review"];
+
+/** D10: the version a run review checkpoint reviews (`payload.import`), when its draft was imported. */
+export function reviewedVersion(c: Pick<CheckpointOut, "kind" | "payload">): { document_id: string; slug: string; version: number } | null {
+  const imp = (c.payload as { import?: { document_id?: string | null; slug?: string | null; version?: number | null } }).import;
+  return RUN_REVIEW_KINDS.includes(c.kind) && imp?.document_id && imp.slug && imp.version
+    ? { document_id: imp.document_id, slug: imp.slug, version: imp.version }
+    : null;
+}
+
+function reviewLink(c: CheckpointOut): string | null {
+  const v = reviewedVersion(c);
+  return v ? `/documents/${v.slug}/v/${v.version}?run_review=${c.id}` : null;
+}
+
+/** D10: the document's feedback a Send back carries (open items and staged changes). */
+export function sendBackEntries(ctx: Pick<RunsContext, "feedback" | "staged">, documentId: string, version: number): number {
+  return ctx.feedback.filter((f) => f.document_id === documentId && f.raised_on_version <= version && (f.status === "open" || ctx.staged?.(f.id))).length;
+}
+
+/**
+ * D10: the version's review approved its run review (the last section approved, or the
+ * version published): decided as an Approve, audited by the API `via: document_review`.
+ */
+export function approveRunReview(ctx: RunsContext, runId: string, checkpointId: string) {
+  const r = ctx.db.runs.find((x) => x.id === runId);
+  const cp = r?.checkpoints.find((c) => c.id === checkpointId);
+  if (!r || !cp || cp.status !== "pending" || r.status !== "awaiting_checkpoint") return;
+  Object.assign(cp, { status: "approved", note: null, decided_by: ctx.userId, decided_at: ctx.now() });
+  cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: "oracle" } };
+  next(ctx, r, r.segments.find((x) => x.seq === cp.segment_seq)!);
+  refresh(r);
+}
+
 function refresh(r: RunOut) {
   r.progress = progressOf(r);
   r.draft_rejected = refused(r, false);
@@ -707,7 +751,9 @@ function refresh(r: RunOut) {
   // As the API: waiting on its checkpoint, a decision recorded there and not delivered yet.
   // Oracle's send-back means no decision is owed: Revising wins.
   r.delivering = r.status === "awaiting_checkpoint" && !r.sent_back ? (r.checkpoints.find((c) => c.delivery)?.kind ?? null) : null;
-  for (const c of r.checkpoints) Object.assign(c, { can_decide: c.status === "pending", cannot_approve: cannotApprove(c) });
+  for (const c of r.checkpoints) Object.assign(c, { can_decide: c.status === "pending", cannot_approve: cannotApprove(c), review_link: reviewLink(c) });
+  // D10: a run waiting at its PRD or roadmap review is decided in the version.
+  r.review_link = r.checkpoints.find((c) => c.status === "pending")?.review_link ?? null;
   // As the API: a refused draft whose file is kept, while the run waits at its review.
   const file = r.document_kind === "roadmap" ? "roadmap.md" : "prd.md";
   for (const s of r.segments) {
@@ -1069,6 +1115,8 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     artifacts: s.artifacts,
     ...(s.feature_set_check ? { feature_set_check: s.feature_set_check } : {}),
     ...(snapshot ? { priority_check: s.priority_check, priority_snapshot_id: snapshot.id } : {}),
+    // As the API: the review of an imported draft names its version.
+    ...(s.draft_import?.version ? { import: { document_id: s.draft_import.document_id, slug: s.draft_import.slug, kind: r.document_kind, version: s.draft_import.version } } : {}),
   };
   if (!def.checkpoint) {
     // No stop (F5-2's code_map index): the run goes on, or ends.
@@ -1629,7 +1677,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (action === "cancel-again" && m === "POST") {
     const { workflow_id } = await body<Schemas["CancelAgain"]>();
     if (!(r.cancel_again ?? []).includes(workflow_id)) {
-      return fail(409, `nothing to cancel again: workflow ${workflow_id} is not one Oracle stopped cancelling for this run`);
+      // #396: the refusal a person reads names no workflow id; the id stays in refs, as in the API.
+      return json(409, { detail: "nothing to cancel again: that workflow is not one Oracle stopped cancelling for this run", refs: { workflow: workflow_id } });
     }
     r.cancel_again = (r.cancel_again ?? []).filter((w) => w !== workflow_id);
     return done();
@@ -1661,6 +1710,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (ctx.mayDecide && !ctx.mayDecide(cp, r.flow)) return fail(403, ENGINEERING_KINDS.includes(cp.kind) ? LEAD_ONLY : `Requires the ${cp.approver_role} role`);
     // H8: an update's review stop is an owner's to decide.
     if (cp.approver_role === "owner" && ctx.userRole !== "owner") return fail(403, "Only an owner can decide this stop");
+    // D10: a run review's Approve draft and Send back are the designated decider's.
+    const decider = ctx.reviewDecider?.(cp);
+    if (decider && decider !== ctx.member?.id) return fail(403, "Only the designated decider decides this run review");
     const { decision, note, expected_revision } = await body<Schemas["CheckpointDecision"]>();
     const draft = draftOf(ctx, cp.id);
     const changedBy = ctx.reviewChange?.();
@@ -1698,12 +1750,17 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     }
     // D8: the note defaults to the shared draft's.
     const text = (note ?? draft.note)?.trim() || null;
-    // D4: a send-back says something: a staged action or a note.
+    // D10: a run review sends back the document's own feedback; the note is optional.
+    const reviewed = reviewedVersion(cp);
+    if (decision === "changes_requested" && !text && reviewed && !sendBackEntries(ctx, reviewed.document_id, reviewed.version)) {
+      return fail(422, "Nothing to send back: comment, request changes on a section, or write a note.");
+    }
+    // D4: any other send-back says something: a staged action or a note.
     const staged = draft.actions.filter((a) => a.state === "staged");
-    if (decision === "changes_requested" && !text && !staged.length) return fail(422, "Stage a change, ask a question, or write a note to send back.");
+    if (decision === "changes_requested" && !text && !reviewed && !staged.length) return fail(422, "Stage a change, ask a question, or write a note to send back.");
     const status = confirming ? "approved" : (decision as "approved" | "changes_requested");
     Object.assign(cp, { status, note: text, decided_by: ctx.userId, decided_at: ctx.now(), console: null });
-    if (decision === "changes_requested") cp.review = buildReview(ctx, r, cp, staged, text);
+    if (decision === "changes_requested") cp.review = reviewed ? documentReview(ctx, r, cp, reviewed, text) : buildReview(ctx, r, cp, staged, text);
     if (edited) {
       // D7: the edited file replaces the agents' (kept for ?agents=1), and its check is re-run.
       const role = ctx.userRole ?? "approver";
@@ -1739,7 +1796,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     }
     const s = r.segments.find((x) => x.seq === cp.segment_seq)!;
     if (status === "approved") next(ctx, r, s);
-    else submit(ctx, r, s, text);
+    else submit(ctx, r, s, text ?? (reviewed ? "Sent back with the document's feedback." : null));
     return done();
   }
   if (action === "segments" && p[5] === "retry-draft-import" && m === "POST") {
@@ -2125,6 +2182,24 @@ export function seedEngReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunO
   tick(full);
   const cp = r.checkpoints.find((c) => c.status === "pending")!;
   Object.assign(cp, { kind: "eng_review", approver_role: "approver" });
+  refresh(r);
+  db.runs.push(r);
+  return r;
+}
+
+/** D10 "run-review" scenario: a Baseline to PRD run waiting at its PRD review of the Usage alerts PRD's v2. */
+export const RUN_REVIEW_RUN = "7a11c0de-0000-4000-8000-0000000000da";
+
+export function seedRunReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut {
+  const { from, now } = seedClock();
+  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), priority_snapshots: (db.priority_snapshots ??= []) };
+  const full = { ...ctx, db: own, now };
+  const off = { baseline_confirm: false, feature_set: false, priority_order: false };
+  const r = seedRun(ctx, own, "baseline_to_prd", "usage-alerts", { checkpoints: off }, "2026-10-21T08:00:00Z");
+  r.id = RUN_REVIEW_RUN;
+  from(r.created_at);
+  launch(full, r);
+  for (let i = 0; i < 8 && r.status !== "awaiting_checkpoint"; i++) tick(full);
   refresh(r);
   db.runs.push(r);
   return r;
@@ -2837,6 +2912,8 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
 
 type Review = Record<string, unknown> & { items: Record<string, unknown>[] };
 const REVIEW_KEYS = ["version", "checkpoint", "run", "segment", "attempt", "file", "items", "unchanged", "problems_open", "waived", "general_note"];
+// Written after the fixed keys when a review has them: D10's locked sections.
+const REVIEW_OPTIONAL_KEYS = ["locked_sections"];
 const RENAMED: Record<string, [string, string]> = { milestone_date: ["milestone", "date"], milestone_name: ["milestone", "name"] };
 
 /** As oracle.runs.review_file.build_review, for roadmap_items (other kinds: the note alone). */
@@ -2897,6 +2974,27 @@ function buildReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: Dra
   };
 }
 
+/**
+ * D10: a run review's send-back is D4's review of the document's own feedback (as the API's
+ * review_file.document_review): one entry per open or staged feedback item, the version's
+ * locked sections, the note as general_note.
+ */
+function documentReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, reviewed: { document_id: string; version: number }, note: string | null): Review {
+  const mine = ctx.feedback.filter((f) => f.document_id === reviewed.document_id && f.raised_on_version <= reviewed.version);
+  const entry = (f: FeedbackRow) => ({ id: f.id, section: f.section_key ?? "general", action: "change", summary: f.summary });
+  const staged = mine.filter((f) => ctx.staged?.(f.id));
+  const kind = ctx.documents.find((d) => d.id === reviewed.document_id)?.kind ?? "prd";
+  return {
+    ...buildReview(ctx, r, cp, [], note),
+    file: `${kind}.md`,
+    items: [
+      ...mine.filter((f) => f.status === "open" && !ctx.staged?.(f.id)).map(entry),
+      ...staged.map((f) => ({ ...entry(f), accepted_text: ctx.stagedText?.(f.id) ?? null })),
+    ],
+    locked_sections: ctx.lockedSections?.(reviewed.document_id, reviewed.version) ?? [],
+  };
+}
+
 function yamlScalar(v: unknown): string {
   if (v === null || v === undefined) return "null";
   if (typeof v === "string") return /^[\w][\w .,/-]*$/.test(v) && !/^(true|false|null|yes|no|on|off|[\d.+-]+)$/i.test(v) ? v : JSON.stringify(v);
@@ -2926,9 +3024,9 @@ function renderReview(review: Record<string, unknown>, decidedAt: string | null 
   const kind = String(review.checkpoint);
   const what = (review.file as string | null) ?? `the ${review.segment ?? kind} output`;
   const attempt = review.attempt ? `, attempt ${review.attempt}` : "";
-  const on = decidedAt ? ` on ${decidedAt.slice(0, 10)}` : "";
+  const on = decidedAt ? ` on ${companyDayIso(decidedAt)}` : "";
   const label = words[kind] ?? kind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
-  const ordered = Object.fromEntries(REVIEW_KEYS.map((k) => [k, review[k] ?? null]));
+  const ordered = Object.fromEntries([...REVIEW_KEYS.map((k) => [k, review[k] ?? null]), ...REVIEW_OPTIONAL_KEYS.filter((k) => k in review).map((k) => [k, review[k]])]);
   return [`# Review of ${what}${attempt}, at the ${label} checkpoint.`, `# Sent back by an approver${on}. Apply each entry; answer each in resolutions.`, ...yamlLines(ordered, ""), ""].join("\n");
 }
 

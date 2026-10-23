@@ -7,12 +7,12 @@ layer ports these rules to web/lib/api/mock/describe.ts: change both together.
 import re
 import uuid
 from collections.abc import Iterable, Mapping
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.baseline.schemas import ProposalProposer, ProposalRun
 
@@ -330,13 +330,9 @@ async def summaries(db: AsyncSession, proposals: list[Proposal]) -> dict[uuid.UU
     return out
 
 
-def run_label(run: ProposalRun) -> str:
-    """ "Build the baseline · Oct 20"."""
-    return f"{run.flow_title} · {_day(run.created_at)}"
-
-
-def _day(at: datetime) -> str:
-    return f"{at.strftime('%b')} {at.day}"
+def run_label(run: ProposalRun, zone: str) -> str:
+    """ "Build the baseline · Oct 20", the day it started in the Company time zone."""
+    return f"{run.flow_title} · {company_time.day_in_words(run.created_at, zone)}"
 
 
 def _from_intake(payload: Mapping[str, Any]) -> bool:
@@ -368,11 +364,12 @@ async def proposers(
             select(ApiToken.id, ApiToken.name).where(ApiToken.id.in_(token_ids))
         )
         names = {r.id: r.name for r in rows}
+    zone = await company_time.company_time_zone(db) if runs else company_time.DEFAULT_ZONE
     out: dict[uuid.UUID, ProposalProposer] = {}
     for p in proposals:
         run = runs.get(p.run_id) if p.run_id else None
         if run is not None:
-            out[p.id] = ProposalProposer(kind="run", label=run_label(run), run_id=run.id)
+            out[p.id] = ProposalProposer(kind="run", label=run_label(run, zone), run_id=run.id)
         elif p.run_id or (p.actor or "").startswith("run:"):
             out[p.id] = ProposalProposer(kind="run", label="A run that was removed")
         elif _from_intake(p.payload or {}):

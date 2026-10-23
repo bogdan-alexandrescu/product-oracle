@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { Button, Chip, InfoTip, InspectorSection, Notice, Panel, Sheet, Split, type Column } from "@/components/ds";
+import { Button, Chip, FilterChips, InfoTip, InspectorSection, Notice, Panel, Sheet, Split, type Column } from "@/components/ds";
 import { usePolling } from "@/components/JobsPanel";
 import { ItemInspector } from "@/components/review/ItemInspector";
 import { ItemsTable } from "@/components/review/ItemsTable";
 import { ErrorNote, Loading } from "@/components/ui";
+import { api, unwrap } from "@/lib/api/client";
 import {
   deriveDraftRoadmap,
   getDraftRoadmap,
@@ -17,8 +19,14 @@ import {
 } from "@/lib/api/draft-roadmap";
 import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { formatDateTime } from "@/lib/format";
 
-import { HORIZONS, toItemRow, type ItemRow } from "./item-row";
+import { baseName, CompareBar } from "./CompareBar";
+import { HORIZONS, needsAttention, toItemRow, type ItemRow } from "./item-row";
+import { ChangeChips, ItemHistory, WhatChanged } from "./ItemChanges";
+import { CHANGED, useItemsDiff, type Compare } from "./useItemsDiff";
+
+type Filter = "all" | "changed" | "attention";
 
 /** Every 10 s while a derivation is queued or running (JobsPanel's usePolling). */
 const POLL_MS = 10_000;
@@ -36,8 +44,6 @@ const PROBLEM_LABEL: Record<string, string> = {
 };
 export const problemLabel = (code: string) => PROBLEM_LABEL[code] ?? "Check problem";
 
-// "20 Oct, 10:09".
-const derivedFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 function ago(iso: string | null): string {
   if (!iso) return "just now";
@@ -52,8 +58,11 @@ function ago(iso: string | null): string {
  * draft. A line saying these are proposals, the derivation's status (polled while queued or
  * running), the check's problems linking to their rows, the owner's "Derive for each new
  * draft" switch, and the shared items table and inspector without State and Engineering
- * (draft items have no freshness or tracker records). Viewers and commenters read it;
- * approvers and owners also derive; owners also turn the switch.
+ * (draft items have no freshness or tracker records). E3b: compared with the previous
+ * draft or the approved plan, with a Changed filter (the default when there is something to
+ * compare with), a change column, dropped items as struck rows, and What changed and History
+ * in the inspector; `?compare=` and `?filter=` keep the view in the URL. Viewers and
+ * commenters read it; approvers and owners also derive; owners also turn the switch.
  */
 export function DraftRoadmapPane({
   doc,
@@ -98,8 +107,34 @@ export function DraftRoadmapPane({
     return m;
   }, [problems]);
 
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const compare: Compare = params.get("compare") === "approved" ? "approved" : "previous";
+  // Asked again once the draft's items are (re)stored; nothing to ask before.
+  const { diff, byKey, ghosts } = useItemsDiff(doc, n, compare, status === "ready" ? (data?.ready_at ?? "ready") : null);
+  const compared = !!diff?.base;
+  const changed = diff?.summary ? [...CHANGED].reduce((sum, k) => sum + (diff.summary?.[k] ?? 0), 0) : 0;
+  const asked = params.get("filter");
+  // Opening a draft with something to compare with shows its changes first.
+  const filter: Filter = asked === "attention" || asked === "all" ? asked : compared ? "changed" : "all";
+  const setUrl = (key: string, value: string) => {
+    const next = new URLSearchParams(params.toString());
+    next.set(key, value);
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  };
+  const shownRows = useMemo(() => (compared ? [...rows, ...ghosts] : rows), [compared, rows, ghosts]);
+  const titles = useMemo(() => new Map(shownRows.map((r) => [r.key, r.title])), [shownRows]);
+
   const [selected, setSelected] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
+  const selectedRow = shownRows.find((r) => r.key === selected) ?? null;
+  const historyKey = selectedRow && !selectedRow.ghost ? selectedRow.key : "";
+  const historyQ = useQuery(`roadmap-item-history|${doc}|${historyKey}`, () =>
+    historyKey
+      ? unwrap(api.GET("/v1/roadmap-items/history", { params: { query: { prd: doc, item_key: historyKey } } })).catch(() => null)
+      : Promise.resolve(null),
+  );
   const onSelect = useCallback((key: string) => {
     setSelected(key);
     if (window.matchMedia("(max-width: 639px)").matches) setSheet(true);
@@ -127,9 +162,22 @@ export function DraftRoadmapPane({
   if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
   if (!data) return <Loading label="Loading roadmap items…" />;
 
-  const row = rows.find((r) => r.key === selected) ?? null;
+  const row = selectedRow;
   const item = items.find((i) => i.item_key === selected);
+  const attention = rows.filter(needsAttention).length;
+  const since = diff && compared ? baseName(diff, compare) : "";
+  const filterFn =
+    filter === "attention"
+      ? (r: ItemRow) => !r.ghost && needsAttention(r)
+      : filter === "changed"
+        ? (r: ItemRow) => CHANGED.has(byKey.get(r.key)?.change ?? "unchanged")
+        : undefined;
+  const decorate = (r: ItemRow) =>
+    r.ghost ? { "data-testid": "roadmap-item-ghost", "data-change": "dropped" } : { "data-change": byKey.get(r.key)?.change };
   const columns: Column<ItemRow>[] = [
+    ...(compared
+      ? [{ key: "change", header: "Change", width: "190px", phone: "meta" as const, cell: (r: ItemRow) => <ChangeChips change={byKey.get(r.key)} /> }]
+      : []),
     {
       key: "check",
       header: "Check",
@@ -173,8 +221,11 @@ export function DraftRoadmapPane({
   ];
   const inspector = (r: ItemRow) => {
     const key = items.find((i) => i.item_key === r.key)?.prd.section_key;
+    const change = byKey.get(r.key);
     return (
-      <ItemInspector row={r} item={item} total={rows.length} rows={rows} documentHref={key ? sectionHref(doc, n, key) : null}>
+      <ItemInspector row={r} item={r.ghost ? undefined : item} total={rows.length} rows={rows} documentHref={key ? sectionHref(doc, n, key) : null}>
+        {change && <WhatChanged change={change} since={since} titles={titles} />}
+        {!r.ghost && <ItemHistory history={historyQ.data} />}
         {(byItem.get(r.key)?.length ?? 0) > 0 && (
           <InspectorSection label="Check" testId="item-problems">
             <ul className="flex flex-col gap-1.5 text-sm text-warn">
@@ -239,13 +290,27 @@ export function DraftRoadmapPane({
 
       {rows.length > 0 && (
         <Split inspector={row ? <div className="max-[639px]:hidden">{inspector(row)}</div> : undefined}>
+          {diff && <CompareBar diff={diff} compare={compare} onCompare={(c) => setUrl("compare", c)} />}
+          <FilterChips<Filter>
+            label="Items"
+            testId="items-filter"
+            value={filter}
+            onChange={(f) => setUrl("filter", f)}
+            items={[
+              { value: "all", label: "All", count: rows.length },
+              ...(compared ? [{ value: "changed" as const, label: "Changed", count: changed, testId: "filter-changed" }] : []),
+              { value: "attention", label: "Needs attention", count: attention },
+            ]}
+          />
           <Panel>
             <ItemsTable
-              rows={rows}
+              rows={shownRows}
               selected={selected}
               onSelect={onSelect}
+              filter={filterFn}
               hide={["state", "engineering", "prd"]}
               extraColumns={columns}
+              rowDecorations={decorate}
               label="Proposed roadmap items"
             />
           </Panel>
@@ -313,7 +378,7 @@ function StatusRow({
             {data.items.length} item{data.items.length === 1 ? "" : "s"}
           </b>
           {horizons}
-          {data.ready_at ? ` · derived ${derivedFmt.format(new Date(data.ready_at))}` : ""}
+          {data.ready_at ? ` · derived ${formatDateTime(data.ready_at)}` : ""}
           {p ? ` · ${p} problem${p === 1 ? "" : "s"}` : ""}
         </span>
       );

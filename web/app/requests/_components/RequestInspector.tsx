@@ -6,7 +6,7 @@ import { Button, Chip, Inspector, InspectorSection } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { CHANNEL_LABEL, STATE } from "./RequestList";
@@ -51,8 +51,10 @@ export function RequestInspector({
   goalTitles: Map<string, string>;
   onChange: (request: Request) => void;
 }) {
-  const { me, role } = useMe();
-  const approver = hasRole(role, "approver");
+  const { me, can } = useMe();
+  // #370: links and decisions are an approver's (the decision routes' role), the suggestion's buttons its routes'.
+  const approver = can("qualify_request");
+  const canSuggest = can("accept_request_suggestion");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,7 +106,7 @@ export function RequestInspector({
               {s.duplicate_of && <li>Same as: {requests.find((r) => r.id === s.duplicate_of)?.title ?? "another request"}</li>}
               {s.feature_id && <li data-testid="suggested-feature">Feature: {featureTitle(s.feature_id) ?? "Loading…"}</li>}
             </ul>
-            {approver && (
+            {canSuggest && (
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="solid"

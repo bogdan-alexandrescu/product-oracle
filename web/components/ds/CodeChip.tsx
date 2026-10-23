@@ -5,7 +5,8 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } f
 import { createPortal } from "react-dom";
 
 import { splitCodes, type CodeEntry, type CodeIndex } from "@/lib/code-index";
-import { named, useCompanyCodes, useNames, type Named } from "@/lib/codes";
+import { named, useCompanyCodes, useNames, type Named, type Names } from "@/lib/codes";
+import { treeCodes } from "@/lib/goal-tree";
 import { sectionHash } from "@/lib/section-link";
 
 const OPEN_DELAY = 250;
@@ -234,6 +235,15 @@ export function CodeTag({ code, proposed = false }: { code: string; proposed?: b
   );
 }
 
+/** A subgoal's code from the company's goal tree; undefined (the title's) for a goal. */
+function subgoalCode(names: Names, id?: string | null, key?: string | null): string | null | undefined {
+  const e = (id ? names.byId.get(id) : undefined) ?? (key ? names.byKey.get(key) : undefined);
+  return e?.parent_id ? treeCodes(names).get(e.id) : undefined;
+}
+
+/** The caller's code, when it gives one, over the title's. */
+const coded = (n: Named, code: string | null | undefined): Named => (code === undefined ? n : { ...n, code });
+
 const STATE: Record<string, string> = { confirmed: "confirmed", proposed: "proposed", rejected: "rejected" };
 
 type ChipProps = {
@@ -243,6 +253,8 @@ type ChipProps = {
   /** The title the caller knows; the card reads the company's lookup for the rest. */
   title?: string | null;
   proposed?: boolean;
+  /** The code to show when the caller knows better than the title: a subgoal's "G-B.1" (#345, lib/goal-tree). */
+  code?: string | null;
 };
 
 /**
@@ -263,7 +275,10 @@ export function CodeChip({
   codeOnly?: boolean;
   testId?: string;
 }) {
-  const n: Named = named(p.title ?? "", p.entityKey);
+  // A subgoal's code is its place in the goal tree (#345): the caller's, else the company's lookup's.
+  const names = useNames();
+  const code = p.code !== undefined || p.kind !== "goal" || !names ? p.code : subgoalCode(names, p.entityId, p.entityKey);
+  const n: Named = coded(named(p.title ?? "", p.entityKey), code);
   const label = n.name || (p.kind === "goal" ? "Goal" : "Feature");
   if (codeOnly && !n.code) return null;
   return (
@@ -285,16 +300,16 @@ export function CodeChip({
         </>
       }
     >
-      <CodeCard {...p} />
+      <CodeCard {...p} code={code} />
     </HoverCard>
   );
 }
 
 /** The card's body: mounted when the card opens, so the lookup loads only then. */
-function CodeCard({ kind, entityKey, entityId, title, proposed }: ChipProps) {
+function CodeCard({ kind, entityKey, entityId, title, proposed, code }: ChipProps) {
   const names = useNames();
   const e = (entityId ? names?.byId.get(entityId) : undefined) ?? (entityKey ? names?.byKey.get(entityKey) : undefined);
-  const n = named(e?.title ?? title ?? "", e?.key ?? entityKey);
+  const n = coded(named(e?.title ?? title ?? "", e?.key ?? entityKey), code);
   const status = e?.status ?? (proposed ? "proposed" : undefined);
   const label = n.name || (kind === "goal" ? "Goal" : "Feature");
   const line =

@@ -304,7 +304,8 @@ def test_render_yaml_parses_back_to_the_stored_dict_with_its_header():
     """protects=the agents get parseable YAML equal to what is stored (AC4); fails_when=the
     YAML does not parse with safe_yaml or differs; no_claim=agent behaviour."""
     sent = _full()
-    text = review_file.render_yaml(sent, datetime(2026, 10, 21, tzinfo=UTC))
+    # Midday UTC: Oct 21 in the Company time zone too (America/Los_Angeles by default).
+    text = review_file.render_yaml(sent, datetime(2026, 10, 21, 12, tzinfo=UTC))
     lines = text.splitlines()
     assert lines[0] == (
         "# Review of roadmap_items.yaml, attempt 1, at the Roadmap items checkpoint."

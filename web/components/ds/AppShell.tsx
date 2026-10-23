@@ -4,16 +4,23 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
+import { HopPanel } from "@/components/hop/HopPanel";
+import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { resetMockData } from "@/lib/api/mock/server";
 import { useMe } from "@/lib/me";
+import { useSettingsTabs } from "@/lib/settings-tabs";
 import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/lib/waiting";
+import { ScreenSubjectProvider } from "@/lib/screen-subject";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
 import { Mark } from "./Brand";
 import { ConfirmHost } from "./ConfirmDialog";
 import { initialsOf } from "./Figures";
+import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
+import { Notice } from "./Layout";
+import { Sheet } from "./Sheet";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string; match?: string };
 
@@ -33,7 +40,7 @@ export const DESTINATIONS: Dest[] = [
   { label: "Inbox", href: "/inbox", icon: "inbox", testId: "nav-inbox" },
   { label: "Company", href: "/company", icon: "company", testId: "nav-company" },
 ];
-const SETTINGS: Dest = { label: "Settings", href: "/settings/members", icon: "settings", testId: "nav-settings", match: "/settings" };
+const SETTINGS: Dest = { label: "Settings", href: "/settings", icon: "settings", testId: "nav-settings", match: "/settings" };
 
 /** Phone tab bar: Home, PRDs, Plan, Inbox, More. */
 const TABS = ["Home", "PRDs", "Plan", "Inbox"];
@@ -81,7 +88,7 @@ function isActive(pathname: string, d: Dest, home?: string): boolean {
   if (home) return d.href === home || home.startsWith(`${d.href}/`);
   const base = d.match ?? d.href;
   // /sources (evidence search) lives under Settings › Sources.
-  if (d === SETTINGS && pathname.startsWith("/sources")) return true;
+  if (d.testId === SETTINGS.testId && pathname.startsWith("/sources")) return true;
   // A brief before drafting (C5) is on its way to a PRD.
   if (d.href === "/documents" && pathname.startsWith("/intakes/")) return true;
   // The Plan's alignment reports (F6) belong with the Roadmap.
@@ -311,6 +318,13 @@ function Navs() {
   const inbox = useInboxCount(shown);
   const home = useDocumentHome(pathname);
   const [more, setMore] = useState(false);
+  // #370: Settings opens on the first tab the role can read, and leaves when there is none.
+  const settingsTabs = useSettingsTabs();
+  const settings: Dest | null = !settingsTabs.ready
+    ? SETTINGS
+    : settingsTabs.tabs[0]
+      ? { ...SETTINGS, href: settingsTabs.tabs[0].href }
+      : null;
   // Close the More sheet on navigation.
   const [lastPath, setLastPath] = useState(pathname);
   if (lastPath !== pathname) {
@@ -320,7 +334,7 @@ function Navs() {
   if (!shown) return null;
 
   const tabDests = TABS.map((t) => DESTINATIONS.find((d) => d.label === t)!);
-  const moreDests = [...DESTINATIONS.filter((d) => !TABS.includes(d.label)), SETTINGS];
+  const moreDests = [...DESTINATIONS.filter((d) => !TABS.includes(d.label)), ...(settings ? [settings] : [])];
   const moreActive = moreDests.some((d) => isActive(pathname, d, home));
 
   return (
@@ -338,7 +352,7 @@ function Navs() {
         ))}
         <span className="flex-1" />
         <span aria-hidden className="mb-1.5 h-px w-10 flex-none bg-rail-sep" />
-        <RailLink d={SETTINGS} pathname={pathname} home={home} />
+        {settings && <RailLink d={settings} pathname={pathname} home={home} />}
         <UserMenu placement="rail" />
       </nav>
 
@@ -459,6 +473,12 @@ function PhoneHeader() {
   const pathname = usePathname();
   const { me } = useMe();
   const title = usePageTitle(pathname);
+  const [ask, setAsk] = useState(false);
+  const [askPath, setAskPath] = useState(pathname);
+  if (askPath !== pathname) {
+    setAskPath(pathname);
+    setAsk(false);
+  }
   if (pathname.startsWith("/i/")) return null;
   return (
     <header
@@ -471,8 +491,85 @@ function PhoneHeader() {
       <p data-testid="phone-title" className="min-w-0 flex-1 truncate font-display text-[17px] leading-6 font-semibold text-rail-active-text">
         {title}
       </p>
+      {me && !panelHidden(pathname) && (
+        <button
+          type="button"
+          data-testid="phone-ask"
+          aria-label="Ask Oracle"
+          aria-expanded={ask}
+          onClick={() => setAsk(true)}
+          className="flex h-9 flex-none items-center gap-1 rounded-lg px-2 text-[15px] font-semibold text-rail-active-text hover:bg-rail-hover"
+        >
+          <Icon name="ask" size={20} />
+          Ask
+        </button>
+      )}
       {me && <UserMenu placement="header" />}
+      <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} full>
+        <HopPanel showHeader={false} />
+      </Sheet>
     </header>
+  );
+}
+
+/** Where the head-of-product panel never shows (G7 3.2): sign-in, consent, present mode, the design page. */
+export function panelHidden(pathname: string): boolean {
+  return /^\/(login|oauth|design)(\/|$)/.test(pathname) || /\/present\/?$/.test(pathname);
+}
+
+/**
+ * The head-of-product panel's place (G7 "Panel place", owner 2026-10-21): a 44 px "Ask" strip
+ * on the right edge of every screen; a click or ⌘J / Ctrl+J opens the 400 px panel, docked
+ * from 1280 px (the page's grid gives up the width) and an overlay drawer below. Esc or the
+ * strip closes it. Phones get the header's Ask button instead. Nothing loads until it opens.
+ */
+function HopDock() {
+  const pathname = usePathname();
+  const { me } = useMe();
+  const open = usePanelOpen();
+  const shown = !!me && !panelHidden(pathname);
+  useEffect(() => {
+    if (!shown) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        setPanelOpen(!open);
+      } else if (e.key === "Escape" && open && !e.defaultPrevented) {
+        setPanelOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [shown, open]);
+  if (!shown) return null;
+  return (
+    <aside
+      aria-label="Ask Oracle"
+      data-testid="hop-dock"
+      data-open={open ? "true" : "false"}
+      className={`sticky top-0 col-start-3 row-start-1 h-dvh border-l border-line bg-surface max-[600px]:hidden ${open ? "w-11 min-[1280px]:w-[400px]" : "w-11"}`}
+    >
+      <button
+        type="button"
+        data-testid="hop-strip"
+        aria-expanded={open}
+        aria-label={open ? "Close Ask Oracle" : "Ask Oracle"}
+        title="Ask Oracle (⌘J)"
+        onClick={() => setPanelOpen(!open)}
+        className={`flex h-full w-11 flex-col items-center gap-3 pt-4 text-text hover:bg-surface2 ${open ? "min-[1280px]:hidden" : ""}`}
+      >
+        <Mark size={24} tone="current" className="block flex-none text-accent" />
+        <span className="text-[15px] font-semibold [writing-mode:vertical-rl]">Ask</span>
+      </button>
+      {open && (
+        <div
+          data-testid="hop-drawer"
+          className="fixed inset-y-0 right-11 z-40 w-[400px] max-w-[calc(100vw-44px)] border-l border-line shadow-tip min-[1280px]:static min-[1280px]:h-full min-[1280px]:w-full min-[1280px]:max-w-none min-[1280px]:border-l-0 min-[1280px]:shadow-none"
+        >
+          <HopPanel onClose={() => setPanelOpen(false)} />
+        </div>
+      )}
+    </aside>
   );
 }
 
@@ -482,19 +579,49 @@ function PhoneHeader() {
  * customer's interview link /i/ (no phone header either) and when
  * signed out: its grid column then collapses to nothing.
  */
+/**
+ * #370 fixes 4: when GET /v1/me/capabilities fails, every can() is false and the pages hide
+ * their actions. Say so, with Retry, instead of leaving them quietly empty.
+ */
+export function CapsError() {
+  const { capsError, retryCaps } = useMe();
+  if (!capsError) return null;
+  return (
+    <div className="px-4 pt-3 sm:px-6">
+      <Notice
+        tone="error"
+        testId="caps-error"
+        action={
+          <Button onClick={retryCaps}>
+            Retry
+          </Button>
+        }
+      >
+        {capsError}
+      </Notice>
+    </div>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="grid min-h-dvh grid-cols-[auto_minmax(0,1fr)]">
-      <Suspense fallback={null}>
-        <Navs />
-      </Suspense>
-      <main className="col-start-2 row-start-1 min-w-0">
+    <ScreenSubjectProvider>
+      <div className="grid min-h-dvh grid-cols-[auto_minmax(0,1fr)_auto]">
         <Suspense fallback={null}>
-          <PhoneHeader />
+          <Navs />
         </Suspense>
-        {children}
-      </main>
-      <ConfirmHost />
-    </div>
+        <main className="col-start-2 row-start-1 min-w-0">
+          <Suspense fallback={null}>
+            <PhoneHeader />
+          </Suspense>
+          <CapsError />
+          {children}
+        </main>
+        <Suspense fallback={null}>
+          <HopDock />
+        </Suspense>
+        <ConfirmHost />
+      </div>
+    </ScreenSubjectProvider>
   );
 }

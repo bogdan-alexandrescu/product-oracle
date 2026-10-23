@@ -6,6 +6,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
+import { displayName } from "@/lib/names";
 
 import { mockUuid, seeded } from "./ids";
 import { addGoalCodes, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
@@ -14,11 +15,12 @@ import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
+import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
-import { emptyDiscussions, routeDiscussions, seedDiscussionReplies, seedDiscussions, type DiscussionRow, type DiscussionsContext, type DiscussionsDb, type DocumentSection, type SubjectInfo } from "./discussions";
+import { emptyDiscussions, routeDiscussions, seedDiscussionReplies, seedDiscussions, seedRunDiscussions, type DiscussionRow, type DiscussionsContext, type DiscussionsDb, type DocumentSection, type SubjectInfo } from "./discussions";
 import { routeEngineering, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
@@ -26,7 +28,24 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
-import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, ROADMAP_REVIEW_HELD_RUN, routeRuns, seedEngReviewRun, seedFeatureSetRun, seedPriorityRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import {
+  approveRunReview,
+  ENGINEERING_KINDS,
+  enlargeRuns,
+  FEATURE_SET_RUN,
+  lastBaselineBuild,
+  reviewedVersion,
+  ROADMAP_REVIEW_HELD_RUN,
+  routeRuns,
+  seedEngReviewRun,
+  seedFeatureSetRun,
+  seedPriorityRuns,
+  seedRunReviewRun,
+  seedRuns,
+  sendBackEntries,
+  type RunsContext,
+  type RunsDb,
+} from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
@@ -50,9 +69,9 @@ import {
 } from "./quality";
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
-import { draftRoadmapSummary, queueDraftRoadmap, routeDraftRoadmap, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_ROADMAP_SLUG, DATE_BASES_SCENARIO, DIFF_SCENARIO, dateMarks, inboxTracks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
-import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
+import { draftRoadmapSummary, queueDraftRoadmap, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
+import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { routeSpecs, seedSpecs, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
@@ -326,12 +345,17 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json); "roadmap-diff" as the default company plus usage-alerts-roadmap v2,
  * a draft whose items moved, added and dropped one each since the approved v1 (E3);
+ * "approved-plan" as the default company plus usage-alerts-roadmap v1 approved and usage-alerts
+ * v2, a draft with a new "3. Spend limits" section whose ready draft items move Behaviour from
+ * Now to Next, keep Success metrics and add Spend limits (Now) (E3b);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
  * problem (C6, saved-addresses);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
  * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
  * activation and Cut early churn, a goal rejected since (#260, ./intake.ts seedBriefGoalRejected);
+ * "run-discussions" as "feature-set" plus an open discussion and a private one (the approver's,
+ * with the owner) on that run's waiting checkpoint (G5, ./discussions.ts seedRunDiscussions);
  * "discussions" as the default company plus one private discussion the commenter started
  * with the approver on team-workspaces v2's Problem, 3 messages from the 2 of them (G1,
  * ./discussions.ts);
@@ -792,6 +816,26 @@ function seedRoadmapItemsConsoleHeld(): Db {
   return db;
 }
 
+/** D10 "run-review" scenario: the default seed plus a run waiting at its PRD review of usage-alerts v2 (./runs.ts). */
+function seedRunReview(): Db {
+  const db = seed();
+  seeded("run-review", () => seedRunReviewRun(db.runs!, runsContext(db)));
+  return db;
+}
+
+/** D10 "run-review-decider" scenario: "run-review" with usage-alerts' review policy naming approver@example.com its designated decider. */
+function seedRunReviewDecider(): Db {
+  const db = seedRunReview();
+  const doc = db.documents.find((d) => d.slug === "usage-alerts")!;
+  const prd = db.documents.find((d) => d.kind === "prd");
+  db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
+  db.review_v2.policies.push({
+    document_id: doc.id, decider_id: db.members.find((m) => m.email === "approver@example.com")!.id, mandatory_reviewer_ids: [],
+    required_section_keys: [], section_approval: "required_sections", rereview_on_change: true, source: "document", lock_version: 1,
+  });
+  return db;
+}
+
 /** The default seed plus a run waiting at its feature set with a blocking problem (C6, ./runs.ts). */
 function seedFeatureSet(): Db {
   const db = seed();
@@ -1110,6 +1154,7 @@ function seed(): Db {
       code: "locked_section_changed",
       message: "Sections approved in v1 changed in this version: scope",
       section_keys: ["scope"],
+      refs: {},
     },
   ];
   // Review comments on v2, which Oracle's review job has already handled (./llm-jobs.ts).
@@ -1395,6 +1440,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       return atLeast(role, c.approver_role);
     },
     member: member ? { id: member.id, email: member.email, role: withMockRole(member).role } : null,
+    reviewDecider: (c) => runReviewDecider(db, c),
     members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role })),
     reviewChange: () => {
       const who = localStorage.getItem(MOCK_REVIEW_CHANGE_KEY);
@@ -1409,6 +1455,14 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title })),
     suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
     staged: (id) => isStaged(withSuggestion(db.llm, { id } as FeedbackRow).suggestion),
+    stagedText: (id) => {
+      const s = withSuggestion(db.llm, { id } as FeedbackRow).suggestion;
+      return s?.text ?? null;
+    },
+    lockedSections: (documentId, version) => {
+      const v = db.versions.find((x) => x.document_id === documentId && x.number === version);
+      return v ? lockedKeys(db, v) : [];
+    },
     openProposals: (runId) => db.baseline.proposals.filter((p) => p.run_id === runId && p.status === "open").length,
     latestVersion: (id) => {
       const doc = db.documents.find((d) => d.id === id);
@@ -1529,12 +1583,16 @@ function load(): Db {
         ? seedSuggestions
         : scenario === "big-prd"
           ? seedBigPrd
-          : scenario === "feature-set"
+          : scenario === "feature-set" || scenario === "run-discussions"
             ? seedFeatureSet
           : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO
             ? seedEngReview
           : scenario === "roadmap-items-console-held"
             ? seedRoadmapItemsConsoleHeld
+          : scenario === "run-review"
+            ? seedRunReview
+          : scenario === "run-review-decider"
+            ? seedRunReviewDecider
           : scenario === "priority-order"
             ? seedPriorityOrder
           : scenario === "next-draft" || scenario === "next-draft-costly"
@@ -1587,7 +1645,9 @@ function load(): Db {
       ? seedDiscussionsScenario(db)
       : scenario === "discussion-replies" || scenario === POOL_SPENT_SCENARIO
         ? seedDiscussionsScenario(db, seedDiscussionReplies)
-        : emptyDiscussions();
+        : scenario === "run-discussions"
+          ? seedRunDiscussionsScenario(db)
+          : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
@@ -1610,6 +1670,13 @@ function load(): Db {
   }
   if (scenario === "proposal-overlap") addOverlappingProposals(db.baseline, uuid);
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
+  if (scenario === APPROVED_PLAN_SCENARIO) addApprovedPlan(db);
+  if (scenario === VERSION_WARNINGS_SCENARIO) {
+    const prd = db.documents.find((d) => d.slug === "usage-alerts");
+    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+    const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
+    if (prd && v1) v1.warnings = versionWarnings(prd.title, prd.slug);
+  }
   save(db);
   return db;
 }
@@ -1627,11 +1694,42 @@ function addRoadmapVersion(db: Db) {
   doc.updated_at = v2.created_at;
 }
 
+/** E3b "approved-plan": usage-alerts-roadmap v1 approved, then usage-alerts v2, a draft with a Spend limits section (./draft-roadmap.ts gives it its items). */
+function addApprovedPlan(db: Db) {
+  const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+  const r1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
+  const prd = db.documents.find((d) => d.slug === "usage-alerts");
+  const p1 = prd && db.versions.find((v) => v.document_id === prd.id && v.number === 1);
+  if (!roadmap || !r1 || !prd || !p1) return;
+  r1.approved_at ??= "2026-10-05T09:00:00Z";
+  roadmap.status = "approved";
+  const p2 = structuredClone(p1);
+  Object.assign(p2, { id: uuid(), number: 2, created_at: "2026-10-21T09:00:00Z", approved_at: null });
+  const heading = "3. Spend limits";
+  const body = "Admins set a monthly spend limit; Oracle warns at 80% of it.";
+  p2.sections = [
+    ...p2.sections.map((x) => ({ ...x, id: uuid() })),
+    { ...p2.sections[p2.sections.length - 1], id: uuid(), section_key: "limits", ordinal: p2.sections.length, heading, body_md: body, body_text: body, content_hash: hash(`${heading}\n${body}`), citation_keys: [] },
+  ];
+  p2.content_hash = hash(p2.sections.map((x) => x.content_hash).join(""));
+  db.versions.push(p2);
+  prd.status = "in_review";
+  prd.updated_at = p2.created_at;
+}
+
 /** "discussions": the commenter's private discussion with the approver on team-workspaces v2's Problem. */
 function seedDiscussionsScenario(db: Db, seed: typeof seedDiscussions = seedDiscussions): DiscussionsDb {
   const doc = findDocument(db, "team-workspaces")!;
   const heading = findVersion(db, doc, 2)!.sections.find((s) => s.section_key === "problem")!.heading;
   return seed({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, doc.id, `${doc.title} · ${heading}`, `/documents/${doc.slug}/v/2#problem`);
+}
+
+/** G5 "run-discussions": an open and a private discussion on the feature-set run's waiting checkpoint. */
+function seedRunDiscussionsScenario(db: Db): DiscussionsDb {
+  const run = db.runs!.runs.find((r) => r.id === FEATURE_SET_RUN)!;
+  const cp = run.checkpoints.find((c) => c.status === "pending")!;
+  const label = `${run.flow_title} · ${CHECKPOINT_NAMES[cp.kind] ?? cp.kind}`;
+  return seedRunDiscussions({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind });
 }
 
 const CHECKPOINT_NAMES: Record<string, string> = {
@@ -1781,6 +1879,35 @@ function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
   };
 }
 
+/** D10: the latest run review checkpoint whose import made version `number` of the document. */
+function runReviewOf(db: Db, documentId: string, number: number) {
+  const found = (db.runs?.runs ?? []).flatMap((run) => run.checkpoints.map((cp) => ({ run, cp })));
+  return found.filter(({ cp }) => {
+    const v = reviewedVersion(cp);
+    return v?.document_id === documentId && v.version === number;
+  }).pop();
+}
+
+/** D10: the designated decider of the document a run review reviews (its review policy), if any. */
+function runReviewDecider(db: Db, cp: Pick<Schemas["CheckpointOut"], "kind" | "payload">): string | null {
+  const v = reviewedVersion(cp);
+  return (v && db.review_v2?.policies.find((x) => x.document_id === v.document_id)?.decider_id) || null;
+}
+
+/**
+ * D10: a pending run review of `v` is approved once every section is approved, or `v` is
+ * published. With a designated decider, the last section's approval counts only when the
+ * decider gave it; otherwise the run review waits for them.
+ */
+function followRunReview(db: Db, doc: DocumentRow, v: VersionRow, published: boolean, by: string) {
+  const found = runReviewOf(db, doc.id, v.number);
+  if (!found || found.cp.status !== "pending" || !db.runs) return;
+  const decider = runReviewDecider(db, found.cp);
+  if (!published && decider && decider !== by) return;
+  if (!published && !v.sections.every((x) => latestReview(db, v.id, x.section_key)?.verdict === "approved")) return;
+  approveRunReview({ ...runsContext(db), db: db.runs }, found.run.id, found.cp.id);
+}
+
 function latestReview(db: Db, versionId: string, key: string): ReviewRow | undefined {
   return db.reviews
     .filter((r) => r.version_id === versionId && r.section_key === key)
@@ -1834,7 +1961,11 @@ function draftCtx(db: Db): DraftRoadmapContext {
 }
 
 function draftDb(db: Db): DraftRoadmapDb {
-  return (db.draft_roadmaps ??= seeded("draft-roadmaps", () => seedDraftRoadmaps(draftCtx(db))));
+  return (db.draft_roadmaps ??= seeded("draft-roadmaps", () => {
+    const drafts = seedDraftRoadmaps(draftCtx(db));
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === APPROVED_PLAN_SCENARIO) seedApprovedPlanDraft(draftCtx(db), drafts);
+    return drafts;
+  }));
 }
 
 /** E1: a new PRD version queues its items-only roadmap (the API's version_imported handler). */
@@ -2633,6 +2764,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
+  if (p[1] === "me" && p[2] === "capabilities" && m === "GET") return json(200, await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0));
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
     const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false });
@@ -2993,6 +3125,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     documents: db.documents,
     versions: db.versions,
     approverId: db.members.find((x) => x.email === "approver@example.com")?.id,
+    drafts: () => draftDb(db).rows,
   };
   // E1: a PRD draft's roadmap items and the PRD's "Derive for each new draft" switch.
   const draftRes = await routeDraftRoadmap(draftCtx(db), draftDb(db), req, p, q);
@@ -3251,7 +3384,36 @@ async function route(db: Db, req: Request): Promise<Response> {
     const r = addReview(db, v, p[6], await body<Schemas["SectionReviewIn"]>(), { reviewer_id: me.id });
     touch(db, doc.id);
     if (r.feedback_item_id) onFeedback(llm, doc.id, v.number);
+    // D10: the last section approved approves the run review of this version.
+    followRunReview(db, doc, v, false, me.id);
     return json(200, { ...r, layer: sectionLayer(db, v.id, r.section_key) });
+  }
+  if (sub === "run-review" && m === "GET") {
+    const found = runReviewOf(db, doc.id, v.number);
+    if (!found) return json(404, { detail: "no run review for this version" });
+    const { run, cp } = found;
+    const decider = runReviewDecider(db, cp);
+    const reviews = v.sections.map((x) => latestReview(db, v.id, x.section_key));
+    const entries = sendBackEntries(runsContext(db), doc.id, v.number);
+    const staged = db.feedback.filter((f) => f.document_id === doc.id && isStaged(withSuggestion(db.llm, f).suggestion)).length;
+    return json(200, {
+      checkpoint_id: cp.id,
+      run_id: run.id,
+      kind: cp.kind,
+      status: cp.status,
+      flow_title: run.flow_title,
+      approver_role: cp.approver_role,
+      sections: {
+        total: v.sections.length,
+        reviewed: reviews.filter(Boolean).length,
+        approved: reviews.filter((x) => x?.verdict === "approved").length,
+      },
+      feedback: { open: entries - staged, staged, verdicts: reviews.filter((x) => x && x.verdict !== "approved").length },
+      wait: { state: "none" },
+      decider_id: decider,
+      decider_name: decider ? displayName(db.members.find((x) => x.id === decider)?.email ?? decider) : null,
+      can_decide: cp.status === "pending" && run.status === "awaiting_checkpoint" && atLeast(me.role, cp.approver_role) && (!decider || decider === me.id),
+    });
   }
   if (sub === "feedback-package") {
     return json(200, {
@@ -3285,6 +3447,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     // #346: a proposal a later one superseded can't be approved, and says why.
     const superseded = doc.kind === "roadmap" && db.plan_edits && !v.approved_at ? supersededRefusal(db.plan_edits, doc.slug, v.number) : null;
     if (superseded) return json(409, { detail: superseded });
+    // #396: a spec version that may be stale is refused, in the app's words; its id in refs.
+    const stale = doc.kind === "spec" && !v.approved_at ? staleSpecRefusal((db.specs ??= seedSpecs()), doc.slug, v.number) : null;
+    if (stale) return json(422, stale);
     // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
     if (doc.kind === "prd") {
       // #254: a version that is still only its template's text is never approved.
@@ -3324,6 +3489,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     v.approved_at = now();
     doc.status = "approved";
     doc.updated_at = v.approved_at;
+    // D10: publishing the version approves its run review.
+    followRunReview(db, doc, v, true, me.id);
     return json(200, { document_id: doc.id, document_status: doc.status, version: summary(v) });
   }
   if (sub === "deck" || (sub === "export" && (q.get("layer") ?? "full") !== "full")) {

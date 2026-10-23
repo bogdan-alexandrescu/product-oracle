@@ -22,7 +22,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, safe_yaml
+from oracle import audit, company_time, safe_yaml, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
@@ -79,6 +79,11 @@ DESIGN_CHECK_SECONDS = 20.0
 
 class SpecError(Exception):
     status = 409
+
+    def __init__(self, message: str, refs: wording.Refs | None = None) -> None:
+        super().__init__(message)
+        # #396: the ids agents need beside a message a person reads (oracle.wording).
+        self.refs = refs
 
 
 class NotFound(SpecError):
@@ -281,8 +286,8 @@ async def create_request(
     if body.document:
         if await docs_service.find_document(db, body.document) is not None:
             raise Invalid(
-                f"document '{body.document}' exists: regenerate its spec request instead "
-                "(POST /v1/spec-requests/{id}/regenerate)"
+                f"document '{body.document}' exists: regenerate its spec instead of "
+                "requesting a new one"
             )
         slug = body.document
         if not PARSER_SLUG_RE.fullmatch(slug):
@@ -481,6 +486,7 @@ async def _inputs(
         run_id=str(run.id) if run else None,
         feature=feature,
         dropped=dropped,
+        zone=await company_time.company_time_zone(db),
     )
     return inputs, prd, version
 
@@ -1228,8 +1234,7 @@ async def review_design(
             raise SpecError(f"version {av.number} is {av.status}")
         if body.kind == "approved" and av.freshness == "potentially_stale":
             raise SpecError(
-                "the version may be stale: review or reconcile it (POST /v1/trace/staleness/"
-                "actions), or regenerate it, before approving"
+                f"this version {wording.STALE} it", refs={"artifact_version": str(av.id)}
             )
         if body.kind in ("changes_requested", "rejected") and not (body.body or "").strip():
             raise Invalid("say why: a note is required to request changes or reject")
@@ -1293,8 +1298,8 @@ async def approve_version(
     if av.freshness == "potentially_stale":
         raise review_service.ReviewError(
             "invalid",
-            "this spec version may be stale: review or reconcile it (POST /v1/trace/staleness/"
-            "actions), or regenerate it, before approving its approach",
+            f"this spec version {wording.STALE} its approach",
+            refs={"artifact_version": str(av.id)},
         )
     document, version = await review_service.approve_version(session, principal, doc, n)
     if av.status != "approved":
@@ -1347,7 +1352,11 @@ async def regenerate(
     await _adopted(db, prd, version, list(request.requirement_ids))
     run = await db.get(Run, request.run_id) if request.run_id else None
     if run is not None and run.status not in ("succeeded", "failed", "cancelled"):
-        raise SpecError(f"run {run.id} is still {run.status}: finish or cancel it first")
+        raise SpecError(
+            f"this spec's run has not ended (it is {run.status}): let it finish, or cancel it "
+            "on its run page, first",
+            refs={"run": str(run.id)},
+        )
     keys = [s.section_key for s in await _section_rows(db, version.id)]
     kept = [k for k in request.section_keys if k in keys]
     dropped = [k for k in request.section_keys if k not in keys]

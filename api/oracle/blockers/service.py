@@ -47,7 +47,7 @@ from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, changes
+from oracle import audit, changes, company_time
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
@@ -1483,6 +1483,8 @@ class GateInputs:
     # The gate snapshot last recorded for each blocker (see gate_snapshot); none for a
     # legacy-unrecorded blocker. Loading these never writes.
     recorded_gate: dict[uuid.UUID, dict[str, Any]] = field(default_factory=dict)
+    # The Company time zone: the rationales name their days in it (#463).
+    zone: str = company_time.DEFAULT_ZONE
 
 
 async def gate_inputs(db: AsyncSession, blocker_ids: list[uuid.UUID]) -> GateInputs:
@@ -1519,7 +1521,8 @@ async def gate_inputs(db: AsyncSession, blocker_ids: list[uuid.UUID]) -> GateInp
             ).all()
         }
     recorded_gate = await _last_gate_snapshots(db, blocker_ids)
-    return GateInputs(last, decisions, experiments, recorded_gate)
+    zone = await company_time.company_time_zone(db)
+    return GateInputs(last, decisions, experiments, recorded_gate, zone)
 
 
 def _name(entity: Entity) -> str:
@@ -1535,6 +1538,11 @@ def _date(value: Any) -> datetime | None:
         except ValueError:
             return None
     return None
+
+
+def _day(moment: datetime, inputs: GateInputs) -> str:
+    """A rationale's day: the Company day of ``moment`` (#463)."""
+    return company_time.day(moment, inputs.zone).isoformat()
 
 
 def assess(entity: Entity, spec: BlockerSpec | None, inputs: GateInputs) -> BlockerGate:
@@ -1614,9 +1622,9 @@ def assess(entity: Entity, spec: BlockerSpec | None, inputs: GateInputs) -> Bloc
             return BlockerGate(
                 status="critical",
                 rationale=f"The accepted risk of {_name(entity)} is past its review date "
-                f"({decision.review_at.date().isoformat()}); review it again",
+                f"({_day(decision.review_at, inputs)}); review it again",
             )
-        until = decision.review_at.date().isoformat() if decision.review_at else "no date"
+        until = _day(decision.review_at, inputs) if decision.review_at else "no date"
         return BlockerGate(
             status="pass",
             rationale=f"Risk of {_name(entity)} accepted by {event.actor} until {until}: "
@@ -1658,7 +1666,7 @@ def assess(entity: Entity, spec: BlockerSpec | None, inputs: GateInputs) -> Bloc
     ]
     gate_at = min(dates) if dates else None
     if gate_at is None or gate_at <= _now():
-        when = gate_at.date().isoformat() if gate_at else "no date"
+        when = _day(gate_at, inputs) if gate_at else "no date"
         if exp.status == "succeeded":
             return BlockerGate(
                 status="critical",
@@ -1674,7 +1682,7 @@ def assess(entity: Entity, spec: BlockerSpec | None, inputs: GateInputs) -> Bloc
     return BlockerGate(
         status="pass",
         rationale=f"{_name(entity)} proceeds only as a scoped feasibility experiment "
-        f"({exp.status}) until {gate_at.date().isoformat()}: {exp.hypothesis}",
+        f"({exp.status}) until {_day(gate_at, inputs)}: {exp.hypothesis}",
     )
 
 

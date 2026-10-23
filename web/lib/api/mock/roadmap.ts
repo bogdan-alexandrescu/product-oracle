@@ -72,6 +72,17 @@ export interface RoadmapContext {
   versions: Version[];
   /** The mock approver's id (who proposed the seeded basis). */
   approverId?: string;
+  /** E3b: the PRD drafts' items-only roadmaps (./draft-roadmap.ts), for draft refs. */
+  drafts?: () => readonly DraftItems[];
+}
+
+/** A PRD version's draft roadmap as the diff reads it (./draft-roadmap.ts DraftRow). */
+export interface DraftItems {
+  document_id: string;
+  version: number;
+  status: string;
+  ready_at: string | null;
+  items: Item[];
 }
 
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
@@ -79,15 +90,21 @@ const AT = "2026-10-19T09:00:00Z";
 const OFF_REASON = "Two-way tracker sync is off: Oracle makes no tracker writes. Use the read-only alignment report.";
 const UNVERIFIED = "a dated milestone needs a verified estimate, capacity or commitment (basis_ids); Oracle never invents dates";
 // The API's texts for an item's refused date (api/oracle/roadmap/schedule.py).
+// #396: where a person records a date basis (api/oracle/wording.py RECORD_DATE_BASIS).
+const RECORD_DATE_BASIS = "record a date basis on Plan › Dates (or ask the engineering lead to)";
 const DATE_UNVERIFIED =
-  "a date needs a verified estimate, capacity or commitment recorded for this PRD (and item) that supports it (record one with POST /v1/schedule-bases); Oracle never invents dates";
+  `a date needs a verified estimate, capacity or commitment recorded for this PRD (and item) that supports it (${RECORD_DATE_BASIS}); Oracle never invents dates`;
 const OUTSIDE_NOW = "dated milestones belong only in now; the date was dropped";
 /** The mock scenario (MOCK_SCENARIO_KEY) whose roadmap items carry every field the Items tab shows (E2). */
 export const ITEMS_SCENARIO = "roadmap-items";
 /** F3 Date bases: commenter@example.com is the engineering lead, a basis waits for them. */
 export const DATE_BASES_SCENARIO = "date-bases";
+/** #396: the default company, GA's date with no basis, and usage-alerts-roadmap v1 carrying the API's date and citation warnings. */
+export const VERSION_WARNINGS_SCENARIO = "version-warnings";
 /** The mock scenario whose usage-alerts-roadmap v2 moved, added and dropped one item each since the approved v1 (E3). */
 export const DIFF_SCENARIO = "roadmap-diff";
+/** The mock scenario whose usage-alerts v2 draft moved and added one item against the approved usage-alerts-roadmap v1 (E3b). */
+export const APPROVED_PLAN_SCENARIO = "approved-plan";
 
 const now = () => new Date().toISOString();
 const today = () => now().slice(0, 10);
@@ -164,7 +181,8 @@ function itemsFor(ctx: RoadmapContext, roadmap: Version, trackId: string | null)
 export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): RoadmapDb {
   const withItems = scenario === ITEMS_SCENARIO;
   const withDiff = scenario === DIFF_SCENARIO;
-  const key = withItems || withDiff || scenario === DATE_BASES_SCENARIO ? `roadmap:${scenario}` : "roadmap";
+  const noGaBasis = scenario === DATE_BASES_SCENARIO || scenario === VERSION_WARNINGS_SCENARIO;
+  const key = withItems || withDiff || noGaBasis ? `roadmap:${scenario}` : "roadmap";
   return seeded(key, () => {
     const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [] };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
@@ -186,7 +204,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
     // ENG-420 waits for the engineering lead.
     const ga = scenario === "plan-decider" ? "verified" : "withdrawn";
     const seeds =
-      scenario === DATE_BASES_SCENARIO
+      noGaBasis
         ? ([["ENG-412", "2026-11-30", "verified"], ["ENG-420", "2027-01-15", "proposed"]] as const)
         : ([["ENG-412", "2026-11-30", "verified"], ["ENG-413", "2026-12-15", ga]] as const);
     for (const [reference, day, status] of seeds) {
@@ -242,66 +260,119 @@ function seedDiff(ctx: RoadmapContext, db: RoadmapDb, roadmapId: string, trackId
   db.items[v2.id] = [extra(second[0], "item-limits", "Spend limits", "now"), ...second].map((i, position) => ({ ...i, position }));
 }
 
-/** E3: GET /v1/roadmap-items/diff, a roadmap version's items against another's (api/oracle/roadmap/diff_views.py). */
+type Side = { doc: Doc; v: Version; kind: Schemas["ItemsRef"]["kind"]; items: Item[] };
+
+/** A PRD version's ready draft roadmap (E1), if any. */
+function readyDraft(ctx: RoadmapContext, doc: Doc, n: number): DraftItems | undefined {
+  return ctx.drafts?.().find((r) => r.document_id === doc.id && r.version === n && r.status === "ready");
+}
+
+/** Whether a roadmap version's items trace to the PRD. */
+const tracesTo = (db: RoadmapDb, v: Version, prdId: string) => (db.items[v.id] ?? []).some((i) => i.prd.document?.id === prdId);
+
+/**
+ * E3: GET /v1/roadmap-items/diff, a roadmap version's items or a PRD draft's (E3b) against
+ * another's (api/oracle/roadmap/diff_views.py).
+ */
 function itemsDiff(ctx: RoadmapContext, db: RoadmapDb, q: URLSearchParams): Response {
-  const parse = (ref: string | null) => {
+  const parse = (ref: string | null): Side | Response => {
     const m = /^([^@\s]+)@([1-9][0-9]{0,5})$/.exec(ref ?? "");
     if (!m) return json(422, { detail: `'${ref}' is not a ref: write <slug>@<version>` });
     const doc = ctx.documents.find((d) => d.slug === m[1]);
     const v = doc && ctx.versions.find((x) => x.document_id === doc.id && x.number === Number(m[2]));
     if (!doc || !v) return notFound(doc ? `version ${m[2]} of '${doc.slug}'` : `document '${m[1]}'`);
-    if (doc.kind === "prd") return json(409, { detail: `Roadmap items for v${v.number} are not ready yet` });
+    if (doc.kind === "prd") {
+      const draft = readyDraft(ctx, doc, v.number);
+      if (!draft) return json(409, { detail: `Roadmap items for v${v.number} are not ready yet` });
+      return { doc, v, kind: "prd_draft", items: draft.items };
+    }
     if (doc.kind !== "roadmap") return json(422, { detail: `'${doc.slug}' is a ${doc.kind}: it has no roadmap items` });
-    return { doc, v };
+    return { doc, v, kind: "roadmap", items: db.items[v.id] ?? [] };
   };
   const head = parse(q.get("head"));
   if (head instanceof Response) return head;
-  const side = (v: Version): Schemas["ItemsRef"] => ({
-    ref: `${head.doc.slug}@${v.number}`, kind: "roadmap", label: `Roadmap v${v.number}`, document: docRef(head.doc, v),
-  });
-  const others = ctx.versions
-    .filter((v) => v.document_id === head.doc.id && v.id !== head.v.id && db.items[v.id]?.length)
-    .sort((a, b) => b.number - a.number);
-  const previous = others.find((v) => v.number < head.v.number);
-  const approved = others.find((v) => v.approved_at);
+  const label = (s: Side) => `${s.kind === "prd_draft" ? "Draft" : "Roadmap"} v${s.v.number}`;
+  const ref = (s: Side): Schemas["ItemsRef"] => ({ ref: `${s.doc.slug}@${s.v.number}`, kind: s.kind, label: label(s), document: docRef(s.doc, s.v) });
+  const roadmapSide = (v: Version): Side => ({ doc: ctx.documents.find((d) => d.id === v.document_id)!, v, kind: "roadmap", items: db.items[v.id] ?? [] });
+  let previous: Side | undefined;
+  let approved: Side | undefined;
+  if (head.kind === "prd_draft") {
+    const earlier = ctx.versions
+      .filter((v) => v.document_id === head.doc.id && v.number < head.v.number && readyDraft(ctx, head.doc, v.number))
+      .sort((a, b) => b.number - a.number)[0];
+    if (earlier) previous = { doc: head.doc, v: earlier, kind: "prd_draft", items: readyDraft(ctx, head.doc, earlier.number)!.items };
+    // The approved plan: the latest approved roadmap version tracing to the PRD, its track's roadmap first.
+    const own = db.tracks.find((t) => t.prd_id === head.doc.id)?.roadmap_id;
+    const plan = ctx.versions
+      .filter((v) => v.approved_at && tracesTo(db, v, head.doc.id))
+      .sort((a, b) => Number(b.document_id === own) - Number(a.document_id === own) || (b.approved_at ?? "").localeCompare(a.approved_at ?? "") || b.number - a.number)[0];
+    if (plan) approved = roadmapSide(plan);
+  } else {
+    const others = ctx.versions
+      .filter((v) => v.document_id === head.doc.id && v.id !== head.v.id && db.items[v.id]?.length)
+      .sort((a, b) => b.number - a.number);
+    const p = others.find((v) => v.number < head.v.number);
+    const a = others.find((v) => v.approved_at);
+    previous = p && roadmapSide(p);
+    approved = a && roadmapSide(a);
+  }
   const base = q.get("base") ?? "previous";
-  let against: Version | undefined;
+  let against: Side | undefined;
   if (base === "previous") against = previous;
   else if (base === "approved") against = approved;
   else {
     if (!base.includes("@")) return json(422, { detail: `base must be previous, approved or a ref, not '${base}'` });
+    const other = json(422, { detail: `'${base}' is not a version of '${head.doc.slug}'` });
     const named = parse(base);
-    if (named instanceof Response) return named.status === 404 ? named : json(422, { detail: `'${base}' is not a version of '${head.doc.slug}'` });
-    if (named.doc.id !== head.doc.id) return json(422, { detail: `'${base}' is not a version of '${head.doc.slug}'` });
-    against = named.v;
+    if (named instanceof Response) {
+      const sameDraft = named.status === 409 && head.kind === "prd_draft" && base.split("@")[0] === head.doc.slug;
+      return named.status === 404 || sameDraft ? named : other;
+    }
+    const fits = named.doc.id === head.doc.id || (head.kind === "prd_draft" && named.kind === "roadmap" && tracesTo(db, named.v, head.doc.id));
+    if (!fits) return other;
+    against = named;
   }
-  const option = (v?: Version) => (v ? { ref: side(v).ref, label: side(v).label } : null);
+  const option = (s?: Side) => (s ? { ref: ref(s).ref, label: label(s) } : null);
   const out: Schemas["ItemsDiffOut"] = {
-    head: side(head.v), base: null, options: { previous: option(previous), approved: option(approved) }, summary: null, items: [],
+    head: ref(head), base: null, options: { previous: option(previous), approved: option(approved) }, summary: null, items: [],
   };
   if (!against) return json(200, out);
-  const live = (v: Version) => (db.items[v.id] ?? []).map((i) => liveItem(db, i));
-  const diff = diffItems(live(against), live(head.v));
-  return json(200, { ...out, base: side(against), summary: diff.summary, items: diff.items });
+  const live = (s: Side) => s.items.map((i) => liveItem(db, i));
+  const diff = diffItems(live(against), live(head));
+  return json(200, { ...out, base: ref(against), summary: diff.summary, items: diff.items });
 }
 
-/** E3: GET /v1/roadmap-items/history, an item across the roadmap versions tracing to a PRD. */
+/**
+ * E3: GET /v1/roadmap-items/history, an item across the PRD's ready drafts (E3b) and the
+ * roadmap versions tracing to it, in the order their items were stored.
+ */
 function itemHistory(ctx: RoadmapContext, db: RoadmapDb, q: URLSearchParams): Response {
   const prd = ctx.documents.find((d) => d.slug === q.get("prd"));
   if (!prd) return notFound(`document '${q.get("prd")}'`);
   const key = q.get("item_key") ?? "";
-  const versions = ctx.versions
-    .filter((v) => (db.items[v.id] ?? []).some((i) => i.prd.document?.id === prd.id))
-    .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? "") || a.number - b.number)
+  type Stored = { kind: Schemas["ItemsRef"]["kind"]; v: Version; at: string; items: Item[] };
+  const stored: Stored[] = [
+    ...ctx.versions
+      .filter((v) => (db.items[v.id] ?? []).some((i) => i.prd.document?.id === prd.id))
+      .map((v): Stored => ({ kind: "roadmap", v, at: v.created_at ?? AT, items: db.items[v.id] ?? [] })),
+    ...(ctx.drafts?.() ?? [])
+      .filter((r) => r.document_id === prd.id && r.status === "ready")
+      .flatMap((r): Stored[] => {
+        const v = ctx.versions.find((x) => x.document_id === prd.id && x.number === r.version);
+        return v ? [{ kind: "prd_draft", v, at: r.ready_at ?? AT, items: r.items }] : [];
+      }),
+  ]
+    .sort((a, b) => a.at.localeCompare(b.at) || a.v.number - b.v.number)
     .slice(-50);
   const entries: Schemas["RoadmapItemHistoryEntry"][] = [];
   let last: Item | null = null;
-  for (const v of versions) {
-    const found = (db.items[v.id] ?? []).find((i) => i.item_key === key);
+  for (const { kind, v, at, items } of stored) {
+    const found = items.find((i) => i.item_key === key);
     const item = found ? liveItem(db, found) : null;
     if (!item && !last) continue;
     const doc = ctx.documents.find((d) => d.id === v.document_id)!;
-    const common = { ref: `${doc.slug}@${v.number}`, kind: "roadmap" as const, label: `Roadmap v${v.number}`, approved: !!v.approved_at, at: v.created_at ?? AT };
+    const label = `${kind === "prd_draft" ? "Draft" : "Roadmap"} v${v.number}`;
+    const common = { ref: `${doc.slug}@${v.number}`, kind, label, approved: !!v.approved_at, at };
     if (!item) {
       entries.push({ ...common, present: false, title: null, horizon: null, milestone_name: null, milestone_date: null, change: "dropped" });
       last = null;
@@ -1455,4 +1526,34 @@ export function inboxTracks(ctx: RoadmapContext, db: RoadmapDb, seen: string | n
     total += open.length;
   }
   return { tracks, total };
+}
+
+/**
+ * #396: the warnings the API stores on a roadmap version for GA's date with no basis, a
+ * citation whose source item Oracle no longer has and the feedback an agent's draft left open,
+ * worded as api/oracle/roadmap/doc_dates.py problem_message and api/oracle/wording.py
+ * unknown_source_item and feedback_left_open write them; the ids in refs.
+ */
+export function versionWarnings(prdTitle: string, prdSlug: string): Schemas["VersionWarning"][] {
+  return [
+    {
+      code: "unverified_date",
+      message: `the date 2026-12-15 ("Behaviour", line 1) rests on no verified estimate, capacity or commitment of the PRD "${prdTitle}" for this item; ${RECORD_DATE_BASIS} or drop the date. Oracle never invents dates`,
+      section_keys: ["item-behaviour"],
+      refs: { date: "2026-12-15", prd: prdSlug },
+    },
+    {
+      code: "unknown_citation_item",
+      message: 'a citation in "Summary" names a source item Oracle no longer has; the citation is kept without it',
+      section_keys: ["summary"],
+      refs: { cite_key: "c-usage", source_item: "00000000-0000-4000-8000-000000000396" },
+    },
+    {
+      code: "resolution_not_applied",
+      message:
+        'an agent\'s draft closes feedback only as addressed, and only on a section whose text or evidence it changed in this version; 2 feedback items stay open: on "Summary" and "Behaviour"',
+      section_keys: ["item-behaviour", "summary"],
+      refs: { feedback_items: ["00000000-0000-4000-8000-000000000397", "00000000-0000-4000-8000-000000000398"] },
+    },
+  ];
 }

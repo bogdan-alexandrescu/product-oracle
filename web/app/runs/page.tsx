@@ -23,7 +23,7 @@ import {
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import {
@@ -50,7 +50,7 @@ const ACTION: Partial<Record<RunSummary["status"], string>> = {
 
 export default function RunsPage() {
   const q = useQuery("runs", () => unwrap(api.GET("/v1/runs")));
-  const { role } = useMe();
+  const { can } = useMe();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
@@ -106,7 +106,8 @@ export default function RunsPage() {
           <Button
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/runs/${r.id}`);
+              // D10: a PRD or roadmap review opens its version, where it is decided.
+              router.push(r.status === "awaiting_checkpoint" && r.review_link ? r.review_link : `/runs/${r.id}`);
             }}
           >
             {ACTION[r.status]}
@@ -132,7 +133,7 @@ export default function RunsPage() {
           </>
         }
         action={
-          hasRole(role, "approver") && (
+          can("create_run") && (
             <Button variant="primary" icon="plus" onClick={() => setOpen(true)}>
               New run
             </Button>

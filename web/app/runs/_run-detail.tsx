@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
@@ -24,12 +25,15 @@ import {
   Split,
   type ChipKind,
 } from "@/components/ds";
+import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { DiscussSubject } from "@/components/discuss/StartDiscussion";
 import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime, formatDayUtc } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { displayZone, formatInZone } from "@/lib/dates";
+import { formatDateTime, formatDay } from "@/lib/format";
+import { useMe, type Operation } from "@/lib/me";
+import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -85,15 +89,45 @@ function toDecision() {
   panel.focus({ preventScroll: true });
 }
 
+/**
+ * G5: a discussion link (`?discussion=<id>`, what the run's agents are given) opens its thread
+ * in a sheet; the thread says "This discussion is private" to someone not in a private one.
+ */
+function LinkedDiscussion() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const path = usePathname();
+  const id = params.get("discussion");
+  if (!id) return null;
+  const close = () => {
+    const rest = new URLSearchParams(params.toString());
+    rest.delete("discussion");
+    router.replace(rest.size ? `${path}?${rest}` : path, { scroll: false });
+  };
+  return (
+    <Sheet open title="Discussion" onClose={close} testId="run-discussion-sheet">
+      <div className="p-4">
+        <DiscussionThread key={id} id={id} />
+      </div>
+    </Sheet>
+  );
+}
+
 export function RunDetail({ id }: { id: string }) {
   const q = useQuery(`run|${id}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: id } } })));
-  const { me, role } = useMe();
+  const { me, can } = useMe();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // #258: what the last "Check agents now" checked, said once it answers.
   const [checked, setChecked] = useState<string | null>(null);
   const run = q.data;
   const { reload } = q;
+  // G7 3.3: the panel is about the waiting checkpoint, else the run's page.
+  const pendingCp = run?.checkpoints.find((c) => c.status === "pending") ?? null;
+  useScreenSubject(
+    run && pendingCp ? { kind: "checkpoint", subject: { run_id: run.id, checkpoint_id: pendingCp.id } } : null,
+    run && pendingCp ? `${run.flow_title} · ${CHECKPOINT_LABEL[pendingCp.kind as keyof typeof CHECKPOINT_LABEL] ?? pendingCp.kind}` : null,
+  );
 
   // Agents work in the background: re-read while the run is moving, and while a recorded
   // decision is still being delivered to it (Oracle sends it again on every tick).
@@ -133,8 +167,8 @@ export function RunDetail({ id }: { id: string }) {
   }
 
   const path = { params: { path: { run_id: id } } };
-  const owner = role === "owner";
-  const mayManage = owner || (hasRole(role, "approver") && run?.created_by === me?.user_id);
+  // #370: the handlers let an owner manage any run, an approver only a run they created.
+  const mayManage = (op: Operation) => can(op, run?.created_by === me?.user_id);
   const back = (
     <Link href="/runs" className="inline-flex items-center gap-1 hover:text-text hover:underline">
       <Icon name="back" size={16} />
@@ -184,6 +218,7 @@ export function RunDetail({ id }: { id: string }) {
 
   return (
     <Page>
+      <LinkedDiscussion />
       <PageHeader
         back={back}
         title={run.flow_title}
@@ -223,7 +258,7 @@ export function RunDetail({ id }: { id: string }) {
         }
         action={
           <>
-            {owner && run.status === "awaiting_approval" && (
+            {can("approve_run") && run.status === "awaiting_approval" && (
               <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/approve", path)))}>
                 Approve {usd(run.estimate_usd)} and start
               </Button>
@@ -234,7 +269,7 @@ export function RunDetail({ id }: { id: string }) {
                 Decide
               </Button>
             )}
-            {owner && run.status === "paused_overrun" && (
+            {can("resume_run") && run.status === "paused_overrun" && (
               <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/resume", path)))}>
                 Resume
               </Button>
@@ -249,61 +284,59 @@ export function RunDetail({ id }: { id: string }) {
           <Notice
             testId="run-stuck"
             action={
-              mayManage && (
-                <>
-                  {run.can_retry && (
-                    <Button
-                      disabled={busy}
-                      onClick={async () => {
-                        if (await confirmInPage({ action: "Retry", message: RETRY_CONFIRM })) {
-                          void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry", path)));
-                        }
-                      }}
-                    >
-                      Retry
-                    </Button>
-                  )}
-                  {run.can_stop_cancelling && (
-                    <Button
-                      disabled={busy}
-                      onClick={async () => {
-                        if (await confirmInPage({ destructive: true, action: "Stop cancelling", message: STOP_CANCELLING_CONFIRM })) {
-                          void act(() => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path)));
-                        }
-                      }}
-                    >
-                      Stop cancelling
-                    </Button>
-                  )}
-                  {run.can_retry_lookup && (
-                    <Button disabled={busy} onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry-lookup", path)))}>
-                      Retry lookup
-                    </Button>
-                  )}
-                  {(run.cancel_again ?? []).map((wid, _, all) => (
-                    <Button
-                      key={wid}
-                      disabled={busy}
-                      onClick={async () => {
-                        if (await confirmInPage({ destructive: true, action: "Cancel again", message: CANCEL_AGAIN_CONFIRM })) {
-                          void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path, body: { workflow_id: wid } })));
-                        }
-                      }}
-                    >
-                      {all.length > 1 ? `Cancel again ${wid}` : "Cancel again"}
-                    </Button>
-                  ))}
-                  {run.can_dismiss_overrun && (
-                    <Button
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/dismiss-overrun", path)))}
-                    >
-                      Dismiss
-                    </Button>
-                  )}
-                </>
-              )
+              <>
+                {run.can_retry && mayManage("retry_run") && (
+                  <Button
+                    disabled={busy}
+                    onClick={async () => {
+                      if (await confirmInPage({ action: "Retry", message: RETRY_CONFIRM })) {
+                        void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry", path)));
+                      }
+                    }}
+                  >
+                    Retry
+                  </Button>
+                )}
+                {run.can_stop_cancelling && mayManage("stop_cancelling_run") && (
+                  <Button
+                    disabled={busy}
+                    onClick={async () => {
+                      if (await confirmInPage({ destructive: true, action: "Stop cancelling", message: STOP_CANCELLING_CONFIRM })) {
+                        void act(() => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path)));
+                      }
+                    }}
+                  >
+                    Stop cancelling
+                  </Button>
+                )}
+                {run.can_retry_lookup && mayManage("retry_lookup_run") && (
+                  <Button disabled={busy} onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry-lookup", path)))}>
+                    Retry lookup
+                  </Button>
+                )}
+                {mayManage("cancel_again_run") && (run.cancel_again ?? []).map((wid, _, all) => (
+                  <Button
+                    key={wid}
+                    disabled={busy}
+                    onClick={async () => {
+                      if (await confirmInPage({ destructive: true, action: "Cancel again", message: CANCEL_AGAIN_CONFIRM })) {
+                        void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path, body: { workflow_id: wid } })));
+                      }
+                    }}
+                  >
+                    {all.length > 1 ? `Cancel again ${wid}` : "Cancel again"}
+                  </Button>
+                ))}
+                {run.can_dismiss_overrun && mayManage("dismiss_overrun_run") && (
+                  <Button
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/dismiss-overrun", path)))}
+                  >
+                    Dismiss
+                  </Button>
+                )}
+              </>
             }
           >
             {run.stuck}
@@ -314,7 +347,7 @@ export function RunDetail({ id }: { id: string }) {
             tone="error"
             testId="run-import-failed"
             action={
-              owner &&
+              can("retry_import_run") &&
               run.can_retry_import && (
                 <Button disabled={busy} onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry-import", path)))}>
                   Retry
@@ -349,7 +382,7 @@ export function RunDetail({ id }: { id: string }) {
               <span className="tnum text-sm font-semibold text-text2">
                 {done}/{run.segments.length} segments
               </span>
-              {owner && open && (
+              {can("tick") && open && (
                 <Button
                   variant="ghost"
                   disabled={busy}
@@ -365,7 +398,7 @@ export function RunDetail({ id }: { id: string }) {
                   Check agents now
                 </Button>
               )}
-              {mayManage && !FINAL_STATUSES.includes(run.status) && (
+              {mayManage("cancel_run") && !FINAL_STATUSES.includes(run.status) && (
                 <Button
                   disabled={busy}
                   data-testid="run-cancel"
@@ -413,7 +446,7 @@ export function RunDetail({ id }: { id: string }) {
 
 /** #258: what "Check agents now" checked: "Checked 1 active run at 9:24 AM: 1 segment finished." */
 function tickResult(out: Schemas["TickOut"]): string {
-  const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const at = formatInZone(new Date().toISOString(), displayZone(), { hour: "numeric", minute: "2-digit" });
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
   if (out.runs_checked === 0 && out.errors.length === 0) return `Checked at ${at}: no run is active.`;
   const parts = [out.segments_finished ? `${plural(out.segments_finished, "segment")} finished` : "no segment finished yet"];
@@ -802,7 +835,7 @@ function SegmentItem({
             // C4 (B1 "Reuse base"): the run used the current baseline; this segment ran no step.
             <Chip kind="na" className={WRAP_CHIP}>
               <span data-testid="segment-state">
-                Reused (approved {formatDayUtc(s.reused.approved_at)})
+                Reused (approved {formatDay(s.reused.approved_at)})
               </span>
             </Chip>
           ) : (
@@ -912,7 +945,12 @@ function SegmentItem({
           {delivering.map((cp) => (
             <DeliveryLine key={cp.id} cp={cp} />
           ))}
-          {deciding.map((cp, i) => (
+          {deciding.map((cp, i) =>
+            // D10: a PRD or roadmap review with its draft imported is decided in the version;
+            // a refused draft and a console answer stay here.
+            cp.review_link && !cp.console && !cp.cannot_approve ? (
+              <RunReviewSummary key={cp.id} cp={cp} anchor={i === 0} />
+            ) : (
             <CheckpointRow
               key={cp.id}
               cp={cp}
@@ -930,10 +968,47 @@ function SegmentItem({
                 noteFields.current[cp.id] = el;
               }}
             />
-          ))}
+            ),
+          )}
         </div>
       )}
     </li>
+  );
+}
+
+/** D10: a run review decided in its version: how far the review got, and a link to it. */
+function RunReviewSummary({ cp, anchor }: { cp: CheckpointOut; anchor?: boolean }) {
+  const imp = (cp.payload as { import?: { slug?: string; version?: number } }).import ?? {};
+  const doc = imp.slug ?? "";
+  const n = imp.version ?? 0;
+  const q = useQuery(`run-review|${doc}|${n}|${cp.id}`, () =>
+    unwrap(api.GET("/v1/documents/{doc}/versions/{n}/run-review", { params: { path: { doc, n } } })),
+  );
+  const sections = q.data?.sections;
+  return (
+    <div
+      id={anchor ? "decide" : undefined}
+      tabIndex={anchor ? -1 : undefined}
+      role="group"
+      aria-label={`Decide: ${CHECKPOINT_LABEL[cp.kind]}`}
+      className="flex scroll-mt-24 flex-wrap items-center gap-2 rounded-button border border-line bg-surface p-3"
+      data-testid={`checkpoint-${cp.kind}`}
+    >
+      <Icon name="flag" size={16} className="text-accent-ink" />
+      <span className="font-semibold">{CHECKPOINT_LABEL[cp.kind]}</span>
+      <span className="min-w-0 flex-1 text-text2" data-testid="run-review-summary">
+        Waiting for review of v{n}
+        {sections && (
+          <>
+            {" "}
+            · {sections.reviewed}/{sections.total} sections reviewed
+          </>
+        )}
+      </span>
+      <LinkButton href={cp.review_link!} icon="arrow">
+        Open review
+      </LinkButton>
+    </div>
   );
 }
 

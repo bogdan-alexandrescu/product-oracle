@@ -1,5 +1,7 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
+import { displayZone, formatInZone } from "@/lib/dates";
+import { formatDate } from "@/lib/format";
 
 export type Ritual = Schemas["RitualOut"];
 export type Occurrence = Schemas["OccurrenceOut"];
@@ -63,22 +65,14 @@ export function whenText(s: Schedule): string {
   }
 }
 
-const localFmt = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-const dayFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
+const WHEN: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
 
-/** A due time in the viewer's own zone: "Fri, Oct 30, 12:00 PM". */
-export const localTime = (iso: string) => localFmt.format(new Date(iso));
-export const localDate = (iso: string) => dayFmt.format(new Date(iso));
+/** A due time in the Company time zone: "Fri, Oct 30, 12:00 PM PDT". */
+export const localTime = (iso: string) => formatInZone(iso, displayZone(), WHEN);
+export const localDate = formatDate;
 
-/** The same instant in the ritual's zone, for the tooltip. */
-export function zoneTime(iso: string, timezone: string): string {
-  try {
-    const f = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: timezone, timeZoneName: "short" });
-    return `${f.format(new Date(iso))} (${timezone})`;
-  } catch {
-    return timezone;
-  }
-}
+/** The same instant in the ritual's own zone (it is scheduled there), for the tooltip. */
+export const zoneTime = (iso: string, timezone: string) => `${formatInZone(iso, timezone, WHEN)} (${timezone})`;
 
 export const STATE_LABEL: Record<OccurrenceSummary["status"], string> = {
   scheduled: "Scheduled",

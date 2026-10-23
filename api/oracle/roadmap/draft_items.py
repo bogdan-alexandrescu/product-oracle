@@ -340,7 +340,7 @@ async def summary(db: AsyncSession, version: DocumentVersion) -> DraftRoadmapSum
     return DraftRoadmapSummary(status=row.status, items=count, problems=problems)  # type: ignore[arg-type]
 
 
-async def _previous(
+async def previous_ready(
     db: AsyncSession, version: DocumentVersion
 ) -> tuple[DocumentVersion, DraftRoadmap] | None:
     found = (
@@ -370,7 +370,7 @@ async def view(
         views.item_out(i, ctx, view).model_copy(update={"engineering": [], "freshness": "fresh"})
         for i in rows
     ]
-    previous = await _previous(db, version)
+    previous = await previous_ready(db, version)
     prev_out = None
     if previous is not None:
         count = (await _counts(db, [previous[1].id])).get(previous[1].id, 0)
@@ -421,7 +421,7 @@ async def known_items(
     latest approved roadmap version's items traced to this PRD; one per key."""
     known: dict[str, dict[str, str]] = {}
     sources: list[str] = []
-    previous = await _previous(db, version)
+    previous = await previous_ready(db, version)
     if previous is not None:
         for i in await draft_items(db, previous[1]):
             known.setdefault(i.item_key, {"id": i.item_key, "title": i.title, "horizon": i.horizon})

@@ -72,6 +72,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Capabilities
+         * @description What the caller's role may do, from the routes' own role checks (#370): the web
+         *     app reads it once per sign-in and hides the controls a role can never use.
+         */
+        get: operations["capabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/preferences": {
         parameters: {
             query?: never;
@@ -469,6 +490,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{doc}/versions/{n}/run-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Run Review
+         * @description The run checkpoint this version's review decides (D10), any member: the latest
+         *     ``prd_review``/``roadmap_review`` whose import made the version, its section and
+         *     feedback counts, the SwarmCloud wait and whether I may decide it. 404 when no run
+         *     checkpoint points at this version.
+         */
+        get: operations["get_run_review"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/discussions": {
         parameters: {
             query?: never;
@@ -504,6 +548,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/discussions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Run Discussions
+         * @description The discussions about a run (G5): its checkpoints', its intake's and, for a feedback
+         *     loop, its document's with staged next-draft changes; newest activity first, at most 50.
+         *     Each gives its summary and the changes staged from it, never its messages or people.
+         *     A private discussion shows its title and summary only to the people in it; a run's
+         *     agents (the get_run_discussions tool) get its staged changes, and its summary when the
+         *     starter shared it.
+         */
+        get: operations["list_run_discussions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/discussions/{discussion_id}": {
         parameters: {
             query?: never;
@@ -531,6 +600,29 @@ export interface paths {
          *     exposes" with the current ``messages`` and ``people``, and nothing changes.
          */
         patch: operations["update_discussion"];
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share Discussion
+         * @description Share as discussion (G7 head-of-product panel): a new open discussion on the panel
+         *     chat's subject, ``origin: "discuss"``, whose first message is ``first_message`` (the
+         *     chat's summary as its starter edited it); the chat's open changes are copied as
+         *     ``suggested`` by the sharer. Only the chat's starter may; the chat stays private.
+         */
+        post: operations["share_discussion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/discussions/{discussion_id}/messages": {
@@ -8020,12 +8112,15 @@ export interface paths {
         /**
          * Diff Roadmap Items
          * @description What changed, item by item, between two sets of roadmap items: ``head`` and
-         *     ``base`` are refs (``<slug>@<n>``, a roadmap version's items); ``base`` is also
-         *     ``previous`` (the nearest earlier version with items, the default) or ``approved``
-         *     (the roadmap's latest approved version other than the head). Plan changes count
+         *     ``base`` are refs (``<slug>@<n>``: a roadmap version's items, or a PRD version's draft
+         *     items); ``base`` is also ``previous`` (the nearest earlier version, or ready draft,
+         *     with items; the default) or ``approved`` (for a roadmap version, the roadmap's latest
+         *     approved version other than the head; for a PRD draft, the latest approved roadmap
+         *     version whose items trace to the PRD, its track's roadmap first). A PRD draft's ref
+         *     base is a draft of the same PRD or a roadmap version tracing to it. Plan changes count
          *     (oracle.roadmap.diff.COUNTED_FIELDS); confidence, one-place rank moves and the PRD
          *     section's text are notes. Nothing to compare with: ``base`` null and no items. A PRD
-         *     version's draft items are not stored yet (409).
+         *     draft whose items are not ready is 409.
          */
         get: operations["diff_roadmap_items"];
         put?: never;
@@ -8045,9 +8140,10 @@ export interface paths {
         };
         /**
          * Get Roadmap Item History
-         * @description One item across the roadmap versions whose items trace to the PRD, oldest first
-         *     (the latest 50), each entry against the one before; ``present: false`` where it
-         *     left. Follows the key only: a rename starts a new history.
+         * @description One item across the PRD's ready drafts and the roadmap versions whose items trace
+         *     to it, in the order their items were stored (the latest 50), each entry against the
+         *     one before; ``present: false`` where it left. Follows the key only: a rename starts a
+         *     new history.
          */
         get: operations["get_roadmap_item_history"];
         put?: never;
@@ -12084,6 +12180,38 @@ export interface components {
             /** Excerpt */
             excerpt: string | null;
         };
+        /**
+         * Capabilities
+         * @description #370: what the caller's role may do, per API operation (operationId).
+         */
+        Capabilities: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Engineering Lead
+             * @default false
+             */
+            engineering_lead: boolean;
+            /** Operations */
+            operations: {
+                [key: string]: boolean;
+            };
+            /**
+             * Decide Engineering Stops
+             * @default false
+             */
+            decide_engineering_stops: boolean;
+            /**
+             * Per Item
+             * @default {}
+             */
+            per_item: {
+                [key: string]: ("viewer" | "commenter" | "approver" | "owner") | null;
+            };
+        };
         /** CatalogModuleDetail */
         CatalogModuleDetail: {
             /** Key */
@@ -12569,6 +12697,8 @@ export interface components {
              * @default []
              */
             needs_agents: components["schemas"]["NeedsAgents"][];
+            /** Review Link */
+            review_link?: string | null;
         };
         /**
          * CheckpointReview
@@ -14700,6 +14830,12 @@ export interface components {
             /** Participants */
             participants?: string[];
             message?: components["schemas"]["DiscussionMessageIn"] | null;
+            /**
+             * Origin
+             * @default discuss
+             * @enum {string}
+             */
+            origin: "discuss" | "panel";
         };
         /**
          * DiscussionExposure
@@ -14983,6 +15119,17 @@ export interface components {
              * Format: uuid
              */
             message_id: string;
+        };
+        /**
+         * DiscussionShareIn
+         * @description G7 Share as discussion: the new open discussion's title and first message (the
+         *     chat's summary as the person edited it).
+         */
+        DiscussionShareIn: {
+            /** Title */
+            title?: string | null;
+            /** First Message */
+            first_message: string;
         };
         /**
          * DiscussionStarted
@@ -15829,6 +15976,8 @@ export interface components {
             };
             /** Status */
             status?: ("proposed" | "confirmed" | "rejected") | null;
+            /** Parent Id */
+            parent_id?: string | null;
             /**
              * Origin
              * @default user
@@ -15898,6 +16047,9 @@ export interface components {
              */
             updated_at: string;
             goal_check?: components["schemas"]["GoalCheck"] | null;
+            /** Parent Id */
+            parent_id?: string | null;
+            progress?: components["schemas"]["GoalProgress"] | null;
             /**
              * Evidence
              * @default []
@@ -15977,6 +16129,9 @@ export interface components {
              */
             updated_at: string;
             goal_check?: components["schemas"]["GoalCheck"] | null;
+            /** Parent Id */
+            parent_id?: string | null;
+            progress?: components["schemas"]["GoalProgress"] | null;
         };
         /** EntityPatch */
         EntityPatch: {
@@ -15990,6 +16145,8 @@ export interface components {
             } | null;
             /** Status */
             status?: ("proposed" | "confirmed" | "rejected") | null;
+            /** Parent Id */
+            parent_id?: string | null;
             /**
              * Origin
              * @default user
@@ -17426,6 +17583,22 @@ export interface components {
             /** Where */
             where: string;
         };
+        /**
+         * GoalProgress
+         * @description #345: a goal's progress, 0 to 1: its own measurement ("own") when it has one, else
+         *     the weighted progress of its subgoals ("subgoals"); null source without either.
+         */
+        GoalProgress: {
+            /** Value */
+            value?: number | null;
+            /** Source */
+            source?: ("own" | "subgoals") | null;
+            /**
+             * Subgoals
+             * @default 0
+             */
+            subgoals: number;
+        };
         /** GoalTerm */
         GoalTerm: {
             /** Goal */
@@ -17444,6 +17617,10 @@ export interface components {
             link_status: string;
             /** Term */
             term: number | null;
+            /** Parent */
+            parent?: string | null;
+            /** Parent Title */
+            parent_title?: string | null;
         };
         /** GraphOut */
         GraphOut: {
@@ -17714,6 +17891,13 @@ export interface components {
             cite_key?: string | null;
             /** Line */
             line?: number | null;
+            /**
+             * Refs
+             * @default {}
+             */
+            refs: {
+                [key: string]: string | string[];
+            };
         };
         /**
          * InboxAccessFailure
@@ -17815,6 +17999,8 @@ export interface components {
              * @default []
              */
             needs_agents: components["schemas"]["NeedsAgents"][];
+            /** Review Link */
+            review_link?: string | null;
             /**
              * Flow
              * @enum {string}
@@ -25856,6 +26042,16 @@ export interface components {
             strategy_brief?: components["schemas"]["StrategyBriefIn"] | null;
         };
         /**
+         * RunDecidedChange
+         * @description A change already done (an answer, a verified basis, a baseline proposal).
+         */
+        RunDecidedChange: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+        };
+        /**
          * RunDecision
          * @description A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):
          *     who decided by role only (no names reach the agents), when, and what. A console
@@ -25912,6 +26108,63 @@ export interface components {
             /** Summary */
             summary: string;
         };
+        /**
+         * RunDiscussion
+         * @description One discussion as a run sees it (G5): never its messages or people. A private one
+         *     shows its title and summary only to the people in it; to agents, only its staged
+         *     changes, and its summary when the starter shared it.
+         */
+        RunDiscussion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "open" | "private";
+            /** Title */
+            title: string | null;
+            /** Subject Label */
+            subject_label: string | null;
+            /** Subject */
+            subject: {
+                [key: string]: unknown;
+            };
+            /** Link */
+            link: string;
+            /** Summary */
+            summary: string | null;
+            /** Summary Status */
+            summary_status: ("none" | "draft" | "confirmed") | null;
+            /** Summary Withheld */
+            summary_withheld: boolean;
+            /** Staged Changes */
+            staged_changes: components["schemas"]["RunStagedChange"][];
+            /** Decided */
+            decided: components["schemas"]["RunDecidedChange"][];
+        };
+        /**
+         * RunDiscussionsOut
+         * @description The discussions about a run: its checkpoints', its intake's and, for a feedback
+         *     loop, its document's with staged next-draft changes. Newest activity first, at most
+         *     50 and 40,000 characters; ``omitted`` counts the rest.
+         */
+        RunDiscussionsOut: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Discussions */
+            discussions: components["schemas"]["RunDiscussion"][];
+            /** Truncated */
+            truncated: boolean;
+            /** Omitted */
+            omitted: number;
+        };
         /** RunOut */
         RunOut: {
             /**
@@ -25959,6 +26212,8 @@ export interface components {
             finished_at?: string | null;
             /** Waiting On */
             waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            /** Review Link */
+            review_link?: string | null;
             /** Error */
             error?: string | null;
             /** Stuck */
@@ -26066,6 +26321,107 @@ export interface components {
             /** Now */
             now?: string | null;
         };
+        /** RunReviewFeedback */
+        RunReviewFeedback: {
+            /** Open */
+            open: number;
+            /** Staged */
+            staged: number;
+            /** Verdicts */
+            verdicts: number;
+        };
+        /**
+         * RunReviewOut
+         * @description D10: the run checkpoint a version's review decides (the version view's run review
+         *     bar): the latest ``prd_review``/``roadmap_review`` whose import made the version.
+         */
+        RunReviewOut: {
+            /**
+             * Checkpoint Id
+             * Format: uuid
+             */
+            checkpoint_id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "changes_requested" | "skipped";
+            /** Flow Title */
+            flow_title: string;
+            /**
+             * Approver Role
+             * @enum {string}
+             */
+            approver_role: "viewer" | "commenter" | "approver" | "owner";
+            sections: components["schemas"]["RunReviewSections"];
+            feedback: components["schemas"]["RunReviewFeedback"];
+            wait: components["schemas"]["WaitInfo"];
+            /** Decider Id */
+            decider_id?: string | null;
+            /** Decider Name */
+            decider_name?: string | null;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+        };
+        /** RunReviewSections */
+        RunReviewSections: {
+            /** Total */
+            total: number;
+            /** Reviewed */
+            reviewed: number;
+            /** Approved */
+            approved: number;
+        };
+        /**
+         * RunStagedChange
+         * @description A change people staged from a discussion for this run (G5): a D8 action on one of the
+         *     run's checkpoints (``staged`` while it waits, ``sent`` once the checkpoint was decided)
+         *     or a ``next_draft_changes`` row for the document's next draft. The shape D4, D6 and D11
+         *     share.
+         */
+        RunStagedChange: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Item Key */
+            item_key?: string | null;
+            /** Section Key */
+            section_key?: string | null;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "staged" | "sent";
+            /** Target */
+            target: {
+                [key: string]: unknown;
+            };
+        };
         /** RunSummary */
         RunSummary: {
             /**
@@ -26113,6 +26469,8 @@ export interface components {
             finished_at?: string | null;
             /** Waiting On */
             waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            /** Review Link */
+            review_link?: string | null;
             /** Error */
             error?: string | null;
             /** Stuck */
@@ -31113,6 +31471,13 @@ export interface components {
              * @default []
              */
             section_keys: string[];
+            /**
+             * Refs
+             * @default {}
+             */
+            refs: {
+                [key: string]: string | string[];
+            };
         };
         /**
          * VisibilityIn
@@ -31464,6 +31829,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+        };
+    };
+    capabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Capabilities"];
                 };
             };
         };
@@ -32311,6 +32696,38 @@ export interface operations {
             };
         };
     };
+    get_run_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_discussions: {
         parameters: {
             query?: {
@@ -32373,6 +32790,44 @@ export interface operations {
                 };
             };
             /** @description The subject is not in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_run_discussions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunDiscussionsOut"];
+                };
+            };
+            /** @description No such run (a run's token reads its own run only) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -32490,6 +32945,53 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    share_discussion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscussionShareIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionOut"];
+                };
+            };
+            /** @description Not the panel chat's starter */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a panel chat, or no first message */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

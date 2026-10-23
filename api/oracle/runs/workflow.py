@@ -395,7 +395,7 @@ ADVICE: dict[str, str] = {
     "its own workflow. Nothing to do; Oracle uses it once SwarmCloud switches it on.",
     "mcp_server_unregistered": "SwarmCloud has no MCP server named 'oracle' for Oracle's "
     "tenant (422 mcp_server_unregistered). Oracle registers it again on the next submit; "
-    "an owner can do it now with POST /v1/runtime/mcp-server.",
+    "nothing to do meanwhile.",
     "mcp_server_profile_refused": "SwarmCloud refuses Oracle's MCP server for this step's "
     "runner profile (403 mcp_server_profile_refused): the registration allows only "
     "claude-code. Set ORACLE_SWARMCLOUD_PROFILE=claude-code or widen allowed_profiles.",
@@ -414,8 +414,8 @@ ADVICE: dict[str, str] = {
     "ORACLE_CHECKPOINT_WAIT_SECONDS so the credential covers the work after a wait.",
     "mcp_server_withheld": "SwarmCloud withheld Oracle's MCP server when the step started "
     "(mcp_server_withheld; its result_summary.mcp_check gives the cause). Check that "
-    "ORACLE_PUBLIC_URL/mcp answers over public https and that the registration "
-    "(GET /v1/mcp-servers/oracle) is enabled, then start the run again.",
+    "ORACLE_PUBLIC_URL/mcp answers over public https and that Oracle's MCP server is "
+    "enabled in SwarmCloud, then start the run again.",
     "CREDENTIAL_MISSING": "SwarmCloud parked a step with CREDENTIAL_MISSING: Oracle's MCP "
     "server is disabled there. Enable it (PATCH /v1/mcp-servers/oracle, enabled: true); "
     "the step resumes on its own.",

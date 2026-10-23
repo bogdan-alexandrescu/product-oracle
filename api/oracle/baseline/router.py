@@ -22,6 +22,7 @@ from oracle.baseline import (
     goals,
     measurements,
     public_links,
+    rollup,
     scoring,
     service,
     trace,
@@ -49,6 +50,7 @@ from oracle.baseline.schemas import (
     EvidenceLinkCreate,
     EvidenceOut,
     FillFromTextResult,
+    GoalProgress,
     GraphOut,
     LinkErrorOut,
     LinkPreviewOut,
@@ -148,8 +150,13 @@ async def _entities_out(
     counts = await service.evidence_counts(db, entity_ids=[e.id for e in rows])
     view = await evidence.run_view(db, principal, entity_ids=[e.id for e in rows])
     # B5: a goal's check reads the company's day and its planning horizons.
-    checked = {}
+    checked, progress = {}, {}
     if any(e.type == "goal" for e in rows):
+        # #345: a goal's roll-up reads its subgoals, listed or not; served through its schema.
+        progress = {
+            k: GoalProgress(**v)
+            for k, v in rollup.progress_of(await service.list_entities(db, "goal")).items()
+        }
         on, horizons = await goals.company_today(db), await goals.company_horizons(db)
         checked = {
             e.id: goals.GoalCheck(
@@ -162,7 +169,11 @@ async def _entities_out(
     out = []
     for e in rows:
         o = EntityOut.model_validate(e).model_copy(
-            update={"evidence_count": counts.get(e.id, 0), "goal_check": checked.get(e.id)}
+            update={
+                "evidence_count": counts.get(e.id, 0),
+                "goal_check": checked.get(e.id),
+                "progress": progress.get(e.id),
+            }
         )
         if view is not None:
             o = o.model_copy(update={"confidence": view.confidence("entity", e.id)})
@@ -276,6 +287,7 @@ async def create_entity(body: EntityCreate, principal: ApproverNow, db: TenantDB
             body=body.body,
             attrs=body.attrs,
             status=body.status,
+            parent_id=body.parent_id,
         )
     except service.BaselineError as exc:
         raise _fail(exc) from exc

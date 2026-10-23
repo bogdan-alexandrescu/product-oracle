@@ -18,6 +18,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import select
 
+from oracle import company_time
 from oracle.main import app
 from oracle.mcp.scopes import required_scope
 from oracle.mcp.tools import app_operations
@@ -87,7 +88,8 @@ async def status_of(client, ctx, who: str = "viewer") -> dict:
 
 
 def oct_date(at: datetime) -> str:
-    return f"{at:%b} {at.day}"
+    """The Company day (America/Los_Angeles by default), #463."""
+    return company_time.day_in_words(at)
 
 
 async def plain_run(client, ctx, **knobs) -> dict:

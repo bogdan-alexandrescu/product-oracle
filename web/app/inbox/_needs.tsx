@@ -5,6 +5,7 @@ import { useId, useState, type ReactNode } from "react";
 
 import { Button, Chip, CodeText, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { displayZone, formatInZone } from "@/lib/dates";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { errorMessage } from "@/lib/use-query";
 import { BUILD_PARAM } from "@/components/NextDraft";
@@ -1062,8 +1063,9 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
         <LinkButton href={review}>Review items</LinkButton>
       ) : (
         // The same verb as the runs list: the run page opens at the decision; a priority stop
-        // opens its order next to the live ranking (C8), where it is decided too.
-        <LinkButton href={orderHref(c) ?? `/runs/${c.run_id}#decide`}>Decide</LinkButton>
+        // opens its order next to the live ranking (C8), where it is decided too; a PRD or
+        // roadmap review opens its version (D10).
+        <LinkButton href={orderHref(c) ?? c.review_link ?? `/runs/${c.run_id}#decide`}>Decide</LinkButton>
       ),
       children: counted && !compact ? childNeeds(c, summary, busy, act, fixed) : undefined,
     };
@@ -1385,7 +1387,7 @@ export function launchNeeds(inbox: InboxOut): { counted: Need[]; shipped: Need[]
   return { counted: rows.filter((r) => r.counted).map(need), shipped: rows.filter((r) => !r.counted).map(need) };
 }
 
-const ritualWhen = new Intl.DateTimeFormat("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
+const ritualWhen = (iso: string) => formatInZone(iso, displayZone(), { weekday: "short", hour: "numeric", minute: "2-digit" });
 
 /**
  * H2 ritual rows: Pre-read ready (the owner and attendees, until they open it), Record notes
@@ -1396,7 +1398,7 @@ export function ritualNeeds(inbox: InboxOut, busy: string | null, act: Act): Sta
   return (inbox.rituals ?? []).map((r) => {
     const label =
       r.reason === "pre_read"
-        ? `Pre-read ready · ${r.title} · ${ritualWhen.format(new Date(r.due_at))}`
+        ? `Pre-read ready · ${r.title} · ${ritualWhen(r.due_at)}`
         : r.reason === "record_notes"
           ? `Record notes · ${r.title}`
           : `Ritual failed to prepare · ${r.title}`;
@@ -1537,7 +1539,7 @@ export function decisionNeeds(inbox: InboxOut, busy: string | null, act: Act, se
           {d.reason === "informed" ? `${DECISION_KIND[d.reason]} · ${d.ref} ${d.title}` : label}
         </span>
       ),
-      context: <span className="block truncate">{d.review_at && d.reason === "review_due" ? `Review was due ${formatDate(`${d.review_at}T12:00:00`)}` : "Decision log"}</span>,
+      context: <span className="block truncate">{d.review_at && d.reason === "review_due" ? `Review was due ${formatDate(d.review_at)}` : "Decision log"}</span>,
       at: d.since,
       action: (
         <>

@@ -47,14 +47,18 @@ test("a PRD version has Document and Roadmap 4 tabs; Roadmap shows 3 Now, 1 Next
   const pane = visible(page, "draft-roadmap");
   await expect(pane).toContainText("Proposed by draft v2 · not an approved roadmap");
   await expect(status(page)).toHaveAttribute("data-status", "ready");
-  await expect(status(page)).toContainText(/^4 items · 3 Now · 1 Next · derived \d{1,2} \w{3}, \d\d:\d\d · 1 problem/);
+  await expect(status(page)).toContainText(/^4 items · 3 Now · 1 Next · derived \w{3} \d{1,2}, \d{1,2}:\d\d [AP]M \S+ · 1 problem/);
+  // E3b: the tab opens on what changed since draft v1; All shows every item.
+  await visible(page, "items-filter").getByRole("button", { name: /^All/ }).click();
   await expect(rows(page)).toHaveCount(4);
   const groups = pane.getByTestId("roadmap-group");
-  await expect(groups).toHaveCount(2);
+  // Later holds only v1's One-tap wallet pay, dropped since (a struck row, not an item).
+  await expect(groups).toHaveCount(3);
   await expect(groups.nth(0)).toHaveAttribute("data-horizon", "now");
   await expect(groups.nth(0)).toContainText("3");
   await expect(groups.nth(1)).toHaveAttribute("data-horizon", "next");
   await expect(groups.nth(1)).toContainText("1");
+  await expect(groups.nth(2)).toHaveAttribute("data-horizon", "later");
   await expect(pane.locator('[data-testid="roadmap-group"][data-horizon="now"]')).toHaveCount(1);
 
   const saved = row(page, "saved-addresses");

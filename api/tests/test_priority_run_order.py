@@ -50,6 +50,7 @@ Test cards (protects / fails_when / no_claim):
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import select
@@ -648,8 +649,10 @@ async def test_roadmap_reads_this_prds_approved_order(client, owner, runtime):  
     prompt = await roadmap_prompt(client, auth, runtime)
     assert "this-prd-order" in prompt
     assert "company-order" not in prompt and "other-prd-order" not in prompt
-    today = datetime.now(UTC)
-    line = f"Priority order (goal_weighted, this PRD's approved order of {today.day} {today:%b}"
+    # The Company day (America/Los_Angeles by default), #463, day first as before: "12 Oct".
+    local = datetime.now(ZoneInfo("America/Los_Angeles"))
+    today = f"{local.day} {local:%b}"
+    line = f"Priority order (goal_weighted, this PRD's approved order of {today}"
     assert line in prompt
 
 

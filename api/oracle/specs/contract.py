@@ -34,7 +34,7 @@ from typing import Any, Literal
 import yaml
 from markdown_it import MarkdownIt
 
-from oracle import parse_budget
+from oracle import company_time, parse_budget
 from oracle.docs import layers
 from oracle.docs.parser import (
     DraftError,
@@ -225,6 +225,8 @@ class SpecInputs:
     feature: str | None = None
     # Keys of the request's requirements the PRD version does not adopt (left out).
     dropped: tuple[str, ...] = ()
+    # The Company time zone: the Sources section names the PRD's approval day in it (#463).
+    zone: str = company_time.DEFAULT_ZONE
 
 
 @dataclass
@@ -339,7 +341,11 @@ def _acceptance_body(inputs: SpecInputs, proposed: str | None) -> str:
 
 
 def _sources_body(inputs: SpecInputs) -> str:
-    approved = f", approved {inputs.prd_approved_at:%Y-%m-%d}" if inputs.prd_approved_at else ""
+    approved = (
+        f", approved {company_time.day(inputs.prd_approved_at, inputs.zone).isoformat()}"
+        if inputs.prd_approved_at
+        else ""
+    )
     lines = [
         f"- Product requirements: PRD {inputs.prd_slug} version {inputs.prd_version}{approved}.",
         "- Requirement ids: " + (", ".join(r.id for r in inputs.requirements) or "none") + ".",

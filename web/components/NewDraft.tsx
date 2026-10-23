@@ -7,6 +7,7 @@ import { useId, useMemo, useState, useSyncExternalStore, type FormEvent } from "
 import {
   Button,
   Chip,
+  CodeTag,
   Icon,
   InfoTip,
   Inspector,
@@ -21,9 +22,10 @@ import {
 import { ThemeThumbnail } from "@/components/ThemePreview";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { namedText } from "@/lib/codes";
 import { unwrapProblems, ProblemsError } from "@/lib/api/problems";
 import { assess, goalViews } from "@/app/home/_goals";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useLive } from "@/lib/use-live";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -387,8 +389,9 @@ function RecommendationInspector({
   onError: (e: string | null) => void;
   onNotice: (n: string | null) => void;
 }) {
-  const { role } = useMe();
-  const isOwner = role === "owner";
+  const { can } = useMe();
+  // #370: "Make company default" is PUT /v1/drafts/defaults.
+  const canSetDefault = can("set_draft_defaults");
   const label = kind === "prd" ? "PRD" : "roadmap";
   const [busy, setBusy] = useState(false);
   const { live, rec, themes, templates, template, templateKey, themeKey, setTemplatePick, setThemePick } = choice;
@@ -477,7 +480,7 @@ function RecommendationInspector({
           <InspectorRow value={template ? `v${template.latest_version}` : undefined}>{template?.name ?? "–"}</InspectorRow>
           <InspectorRow>{themeName ?? "No theme"}</InspectorRow>
         </InspectorSection>
-        {(company || isOwner) && (
+        {(company || canSetDefault) && (
           <InspectorSection label="Company default">
             {company && (
               <div data-testid="company-default" className="flex flex-wrap items-center gap-2">
@@ -490,7 +493,7 @@ function RecommendationInspector({
                 </Button>
               </div>
             )}
-            {isOwner && (
+            {canSetDefault && (
               <div className={`flex items-center gap-2 ${company ? "mt-2.5" : ""}`}>
                 <Button onClick={makeDefault} disabled={busy || !templateKey}>
                   {busy ? "Saving…" : "Make company default"}
@@ -659,6 +662,11 @@ export function useConfirmedGoals() {
   );
 }
 
+/** Every goal of the company, archived ones included: a subgoal's code counts them (#345). */
+function useAllGoals() {
+  return useQuery("door-goals-all", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
+}
+
 /** The confirmed goals a brief (or its PRD run, #260) may serve, each with its distance to go (Home's reading). */
 export function GoalPicker({
   value,
@@ -669,8 +677,17 @@ export function GoalPicker({
   onChange: (ids: string[]) => void;
   legend?: string;
 }) {
-  const goals = useConfirmedGoals();
-  const views = goalViews(goals.data ?? []);
+  const goals = useAllGoals();
+  const views = goalViews((goals.data ?? []).filter((g) => g.status === "confirmed"), goals.data);
+  // #345: a goal's subgoals show under it, folded on demand.
+  const [folded, setFolded] = useState<Set<string>>(new Set());
+  const fold = (id: string) =>
+    setFolded((f) => {
+      const next = new Set(f);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   return (
     <fieldset className="min-w-0">
       <legend className="mb-2 text-[15px] font-semibold text-text">
@@ -680,27 +697,43 @@ export function GoalPicker({
       {goals.loading && <Loading />}
       {goals.data && views.length === 0 && <p className="text-sm text-text2">No confirmed goals yet. Oracle will ask.</p>}
       <div className="flex flex-col gap-1.5">
-        {views.map((g) => {
-          const checked = value.includes(g.id);
-          const p = assess(g);
-          return (
-            <label
-              key={g.id}
-              className={`flex min-w-0 cursor-pointer items-center gap-2.5 rounded-button border px-3 py-2 ${
-                checked ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong"
-              }`}
-            >
-              <input
-                type="checkbox"
-                className="size-4 flex-none accent-[var(--accent)]"
-                checked={checked}
-                onChange={(e) => onChange(e.target.checked ? [...value, g.id] : value.filter((id) => id !== g.id))}
-              />
-              <span className="min-w-0 flex-1 font-semibold text-text [overflow-wrap:anywhere]">{g.title}</span>
-              {p.text && <span className="flex-none text-sm text-text2">{p.text}</span>}
-            </label>
-          );
-        })}
+        {views
+          .filter((g) => !g.parentId || !folded.has(g.parentId))
+          .map((g) => {
+            const checked = value.includes(g.id);
+            const p = assess(g);
+            return (
+              <div key={g.id} className={`flex min-w-0 items-center gap-1.5 ${g.parentId ? "ml-6 max-[600px]:ml-4" : ""}`}>
+                <label
+                  data-testid={`goal-pick-${g.tag}`}
+                  className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-button border px-3 py-2 ${
+                    checked ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="size-4 flex-none accent-[var(--accent)]"
+                    checked={checked}
+                    onChange={(e) => onChange(e.target.checked ? [...value, g.id] : value.filter((id) => id !== g.id))}
+                  />
+                  {g.code && <CodeTag code={g.code} />}
+                  <span className="min-w-0 flex-1 font-semibold text-text [overflow-wrap:anywhere]">{g.name}</span>
+                  {p.text && <span className="flex-none text-sm text-text2">{p.text}</span>}
+                </label>
+                {g.subgoals > 0 && (
+                  <button
+                    type="button"
+                    aria-expanded={!folded.has(g.id)}
+                    aria-label={`${folded.has(g.id) ? "Show" : "Hide"} subgoals of ${namedText(g)}`}
+                    onClick={() => fold(g.id)}
+                    className="flex size-8 flex-none items-center justify-center rounded-button border border-line text-text2 hover:border-line-strong"
+                  >
+                    {folded.has(g.id) ? "▸" : "▾"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
       </div>
     </fieldset>
   );
@@ -715,9 +748,10 @@ export function GoalPicker({
 export function NewPrd() {
   const kind = "prd" as const;
   const router = useRouter();
-  const { role } = useMe();
-  const canWrite = hasRole(role, "commenter");
-  const canSkeleton = hasRole(role, "approver");
+  const { can } = useMe();
+  // #370: Continue creates an intake not linked to a PRD (the handler only asks an approver to link one).
+  const canWrite = can("create_intake", true);
+  const canSkeleton = can("start_draft", true);
   const [prd, setPrd] = useState<PrdAnswers>({});
   const [title, setTitle] = useState("");
   const [problem, setProblem] = useState("");

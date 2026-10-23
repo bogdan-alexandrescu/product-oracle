@@ -26,7 +26,7 @@ import {
 } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -101,14 +101,13 @@ function Launches() {
   // ?launch=<id>: the Inbox's Open lands on that launch.
   const wanted = useSearchParams().get("launch");
   const q = useQuery("launches", () => unwrap(api.GET("/v1/launches")));
-  const { role } = useMe();
-  const canApprove = hasRole(role, "approver");
   const phone = useIsPhone();
   const [filter, setFilter] = useState<Filter | null>(null);
   const [picked, setSelected] = useState<string | null>(null);
   const selected = picked ?? wanted;
   const [sheet, setSheet] = useState(false);
   const [creating, setCreating] = useState(false);
+  const { can } = useMe();
 
   const rows = q.data ?? [];
   const count = (s: Summary["state"]) => rows.filter((l) => l.state === s).length;
@@ -168,7 +167,7 @@ function Launches() {
   ];
 
   const inspector = active ? (
-    <LaunchInspector key={active.id} id={active.id} canApprove={canApprove} onChanged={q.reload} />
+    <LaunchInspector key={active.id} id={active.id} onChanged={q.reload} />
   ) : null;
 
   return (
@@ -198,7 +197,7 @@ function Launches() {
             <LinkButton href="/roadmap/changelog" icon="doc">
               Changelog
             </LinkButton>
-            {canApprove && (
+            {can("create_launch") && (
               <Button variant="primary" icon="plus" onClick={() => setCreating(true)} data-testid="new-launch">
                 New launch
               </Button>
@@ -268,11 +267,11 @@ function Launches() {
   );
 }
 
-function LaunchInspector({ id, canApprove, onChanged }: { id: string; canApprove: boolean; onChanged: () => Promise<void> }) {
+function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promise<void> }) {
   const path = { params: { path: { launch_id: id } } };
   const q = useQuery(`launch|${id}`, () => unwrap(api.GET("/v1/launches/{launch_id}", path)));
   const notesQ = useQuery(`launch-notes|${id}`, () => unwrap(api.GET("/v1/launches/{launch_id}/notes", path)));
-  const { me } = useMe();
+  const { me, can } = useMe();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tier, setTier] = useState<"1" | "2" | "3" | null>(null);
@@ -337,7 +336,7 @@ function LaunchInspector({ id, canApprove, onChanged }: { id: string; canApprove
         </>
       }
       action={
-        canApprove && live ? (
+        can("mark_launched") && live ? (
           <Button variant="hero" disabled={busy !== null} onClick={markLaunched} data-testid="mark-launched">
             Mark launched
           </Button>
@@ -369,7 +368,7 @@ function LaunchInspector({ id, canApprove, onChanged }: { id: string; canApprove
             Oracle suggested Tier {l.tier_suggestion.tier}: {l.tier_suggestion.reason}.
           </p>
         )}
-        {canApprove && live && (
+        {can("update_launch") && live && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <SegmentedControl
               label="Tier"
@@ -414,7 +413,7 @@ function LaunchInspector({ id, canApprove, onChanged }: { id: string; canApprove
         </ul>
       </InspectorSection>
       <InspectorSection label="Checklist">
-        {canApprove && l.state !== "cancelled" && (!l.kit_run_id || l.kit_error) && (
+        {can("draft_launch_kit") && l.state !== "cancelled" && (!l.kit_run_id || l.kit_error) && (
           <Button
             disabled={busy !== null}
             onClick={() => act("draft", () => unwrap(api.POST("/v1/launches/{launch_id}/draft", path)))}
@@ -428,24 +427,24 @@ function LaunchInspector({ id, canApprove, onChanged }: { id: string; canApprove
             <TaskRow
               key={t.id}
               task={t}
-              canEdit={canApprove || (t.owner_id != null && t.owner_id === myId)}
+              canEdit={can("update_launch_task", t.owner_id != null && t.owner_id === myId)}
               mine={t.owner_id != null && t.owner_id === myId}
               busy={busy}
               act={act}
             />
           ))}
         </ul>
-        {canApprove && <AddTask launchId={l.id} busy={busy} act={act} />}
+        {can("add_launch_task") && <AddTask launchId={l.id} busy={busy} act={act} />}
       </InspectorSection>
       <InspectorSection label="Notes to the people who asked">
         {notesQ.data && notesQ.data.length === 0 && <span className="text-text2">Nobody yet</span>}
         <ul className="flex flex-col divide-y divide-line" data-testid="launch-notes">
           {(notesQ.data ?? []).map((n) => (
-            <NoteRow key={n.id} note={n} canEdit={canApprove || l.owner_id === myId} busy={busy} act={act} />
+            <NoteRow key={n.id} note={n} canEdit={can("update_requester_note", l.owner_id === myId)} busy={busy} act={act} />
           ))}
         </ul>
-        {canApprove && <AddNote launchId={l.id} busy={busy} act={act} />}
-        {canApprove && l.state === "launched" && (notesQ.data ?? []).some((n) => n.internal && n.status === "drafted") && (
+        {can("add_requester") && <AddNote launchId={l.id} busy={busy} act={act} />}
+        {can("notify_requesters") && l.state === "launched" && (notesQ.data ?? []).some((n) => n.internal && n.status === "drafted") && (
           <Button
             className="mt-2"
             disabled={busy !== null}
@@ -455,7 +454,7 @@ function LaunchInspector({ id, canApprove, onChanged }: { id: string; canApprove
           </Button>
         )}
       </InspectorSection>
-      {canApprove && live && (
+      {can("cancel_launch") && live && (
         <InspectorSection>
           {cancelling ? (
             <div className="flex flex-col gap-2">

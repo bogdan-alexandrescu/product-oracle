@@ -9,7 +9,7 @@ import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type GraphOut, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { named } from "@/lib/codes";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { EvidenceChip } from "./EvidenceChip";
@@ -24,6 +24,7 @@ import {
 } from "./LinkTools";
 import { GoalFields, goalDraft, goalPatch, Measurements, missingTip, problemsOf, type GoalDraft, type GoalProblem, type PlanningHorizons } from "./goal-fields";
 import { LIMIT_LABEL, PromoteForm, suggestedBlocker } from "./PromoteBlocker";
+import { SubgoalActions } from "./subgoal-actions";
 import {
   ConfidenceRing,
   contributionOf,
@@ -31,6 +32,7 @@ import {
   DEFAULT_LOW,
   DeliveryChip,
   formatValue,
+  goalCodes,
   LockBadge,
   NodeStatusBadge,
   titleOf,
@@ -123,7 +125,9 @@ export function EntityDrawer({
   const [problems, setProblems] = useState<GoalProblem[] | null>(null);
   const d = q.data;
   const title = d?.title ?? entity.title;
-  const code = named(title, d?.key ?? entity.key).code;
+  // A subgoal's code is its place in the goal tree (#345), as its chip shows: G-B.1, or none.
+  const treeCode = d?.parent_id ? goalCodes(graph).get(entity.id) : undefined;
+  const code = treeCode !== undefined ? treeCode : named(title, d?.key ?? entity.key).code;
   const root = useRef<HTMLDivElement>(null);
 
   // Below the tables (narrow screens), bring the inspector into view when it opens.
@@ -190,6 +194,19 @@ export function EntityDrawer({
       return "Saved. The item is now locked against agent changes.";
     });
 
+  // #345: move a subgoal under another goal, or promote it (null).
+  const moveGoal = (parentId: string | null) =>
+    write(async () => {
+      const res = await api.PATCH("/v1/baseline/entities/{entity_id}", {
+        params: { path: { entity_id: entity.id } },
+        body: { parent_id: parentId, origin: "user" },
+      });
+      await unwrap(Promise.resolve(res));
+      if (res.response.status === 202) return "The item is locked, so your change was saved as a proposal for an approver.";
+      if (!parentId) return "Promoted to a goal.";
+      return `Moved under “${titleOf(graph, parentId)}”.`;
+    });
+
   const decide = (action: "confirm" | "reject" | "archive", note?: string) =>
     write(async () => {
       const params = { params: { path: { entity_id: entity.id } }, body: { note: note || null } };
@@ -198,7 +215,10 @@ export function EntityDrawer({
       else await unwrap(api.POST("/v1/baseline/entities/{entity_id}/reject", params));
       setAsking(null);
       if (action === "confirm") return `Confirmed “${title}”.`;
-      if (action === "archive") return `Archived “${title}”: it leaves the baseline; its history keeps the reason.`;
+      if (action === "archive") {
+        const sub = d?.parent_id ? " Its parent no longer counts it." : "";
+        return `Archived “${title}”: it leaves the baseline; its history keeps the reason.${sub}`;
+      }
       return `Rejected “${title}”.`;
     });
 
@@ -290,7 +310,9 @@ export function EntityDrawer({
             {code && (
               <>
                 {" · "}
-                <span className="font-mono">{code}</span>
+                <span className="font-mono" data-testid="drawer-code">
+                  {code}
+                </span>
               </>
             )}
           </>
@@ -453,6 +475,10 @@ export function EntityDrawer({
               />
             )}
 
+            {canWrite && d.type === "goal" && (
+              <SubgoalActions goal={d} graph={graph} busy={busy} onMove={moveGoal} onArchive={() => setAsking("archive")} />
+            )}
+
             <History entityId={d.id} updatedAt={d.updated_at} />
 
             <Links
@@ -594,7 +620,8 @@ export function EntityDrawer({
                     >
                       Edit
                     </Button>
-                    {d.status === "confirmed" && (
+                    {/* A subgoal's Archive sits with its place in the goal tree (#345). */}
+                    {d.status === "confirmed" && !d.parent_id && (
                       <Button variant="danger" disabled={busy} onClick={() => setAsking("archive")}>
                         Archive
                       </Button>
@@ -1009,10 +1036,10 @@ function History({ entityId, updatedAt }: { entityId: string; updatedAt: string 
   );
 }
 
-/** H1: commenters and above record a decision about a blocker (Propose decision, about it). */
+/** H1: who may record a decision records one about a blocker (Propose decision, about it). */
 function RecordDecision({ entity }: { entity: EntityOut }) {
-  const { role } = useMe();
-  if (!hasRole(role, "commenter")) return null;
+  const { can } = useMe();
+  if (!can("create_decision")) return null;
   const href = `/company/decisions?subject=${encodeURIComponent(`blocker:${entity.id}`)}&ref=${encodeURIComponent(entity.title)}&propose=1`;
   return (
     <InspectorSection label="Decisions">

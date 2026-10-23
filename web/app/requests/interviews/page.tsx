@@ -7,7 +7,7 @@ import { Button, Chip, DataTable, Page, PageHeader, Panel, type Column } from "@
 import { ErrorNote } from "@/components/ui";
 import { INTERVIEW_STATUS_KIND, INTERVIEW_STATUS_LABEL, interviewsCall, type InterviewSummary } from "@/lib/api/interviews";
 import { formatDate } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { InterviewDialog } from "../_components/InterviewDialog";
@@ -44,14 +44,14 @@ const COLUMNS: Column<InterviewSummary>[] = [
 /** Requests' Interviews tab (C3): every customer interview, newest first; a row opens it. */
 export default function InterviewsPage() {
   const router = useRouter();
-  const { role } = useMe();
+  const { can } = useMe();
   const q = useQuery("interviews", () => interviewsCall<InterviewSummary[]>("GET", "/v1/interviews?kind=customer"));
   const [interviewing, setInterviewing] = useState(false);
   return (
     <Page>
       <PageHeader
         title="Requests"
-        action={hasRole(role, "commenter") && <Button onClick={() => setInterviewing(true)}>Interview a customer</Button>}
+        action={can("create_interview") && <Button onClick={() => setInterviewing(true)}>Interview a customer</Button>}
       />
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       <Panel title="Interviews" count={q.data?.length}>

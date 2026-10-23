@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from oracle import wording
 from oracle.account.router import router as account_router
 from oracle.auth.router import router as auth_router
 from oracle.autonomy_router import router as autonomy_router
@@ -16,6 +17,7 @@ from oracle.baseline.goals import GoalAttrs
 from oracle.baseline.router import router as baseline_router
 from oracle.baseline.service import GoalFieldsInvalid
 from oracle.blockers.router import router as blockers_router
+from oracle.capabilities import stamp_openapi
 from oracle.claude_accounts.router import router as claude_accounts_router
 from oracle.claude_accounts.sweep import get_pool_settings, run_scheduler
 from oracle.config import get_settings
@@ -163,6 +165,13 @@ def create_app() -> FastAPI:
     # 409 names them, on every path that creates or starts such a run.
     app.add_exception_handler(DraftGateClosed, draft_gate_closed)
 
+    @app.exception_handler(wording.Refused)
+    async def refused(_request: Request, exc: wording.Refused) -> JSONResponse:
+        # #396: a refusal a person reads, with the ids agents need beside it.
+        return JSONResponse(
+            {"detail": exc.detail, "refs": exc.refs}, exc.status_code, headers=exc.headers
+        )
+
     @app.exception_handler(GoalFieldsInvalid)
     async def goal_fields_rejected(_request: Request, exc: GoalFieldsInvalid) -> JSONResponse:
         # B5: a person's goal write with bad typed fields; every problem with its code.
@@ -266,6 +275,8 @@ def create_app() -> FastAPI:
         return app.openapi_schema
 
     app.openapi = openapi
+    # #370: each operation's role in the OpenAPI document (x-min-role).
+    stamp_openapi(app)
     return app
 
 
