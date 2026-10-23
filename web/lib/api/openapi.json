@@ -28003,7 +28003,8 @@
                     "slack",
                     "meeting",
                     "doc",
-                    "other"
+                    "other",
+                    "in_app"
                   ],
                   "type": "string"
                 },
@@ -36246,7 +36247,8 @@
                   "slack",
                   "meeting",
                   "doc",
-                  "other"
+                  "other",
+                  "in_app"
                 ]
               },
               {
@@ -65498,7 +65500,8 @@
               "slack",
               "meeting",
               "doc",
-              "other"
+              "other",
+              "in_app"
             ],
             "title": "Channel"
           },
@@ -65599,7 +65602,8 @@
               "slack",
               "meeting",
               "doc",
-              "other"
+              "other",
+              "in_app"
             ],
             "title": "Channel"
           },
@@ -66008,7 +66012,8 @@
               "slack",
               "meeting",
               "doc",
-              "other"
+              "other",
+              "in_app"
             ],
             "title": "Channel"
           },

@@ -53,7 +53,7 @@ export function PageHeader({
       >
         {status}
       </div>
-      {action && <div className="ml-auto flex flex-none flex-wrap items-center justify-end gap-2">{action}</div>}
+      {action && <div className="ml-auto flex max-w-full flex-none flex-wrap items-center justify-end gap-2">{action}</div>}
       <PageTabs />
     </header>
   );

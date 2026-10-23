@@ -10721,7 +10721,7 @@ export interface components {
             /** Body */
             body?: string | null;
             /** Channel */
-            channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other") | null;
+            channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app") | null;
             /** Requester Name */
             requester_name?: string | null;
             /** Requester Kind */
@@ -21440,7 +21440,7 @@ export interface components {
              * Channel
              * @enum {string}
              */
-            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other";
+            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app";
             /** Requester Name */
             requester_name?: string | null;
             /**
@@ -21474,7 +21474,7 @@ export interface components {
              * Channel
              * @enum {string}
              */
-            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other";
+            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app";
             /**
              * Origin
              * @enum {string}
@@ -21597,7 +21597,7 @@ export interface components {
              * Channel
              * @enum {string}
              */
-            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other";
+            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app";
             /**
              * Origin
              * @enum {string}
@@ -43128,7 +43128,7 @@ export interface operations {
                 /** @description A theme id, or `none` for requests with no theme */
                 theme_id?: string | null;
                 goal_id?: string | null;
-                channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other") | null;
+                channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app") | null;
                 /** @description Title or body search */
                 q?: string | null;
                 limit?: number;

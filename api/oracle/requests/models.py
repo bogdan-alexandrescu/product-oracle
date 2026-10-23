@@ -38,7 +38,18 @@ from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 from oracle.v2.models import _fk, _json, _lock_version, _updated_at, _uuids
 
-CHANNELS = ("support", "sales", "team", "interview", "slack", "meeting", "doc", "other")
+# ``in_app``: filed with New request on the Requests screen (#329, migration 0025).
+CHANNELS = (
+    "support",
+    "sales",
+    "team",
+    "interview",
+    "slack",
+    "meeting",
+    "doc",
+    "other",
+    "in_app",
+)
 ORIGINS = ("person", "oracle", "interview")
 THEME_ORIGINS = ("person", "oracle")
 REQUESTER_KINDS = ("customer", "team", "unknown")

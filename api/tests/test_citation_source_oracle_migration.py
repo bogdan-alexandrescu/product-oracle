@@ -95,7 +95,7 @@ def test_chains_on_the_refinement_batch_head():
     # 0018_runtime_features chains on it, 0019_citation_confidence on that, the intake
     # lane's 0014_intake on that and the PRD review chain (0014_review,
     # 0014_member_disable, 0014_member_follow_up_retry) on that; one head.
-    assert script.get_heads() == ["0026_staging"]
+    assert script.get_heads() == ["0027_request_in_app"]
     assert script.get_revision("0018_runtime_features").down_revision == REVISION
     assert script.get_revision("0019_citation_confidence").down_revision == "0018_runtime_features"
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
