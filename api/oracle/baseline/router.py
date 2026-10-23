@@ -150,7 +150,8 @@ async def _entities_out(
         on, horizons = await goals.company_today(db), await goals.company_horizons(db)
         checked = {
             e.id: goals.GoalCheck(
-                **goals.goal_check(e.attrs or {}, status=e.status, on=on, horizons=horizons)
+                **goals.goal_check(e.attrs or {}, status=e.status, on=on, horizons=horizons),
+                horizons=horizons,
             )
             for e in rows
             if e.type == "goal"

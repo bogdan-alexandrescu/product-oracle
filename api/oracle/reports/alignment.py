@@ -14,8 +14,8 @@ at-risk reasons and says "as of now" (``needs_attention_as_of_now``).
 The schedule is the company setting ``alignment_report`` (Monday 08:00 by default) in
 the Company time zone (``company_timezone``, UTC by default). Its clock is H2's: the
 built-in ``alignment_report`` ritual (oracle.rituals) is seeded on this setting's day
-and time in that zone, follows their changes, and at each weekly moment builds the week that just ended
-(``oracle.rituals.blocks.alignment_report``); the same tick posts it to Slack
+and time in that zone, follows their changes, and at each weekly moment builds the
+week that just ended (``oracle.rituals.blocks.alignment_report``); the same tick posts it to Slack
 (oracle.reports.slack). The unique index on (company, week_start) for weekly reports
 makes a second build impossible. A company with no active or paused track gets none.
 """
