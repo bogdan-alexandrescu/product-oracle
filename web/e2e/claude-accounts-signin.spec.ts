@@ -45,9 +45,8 @@ test("claude accounts: the method is a choice and the one solid button in the pa
   // It starts the sign-in: Claude's page opens.
   const popup = page.waitForEvent("popup");
   await open.click();
-  const opened = await popup;
-  expect(opened.url()).toMatch(/claude\.com\/cai\/oauth\/authorize/);
-  await opened.close();
+  await (await popup).close();
+  await expect(add.getByRole("link", { name: "Open", exact: true })).toHaveAttribute("href", /claude\.com\/cai\/oauth\/authorize/);
   await expect(add.getByLabel("Code from the Claude page")).toBeVisible();
 });
 
@@ -88,7 +87,7 @@ test("claude accounts: a pasted saved login says the Claude account is not known
   await add.getByLabel("Label").fill("laptop-3");
   await add.getByRole("radio", { name: "Paste Claude Code's saved login" }).check();
   await add
-    .getByLabel("Saved login")
+    .getByLabel("Saved login", { exact: true })
     .fill('{"claudeAiOauth": {"accessToken": "a", "refreshToken": "r", "expiresAt": 1}}');
   await add.getByRole("button", { name: "Add account" }).click();
   await page.getByTestId("account-row-laptop-3").getByRole("button").click();
