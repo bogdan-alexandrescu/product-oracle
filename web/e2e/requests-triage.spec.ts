@@ -138,15 +138,14 @@ test("daily triage: an owner turns it on and sees who it runs as", async ({ page
   await expect(status).toContainText("Daily triage is off");
 });
 
-test("daily triage: a commenter sees the switch but cannot turn it", async ({ page }) => {
-  // protects=approvers and owners turn the switch; commenters and viewers see its state only;
-  // fails_when=the switch is hidden from a commenter or they can change it; no_claim=the API's
-  // 403 (tests/test_requests_triage.py).
+test("daily triage: a commenter reads its state, with no switch to turn", async ({ page }) => {
+  // protects=approvers and owners turn the switch; commenters and viewers see its state only
+  // (#370: a control the role can never use is not drawn); fails_when=a commenter is offered the
+  // switch, or its state is not shown; no_claim=the API's 403 (tests/test_requests_triage.py).
   await login(page, "commenter@example.com");
   await openRequests(page);
-  await expect(dailySwitch(page)).toBeVisible();
-  await expect(dailySwitch(page)).toBeDisabled();
-  await expect(dailySwitch(page)).not.toBeChecked();
+  await expect(dailySwitch(page)).toHaveCount(0);
+  await expect(page.getByTestId("daily-triage-state")).toHaveText("Daily triage off");
   await expect(page.getByTestId("triage-status")).toContainText("Daily triage is off");
 });
 
