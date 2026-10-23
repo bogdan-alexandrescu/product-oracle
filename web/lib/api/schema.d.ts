@@ -8020,12 +8020,15 @@ export interface paths {
         /**
          * Diff Roadmap Items
          * @description What changed, item by item, between two sets of roadmap items: ``head`` and
-         *     ``base`` are refs (``<slug>@<n>``, a roadmap version's items); ``base`` is also
-         *     ``previous`` (the nearest earlier version with items, the default) or ``approved``
-         *     (the roadmap's latest approved version other than the head). Plan changes count
+         *     ``base`` are refs (``<slug>@<n>``: a roadmap version's items, or a PRD version's draft
+         *     items); ``base`` is also ``previous`` (the nearest earlier version, or ready draft,
+         *     with items; the default) or ``approved`` (for a roadmap version, the roadmap's latest
+         *     approved version other than the head; for a PRD draft, the latest approved roadmap
+         *     version whose items trace to the PRD, its track's roadmap first). A PRD draft's ref
+         *     base is a draft of the same PRD or a roadmap version tracing to it. Plan changes count
          *     (oracle.roadmap.diff.COUNTED_FIELDS); confidence, one-place rank moves and the PRD
          *     section's text are notes. Nothing to compare with: ``base`` null and no items. A PRD
-         *     version's draft items are not stored yet (409).
+         *     draft whose items are not ready is 409.
          */
         get: operations["diff_roadmap_items"];
         put?: never;
@@ -8045,9 +8048,10 @@ export interface paths {
         };
         /**
          * Get Roadmap Item History
-         * @description One item across the roadmap versions whose items trace to the PRD, oldest first
-         *     (the latest 50), each entry against the one before; ``present: false`` where it
-         *     left. Follows the key only: a rename starts a new history.
+         * @description One item across the PRD's ready drafts and the roadmap versions whose items trace
+         *     to it, in the order their items were stored (the latest 50), each entry against the
+         *     one before; ``present: false`` where it left. Follows the key only: a rename starts a
+         *     new history.
          */
         get: operations["get_roadmap_item_history"];
         put?: never;

@@ -3,13 +3,14 @@ compared with (the previous version, the approved plan or a named ref), the diff
 and an item's history. The comparison itself is oracle.roadmap.diff's, unchanged.
 
 A ref is ``<slug>@<n>``: a roadmap version's items, or a PRD version's draft items (E1
-Roadmap per draft; until those are stored, a PRD ref is 409, not ready). Both sides'
-dates are compared as they stand now (items.live_milestones).
+Roadmap per draft; 409 until they are ready). Both sides' dates are compared as they stand
+now (items.live_milestones).
 """
 
 import re
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -18,8 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap import diff as diff_mod
+from oracle.roadmap import draft_items
 from oracle.roadmap.items import live_milestones
-from oracle.roadmap.models import RoadmapItem
+from oracle.roadmap.models import DraftRoadmap, ProductTrack, RoadmapItem
 from oracle.roadmap.schemas import (
     DocumentRef,
     ItemsDiffOut,
@@ -95,8 +97,10 @@ async def resolve_ref(db: AsyncSession, ref: str) -> Side:
     except docs_service.NotFoundError as e:
         raise DiffError(404, str(e)) from e
     if document.kind == "prd":
-        # E1 Roadmap per draft stores a PRD version's draft items; none are stored yet.
-        raise DiffError(409, f"Roadmap items for v{version.number} are not ready yet")
+        row = await db.scalar(select(DraftRoadmap).where(DraftRoadmap.prd_version_id == version.id))
+        if row is None or row.status != "ready":
+            raise DiffError(409, f"Roadmap items for v{version.number} are not ready yet")
+        return Side("prd_draft", document, version, await draft_items.draft_items(db, row))
     if document.kind != "roadmap":
         raise DiffError(422, f"'{document.slug}' is a {document.kind}: it has no roadmap items")
     return Side("roadmap", document, version, await version_items(db, version))
@@ -120,8 +124,58 @@ async def _with_items(db: AsyncSession, head: Side, *, approved: bool) -> Side |
     return Side(head.kind, head.document, version, await version_items(db, version))
 
 
+def _traced(prd_document_id: uuid.UUID):
+    """The roadmap versions whose items trace to the PRD."""
+    return select(RoadmapItem.roadmap_version_id).where(
+        RoadmapItem.prd_document_id == prd_document_id, RoadmapItem.roadmap_version_id.is_not(None)
+    )
+
+
+async def _approved_plan(db: AsyncSession, prd: Document) -> Side | None:
+    """A PRD's approved plan: the latest approved roadmap version whose items trace to it,
+    preferring the roadmap of the PRD's product track."""
+    track_roadmap = select(ProductTrack.roadmap_document_id).where(
+        ProductTrack.prd_document_id == prd.id
+    )
+    version = await db.scalar(
+        select(DocumentVersion)
+        .where(DocumentVersion.approved_at.is_not(None), DocumentVersion.id.in_(_traced(prd.id)))
+        .order_by(
+            DocumentVersion.document_id.in_(track_roadmap).desc(),
+            DocumentVersion.approved_at.desc(),
+            DocumentVersion.number.desc(),
+        )
+        .limit(1)
+    )
+    if version is None:
+        return None
+    roadmap = await db.get(Document, version.document_id)
+    assert roadmap is not None
+    return Side("roadmap", roadmap, version, await version_items(db, version))
+
+
 async def options(db: AsyncSession, head: Side) -> tuple[Side | None, Side | None]:
+    if head.kind == "prd_draft":
+        found = await draft_items.previous_ready(db, head.version)
+        previous = None
+        if found is not None:
+            previous = Side(
+                "prd_draft", head.document, found[0], await draft_items.draft_items(db, found[1])
+            )
+        return previous, await _approved_plan(db, head.document)
     return await _with_items(db, head, approved=False), await _with_items(db, head, approved=True)
+
+
+async def _traces_to(db: AsyncSession, side: Side, prd: Document) -> bool:
+    return (
+        side.kind == "roadmap"
+        and await db.scalar(
+            select(DocumentVersion.id).where(
+                DocumentVersion.id == side.version.id, DocumentVersion.id.in_(_traced(prd.id))
+            )
+        )
+        is not None
+    )
 
 
 async def resolve_base(
@@ -133,16 +187,23 @@ async def resolve_base(
         return approved
     if "@" not in base:
         raise DiffError(422, f"base must be previous, approved or a ref, not '{base}'")
+    other = DiffError(422, f"'{base}' is not a version of '{head.document.slug}'")
     try:
         side = await resolve_ref(db, base)
     except DiffError as e:
-        # A PRD's draft items are never another chain's base: say so, not "not ready".
-        if e.status_code == 409:
-            raise DiffError(422, f"'{base}' is not a version of '{head.document.slug}'") from e
+        # Another chain's draft is never the base: say so, not "not ready".
+        m = REF.match(base)
+        if e.status_code == 409 and not (
+            head.kind == "prd_draft" and m and m["slug"] == head.document.slug
+        ):
+            raise other from e
         raise
-    if side.document.id != head.document.id:
-        raise DiffError(422, f"'{base}' is not a version of '{head.document.slug}'")
-    return side
+    if side.document.id == head.document.id:
+        return side
+    # A PRD draft also compares with a roadmap version whose items trace to the PRD.
+    if head.kind == "prd_draft" and await _traces_to(db, side, head.document):
+        return side
+    raise other
 
 
 async def snapshots(db: AsyncSession, rows: list[RoadmapItem]) -> list[diff_mod.ItemSnapshot]:
@@ -240,47 +301,68 @@ async def diff_view(db: AsyncSession, head_ref: str, base: str = "previous") -> 
     return out
 
 
+@dataclass
+class _Stored:
+    """One set of items in an item's history: a ready PRD draft's or a roadmap version's."""
+
+    kind: str
+    at: datetime
+    version: DocumentVersion
+    owner: Any  # the RoadmapItem column that holds this set's items
+    owner_id: uuid.UUID
+
+
 async def history(db: AsyncSession, prd: str, item_key: str) -> RoadmapItemHistoryOut:
-    """The item across the roadmap versions whose items trace to the PRD, oldest first
-    (the latest HISTORY_LIMIT), each against the one before; where it left, an entry
-    ``present: false``. By key only: a rename starts a new history."""
+    """The item across the PRD's ready drafts and the roadmap versions whose items trace to
+    it, in the order the items were stored (the latest HISTORY_LIMIT), each against the one
+    before; where it left, an entry ``present: false``. By key only: a rename starts a new
+    history."""
     try:
         document = await docs_service.get_document_or_404(db, prd)
     except docs_service.NotFoundError as e:
         raise DiffError(404, str(e)) from e
     if document.kind != "prd":
         raise DiffError(422, f"'{document.slug}' is a {document.kind}, not a prd")
-    traced = select(RoadmapItem.roadmap_version_id).where(
-        RoadmapItem.prd_document_id == document.id, RoadmapItem.roadmap_version_id.is_not(None)
+    versions = await db.scalars(
+        select(DocumentVersion)
+        .where(DocumentVersion.id.in_(_traced(document.id)))
+        .order_by(DocumentVersion.created_at.desc(), DocumentVersion.number.desc())
+        .limit(HISTORY_LIMIT)
     )
-    versions = list(
-        await db.scalars(
-            select(DocumentVersion)
-            .where(DocumentVersion.id.in_(traced))
-            .order_by(DocumentVersion.created_at.desc(), DocumentVersion.number.desc())
-            .limit(HISTORY_LIMIT)
-        )
-    )[::-1]
-    roadmaps: dict[uuid.UUID, Document] = {}
+    stored = [
+        _Stored("roadmap", v.created_at, v, RoadmapItem.roadmap_version_id, v.id) for v in versions
+    ]
+    ready = await db.execute(
+        select(DraftRoadmap, DocumentVersion)
+        .join(DocumentVersion, DocumentVersion.id == DraftRoadmap.prd_version_id)
+        .where(DraftRoadmap.prd_document_id == document.id, DraftRoadmap.status == "ready")
+        .order_by(DraftRoadmap.ready_at.desc())
+        .limit(HISTORY_LIMIT)
+    )
+    stored += [
+        _Stored("prd_draft", r.ready_at or r.updated_at, v, RoadmapItem.draft_roadmap_id, r.id)
+        for r, v in ready.all()
+    ]
+    stored = sorted(stored, key=lambda s: (s.at, s.version.number))[-HISTORY_LIMIT:]
+    documents: dict[uuid.UUID, Document] = {document.id: document}
     entries: list[RoadmapItemHistoryEntry] = []
     last: diff_mod.ItemSnapshot | None = None
-    for version in versions:
+    for s in stored:
+        version = s.version
         row = await db.scalar(
-            select(RoadmapItem).where(
-                RoadmapItem.roadmap_version_id == version.id, RoadmapItem.item_key == item_key
-            )
+            select(RoadmapItem).where(s.owner == s.owner_id, RoadmapItem.item_key == item_key)
         )
         if row is None and last is None:
             continue
-        roadmap = roadmaps.get(version.document_id) or await db.get(Document, version.document_id)
-        assert roadmap is not None
-        roadmaps[version.document_id] = roadmap
+        doc = documents.get(version.document_id) or await db.get(Document, version.document_id)
+        assert doc is not None
+        documents[version.document_id] = doc
         common = {
-            "ref": f"{roadmap.slug}@{version.number}",
-            "kind": "roadmap",
-            "label": label("roadmap", version.number),
+            "ref": f"{doc.slug}@{version.number}",
+            "kind": s.kind,
+            "label": label(s.kind, version.number),
             "approved": version.approved_at is not None,
-            "at": version.created_at,
+            "at": s.at,
         }
         if row is None:
             entries.append(

@@ -50,8 +50,8 @@ import {
 } from "./quality";
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
-import { draftRoadmapSummary, queueDraftRoadmap, routeDraftRoadmap, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_ROADMAP_SLUG, DATE_BASES_SCENARIO, DIFF_SCENARIO, dateMarks, inboxTracks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { draftRoadmapSummary, queueDraftRoadmap, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
+import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, DATE_BASES_SCENARIO, DIFF_SCENARIO, dateMarks, inboxTracks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
@@ -326,6 +326,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json); "roadmap-diff" as the default company plus usage-alerts-roadmap v2,
  * a draft whose items moved, added and dropped one each since the approved v1 (E3);
+ * "approved-plan" as the default company plus usage-alerts-roadmap v1 approved and usage-alerts
+ * v2, a draft with a new "3. Spend limits" section whose ready draft items move Behaviour from
+ * Now to Next, keep Success metrics and add Spend limits (Now) (E3b);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
  * problem (C6, saved-addresses);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
@@ -1610,6 +1613,7 @@ function load(): Db {
   }
   if (scenario === "proposal-overlap") addOverlappingProposals(db.baseline, uuid);
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
+  if (scenario === APPROVED_PLAN_SCENARIO) addApprovedPlan(db);
   save(db);
   return db;
 }
@@ -1625,6 +1629,29 @@ function addRoadmapVersion(db: Db) {
   v2.sections = v2.sections.map((s) => ({ ...s, id: uuid() }));
   db.versions.push(v2);
   doc.updated_at = v2.created_at;
+}
+
+/** E3b "approved-plan": usage-alerts-roadmap v1 approved, then usage-alerts v2, a draft with a Spend limits section (./draft-roadmap.ts gives it its items). */
+function addApprovedPlan(db: Db) {
+  const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+  const r1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
+  const prd = db.documents.find((d) => d.slug === "usage-alerts");
+  const p1 = prd && db.versions.find((v) => v.document_id === prd.id && v.number === 1);
+  if (!roadmap || !r1 || !prd || !p1) return;
+  r1.approved_at ??= "2026-10-05T09:00:00Z";
+  roadmap.status = "approved";
+  const p2 = structuredClone(p1);
+  Object.assign(p2, { id: uuid(), number: 2, created_at: "2026-10-21T09:00:00Z", approved_at: null });
+  const heading = "3. Spend limits";
+  const body = "Admins set a monthly spend limit; Oracle warns at 80% of it.";
+  p2.sections = [
+    ...p2.sections.map((x) => ({ ...x, id: uuid() })),
+    { ...p2.sections[p2.sections.length - 1], id: uuid(), section_key: "limits", ordinal: p2.sections.length, heading, body_md: body, body_text: body, content_hash: hash(`${heading}\n${body}`), citation_keys: [] },
+  ];
+  p2.content_hash = hash(p2.sections.map((x) => x.content_hash).join(""));
+  db.versions.push(p2);
+  prd.status = "in_review";
+  prd.updated_at = p2.created_at;
 }
 
 /** "discussions": the commenter's private discussion with the approver on team-workspaces v2's Problem. */
@@ -1834,7 +1861,11 @@ function draftCtx(db: Db): DraftRoadmapContext {
 }
 
 function draftDb(db: Db): DraftRoadmapDb {
-  return (db.draft_roadmaps ??= seeded("draft-roadmaps", () => seedDraftRoadmaps(draftCtx(db))));
+  return (db.draft_roadmaps ??= seeded("draft-roadmaps", () => {
+    const drafts = seedDraftRoadmaps(draftCtx(db));
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === APPROVED_PLAN_SCENARIO) seedApprovedPlanDraft(draftCtx(db), drafts);
+    return drafts;
+  }));
 }
 
 /** E1: a new PRD version queues its items-only roadmap (the API's version_imported handler). */
@@ -2993,6 +3024,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     documents: db.documents,
     versions: db.versions,
     approverId: db.members.find((x) => x.email === "approver@example.com")?.id,
+    drafts: () => draftDb(db).rows,
   };
   // E1: a PRD draft's roadmap items and the PRD's "Derive for each new draft" switch.
   const draftRes = await routeDraftRoadmap(draftCtx(db), draftDb(db), req, p, q);
