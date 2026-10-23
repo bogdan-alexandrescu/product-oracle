@@ -2218,6 +2218,10 @@ async def _prompt_context(
         )
         if latest is not None:
             locked = sorted(await locked_section_keys(db, latest.id))
+    from oracle.discussions import agent_view
+
+    # G5: what people discussed about the run, as its agents see it.
+    discussions = await agent_view.for_prompt(db, run)
     scope_yaml = None
     if not attached and "get_prd_scope" in _flow(run).segment(segment.name).tools:
         scope = await feature_set.approved_scope(db, run_id=run.id, document_id=run.document_id)
@@ -2255,6 +2259,7 @@ async def _prompt_context(
         scope_yaml=scope_yaml,
         launch_id=run.knobs.get("launch_id"),
         target_goals=[(g["key"], g["title"]) for g in run.knobs.get("target_goals") or []],
+        discussions=discussions,
         baseline_reused=reuse.short_date(reused["approved_at"])
         if (reused := run.knobs.get("reuse_baseline")) and segment.name != "baseline"
         else None,

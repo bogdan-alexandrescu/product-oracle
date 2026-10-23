@@ -38,7 +38,6 @@ from tests.test_staging import HORIZON, change, discussion, stage
 SECRET = "A private remark that must never reach an agent."
 REASON = "It depends on an item in Later."
 DROP_REASON = "Serves no confirmed goal."
-LINK = "https://oracle.example.com/runs/{run}?discussion={d}"
 
 
 # --- unit: the agent view -----------------------------------------------------------------
@@ -62,7 +61,8 @@ def _discussion(**kw) -> Discussion:
 STAGED = [{"id": str(uuid.uuid4()), "kind": "item_drop", "label": "Drop gift-cards",
            "item_key": "gift-cards", "payload": {"item_key": "gift-cards"},
            "reason": DROP_REASON, "status": "staged",
-           "target": {"kind": "checkpoint", "checkpoint_kind": "roadmap_items", "attempt": 1}}]  # fmt: skip
+           "target": {"kind": "checkpoint", "checkpoint_kind": "roadmap_items",
+                      "attempt": 1}}]  # fmt: skip
 
 
 def _entry(d: Discussion, reads: bool = False) -> dict:
@@ -168,7 +168,8 @@ def test_without_mcp_the_prompt_pastes_the_staged_changes_and_shared_summaries()
     """Prompt card; criterion 8 (MCP not attached)."""
     text = _prompt(_ctx(mcp_attached=False, discussions=PROMPT_DISCUSSIONS))
     assert "Staged changes from discussions:" in text
-    assert f"- Move mobile-push to Next ({REASON}) [discussion https://x/runs/r1?discussion=d1]" in text
+    link = "https://x/runs/r1?discussion=d1"
+    assert f"- Move mobile-push to Next ({REASON}) [discussion {link}]" in text
     assert f"- Drop gift-cards ({DROP_REASON})" in text
     assert "Summary of Push timing: Decided: move mobile-push to Next." in text
     assert "a private discussion" not in text
@@ -373,7 +374,8 @@ async def test_an_authors_own_private_finding_is_left_out_and_not_counted(review
         await s.flush()
         s.add(KnowledgeGap(id=gap_id, intake_id=intake.id, category="pain_evidence",
                            statement="Is the rollout limited to some regions?", impact=[],
-                           importance="high", knowledge_state="unknown", status="unknown"))  # fmt: skip
+                           importance="high", knowledge_state="unknown",
+                           status="unknown"))  # fmt: skip
         run = await s.get(Run, uuid.UUID(review.run["id"]))
         run.knobs = {**run.knobs, "intake_id": str(intake.id)}
         await s.commit()
@@ -398,9 +400,7 @@ async def test_an_authors_own_private_finding_is_left_out_and_not_counted(review
     assert "My finding" not in json.dumps(out)
 
 
-async def test_another_runs_token_gets_404_and_generic_tools_stay_closed(
-    review, client, runtime  # noqa: F811
-):
+async def test_another_runs_token_gets_404_and_generic_tools_stay_closed(review):  # noqa: F811
     """Agent view card; criterion 7."""
     await open_and_private(review)
     async with tenant_session(review.tenant_id) as s:
@@ -410,11 +410,13 @@ async def test_another_runs_token_gets_404_and_generic_tools_stay_closed(
         other_id = str(other.id)
     caller = await mcp_auth.verify(await mint(review, other_id))
     assert caller is not None
-    resp = await client.get(
+    resp = await review.client.get(
         f"/v1/runs/{review.run['id']}/discussions", headers=dict(caller.credentials)
     )
     assert resp.status_code == 404, resp.text
-    own = await client.get(f"/v1/runs/{other_id}/discussions", headers=dict(caller.credentials))
+    own = await review.client.get(
+        f"/v1/runs/{other_id}/discussions", headers=dict(caller.credentials)
+    )
     assert own.status_code == 200 and own.json()["discussions"] == []
     async with mcp_client(await mint(review)) as c:
         names = {t.name for t in (await c.list_tools()).tools}

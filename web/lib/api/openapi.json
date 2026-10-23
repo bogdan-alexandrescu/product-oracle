@@ -1834,6 +1834,61 @@
         }
       }
     },
+    "/v1/runs/{run_id}/discussions": {
+      "get": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "List Run Discussions",
+        "description": "The discussions about a run (G5): its checkpoints', its intake's and, for a feedback\nloop, its document's with staged next-draft changes; newest activity first, at most 50.\nEach gives its summary and the changes staged from it, never its messages or people.\nA private discussion shows its title and summary only to the people in it; a run's\nagents (the get_run_discussions tool) get its staged changes, and its summary when the\nstarter shared it.",
+        "operationId": "list_run_discussions",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDiscussionsOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such run (a run's token reads its own run only)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/discussions/{discussion_id}": {
       "get": {
         "tags": [
@@ -70010,6 +70065,25 @@
         ],
         "title": "RunCreate"
       },
+      "RunDecidedChange": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "RunDecidedChange",
+        "description": "A change already done (an answer, a verified basis, a baseline proposal)."
+      },
       "RunDecision": {
         "properties": {
           "checkpoint_id": {
@@ -70168,6 +70242,149 @@
         ],
         "title": "RunDecision",
         "description": "A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):\nwho decided by role only (no names reach the agents), when, and what. A console\nanswer is a decision once it is followed: one held for an approver is still pending\nand not listed."
+      },
+      "RunDiscussion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "open",
+              "private"
+            ],
+            "title": "Visibility"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "subject_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Label"
+          },
+          "subject": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Subject"
+          },
+          "link": {
+            "type": "string",
+            "title": "Link"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "summary_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "draft",
+                  "confirmed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Status"
+          },
+          "summary_withheld": {
+            "type": "boolean",
+            "title": "Summary Withheld"
+          },
+          "staged_changes": {
+            "items": {
+              "$ref": "#/components/schemas/RunStagedChange"
+            },
+            "type": "array",
+            "title": "Staged Changes"
+          },
+          "decided": {
+            "items": {
+              "$ref": "#/components/schemas/RunDecidedChange"
+            },
+            "type": "array",
+            "title": "Decided"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "visibility",
+          "title",
+          "subject_label",
+          "subject",
+          "link",
+          "summary",
+          "summary_status",
+          "summary_withheld",
+          "staged_changes",
+          "decided"
+        ],
+        "title": "RunDiscussion",
+        "description": "One discussion as a run sees it (G5): never its messages or people. A private one\nshows its title and summary only to the people in it; to agents, only its staged\nchanges, and its summary when the starter shared it."
+      },
+      "RunDiscussionsOut": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "discussions": {
+            "items": {
+              "$ref": "#/components/schemas/RunDiscussion"
+            },
+            "type": "array",
+            "title": "Discussions"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          },
+          "omitted": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Omitted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "discussions",
+          "truncated",
+          "omitted"
+        ],
+        "title": "RunDiscussionsOut",
+        "description": "The discussions about a run: its checkpoints', its intake's and, for a feedback\nloop, its document's with staged next-draft changes. Newest activity first, at most\n50 and 40,000 characters; ``omitted`` counts the rest."
       },
       "RunOut": {
         "properties": {
@@ -70726,6 +70943,85 @@
         ],
         "title": "RunProgress",
         "description": "Segments done of the run's total, and what it does now: Home's In flight row."
+      },
+      "RunStagedChange": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "sent"
+            ],
+            "title": "Status"
+          },
+          "target": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "payload",
+          "status",
+          "target"
+        ],
+        "title": "RunStagedChange",
+        "description": "A change people staged from a discussion for this run (G5): a D8 action on one of the\nrun's checkpoints (``staged`` while it waits, ``sent`` once the checkpoint was decided)\nor a ``next_draft_changes`` row for the document's next draft. The shape D4, D6 and D11\nshare."
       },
       "RunSummary": {
         "properties": {

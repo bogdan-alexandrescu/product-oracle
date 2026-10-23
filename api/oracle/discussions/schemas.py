@@ -244,3 +244,58 @@ class DiscussionExposureConflict(BaseModel):
     detail: str
     messages: int
     people: int
+
+
+class RunStagedChange(BaseModel):
+    """A change people staged from a discussion for this run (G5): a D8 action on one of the
+    run's checkpoints (``staged`` while it waits, ``sent`` once the checkpoint was decided)
+    or a ``next_draft_changes`` row for the document's next draft. The shape D4, D6 and D11
+    share."""
+
+    id: uuid.UUID
+    kind: str
+    label: str
+    item_key: str | None = None
+    section_key: str | None = None
+    payload: dict[str, Any]
+    # The reason the stager wrote when staging.
+    reason: str | None = None
+    status: Literal["staged", "sent"]
+    target: dict[str, Any]
+
+
+class RunDecidedChange(BaseModel):
+    """A change already done (an answer, a verified basis, a baseline proposal)."""
+
+    kind: str
+    label: str
+
+
+class RunDiscussion(BaseModel):
+    """One discussion as a run sees it (G5): never its messages or people. A private one
+    shows its title and summary only to the people in it; to agents, only its staged
+    changes, and its summary when the starter shared it."""
+
+    id: uuid.UUID
+    visibility: Visibility
+    title: str | None
+    subject_label: str | None
+    subject: dict[str, Any]
+    # Opens the thread on the run page, for the people who may read it.
+    link: str
+    summary: str | None
+    summary_status: SummaryStatus | None
+    summary_withheld: bool
+    staged_changes: list[RunStagedChange]
+    decided: list[RunDecidedChange]
+
+
+class RunDiscussionsOut(BaseModel):
+    """The discussions about a run: its checkpoints', its intake's and, for a feedback
+    loop, its document's with staged next-draft changes. Newest activity first, at most
+    50 and 40,000 characters; ``omitted`` counts the rest."""
+
+    run_id: uuid.UUID
+    discussions: list[RunDiscussion]
+    truncated: bool
+    omitted: int = Field(ge=0)
