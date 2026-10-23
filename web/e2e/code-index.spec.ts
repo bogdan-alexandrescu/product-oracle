@@ -35,9 +35,43 @@ test("finds headings, requirement lines, table rows, decisions and goals", () =>
   expect(index.get("D1")).toMatchObject({ kind: "Decision", name: "Lists are per trip" });
   expect(index.get("Q1")).toMatchObject({ kind: "Open question", name: "Who can edit a shared list?" });
   expect(index.get("G-B")).toMatchObject({ kind: "Goal", name: "Growth", entityId: "goal-1", from: "confirmed" });
-  expect(index.get("G2")).toMatchObject({ kind: "Goal", name: "retention", line: "more repeat trips within 30 days", sectionKey: "goal-trace" });
+  // A goal's code comes from the company's goals, not from a line in the document.
+  expect(index.has("G2")).toBe(false);
   // A code that only prose mentions is not defined by it.
   expect(index.has("F-31")).toBe(false);
+});
+
+test("only headings, requirement lines and listed decisions, questions and milestones define a code", () => {
+  const prose = buildCodeIndex([
+    {
+      section_key: "security",
+      heading: "Security",
+      body_md: [
+        "- SHA256 is used for hashing.",
+        "- Q1: Who edits?",
+        "- FY2026 Budget is fixed.",
+        "**M3** ships late.",
+        "R4: Notes export.",
+        "- D2 — Keep one card.",
+        "| Q2 | Who signs off? |",
+        "1. M4. A milestone written in a numbered list.",
+      ].join("\n"),
+    },
+    { section_key: "sha", heading: "SHA256 Hashing", body_md: "" },
+    { section_key: "fy", heading: "FY2026 Plan", body_md: "" },
+    { section_key: "q4", heading: "Q4 Launch window", body_md: "" },
+  ]);
+  expect([...prose.keys()]).toEqual([]);
+  expect(splitCodes("Hashing uses SHA256; Q1 has the launch.", prose)).toEqual(["Hashing uses SHA256; Q1 has the launch."]);
+
+  const listed = buildCodeIndex([
+    { section_key: "f-7", heading: "F-7 Offline maps", body_md: "- R7 (F-7) Maps open with no signal." },
+    { section_key: "m", heading: "Milestones", body_md: "- M3: Beta." },
+    { section_key: "q", heading: "Open questions", body_md: "- Q1: Who edits?\n| Q2 | Who signs off? |" },
+    { section_key: "d", heading: "Decisions", body_md: "- D2 — Keep one card." },
+  ]);
+  expect([...listed.keys()].sort()).toEqual(["D2", "F-7", "M3", "Q1", "Q2", "R7"]);
+  expect(listed.get("Q1")).toMatchObject({ kind: "Open question", name: "Who edits?", sectionKey: "q" });
 });
 
 test("a slice takes its parent's name; a range lists its known members", () => {
