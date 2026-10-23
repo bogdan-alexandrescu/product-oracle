@@ -46,16 +46,15 @@ export function engineeringLine(i: PlanItem): string {
 }
 
 /**
- * F3: the basis the item's date rests on (verified) or lost (withdrawn): this PRD's, for this
- * date, for the whole PRD or this item; the latest when several match. None for an unverified date.
+ * F3: the basis the item's date rests on (verified) or lost (withdrawn): one of the bases the plan
+ * names for it (engineering.basis_ids: this PRD's, supporting the date, covering the item and named
+ * in the date's source); the latest when several do. None for an unverified date.
  */
 export function dateBasis(i: PlanItem, bases: Basis[]): Basis | undefined {
-  const { date, date_status } = i.engineering;
-  if (!date || !i.prd || (date_status !== "verified" && date_status !== "withdrawn")) return undefined;
+  const { date, date_status, basis_ids } = i.engineering;
+  if (!date || (date_status !== "verified" && date_status !== "withdrawn")) return undefined;
   const at = (b: Basis) => (date_status === "verified" ? b.verified_at : b.withdrawn_at) ?? b.created_at;
-  return bases
-    .filter((b) => b.status === date_status && b.prd_document_id === i.prd!.id && b.supports_date === date && (!b.item_key || b.item_key === i.key))
-    .sort((a, b) => at(b).localeCompare(at(a)))[0];
+  return bases.filter((b) => b.status === date_status && basis_ids.includes(b.id)).sort((a, b) => at(b).localeCompare(at(a)))[0];
 }
 
 /** Who makes the next decision: a person when one is named (the viewer reads "you"), else the role. */

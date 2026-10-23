@@ -19518,6 +19518,11 @@ export interface components {
             date: string | null;
             /** Date Status */
             date_status: ("verified" | "unverified" | "withdrawn") | null;
+            /**
+             * Basis Ids
+             * @default []
+             */
+            basis_ids: string[];
             /** Slip Days */
             slip_days: number | null;
             /** Tracked */

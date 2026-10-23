@@ -113,6 +113,9 @@ class PlanEngineering(BaseModel):
     # The item's milestone date: verified, or the refused one.
     date: date | None
     date_status: DateStatus | None
+    # The bases the date rests on (verified) or lost (withdrawn), by schedule.supporting:
+    # this PRD's, supporting exactly the date, covering the item and named in its source.
+    basis_ids: list[uuid.UUID] = []
     # Days the latest tracker target runs past the milestone date (date_slip drift).
     slip_days: int | None
     tracked: bool

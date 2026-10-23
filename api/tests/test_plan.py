@@ -659,7 +659,7 @@ async def test_basis_ids_are_the_bases_the_date_source_names(client):
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
         row = await s.get(ScheduleBasis, named.id)
-        row.status, row.withdrawn_at, row.withdrawn_reason = "withdrawn", datetime.now(UTC), "re-estimated"
+        row.status, row.withdrawn_at = "withdrawn", datetime.now(UTC)
         cap = await s.scalar(select(ScheduleBasis).where(ScheduleBasis.reference == "CAP-9"))
         await s.delete(cap)
         # Withdrawn later on the same date: one the source does not name, one named but
@@ -671,9 +671,7 @@ async def test_basis_ids_are_the_bases_the_date_source_names(client):
     items = {i["key"]: i for i in (await plan(client, ctx))["items"]}
     assert items["it"]["engineering"]["date_status"] == "withdrawn"
     assert items["it"]["engineering"]["basis_ids"] == [str(named.id)]
-    assert items["other"]["engineering"]["basis_ids"] == sorted(
-        [str(named.id), str(other.id)]
-    )
+    assert items["other"]["engineering"]["basis_ids"] == sorted([str(named.id), str(other.id)])
 
 
 # --- company scoping, access, cost -----------------------------------------------------------

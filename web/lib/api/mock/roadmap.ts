@@ -837,26 +837,39 @@ function namesReference(reference: string, text: string): boolean {
 }
 
 /**
- * F3: the seeded date status as the bases now stand, as the API's plan reads it
- * (schedule.supporting, then plan._engineering): verified while, in Now, a verified basis of the PRD
- * supports exactly the date, covers this item (the whole PRD, this item, or a tracker issue
- * matched to it) and is named in the date's source; otherwise withdrawn when a withdrawn basis
- * of the PRD is named there, else unverified. A date whose source names no basis the mock knows
- * keeps its seeded status (the seed has no basis for every date).
+ * F3: the seeded date status as the bases now stand, and the bases the date rests on (verified) or
+ * lost (withdrawn), as the API's plan reads them (schedule.supporting, then plan._engineering):
+ * verified while, in Now, a verified basis of the PRD supports exactly the date, covers this item
+ * (the whole PRD, this item, or a tracker issue matched to it) and is named in the date's source,
+ * and those are its basis_ids; otherwise withdrawn when a withdrawn basis of the PRD is named
+ * there, with the named withdrawn ones that supported the date for this item; else unverified. A
+ * date whose source names no basis the mock knows keeps its seeded status and lists no basis.
  */
-function dateStatus(db: RoadmapDb, prdId: string, s: PlanSeedItem): NonNullable<PlanSeedItem["dateStatus"]> | null {
-  if (!s.date) return s.dateStatus ?? null;
+function dateStatus(
+  db: RoadmapDb,
+  prdId: string,
+  s: PlanSeedItem,
+): { date_status: NonNullable<PlanSeedItem["dateStatus"]> | null; basis_ids: string[] } {
+  const seeded = { date_status: s.dateStatus ?? null, basis_ids: [] };
+  if (!s.date) return seeded;
   const source = s.dateSource ?? "";
   const named = db.bases.filter((b) => b.prd_document_id === prdId && namesReference(b.reference, source));
-  if (!named.length) return s.dateStatus ?? null;
+  if (!named.length) return seeded;
   const covers = (b: Basis) =>
     b.item_key
       ? b.item_key === s.key
       : b.tracker_key
         ? db.records.some((r) => r.external_ref === b.tracker_key && r.item_key === s.key && db.tracks.find((t) => t.id === r.track_id)?.prd_id === prdId)
         : true;
-  if (s.horizon === "now" && named.some((b) => b.status === "verified" && b.supports_date === s.date && covers(b))) return "verified";
-  return named.some((b) => b.status === "withdrawn") ? "withdrawn" : "unverified";
+  const supporting = (status: Basis["status"]) =>
+    named
+      .filter((b) => b.status === status && b.supports_date === s.date && covers(b))
+      .map((b) => b.id)
+      .sort();
+  const verified = s.horizon === "now" ? supporting("verified") : [];
+  if (verified.length) return { date_status: "verified", basis_ids: verified };
+  if (named.some((b) => b.status === "withdrawn")) return { date_status: "withdrawn", basis_ids: supporting("withdrawn") };
+  return { date_status: "unverified", basis_ids: [] };
 }
 
 function planHistory(q: URLSearchParams): Response {
@@ -921,7 +934,7 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
       goal_ids: goalIds(s.goals),
       state: origin === "draft" ? "proposed" : (s.state ?? "planned"),
       reasons: origin === "draft" ? [] : (s.reasons ?? []),
-      engineering: { records, date: s.date ?? null, date_status: dateStatus(db, prd.id, s), slip_days: s.slipDays ?? null, tracked: records.length > 0 },
+      engineering: { records, date: s.date ?? null, ...dateStatus(db, prd.id, s), slip_days: s.slipDays ?? null, tracked: records.length > 0 },
       next,
     };
   };
