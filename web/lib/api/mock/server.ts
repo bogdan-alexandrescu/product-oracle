@@ -821,7 +821,7 @@ function seedRunReviewDecider(): Db {
   const db = seedRunReview();
   const doc = db.documents.find((d) => d.slug === "usage-alerts")!;
   const prd = db.documents.find((d) => d.kind === "prd");
-  db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id);
+  db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
   db.review_v2.policies.push({
     document_id: doc.id, decider_id: db.members.find((m) => m.email === "approver@example.com")!.id, mandatory_reviewer_ids: [],
     required_section_keys: [], section_approval: "required_sections", rereview_on_change: true, source: "document", lock_version: 1,
