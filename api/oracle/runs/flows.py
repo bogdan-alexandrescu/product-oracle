@@ -16,6 +16,7 @@ stand for that file and the document kind's name, so the feedback loop works on 
 and roadmaps alike.
 """
 
+import re
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
@@ -994,6 +995,40 @@ class PromptContext:
     # C4: a run that uses the current baseline: the day its review was approved ("Oct
     # 12"), named in place of the baseline segment's output.
     baseline_reused: str | None = None
+    # #260: a Baseline to PRD run's target goals, (key, title) in the order named.
+    target_goals: list[tuple[str, str]] = field(default_factory=list)
+
+
+# #260: what each Baseline to PRD segment does with the run's target goals.
+TARGET_GOALS_TASK = {
+    "baseline": "Favour the features that move these goals: propose and evidence them first.",
+    "feature_set": "Favour the features that move these goals; leave out, under excluded, "
+    "a feature that moves none of them unless a kept feature depends on it. Name the goals "
+    "with their keys: every kept feature lists, under goals, the target goals it serves "
+    "(and any other confirmed goal it moves).",
+    "priority": "Weigh the target goals first when you rank.",
+    "prd_draft": "The Goal trace section ({#goal-trace}) covers every target goal: what "
+    "in this PRD moves it and how much, or that nothing does.",
+}
+
+
+_HEADING = re.compile(r"^(#{1,6})\s")
+
+
+def goal_trace_missing(markdown: str, targets: list[tuple[str, str]]) -> list[str]:
+    """#260: the keys of the target goals (key, title) the PRD's Goal trace section
+    ({#goal-trace}) names by neither key nor title, in the order given."""
+    lines = markdown.splitlines()
+    start = next((i for i, line in enumerate(lines) if "{#goal-trace}" in line), None)
+    trace: list[str] = []
+    if start is not None and (m := _HEADING.match(lines[start])):
+        level = len(m[1])
+        for line in lines[start + 1 :]:
+            if (h := _HEADING.match(line)) and len(h[1]) <= level:
+                break
+            trace.append(line)
+    text = "\n".join(trace).lower()
+    return [key for key, title in targets if key.lower() not in text and title.lower() not in text]
 
 
 MAX_PRIOR_CHARS = 20_000
@@ -1051,6 +1086,13 @@ def step_prompt(
         DEPTH_GUIDANCE[ctx.depth],
         "",
     ]
+    if ctx.target_goals and segment.name in TARGET_GOALS_TASK:
+        lines += [
+            "Target goals: this PRD serves these confirmed goals.",
+            *(f"- {key}: {title}" for key, title in ctx.target_goals),
+            TARGET_GOALS_TASK[segment.name],
+            "",
+        ]
     if ctx.mcp_reachable:
         lines.append(
             "Read Oracle's knowledge through its MCP server (/mcp) with the run token you were "

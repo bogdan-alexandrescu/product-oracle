@@ -203,6 +203,7 @@ from oracle.runs.schemas import (
     SegmentAttempt,
     SegmentEstimate,
     SegmentOut,
+    TargetGoal,
     TickOut,
 )
 from oracle.runs.scope_models import PrdScope
@@ -271,6 +272,8 @@ ORACLE_KNOBS = (
     # C4 (B1 "Reuse base"): a Baseline to PRD run that uses the current baseline: the
     # review it reuses, {"checkpoint_id", "approved_at"} (oracle.runs.reuse).
     "reuse_baseline",
+    # #260: the confirmed goals a Baseline to PRD run serves, [{"id", "key", "title"}].
+    "target_goals",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -993,6 +996,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
             checkpoints=knobs.checkpoints,
             budget_usd=_usd(knobs.budget_usd),
             reuse_baseline=(run.knobs or {}).get("reuse_baseline") or None,
+            goals=[TargetGoal(**g) for g in (run.knobs or {}).get("target_goals") or []],
         ),
         snapshot_id=run.snapshot_id,
         snapshot_as_of=snapshot.as_of if snapshot else None,
@@ -1707,6 +1711,9 @@ async def create_run(
     extra.pop("reuse_baseline", None)
     if body.knobs.reuse_baseline:
         extra["reuse_baseline"] = await _reuse_knob(db, flow)
+    extra.pop("target_goals", None)
+    if goals := await _target_goals(db, flow, body.knobs.goals):
+        extra["target_goals"] = goals
     if body.strategy_brief is not None:
         if flow.key != "strategy_draft":
             raise Invalid("only a Vision or strategy draft run takes a brief")
@@ -1737,6 +1744,34 @@ async def create_run(
     if commit:
         await db.commit()
     return run.id
+
+
+async def _target_goals(
+    db: AsyncSession, flow: flows.FlowDef, refs: list[str] | None
+) -> list[dict[str, str]]:
+    """The ``target_goals`` knob (#260): each named goal (key or id), confirmed, once, in
+    the order named. Only a Baseline to PRD run names goals."""
+    if not refs:
+        return []
+    if flow.key != "baseline_to_prd":
+        raise Invalid("only a Baseline to PRD run names the goals it serves")
+    refs = list(dict.fromkeys(r.strip() for r in refs))
+    ids = [uuid.UUID(r) for r in refs if is_uuid(r)]
+    rows = (
+        await db.scalars(
+            select(Entity).where(
+                Entity.type == "goal",
+                Entity.status == "confirmed",
+                or_(Entity.key.in_(refs), Entity.id.in_(ids)),
+            )
+        )
+    ).all()
+    found = {e.key: e for e in rows} | {str(e.id): e for e in rows}
+    missing = [r for r in refs if r not in found]
+    if missing:
+        raise Invalid(f"not a confirmed goal: {', '.join(missing)}")
+    goals = list({found[r].id: found[r] for r in refs}.values())
+    return [{"id": str(g.id), "key": g.key, "title": g.title} for g in goals]
 
 
 async def _current_inputs(db: AsyncSession, run: Run) -> _Inputs:
@@ -1779,7 +1814,9 @@ async def update_run(
             if getattr(body, k) is not None:
                 setattr(current, k, getattr(body, k))
         intake = {
-            k: v for k, v in oracle.items() if k.startswith("intake_") or k == "reuse_baseline"
+            k: v
+            for k, v in oracle.items()
+            if k.startswith("intake_") or k in ("reuse_baseline", "target_goals")
         }
         run.document_id, oracle = await _resolve_inputs(db, flow, current)
         oracle.update(intake)
@@ -1787,6 +1824,10 @@ async def update_run(
         oracle.pop("reuse_baseline", None)
         if body.knobs.reuse_baseline:
             oracle["reuse_baseline"] = await _reuse_knob(db, flow)
+    if body.knobs is not None and body.knobs.goals is not None:
+        oracle.pop("target_goals", None)
+        if goals := await _target_goals(db, flow, body.knobs.goals):
+            oracle["target_goals"] = goals
     run.knobs = {**stored, **oracle}
     await _reset_segments(db, run, flow)
     await audit.record(db, principal, "run.updated", "run", run.id, {})
@@ -2149,6 +2190,7 @@ async def _prompt_context(
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
         scope_yaml=scope_yaml,
         launch_id=run.knobs.get("launch_id"),
+        target_goals=[(g["key"], g["title"]) for g in run.knobs.get("target_goals") or []],
         baseline_reused=reuse.short_date(reused["approved_at"])
         if (reused := run.knobs.get("reuse_baseline")) and segment.name != "baseline"
         else None,
@@ -4014,6 +4056,7 @@ async def _advance(
                 # document from now on.
                 await feature_set.fill_document(db, run.id, run.document_id)
                 await run_order.fill_document(db, run.id, run.document_id)
+                _check_goal_trace(run, art, imported, markdown)
         art["import"] = imported
     if sdef.importer:
         # Committed first: the importer runs in its own transaction.
@@ -4157,6 +4200,22 @@ async def _advance(
             )
     await _next(db, run, segment, segments)
     return True
+
+
+def _check_goal_trace(
+    run: Run, art: dict[str, Any], imported: dict[str, Any], markdown: str
+) -> None:
+    """#260: the imported PRD's Goal trace covers every target goal of the run; one it
+    leaves out is a warning on the import and a note on the run."""
+    targets = {g["key"]: g["title"] for g in (run.knobs or {}).get("target_goals") or []}
+    missing = flows.goal_trace_missing(markdown, list(targets.items()))
+    if not missing:
+        return
+    imported["warnings"] = [*imported.get("warnings", []), "goal_trace_incomplete"]
+    named = ", ".join(f"{k} ({targets[k]})" for k in missing)
+    _note_art(
+        art, f"The PRD's Goal trace leaves out target goal{'s' * (len(missing) > 1)}: {named}"
+    )
 
 
 async def _check_feature_set(

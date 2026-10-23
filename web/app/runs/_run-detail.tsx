@@ -206,6 +206,12 @@ export function RunDetail({ id }: { id: string }) {
                 {run.theme && `, theme ${run.theme}`}
               </Chip>
             )}
+            {/* #260: the goals a PRD run serves. */}
+            {!!run.knobs.goals?.length && (
+              <Chip kind="line" wrap data-testid="run-goals">
+                Serves {run.knobs.goals.map((g) => g.title).join(", ")}
+              </Chip>
+            )}
             {/* H1: the stops this run had approved or sent back, in the decision log. */}
             <Link href={`/company/decisions?run=${run.id}`} data-testid="run-decision-log" className="text-sm font-medium text-accent-ink hover:underline">
               Decisions in this run

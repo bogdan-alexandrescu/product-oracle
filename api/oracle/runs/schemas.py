@@ -64,6 +64,11 @@ class KnobsIn(BaseModel):
     # ``baseline_not_reusable`` when it is not reusable). Omitted on create: false; on
     # PATCH: unchanged.
     reuse_baseline: bool | None = None
+    # Baseline to PRD only (#260): the confirmed goals (keys or ids) the PRD serves; the
+    # baseline proposal and feature set favour features that move them, and the PRD's
+    # goal trace covers them (422 for a goal that is not confirmed, or another flow).
+    # Omitted on create: none (a run from a brief: the brief's goals); on PATCH: unchanged.
+    goals: list[str] | None = Field(default=None, max_length=10)
 
 
 class ReusedBaseline(BaseModel):
@@ -73,6 +78,14 @@ class ReusedBaseline(BaseModel):
     approved_at: datetime
 
 
+class TargetGoal(BaseModel):
+    """A confirmed goal a PRD run serves (#260)."""
+
+    id: uuid.UUID
+    key: str
+    title: str
+
+
 class KnobsOut(BaseModel):
     depth: Depth
     roles: dict[str, list[str]]
@@ -80,6 +93,8 @@ class KnobsOut(BaseModel):
     budget_usd: float | None = None
     # Set when the run reuses the current baseline (C4).
     reuse_baseline: ReusedBaseline | None = None
+    # The goals the run serves, in the order named (#260).
+    goals: list[TargetGoal] = []
 
 
 class StrategyBriefIn(BaseModel):

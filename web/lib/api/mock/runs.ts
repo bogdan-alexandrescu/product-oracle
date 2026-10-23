@@ -96,6 +96,8 @@ export interface RunsContext {
   undelivered?: boolean;
   feedback: FeedbackRow[];
   documents: DocumentRow[];
+  /** #260: the confirmed goals a Baseline to PRD run may name. */
+  confirmedGoals?: () => Schemas["TargetGoal"][];
   latestVersion: (documentId: string) => number | null;
   /** The status of Oracle's live suggestion on a feedback item, if it has one. */
   suggestionStatus?: (feedbackId: string) => Schemas["SuggestionOut"]["status"] | null;
@@ -374,9 +376,24 @@ function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut["knobs"
   }
   const checkpoints: Record<string, boolean> = {};
   for (const s of flow.segments) if (s.checkpoint) checkpoints[s.checkpoint] = raw?.checkpoints?.[s.checkpoint] ?? true;
-  const knobs: Knobs = { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null };
+  const knobs: Knobs = { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null, goals: [] };
   if (flowKey === "baseline_to_prd" && raw?.reuse_baseline) knobs.reuse_baseline = reuseKnob(raw.reuse_baseline);
   return knobs;
+}
+
+/** #260, as the API: the confirmed goals (ids or keys) a Baseline to PRD run names; null: none named. */
+function targetGoals(ctx: Omit<RunsContext, "db">, flowKey: string, raw: string[] | null | undefined): Schemas["TargetGoal"][] | string | null {
+  if (raw == null) return null;
+  if (!raw.length) return [];
+  if (flowKey !== "baseline_to_prd") return "only a Baseline to PRD run names the goals it serves";
+  const confirmed = ctx.confirmedGoals?.() ?? [];
+  const out: Schemas["TargetGoal"][] = [];
+  for (const ref of raw) {
+    const goal = confirmed.find((g) => g.id === ref || g.key === ref);
+    if (!goal) return `not a confirmed goal: ${ref}`;
+    if (!out.includes(goal)) out.push(goal);
+  }
+  return out;
 }
 
 function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string): SegmentOut[] {
@@ -1108,6 +1125,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (input.flow === "update_draft" && ctx.userRole !== "owner") return fail(403, "Only an owner can draft an update");
     const knobs = resolveKnobs(input.flow, input.knobs);
     if (typeof knobs === "string") return fail(422, knobs);
+    const goals = targetGoals(ctx, input.flow, input.knobs?.goals);
+    if (typeof goals === "string") return fail(422, goals);
+    knobs.goals = goals ?? [];
     const refused = buildUnderWay(ctx, input.flow);
     if (refused) return refused;
     // A flow that writes no document names none, reads none and takes no template.
@@ -1231,6 +1251,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (patch.knobs) {
       const knobs = resolveKnobs(r.flow, patch.knobs);
       if (typeof knobs === "string") return fail(422, knobs);
+      const goals = targetGoals(ctx, r.flow, patch.knobs.goals);
+      if (typeof goals === "string") return fail(422, goals);
+      knobs.goals = goals ?? r.knobs.goals ?? [];
       r.knobs = knobs;
     }
     if (patch.document) {
