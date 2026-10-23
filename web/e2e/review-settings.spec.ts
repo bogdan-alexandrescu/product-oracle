@@ -49,7 +49,8 @@ test("an owner sets the decider, mandatory reviewers, required sections and re-r
   // A decider can be cleared again.
   await sheet.getByRole("button", { name: "Remove Approver" }).click();
   await sheet.getByRole("button", { name: "Save review settings" }).click();
-  await page.getByRole("button", { name: "Review settings" }).click();
+  await expect(sheet).toHaveCount(0);
+  await page.getByRole("button", { name: "Review settings", exact: true }).click();
   await expect(sheet.getByTestId("decider")).toContainText("Any approver");
 });
 
