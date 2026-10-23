@@ -730,7 +730,7 @@ function SegmentItem({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revisionKey]);
   // F4: a stop with its own review screen (the Engineering check) is opened from a line here.
-  const screened = checkpoints.find((c) => c.status === "pending" && reviewHref({ ...c, run_id: run.id })) ?? null;
+  const screened = checkpoints.find((c) => c.status === "pending" && briefsCheck(c)) ?? null;
   // The Waiting chip counts every stop waiting for me, the screened one included.
   const mine = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
   const deciding = mine.filter((c) => c !== screened);
@@ -951,7 +951,7 @@ function SegmentItem({
             <AppliedEditsLine key={cp.id} cp={cp} />
           ))}
           {s.feature_set_check && <FeatureSetCheckLine check={s.feature_set_check} />}
-          {waitingCp && reviewHref(waitingCp) && !deciding.includes(waitingCp) && (
+          {waitingCp?.kind === "feature_set" && reviewHref(waitingCp) && !deciding.includes(waitingCp) && (
             // C7: commenters suggest and viewers read on the review screen too.
             <p className="mt-2" data-testid="review-link">
               <LinkButton href={reviewHref(waitingCp)!} icon="flag">
@@ -1886,7 +1886,7 @@ function CheckpointRow({
           {agentsOnly}
         </p>
       )}
-      {reviewHref(cp) && cp.status === "pending" && (
+      {cp.kind === "feature_set" && reviewHref(cp) && cp.status === "pending" && (
         // C7: the feature set is reviewed row by row on its own screen; the raw files stay below.
         <p className="mt-2">
           <LinkButton href={reviewHref(cp)!} variant="solid" icon="flag">
