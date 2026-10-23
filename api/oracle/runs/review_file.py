@@ -288,7 +288,8 @@ def _line(entry: dict[str, Any]) -> str:
 
 def findings(review: dict[str, Any], extra: list[str] | None = None) -> list[str]:
     """The workflow revise step's findings: a lead line, one line per entry, the items left
-    alone, ``extra`` (Oracle's check), then the note; at most :data:`MAX_FINDINGS` lines."""
+    alone, the note, then ``extra`` (Oracle's check, after the person's note as before D4);
+    at most :data:`MAX_FINDINGS` lines."""
     review = canonical(review)
     entries = review["items"]
     attempt = f", attempt {review['attempt']}" if review.get("attempt") else ""
@@ -299,9 +300,9 @@ def findings(review: dict[str, Any], extra: list[str] | None = None) -> list[str
     lines += [_line(e) for e in entries]
     if review.get("unchanged"):
         lines.append(f"Unchanged: {', '.join(review['unchanged'])}")
-    lines += extra or []
     if review.get("general_note"):
         lines.append(f"Note: {review['general_note']}")
+    lines += extra or []
     if len(lines) > MAX_FINDINGS:
         lines = [*lines[: MAX_FINDINGS - 1], MORE]
     return lines

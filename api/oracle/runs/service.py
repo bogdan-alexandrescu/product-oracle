@@ -2812,6 +2812,8 @@ async def _submit_now(
     # A retry after the runtime refused a re-run keeps the reviewer's note; it stays
     # recorded until a submission succeeds (:func:`_accepted`).
     change_request = change_request or art.get("pending_note")
+    # What the agents get: the structured review of a send-back (D4), else the note.
+    agents_request = art.get("pending_review") or change_request
     if segment.estimate_usd is None:
         segment.estimate_usd = flows.segment_estimate(sdef, knobs)
     tag = workflow.label(run.id, segment.name, attempt)
@@ -2896,7 +2898,7 @@ async def _submit_now(
                 s,
                 segments,
                 attempt if own else 1,
-                change_request if own else None,
+                agents_request if own else None,
                 runtime,
                 attached=mode.attach,
                 planned=list(planned),
@@ -3056,6 +3058,7 @@ def _accepted(
     art.pop("decision", None)
     art.pop("claim", None)
     art.pop("pending_note", None)
+    art.pop("pending_review", None)
     art["attempts"].append(
         {
             # The number in its key: submissions given up on (Retry) keep theirs.
@@ -3116,15 +3119,25 @@ async def _submit(
     segment: RunSegment,
     segments: list[RunSegment],
     change_request: str | None = None,
+    review: str | None = None,
 ) -> None:
     """Queue the segment for submission (the caller commits): the runtime is not called,
     the segment waits (:data:`QUEUED`) for :func:`submit_queued` to submit it after the
     caller commits, with neither the review gate nor the run's row lock held across the
-    call. Every path that starts a segment queues; none submits under a lock."""
+    call. Every path that starts a segment queues; none submits under a lock.
+
+    ``change_request`` is the person's note (the attempt's note, kept until a submission
+    succeeds); ``review``, the structured review a send-back delivers (D4), is what the
+    agents get instead when given."""
     art = _art(segment)
-    if change_request:
+    if change_request or review:
         _keep_previous(art)
+    if change_request:
         art["pending_note"] = change_request
+    if review:
+        art["pending_review"] = review
+    elif change_request:
+        art.pop("pending_review", None)
     art.pop("claim", None)
     _set_art(segment, art)
     segment.status = "pending"
@@ -6491,11 +6504,12 @@ async def _continue_decided(
         "restore": restore,
     }
     _set_art(target, art)
+    review = None
     if decision != "approved" and cp.review:
         from oracle.runs import review_file
 
-        note = review_file.change_request(cp.review, cp.decided_at)
-    await _submit(db, run, target, segments, change_request=note)
+        review = review_file.change_request(cp.review, cp.decided_at)
+    await _submit(db, run, target, segments, change_request=note, review=review)
 
 
 def _owes(cp: Checkpoint) -> bool:
@@ -6880,6 +6894,7 @@ async def void_decision(
     unqueue(segment)
     art = _art(segment)
     art.pop("pending_note", None)
+    art.pop("pending_review", None)
     _set_art(segment, art)
     segment.status = decision.get("restore") or "pending"
     decided_by, kind = cp.decided_by, cp.status
