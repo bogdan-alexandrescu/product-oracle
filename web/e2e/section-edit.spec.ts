@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, openSection, section } from "./helpers";
 
 // #347: people type into PRD sections by hand, and review the agent rewrites held because
@@ -110,4 +111,60 @@ test("held rewrites: Reject keeps the approved text and shows the reason", async
   await expect(page).toHaveURL(/\/v\/2/);
   const goal = await openSection(page, "goal-trace");
   await expect(goal).not.toContainText("An agent proposed this added sentence.");
+});
+
+// Review fixes 3: a save is checked against the section's revision (its text, what it cites
+// and its layer), which differs from its content hash once the section cites something.
+test("the first Save on a section that cites something is not refused", async ({ page }) => {
+  await login(page);
+  await page.goto(DOC);
+  const { editor } = await openEditor(page, "goal-trace", "1. Goal trace");
+  await editor.getByLabel("Section text (markdown)").fill("Serves G1 (activation) [c:c3]. Completion moves between the cart and the confirmation page.");
+  await editor.getByRole("button", { name: "Save" }).click();
+  await expect(page).toHaveURL(/\/v\/3#goal-trace$/);
+  await expect(editor.getByTestId("section-edit-conflict")).toHaveCount(0);
+  await expect(section(page, "goal-trace")).toContainText("Completion moves between the cart and the confirmation page.");
+});
+
+test("held rewrites: a rewrite of a section the document no longer has cannot be accepted, and says why", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "held-section-gone"), MOCK_SCENARIO_KEY);
+  await login(page);
+  await page.goto(DOC);
+  const open = page.getByRole("button", { name: /^Held rewrites/ }).filter({ visible: true });
+  await expect(open.getByTestId("held-count")).toHaveText("2");
+  await open.click();
+  const item = page.getByTestId("held-rewrites").filter({ visible: true }).getByTestId("held-rewrite").filter({ hasText: "Launch checklist" });
+  await expect(item).toContainText("This section is no longer in the latest version.");
+  await expect(item.getByRole("button", { name: "Accept" })).toBeDisabled();
+  await item.getByLabel("Reason").fill("The checklist moved to the launch plan.");
+  await item.getByRole("button", { name: "Reject" }).click();
+  await expect(item).toContainText("Rejected");
+  await expect(open.getByTestId("held-count")).toHaveText("1");
+});
+
+// Owner rule (#370): a control a role can never use is hidden, not disabled.
+test("Edit section is hidden from a viewer, even on a section they own, and so are Accept and Reject", async ({ page }) => {
+  await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [MOCK_ROLE_KEY, "viewer"] as const);
+  await login(page);
+  await page.goto(DOC);
+  const goal = await openSection(page, "goal-trace");
+  // Edit section was a viewer's only ⋯ item: with it hidden there is no menu at all.
+  await expect(goal.getByRole("button", { name: "Actions for 1. Goal trace" })).toHaveCount(0);
+  await page.getByRole("button", { name: /^Held rewrites/ }).filter({ visible: true }).click();
+  const item = page.getByTestId("held-rewrites").filter({ visible: true }).getByTestId("held-rewrite");
+  await expect(item).toContainText("An approver accepts or rejects it.");
+  await expect(item.getByRole("button", { name: "Accept" })).toHaveCount(0);
+  await expect(item.getByRole("button", { name: "Reject" })).toHaveCount(0);
+});
+
+test("a commenter edits the section they own, and has no Edit section on others", async ({ page }) => {
+  await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [MOCK_ROLE_KEY, "commenter"] as const);
+  await login(page);
+  await page.goto(DOC);
+  const { editor } = await openEditor(page, "goal-trace", "1. Goal trace");
+  await expect(editor).toBeVisible();
+  const problem = await openSection(page, "problem");
+  await problem.getByRole("button", { name: "Actions for 2. Problem" }).click();
+  await expect(problem.getByRole("menuitem", { name: "Add evidence link" })).toBeVisible();
+  await expect(problem.getByRole("menuitem", { name: /^Edit section/ })).toHaveCount(0);
 });

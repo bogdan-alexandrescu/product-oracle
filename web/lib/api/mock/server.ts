@@ -33,7 +33,7 @@ import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./rep
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
-import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
+import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
@@ -1438,6 +1438,18 @@ function load(): Db {
   db.discussions = scenario === "discussions" ? seedDiscussionsScenario(db) : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
+  // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
+  if (scenario === "held-section-gone") {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
+    const first = db.review_v2.patches[0];
+    if (first) {
+      db.review_v2.patches.push({
+        ...first, id: "p0000000-0000-4000-8000-000000000002", section_key: "launch-checklist", heading: "Launch checklist",
+        base_hash: hash("launch-checklist"), body_md: "Tell support a day before the cart change ships.",
+      });
+    }
+  }
   save(db);
   return db;
 }
@@ -1593,6 +1605,7 @@ function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
       const r = latestReview(db, v.id, s.section_key);
       return {
         ...s,
+        revision: sectionRevision(s, hash),
         spec_states: s.spec_states ?? [],
         verdict: r
           ? {
@@ -2293,7 +2306,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   // v2 review routes (./review-v2.ts) check roles themselves.
   if (!db.review_v2) {
     const prd = db.documents.find((d) => d.kind === "prd");
-    db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id);
+    db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
   }
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
