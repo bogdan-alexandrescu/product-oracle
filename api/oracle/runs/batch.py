@@ -42,3 +42,19 @@ def put(key: Hashable, value: Any) -> None:
     memo = _memo.get()
     if memo is not None:
         memo[key] = value
+
+
+async def many[K: Hashable, V](
+    kind: Hashable, keys: list[K], load: Callable[[list[K]], Awaitable[dict[K, V]]]
+) -> dict[K, V]:
+    """``load(keys)`` for many keys, each read once per :func:`batched` block: the keys not
+    read yet are read together, in one ``load``. A key ``load`` does not return is absent."""
+    memo = _memo.get()
+    if memo is None:
+        return await load(keys)
+    missing = [k for k in dict.fromkeys(keys) if (kind, k) not in memo]
+    if missing:
+        found = await load(missing)
+        for k in missing:
+            memo[(kind, k)] = found.get(k)
+    return {k: v for k in keys if (v := memo[(kind, k)]) is not None}

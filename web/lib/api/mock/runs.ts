@@ -2117,8 +2117,8 @@ export const ROADMAP_REVIEW_RUN: { run: RunOut; artifacts: Record<string, string
 
 /**
  * D3's roadmap-items-console-held scenario: the same run, approved in SwarmCloud's console
- * while blocking reasons are open, so the approval is held until an approver confirms (e2e/helpers.ts
- * seedRoadmapReviewConsoleHeld).
+ * while blocking reasons are open, so the approval is held until an approver confirms (seeded
+ * by po-mock-scenario=roadmap-items-console-held, ./server.ts).
  */
 export const ROADMAP_REVIEW_HELD_RUN: typeof ROADMAP_REVIEW_RUN = {
   run: {
