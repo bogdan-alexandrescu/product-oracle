@@ -15,6 +15,9 @@ import time
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import event
+
+from oracle.db import get_engine
 from oracle.runs import actions
 from oracle.runs.models import Checkpoint
 from oracle.runs.schemas import (
@@ -35,6 +38,11 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
     seed_baseline,
 )
 from tests.test_roadmap_reasons import SECOND, roadmap_items_check
+
+# The reads of one ``GET /v1/inbox`` with 20 Roadmap items checkpoints of 3 distinct items
+# each: about 50 when batched (most of them the Inbox's other rows), about 170 when each
+# item's trace is read on its own.
+MAX_INBOX_READS = 60
 
 # --- unit: actions.summarize -------------------------------------------------------------
 
@@ -347,17 +355,36 @@ async def test_a_held_console_approval_marks_the_summary(client, owner, runtime)
 
 
 async def test_the_inbox_with_20_roadmap_checkpoints_is_quick(client, owner, runtime):  # noqa: F811
-    """protects=the Inbox reads the company-wide inputs and each item's trace once per call,
-    shared across its checkpoints, and stays quick; fails_when=p95 over 300 ms with 20
-    pending Roadmap items checkpoints on the test database; no_claim=production data
-    volume."""
+    """protects=the Inbox reads the company-wide inputs once per call and the traces of all
+    its checkpoints' items together, so it stays quick when every checkpoint has its own
+    items; fails_when=p95 over 300 ms with 20 pending Roadmap items checkpoints whose items
+    all differ, on the test database; no_claim=production data volume."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
-    for _ in range(20):
-        await roadmap_items_check(client, auth, runtime, SECOND)
-    got = await inbox_of(client, auth)
+    for n in range(20):
+        # Distinct items in every checkpoint: nothing is shared between them but the
+        # company-wide reads.
+        items = SECOND
+        for key in ("payment-step", "mobile-push", "gift-cards"):
+            items = items.replace(f"id: {key}", f"id: {key}-{n}")
+        await roadmap_items_check(client, auth, runtime, items)
+    statements: list[str] = []
+
+    def count(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        got = await inbox_of(client, auth)
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
     assert sum(1 for c in got["checkpoints"] if c["summary"]) == 20
+    # Batched, not per checkpoint or per item: the reads do not grow with the 60 items (each
+    # review's savepoint, two statements, is not a read).
+    reads = [st for st in statements if "SAVEPOINT" not in st]
+    assert len(reads) <= MAX_INBOX_READS, len(reads)
     assert got["total"] >= 20  # the badge: one per checkpoint, children add nothing
     times = []
     for _ in range(10):
