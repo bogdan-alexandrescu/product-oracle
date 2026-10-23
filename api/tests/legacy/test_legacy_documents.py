@@ -163,7 +163,8 @@ async def test_markdown_export_is_the_draft_with_a_banner_after_front_matter(cli
     banner, rest = exported[len(front) + 5 :].split("\n", 1)
     assert re.fullmatch(
         r"<!-- Product Oracle export: Onboarding checklist PRD \(legacy-onboarding\)"
-        r" · version 1 · status draft · imported .+ UTC -->",
+        # #463: the export names its time in the Company time zone, with its abbreviation.
+        r" · version 1 · status draft · imported \d{4}-\d{2}-\d{2} \d{2}:\d{2} [A-Z]{2,5} -->",
         banner,
     )
     assert rest.strip() == body.strip()
