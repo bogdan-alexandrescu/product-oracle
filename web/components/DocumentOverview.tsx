@@ -21,6 +21,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { ORACLE_WORK } from "@/components/JobsPanel";
+import { Campaigns, ReviewSettingsButton, SectionAssignments } from "@/components/ReviewSetup";
 import { FRESHNESS, sizeText } from "@/components/tech-brief";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type VersionSummary } from "@/lib/api/client";
@@ -206,6 +207,14 @@ export function DocumentOverview({ doc }: { doc: string }) {
   const versions = [...(d?.versions ?? [])].reverse();
   const [picked, setPicked] = useState<number | null>(null);
   const selected = versions.find((v) => v.number === picked) ?? versions[0] ?? null;
+  // Review setup (#342): each section of the latest version, its owner, reviewers and due date.
+  const latest = d?.latest_version ?? null;
+  const statesQ = useQuery(`section-states|${doc}|${latest}`, () =>
+    latest == null
+      ? Promise.resolve(null)
+      : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/section-states", { params: { path: { doc, n: latest } } })),
+  );
+  const states = statesQ.data?.sections ?? [];
   return (
     <div>
       <DocToolbar doc={d} />
@@ -239,6 +248,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
               action={
                 <>
                   {d.kind === "prd" && <BuildRoadmapButton prd={d} />}
+                  {statesQ.data && <ReviewSettingsButton doc={doc} sections={states} onSaved={statesQ.reload} />}
                   {d.latest_version != null && (
                     <LinkButton variant="primary" href={versionHref(doc, d.kind, d.latest_version)}>
                       Open latest (v{d.latest_version})
@@ -262,6 +272,9 @@ export function DocumentOverview({ doc }: { doc: string }) {
                 />
               </Panel>
               {d.kind === "prd" && <TechBriefs doc={doc} />}
+              {statesQ.error && <ErrorNote>{statesQ.error}</ErrorNote>}
+              {statesQ.data && <SectionAssignments doc={doc} states={states} onSaved={statesQ.reload} />}
+              {latest != null && <Campaigns doc={doc} />}
             </Split>
           </>
         )}
