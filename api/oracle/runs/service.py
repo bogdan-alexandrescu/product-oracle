@@ -4464,7 +4464,15 @@ async def _section_keys(db: AsyncSession, version_id: uuid.UUID) -> list[str]:
     )
 
 
-async def checked_items(db: AsyncSession, run: Run, text: str) -> CheckedItems:
+async def items_check(db: AsyncSession, run: Run, text: str) -> roadmap.ItemsCheck:
+    """The check of a Roadmap items file, read once per Inbox call (oracle.runs.batch)."""
+    check, *_ = await once(("items_check", _source_id(run), text), lambda: _checked(db, run, text))
+    return check
+
+
+async def _checked(
+    db: AsyncSession, run: Run, text: str
+) -> tuple[roadmap.ItemsCheck, str | None, int | None, set[str] | None]:
     slug = version = prd_id = None
     keys: set[str] | None = None
     source_id = _source_id(run)
@@ -4480,6 +4488,13 @@ async def checked_items(db: AsyncSession, run: Run, text: str) -> CheckedItems:
     # In a worker thread with a time cap: agent output never holds the event loop.
     check = await roadmap.check_items_async(
         text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
+    )
+    return check, slug, version, keys
+
+
+async def checked_items(db: AsyncSession, run: Run, text: str) -> CheckedItems:
+    check, slug, version, keys = await once(
+        ("items_check", _source_id(run), text), lambda: _checked(db, run, text)
     )
     if not check.items:
         return CheckedItems(check, [], None, False, keys)
@@ -8600,7 +8615,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.runs import actions
 
     with batched():
-        await actions.read_ahead(db, [c for c in mine if c.kind in actions.SUMMARIES])
+        await actions.read_ahead(db, [c for c in mine if c.kind in actions.SUMMARIES], runs)
         for c, row in zip(mine, checkpoints, strict=True):
             row.summary = await actions.inbox_summary(
                 db, c, principal, run=runs[c.run_id], console=row.console

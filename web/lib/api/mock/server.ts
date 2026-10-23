@@ -24,7 +24,7 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
-import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngReviewRun, seedFeatureSetRun, seedPriorityRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, ROADMAP_REVIEW_HELD_RUN, routeRuns, seedEngReviewRun, seedFeatureSetRun, seedPriorityRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
@@ -710,6 +710,19 @@ function seedEngReview(): Db {
   const db = seed();
   db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
   seeded("eng-review", () => seedEngReviewRun(db.runs!, runsContext(db)));
+  return db;
+}
+
+/**
+ * D3 "roadmap-items-console-held" scenario: the default company plus the roadmap review run
+ * (usage-alerts-roadmap at its Roadmap items checkpoint) approved in SwarmCloud's console
+ * while blocking reasons are open, so the approval is held (./runs.ts ROADMAP_REVIEW_HELD_RUN).
+ */
+function seedRoadmapItemsConsoleHeld(): Db {
+  const db = seed();
+  const held = structuredClone(ROADMAP_REVIEW_HELD_RUN);
+  db.runs!.runs.push(held.run);
+  Object.assign(db.runs!.artifacts, held.artifacts);
   return db;
 }
 
@@ -1408,6 +1421,8 @@ function load(): Db {
             ? seedFeatureSet
           : scenario === "eng-review"
             ? seedEngReview
+          : scenario === "roadmap-items-console-held"
+            ? seedRoadmapItemsConsoleHeld
           : scenario === "priority-order"
             ? seedPriorityOrder
           : scenario === "next-draft" || scenario === "next-draft-costly"

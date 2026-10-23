@@ -22,6 +22,7 @@ Each pending checkpoint has one draft on the server: a list of per-item actions
 The writes commit; :func:`read` does not write.
 """
 
+import logging
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -94,6 +95,8 @@ KIND_WORDS = {
     "strategy_review": "strategy review",
     "launch_review": "launch review",
 }
+
+log = logging.getLogger(__name__)
 
 
 class InvalidAction(ValueError):
@@ -679,9 +682,10 @@ async def _actions(db: AsyncSession, checkpoint_ids: list[uuid.UUID]) -> list[Ch
     )
 
 
-async def read_ahead(db: AsyncSession, cps: list[Checkpoint]) -> None:
+async def read_ahead(db: AsyncSession, cps: list[Checkpoint], runs: dict[uuid.UUID, Run]) -> None:
     """In one Inbox call (oracle.runs.batch): the checkpoints' segments and draft actions in
-    two reads, for their reviews to share."""
+    two reads, and their items' traces together (oracle.runs.reasons.read_ahead), for their
+    reviews to share."""
     seqs = {
         (c.run_id, s)
         for c in cps
@@ -700,6 +704,21 @@ async def read_ahead(db: AsyncSession, cps: list[Checkpoint]) -> None:
     rows = await _actions(db, [c.id for c in cps if c.kind in ITEM_FILES])
     for c in cps:
         batch.put(("actions", c.id), [r for r in rows if r.checkpoint_id == c.id])
+    runs_items = []
+    for c in cps:
+        name, seq = ITEM_FILES.get(c.kind), (c.payload or {}).get("segment_seq")
+        segment = found.get((c.run_id, seq)) if name else None
+        text = ((segment.artifacts or {}).get("files") or {}).get(name) if segment else None
+        if isinstance(text, str):
+            check = await service.items_check(db, runs[c.run_id], text)
+            runs_items.append((runs[c.run_id], check.items))
+    try:
+        # As each review's own reasons (service.checked_items): an error here loses only
+        # the read ahead; each review then reads its own, in its savepoint.
+        async with db.begin_nested():
+            await reasons.read_ahead(db, runs_items)
+    except Exception:  # noqa: BLE001 - the read ahead never fails the Inbox
+        log.exception("the Inbox could not read its checkpoints' traces ahead")
 
 
 async def read(

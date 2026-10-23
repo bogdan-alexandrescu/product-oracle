@@ -101,63 +101,6 @@ class ImportResult:
 # --- reading the baseline --------------------------------------------------------------
 
 
-async def _entities_by_key(db: AsyncSession, type_: str, keys: list[str]) -> dict[str, Entity]:
-    if not keys:
-        return {}
-    rows = await db.scalars(
-        select(Entity).where(
-            Entity.type == type_, Entity.key.in_(keys), Entity.status != "rejected"
-        )
-    )
-    return {e.key: e for e in rows}
-
-
-async def _linked_entities(
-    db: AsyncSession, prd_version: DocumentVersion, section_key: str | None
-) -> list[Entity]:
-    """Entities the PRD section links on that exact version (or document-wide)."""
-    if not section_key:
-        return []
-    ids = list(
-        await db.scalars(
-            select(DocumentSectionLink.entity_id).where(
-                DocumentSectionLink.document_id == prd_version.document_id,
-                DocumentSectionLink.section_key == section_key,
-                DocumentSectionLink.kind.in_(TRACING_LINKS),
-                DocumentSectionLink.entity_id.is_not(None),
-                or_(
-                    DocumentSectionLink.version_id == prd_version.id,
-                    DocumentSectionLink.version_id.is_(None),
-                ),
-            )
-        )
-    )
-    if not ids:
-        return []
-    rows = await db.scalars(
-        select(Entity)
-        .where(Entity.id.in_(ids), Entity.status != "rejected")
-        .order_by(Entity.type, Entity.key)
-    )
-    return list(rows)
-
-
-async def _parts_of(db: AsyncSession, feature_id: uuid.UUID) -> list[Entity]:
-    rows = await db.scalars(
-        select(Entity)
-        .join(Edge, Edge.src_id == Entity.id)
-        .where(
-            Edge.dst_id == feature_id,
-            Edge.type == "part_of",
-            Edge.status != "rejected",
-            Entity.type == "requirement",
-            Entity.status != "rejected",
-        )
-        .order_by(Entity.key)
-    )
-    return list(rows)
-
-
 async def blockers_of(db: AsyncSession, target_ids: list[uuid.UUID]) -> list[Entity]:
     """Constraints (blockers) that affect or block any of ``target_ids``."""
     if not target_ids:
@@ -203,24 +146,6 @@ async def blockers_by_target(
     return out
 
 
-async def _criteria_of(db: AsyncSession, requirement_ids: list[uuid.UUID]) -> list[Entity]:
-    if not requirement_ids:
-        return []
-    rows = await db.scalars(
-        select(Entity)
-        .join(Edge, Edge.src_id == Entity.id)
-        .where(
-            Edge.dst_id.in_(requirement_ids),
-            Edge.type == "verifies",
-            Edge.status != "rejected",
-            Entity.type == "acceptance_criterion",
-            Entity.status != "rejected",
-        )
-        .order_by(Entity.key)
-    )
-    return list(dict.fromkeys(rows))
-
-
 async def open_experiments(
     db: AsyncSession, blocker_ids: list[uuid.UUID]
 ) -> list[FeasibilityExperiment]:
@@ -257,42 +182,145 @@ async def derive_trace(
     db: AsyncSession, prd_version: DocumentVersion | None, raw: dict[str, Any]
 ) -> dict[str, Any]:
     """The feature, requirements, blockers, gates and economics of one raw item."""
-    trace: list[dict[str, Any]] = []
-    section = items_file._text(raw.get("prd_section"))
+    return (await derive_traces(db, prd_version, [raw]))[0]
 
-    def note(target: str, entity: Entity, via: str) -> None:
-        trace.append({"target": target, "id": str(entity.id), "key": entity.key, "via": via})
 
-    feature: Entity | None = None
-    requirements: dict[uuid.UUID, Entity] = {}
-    blockers: dict[uuid.UUID, Entity] = {}
+def _merged(lists: list[list[Entity]]) -> list[Entity]:
+    """Entities of several targets, each once, in key order (as one query of them all)."""
+    return sorted(dict.fromkeys(e for found in lists for e in found), key=lambda e: e.key)
 
-    declared_feature = raw.get("feature") if isinstance(raw.get("feature"), str) else None
-    if declared_feature:
-        feature = (await _entities_by_key(db, "feature", [declared_feature])).get(declared_feature)
-        if feature is not None:
-            note("feature", feature, "declared")
-        else:
-            trace.append({"target": "feature", "key": declared_feature, "unresolved": True})
-    declared_reqs = _keys(raw.get("requirements"))
-    found = await _entities_by_key(db, "requirement", declared_reqs)
-    for key in declared_reqs:
-        if key in found:
-            requirements[found[key].id] = found[key]
-            note("requirement", found[key], "declared")
-        else:
-            trace.append({"target": "requirement", "key": key, "unresolved": True})
-    declared_blockers = _keys(raw.get("blockers"))
-    found = await _entities_by_key(db, "constraint", declared_blockers)
-    for key in declared_blockers:
-        if key in found:
-            blockers[found[key].id] = found[key]
-            note("blocker", found[key], "declared")
-        else:
-            trace.append({"target": "blocker", "key": key, "unresolved": True})
 
-    if prd_version is not None:
-        for entity in await _linked_entities(db, prd_version, section):
+async def _by_type_and_key(
+    db: AsyncSession, wanted: set[tuple[str, str]]
+) -> dict[tuple[str, str], Entity]:
+    if not wanted:
+        return {}
+    rows = await db.scalars(
+        select(Entity).where(
+            Entity.type.in_({t for t, _ in wanted}),
+            Entity.key.in_({k for _, k in wanted}),
+            Entity.status != "rejected",
+        )
+    )
+    return {(e.type, e.key): e for e in rows if (e.type, e.key) in wanted}
+
+
+async def _linked_by_section(
+    db: AsyncSession, prd_version: DocumentVersion, section_keys: set[str]
+) -> dict[str, list[Entity]]:
+    """:func:`_linked_entities` for many sections in two queries: section -> its entities."""
+    if not section_keys:
+        return {}
+    links = (
+        await db.execute(
+            select(DocumentSectionLink.section_key, DocumentSectionLink.entity_id).where(
+                DocumentSectionLink.document_id == prd_version.document_id,
+                DocumentSectionLink.section_key.in_(section_keys),
+                DocumentSectionLink.kind.in_(TRACING_LINKS),
+                DocumentSectionLink.entity_id.is_not(None),
+                or_(
+                    DocumentSectionLink.version_id == prd_version.id,
+                    DocumentSectionLink.version_id.is_(None),
+                ),
+            )
+        )
+    ).all()
+    if not links:
+        return {}
+    rows = list(
+        await db.scalars(
+            select(Entity)
+            .where(Entity.id.in_({i for _, i in links}), Entity.status != "rejected")
+            .order_by(Entity.type, Entity.key)
+        )
+    )
+    ids: dict[str, set[uuid.UUID]] = {}
+    for key, entity_id in links:
+        ids.setdefault(key, set()).add(entity_id)
+    return {key: [e for e in rows if e.id in found] for key, found in ids.items()}
+
+
+async def _related(
+    db: AsyncSession, dst_ids: set[uuid.UUID], edge_types: tuple[str, ...], type_: str
+) -> dict[uuid.UUID, list[Entity]]:
+    """The live ``type_`` entities with a live edge of ``edge_types`` to each of
+    ``dst_ids``, in key order, in one query."""
+    if not dst_ids:
+        return {}
+    rows = await db.execute(
+        select(Edge.dst_id, Entity)
+        .join(Edge, Edge.src_id == Entity.id)
+        .where(
+            Edge.dst_id.in_(dst_ids),
+            Edge.type.in_(edge_types),
+            Edge.status != "rejected",
+            Entity.type == type_,
+            Entity.status != "rejected",
+        )
+        .order_by(Entity.key)
+    )
+    out: dict[uuid.UUID, list[Entity]] = {}
+    for dst, entity in rows.all():
+        found = out.setdefault(dst, [])
+        if entity not in found:
+            found.append(entity)
+    return out
+
+
+async def derive_traces(
+    db: AsyncSession, prd_version: DocumentVersion | None, raws: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """:func:`derive_trace` of many raw items, in a fixed number of queries whatever their
+    number (each step reads for all the items at once); the results are the same."""
+    sections = [items_file._text(raw.get("prd_section")) for raw in raws]
+    declared = [raw.get("feature") if isinstance(raw.get("feature"), str) else None for raw in raws]
+    declared_reqs = [_keys(raw.get("requirements")) for raw in raws]
+    declared_blockers = [_keys(raw.get("blockers")) for raw in raws]
+    item_keys = [items_file._text(raw.get("id")) for raw in raws]
+
+    wanted = {("feature", k) for k in [*declared, *item_keys] if k}
+    wanted |= {("requirement", k) for keys in declared_reqs for k in keys}
+    wanted |= {("constraint", k) for keys in declared_blockers for k in keys}
+    by_key = await _by_type_and_key(db, wanted)
+    linked = (
+        await _linked_by_section(db, prd_version, {s for s in sections if s})
+        if prd_version is not None
+        else {}
+    )
+
+    traces: list[list[dict[str, Any]]] = []
+    features: list[Entity | None] = []
+    requirements_of: list[dict[uuid.UUID, Entity]] = []
+    blockers_of_item: list[dict[uuid.UUID, Entity]] = []
+    for n in range(len(raws)):
+        trace: list[dict[str, Any]] = []
+
+        def note(target: str, entity: Entity, via: str, trace: list = trace) -> None:
+            trace.append({"target": target, "id": str(entity.id), "key": entity.key, "via": via})
+
+        feature: Entity | None = None
+        requirements: dict[uuid.UUID, Entity] = {}
+        blockers: dict[uuid.UUID, Entity] = {}
+        declared_feature = declared[n]
+        if declared_feature:
+            feature = by_key.get(("feature", declared_feature))
+            if feature is not None:
+                note("feature", feature, "declared")
+            else:
+                trace.append({"target": "feature", "key": declared_feature, "unresolved": True})
+        for key in declared_reqs[n]:
+            if (found := by_key.get(("requirement", key))) is not None:
+                requirements[found.id] = found
+                note("requirement", found, "declared")
+            else:
+                trace.append({"target": "requirement", "key": key, "unresolved": True})
+        for key in declared_blockers[n]:
+            if (found := by_key.get(("constraint", key))) is not None:
+                blockers[found.id] = found
+                note("blocker", found, "declared")
+            else:
+                trace.append({"target": "blocker", "key": key, "unresolved": True})
+        for entity in linked.get(sections[n] or "", []) if sections[n] else []:
             if entity.type == "feature" and feature is None:
                 feature = entity
                 note("feature", entity, "section_link")
@@ -302,77 +330,109 @@ async def derive_trace(
             elif entity.type == "constraint" and entity.id not in blockers:
                 blockers[entity.id] = entity
                 note("blocker", entity, "section_link")
-    item_key = items_file._text(raw.get("id"))
-    if feature is None and item_key:
-        feature = (await _entities_by_key(db, "feature", [item_key])).get(item_key)
-        if feature is not None:
-            note("feature", feature, "key_match")
-    if feature is not None:
-        for req in await _parts_of(db, feature.id):
-            if req.id not in requirements:
-                requirements[req.id] = req
-                note("requirement", req, "graph")
-    targets = ([feature.id] if feature is not None else []) + list(requirements)
-    for blocker in await blockers_of(db, targets):
-        if blocker.id not in blockers:
-            blockers[blocker.id] = blocker
-            note("blocker", blocker, "graph")
+        item_key = item_keys[n]
+        if feature is None and item_key:
+            feature = by_key.get(("feature", item_key))
+            if feature is not None:
+                note("feature", feature, "key_match")
+        traces.append(trace)
+        features.append(feature)
+        requirements_of.append(requirements)
+        blockers_of_item.append(blockers)
 
-    gates: list[dict[str, Any]] = []
-    declared_gates = raw.get("validation_gates")
-    for g in declared_gates if isinstance(declared_gates, list) else []:
-        if isinstance(g, dict) and items_file._text(g.get("name")):
+    parts = await _related(
+        db, {f.id for f in features if f is not None}, ("part_of",), "requirement"
+    )
+    for n, feature in enumerate(features):
+        if feature is not None:
+            for req in parts.get(feature.id, []):
+                if req.id not in requirements_of[n]:
+                    requirements_of[n][req.id] = req
+                    traces[n].append(
+                        {"target": "requirement", "id": str(req.id), "key": req.key, "via": "graph"}
+                    )
+    targets = [
+        ([f.id] if f is not None else []) + list(reqs)
+        for f, reqs in zip(features, requirements_of, strict=True)
+    ]
+    affecting = await _related(
+        db, {t for ts in targets for t in ts}, ("affects", "blocks"), "constraint"
+    )
+    for n, ts in enumerate(targets):
+        for blocker in _merged([affecting.get(t, []) for t in ts]):
+            if blocker.id not in blockers_of_item[n]:
+                blockers_of_item[n][blocker.id] = blocker
+                traces[n].append(
+                    {"target": "blocker", "id": str(blocker.id), "key": blocker.key, "via": "graph"}
+                )
+    verifying = await _related(
+        db, {r for reqs in requirements_of for r in reqs}, ("verifies",), "acceptance_criterion"
+    )
+    experiments = await open_experiments(db, list({b for bs in blockers_of_item for b in bs}))
+
+    out: list[dict[str, Any]] = []
+    for n, raw in enumerate(raws):
+        feature, requirements, blockers = features[n], requirements_of[n], blockers_of_item[n]
+        gates: list[dict[str, Any]] = []
+        declared_gates = raw.get("validation_gates")
+        for g in declared_gates if isinstance(declared_gates, list) else []:
+            if isinstance(g, dict) and items_file._text(g.get("name")):
+                gates.append(
+                    {
+                        "kind": "declared",
+                        "name": items_file._text(g.get("name")),
+                        "criterion": items_file._text(g.get("criterion")),
+                    }
+                )
+        for criterion in _merged([verifying.get(r, []) for r in requirements]):
             gates.append(
                 {
-                    "kind": "declared",
-                    "name": items_file._text(g.get("name")),
-                    "criterion": items_file._text(g.get("criterion")),
+                    "kind": "acceptance_criterion",
+                    "name": criterion.title,
+                    "entity_id": str(criterion.id),
+                    "key": criterion.key,
                 }
             )
-    for criterion in await _criteria_of(db, list(requirements)):
-        gates.append(
+        for exp in experiments:
+            if exp.blocker_id not in blockers:
+                continue
+            gates.append(
+                {
+                    "kind": "feasibility_experiment",
+                    "name": exp.hypothesis,
+                    "experiment_id": str(exp.id),
+                    "blocker_id": str(exp.blocker_id),
+                    "criterion": exp.success_threshold,
+                    "decision_gate_at": exp.decision_gate_at.isoformat()
+                    if exp.decision_gate_at
+                    else None,
+                    "status": exp.status,
+                }
+            )
+
+        economics: dict[str, Any] = {}
+        if isinstance(raw.get("economics"), dict):
+            economics["declared"] = json_safe(raw["economics"])
+        if feature is not None:
+            attrs = feature.attrs or {}
+            for k in ("effort", "confidence", "value", "cost"):
+                if attrs.get(k) is not None:
+                    economics.setdefault("baseline", {})[k] = attrs[k]
+        priority = raw.get("priority") if isinstance(raw.get("priority"), dict) else None
+        if priority and priority.get("score") is not None:
+            economics["priority_score"] = priority.get("score")
+
+        out.append(
             {
-                "kind": "acceptance_criterion",
-                "name": criterion.title,
-                "entity_id": str(criterion.id),
-                "key": criterion.key,
+                "feature_id": feature.id if feature is not None else None,
+                "requirement_ids": list(requirements),
+                "blocker_ids": list(blockers),
+                "trace": traces[n],
+                "validation_gates": gates,
+                "economics": economics,
             }
         )
-    for exp in await open_experiments(db, list(blockers)):
-        gates.append(
-            {
-                "kind": "feasibility_experiment",
-                "name": exp.hypothesis,
-                "experiment_id": str(exp.id),
-                "blocker_id": str(exp.blocker_id),
-                "criterion": exp.success_threshold,
-                "decision_gate_at": exp.decision_gate_at.isoformat()
-                if exp.decision_gate_at
-                else None,
-                "status": exp.status,
-            }
-        )
-
-    economics: dict[str, Any] = {}
-    if isinstance(raw.get("economics"), dict):
-        economics["declared"] = json_safe(raw["economics"])
-    if feature is not None:
-        attrs = feature.attrs or {}
-        for k in ("effort", "confidence", "value", "cost"):
-            if attrs.get(k) is not None:
-                economics.setdefault("baseline", {})[k] = attrs[k]
-    priority = raw.get("priority") if isinstance(raw.get("priority"), dict) else None
-    if priority and priority.get("score") is not None:
-        economics["priority_score"] = priority.get("score")
-
-    return {
-        "feature_id": feature.id if feature is not None else None,
-        "requirement_ids": list(requirements),
-        "blocker_ids": list(blockers),
-        "trace": trace,
-        "validation_gates": gates,
-        "economics": economics,
-    }
+    return out
 
 
 # --- importing ---------------------------------------------------------------------------
