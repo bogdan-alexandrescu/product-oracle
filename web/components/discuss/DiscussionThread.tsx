@@ -147,9 +147,15 @@ function chipCitation(c: Cite): CitationOut {
   } as CitationOut;
 }
 
-/** Oracle's text with each `[c:n]` drawn as a citation chip. */
-function ReplyBody({ text, citations }: { text: string; citations: Cite[] }) {
-  const parts = text.split(/(\[c:\d{1,4}\])/g);
+/** A marker still being written at the end of a streaming reply ("[", "[c", "[c:1"). */
+const PARTIAL_MARKER = /\[(c(:\d{0,4})?)?$/;
+
+/**
+ * Oracle's text with each `[c:n]` drawn as a citation chip. While it streams (#406) a
+ * marker is held back until it is complete and its citation has arrived: no raw `[c:` shows.
+ */
+function ReplyBody({ text, citations, live = false }: { text: string; citations: Cite[]; live?: boolean }) {
+  const parts = (live ? text.replace(PARTIAL_MARKER, "") : text).split(/(\[c:\d{1,4}\])/g);
   return (
     <>
       {parts.map((part, i) => {
@@ -191,6 +197,8 @@ function OracleReply({ m, discussionId, asker }: { m: Message; discussionId: str
         setText((x) => (first ? "" : x) + t);
         setMsg((x) => (x.status === "pending" ? { ...x, status: "streaming" } : x));
       },
+      // Sent as each marker completes, so it shows as a chip while the reply streams.
+      onCitations: (cites) => setMsg((x) => ({ ...x, citations: cites as Message["citations"] })),
       onDone: (out) => {
         const done = out as Message;
         setMsg(done);
@@ -244,7 +252,7 @@ function OracleReply({ m, discussionId, asker }: { m: Message; discussionId: str
           <span className="text-text2 italic">Oracle is thinking…</span>
         ) : live ? (
           <>
-            {text}
+            <ReplyBody text={text} citations={citations} live />
             <span aria-hidden className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-text align-middle" data-testid="oracle-caret" />
           </>
         ) : (

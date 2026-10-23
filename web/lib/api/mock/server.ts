@@ -17,7 +17,7 @@ import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
-import { emptyDiscussions, routeDiscussions, seedDiscussionReplies, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
+import { emptyDiscussions, routeDiscussions, seedDiscussionReplies, seedDiscussions, type DiscussionRow, type DiscussionsContext, type DiscussionsDb, type DocumentSection, type SubjectInfo } from "./discussions";
 import { routeEngineering, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
@@ -1507,6 +1507,24 @@ const CHECKPOINT_NAMES: Record<string, string> = {
   request_triage: "Request triage",
 };
 
+/** #406: the text of the document version a discussion is on, as oracle.discussions.context reads it: the section first (the brief on the whole document), then the rest, citation markers stripped. */
+function discussionDocument(db: Db, d: DiscussionRow): DocumentSection[] {
+  if (d.subject_kind !== "document" && d.subject_kind !== "section" && d.subject_kind !== "roadmap_item") return [];
+  const doc = findDocument(db, String(d.subject.document_id));
+  const v = doc ? findVersion(db, doc, Number(d.subject.version)) : undefined;
+  if (!doc || !v) return [];
+  const first = d.subject_kind === "section" ? String(d.subject.section_key) : null;
+  const later = (x: (typeof v.sections)[number]) => Number(first ? x.section_key !== first : x.layer !== "brief");
+  const sections = [...v.sections].sort((a, b) => later(a) - later(b));
+  return sections.map((x) => ({
+    document_id: doc.id,
+    key: x.section_key,
+    heading: x.heading,
+    text: x.body_md.replace(/\s*\[c:[^\]]*\]/g, ""),
+    url: `/documents/${doc.slug}/v/${v.number}#${x.section_key}`,
+  }));
+}
+
 /** A discussion's subject as the API resolves it (oracle.discussions.service): documents, sections and run checkpoints are checked; other kinds are taken as given. */
 function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): SubjectInfo | { status: number; detail: string } {
   if (kind === "document" || kind === "section" || kind === "roadmap_item") {
@@ -2415,6 +2433,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         return next;
       },
       current: () => load().discussions ?? emptyDiscussions(),
+      documentText: (d) => discussionDocument(db, d),
     };
     const res = await routeDiscussions(discussionsCtx, req, p, q);
     if (res) return res;

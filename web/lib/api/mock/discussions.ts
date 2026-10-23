@@ -80,7 +80,12 @@ export type DiscussionsContext = {
   persist?: (change: (db: DiscussionsDb) => void) => Promise<void>;
   /** The saved state now (a streaming reply checks for Stop). */
   current?: () => DiscussionsDb;
+  /** #406: the text of the document version a discussion is on, the section it is on first. */
+  documentText?: (d: DiscussionRow) => DocumentSection[];
 };
+
+/** A section of the document a discussion is on, as Oracle reads it (markers stripped). */
+export type DocumentSection = { document_id: string; key: string; heading: string; text: string; url: string };
 
 /** G2: the gateway's message when no Claude account can take a call (approvers and owners). */
 export const NO_ACCOUNT_MESSAGE =
@@ -88,6 +93,34 @@ export const NO_ACCOUNT_MESSAGE =
 /** The mock's canned reply, citing the seed's "Raise activation" goal. */
 export const CANNED_REPLY = ["Yes, if caps ", "read the plan thresholds only ", "[c:1]. Detection can follow ", "once activation holds; ", "the goal does not depend on it."];
 const CANNED_CITATIONS = [{ n: 1, kind: "entity", ref: "g.activation", title: "Goal: Raise activation", url: "/baseline", confidence: 0.82, low_confidence: false }];
+const STOPWORDS = new Set(["what", "when", "where", "which", "does", "this", "that", "draft", "document", "about", "with", "from", "have", "there", "their", "they"]);
+const words = (text: string) => new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !STOPWORDS.has(w)));
+
+/**
+ * #406: the mock's stand-in for the model reading the document. The sentence of the version
+ * (the section first, then the rest) that shares the most words with the question, at least
+ * two; its citation's marker comes split across two pieces, as a model's often is.
+ */
+export function documentReply(question: string, sections: DocumentSection[]): { pieces: string[]; citations: Record<string, unknown>[] } | null {
+  const asked = words(question);
+  let best: { n: number; sentence: string; score: number } | null = null;
+  sections.forEach((sec, i) => {
+    for (const sentence of sec.text.split(/\n+|(?<=[.!?])\s+/)) {
+      if (!sentence.trim() || sentence.trim().startsWith("|")) continue;
+      const score = [...words(sentence)].filter((w) => asked.has(w)).length;
+      if (score >= 2 && (!best || score > best.score)) best = { n: i + 1, sentence: sentence.trim().replace(/[.!?]$/, ""), score };
+    }
+  });
+  if (!best) return null;
+  const { n, sentence } = best as { n: number; sentence: string };
+  const sec = sections[n - 1];
+  const said = sentence[0].toLowerCase() + sentence.slice(1);
+  return {
+    pieces: ["The draft says ", `${said} `, "[c:", `${n}]`, ", in ", `“${sec.heading}”.`],
+    citations: [{ n, kind: "section", ref: `${sec.document_id}:${sec.key}`, title: sec.heading, url: sec.url }],
+  };
+}
+
 /** The first piece waits a little ("Oracle is thinking…"), the rest come 150 ms apart. */
 const FIRST_MS = 500;
 const DELTA_MS = 150;
@@ -387,8 +420,15 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
           controller.close();
           return;
         }
+        // #406: Oracle reads the document the discussion is on; else the canned answer.
+        const d = db.discussions.find((y) => y.id === x.discussion_id);
+        const asked = [...db.messages].reverse().find((y) => y.discussion_id === x.discussion_id && y.author_kind === "person");
+        const read = d && asked ? documentReply(asked.body, ctx.documentText?.(d) ?? []) : null;
+        const pieces = read?.pieces ?? CANNED_REPLY;
+        const citations = read?.citations ?? CANNED_CITATIONS;
         let text = "";
-        for (const [i, piece] of CANNED_REPLY.entries()) {
+        let cited = 0;
+        for (const [i, piece] of pieces.entries()) {
           await new Promise((ok) => setTimeout(ok, i === 0 ? FIRST_MS : DELTA_MS));
           if (now().cancel_requested) {
             await write({ status: "cancelled", body: text, cancel_requested: false });
@@ -398,11 +438,17 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
           }
           text += piece;
           controller.enqueue(event("delta", { text: piece }));
+          // As the API: a citation is sent as soon as its marker is complete.
+          const used = citations.filter((c) => text.includes(`[c:${c.n}]`));
+          if (used.length > cited) {
+            cited = used.length;
+            controller.enqueue(event("citations", used));
+          }
           await write({ body: text });
         }
-        await write({ status: "complete", body: text, citations: CANNED_CITATIONS });
-        controller.enqueue(event("citations", CANNED_CITATIONS));
-        controller.enqueue(event("done", messageOut({ ...x, status: "complete", body: text, citations: CANNED_CITATIONS })));
+        await write({ status: "complete", body: text, citations });
+        controller.enqueue(event("citations", citations));
+        controller.enqueue(event("done", messageOut({ ...x, status: "complete", body: text, citations })));
         controller.close();
       },
     });
