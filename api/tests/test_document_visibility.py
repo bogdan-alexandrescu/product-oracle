@@ -392,6 +392,11 @@ async def test_every_documents_review_export_and_search_get_route_misses_it(clie
         "campaign_id": campaign.json()["id"],
         "patch_id": patches[0]["id"],
         "job_id": str(uuid.uuid4()),
+        # A roadmap's change-set route (#346), walked with the update's slug: an update is
+        # never a roadmap, so this only proves the route is walked. That a real change set
+        # of a hidden roadmap is hidden is test_roadmap_change_sets'
+        # test_a_hidden_roadmaps_change_sets_are_hidden.
+        "set_id": str(uuid.uuid4()),
     }
 
     areas = {"documents", "review", "export", "search"}
@@ -423,6 +428,7 @@ async def test_every_documents_review_export_and_search_get_route_misses_it(clie
     assert "/v1/documents/{doc}/versions/{n}/comments" in walked
     assert "/v1/section-patches/{patch_id}" in walked
     assert "/v1/campaigns/{campaign_id}" in walked
+    assert "/v1/roadmaps/{doc}/change-sets/{set_id}" in walked
     # The owner reads what the commenter cannot.
     for path in (f"{url}/comments", f"/v1/section-patches/{values['patch_id']}",
                  f"/v1/campaigns/{values['campaign_id']}"):  # fmt: skip
