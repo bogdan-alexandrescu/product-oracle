@@ -744,7 +744,7 @@ def _rank(item: dict[str, Any]) -> int | None:
 def _sent_yaml(cp: Checkpoint) -> str | None:
     from oracle.runs import review_file
 
-    if cp.status == "pending" or not cp.review:
+    if cp.status == "pending" or not cp.review or cp.review.get("kind") == "edits":
         return None
     return review_file.render_yaml(cp.review, cp.decided_at)
 
@@ -979,7 +979,9 @@ async def _read(
         items=items,
         tally=tally,
         note=cp.draft_note,
-        sent_review=cp.review if cp.status != "pending" else None,
+        sent_review=cp.review
+        if cp.status != "pending" and (cp.review or {}).get("kind") != "edits"
+        else None,
         sent_review_yaml=_sent_yaml(cp),
         can_read=True,
         can_suggest=pending

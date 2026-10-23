@@ -118,6 +118,7 @@ fails and owners see "Couldn't import" in the Inbox with Retry.
 import asyncio
 import contextvars
 import copy
+import hashlib
 import logging
 import time
 import uuid
@@ -166,6 +167,7 @@ from oracle.review.service import locked_section_keys
 from oracle.roadmap import doc_dates, schedule
 from oracle.roadmap.views import items_version, version_items
 from oracle.runs import (
+    apply_edits,
     extensions,
     feature_set,
     flows,
@@ -205,6 +207,7 @@ from oracle.runs.schemas import (
     ItemsCheck,
     KnobsIn,
     KnobsOut,
+    NeedsAgents,
     PrdScopeOut,
     PreviousAttempt,
     RunCreate,
@@ -247,6 +250,7 @@ from oracle.templates.models import Template, TemplateVersion, Theme
 from oracle.tenancy import current_tenant, tenant_session
 from oracle.tenant_settings import TenantSetting
 from oracle.tenant_settings_api import company_horizons
+from oracle.v2.models import StakeholderQuestion
 
 if TYPE_CHECKING:
     from oracle.members.models import MemberFollowUp
@@ -797,17 +801,18 @@ def _checkpoint_out(
     flow: str,
     leads: frozenset[uuid.UUID],
     staged: dict[uuid.UUID, list[CheckpointAction]] | None = None,
+    open_questions: set[uuid.UUID] | None = None,
 ) -> CheckpointOut:
     """``names``: :func:`_decider_names` of the checkpoints read; ``flow``: the run's;
     ``leads``: :func:`oracle.members.leads.engineering_leads`, read once per request;
-    ``staged``: :func:`_staged_actions` of the checkpoints read (the approve gate)."""
+    ``staged``: :func:`_staged_actions` of the checkpoints read (the approve gate);
+    ``open_questions``: :func:`_open_questions` of those (D7: what needs the agents)."""
     console = ((cp.payload or {}).get("wait") or {}).get("console")
     payload, delivery = _delivery(cp, names or {})
-    shut = (
-        gate.approve_gate(cp, None, (staged or {}).get(cp.id, []))
-        if cp.status == "pending"
-        else None
-    )
+    mine = (staged or {}).get(cp.id, []) if cp.status == "pending" else []
+    shut = gate.approve_gate(cp, None, mine) if cp.status == "pending" else None
+    edits = cp.kind in apply_edits.FILES
+    blocked = apply_edits.needs_agents(mine, open_questions or set()) if edits else []
     return CheckpointOut(
         id=cp.id,
         run_id=cp.run_id,
@@ -831,6 +836,25 @@ def _checkpoint_out(
         or (gate.message(shut) if shut is not None and not shut.open else None),
         gate=shut,
         delivery=delivery,
+        approve_label=apply_edits.label(apply_edits.edit_count(mine) if edits else 0),
+        needs_agents=[NeedsAgents(action_id=a.id, item=a.item_key, kind=a.kind) for a in blocked],
+    )
+
+
+async def _open_questions(
+    db: AsyncSession, staged: dict[uuid.UUID, list[CheckpointAction]]
+) -> set[uuid.UUID]:
+    """The questions of staged question actions still asked (D7: they need the agents)."""
+    ids = {a.question_id for xs in staged.values() for a in xs if a.question_id is not None}
+    if not ids:
+        return set()
+    return set(
+        await db.scalars(
+            select(StakeholderQuestion.id).where(
+                StakeholderQuestion.id.in_(ids),
+                StakeholderQuestion.status.in_(apply_edits.OPEN_QUESTIONS),
+            )
+        )
     )
 
 
@@ -1036,6 +1060,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     names = await _decider_names(db, checkpoints)
     leads = await engineering_leads(db)
     staged = await _staged_actions(db, checkpoints)
+    asked = await _open_questions(db, staged)
     refs = await _refs(db, [run])
     knobs = _knobs(run)
     kind = await _target_kind(db, run)
@@ -1074,7 +1099,9 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         notes=notes,
         segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
         checkpoints=[
-            _checkpoint_out(c, principal, names, flow=run.flow, leads=leads, staged=staged)
+            _checkpoint_out(
+                c, principal, names, flow=run.flow, leads=leads, staged=staged, open_questions=asked
+            )
             for c in checkpoints
         ],
         token_read_only=await token_hold(db, run.id, live=False) is not None,
@@ -1425,16 +1452,29 @@ async def read_scope(db: AsyncSession, run_id: uuid.UUID) -> PrdScopeOut:
 
 
 async def read_artifact(
-    db: AsyncSession, run_id: uuid.UUID, seq: int, name: str, attempt: int | None = None
+    db: AsyncSession,
+    run_id: uuid.UUID,
+    seq: int,
+    name: str,
+    attempt: int | None = None,
+    agents: bool = False,
 ) -> str:
     """A segment's file; with ``attempt``, that attempt's: the current one, or the previous
-    one a send-back kept (D5). Older attempts are not kept."""
+    one a send-back kept (D5). Older attempts are not kept. ``agents``: the file as the
+    agents wrote it, before an approver's edits were applied (D7; 404 when none were)."""
     await _get_run(db, run_id)
     segment = await db.scalar(
         select(RunSegment).where(RunSegment.run_id == run_id, RunSegment.seq == seq)
     )
     art = (segment.artifacts or {}) if segment else {}
     files = art.get("files") or {}
+    if agents:
+        revisions = art.get("revisions") or []
+        last = str(revisions[-1].get("attempt")) if revisions else None
+        kept = (art.get("agent_files") or {}).get(last) or {} if last else {}
+        if name not in kept:
+            raise NotFound(f"no edits were applied to {name!r}: the agents' file is current")
+        return kept[name]
     if attempt is not None:
         previous = art.get("previous") or {}
         attempts = art.get("attempts") or []
@@ -6092,6 +6132,10 @@ async def _take_answer(
         if shut is not None and not shut.open:
             await _hold_console_approval(db, run, cp, segment, record, wait, at, revise, member)
             return
+        if cp.kind in apply_edits.FILES and (
+            unapplied := apply_edits.edit_count((await _staged_actions(db, [cp])).get(cp.id, []))
+        ):
+            _note(segment, _unapplied_note(unapplied))
     if not counted or (not approved and not revise):
         console = _console_record(run, segment, record, at, revise)
         console.update(
@@ -6668,9 +6712,25 @@ async def decide_checkpoint(
     if decision == "approved" and (blocked := _cannot_approve(cp)):
         # Approve, a confirmed console approval and Continue alike: nothing is decided.
         raise RunError(blocked)
-    if decision == "approved" and (shut := await approve_gate_of(db, cp)) and not shut.open:
+    edited: _Edited | None = None
+    if decision == "approved" and via == "oracle" and cp.kind in apply_edits.FILES:
+        # D7: the staged edits are applied to the file and the result re-checked under the
+        # same gate; a refusal raises before anything is written.
+        edited = await _apply_staged_edits(db, principal, run, cp)
+    if (
+        decision == "approved"
+        and edited is None
+        and (shut := await approve_gate_of(db, cp))
+        and not shut.open
+    ):
         # D3: the same for a blocking reason not fixed or waived (one gate for every path).
         raise blocking_open(shut)
+    # D7: a console approval never applies staged edits (its answerer did not see them).
+    unapplied = (
+        apply_edits.edit_count((await _staged_actions(db, [cp])).get(cp.id, []))
+        if decision == "approved" and via == "swarmcloud_console"
+        else 0
+    )
     if decision == "changes_requested" and not note:
         if not send_back:
             raise Invalid("say what to change: a note is required to request changes")
@@ -6699,8 +6759,14 @@ async def decide_checkpoint(
         from oracle.runs import review_file
 
         cp.review = await review_file.sent_review(db, principal, run, cp, note)
+    if edited is not None:
+        _write_edits(run, cp, segment, edited)
+    if unapplied:
+        _note(segment, _unapplied_note(unapplied))
     _record_decider(cp, *decider)
     data: dict[str, Any] = {"run_id": str(run.id), "kind": cp.kind}
+    if edited is not None:
+        data.update(edited.audit)
     if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW:
         # F4 Engineering review stop reads whether a lead was named when it was decided.
         data["engineering_lead_named"] = bool(leads)
@@ -6770,6 +6836,170 @@ async def decide_checkpoint(
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
 
+def _unapplied_note(n: int) -> str:
+    return (
+        f"Approved in the runtime's console: {n} staged edit{' was' if n == 1 else 's were'} "
+        "not applied"
+    )
+
+
+@dataclass
+class _Edited:
+    """Staged edits applied and re-checked (D7), not written yet."""
+
+    name: str
+    agents: str
+    text: str
+    attempt: int
+    check: dict[str, Any]
+    revision: dict[str, Any]
+    review: dict[str, Any]
+    audit: dict[str, Any]
+
+
+def _edits_refused(code: str, message: str, **extra: Any) -> RunError:
+    error = RunError(message)
+    error.detail = {"code": code, "message": message, **extra}  # type: ignore[attr-defined]
+    return error
+
+
+async def _member_name(db: AsyncSession, principal: Principal) -> str:
+    user = await db.get(User, principal.user_id) if principal.user_id else None
+    if user is None:
+        return "an API token"
+    from oracle.members.names import display_name
+
+    return display_name(user.email)
+
+
+async def _apply_staged_edits(
+    db: AsyncSession, principal: Principal, run: Run, cp: Checkpoint
+) -> _Edited | None:
+    """D7 Approve with edits: the staged actions of ``cp``'s draft applied to the agents'
+    file (no model, nothing spent), re-checked (``check_items`` and the D2 reasons) and
+    gated (D3) on that check. None when nothing staged changes the file (a plain
+    approval). Raises 409 ``needs_agents`` or ``edits_leave_problems`` having written
+    nothing: the edits stay staged."""
+    staged = list(
+        await db.scalars(
+            select(CheckpointAction)
+            .where(CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged")
+            .order_by(CheckpointAction.created_at, CheckpointAction.id)
+        )
+    )
+    blocked = apply_edits.needs_agents(staged, await _open_questions(db, {cp.id: staged}))
+    if blocked:
+        raise _edits_refused(
+            "needs_agents", apply_edits.refusal(blocked), actions=[str(a.id) for a in blocked]
+        )
+    n = apply_edits.edit_count(staged)
+    if not n:
+        return None
+    name = apply_edits.FILES[cp.kind]
+    segment = await db.scalar(
+        select(RunSegment).where(
+            RunSegment.run_id == run.id, RunSegment.seq == (cp.payload or {}).get("segment_seq")
+        )
+    )
+    art = (segment.artifacts or {}) if segment is not None else {}
+    agents = (art.get("files") or {}).get(name)
+    if not isinstance(agents, str):
+        raise RunError(f"the checkpoint's segment left no {name} to apply the edits to")
+    _, base = await reasons._base(db, run)
+    try:
+        body, applied = apply_edits.apply(
+            agents, staged, {k: v.get("raw") or {} for k, v in base.items()}
+        )
+    except apply_edits.EditError as exc:
+        raise _edits_refused(
+            "edit_cannot_apply", f"{exc}: remove that edit, or send back to the agents",
+            actions=[str(exc.action_id)],
+        ) from None  # fmt: skip
+    except safe_yaml.SafeYamlError as exc:
+        raise _edits_refused(
+            "edit_cannot_apply", f"{name} cannot be edited ({exc}): send back to the agents"
+        ) from None
+    attempts = art.get("attempts") or []
+    attempt = int(attempts[-1].get("attempt") or len(attempts)) if attempts else 1
+    now = _now()
+    on = now.astimezone(apply_edits.COMPANY_ZONE).date()
+    text = apply_edits.header(await _member_name(db, principal), on, n, attempt) + body
+    check = await _check_items(db, run, text)
+    # The gate on the re-checked file, read from a copy: a refusal leaves the stored check.
+    shut = gate.approve_gate(
+        Checkpoint(kind=cp.kind, payload={**(cp.payload or {}), "items_check": check}),
+        None,
+        staged,
+    )
+    if shut is not None and not shut.open:
+        left = gate.left_count(shut)
+        what = "; ".join(f"{x.item}: {x.label}" for x in shut.left) or "a problem of the file"
+        raise _edits_refused(
+            "edits_leave_problems",
+            f"After the edits, {left} blocking problem{' is' if left == 1 else 's are'} left: "
+            f"{what}",
+            left=[x.model_dump() for x in shut.left],
+        )
+    ids = [str(a.id) for a in staged]
+    sha = hashlib.sha256(text.encode()).hexdigest()
+    revision = {
+        "attempt": attempt,
+        "by": str(principal.user_id or principal.token_id),
+        "at": now.isoformat(),
+        "actions": ids,
+        "agent_sha256": hashlib.sha256(agents.encode()).hexdigest(),
+        "edited_sha256": sha,
+    }
+    review = {
+        "kind": "edits",
+        "file": name,
+        "applied": applied,
+        "edits": n,
+        "summary": apply_edits.summary(applied),
+    }
+    audit_data = {"edits": n, "actions": ids, "edited_sha256": sha}
+    return _Edited(name, agents, text, attempt, check, revision, review, audit_data)
+
+
+def _write_edits(run: Run, cp: Checkpoint, segment: RunSegment, edited: _Edited) -> None:
+    """The edited file as the segment's current one; the agents' text kept per attempt."""
+    art = _art(segment)
+    agent_files = copy.deepcopy(art.get("agent_files") or {})
+    agent_files.setdefault(str(edited.attempt), {}).setdefault(edited.name, edited.agents)
+    revisions = [*(art.get("revisions") or []), edited.revision]
+    art["files"] = {**(art.get("files") or {}), edited.name: edited.text}
+    art["agent_files"] = agent_files
+    art["revisions"] = revisions
+    art["items_check"] = edited.check
+    _set_art(segment, art)
+    cp.payload = {**(cp.payload or {}), "items_check": edited.check}
+    cp.review = {**edited.review, "revision": len(revisions)}
+
+
+async def _restore_agents_file(db: AsyncSession, run: Run, cp: Checkpoint) -> None:
+    """A voided approval with edits (D7): the agents' file is the current one again,
+    re-checked; the edits are staged as they were."""
+    if not isinstance(cp.review, dict) or cp.review.get("kind") != "edits":
+        return
+    name = cp.review.get("file") or apply_edits.FILE
+    segment = await db.scalar(
+        select(RunSegment).where(
+            RunSegment.run_id == run.id, RunSegment.seq == (cp.payload or {}).get("segment_seq")
+        )
+    )
+    art = _art(segment) if segment is not None else {}
+    revisions = art.get("revisions") or []
+    attempt = str(revisions[-1].get("attempt")) if revisions else "1"
+    agents = ((art.get("agent_files") or {}).get(attempt) or {}).get(name)
+    if segment is None or not isinstance(agents, str):
+        return
+    check = await _check_items(db, run, agents)
+    art["files"] = {**(art.get("files") or {}), name: agents}
+    art["items_check"] = check
+    _set_art(segment, art)
+    cp.payload = {**(cp.payload or {}), "items_check": check}
+
+
 async def read_review_file(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: uuid.UUID) -> str:
     """The ``review.yaml`` a send-back at the checkpoint delivered (D4)."""
     from oracle.runs import review_file
@@ -6780,7 +7010,7 @@ async def read_review_file(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: u
     )
     if cp is None:
         raise NotFound(f"checkpoint {checkpoint_id} not found")
-    if cp.status == "pending" or not cp.review:
+    if cp.status == "pending" or not cp.review or cp.review.get("kind") == "edits":
         raise NotFound("no review was sent back at this checkpoint")
     return review_file.render_yaml(cp.review, cp.decided_at)
 
@@ -7095,6 +7325,7 @@ async def _void_owed(
     wait["voided"] = {"decided_by": str(cp.decided_by), "why": why, "at": _now().isoformat()}
     _set_wait(cp, wait)
     decided_by, kind = cp.decided_by, cp.status
+    await _restore_agents_file(db, run, cp)
     cp.status = "pending"
     cp.decided_by = None
     cp.decided_at = None
@@ -7212,6 +7443,7 @@ async def void_decision(
     _set_art(segment, art)
     segment.status = decision.get("restore") or "pending"
     decided_by, kind = cp.decided_by, cp.status
+    await _restore_agents_file(db, run, cp)
     cp.status = "pending"
     cp.decided_by = None
     cp.decided_at = None
@@ -7268,6 +7500,7 @@ async def _undecide(db: AsyncSession, run: Run, cp: Checkpoint) -> bool:
     wait.pop("posting")
     _set_wait(cp, wait)
     decided_by, kind = cp.decided_by, cp.status
+    await _restore_agents_file(db, run, cp)
     cp.status = "pending"
     cp.decided_by = None
     cp.decided_at = None
@@ -7470,8 +7703,9 @@ async def _decide_in_workflow(
         if not await _detach(db, run, cancel=True, state="tail"):
             raise _unconfirmed("continue the run as a new workflow")
         return False
+    edits = cp.review if isinstance(cp.review, dict) and cp.review.get("kind") == "edits" else None
     payload: dict[str, Any] = (
-        {"verdict": MERGE, "findings": []}
+        {"verdict": MERGE, "findings": [edits["summary"]] if edits else []}
         if approved
         else {
             "verdict": NOT_YET,
@@ -8970,6 +9204,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     owed = [c for c in owing if may_decide(principal, c, runs[c.run_id].flow, leads)]
     names = await _decider_names(db, owed)
     staged = await _staged_actions(db, mine)
+    asked = await _open_questions(db, staged)
     owner = principal.role == "owner"
     waiting_runs: list[Run] = []
     if owner:
@@ -8989,7 +9224,13 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         sdef = _flow(run).segments[seq - 1] if seq else None
         return InboxCheckpoint(
             **_checkpoint_out(
-                c, principal, names, flow=run.flow, leads=leads, staged=staged
+                c,
+                principal,
+                names,
+                flow=run.flow,
+                leads=leads,
+                staged=staged,
+                open_questions=asked,
             ).model_dump(),
             flow=run.flow,  # type: ignore[arg-type]
             flow_title=_flow(run).title,
