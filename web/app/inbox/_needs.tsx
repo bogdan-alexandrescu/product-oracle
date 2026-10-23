@@ -200,6 +200,7 @@ export type NeedGroup =
   | "revising"
   | "decisions"
   | "launches"
+  | "dates"
   | "shipped";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
 
@@ -603,6 +604,44 @@ export function oracleActionNeeds(actions: OracleAction[], busy: string | null, 
               Undo
             </Button>
           )}
+        </>
+      ),
+    };
+  });
+}
+
+const dayFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+/** F3: each proposed date basis, for the engineering leads (and owners while none is named):
+ * Verify in place, Reject (with a reason) on Plan › Dates. */
+export function dateNeeds(inbox: InboxOut, busy: string | null, act: Act): Need[] {
+  return (inbox.dates ?? []).map((b) => {
+    const day = dayFmt.format(new Date(`${b.supports_date}T00:00:00Z`));
+    const path = { params: { path: { basis_id: b.id } } };
+    return {
+      key: `date-${b.id}`,
+      icon: "roadmap",
+      kind: "Date",
+      item: (
+        <span className="truncate" data-testid="inbox-date" title={`${b.reference} supports ${day} · ${b.prd.title}`}>
+          {b.reference} supports {day} · {b.prd.title}
+        </span>
+      ),
+      context: <span className="block truncate text-text2">Proposed for verification</span>,
+      at: b.proposed_at,
+      action: (
+        <>
+          <Button
+            disabled={busy !== null}
+            onClick={() =>
+              act(`verify-${b.id}`, () => unwrap(api.POST("/v1/schedule-bases/{basis_id}/verify", { ...path, body: { note: null } })))
+            }
+          >
+            Verify
+          </Button>
+          <LinkButton variant="ghost" href="/plan/dates">
+            Reject
+          </LinkButton>
         </>
       ),
     };
@@ -1035,6 +1074,7 @@ export function allNeeds(
     ...stated(reportFailureNeeds(inbox.report_failures ?? [], busy, act), "report-failures"),
     ...reportNeeds(inbox.reports ?? [], seenBefore),
     ...stated(strategyNeeds(inbox.strategy), "strategy"),
+    ...stated(dateNeeds(inbox, busy, act), "dates"),
     ...stated(launches.counted, "launches"),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),
