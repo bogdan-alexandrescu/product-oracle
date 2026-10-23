@@ -93,7 +93,10 @@ test("answer, review, ready: answer my question, review the critical one, then d
   await review.getByLabel("Rationale").fill("The address API limit covers our volume.");
   await review.getByRole("button", { name: "Validate" }).click();
   await expect(review).not.toContainText("Waiting for review");
-  await expect(gate).toContainText("Ready to draft");
+  // Nothing holds the draft; the critical questions still open are named, never "Ready to draft" (#307).
+  await expect(gate.getByTestId("blocking-gap")).toHaveCount(0);
+  await expect(gate).toContainText("critical questions open");
+  await expect(gate).not.toContainText("Ready to draft");
   await expect(page.getByTestId("draft-reason")).toHaveCount(0);
   await expect(draft(page)).toBeEnabled();
 });
@@ -108,7 +111,9 @@ test("decide from the inspector: a blank rationale is refused, a decision clears
   await expect(gate).toContainText("Write a rationale first");
   await gate.getByLabel("Rationale").fill("We ship behind the limit and watch it.");
   await gate.getByRole("button", { name: "Record decision" }).click();
-  await expect(gate).toContainText("Ready to draft");
+  await expect(gate.getByTestId("blocking-gap")).toHaveCount(0);
+  await expect(gate.getByTestId("missing-gap")).toHaveCount(3);
+  await expect(gate).not.toContainText("Ready to draft");
   await expect(draft(page)).toBeEnabled();
 });
 

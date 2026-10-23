@@ -11,8 +11,8 @@ from the Inbox.
   ``general`` questions with no gap ("<name> asks"); the engine's are "Oracle asks". A
   company API token asks as no person: "<token name> asks", read from the audit trail.
 - **Reassign or withdraw** (:func:`patch`): the asker, the intake's author (an intake's
-  question) or an approver; an answered or withdrawn question stays as it is (409). A
-  deferred question reassigned is asked again, of the new person.
+  question) or an approver; an answered, withdrawn or retired question stays as it is
+  (409). A deferred question reassigned is asked again, of the new person.
 - **The Inbox** (:func:`inbox`): what is asked of me (``asked`` or ``delegated``), oldest
   first, each as the reader may see it (``oracle.intake.views``), with its asker, its
   subject and the answer paths it offers.
@@ -59,8 +59,8 @@ PRIVATE = "Share this finding first to ask someone else"
 # Asked of someone, waiting for them: the Inbox's questions (a delegated one is asked of
 # the delegate).
 OPEN = ("asked", "delegated")
-# Final: never moved again.
-SETTLED = ("answered", "withdrawn")
+# Never moved again (a retired one waits for its brief to be restored).
+SETTLED = ("answered", "withdrawn", "retired")
 # What a token asks reads as once the token is gone.
 UNNAMED_CLIENT = "An API token"
 # The checkpoint kinds, as the Inbox names them.

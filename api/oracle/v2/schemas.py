@@ -70,7 +70,7 @@ ImpactArea = Literal["goals", "feasibility", "scope", "economics", "risks", "mod
 Importance = Literal["critical", "high", "medium", "low"]
 KnowledgeState = Literal["verified_fact", "user_decision", "ai_inference", "hypothesis", "unknown"]
 QuestionStatus = Literal[
-    "draft", "asked", "answered", "deferred", "delegated", "researching", "withdrawn"
+    "draft", "asked", "answered", "deferred", "delegated", "researching", "withdrawn", "retired"
 ]
 AnswerKind = Literal["answer", "dont_know", "defer", "delegate", "research"]
 AssumptionDecisionKind = Literal["accept_assumption", "accept_risk", "validate", "reject"]

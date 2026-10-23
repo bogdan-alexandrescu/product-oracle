@@ -35,6 +35,9 @@ export const HARD_BLOCKERS = new Set<Category>(["blockers", "third_party_policy"
 /** Gap statuses still waiting on an answer. */
 export const OPEN_GAP = new Set<Gap["status"]>(["unknown", "asked", "under_investigation"]);
 
+/** Gap statuses that settle a critical question (the API's engine.DECIDED). */
+export const DECIDED_GAP = new Set<Gap["status"]>(["answered", "validated", "accepted_risk"]);
+
 /** The intake's status, in the header's words. */
 export const STATUS: Record<Summary["intake"]["status"], { label: string; kind: ChipKind }> = {
   draft: { label: "Oracle is reading", kind: "na" },
