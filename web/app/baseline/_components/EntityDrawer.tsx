@@ -12,6 +12,16 @@ import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { EvidenceChip } from "./EvidenceChip";
+import {
+  AddDependencyForm,
+  CiteSourceForm,
+  ConfirmRemove,
+  ContributionSelect,
+  endName,
+  LinkToGoalForm,
+  WRITE_REASON,
+  type NewLink,
+} from "./LinkTools";
 import { LIMIT_LABEL, PromoteForm, suggestedBlocker } from "./PromoteBlocker";
 import {
   ConfidenceRing,
@@ -103,6 +113,9 @@ export function EntityDrawer({
   const [promoting, setPromoting] = useState(promote && canWrite);
   // Reject (a proposed item) or Archive (a confirmed one) asks for the reason first.
   const [asking, setAsking] = useState<"reject" | "archive" | null>(null);
+  // Link to goal, Add dependency or Cite a source item, open below its section.
+  const [adding, setAdding] = useState<"goal" | "dependency" | "cite" | null>(null);
+  const [removingEvidence, setRemovingEvidence] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -179,6 +192,71 @@ export function EntityDrawer({
       if (action === "archive") return `Archived “${title}”: it leaves the baseline; its history keeps the reason.`;
       return `Rejected “${title}”.`;
     });
+
+  const LOCKED = "The link is locked, so your change was saved as a proposal for an approver.";
+
+  const addLink = (link: NewLink) =>
+    write(async () => {
+      const res = await api.POST("/v1/baseline/edges", { body: { ...link, src_id: entity.id, origin: "user" } });
+      await unwrap(Promise.resolve(res));
+      setAdding(null);
+      if (res.response.status === 202) return "Your link was saved as a proposal for an approver.";
+      const name = titleOf(graph, link.dst_id);
+      return link.type === "supports" ? `Linked to “${name}”.` : `Added the link to “${name}”.`;
+    });
+
+  const patchEdge = (edge: EdgeOut, body: Pick<Schemas["EdgePatch"], "attrs" | "status">, done: string) =>
+    write(async () => {
+      const res = await api.PATCH("/v1/baseline/edges/{edge_id}", {
+        params: { path: { edge_id: edge.id } },
+        body: { ...body, origin: "user" },
+      });
+      await unwrap(Promise.resolve(res));
+      return res.response.status === 202 ? LOCKED : done;
+    });
+
+  const removeEdge = (edge: EdgeOut) =>
+    write(async () => {
+      const res = await api.DELETE("/v1/baseline/edges/{edge_id}", { params: { path: { edge_id: edge.id } } });
+      await unwrap(Promise.resolve(res));
+      if (res.response.status === 202) return LOCKED;
+      return `Removed the link to “${endName(graph, edge, entity.id)}”.`;
+    });
+
+  const unlockEdge = (edge: EdgeOut) =>
+    write(async () => {
+      await unwrap(api.POST("/v1/baseline/edges/{edge_id}/unlock", { params: { path: { edge_id: edge.id } } }));
+      return "Unlocked: agents can change this link again.";
+    });
+
+  const cite = (item: Schemas["ItemOut"]) =>
+    write(async () => {
+      await unwrap(
+        api.POST("/v1/baseline/entities/{entity_id}/evidence", {
+          params: { path: { entity_id: entity.id } },
+          body: { source_item_id: item.id },
+        }),
+      );
+      setAdding(null);
+      return `Cited “${item.title ?? item.external_id}”.`;
+    });
+
+  const removeEvidence = (evidenceId: string, label: string, reason: string) =>
+    write(async () => {
+      await unwrap(
+        api.DELETE("/v1/baseline/evidence/{evidence_id}", {
+          params: { path: { evidence_id: evidenceId }, query: { reason } },
+        }),
+      );
+      setRemovingEvidence(null);
+      return `Removed “${label}”.`;
+    });
+
+  const open = (form: "goal" | "dependency" | "cite") => {
+    setNotice(null);
+    setError(null);
+    setAdding(form);
+  };
 
   const promoteBlocker = (body: Schemas["BlockerCreate"]) =>
     write(async () => {
@@ -331,7 +409,46 @@ export function EntityDrawer({
 
             <History entityId={d.id} updatedAt={d.updated_at} />
 
-            <Links detail={d} graph={graph} tags={tags} onOpen={onOpen} />
+            <Links
+              detail={d}
+              graph={graph}
+              tags={tags}
+              onOpen={onOpen}
+              canWrite={canWrite}
+              busy={busy}
+              onPatch={patchEdge}
+              onRemove={removeEdge}
+              onUnlock={unlockEdge}
+            />
+
+            <InspectorSection label="Add a link">
+              {adding === "goal" ? (
+                <LinkToGoalForm detail={d} graph={graph} busy={busy} onCancel={() => setAdding(null)} onSave={addLink} />
+              ) : adding === "dependency" ? (
+                <AddDependencyForm detail={d} graph={graph} busy={busy} onCancel={() => setAdding(null)} onSave={addLink} />
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {d.type !== "goal" && (
+                    <Button
+                      icon="plus"
+                      disabled={!canWrite || busy}
+                      title={canWrite ? undefined : WRITE_REASON}
+                      onClick={() => open("goal")}
+                    >
+                      Link to goal
+                    </Button>
+                  )}
+                  <Button
+                    icon="plus"
+                    disabled={!canWrite || busy}
+                    title={canWrite ? undefined : WRITE_REASON}
+                    onClick={() => open("dependency")}
+                  >
+                    Add dependency
+                  </Button>
+                </div>
+              )}
+            </InspectorSection>
 
             <InspectorSection label="Evidence" tools={<span className="tnum text-text">{d.evidence.length}</span>}>
               {d.evidence.length === 0 ? (
@@ -339,28 +456,69 @@ export function EntityDrawer({
               ) : (
                 <ul className="flex flex-col gap-1.5" aria-label="Evidence">
                   {d.evidence.map((ev) => (
-                    <li key={ev.id} className="flex min-h-8 max-w-full min-w-0 items-center gap-2" data-testid="evidence-row">
-                      <EvidenceChip evidence={ev} low={low} />
-                      <span className="min-w-0 flex-1 truncate text-sm text-text2" title={ev.ref ?? ev.url ?? undefined}>
-                        {ev.ref ?? ev.url}
-                        {ev.retrieved_at && <span className="tnum"> · {formatDate(ev.retrieved_at)}</span>}
-                      </span>
-                      {ev.kind && canComment && (
-                        <Button
-                          variant="ghost"
-                          className="flex-none"
-                          disabled={busy}
-                          aria-label={`Refresh ${ev.ref ?? ev.url}`}
-                          title="Fetch the public page again and rescore it"
-                          onClick={() => refreshLink(ev.id, ev.ref ?? ev.url ?? "the link")}
-                        >
-                          Refresh
-                        </Button>
+                    <li key={ev.id} className="flex flex-col gap-1.5" data-testid="evidence-row">
+                      <div className="flex min-h-8 max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        <EvidenceChip evidence={ev} low={low} />
+                        <span className="min-w-[6rem] flex-1 truncate text-sm text-text2" title={ev.ref ?? ev.url ?? undefined}>
+                          {ev.ref ?? ev.url}
+                          {ev.retrieved_at && <span className="tnum"> · {formatDate(ev.retrieved_at)}</span>}
+                        </span>
+                        {ev.kind && canComment && (
+                          <Button
+                            variant="ghost"
+                            className="flex-none"
+                            disabled={busy}
+                            aria-label={`Refresh ${ev.ref ?? ev.url}`}
+                            title="Fetch the public page again and rescore it"
+                            onClick={() => refreshLink(ev.id, ev.ref ?? ev.url ?? "the link")}
+                          >
+                            Refresh
+                          </Button>
+                        )}
+                        {/* Approvers remove any evidence; a commenter only a link they added (the API checks who). */}
+                        {(canWrite || (canComment && ev.kind)) && removingEvidence !== ev.id && (
+                          <Button
+                            variant="ghost"
+                            className="ml-auto flex-none"
+                            disabled={busy}
+                            aria-label={`Remove ${ev.ref ?? ev.url}`}
+                            onClick={() => {
+                              setNotice(null);
+                              setRemovingEvidence(ev.id);
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                      {removingEvidence === ev.id && (
+                        <ConfirmRemove
+                          name="Remove evidence"
+                          prompt="Remove this evidence? The item's confidence is rescored without it."
+                          reason
+                          busy={busy}
+                          onBack={() => setRemovingEvidence(null)}
+                          onRemove={(reason) => removeEvidence(ev.id, ev.ref ?? ev.url ?? "the evidence", reason)}
+                        />
                       )}
                     </li>
                   ))}
                 </ul>
               )}
+              <div className="mt-3">
+                {adding === "cite" ? (
+                  <CiteSourceForm busy={busy} onCancel={() => setAdding(null)} onCite={cite} />
+                ) : (
+                  <Button
+                    icon="plus"
+                    disabled={!canWrite || busy}
+                    title={canWrite ? undefined : WRITE_REASON}
+                    onClick={() => open("cite")}
+                  >
+                    Cite a source item
+                  </Button>
+                )}
+              </div>
               {canComment && (
                 <div className="mt-3">
                   <AddEvidenceLink
@@ -499,12 +657,24 @@ function Links({
   graph,
   tags,
   onOpen,
+  canWrite,
+  busy,
+  onPatch,
+  onRemove,
+  onUnlock,
 }: {
   detail: EntityDetail;
   graph: GraphOut | undefined;
   tags: Map<string, string>;
   onOpen: (id: string) => void;
+  canWrite: boolean;
+  busy: boolean;
+  onPatch: (edge: EdgeOut, body: Pick<Schemas["EdgePatch"], "attrs" | "status">, done: string) => void;
+  onRemove: (edge: EdgeOut) => void;
+  onUnlock: (edge: EdgeOut) => void;
 }) {
+  // Remove asks first, in the row.
+  const [removing, setRemoving] = useState<string | null>(null);
   const out = (t: EdgeOut["type"]) => detail.edges_out.filter((e) => e.type === t && e.status !== "rejected");
   const inn = (t: EdgeOut["type"]) => detail.edges_in.filter((e) => e.type === t && e.status !== "rejected");
   const link = (id: string) => (
@@ -518,22 +688,85 @@ function Links({
   const list = (title: string, edges: EdgeOut[], end: "src_id" | "dst_id", contribution = false) =>
     edges.length > 0 && (
       <InspectorSection label={title}>
-        <ul aria-label={title}>
-          {(contribution ? [...edges].sort((a, b) => contributionOf(b.attrs) - contributionOf(a.attrs)) : edges).map((e) => (
-            <li key={e.id} className="flex min-h-8 min-w-0 items-center gap-2.5">
-              <span className="min-w-0 flex-1">{link(e[end])}</span>
-              {e.status === "proposed" && <Chip kind="warn">Proposed</Chip>}
-              {contribution && (
-                <span className="flex flex-none items-center gap-2" data-testid="contribution">
-                  <ContributionPips value={contributionOf(e.attrs)} proposed={e.status === "proposed"} />
-                  <span className="tnum font-semibold">
-                    <span className="sr-only">contribution </span>
-                    {contributionOf(e.attrs)}/3
-                  </span>
-                </span>
-              )}
-            </li>
-          ))}
+        <ul aria-label={title} className="flex flex-col gap-1">
+          {(contribution ? [...edges].sort((a, b) => contributionOf(b.attrs) - contributionOf(a.attrs)) : edges).map((e) => {
+            const name = titleOf(graph, e[end]);
+            const value = contributionOf(e.attrs);
+            return (
+              <li key={e.id} className="flex flex-col gap-1.5">
+                <div className="flex min-h-8 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+                  <span className="min-w-[9rem] flex-1">{link(e[end])}</span>
+                  {e.status === "proposed" && <Chip kind="warn">Proposed</Chip>}
+                  {contribution && (
+                    <span className="flex flex-none items-center gap-2" data-testid="contribution">
+                      <ContributionPips value={value} proposed={e.status === "proposed"} />
+                      {canWrite ? (
+                        <span className="w-[7.5rem]">
+                          <ContributionSelect
+                            label={`Contribution to ${name}`}
+                            value={String(value)}
+                            disabled={busy}
+                            onChange={(v) => onPatch(e, { attrs: { contribution: Number(v) } }, `Contribution set to ${v}.`)}
+                          />
+                        </span>
+                      ) : (
+                        <span className="tnum font-semibold">
+                          <span className="sr-only">contribution </span>
+                          {value}/3
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {canWrite && (
+                    <span className="ml-auto flex flex-none items-center gap-1">
+                      {e.status === "proposed" && (
+                        <Button
+                          variant="solid"
+                          disabled={busy}
+                          aria-label={`Confirm link to ${name}`}
+                          onClick={() => onPatch(e, { status: "confirmed" }, `Confirmed the link to “${name}”.`)}
+                        >
+                          Confirm
+                        </Button>
+                      )}
+                      {e.locked && (
+                        <Button
+                          variant="ghost"
+                          icon="lock"
+                          disabled={busy}
+                          aria-label={`Unlock link to ${name}`}
+                          title="Locked by a person: agents can only propose changes. Unlock lets them change it."
+                          onClick={() => onUnlock(e)}
+                        >
+                          Unlock
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        disabled={busy}
+                        aria-label={`Remove link to ${name}`}
+                        onClick={() => setRemoving(e.id)}
+                      >
+                        Remove
+                      </Button>
+                    </span>
+                  )}
+                </div>
+                {removing === e.id && (
+                  <ConfirmRemove
+                    name="Remove link"
+                    prompt={<>Remove the link to “{name}”?</>}
+                    busy={busy}
+                    onBack={() => setRemoving(null)}
+                    onRemove={() => {
+                      setRemoving(null);
+                      onRemove(e);
+                    }}
+                  />
+                )}
+              </li>
+            );
+          })}
         </ul>
       </InspectorSection>
     );

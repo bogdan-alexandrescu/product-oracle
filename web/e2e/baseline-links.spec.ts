@@ -84,6 +84,8 @@ test("baseline: add depends-on, blocks and part-of links, and confirm a proposed
 
 test("baseline: cite a source item as evidence, then remove evidence with a reason", async ({ page }) => {
   const d = await openItem(page, "f.dark-mode", "Dark mode");
+  const evidence = d.getByRole("list", { name: "Evidence" });
+  await expect(evidence.getByTestId("evidence-row")).toHaveCount(1);
   await d.getByRole("button", { name: "Cite a source item" }).click();
   const form = d.getByRole("form", { name: "Cite a source item" });
   await form.getByLabel("Search your sources").fill("pricing");
@@ -92,8 +94,7 @@ test("baseline: cite a source item as evidence, then remove evidence with a reas
   await expect(hits).toContainText("Pricing strategy");
   await hits.getByRole("button", { name: "Cite Pricing strategy" }).click();
   await expect(d.getByRole("status")).toContainText("Cited “Pricing strategy”");
-  const evidence = d.getByRole("list", { name: "Evidence" });
-  await expect(evidence.getByTestId("evidence-row")).toHaveCount(1);
+  await expect(evidence.getByTestId("evidence-row")).toHaveCount(2);
   await expect(evidence).toContainText("Pricing strategy");
 
   await evidence.getByRole("button", { name: "Remove Pricing strategy" }).click();
@@ -104,7 +105,8 @@ test("baseline: cite a source item as evidence, then remove evidence with a reas
   await ask.getByLabel("Reason").fill("Cited on the wrong feature.");
   await ask.getByRole("button", { name: "Remove" }).click();
   await expect(d.getByRole("status")).toContainText("Removed “Pricing strategy”");
-  await expect(d.getByRole("list", { name: "Evidence" })).toHaveCount(0);
+  await expect(evidence.getByTestId("evidence-row")).toHaveCount(1);
+  await expect(evidence).not.toContainText("Pricing strategy");
 });
 
 test("baseline: a viewer sees the link and evidence controls disabled, with the reason", async ({ page }) => {

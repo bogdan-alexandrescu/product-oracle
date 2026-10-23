@@ -587,9 +587,15 @@ async def refresh_link_evidence(
 
 
 @router.delete("/evidence/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_evidence(evidence_id: uuid.UUID, principal: Commenter, db: TenantDB) -> Response:
+async def remove_evidence(
+    evidence_id: uuid.UUID,
+    principal: Commenter,
+    db: TenantDB,
+    reason: Annotated[str | None, Query(max_length=1000)] = None,
+) -> Response:
+    """Remove a piece of evidence; ``reason`` (why it was wrong) is kept in the audit log."""
     try:
-        await evidence.detach(db, principal, evidence_id)
+        await evidence.detach(db, principal, evidence_id, reason=reason)
     except service.BaselineError as exc:
         raise _fail(exc) from exc
     await db.commit()
