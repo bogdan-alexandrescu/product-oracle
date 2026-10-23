@@ -14,7 +14,8 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
  * PRD or roadmap review is decided here: Approve draft (an inline confirmation names the
  * unreviewed sections) and Send back to agents (a sheet listing what goes, the document's
  * own feedback, and an optional note). Commenters and viewers read it only; when the review
- * policy names a designated decider, only they decide and others read who does. Hidden when no
+ * policy names a designated decider, only they decide and others read who does (and, once
+ * every section is approved by someone else, that the run review waits for them). Hidden when no
  * run review points at this version (404).
  */
 export function RunReviewBar({ doc, n, refreshKey, onDecided }: { doc: string; n: number; refreshKey: string; onDecided: () => void }) {
@@ -82,7 +83,13 @@ export function RunReviewBar({ doc, n, refreshKey, onDecided }: { doc: string; n
         {state && <b className="font-semibold"> · {state}</b>}
       </p>
       {r.status === "pending" && !deciding && (
-        <span className="text-text2">{r.decider_name ? `${r.decider_name} decides (designated decider)` : "An approver decides"}</span>
+        <span className="text-text2">
+          {!r.decider_name
+            ? "An approver decides"
+            : total > 0 && r.sections.approved === total
+              ? `Every section is approved · waits for ${r.decider_name}, the designated decider`
+              : `${r.decider_name} decides (designated decider)`}
+        </span>
       )}
       {deciding && !confirming && (
         <div className="flex flex-wrap gap-2">

@@ -1634,10 +1634,16 @@ function runReviewDecider(db: Db, cp: Pick<Schemas["CheckpointOut"], "kind" | "p
   return (v && db.review_v2?.policies.find((x) => x.document_id === v.document_id)?.decider_id) || null;
 }
 
-/** D10: a pending run review of `v` is approved once every section is approved, or `v` is published. */
-function followRunReview(db: Db, doc: DocumentRow, v: VersionRow, published: boolean) {
+/**
+ * D10: a pending run review of `v` is approved once every section is approved, or `v` is
+ * published. With a designated decider, the last section's approval counts only when the
+ * decider gave it; otherwise the run review waits for them.
+ */
+function followRunReview(db: Db, doc: DocumentRow, v: VersionRow, published: boolean, by: string) {
   const found = runReviewOf(db, doc.id, v.number);
   if (!found || found.cp.status !== "pending" || !db.runs) return;
+  const decider = runReviewDecider(db, found.cp);
+  if (!published && decider && decider !== by) return;
   if (!published && !v.sections.every((x) => latestReview(db, v.id, x.section_key)?.verdict === "approved")) return;
   approveRunReview({ ...runsContext(db), db: db.runs }, found.run.id, found.cp.id);
 }
@@ -2854,7 +2860,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     touch(db, doc.id);
     if (r.feedback_item_id) onFeedback(llm, doc.id, v.number);
     // D10: the last section approved approves the run review of this version.
-    followRunReview(db, doc, v, false);
+    followRunReview(db, doc, v, false, me.id);
     return json(200, { ...r, layer: sectionLayer(db, v.id, r.section_key) });
   }
   if (sub === "run-review" && m === "GET") {
@@ -2948,7 +2954,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     doc.status = "approved";
     doc.updated_at = v.approved_at;
     // D10: publishing the version approves its run review.
-    followRunReview(db, doc, v, true);
+    followRunReview(db, doc, v, true, me.id);
     return json(200, { document_id: doc.id, document_status: doc.status, version: summary(v) });
   }
   if (sub === "deck" || (sub === "export" && (q.get("layer") ?? "full") !== "full")) {

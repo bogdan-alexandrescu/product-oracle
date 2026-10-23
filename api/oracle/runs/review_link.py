@@ -250,12 +250,16 @@ async def on_document_review(
 ) -> None:
     """After a section verdict or a publish has committed: a pending run review of
     ``version`` is approved when every section is approved, or the version was published.
-    Best effort: a failure is logged and the checkpoint stays pending."""
+    With a designated decider, the last section's approval approves it only when the
+    decider gave it (owner, 2026-10-22); otherwise it waits for the decider (publishing is
+    already theirs). Best effort: a failure is logged and the checkpoint stays pending."""
     try:
         cp = await checkpoint_for(db, version.document_id, version.number)
         if cp is None or cp.status != "pending":
             return
         if not published:
+            if not is_decider(principal, await decider_of(db, cp)):
+                return
             document = await db.get(Document, version.document_id)
             keys, _, approved = await _counts(db, document, version)
             if not keys or approved != keys:
