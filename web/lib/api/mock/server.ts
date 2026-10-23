@@ -1180,6 +1180,12 @@ function seed(): Db {
       if (v.source) ver(d.slug, v.number).source = versionSource(docs.get(v.source.slug)!, ver(v.source.slug, v.source.version));
     }
   }
+  // #482 "trash-family": the early shipping cost brief is built from usage-alerts v1 too, so
+  // that PRD has a derived roadmap and a spec (deleting it takes both to Trash).
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) === "trash-family") {
+    const brief = "checkout-redesign-early-shipping-cost-spec";
+    for (const v of db.versions) if (v.document_id === docs.get(brief)!.id) v.source = versionSource(docs.get("usage-alerts")!, a1);
+  }
   docs.get("usage-alerts-roadmap")!.status = "in_review";
   db.runs = seeded("runs", () => seedRuns(runsContext(db)));
   db.llm = seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
