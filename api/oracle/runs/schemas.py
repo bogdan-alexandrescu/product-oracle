@@ -1,6 +1,6 @@
 import uuid
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -504,6 +504,170 @@ class PrdScopeOut(BaseModel):
     approved_by: uuid.UUID | None = None
     approved_at: datetime | None = None
     lock_version: int
+
+
+# --------------------------------------------------------------------------- C7 Scope review
+
+ScopeLeaveOut = Literal["no_goal", "not_now", "out_of_scope", "duplicate"]
+
+
+class ScopeReason(BaseModel):
+    """Why a feature needs a person (C7): a blocking problem of the scope's check, or a
+    flag to confirm. ``answered``: a staged D8 waiver (blocking) or accept (to confirm)
+    answers it."""
+
+    code: str
+    severity: Literal["blocking", "to_confirm"]
+    label: str
+    requirement: str | None = None
+    waivable: bool = False
+    answered: bool = False
+
+
+class ScopeHistory(BaseModel):
+    """The agent's value of a row and who changed it last."""
+
+    original: dict[str, Any] = {}
+    decided_by: uuid.UUID | None = None
+    decided_by_name: str | None = None
+    decided_at: datetime | None = None
+
+
+class ScopeReviewRequirement(ScopeRequirementOut):
+    parent_id: uuid.UUID
+    position: int
+    lock_version: int
+    # A person changed it since the agents wrote it (or added it).
+    edited: bool = False
+    added: bool = False
+    history: ScopeHistory = ScopeHistory()
+
+
+class ScopeReviewFeature(ScopeFeatureOut):
+    text: str | None = None
+    position: int
+    lock_version: int
+    evidence_ids: list[uuid.UUID] = []
+    edited: bool = False
+    reasons: list[ScopeReason] = []
+    # Open reasons left (not answered): the row needs a person.
+    needs_you: bool = False
+    history: ScopeHistory = ScopeHistory()
+    requirements: list[ScopeReviewRequirement] = []  # type: ignore[assignment]
+
+
+class ScopeSummary(BaseModel):
+    """The scope's tally (C7): features, those that need a person, open blocking and
+    to-confirm reasons, those handled, rows a person changed and suggestions waiting."""
+
+    features: int = 0
+    needs_you: int = 0
+    blocking: int = 0
+    to_confirm: int = 0
+    handled: int = 0
+    edits: int = 0
+    suggestions_open: int = 0
+
+
+class ScopeGoalChoice(BaseModel):
+    goal_id: uuid.UUID
+    key: str
+    title: str
+
+
+class PrdScopeReview(PrdScopeOut):
+    """A PRD scope as its review screen reads it (C7): each feature's reasons and
+    history, the tally, the previous attempt's decisions (key -> decision) and kept
+    requirements (key -> requirement keys) for the Changed filter, and the confirmed goals
+    a person may pick. Suggestions, waivers and accepts come from the D8 review read."""
+
+    checkpoint_id: uuid.UUID | None = None
+    title: str | None = None
+    features: list[ScopeReviewFeature]  # type: ignore[assignment]
+    summary: ScopeSummary
+    previous: dict[str, str] | None = None
+    previous_requirements: dict[str, list[str]] | None = None
+    goals_available: list[ScopeGoalChoice] = []
+    can_edit: bool = False
+
+
+class ScopeGoalIn(BaseModel):
+    goal_id: uuid.UUID
+    contribution: int = Field(default=1, ge=0, le=3)
+
+
+class ScopeItemPatch(BaseModel):
+    """One person's change to one scope row (C7); every field optional. ``revert`` puts
+    the row back to the agent's values. ``decision_reason`` of a left-out feature:
+    no_goal | not_now | out_of_scope | duplicate | other:<text>."""
+
+    lock_version: int
+    decision: Literal["include", "exclude", "defer", "keep", "cut"] | None = None
+    decision_reason: str | None = Field(default=None, max_length=500)
+    text: str | None = Field(default=None, min_length=1, max_length=1000)
+    acceptance: list[Annotated[str, Field(min_length=1, max_length=500)]] | None = Field(
+        default=None, max_length=20
+    )
+    goals: list[ScopeGoalIn] | None = Field(default=None, max_length=20)
+    depends_on: list[Annotated[str, Field(min_length=1, max_length=200)]] | None = Field(
+        default=None, max_length=50
+    )
+    blocker_keys: list[Annotated[str, Field(min_length=1, max_length=200)]] | None = Field(
+        default=None, max_length=50
+    )
+    revert: bool = False
+
+
+class ScopeRequirementIn(BaseModel):
+    """A requirement a person adds to a feature (C7); its goals default to the
+    feature's."""
+
+    parent_id: uuid.UUID
+    text: str = Field(min_length=1, max_length=1000)
+    acceptance: list[Annotated[str, Field(min_length=1, max_length=500)]] = Field(
+        default=[], max_length=20
+    )
+    goals: list[ScopeGoalIn] | None = Field(default=None, max_length=20)
+
+
+class ScopeEnhanceIn(BaseModel):
+    instruction: str | None = Field(default=None, max_length=1000)
+
+
+class ScopeEnhanceAccept(BaseModel):
+    """The enhanced text and acceptance as the approver accepts them (edited, or the
+    job's own when absent)."""
+
+    text: str | None = Field(default=None, min_length=1, max_length=1000)
+    acceptance: list[Annotated[str, Field(min_length=1, max_length=500)]] | None = Field(
+        default=None, max_length=20
+    )
+
+
+class ScopeItemOut(BaseModel):
+    """One scope row after a write (C7), with the scope's new tally and the checkpoint's
+    draft revision (D8) to decide with."""
+
+    id: uuid.UUID
+    kind: Literal["feature", "requirement"]
+    key: str
+    parent_id: uuid.UUID | None = None
+    title: str
+    text: str | None = None
+    acceptance: list[str] = []
+    decision: Literal["include", "exclude", "defer", "keep", "cut"]
+    decision_reason: str | None = None
+    origin: Literal["agent", "person"]
+    goals: list[ScopeGoal] = []
+    depends_on: list[str] = []
+    blocker_keys: list[str] = []
+    lock_version: int
+    edited: bool = False
+    added: bool = False
+    original: dict[str, Any] = {}
+    summary: ScopeSummary
+    revision: int
+    scope_lock_version: int
 
 
 class SegmentOut(BaseModel):

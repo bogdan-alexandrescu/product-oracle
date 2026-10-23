@@ -48,6 +48,8 @@ MAX_TOKENS = {
     "interview_guide": 1500,
     "interview_turn": 400,
     "interview_snapshot": 2500,
+    # C7: one requirement deepened at a feature-set review.
+    "scope_enhance": 2000,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -976,6 +978,20 @@ async def interview_snapshot(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str
     return await interview_jobs.snapshot(s, job, ask)
 
 
+# --- scope enhance (C7) -------------------------------------------------------------------
+
+
+async def scope_enhance(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Deepen one requirement of a proposed feature set: a deeper text, acceptance
+    criteria, edge cases and data needs. A suggestion only: the row changes when an
+    approver accepts it (oracle.runs.scope_review.accept_enhancement)."""
+    from oracle.runs import scope_review
+
+    payload = await scope_review.enhance_payload(s, job)
+    answer = await ask("scope_enhance", payload)
+    return scope_review.enhance_output(answer, str((job.input or {}).get("item_id")))
+
+
 RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any]]]] = {
     "review_comments": review_comments,
     "reporting": reporting,
@@ -986,6 +1002,7 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "decision_options": decision_options,
     "interview_guide": interview_guide,
     "interview_snapshot": interview_snapshot,
+    "scope_enhance": scope_enhance,
 }
 
 

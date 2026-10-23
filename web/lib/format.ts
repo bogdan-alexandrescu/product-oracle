@@ -66,6 +66,7 @@ export const JOB_KIND_LABEL: Record<LlmJobKind, string> = {
   quality_review: "Quality review",
   refinement_batch: "Next draft",
   decision_options: "Decision options",
+  scope_enhance: "Requirement deepened",
 };
 
 /** Each per-document switch in plain words (History > Oracle's work); the keys stay the API's JobSettings. */

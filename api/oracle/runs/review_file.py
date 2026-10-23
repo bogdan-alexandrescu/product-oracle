@@ -356,4 +356,20 @@ async def sent_review(db: Any, principal: Any, run: Any, cp: Any, note: str | No
     items = [i.key for i in draft.items if i.position is not None]
     reasons = [r.model_dump() for i in draft.items for r in i.reasons]
     staged = [a for i in draft.items for a in i.actions]
-    return build_review(cp, staged, items, reasons, note, draft.attempt)
+    review = build_review(cp, staged, items, reasons, note, draft.attempt)
+    if cp.kind == "feature_set":
+        # C7: the entries come from the scope's rows a person changed, plus the draft's
+        # questions and waivers.
+        from oracle.runs import scope_review
+
+        found = await scope_review.review_entries(db, cp, staged)
+        if found is not None:
+            entries, waived, keys = found
+            entered = {e["id"] for e in entries}
+            review.update(
+                file="feature_set.yaml",
+                items=entries,
+                waived=waived,
+                unchanged=[k for k in keys if k not in entered],
+            )
+    return review

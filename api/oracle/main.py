@@ -64,6 +64,7 @@ from oracle.review.v2_router import router as review_v2_router
 from oracle.rituals.router import router as rituals_router
 from oracle.roadmap.router import router as roadmap_router
 from oracle.runs.router import router as runs_router
+from oracle.runs.scope_router import router as scope_router
 from oracle.safe_yaml import ParseBusy
 from oracle.setup import router as setup_router
 from oracle.sources.fireflies_browse import router as fireflies_browse_router
@@ -231,6 +232,7 @@ def create_app() -> FastAPI:
     app.include_router(rituals_router)
     app.include_router(templates_router)
     app.include_router(runs_router)
+    app.include_router(scope_router)
     # Product Oracle v2: thin read routes over the shared tables; lanes add writes.
     app.include_router(v2_router)
     # v2 lanes: intake, gaps, questions and answers (CR-03).
