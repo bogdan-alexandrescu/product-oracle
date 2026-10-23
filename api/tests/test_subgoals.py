@@ -61,8 +61,12 @@ async def test_subgoal_is_a_goal_with_a_parent(client, ctx):
     assert (await _get(client, ctx, parent))["parent_id"] is None
     bad = await client.post(
         f"{B}/entities",
-        json={"type": "goal", "key": "bad-target", "parent_id": parent["id"],
-              "attrs": {"target": "45%"}},  # fmt: skip
+        json={
+            "type": "goal",
+            "key": "bad-target",
+            "parent_id": parent["id"],
+            "attrs": {"target": "45%"},
+        },  # fmt: skip
         headers=ctx.as_("owner"),
     )
     assert bad.status_code == 422

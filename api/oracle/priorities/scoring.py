@@ -54,6 +54,9 @@ class GoalLink:
     contribution: int | None
     edge_status: str
     goal_id: str | None = None
+    # #345: a subgoal's parent goal, credited through it (its weight is the parent's share).
+    parent_key: str | None = None
+    parent_title: str | None = None
 
 
 @dataclass
@@ -219,8 +222,10 @@ def goal_value(f: FeatureInput) -> tuple[float, list[dict[str, Any]]]:
         contribution = g.contribution if g.contribution is not None else DEFAULT_CONTRIBUTION
         term = weight * contribution
         total += term
+        via = {"parent": g.parent_key, "parent_title": g.parent_title} if g.parent_key else {}
         terms.append(
             {
+                **via,
                 "goal": g.goal_key,
                 "title": g.goal_title,
                 "weight": weight,

@@ -44,7 +44,7 @@ from oracle.baseline.schemas import ProposalRun
 from oracle.v2 import links
 from oracle.v2.models import DocumentSectionLink
 
-ENTITY_FIELDS = ("title", "body", "attrs", "status")
+ENTITY_FIELDS = ("title", "body", "attrs", "status", "parent_id")
 # attrs keys a module owns, and the routes that change them.
 MANAGED_ATTRS = {
     "blocker": "the blocker routes (/v1/blockers)",
@@ -141,16 +141,17 @@ def _jsonable(value: Any) -> Any:
 
 
 def entity_snapshot(e: Entity) -> dict[str, Any]:
-    return _jsonable(
-        {
-            "type": e.type,
-            "key": e.key,
-            "title": e.title,
-            "body": e.body,
-            "attrs": dict(e.attrs or {}),
-            "status": e.status,
-        }
-    )
+    out = {
+        "type": e.type,
+        "key": e.key,
+        "title": e.title,
+        "body": e.body,
+        "attrs": dict(e.attrs or {}),
+        "status": e.status,
+    }
+    if e.parent_id is not None:
+        out["parent_id"] = e.parent_id
+    return _jsonable(out)
 
 
 def edge_snapshot(e: Edge) -> dict[str, Any]:
@@ -308,6 +309,30 @@ def _check_edge_attrs(type_: str, attrs: dict[str, Any]) -> None:
     c = attrs.get("contribution")
     if not isinstance(c, int) or isinstance(c, bool) or not 0 <= c <= 3:
         raise InvalidError("a supports edge needs attrs.contribution, an integer 0-3")
+
+
+async def check_parent(
+    db: AsyncSession, type_: str, parent_id: uuid.UUID | None, entity: Entity | None = None
+) -> None:
+    """#345: a subgoal's parent is a goal that is not a subgoal itself (one level), and a
+    goal with subgoals does not become one; so no goal is ever its own ancestor."""
+    if parent_id is None:
+        return
+    if type_ != "goal":
+        raise InvalidError("only a goal has a parent goal")
+    if entity is not None and parent_id == entity.id:
+        raise InvalidError("a goal cannot be its own parent (a cycle)")
+    parent = await db.get(Entity, parent_id)
+    if parent is None or parent.type != "goal":
+        raise InvalidError("the parent must be a goal")
+    if entity is not None and parent.parent_id == entity.id:
+        raise InvalidError("the parent is a subgoal of this goal (a cycle)")
+    if parent.parent_id is not None:
+        raise InvalidError("the parent is a subgoal itself; subgoals are one level deep")
+    if entity is not None and await db.scalar(
+        select(Entity.id).where(Entity.parent_id == entity.id).limit(1)
+    ):
+        raise InvalidError("a goal with subgoals cannot become a subgoal")
 
 
 def _initial_status(type_: str, status: str | None, writer: Writer) -> str:
@@ -536,6 +561,15 @@ async def _detach(db: AsyncSession, proposal: Proposal) -> None:
     await db.flush()
 
 
+def _uuid_or_none(value: Any) -> uuid.UUID | None:
+    if value is None or isinstance(value, uuid.UUID):
+        return value
+    try:
+        return uuid.UUID(str(value))
+    except ValueError:
+        raise InvalidError("parent_id must be a goal's id") from None
+
+
 def _entity_create_args(fields: dict[str, Any]) -> dict[str, Any]:
     try:
         return {
@@ -545,6 +579,7 @@ def _entity_create_args(fields: dict[str, Any]) -> dict[str, Any]:
             "body": fields.get("body"),
             "attrs": fields.get("attrs") or {},
             "status": fields.get("status"),
+            "parent_id": _uuid_or_none(fields.get("parent_id")),
         }
     except KeyError as e:
         raise InvalidError(f"proposal is missing entity field {e.args[0]}") from None
@@ -853,11 +888,13 @@ async def create_entity(
     body: str | None = None,
     attrs: dict[str, Any] | None = None,
     status: str | None = None,
+    parent_id: uuid.UUID | None = None,
 ) -> WriteResult:
     if type_ not in ENTITY_TYPES:
         raise InvalidError(f"type must be one of {', '.join(ENTITY_TYPES)}")
     if await find_entity(db, type_, key) is not None:
         raise ConflictError(f"{type_}:{key} already exists")
+    await check_parent(db, type_, parent_id)
     check_managed_attrs(writer, {}, attrs)
     kept: tuple[str, ...] = ()
     if type_ == "goal":
@@ -865,6 +902,8 @@ async def create_entity(
     if writer.must_propose(None):
         fields = {"type": type_, "key": key, "title": title, "body": body,
                   "attrs": dict(attrs or {}), "status": status}  # fmt: skip
+        if parent_id is not None:
+            fields["parent_id"] = str(parent_id)
         proposal = await propose(db, writer, op="create", kind="entity", fields=fields)
         return WriteResult(proposal=proposal, kept_as_text=kept)
     entity = Entity(
@@ -874,6 +913,7 @@ async def create_entity(
         body=body,
         attrs=dict(attrs or {}),
         status=_initial_status(type_, status, writer),
+        parent_id=parent_id,
         origin=writer.origin,
         run_id=writer.run_id,
         locked=False,
@@ -890,7 +930,7 @@ def _entity_changes(entity: Entity, changes: dict[str, Any]) -> dict[str, Any]:
     """The subset of ``changes`` that differs from the entity, attrs already merged."""
     out: dict[str, Any] = {}
     for f in ENTITY_FIELDS:
-        if f not in changes or (changes[f] is None and f != "body"):
+        if f not in changes or (changes[f] is None and f not in ("body", "parent_id")):
             continue
         value = changes[f]
         if f == "attrs":
@@ -907,6 +947,10 @@ async def update_entity(
     if unknown:
         raise InvalidError(f"cannot change {', '.join(sorted(unknown))}")
     _check_status(changes.get("status"))
+    if "parent_id" in changes:
+        changes = {**changes, "parent_id": _uuid_or_none(changes["parent_id"])}
+        if changes["parent_id"] != entity.parent_id:
+            await check_parent(db, entity.type, changes["parent_id"], entity)
     kept: tuple[str, ...] = ()
     if entity.type == "goal" and isinstance(changes.get("attrs"), dict):
         merged = merge_attrs(entity.attrs, changes["attrs"])

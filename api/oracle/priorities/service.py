@@ -6,6 +6,7 @@ proposed until its priority stop is approved (oracle.priorities.run_order)."""
 
 import hashlib
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -38,6 +39,7 @@ from oracle.priorities.schemas import (
     SnapshotDocument,
 )
 from oracle.priorities.scoring import (
+    DEFAULT_WEIGHT,
     EvidenceRef,
     FeatureInput,
     GoalLink,
@@ -167,6 +169,21 @@ async def _cited_items(db: AsyncSession, item_ids: set[uuid.UUID]) -> dict[uuid.
     }
 
 
+def _subgoal_weight(goal: Entity, parent: Entity, confirmed: Iterable[Entity]) -> float:
+    """#345: a subgoal is credited to its parent: the parent's weight times the subgoal's
+    share of its confirmed siblings' weights (1 each when unset), so splitting a goal into
+    subgoals never adds weight."""
+
+    def own(g: Entity) -> float:
+        w = _float((g.attrs or {}).get("weight"))
+        return w if w is not None and w > 0 else 1.0
+
+    siblings = sum(own(g) for g in confirmed if g.parent_id == parent.id)
+    pw = _float((parent.attrs or {}).get("weight"))
+    pw = pw if pw is not None else DEFAULT_WEIGHT
+    return pw * own(goal) / siblings
+
+
 async def load_features(
     db: AsyncSession, *, rescore: bool = True, principal: Principal | None = None
 ) -> list[FeatureInput]:
@@ -203,14 +220,21 @@ async def load_features(
     for edge in edges:
         if edge.type == "supports" and edge.src_id in inputs and edge.dst_id in goals:
             goal = goals[edge.dst_id]
+            parent = goals.get(goal.parent_id) if goal.parent_id else None
             inputs[edge.src_id].goals.append(
                 GoalLink(
                     goal_key=goal.key,
                     goal_title=goal.title,
-                    weight=_float((goal.attrs or {}).get("weight")),
+                    weight=(
+                        _float((goal.attrs or {}).get("weight"))
+                        if parent is None
+                        else _subgoal_weight(goal, parent, goals.values())
+                    ),
                     contribution=_contribution((edge.attrs or {}).get("contribution")),
                     edge_status=edge.status,
                     goal_id=str(goal.id),
+                    parent_key=parent.key if parent else None,
+                    parent_title=parent.title if parent else None,
                 )
             )
         elif edge.type == "depends_on" and edge.src_id in inputs and edge.dst_id in inputs:

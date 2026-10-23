@@ -59,6 +59,8 @@ class EntityCreate(BaseModel):
     attrs: dict[str, Any] = {}
     # Goals always start proposed and go through POST .../confirm.
     status: NodeStatus | None = None
+    # #345: a goal's parent goal (a subgoal); goals only, one level.
+    parent_id: uuid.UUID | None = None
     origin: WriteOrigin = "user"
     run_id: uuid.UUID | None = None
     reason: str | None = None
@@ -70,6 +72,8 @@ class EntityPatch(BaseModel):
     # Merged into the current attrs; a null value removes the key.
     attrs: dict[str, Any] | None = None
     status: NodeStatus | None = None
+    # #345: move a subgoal to another parent goal; null promotes it to a goal.
+    parent_id: uuid.UUID | None = None
     origin: WriteOrigin = "user"
     run_id: uuid.UUID | None = None
     reason: str | None = None
@@ -79,6 +83,16 @@ class Lock(BaseModel):
     locked: bool
     locked_by: uuid.UUID | None = None
     locked_at: datetime | None = None
+
+
+class GoalProgress(BaseModel):
+    """#345: a goal's progress, 0 to 1: its own measurement ("own") when it has one, else
+    the weighted progress of its subgoals ("subgoals"); null source without either."""
+
+    value: float | None = None
+    source: Literal["own", "subgoals"] | None = None
+    # Its subgoals, archived ones left out.
+    subgoals: int = 0
 
 
 class EntityOut(ORM):
@@ -100,6 +114,9 @@ class EntityOut(ORM):
     updated_at: datetime
     # B5: whether a goal is measurable, what it misses and its warnings; null otherwise.
     goal_check: GoalCheck | None = None
+    # #345: the goal this one is a subgoal of, and a goal's progress with its roll-up.
+    parent_id: uuid.UUID | None = None
+    progress: GoalProgress | None = None
 
     @model_validator(mode="after")
     def _check_goal(self) -> "EntityOut":
