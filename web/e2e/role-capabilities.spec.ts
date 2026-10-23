@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -117,4 +118,28 @@ test("a template a commenter opens has no edit, archive or restore buttons", asy
   await page.getByRole("link", { name: /Open|View/ }).first().click();
   await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
   await expect(page.getByRole("button", { name: /^(Edit|Save|Archive|Restore)/ })).toHaveCount(0);
+});
+
+test("engineering lead: the flag adds no Settings tab; the lead keeps the commenter's", async ({ page }) => {
+  // The commenter carries the engineering lead flag in this scenario.
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "eng-review"]);
+  await openSettings(page, "commenter@example.com");
+  await expect(page).toHaveURL(/\/settings\/connections$/);
+  expect(await tabsShown(page)).toEqual(EVERYONE);
+  await settingsNav(page).getByTestId("nav-templates").click();
+  await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
+});
+
+test("when the capabilities cannot be read, Settings says so and Retry reads them again", async ({ page }) => {
+  await login(page, "commenter@example.com");
+  await page.evaluate(() => localStorage.setItem("po-mock-fail", "/v1/me/capabilities"));
+  // A fresh load reads the capabilities again, and they fail.
+  await page.goto("/settings/templates");
+  const failed = page.getByTestId("caps-error").filter({ visible: true }).first();
+  await expect(failed).toContainText("Oracle could not read what your role may do.");
+  await page.evaluate(() => localStorage.removeItem("po-mock-fail"));
+  await failed.getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByTestId("caps-error")).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1, name: "Templates" })).toBeVisible();
+  await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
 });

@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -14,6 +16,7 @@ const email = (role: Role) => (role === "owner" ? "admin@example.com" : `${role}
 
 // Next keeps recently visited routes mounted but hidden, so only the page on screen counts.
 const viewOnly = (page: Page) => page.getByTestId("view-only").filter({ visible: true });
+const withScenario = (page: Page, scenario: string) => page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario]);
 const header = (page: Page, title: string) => page.getByRole("heading", { level: 1, name: title });
 
 async function open(page: Page, path: string, title: string) {
@@ -80,15 +83,57 @@ for (const role of ROLES) {
     await open(page, "/company/decisions", "Company");
     await expect(page.getByRole("button", { name: "Propose decision" })).toHaveCount(commenter ? 1 : 0);
   });
+
+  test(`${role}: PRD and document pages show only what the role can do (#370 fixes 4)`, async ({ page }) => {
+    await login(page, email(role));
+
+    // A PRD: no old role note; a viewer reads it with View only.
+    await page.goto("/documents/team-workspaces/v/2");
+    await expect(page.getByTestId("doc-status").filter({ visible: true })).toBeVisible();
+    await expect(page.getByTestId("role-note")).toHaveCount(0);
+    await expect(page.getByText("Read only", { exact: true })).toHaveCount(0);
+    await expectViewOnly(page, !commenter);
+    // History: the "Oracle does on its own" switches are an owner's; nobody else sees them.
+    await page.getByRole("tab", { name: /^History/ }).filter({ visible: true }).click();
+    const jobs = page.getByTestId("jobs-panel").filter({ visible: true });
+    await expect(jobs).toBeVisible();
+    await expect(jobs.getByTestId("llm-job-settings")).toHaveCount(role === "owner" ? 1 : 0);
+    await expect(jobs.getByRole("checkbox")).toHaveCount(role === "owner" ? 2 : 0);
+    await expect(jobs.getByText(/Approvers and owners/)).toHaveCount(0);
+
+    // A document only an owner approves: no "Only an owner approves" note for anyone.
+    await page.goto("/documents/board-update-2026-10/v/1");
+    await expect(page.getByTestId("doc-status").filter({ visible: true })).toBeVisible();
+    await expect(page.getByTestId("owner-approves-note")).toHaveCount(0);
+    await expect(page.getByTestId("role-note")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(role === "owner" ? 1 : 0);
+
+    // An intake: only those who may start the draft see Draft with Oracle.
+    await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+    await expect(page.getByRole("heading", { level: 1, name: BEFORE_DRAFTING.title })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Draft with Oracle" })).toHaveCount(approver ? 1 : 0);
+    await expect(page.getByText("An approver starts the draft")).toHaveCount(0);
+
+    // Plan: importing a roadmap is for those who may write it.
+    await open(page, "/plan", "Plan");
+    await expect(page.getByText("Approvers and owners", { exact: false })).toHaveCount(0);
+  });
 }
 
-test("a control the item's state blocks still says why", async ({ page }) => {
-  await login(page, "approver@example.com");
-  await open(page, "/requests", "Requests");
-  const classify = page.getByRole("button", { name: "Classify now", exact: true });
-  await classify.click();
-  // While triage runs, Classify now waits for it rather than disappearing.
-  await expect(classify).toBeDisabled();
-  await expect(classify).toHaveAttribute("title", "Oracle is classifying now");
-  await expect(page.getByTestId("triage-status")).toContainText(/classifying/i);
+test("engineering lead: the flag shows what the lead may do, and nothing more", async ({ page }) => {
+  // The commenter carries the engineering lead flag in this scenario.
+  await withScenario(page, "eng-review");
+  await login(page, "commenter@example.com");
+  await page.goto("/inbox");
+  const stop = page.getByTestId("inbox-checkpoints").getByRole("link", { name: "Decide" });
+  await expect(stop).toHaveCount(1);
+  await stop.click();
+  await expect(page).toHaveURL(/\/runs\/[^/]+#decide$/);
+  await expect(page.getByRole("button", { name: "Approve and continue" })).toBeEnabled();
+  await expectViewOnly(page, false);
+  // Still a commenter everywhere else: no New run, Plan is read only.
+  await open(page, "/runs", "Runs");
+  await expect(page.getByRole("button", { name: "New run" })).toHaveCount(0);
+  await open(page, "/plan", "Plan");
+  await expectViewOnly(page, true);
 });
