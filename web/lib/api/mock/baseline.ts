@@ -849,6 +849,7 @@ function attachEvidence(
   s.evidence.push({ ...row, added_by: caller.userId });
   rescoreEntity(s, entityId);
   return row;
+}
 
 /** An entity's fields as "title", "body", "status" and "attrs.<key>". */
 function flatOf(e: EntityRow): Record<string, unknown> {
