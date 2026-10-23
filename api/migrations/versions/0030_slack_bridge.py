@@ -1,6 +1,7 @@
 """G8 Slack bridge: a discussion mirrored to a Slack thread
 
-Additive. ``company_integrations`` (F6) gains ``bot_user_id`` and one active Slack install
+Additive. ``company_integrations`` (F6) gains ``bot_user_id`` (and the earlier Slacks' app
+users, ``former_bot_user_ids``) and one active Slack install
 per Slack team; three new tables (``discussion_slack_links``, ``slack_outbox``,
 ``slack_events_seen``); ``discussion_messages`` gains ``slack_ts`` and ``slack_user_id``
 (nullable).
@@ -47,6 +48,13 @@ def _tenant(table: str) -> list:
 def upgrade() -> None:
     op.execute(LOCK_TIMEOUT)
     op.add_column("company_integrations", sa.Column("bot_user_id", sa.Text(), nullable=True))
+    op.add_column(
+        "company_integrations",
+        sa.Column(
+            "former_bot_user_ids", postgresql.ARRAY(sa.Text()), server_default="{}",
+            nullable=False,
+        ),
+    )  # fmt: skip
     op.create_index(
         "uq_company_integrations_slack_team",
         "company_integrations",
@@ -154,4 +162,5 @@ def downgrade() -> None:
     op.drop_column("discussion_messages", "slack_user_id")
     op.drop_column("discussion_messages", "slack_ts")
     op.drop_index("uq_company_integrations_slack_team", table_name="company_integrations")
+    op.drop_column("company_integrations", "former_bot_user_ids")
     op.drop_column("company_integrations", "bot_user_id")

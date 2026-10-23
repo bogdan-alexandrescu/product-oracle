@@ -212,10 +212,17 @@ async def _close(
     *,
     with_link: bool,
 ) -> SlackOutbox | None:
-    """Unlink, with a closing line in the thread; a failed mirror has no thread, so none."""
-    if link.failed_at is not None:
+    """Unlink, with a closing line in the thread; a failed mirror, or one whose root is not
+    posted yet, has no thread, so none (and its root is never posted)."""
+    if link.failed_at is not None or not link.thread_ts:
         link.unlinked_at = datetime.now(UTC)
         link.unlinked_by = principal.user_id if principal is not None else None
+        for pending in await db.scalars(
+            select(SlackOutbox).where(
+                SlackOutbox.link_id == link.id, SlackOutbox.status == "queued"
+            )
+        ):
+            pending.status = "dropped"
         await db.flush()
         return None
     text = CLOSING

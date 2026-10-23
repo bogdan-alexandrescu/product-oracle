@@ -197,6 +197,11 @@ async def oauth_slack_notifications_callback(
             found.status = "active"
             found.last_error = None
             found.installed_by = st.user_id
+            if found.bot_user_id and found.bot_user_id != got.bot_user_id:
+                # Another Slack (or app): its sources still skip Oracle's earlier posts.
+                found.former_bot_user_ids = sorted(
+                    {*found.former_bot_user_ids, found.bot_user_id} - {got.bot_user_id}
+                )
             found.bot_user_id = got.bot_user_id
             await db.flush()
             await audit.record(

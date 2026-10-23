@@ -62,3 +62,8 @@ class CompanyIntegration(TenantScoped, Base):
     # G8: the app's own Slack user (``oauth.v2.access``'s ``bot_user_id``): its posts never
     # come back as messages or as source evidence.
     bot_user_id: Mapped[str | None] = mapped_column(Text)
+    # The app's users in the Slacks it was connected to before (a reconnect to another
+    # Slack): Oracle's posts there still never become source evidence.
+    former_bot_user_ids: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, default=list, server_default="{}"
+    )

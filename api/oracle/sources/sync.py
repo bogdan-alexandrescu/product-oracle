@@ -387,14 +387,14 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
         run_config[base.COMPANY_DOMAINS] = list(start.company[0])
         run_config[base.COMPANY_SHARED_DRIVES] = list(start.company[1])
     if kind == "slack":
-        run_config[base.ORACLE_SLACK_USERS] = list(
-            await db.scalars(
-                select(CompanyIntegration.bot_user_id).where(
-                    CompanyIntegration.provider == "slack",
-                    CompanyIntegration.bot_user_id.is_not(None),
-                )
+        oracle_users: set[str] = set()
+        for bot, former in await db.execute(
+            select(CompanyIntegration.bot_user_id, CompanyIntegration.former_bot_user_ids).where(
+                CompanyIntegration.provider == "slack"
             )
-        )
+        ):
+            oracle_users.update([bot] if bot else [], former or [])
+        run_config[base.ORACLE_SLACK_USERS] = sorted(oracle_users)
 
     attentions: list[str] = []
     held = False  # this transaction holds the source row (see _hold)
