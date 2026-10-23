@@ -766,7 +766,8 @@ export function DiscussionThread({
     const yes = await confirmInPage({
       action: "Stop mirroring",
       message:
-        d.slack.status === "failed"
+        // No thread yet (or a failed mirror): nothing was posted, and no closing line goes.
+        !d.slack.thread_url
           ? `Stop mirroring to #${d.slack.channel_name}? Nothing was posted in Slack.`
           : `Stop mirroring to #${d.slack.channel_name}? Oracle posts a closing line in the Slack thread. What was posted stays in Slack.`,
     });
