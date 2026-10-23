@@ -10080,7 +10080,7 @@
           "connections"
         ],
         "summary": "List Fireflies Series",
-        "description": "Your meetings grouped into their calendar series, with counts and the last date\n(from/to: whole days in UTC). Meetings on no calendar are in no series.",
+        "description": "Your meetings grouped into their calendar series, with counts, the last date and\nthe same-title meetings outside each (from/to: whole days in UTC). The window's\npages are read, one browse call each, up to the newest 300 meetings or until the\nbudget stops it (truncated).\nMeetings on no calendar are in no series.",
         "operationId": "list_fireflies_series",
         "security": [
           {
@@ -48750,6 +48750,37 @@
         ],
         "title": "FirefliesMeetingPage"
       },
+      "FirefliesSameTitleOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "date"
+        ],
+        "title": "FirefliesSameTitleOut"
+      },
       "FirefliesSeriesList": {
         "properties": {
           "series": {
@@ -48762,12 +48793,17 @@
           "truncated": {
             "type": "boolean",
             "title": "Truncated"
+          },
+          "scanned": {
+            "type": "integer",
+            "title": "Scanned"
           }
         },
         "type": "object",
         "required": [
           "series",
-          "truncated"
+          "truncated",
+          "scanned"
         ],
         "title": "FirefliesSeriesList"
       },
@@ -48807,6 +48843,13 @@
               }
             ],
             "title": "Organizer"
+          },
+          "same_title": {
+            "items": {
+              "$ref": "#/components/schemas/FirefliesSameTitleOut"
+            },
+            "type": "array",
+            "title": "Same Title"
           }
         },
         "type": "object",
@@ -48815,7 +48858,8 @@
           "title",
           "meeting_count",
           "last_date",
-          "organizer"
+          "organizer",
+          "same_title"
         ],
         "title": "FirefliesSeriesOut"
       },

@@ -62,7 +62,7 @@ import math
 import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -94,9 +94,9 @@ OVERLAP = timedelta(days=3)
 # A meeting Fireflies lists but answers without a transcript is asked for again on this
 # many syncs (the position waits for it), then skipped.
 MISSING_TRIES = 3
-# The series list reads at most this many pages of meetings (lower Fireflies plans allow
-# 50 API calls a day: see oracle.sources.fireflies_browse).
-SERIES_PAGES = 4
+# The series list reads at most this many pages of meetings (the newest 300), so it
+# leaves most of the browse budget to Search and Load more.
+SERIES_PAGES = 6
 MAX_SERIES = 200
 MAX_MEETINGS = 2000
 # The picker keeps a label for each pick only.
@@ -439,12 +439,15 @@ class Series:
     meeting_count: int
     last_date: datetime | None
     organizer: str | None
+    # Meetings outside the series with its title (a reschedule, a one-off copy), newest
+    # first, at most MAX_MEETINGS.
+    same_title: list[Meeting] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class SeriesList:
     series: list[Series]
-    # More meetings exist than the list read (SERIES_PAGES pages).
+    # More meetings may exist than the list read (SERIES_PAGES or ``more`` stopped it).
     truncated: bool
     # Meetings read to build the list.
     scanned: int = 0
@@ -926,19 +929,31 @@ class FirefliesConnector:
         )
 
     async def browse_series(
-        self, credential: dict[str, Any] | None, *, date_from: date | None, date_to: date | None
+        self,
+        credential: dict[str, Any] | None,
+        *,
+        date_from: date | None,
+        date_to: date | None,
+        more: Callable[[], Awaitable[bool]] | None = None,
     ) -> SeriesList:
-        """The key's meetings grouped into their calendar series, newest first (at most
-        SERIES_PAGES pages of meetings are read). Meetings without a calendar id are in
-        no series. A series' count is what a sync of it takes over the same dates."""
+        """The key's meetings grouped into their calendar series, newest first, over the
+        window's pages up to SERIES_PAGES: before each page after the first ``more()`` is
+        asked, and a False stops the list there (truncated, as is a full last page).
+        Meetings without a calendar id are in no series. A series' count is what a sync
+        of it takes over the same dates."""
         groups: dict[str, Series] = {}
+        by_title: dict[str, list[Meeting]] = {}
         scanned = 0
         truncated = False
+        variables = _range(date_from, date_to)
         async with self._session(credential) as fireflies:
-            async for page in self._pages(fireflies, _range(date_from, date_to), SERIES_PAGES):
+            skip = 0
+            while True:
+                page = await fireflies.transcripts(limit=PAGE_SIZE, skip=skip, **variables)
                 for entry in _listed(page):
                     scanned += 1
                     m = _meeting(entry)
+                    by_title.setdefault(m.series_title.casefold(), []).append(m)
                     if m.series_key is None:
                         continue
                     group = groups.get(m.series_key)
@@ -951,12 +966,22 @@ class FirefliesConnector:
                         group.meeting_count += 1
                         if m.date and (group.last_date is None or m.date > group.last_date):
                             group.last_date = m.date
-                truncated = len(page) >= PAGE_SIZE and scanned >= SERIES_PAGES * PAGE_SIZE
-        ordered = sorted(
-            groups.values(),
-            key=lambda g: g.last_date or datetime.min.replace(tzinfo=UTC),
-            reverse=True,
-        )
+                if len(page) < PAGE_SIZE:
+                    break
+                if skip + PAGE_SIZE >= SERIES_PAGES * PAGE_SIZE or (
+                    more is not None and not await more()
+                ):
+                    truncated = True
+                    break
+                skip += PAGE_SIZE
+        newest_first = datetime.min.replace(tzinfo=UTC)
+        for group in groups.values():
+            others = [
+                m for m in by_title.get(group.title.casefold(), []) if m.series_key != group.key
+            ]
+            others.sort(key=lambda m: m.date or newest_first, reverse=True)
+            group.same_title = others[:MAX_MEETINGS]
+        ordered = sorted(groups.values(), key=lambda g: g.last_date or newest_first, reverse=True)
         return SeriesList(series=ordered, truncated=truncated, scanned=scanned)
 
     def _item(self, transcript: dict[str, Any]) -> ItemUpsert:
