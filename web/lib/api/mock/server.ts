@@ -2988,6 +2988,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       versions: db.versions,
       runs: () => (db.runs ??= seeded("runs", () => seedRuns(runsContext(db)))).runs,
       intakes: () => ensureV2(db).intakes,
+      specRequests: () => (db.specs ??= seedSpecs()).specs.map((s) => ({ source_document_id: s.request.source_document_id, document_slug: s.document_slug })),
       me,
       uuid,
       now,

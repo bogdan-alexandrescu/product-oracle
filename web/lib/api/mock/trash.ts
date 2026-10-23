@@ -53,6 +53,8 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
   versions: V[];
   runs: () => RunOut[];
   intakes: () => Intake[];
+  /** The spec requests: a tech brief's link to its PRD (its versions name no source). */
+  specRequests: () => { source_document_id: string; document_slug?: string | null }[];
   me: { id: string; email: string; role: Role };
   uuid: () => string;
   now: () => string;
@@ -81,8 +83,8 @@ const docItem = (d: TrashDocument): TrashItem => ({ type: "document", id: d.id, 
 const runItem = (r: RunOut): TrashItem => ({ type: "run", id: r.id, slug: null, title: r.flow_title ?? r.flow, kind: r.flow });
 const intakeItem = (i: Intake): TrashItem => ({ type: "intake", id: i.id, slug: null, title: i.title, kind: "intake" });
 
-/** What goes to Trash with a document: the documents built from its versions, transitively,
- * and the runs that write any of them. */
+/** What goes to Trash with a document: the documents built from its versions and its spec
+ * requests' tech briefs, transitively, and the runs that write any of them. */
 function resolve<D extends TrashDocument, V extends TrashVersion>(ctx: TrashContext<D, V>, tops: D[]) {
   const docs = [...tops];
   const seen = new Set(tops.map((d) => d.id));
@@ -91,6 +93,10 @@ function resolve<D extends TrashDocument, V extends TrashVersion>(ctx: TrashCont
     const next = new Set<string>();
     for (const v of ctx.versions) {
       if (v.source && frontier.has(v.source.document_id) && !seen.has(v.document_id)) next.add(v.document_id);
+    }
+    for (const r of ctx.specRequests()) {
+      const brief = frontier.has(r.source_document_id) ? ctx.documents.find((d) => d.slug === r.document_slug) : undefined;
+      if (brief && !seen.has(brief.id)) next.add(brief.id);
     }
     for (const id of next) {
       seen.add(id);
