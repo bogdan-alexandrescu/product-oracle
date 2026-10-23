@@ -141,9 +141,10 @@ export default function RequestsPage() {
                   </select>
                   <select aria-label="Theme" className={`${INPUT} w-auto max-w-full`} value={theme} onChange={(e) => setTheme(e.target.value)}>
                     <option value="">Any theme</option>
-                    {liveThemes.map((t) => (
+                    {/* Archived themes too (last, marked): their requests can still be found. */}
+                    {[...liveThemes, ...(themes.data ?? []).filter((t) => t.archived)].map((t) => (
                       <option key={t.id} value={t.id}>
-                        {t.title}
+                        {t.archived ? `${t.title} (archived)` : t.title}
                       </option>
                     ))}
                   </select>

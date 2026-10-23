@@ -491,7 +491,8 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       } else if (verb === "suggestion/decline") {
         if (row.state !== "new") return fail(409, "Only a New request takes Oracle's suggestions");
         if (!row.suggestion || row.suggestion.declined_at) return fail(422, "Oracle has no suggestion for this request");
-        row.suggestion = { ...row.suggestion, declined_at: now() };
+        const email = ctx.people?.().find((x) => x.id === ctx.userId)?.email;
+        row.suggestion = { ...row.suggestion, declined_at: now(), declined_by: ctx.userId, declined_by_name: email ? displayName(email) : null };
       } else {
         const parts = (input.parts as Part[] | undefined) ?? [];
         if (parts.length === 0) return fail(422, "parts: at least one");

@@ -78070,6 +78070,29 @@
               }
             ],
             "title": "Declined At"
+          },
+          "declined_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declined By"
+          },
+          "declined_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declined By Name"
           }
         },
         "type": "object",

@@ -134,8 +134,11 @@ class Suggestion(BaseModel):
     at: datetime | None = None
     # Parts an approver accepted so far.
     accepted: list[SuggestionPart] = []
-    # When an approver declined it; a declined suggestion is not offered again.
+    # When and by whom an approver declined it; a declined suggestion is not offered again
+    # and triage leaves it.
     declined_at: datetime | None = None
+    declined_by: uuid.UUID | None = None
+    declined_by_name: str | None = None
 
 
 class RequestOut(BaseModel):

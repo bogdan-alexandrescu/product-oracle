@@ -5,6 +5,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { Button, Chip, Inspector, InspectorSection } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { formatDate } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -31,8 +32,9 @@ const LABEL = "flex flex-col gap-1 text-sm font-semibold text-text2";
  * goals, a theme, a feature and a PRD, Oracle's suggestion to accept or decline, and the
  * decisions: Qualify (with a reason), Merge into another request, Disqualify (with a
  * reason), Reopen. Links, the suggestion's buttons and decisions are an approver's; other
- * roles see the links read-only and no buttons. A decision the state blocks is disabled,
- * with the reason. Every change hands the saved request to `onChange`. Key it by the
+ * roles, and a Merged or Disqualified request, show the links read-only. A declined
+ * suggestion stays, marked with who declined it and when. A decision the state blocks is
+ * disabled, with the reason. Every change hands the saved request to `onChange`. Key it by the
  * request's id so its forms start over for each request.
  */
 export function RequestInspector({
@@ -71,6 +73,9 @@ export function RequestInspector({
   const lock = { lock_version: request.lock_version };
   const s = request.suggestion;
   const offered = request.state === "new" && s && !s.declined_at && suggestedParts(s).length > 0;
+  const declined = s?.declined_at ? s : null;
+  const features = useQuery("request-features", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "feature" } } })));
+  const featureTitle = (id: string) => (features.data ?? []).find((f) => f.id === id)?.title;
   const canEdit = request.origin !== "interview" && !!me?.user_id && request.filed_by === me.user_id;
 
   return (
@@ -97,7 +102,7 @@ export function RequestInspector({
               {(s.theme_title || s.theme_id) && <li>Theme: {s.theme_title ?? themes.find((t) => t.id === s.theme_id)?.title}</li>}
               {s.goal_ids.length > 0 && <li>Goals: {s.goal_ids.map((id) => goalTitles.get(id) ?? "A goal").join(", ")}</li>}
               {s.duplicate_of && <li>Same as: {requests.find((r) => r.id === s.duplicate_of)?.title ?? "another request"}</li>}
-              {s.feature_id && <li>A feature in the baseline</li>}
+              {s.feature_id && <li data-testid="suggested-feature">Feature: {featureTitle(s.feature_id) ?? "Loading…"}</li>}
             </ul>
             {approver && (
               <div className="flex flex-wrap gap-2">
@@ -124,8 +129,24 @@ export function RequestInspector({
           </div>
         </InspectorSection>
       )}
+      {declined && (
+        <InspectorSection label="Oracle's suggestion">
+          <p data-testid="request-suggestion" className="text-sm text-text2">
+            Declined by {declined.declined_by_name ?? "an approver"}, {formatDate(declined.declined_at!)}
+          </p>
+        </InspectorSection>
+      )}
       <InspectorSection label="Links">
-        <Links request={request} themes={themes} goalTitles={goalTitles} canLink={approver} busy={busy} run={run} />
+        <Links
+          request={request}
+          themes={themes}
+          goalTitles={goalTitles}
+          features={features.data ?? []}
+          // The API refuses link changes on a Merged or Disqualified request: shown read-only.
+          canLink={approver && request.state !== "merged" && request.state !== "disqualified"}
+          busy={busy}
+          run={run}
+        />
       </InspectorSection>
       <InspectorSection label="Decision">
         <Decision request={request} requests={requests} canDecide={approver} busy={busy} run={run} />
@@ -162,7 +183,7 @@ function Words({ request, canEdit, busy, run }: { request: Request; canEdit: boo
       unwrap(
         api.PATCH("/v1/requests/{request_id}", {
           params: { path: { request_id: request.id } },
-          body: { lock_version: request.lock_version, title: title.trim(), body: body.trim() },
+          body: { lock_version: request.lock_version, title: title.trim(), body: body.trim() || null },
         }),
       ),
     );
@@ -218,6 +239,7 @@ function Links({
   request,
   themes,
   goalTitles,
+  features,
   canLink,
   busy,
   run,
@@ -225,6 +247,7 @@ function Links({
   request: Request;
   themes: Theme[];
   goalTitles: Map<string, string>;
+  features: Schemas["EntityOut"][];
   canLink: boolean;
   busy: boolean;
   run: Run;
@@ -232,13 +255,12 @@ function Links({
   const goals = useQuery("request-confirmed-goals", () =>
     unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } })),
   );
-  const features = useQuery("request-features", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "feature" } } })));
   const prds = useQuery("request-prds", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const [goalIds, setGoalIds] = useState(request.goal_ids);
   const [themeId, setThemeId] = useState(request.theme?.id ?? "");
   const [featureId, setFeatureId] = useState(request.feature_id ?? "");
   const [documentId, setDocumentId] = useState(request.document?.id ?? "");
-  const featureTitle = (features.data ?? []).find((f) => f.id === request.feature_id)?.title;
+  const featureTitle = features.find((f) => f.id === request.feature_id)?.title;
 
   if (!canLink) {
     return (
@@ -299,7 +321,7 @@ function Links({
         Feature
         <select className={INPUT} value={featureId} onChange={(e) => setFeatureId(e.target.value)}>
           <option value="">None</option>
-          {(features.data ?? []).map((f) => (
+          {features.map((f) => (
             <option key={f.id} value={f.id}>
               {f.title}
             </option>

@@ -740,7 +740,13 @@ async def decline_suggestion(
     s = _suggestion(row.suggestion)
     if s is None or s.declined_at:
         raise _invalid("Oracle has no suggestion for this request")
-    row.suggestion = {**row.suggestion, "declined_at": _now().isoformat()}
+    email = await db.scalar(select(User.email).where(User.id == principal.user_id))
+    row.suggestion = {
+        **row.suggestion,
+        "declined_at": _now().isoformat(),
+        "declined_by": str(principal.user_id),
+        "declined_by_name": display_name(email) if email else None,
+    }
     await flush_or_conflict(db)
     await audit.record(db, principal, "request.suggestion_declined", "product_request", row.id, {})
     return row

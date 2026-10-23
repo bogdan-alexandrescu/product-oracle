@@ -25660,6 +25660,10 @@ export interface components {
             accepted: ("theme" | "goals" | "duplicate" | "feature")[];
             /** Declined At */
             declined_at?: string | null;
+            /** Declined By */
+            declined_by?: string | null;
+            /** Declined By Name */
+            declined_by_name?: string | null;
         };
         /** SuggestionAccept */
         SuggestionAccept: {
