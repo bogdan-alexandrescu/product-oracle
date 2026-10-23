@@ -91,18 +91,57 @@ test("baseline: the drawer rejects a proposed feature, with a reason", async ({ 
   await expect(page.getByTestId("feature-f.usage-export")).toHaveCount(0);
 });
 
-test("baseline: a viewer sees Add item, Confirm and Reject disabled, with the reason", async ({ page }) => {
+test("baseline: a viewer sees no Add, Confirm, Reject or Archive (#370: a role that can never act sees no control)", async ({ page }) => {
   await openBaseline(page, "viewer@example.com");
-  const add = page.getByRole("button", { name: "Add item" });
-  await expect(add).toBeDisabled();
-  await expect(add).toHaveAttribute("title", /approvers/i);
+  await expect(page.getByRole("button", { name: "Add item" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Goals", exact: true }).getByRole("button", { name: "Add" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Feature × goal", exact: true }).getByRole("button", { name: "Add" })).toHaveCount(0);
 
   await page.getByTestId("feature-f.usage-export").getByRole("button", { name: "Usage export" }).click();
   const d = page.getByRole("dialog", { name: "Usage export" });
-  await expect(d.getByRole("button", { name: "Confirm" })).toBeDisabled();
-  await expect(d.getByRole("button", { name: "Reject" })).toBeDisabled();
-  await expect(d.getByTestId("decide-note")).toContainText("approver");
+  await expect(d).toContainText("Proposed");
+  await expect(d.getByRole("button", { name: "Confirm" })).toHaveCount(0);
+  await expect(d.getByRole("button", { name: "Reject" })).toHaveCount(0);
+  await expect(d.getByTestId("decide-note")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(d).toHaveCount(0);
+
+  await page.getByRole("tab", { name: /Items/ }).click();
+  await expect(page.getByRole("region", { name: "Items", exact: true }).getByRole("button", { name: "Add" })).toHaveCount(0);
 });
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`baseline: a failed goal link keeps the new feature and Try again only adds the missing link (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await openBaseline(page);
+    await page.getByRole("region", { name: "Feature × goal", exact: true }).getByRole("button", { name: "Add" }).click();
+    const form = page.getByRole("dialog", { name: "Add an item" });
+    await form.getByLabel("Title").fill("Loyalty points");
+    await form.getByLabel("Product").selectOption({ label: "Storefront" });
+    await form.getByLabel("Raise activation").selectOption("2");
+    // The first link's request (the product link) fails once, after the feature is made.
+    await page.evaluate(() => {
+      localStorage.setItem("po-mock-fail-once", "POST /v1/baseline/edges");
+      (globalThis as { __poMockCalls?: string[] }).__poMockCalls = [];
+    });
+    await form.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(form.getByRole("alert")).toContainText("“Loyalty points” was added");
+    await expect(form.getByRole("button", { name: "Try again" })).toBeVisible();
+    await form.getByRole("button", { name: "Try again" }).click();
+    await expect(form).toHaveCount(0);
+
+    const calls = await page.evaluate(() => (globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? []);
+    expect(calls.filter((c) => c.startsWith("POST /v1/baseline/entities"))).toHaveLength(1);
+    expect(calls.filter((c) => c.startsWith("POST /v1/baseline/edges"))).toHaveLength(3);
+
+    const rows = page.getByTestId("product-p.storefront").getByRole("row").filter({ hasText: "Loyalty points" });
+    await expect(rows).toHaveCount(1);
+    await rows.getByRole("button", { name: "Loyalty points" }).click();
+    const d = page.getByRole("dialog", { name: "Loyalty points" });
+    await expect(d.getByRole("list", { name: "Supports" })).toContainText("Raise activation");
+    await expect(d.getByRole("list", { name: "Part of" })).toContainText("Storefront");
+  });
+}
 
 test("baseline: on a phone the Add item form fits and adds an assumption", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
