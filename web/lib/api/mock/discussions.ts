@@ -80,6 +80,8 @@ export type DiscussionsContext = {
   persist?: (change: (db: DiscussionsDb) => void) => Promise<void>;
   /** The saved state now (a streaming reply checks for Stop). */
   current?: () => DiscussionsDb;
+  /** The gateway's refusal while the Claude account pool is spent, worded; null otherwise. */
+  refusal?: () => string | null;
 };
 
 /** G2: the gateway's message when no Claude account can take a call (approvers and owners). */
@@ -291,7 +293,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     edited_at: x.edited_at,
     deleted: !!x.deleted_at,
     error_reason: x.error_reason ?? null,
-    error: x.status === "failed" ? (x.error_reason === "no_account" && atLeast(me.role, "approver") ? NO_ACCOUNT_MESSAGE : "Oracle can't reply right now.") : null,
+    error: x.status === "failed" ? (x.error_reason === "no_account" && atLeast(me.role, "approver") ? (ctx.refusal?.() ?? NO_ACCOUNT_MESSAGE) : "Oracle can't reply right now.") : null,
     pushback: null,
     usage: null,
   });
