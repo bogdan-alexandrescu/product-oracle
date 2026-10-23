@@ -139,8 +139,7 @@ export function DailyTriageSwitch({ triage, canChange }: { triage: Query<Status>
       )}
       <InfoTip label="Daily triage">
         While this is on, Oracle classifies new requests every day at 07:00 PT, about $1.50 a run. It runs as whoever
-        turned it on, while they are an approver or owner, otherwise as the longest-standing owner. Approvers and owners
-        turn it on or off.
+        turned it on, while they are an approver or owner, otherwise as the longest-standing owner.
         {status?.daily_changed_by && ` Last turned ${status.daily_on ? "on" : "off"} by ${status.daily_changed_by}.`}
       </InfoTip>
     </span>

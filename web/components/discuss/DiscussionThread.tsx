@@ -8,7 +8,7 @@ import { InlineError, Menu, TEXTAREA } from "@/components/review/parts";
 import { Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
 import { plural } from "./DiscussionList";
@@ -303,7 +303,7 @@ export function DiscussionThread({
   /** Something about it changed (a message, its visibility): lists showing it reload. */
   onChanged?: () => void;
 }) {
-  const { me, role } = useMe();
+  const { me, can } = useMe();
   const myId = me?.user_id ?? null;
   const [state, setState] = useState<Loaded | null>(null);
   const [showPeople, setShowPeople] = useState(false);
@@ -353,7 +353,10 @@ export function DiscussionThread({
   const open = d.status === "open";
   const priv = d.visibility === "private";
   const starter = d.me.can_manage;
-  const canClose = starter || hasRole(role, "approver");
+  // #370: the starter or an approver closes it. PATCH /v1/discussions is open to every reader
+  // and its capability does not mark the approver check, so the approvers' decision on feedback
+  // (PATCH /v1/feedback, approver) stands for it.
+  const canClose = starter || can("update_feedback");
   const canMakeOpen = starter && priv && d.origin !== "panel" && !d.author_only;
 
   const patch = async (body: Omit<Schemas["DiscussionPatch"], "lock_version">) => {
@@ -618,11 +621,7 @@ export function DiscussionThread({
             onChanged?.();
           }}
         />
-      ) : (
-        <p className="text-sm text-text2" data-testid="discussion-read-only">
-          Viewers can read but not write here.
-        </p>
-      )}
+      ) : null}
 
       {warning && (
         <MakeOpenWarning

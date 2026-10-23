@@ -10,7 +10,7 @@ import { Button, Chip, Icon, InfoTip, Notice } from "@/components/ds";
 import { JobStatusChip } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime, NO_ACCOUNT_REASON, turnedOff } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useLive } from "@/lib/use-live";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, onWaitingChanged, waitingChanged } from "@/lib/waiting";
@@ -37,8 +37,8 @@ const building = (status?: string | null) => status === "queued" || status === "
  * version; the agents write the draft in a feedback-loop run.
  */
 export function BuildDraftButton({ doc }: { doc: string }) {
-  const { role } = useMe();
-  const canBuild = hasRole(role, "approver");
+  const { can } = useMe();
+  const canBuild = can("build_next_draft");
   const [reload, setReload] = useState(0);
   const q = useQuery(`staged|${doc}|${reload}`, () =>
     unwrap(

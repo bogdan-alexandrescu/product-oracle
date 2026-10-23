@@ -10,7 +10,7 @@ import { TemplateThemePicker, useDraftChoice } from "@/components/NewDraft";
 import { Button, Icon, InfoTip, Notice } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas, type VersionSource } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 /** A PRD with an approved version to build a roadmap from. */
@@ -28,11 +28,12 @@ export function SourceLink({ source }: { source: VersionSource }) {
   );
 }
 
-/** Build roadmap on an approved PRD; approvers and above start runs. */
+/** Build roadmap on an approved PRD; shown to those who may start the run. */
 export function BuildRoadmapButton({ prd, size }: { prd: ApprovedPrd; size?: "sm" | "md" }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const [open, setOpen] = useState(false);
-  if (!hasRole(role, "approver") || prd.approved_version == null) return null;
+  // #370: a prd_to_roadmap run (POST /v1/runs); the handler only keeps update_draft for owners.
+  if (!can("create_run", true) || prd.approved_version == null) return null;
   return (
     <>
       <Button

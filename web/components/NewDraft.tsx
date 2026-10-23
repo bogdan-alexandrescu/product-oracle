@@ -23,7 +23,7 @@ import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { unwrapProblems, ProblemsError } from "@/lib/api/problems";
 import { assess, goalViews } from "@/app/home/_goals";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useLive } from "@/lib/use-live";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -387,8 +387,9 @@ function RecommendationInspector({
   onError: (e: string | null) => void;
   onNotice: (n: string | null) => void;
 }) {
-  const { role } = useMe();
-  const isOwner = role === "owner";
+  const { can } = useMe();
+  // #370: "Make company default" is PUT /v1/drafts/defaults.
+  const canSetDefault = can("set_draft_defaults");
   const label = kind === "prd" ? "PRD" : "roadmap";
   const [busy, setBusy] = useState(false);
   const { live, rec, themes, templates, template, templateKey, themeKey, setTemplatePick, setThemePick } = choice;
@@ -477,7 +478,7 @@ function RecommendationInspector({
           <InspectorRow value={template ? `v${template.latest_version}` : undefined}>{template?.name ?? "–"}</InspectorRow>
           <InspectorRow>{themeName ?? "No theme"}</InspectorRow>
         </InspectorSection>
-        {(company || isOwner) && (
+        {(company || canSetDefault) && (
           <InspectorSection label="Company default">
             {company && (
               <div data-testid="company-default" className="flex flex-wrap items-center gap-2">
@@ -490,7 +491,7 @@ function RecommendationInspector({
                 </Button>
               </div>
             )}
-            {isOwner && (
+            {canSetDefault && (
               <div className={`flex items-center gap-2 ${company ? "mt-2.5" : ""}`}>
                 <Button onClick={makeDefault} disabled={busy || !templateKey}>
                   {busy ? "Saving…" : "Make company default"}
@@ -702,9 +703,10 @@ function GoalPicker({ value, onChange }: { value: string[]; onChange: (ids: stri
 export function NewPrd() {
   const kind = "prd" as const;
   const router = useRouter();
-  const { role } = useMe();
-  const canWrite = hasRole(role, "commenter");
-  const canSkeleton = hasRole(role, "approver");
+  const { can } = useMe();
+  // #370: Continue creates an intake not linked to a PRD (the handler only asks an approver to link one).
+  const canWrite = can("create_intake", true);
+  const canSkeleton = can("start_draft");
   const [prd, setPrd] = useState<PrdAnswers>({});
   const [title, setTitle] = useState("");
   const [problem, setProblem] = useState("");

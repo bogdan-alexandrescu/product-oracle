@@ -222,9 +222,8 @@ test("commenter brief, approver finds it: Continue works, the draft waits for an
   await openDoor(page);
   await writeBrief(page, "Gift wrapping at checkout");
   const id = await continueToIntake(page);
-  const draft = page.getByRole("button", { name: "Draft with Oracle" });
-  await expect(draft).toBeDisabled();
-  await expect(draft).toHaveAttribute("title", "An approver starts the draft");
+  // #370: a commenter can never start the draft, so there is no button to disable.
+  await expect(page.getByRole("button", { name: "Draft with Oracle" })).toHaveCount(0);
   await signOut(page);
 
   await login(page, "approver@example.com");

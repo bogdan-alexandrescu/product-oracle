@@ -14,7 +14,9 @@ import { useTheme, type ThemeChoice } from "@/lib/theme";
 import { Mark } from "./Brand";
 import { ConfirmHost } from "./ConfirmDialog";
 import { initialsOf } from "./Figures";
+import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
+import { Notice } from "./Layout";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string; match?: string };
 
@@ -480,6 +482,30 @@ function PhoneHeader() {
  * (Home, PRDs, Roadmap, Inbox, More) and the phone header on a phone. No rail on /login, /oauth and when
  * signed out: its grid column then collapses to nothing.
  */
+/**
+ * #370 fixes 4: when GET /v1/me/capabilities fails, every can() is false and the pages hide
+ * their actions. Say so, with Retry, instead of leaving them quietly empty.
+ */
+export function CapsError() {
+  const { capsError, retryCaps } = useMe();
+  if (!capsError) return null;
+  return (
+    <div className="px-4 pt-3 sm:px-6">
+      <Notice
+        tone="error"
+        testId="caps-error"
+        action={
+          <Button onClick={retryCaps}>
+            Retry
+          </Button>
+        }
+      >
+        {capsError}
+      </Notice>
+    </div>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="grid min-h-dvh grid-cols-[auto_minmax(0,1fr)]">
@@ -490,6 +516,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Suspense fallback={null}>
           <PhoneHeader />
         </Suspense>
+        <CapsError />
         {children}
       </main>
       <ConfirmHost />

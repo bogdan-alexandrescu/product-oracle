@@ -72,7 +72,7 @@ export function FindingRow({
   onWaived: (f: Finding) => void;
   testId?: string;
 }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const [waiving, setWaiving] = useState(false);
   const href = subjectHref(f, stack);
   const draft = f.detail?.draft === true;
@@ -91,7 +91,7 @@ export function FindingRow({
             Open
           </Link>
         )}
-        {canWaive(f, role) && !waiving && (
+        {canWaive(f, can) && !waiving && (
           <Button variant="ghost" onClick={() => setWaiving(true)}>
             Waive
           </Button>
