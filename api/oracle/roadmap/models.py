@@ -31,6 +31,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -232,4 +233,41 @@ class RoadmapItem(TenantScoped, Base):
     reconciled_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
     reconciled_section_hash: Mapped[str | None] = mapped_column(Text)
     note: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = _updated_at()
+
+
+CHANGE_SET_STATUSES = ("draft", "proposed", "discarded")
+
+
+class RoadmapChangeSet(TenantScoped, Base):
+    """Edits to a roadmap's approved version, proposed as a new version (#346).
+
+    Nobody edits an approved version in place: a change set is opened on the approved
+    version (``base_version_id``) and holds its changes in order (add, move, defer, cut
+    with a reason, reorder within a horizon). Proposing it imports the next roadmap
+    version, with the base's items plus the changes, for the document's decider to
+    approve. A roadmap has at most one draft change set.
+    """
+
+    __tablename__ = "roadmap_change_sets"
+    __table_args__ = (
+        CheckConstraint(_in("status", CHANGE_SET_STATUSES), name="status"),
+        Index(
+            "ux_roadmap_change_sets_draft",
+            "roadmap_document_id",
+            unique=True,
+            postgresql_where=text("status = 'draft'"),
+        ),
+    )
+
+    roadmap_document_id: Mapped[uuid.UUID] = _fk("documents", nullable=False)
+    base_version_id: Mapped[uuid.UUID] = _fk("document_versions", nullable=False)
+    status: Mapped[str] = mapped_column(
+        Text, nullable=False, default="draft", server_default="draft"
+    )
+    # [{"op": "add" | "move" | "defer" | "cut" | "reorder", ...}], applied in order.
+    changes: Mapped[list[dict[str, Any]]] = _json("[]")
+    proposed_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    lock_version: Mapped[int] = _lock_version()
     updated_at: Mapped[datetime] = _updated_at()
