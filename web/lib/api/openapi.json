@@ -25938,7 +25938,7 @@
           "roadmaps"
         ],
         "summary": "List Roadmap Change Sets",
-        "description": "The roadmap's change sets, newest first: the draft being edited, the proposals\nwaiting for the decider (``approved`` false) and the rest.",
+        "description": "The roadmap's change sets, newest first: the draft being edited, the proposals\nwaiting for the decider (``approved`` false) and the rest. ``limit`` and ``offset``\npage through them.",
         "operationId": "list_roadmap_change_sets",
         "security": [
           {
@@ -25978,6 +25978,29 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
             }
           }
         ],

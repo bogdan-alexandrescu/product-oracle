@@ -165,13 +165,17 @@ async def get(db: AsyncSession, document: Document, set_id: uuid.UUID) -> Roadma
 
 
 async def list_sets(
-    db: AsyncSession, document: Document, status: str | None = None
+    db: AsyncSession,
+    document: Document,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
 ) -> list[RoadmapChangeSet]:
     query = select(RoadmapChangeSet).where(RoadmapChangeSet.roadmap_document_id == document.id)
     if status is not None:
         query = query.where(RoadmapChangeSet.status == status)
     order = (RoadmapChangeSet.created_at.desc(), RoadmapChangeSet.id)
-    return list(await db.scalars(query.order_by(*order).limit(50)))
+    return list(await db.scalars(query.order_by(*order).limit(limit).offset(offset)))
 
 
 async def check_base(db: AsyncSession, document: Document, row: RoadmapChangeSet) -> None:
@@ -426,7 +430,8 @@ async def _markdown(db: AsyncSession, base: DocumentVersion, body: str) -> str:
 async def propose(
     db: AsyncSession, principal: Principal, document: Document, row: RoadmapChangeSet
 ) -> DocumentVersion:
-    """Import the next roadmap version from the change set and store its items."""
+    """Import the next roadmap version from the change set and store its items, in the
+    caller's transaction: nothing is committed here."""
     _draft(row)
     await check_base(db, document, row)
     changes = _parse(row.changes)
@@ -444,11 +449,12 @@ async def propose(
         .limit(1)
     )
     set_id, base_number = row.id, base.number
-    # The import commits the version (oracle.docs.service.import_draft); the items follow.
+    # One transaction: the import only flushes the version, and the caller commits it
+    # with its items and the change set's status (a failure leaves no version behind).
     result = await docs_service.import_draft(
         db, document.slug, markdown, principal, kind="roadmap",
         source_version_id=base.source_version_id, base_version=latest,
-        cause="roadmap_change_set",
+        cause="roadmap_change_set", commit=False,
     )  # fmt: skip
     version = await db.scalar(
         select(DocumentVersion).where(

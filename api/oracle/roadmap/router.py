@@ -280,13 +280,16 @@ async def list_roadmap_change_sets(
     principal: Reader,
     db: TenantDB,
     status_: Annotated[ChangeSetStatus | None, Query(alias="status")] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ChangeSetOut]:
     """The roadmap's change sets, newest first: the draft being edited, the proposals
-    waiting for the decider (``approved`` false) and the rest."""
+    waiting for the decider (``approved`` false) and the rest. ``limit`` and ``offset``
+    page through them."""
     document = await _document(db, doc, "roadmap")
     return [
         await changeset.view(db, document, row)
-        for row in await changeset.list_sets(db, document, status_)
+        for row in await changeset.list_sets(db, document, status_, limit, offset)
     ]
 
 

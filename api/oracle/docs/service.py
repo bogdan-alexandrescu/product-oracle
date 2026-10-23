@@ -809,6 +809,7 @@ async def import_draft(
     run_id: uuid.UUID | None = None,
     unverified_dates: Literal["refuse", "mark"] = "refuse",
     date_sections: set[str] | None = None,
+    commit: bool = True,
 ) -> ImportResult:
     """Import a draft as the next version of ``doc``.
 
@@ -840,6 +841,9 @@ async def import_draft(
     it and records an ``unverified_date`` warning per date, which the views mark (and
     approval is refused until each is resolved). ``date_sections``: Oracle's own
     revisions check only the sections they change (``""``: the title).
+
+    ``commit=False`` flushes the version and leaves the commit to the caller, which writes
+    more in the same transaction (a roadmap change set's proposal, oracle.roadmap.changeset).
 
     Raises :class:`DraftError` (422), :class:`NotFoundError` (404, ``doc`` is an
     unknown id) or :class:`ImportConflictError` (409, lost a concurrent import race,
@@ -936,7 +940,7 @@ async def import_draft(
                 await patches.propose_held(
                     db, principal, document, previous, held, origin=origin, run_id=run_id
                 )
-                await db.commit()
+                await (db.commit() if commit else db.flush())
             return ImportResult(
                 version=await read_version(db, existing, require_dates=False),
                 created=False,
@@ -1195,7 +1199,7 @@ async def import_draft(
             **({"held_sections": sorted(held)} if held else {}),
         },
     )
-    await db.commit()
+    await (db.commit() if commit else db.flush())
     if dates is not None:
         # The version's text is the draft's: reading it parses nothing again.
         from oracle.roadmap import doc_dates

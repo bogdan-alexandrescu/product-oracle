@@ -7424,7 +7424,8 @@ export interface paths {
         /**
          * List Roadmap Change Sets
          * @description The roadmap's change sets, newest first: the draft being edited, the proposals
-         *     waiting for the decider (``approved`` false) and the rest.
+         *     waiting for the decider (``approved`` false) and the rest. ``limit`` and ``offset``
+         *     page through them.
          */
         get: operations["list_roadmap_change_sets"];
         put?: never;
@@ -41735,6 +41736,8 @@ export interface operations {
         parameters: {
             query?: {
                 status?: ("draft" | "proposed" | "discarded" | "superseded") | null;
+                limit?: number;
+                offset?: number;
             };
             header?: never;
             path: {

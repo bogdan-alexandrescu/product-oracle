@@ -203,8 +203,11 @@ export async function routeChangeSets(ctx: PlanEditsContext, db: PlanEditsDb, re
     if (!p[4]) {
       if (m === "GET") {
         const status = q.get("status");
+        const limit = Number(q.get("limit") ?? 50);
+        const offset = Number(q.get("offset") ?? 0);
+        if (!(limit >= 1 && limit <= 100) || !(offset >= 0)) throw new Refused(422, "limit is 1-100, offset 0 or more");
         const rows = db.sets.filter((s) => s.roadmap === doc.slug && (!status || s.status === status)).reverse();
-        return json(200, rows.map((r) => view(ctx, db, doc, r)));
+        return json(200, rows.slice(offset, offset + limit).map((r) => view(ctx, db, doc, r)));
       }
       if (m !== "POST") return null;
       const open = db.sets.find((s) => s.roadmap === doc.slug && s.status === "draft");
