@@ -31,8 +31,6 @@ type MilestoneStatus = Milestone["status"];
 /** Which milestone the inspector edits; `id` null adds a new one to the track. */
 export type MilestonePick = { trackId: string; id: string | null };
 
-export const READ_ONLY = "Changing a track needs the approver role.";
-
 const STATUS_LABEL: Record<Status, string> = {
   active: "Active",
   paused: "Paused",
@@ -425,7 +423,10 @@ export function TrackPanel({
   );
 }
 
-/** The milestone editor in the Plan inspector (#339): name, horizon, date with its verified bases, items and status. */
+/**
+ * A milestone in the Plan inspector (#339). #370 (#505): a role that can never change it
+ * sees it read only; any other role gets the editor.
+ */
 export function MilestoneEditor({
   track,
   milestoneId,
@@ -438,6 +439,57 @@ export function MilestoneEditor({
   onSaved: (m: Milestone) => void;
 }) {
   const m = track.milestones.find((x) => x.id === milestoneId) ?? null;
+  if (!canWrite) return m ? <MilestoneView track={track} m={m} /> : null;
+  return <MilestoneForm track={track} m={m} onSaved={onSaved} />;
+}
+
+/** A milestone read only: its name, date and state as text. */
+function MilestoneView({ track, m }: { track: Track; m: Milestone }) {
+  const st = MILESTONE_STATUS[m.status];
+  return (
+    <Inspector
+      eyebrow="Milestone · selected"
+      title={milestoneTitle(track, m.id)}
+      label={`Milestone ${m.name}`}
+      testId="plan-milestone"
+      chips={<Chip hero>{track.title}</Chip>}
+    >
+      <InspectorSection>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[15px]">
+          <dt className="text-text2">Name</dt>
+          <dd data-testid="milestone-name">{m.name}</dd>
+          <dt className="text-text2">Horizon</dt>
+          <dd>{HORIZON_LABEL[m.horizon]}</dd>
+          <dt className="text-text2">Date</dt>
+          <dd data-testid="milestone-date">
+            {m.target_date ? day(m.target_date) : "No date"}
+          </dd>
+          <dt className="text-text2">Status</dt>
+          <dd>
+            <Chip kind={st.kind} data-testid="milestone-state">
+              {st.label}
+            </Chip>
+          </dd>
+          <dt className="text-text2">Items</dt>
+          <dd>
+            {m.item_keys.length} {m.item_keys.length === 1 ? "item" : "items"}
+          </dd>
+        </dl>
+      </InspectorSection>
+    </Inspector>
+  );
+}
+
+/** The milestone editor: name, horizon, date with its verified bases, items and status. */
+function MilestoneForm({
+  track,
+  m,
+  onSaved,
+}: {
+  track: Track;
+  m: Milestone | null;
+  onSaved: (m: Milestone) => void;
+}) {
   const [name, setName] = useState(m?.name ?? "");
   const [horizon, setHorizon] = useState<Horizon>(m?.horizon ?? "now");
   const [date, setDate] = useState(m?.target_date ?? "");
@@ -474,7 +526,7 @@ export function MilestoneEditor({
     );
   };
 
-  const off = !canWrite || busy;
+  const off = busy;
   const toggle = (list: string[], key: string, on: boolean) =>
     on ? [...list, key] : list.filter((k) => k !== key);
 
@@ -652,12 +704,10 @@ export function MilestoneEditor({
               variant="solid"
               className="self-start"
               disabled={off || !name.trim()}
-              title={canWrite ? undefined : READ_ONLY}
             >
               {m ? "Save milestone" : "Add milestone"}
             </Button>
             {error && <InlineError>{error}</InlineError>}
-            {!canWrite && <p className="text-sm text-text2">{READ_ONLY}</p>}
           </div>
         </InspectorSection>
       </form>

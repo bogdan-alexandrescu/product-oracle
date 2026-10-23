@@ -91,6 +91,7 @@ export default function PlanPage() {
     }),
     [can],
   );
+  const canEditMilestone = can("update_milestone");
   const [scope, setScope, ready] = usePlanScope(userId ?? (me ? "token" : null));
   const q = useQuery(
     `plan|${ready ? scope : "wait"}`,
@@ -142,7 +143,8 @@ export default function PlanPage() {
       key={`${msTrack.id}|${milestone?.id ?? "new"}`}
       track={msTrack}
       milestoneId={milestone?.id ?? null}
-      canWrite={canWrite}
+      // #370 (#505): a role that can never change the milestone sees it read only.
+      canWrite={milestone?.id ? canEditMilestone : trackRights.addMilestone}
       onSaved={async (m) => {
         const t = await unwrap(api.GET("/v1/tracks/{track_id}", { params: { path: { track_id: m.track_id } } }));
         putTrack(t);
