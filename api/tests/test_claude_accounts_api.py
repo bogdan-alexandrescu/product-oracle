@@ -122,6 +122,42 @@ async def test_the_browser_sign_in_end_to_end(client, tenant_id, owner, endpoint
     assert again.status_code == 422 and "single-use" in again.json()["detail"]
 
 
+async def _sign_in(client, owner, label: str) -> dict:
+    s = (await client.post(f"{BASE}/authorize", json={"label": label}, headers=owner.headers)).json()
+    resp = await client.post(
+        f"{BASE}/exchange", json={"state": s["state"], "code": "c0de"}, headers=owner.headers
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()["account"]
+
+
+async def test_the_sign_in_keeps_the_claude_account_it_was_for_and_the_list_serves_it(
+    client, tenant_id, owner, endpoint
+):
+    # #405: after the sign-in a person can see WHICH Claude account the row holds.
+    added = await _sign_in(client, owner, "personal")
+    assert added["claude_email"] == "ada@example.com"
+    assert added["claude_organization"] == "Example Studio"
+    listed = (await client.get(BASE, headers=owner.headers)).json()["accounts"]
+    assert [(a["label"], a["claude_email"], a["claude_organization"]) for a in listed] == [
+        ("personal", "ada@example.com", "Example Studio")
+    ]
+
+    # Signing in again to a different Claude account shows the new one, never the old.
+    endpoint.identity = {"account": {"uuid": "acct-2", "email_address": "lin@example.org"}}
+    again = await _sign_in(client, owner, "personal")
+    assert again["claude_email"] == "lin@example.org"
+    assert again["claude_organization"] is None
+
+    # A pasted saved login carries no identity: shown as not known, not as the last one.
+    resp = await client.post(
+        BASE, json={"label": "personal", "credential": pair()}, headers=owner.headers
+    )
+    assert resp.status_code == 201
+    assert resp.json()["account"]["claude_email"] is None
+    assert resp.json()["account"]["claude_organization"] is None
+
+
 async def test_only_whoever_started_a_sign_in_can_finish_it(client, tenant_id, owner, endpoint):
     other = await make_person(tenant_id, "other-owner@example.com", "owner")
     s = (await client.post(f"{BASE}/authorize", json={"label": "x"}, headers=owner.headers)).json()
