@@ -21,7 +21,6 @@ from tests.review_v2_helpers import person
 from tests.swarmcloud_fake import EGRESS
 from tests.test_adapter_v2 import (
     LB,
-    REVIEW_LEAD,
     _ceiling,
     _decide_raw,
     _draft_markdown,
@@ -102,10 +101,10 @@ async def test_a_decision_not_delivered_yet_is_final_too(client, owner, second):
     assert after["status"] == "changes_requested" and after["note"] == "Cover returns"
     await tick(client, auth)
     assert len(swarm.answers) == 1
-    assert swarm.answers[0]["payload"] == {
-        "verdict": "NOT_YET",
-        "findings": [REVIEW_LEAD.format(attempt=1), "Note: Cover returns"],
-    }
+    # D10: the document's open feedback goes back with the note, one finding each.
+    [item] = (await client.get("/v1/documents/checkout-redesign/feedback", headers=auth)).json()
+    findings = [f"general: Add a metric [{item['id']}]", "Cover returns"]
+    assert swarm.answers[0]["payload"] == {"verdict": "NOT_YET", "findings": findings}
 
 
 # --- B. the decision of a decider who lost standing is not delivered --------------------

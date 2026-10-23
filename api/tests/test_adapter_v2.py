@@ -389,18 +389,18 @@ async def test_two_round_workflow_answers_replay_and_the_revise_step(client, own
     assert (await get(client, auth, run["id"]))["status"] == "awaiting_checkpoint"
 
     # Changes requested: posted as NOT_YET for the deciding user, the same workflow goes on.
+    # D10: a PRD review sends back the document's open feedback, one finding per item,
+    # then the note.
     run = await decide(client, approver, run, "changes_requested", note="Add a guardrail metric")
     assert run["status"] == "running"
+    [item] = (await client.get("/v1/documents/checkout-redesign/feedback", headers=auth)).json()
+    findings = [f"general: Add a metric [{item['id']}]", "Add a guardrail metric"]
     assert swarm.answers == [
         {
             "workflow_id": "wf_1",
             "step_id": "next_draft-review1",
             "answer_id": cp["id"],
-            # D4: the revise step reads the structured review; the note is in it verbatim.
-            "payload": {
-                "verdict": "NOT_YET",
-                "findings": [REVIEW_LEAD.format(attempt=1), "Note: Add a guardrail metric"],
-            },
+            "payload": {"verdict": "NOT_YET", "findings": findings},
             "via": "mcp",
             "on_behalf_of": "pm@example.com",
         }
@@ -448,7 +448,7 @@ async def test_two_round_workflow_answers_replay_and_the_revise_step(client, own
     # What SwarmCloud serves back: the record, never the payload.
     record = await runtime.answer_record("wf_1", "next_draft-review1", "review1.json")
     assert record.answer_id == cp["id"] and record.verdict == "NOT_YET"
-    assert record.findings == (REVIEW_LEAD.format(attempt=1), "Note: Add a guardrail metric")
+    assert record.findings == tuple(findings)
     assert record.on_behalf_of == "pm@example.com" and record.via == "mcp"
     served = swarm.workflows["wf_1"].step("next_draft-review1").answer
     assert "payload" not in served and served["sha256"]
@@ -722,7 +722,9 @@ async def test_already_answered_by_oracles_lost_post_with_the_same_verdict(clien
     assert attempt["note"] == "Add a guardrail metric"
     # The revision used the first wording; the run goes on to round 2 in the same workflow.
     staged = json.loads(swarm.workflows["wf_1"].step("next_draft-revise1").staged["review1.json"])
-    assert staged["findings"] == [REVIEW_LEAD.format(attempt=1), "Note: Add a guardrail metric"]
+    # D10: the document's open item goes back with the note, one finding each.
+    [item] = (await client.get("/v1/documents/checkout-redesign/feedback", headers=auth)).json()
+    assert staged["findings"] == [f"general: Add a metric [{item['id']}]", "Add a guardrail metric"]
     await tick(client, auth)
     run = await get(client, auth, run["id"])
     assert run["status"] == "awaiting_checkpoint"

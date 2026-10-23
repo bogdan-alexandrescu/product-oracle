@@ -666,8 +666,9 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     at: c.created_at,
     action: (
       // The same verb as the runs list: the run page opens at the decision; a priority stop
-      // opens its order next to the live ranking (C8), where it is decided too.
-      <LinkButton href={orderHref(c) ?? `/runs/${c.run_id}#decide`}>Decide</LinkButton>
+      // opens its order next to the live ranking (C8), where it is decided too; a PRD or
+      // roadmap review opens its version (D10).
+      <LinkButton href={orderHref(c) ?? c.review_link ?? `/runs/${c.run_id}#decide`}>Decide</LinkButton>
     ),
   }));
 
