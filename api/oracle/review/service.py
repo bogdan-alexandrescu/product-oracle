@@ -1057,6 +1057,12 @@ async def approve_version(
         .limit(1)
     )
     if version.approved_at is None and latest != version.number:
+        if document.kind == "roadmap":
+            # #346: a proposal a later one superseded says so.
+            from oracle.roadmap.changeset import superseded_message
+
+            if message := await superseded_message(session, version):
+                raise ReviewError("conflict", message)
         raise ReviewError(
             "conflict",
             f"version {version.number} is not the current version (version {latest} is); "

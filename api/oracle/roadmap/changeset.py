@@ -14,7 +14,9 @@ then goes through the existing review: only the document's decider (when named) 
 it, and approving it makes it the live plan.
 
 A change set whose base is no longer the approved version is stale: it is refused (409)
-until it is discarded and the plan edited again.
+until it is discarded and the plan edited again. A proposal made while an earlier one still
+waits for approval supersedes it (status ``superseded``): the earlier version says so and
+can't be approved (:func:`superseded_message`).
 """
 
 import re
@@ -249,6 +251,11 @@ async def view(db: AsyncSession, document: Document, row: RoadmapChangeSet) -> C
     proposed = (
         await db.get(DocumentVersion, row.proposed_version_id) if row.proposed_version_id else None
     )
+    later = (
+        await db.get(DocumentVersion, row.superseded_by_version_id)
+        if row.superseded_by_version_id
+        else None
+    )
     policy = await effective_policy(db, document)
     return ChangeSetOut(
         id=row.id,
@@ -277,6 +284,7 @@ async def view(db: AsyncSession, document: Document, row: RoadmapChangeSet) -> C
         summary=summary,
         proposed_version=proposed.number if proposed else None,
         approved=proposed is not None and proposed.approved_at is not None,
+        superseded_by_version=later.number if later else None,
         decider_id=policy.decider_id,
         lock_version=row.lock_version,
         created_by=row.created_by,
@@ -487,5 +495,54 @@ async def propose(
         {"roadmap": document.slug, "base_version": base_number, "version": version.number,
          "changes": row.changes},
     )  # fmt: skip
+    await _supersede(db, principal, document, row, version)
     await db.flush()
     return version
+
+
+async def _supersede(
+    db: AsyncSession,
+    principal: Principal,
+    document: Document,
+    row: RoadmapChangeSet,
+    version: DocumentVersion,
+) -> None:
+    """The proposals still waiting for approval are superseded by ``version``."""
+    waiting = await db.execute(
+        select(RoadmapChangeSet, DocumentVersion.number)
+        .join(DocumentVersion, DocumentVersion.id == RoadmapChangeSet.proposed_version_id)
+        .where(
+            RoadmapChangeSet.roadmap_document_id == document.id,
+            RoadmapChangeSet.status == "proposed",
+            RoadmapChangeSet.id != row.id,
+            DocumentVersion.approved_at.is_(None),
+        )
+        .with_for_update(of=RoadmapChangeSet)
+    )
+    for other, number in waiting:
+        other.status = "superseded"
+        other.superseded_by_version_id = version.id
+        other.lock_version += 1
+        await audit.record(
+            db, principal, "roadmap.change_set_superseded", "roadmap_change_set", other.id,
+            {"roadmap": document.slug, "version": number,
+             "superseded_by_version": version.number, "by_change_set": str(row.id)},
+        )  # fmt: skip
+
+
+async def superseded_message(db: AsyncSession, version: DocumentVersion) -> str | None:
+    """Why ``version`` can't be approved when a later proposal superseded it, else None."""
+    later = await db.scalar(
+        select(DocumentVersion.number)
+        .join(RoadmapChangeSet, RoadmapChangeSet.superseded_by_version_id == DocumentVersion.id)
+        .where(
+            RoadmapChangeSet.proposed_version_id == version.id,
+            RoadmapChangeSet.status == "superseded",
+        )
+    )
+    if later is None:
+        return None
+    return (
+        f"Version {version.number} was superseded by version {later}, a later proposal of "
+        f"plan changes: it can't be approved. Approve version {later} instead."
+    )

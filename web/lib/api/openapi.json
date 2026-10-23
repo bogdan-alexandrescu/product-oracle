@@ -25968,7 +25968,8 @@
                   "enum": [
                     "draft",
                     "proposed",
-                    "discarded"
+                    "discarded",
+                    "superseded"
                   ],
                   "type": "string"
                 },
@@ -37160,7 +37161,8 @@
             "enum": [
               "draft",
               "proposed",
-              "discarded"
+              "discarded",
+              "superseded"
             ],
             "title": "Status"
           },
@@ -37240,6 +37242,17 @@
             "type": "boolean",
             "title": "Approved",
             "default": false
+          },
+          "superseded_by_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Version"
           },
           "decider_id": {
             "anyOf": [

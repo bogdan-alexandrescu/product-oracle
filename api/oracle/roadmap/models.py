@@ -236,7 +236,7 @@ class RoadmapItem(TenantScoped, Base):
     updated_at: Mapped[datetime] = _updated_at()
 
 
-CHANGE_SET_STATUSES = ("draft", "proposed", "discarded")
+CHANGE_SET_STATUSES = ("draft", "proposed", "discarded", "superseded")
 
 
 class RoadmapChangeSet(TenantScoped, Base):
@@ -246,7 +246,8 @@ class RoadmapChangeSet(TenantScoped, Base):
     version (``base_version_id``) and holds its changes in order (add, move, defer, cut
     with a reason, reorder within a horizon). Proposing it imports the next roadmap
     version, with the base's items plus the changes, for the document's decider to
-    approve. A roadmap has at most one draft change set.
+    approve. A roadmap has at most one draft change set. A later proposal while one waits
+    supersedes it (``superseded``, ``superseded_by_version_id``): it can't be approved.
     """
 
     __tablename__ = "roadmap_change_sets"
@@ -268,6 +269,8 @@ class RoadmapChangeSet(TenantScoped, Base):
     # [{"op": "add" | "move" | "defer" | "cut" | "reorder", ...}], applied in order.
     changes: Mapped[list[dict[str, Any]]] = _json("[]")
     proposed_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
+    # The later proposal's version that superseded this one's (status ``superseded``).
+    superseded_by_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     lock_version: Mapped[int] = _lock_version()
     updated_at: Mapped[datetime] = _updated_at()

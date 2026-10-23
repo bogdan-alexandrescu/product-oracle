@@ -461,7 +461,7 @@ class TrackChange(BaseModel):
 
 # --- change sets: edits to the approved plan, proposed as a new version (#346) --------------
 
-ChangeSetStatus = Literal["draft", "proposed", "discarded"]
+ChangeSetStatus = Literal["draft", "proposed", "discarded", "superseded"]
 ItemKey = Annotated[str, Field(min_length=1, max_length=120)]
 
 
@@ -566,6 +566,8 @@ class ChangeSetOut(BaseModel):
     proposed_version: int | None = None
     # The proposed version is approved: it is the live plan (or was).
     approved: bool = False
+    # A later proposal superseded this one while it waited: its version can't be approved.
+    superseded_by_version: int | None = None
     # Who approves the proposed version: the document's designated decider, when named.
     decider_id: uuid.UUID | None = None
     lock_version: int
