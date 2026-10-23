@@ -2760,6 +2760,119 @@
         }
       }
     },
+    "/v1/discussions/{discussion_id}/slack": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Mirror Discussion To Slack",
+        "description": "Mirror an open discussion to a new thread in a Slack channel Oracle's Slack app is\nin (the starter or an approver). Oracle posts the root message (title, subject, link,\nsummary or first message), then every new message; replies in the thread from members\nwho can write come back as messages. Earlier messages are not copied.",
+        "operationId": "mirror_discussion_to_slack",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionSlackIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionSlackOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the starter or an approver"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Already mirrored, closed, or Slack is not connected"
+          },
+          "422": {
+            "description": "Private discussions stay in Oracle"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Stop Slack Mirror",
+        "description": "Stop mirroring: Oracle posts a closing line with a link to the discussion, and\nreplies in the thread no longer come back. What was posted stays in Slack.",
+        "operationId": "stop_slack_mirror",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Not the starter or an approver"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/staging": {
       "get": {
         "tags": [
@@ -28021,7 +28134,7 @@
           "company integrations"
         ],
         "summary": "List Company Integrations",
-        "description": "The company's own integrations (Oracle's Slack app); never a credential.",
+        "description": "The company's own integrations (Oracle's Slack app); never a credential. A\ndisconnected one is not listed.",
         "operationId": "list_company_integrations",
         "responses": {
           "200": {
@@ -28159,13 +28272,43 @@
         }
       }
     },
+    "/v1/company-integrations/slack/status": {
+      "get": {
+        "tags": [
+          "company integrations"
+        ],
+        "summary": "Slack Status",
+        "description": "Whether Oracle's Slack app is connected and can mirror discussions (G8); any member.",
+        "operationId": "slack_status",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackStatusOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
     "/v1/company-integrations/slack/channels": {
       "get": {
         "tags": [
           "company integrations"
         ],
         "summary": "List Slack Notification Channels",
-        "description": "The channels the report can post to: public ones, and the private ones the bot was\ninvited to when the install can read them.",
+        "description": "The channels the report can post to, or a discussion can be mirrored to (G8:\ncommenters and up): public ones, and the private ones the bot was invited to when\nthe install can read them.",
         "operationId": "list_slack_notification_channels",
         "responses": {
           "200": {
@@ -28261,7 +28404,7 @@
           "company integrations"
         ],
         "summary": "Delete Company Integration",
-        "description": "Disconnect: revoke the bot token at Slack (best effort) and delete it. The report\nstops posting (and the report's channel is cleared); people's own Slack connections\nare untouched.",
+        "description": "Disconnect: every mirrored discussion thread gets its closing line and stops\nmirroring (G8), then the bot token is revoked at Slack (best effort) and the install is\nset ``revoked``: its token is erased, and its row and ``bot_user_id`` are kept, so\npeople's Slack sources keep skipping Oracle's own posts (S6). The report stops posting\n(and the report's channel is cleared); people's own Slack connections are untouched.",
         "operationId": "delete_company_integration",
         "security": [
           {
@@ -43970,6 +44113,16 @@
             "type": "object",
             "title": "Subject"
           },
+          "slack": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscussionSlackOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "participants": {
             "items": {
               "$ref": "#/components/schemas/DiscussionParticipantOut"
@@ -44248,6 +44401,69 @@
           "message_id"
         ],
         "title": "DiscussionReadIn"
+      },
+      "DiscussionSlackIn": {
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Channel Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel_id"
+        ],
+        "title": "DiscussionSlackIn"
+      },
+      "DiscussionSlackOut": {
+        "properties": {
+          "channel_name": {
+            "type": "string",
+            "title": "Channel Name"
+          },
+          "thread_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Url"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "posting",
+              "live",
+              "failing",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel_name",
+          "thread_url",
+          "status"
+        ],
+        "title": "DiscussionSlackOut",
+        "description": "G8: the Slack thread an open discussion is mirrored to."
       },
       "DiscussionStarter": {
         "properties": {
@@ -74475,6 +74691,42 @@
           "next_cursor"
         ],
         "title": "SlackChannelPage"
+      },
+      "SlackStatusOut": {
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "mirroring": {
+            "type": "boolean",
+            "title": "Mirroring"
+          },
+          "needs_reconnect": {
+            "type": "boolean",
+            "title": "Needs Reconnect"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connected",
+          "label",
+          "mirroring",
+          "needs_reconnect"
+        ],
+        "title": "SlackStatusOut",
+        "description": "What any member's discussion menu needs to know (G8): connected, the Slack name,\nwhether discussions can be mirrored, and whether an owner must reconnect first."
       },
       "SlackTestIn": {
         "properties": {

@@ -663,6 +663,9 @@ async def discussion_out(db: AsyncSession, principal: "Principal", d: Discussion
         messages, people = await exposure(db, d)
         out.exposure = DiscussionExposure(messages=messages, people=people)
     out.me.private_findings = await private_findings(db, principal, d)
+    from oracle.slack import bridge  # G8; it builds on this module
+
+    out.slack = await bridge.slack_out(db, await bridge.live_link(db, d.id))
     return out
 
 
@@ -1191,6 +1194,10 @@ async def _make_private(
     messages, people = await exposure(db, d)
     d.visibility = "private"
     d.summary_shared = False
+    from oracle.slack import bridge  # G8; it builds on this module
+
+    # A mirrored discussion stops mirroring: the closing line, without the link.
+    await bridge.made_private(db, principal, d)
     await _record(
         db, principal, "visibility", d, **{"from": "open", "to": "private"},
         messages=messages, people=people,

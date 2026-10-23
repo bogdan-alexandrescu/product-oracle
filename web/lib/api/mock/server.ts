@@ -31,6 +31,7 @@ import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
+import { discussionSlackRoute, failSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
@@ -1492,7 +1493,9 @@ function load(): Db {
       ? seedDiscussionsScenario(db)
       : scenario === "discussion-replies"
         ? seedDiscussionsScenario(db, seedDiscussionReplies)
-        : emptyDiscussions();
+        : scenario === SLACK_SCENARIO
+          ? seedDiscussionsScenario(db, seedSlackBridge)
+          : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
@@ -2439,6 +2442,8 @@ async function route(db: Db, req: Request): Promise<Response> {
         return next;
       },
       current: () => load().discussions ?? emptyDiscussions(),
+      // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
+      slack: (d, r) => discussionSlackRoute(d, { me, integration: ensureReports(db, db.user_id).integration }, r),
     };
     const res = await routeDiscussions(discussionsCtx, req, p, q);
     if (res) return res;
@@ -2507,6 +2512,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The Claude account pool checks roles itself: every member reads, owners change.
   const pool = await claudeAccountsRoute(req, p, q, me.role);
   if (pool) return pool;
+  // G8: the Slack install's status (every member) and its channels (commenters and up).
+  const slack = slackRoute(ensureReports(db, db.user_id).integration, me, req, p);
+  if (slack) return slack;
   // Alignment reports and the company Slack install check roles themselves (./reports.ts).
   const reports = await reportsRoute(db, db.user_id, me, req, p, q);
   if (reports) return reports;
@@ -3042,6 +3050,37 @@ async function route(db: Db, req: Request): Promise<Response> {
 
 /** One request at a time: each loads the whole db and saves it back, so two in flight would lose a write. */
 let queue: Promise<unknown> = Promise.resolve();
+
+/**
+ * G8 test hook (mock mode only): `globalThis.__poMockSlack.reply({title, email, text})` stores
+ * a reply from the mirrored Slack thread of the discussion titled `title`, as the events
+ * endpoint would, from the member with `email`. The page shows it on its next load.
+ * `__poMockSlack.fail({title, error})` makes that discussion's mirror failed, as when Slack
+ * gives up on its first post.
+ */
+if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") {
+  (globalThis as { __poMockSlack?: unknown }).__poMockSlack = {
+    reply: (input: { title: string; email: string; text: string }) => {
+      const next = queue.then(() => {
+        const db = load();
+        const id = injectSlackReply((db.discussions ??= emptyDiscussions()), db.members, input, now(), uuid());
+        save(db);
+        return id;
+      });
+      queue = next.catch(() => undefined);
+      return next;
+    },
+    fail: (input: { title: string; error: string }) => {
+      const next = queue.then(() => {
+        const db = load();
+        failSlackMirror((db.discussions ??= emptyDiscussions()), input);
+        save(db);
+      });
+      queue = next.catch(() => undefined);
+      return next;
+    },
+  };
+}
 
 export async function mockFetch(req: Request): Promise<Response> {
   // Every call, in order: tests count them (Home's call budget).

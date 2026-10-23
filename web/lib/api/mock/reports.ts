@@ -11,7 +11,9 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { mockSettingValue, setMockSetting } from "./connections";
+import type { DiscussionsDb } from "./discussions";
 import { mockUuid, seeded } from "./ids";
+import { needsReconnect, SLACK_CHANNELS, SLACK_SCENARIO, slackInstall, unlinkAll } from "./slack";
 
 type Report = Schemas["AlignmentReportOut"];
 type Track = Schemas["ReportTrack"];
@@ -27,13 +29,8 @@ export interface ReportsDb {
 
 export const REPORT_SCENARIO = "alignment-report";
 const SCENARIO_KEY = "po-mock-scenario";
-const CHANNELS: Schemas["NotificationChannelOut"][] = [
-  { id: "C0ENG", name: "eng", is_private: false },
-  // A private channel the bot was invited to (the install has groups:read).
-  { id: "G0LEADS", name: "leads", is_private: true },
-  { id: "C0PLAN", name: "plan", is_private: false },
-  { id: "C0PRODUCT", name: "product", is_private: false },
-];
+// Includes a private channel the bot was invited to (the install has groups:read).
+const CHANNELS = SLACK_CHANNELS;
 const SETTING = "alignment_report";
 
 const ROLE_ORDER: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -180,6 +177,8 @@ const PLAN_CHANNEL = { id: "C0PLAN", name: "plan" };
 function seedReports(ownerId: string): ReportsDb {
   return seeded("reports", () => {
     const db: ReportsDb = { reports: [], reads: {}, integration: null };
+    // G8 "slack-bridge": the install with the bridge's scopes, and no reports.
+    if (localStorage.getItem(SCENARIO_KEY) === SLACK_SCENARIO) db.integration = slackInstall(ownerId, mockUuid(), "2026-10-01T09:00:00Z");
     if (localStorage.getItem(SCENARIO_KEY) !== REPORT_SCENARIO) return db;
     const failed = makeReport({
       kind: "weekly",
@@ -205,18 +204,8 @@ function seedReports(ownerId: string): ReportsDb {
     });
     db.reports = [failed, posted];
     db.reads[failed.id] = [ownerId];
-    db.integration = {
-      id: mockUuid(),
-      provider: "slack",
-      purpose: "notifications",
-      account_id: "T0EXAMPLE",
-      account_label: "Example Co",
-      scopes: ["chat:write", "chat:write.public", "channels:read", "groups:read"],
-      status: "active",
-      last_error: null,
-      installed_by: ownerId,
-      created_at: "2026-10-01T09:00:00Z",
-    };
+    // Installed with F6's scopes before G8: the card asks an owner to reconnect for mirroring.
+    db.integration = slackInstall(ownerId, mockUuid(), "2026-10-01T09:00:00Z", ["chat:write", "chat:write.public", "channels:read", "groups:read"]);
     setMockSetting(SETTING, { ...reportSetting(), slack_channel: PLAN_CHANNEL });
     return db;
   });
@@ -280,7 +269,7 @@ function post(db: ReportsDb, channel: ReportSetting["slack_channel"]): Schemas["
 }
 
 /** Handles /v1/alignment-reports… and /v1/company-integrations…; null for other routes. */
-export async function reportsRoute(holder: { reports?: ReportsDb }, ownerId: string, me: { id: string; role: Role }, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+export async function reportsRoute(holder: { reports?: ReportsDb; discussions?: DiscussionsDb }, ownerId: string, me: { id: string; role: Role }, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "alignment-reports" && p[1] !== "company-integrations") return null;
   const db = ensureReports(holder, ownerId);
   const m = req.method;
@@ -290,20 +279,10 @@ export async function reportsRoute(holder: { reports?: ReportsDb }, ownerId: str
     if (!atLeast(me.role, "owner")) return forbidden("owner");
     if (!p[2] && m === "GET") return json(200, db.integration ? [db.integration] : []);
     if (p[2] === "slack" && p[3] === "install" && m === "GET") {
-      if (db.integration) return json(409, { detail: "Slack is already connected; disconnect it first" });
-      // The mocked OAuth return: Slack's consent screen is skipped, the install is made.
-      db.integration = {
-        id: mockUuid(),
-        provider: "slack",
-        purpose: "notifications",
-        account_id: "T0EXAMPLE",
-        account_label: "Example Co",
-        scopes: ["chat:write", "chat:write.public", "channels:read", "groups:read"],
-        status: "active",
-        last_error: null,
-        installed_by: me.id,
-        created_at: now(),
-      };
+      if (db.integration && !needsReconnect(db.integration)) return json(409, { detail: "Slack is already connected; disconnect it first" });
+      // The mocked OAuth return: Slack's consent screen is skipped, the install is made (a
+      // reconnect keeps the install and gains the bridge's scopes).
+      db.integration = db.integration ? { ...db.integration, scopes: slackInstall(me.id, "", "").scopes } : slackInstall(me.id, mockUuid(), now());
       return json(200, { url: "/settings/notifications?connected=slack" });
     }
     if (p[2] === "slack" && p[3] === "channels" && m === "GET") {
@@ -319,6 +298,7 @@ export async function reportsRoute(holder: { reports?: ReportsDb }, ownerId: str
     if (p[2] && !p[3] && m === "DELETE") {
       if (!db.integration || db.integration.id !== p[2]) return json(404, { detail: "Integration not found" });
       db.integration = null;
+      unlinkAll(holder.discussions);
       const setting = reportSetting();
       if (setting.slack_channel) setMockSetting(SETTING, { ...setting, slack_channel: null });
       return json(204, undefined);

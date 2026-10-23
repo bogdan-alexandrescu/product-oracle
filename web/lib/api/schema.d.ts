@@ -736,6 +736,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/discussions/{discussion_id}/slack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mirror Discussion To Slack
+         * @description Mirror an open discussion to a new thread in a Slack channel Oracle's Slack app is
+         *     in (the starter or an approver). Oracle posts the root message (title, subject, link,
+         *     summary or first message), then every new message; replies in the thread from members
+         *     who can write come back as messages. Earlier messages are not copied.
+         */
+        post: operations["mirror_discussion_to_slack"];
+        /**
+         * Stop Slack Mirror
+         * @description Stop mirroring: Oracle posts a closing line with a link to the discussion, and
+         *     replies in the thread no longer come back. What was posted stays in Slack.
+         */
+        delete: operations["stop_slack_mirror"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/staging": {
         parameters: {
             query?: never;
@@ -8070,7 +8098,8 @@ export interface paths {
         };
         /**
          * List Company Integrations
-         * @description The company's own integrations (Oracle's Slack app); never a credential.
+         * @description The company's own integrations (Oracle's Slack app); never a credential. A
+         *     disconnected one is not listed.
          */
         get: operations["list_company_integrations"];
         put?: never;
@@ -8122,6 +8151,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/company-integrations/slack/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Slack Status
+         * @description Whether Oracle's Slack app is connected and can mirror discussions (G8); any member.
+         */
+        get: operations["slack_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/company-integrations/slack/channels": {
         parameters: {
             query?: never;
@@ -8131,8 +8180,9 @@ export interface paths {
         };
         /**
          * List Slack Notification Channels
-         * @description The channels the report can post to: public ones, and the private ones the bot was
-         *     invited to when the install can read them.
+         * @description The channels the report can post to, or a discussion can be mirrored to (G8:
+         *     commenters and up): public ones, and the private ones the bot was invited to when
+         *     the install can read them.
          */
         get: operations["list_slack_notification_channels"];
         put?: never;
@@ -8175,9 +8225,11 @@ export interface paths {
         post?: never;
         /**
          * Delete Company Integration
-         * @description Disconnect: revoke the bot token at Slack (best effort) and delete it. The report
-         *     stops posting (and the report's channel is cleared); people's own Slack connections
-         *     are untouched.
+         * @description Disconnect: every mirrored discussion thread gets its closing line and stops
+         *     mirroring (G8), then the bot token is revoked at Slack (best effort) and the install is
+         *     set ``revoked``: its token is erased, and its row and ``bot_user_id`` are kept, so
+         *     people's Slack sources keep skipping Oracle's own posts (S6). The report stops posting
+         *     (and the report's channel is cleared); people's own Slack connections are untouched.
          */
         delete: operations["delete_company_integration"];
         options?: never;
@@ -13591,6 +13643,7 @@ export interface components {
             subject: {
                 [key: string]: unknown;
             };
+            slack?: components["schemas"]["DiscussionSlackOut"] | null;
             /** Participants */
             participants: components["schemas"]["DiscussionParticipantOut"][];
             exposure?: components["schemas"]["DiscussionExposure"] | null;
@@ -13664,6 +13717,28 @@ export interface components {
              * Format: uuid
              */
             message_id: string;
+        };
+        /** DiscussionSlackIn */
+        DiscussionSlackIn: {
+            /** Channel Id */
+            channel_id: string;
+        };
+        /**
+         * DiscussionSlackOut
+         * @description G8: the Slack thread an open discussion is mirrored to.
+         */
+        DiscussionSlackOut: {
+            /** Channel Name */
+            channel_name: string;
+            /** Thread Url */
+            thread_url: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "posting" | "live" | "failing" | "failed";
+            /** Error */
+            error?: string | null;
         };
         /** DiscussionStarter */
         DiscussionStarter: {
@@ -24445,6 +24520,21 @@ export interface components {
             /** Next Cursor */
             next_cursor: string | null;
         };
+        /**
+         * SlackStatusOut
+         * @description What any member's discussion menu needs to know (G8): connected, the Slack name,
+         *     whether discussions can be mirrored, and whether an owner must reconnect first.
+         */
+        SlackStatusOut: {
+            /** Connected */
+            connected: boolean;
+            /** Label */
+            label: string | null;
+            /** Mirroring */
+            mirroring: boolean;
+            /** Needs Reconnect */
+            needs_reconnect: boolean;
+        };
         /** SlackTestIn */
         SlackTestIn: {
             /** Channel Id */
@@ -29767,6 +29857,103 @@ export interface operations {
                 };
             };
             /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mirror_discussion_to_slack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscussionSlackIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionSlackOut"];
+                };
+            };
+            /** @description Not the starter or an approver */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Already mirrored, closed, or Slack is not connected */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Private discussions stay in Oracle */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stop_slack_mirror: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not the starter or an approver */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -43642,6 +43829,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    slack_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackStatusOut"];
                 };
             };
         };

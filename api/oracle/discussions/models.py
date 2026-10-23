@@ -230,6 +230,10 @@ class DiscussionMessage(TenantScoped, Base):
     cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     prompt: Mapped[str | None] = mapped_column(Text)
     pushback: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # G8 Slack bridge: a reply from the mirrored thread (its ts and its Slack author), or
+    # the ts of the post that mirrored this message.
+    slack_ts: Mapped[str | None] = mapped_column(Text)
+    slack_user_id: Mapped[str | None] = mapped_column(Text)
 
 
 class DiscussionChange(TenantScoped, Base):

@@ -61,6 +61,7 @@ from typing import Any
 import httpx
 
 from oracle.sources.base import (
+    ORACLE_SLACK_USERS,
     Attention,
     ConnectorAuthError,
     ConnectorConfigError,
@@ -367,7 +368,18 @@ class SlackApiError(ConnectorError):
         self.error = error
 
 
-def _keep(message: dict[str, Any]) -> bool:
+def _oracle(message: dict[str, Any], oracle_users: frozenset[str]) -> bool:
+    """Posted by Oracle's own Slack app (G8: a mirrored discussion's thread, which it
+    starts): never a person's evidence (S6, AUD-9)."""
+    return bool(oracle_users) and (
+        message.get("user") in oracle_users
+        or (message.get("bot_profile") or {}).get("user_id") in oracle_users
+    )
+
+
+def _keep(message: dict[str, Any], oracle_users: frozenset[str] = frozenset()) -> bool:
+    if _oracle(message, oracle_users):
+        return False
     if message.get("subtype") in SKIPPED_SUBTYPES:
         return False
     # A reply broadcast to the channel belongs to its thread.
@@ -497,6 +509,7 @@ class SlackConnector:
     ) -> AsyncIterator[SyncEvent]:
         channels = _channels(config)
         since, until = _since(config), _until(config)
+        oracle_users = frozenset(str(u) for u in config.get(ORACLE_SLACK_USERS) or [] if u)
         state: dict[str, Any] = {
             "range": _range_of(config),
             "channels": {
@@ -510,7 +523,7 @@ class SlackConnector:
             for channel in channels:
                 try:
                     async for event in self._sync_channel(
-                        slack, base, channel, state, since, until
+                        slack, base, channel, state, since, until, oracle_users
                     ):
                         yield event
                 except ChannelGone:
@@ -531,6 +544,7 @@ class SlackConnector:
         state: dict[str, Any],
         since: float | None = None,
         until: float | None = None,
+        oracle_users: frozenset[str] = frozenset(),
     ) -> AsyncIterator[SyncEvent]:
         info = await slack.conversation(channel)
         name = info.get("name") or channel
@@ -611,7 +625,7 @@ class SlackConnector:
                 (
                     m
                     for m in listed
-                    if _keep(m)
+                    if _keep(m, oracle_users)
                     and (since is None or float(m["ts"]) >= since)
                     and (until is None or float(m["ts"]) < until)
                 ),
@@ -623,7 +637,9 @@ class SlackConnector:
                 if message.get("reply_count") and latest_reply:
                     marker = _clip(latest_reply, until)
                     if not known(ts) or threads.get(ts) != marker:
-                        yield await self._thread(slack, base, channel, name, acl, message, until)
+                        yield await self._thread(
+                            slack, base, channel, name, acl, message, until, oracle_users
+                        )
                     threads[ts] = marker
                     messages.discard(ts)
                 elif message.get("subtype") != "tombstone":
@@ -696,6 +712,7 @@ class SlackConnector:
         acl: dict,
         parent: dict,
         until: float | None = None,
+        oracle_users: frozenset[str] = frozenset(),
     ) -> ItemUpsert:
         ts = parent["ts"]
         bound = {} if until is None else {"latest": f"{until:.6f}"}
@@ -712,7 +729,7 @@ class SlackConnector:
         replies.sort(key=lambda m: float(m["ts"]))
         lines = []
         for reply in replies:
-            if reply.get("subtype") in SKIPPED_SUBTYPES:
+            if reply.get("subtype") in SKIPPED_SUBTYPES or _oracle(reply, oracle_users):
                 continue
             when = _ts_time(reply["ts"]).strftime("%Y-%m-%d %H:%M")
             lines.append(f"{await slack.author(reply)} ({when}): {await slack.text(reply)}")

@@ -8,7 +8,7 @@ call.
 ## Oracle's Slack app ("Slack poster", decided 2026-10-20)
 
 Oracle posts through its own Slack app, installed once for the company by an owner in
-Settings › Notifications › **Connect Slack for notifications**. It is the same Slack app
+Settings › Notifications › **Connect Oracle to Slack**. It is the same Slack app
 people sign in with for their own Slack connections (`ORACLE_OAUTH_SLACK_CLIENT_ID` and
 `ORACLE_OAUTH_SLACK_CLIENT_SECRET`); without them, Connect answers "Slack sign-in for
 notifications is not configured".
