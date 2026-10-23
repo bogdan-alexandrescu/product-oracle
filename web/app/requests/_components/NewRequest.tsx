@@ -5,17 +5,15 @@ import { useRef, useState, type FormEvent } from "react";
 import { Button, useFocusTrap } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { displayName } from "@/lib/names";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Request = Schemas["RequestOut"];
 
-const VIEWER_REASON = "Commenters and above file requests";
-
 /**
- * New request (#329): the button on the Requests header and in its empty state. A viewer sees
- * it disabled, with the reason.
+ * New request (#329): the button on the Requests header and in its empty state. #370: a role
+ * that cannot file a request (a viewer) is not shown it.
  */
 export function NewRequestButton({
   onFiled,
@@ -25,21 +23,15 @@ export function NewRequestButton({
   /** The header's is the page's primary action; the empty state's is secondary. */
   variant?: "primary" | "secondary";
 }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const [open, setOpen] = useState(false);
-  const can = hasRole(role, "commenter");
+  // create_request's handler wants an owner only to name someone else as the requester.
+  if (!can("create_request", true)) return null;
   return (
     <>
-      <span className="inline-flex flex-wrap items-center gap-2">
-        <Button variant={variant} icon="plus" disabled={!can} title={can ? undefined : VIEWER_REASON} onClick={() => setOpen(true)}>
-          New request
-        </Button>
-        {role && !can && (
-          <span data-testid="new-request-reason" className="text-sm text-text2">
-            {VIEWER_REASON}
-          </span>
-        )}
-      </span>
+      <Button variant={variant} icon="plus" onClick={() => setOpen(true)}>
+        New request
+      </Button>
       {open && (
         <NewRequestDialog
           onClose={() => setOpen(false)}
@@ -59,14 +51,14 @@ export function NewRequestButton({
  * an owner can name someone else). On a phone it is a full-height sheet.
  */
 function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: (request: Request) => void }) {
-  const { me, role } = useMe();
+  const { me, can } = useMe();
   const panel = useRef<HTMLDivElement>(null);
   useFocusTrap(panel, true, onClose);
   const goals = useQuery("new-request-goals", () =>
     unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } })),
   );
   const myName = me?.email ? displayName(me.email) : "";
-  const owner = hasRole(role, "owner");
+  const owner = can("create_request");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [goalIds, setGoalIds] = useState<string[]>([]);

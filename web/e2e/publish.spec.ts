@@ -111,7 +111,6 @@ test("inspector: the selected block, its question, and what publishing does", as
 test("accept risk: owners accept it, and the block goes", async ({ page }) => {
   await openPublish(page, "online-deposits");
   const risk = inspector(page).getByTestId("block-risk");
-  await expect(risk).toContainText("Owners only");
   await risk.getByRole("button", { name: "Accept risk" }).click();
   await expect(risk.getByLabel("Review by")).toHaveAccessibleDescription("Within 90 days");
   await risk.getByRole("button", { name: "Cancel" }).click();
@@ -187,9 +186,9 @@ test("ready: one line, the button enabled, a confirm step, then published", asyn
 test("ready: commenters check readiness but cannot publish", async ({ page }) => {
   await asRole(page, "commenter");
   await openPublish(page, "visit-reminders");
-  await expect(page.getByTestId("publish-button")).toBeDisabled();
-  await expect(page.getByTestId("publish-header")).toContainText("Approvers only");
-  await expectDescribedBy(page.getByTestId("publish-button"), "Approvers only");
+  // #370: a commenter can never publish, so the button is not drawn.
+  await expect(page.getByTestId("publish-button")).toHaveCount(0);
+  await expect(page.getByTestId("publish-header")).not.toContainText("Approvers only");
 });
 
 test("409 in the dialog: a block that appears after the page loaded is named in the dialog", async ({ page }) => {

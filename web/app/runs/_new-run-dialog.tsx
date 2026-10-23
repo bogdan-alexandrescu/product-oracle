@@ -22,7 +22,7 @@ export type RunStart = { flow: Flow["key"]; document: string; title: string };
 /** Pick a flow and its knobs, see the estimate, then start the run. */
 export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => void; start?: RunStart }) {
   const router = useRouter();
-  const { role } = useMe();
+  const { can } = useMe();
   const catalog = useQuery("flows", () => unwrap(api.GET("/v1/flows")));
   const documents = useQuery("documents", () => unwrap(api.GET("/v1/documents")));
 
@@ -125,7 +125,7 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
     }
   }
 
-  const ownerApproves = role === "owner" && !!estimate?.needs_approval;
+  const ownerApproves = can("approve_run") && !!estimate?.needs_approval;
   const docOptions = documents.data ?? [];
   const inputCls = `${INPUT} h-10 placeholder:text-text2`;
   const legendCls = "mb-1.5 flex items-center gap-1.5 text-[13px] font-semibold tracking-[0.02em] text-text2";

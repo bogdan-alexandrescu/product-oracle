@@ -5,7 +5,7 @@ import { useState } from "react";
 import { NewRunDialog } from "@/app/runs/_new-run-dialog";
 import { Button } from "@/components/ds";
 import type { VersionSummary } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 
 /** #255: a PRD whose latest version is still its template's skeleton is drafted before it is published. */
 export function isTemplateOnly(kind: string | undefined, versions: VersionSummary[]): boolean {
@@ -14,9 +14,10 @@ export function isTemplateOnly(kind: string | undefined, versions: VersionSummar
 
 /** Draft with Oracle: the run dialog on Baseline to PRD, with this PRD filled in. */
 export function DraftWithOracleButton({ slug }: { slug: string }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const [open, setOpen] = useState(false);
-  if (!hasRole(role, "approver")) return null;
+  // create_run's handler wants an owner only to update a draft run; a new run lets approvers in.
+  if (!can("create_run", true)) return null;
   return (
     <>
       <Button variant="primary" icon="doc" aria-haspopup="dialog" data-testid="draft-with-oracle" onClick={() => setOpen(true)}>

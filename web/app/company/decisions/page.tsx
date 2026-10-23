@@ -7,7 +7,7 @@ import { Avatar, Button, Chip, DataTable, Empty, FilterChips, InfoTip, PageHeade
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { paths } from "@/lib/api/schema";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -89,7 +89,7 @@ function Decisions() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const { me, role } = useMe();
+  const { me, can } = useMe();
   const phone = useIsPhone();
   const run = params.get("run");
   const subjectParam = params.get("subject");
@@ -233,7 +233,7 @@ function Decisions() {
       <PageHeader
         title="Company"
         action={
-          hasRole(role, "commenter") && (
+          can("create_decision") && (
             <Button variant="primary" icon="plus" onClick={() => setProposing(true)}>
               Propose decision
             </Button>
@@ -337,7 +337,7 @@ function Decisions() {
           {inspector}
         </Sheet>
       )}
-      {proposing && hasRole(role, "commenter") && (
+      {proposing && can("create_decision") && (
         <ProposeDialog
           people={people}
           subject={subject}

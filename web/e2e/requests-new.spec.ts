@@ -57,14 +57,14 @@ test("New request: file one with a goal; it shows as New with its goal chip, sel
   await expect(row(page, TITLE).getByTestId("goal-chip")).toHaveText(["Raise activation"]);
 });
 
-test("New request: a viewer sees it disabled, with the reason", async ({ page }) => {
-  // protects=#329 rule 4 (a viewer cannot file); fails_when=the control is enabled or gives no
-  // reason; no_claim=the API's 403 (tests/test_requests.py).
+test("New request: a viewer is not shown it (#370)", async ({ page }) => {
+  // protects=#329 rule 4 (a viewer cannot file) and #370 (a control a role can never use is
+  // hidden, not disabled); fails_when=a viewer sees New request; no_claim=the API's 403
+  // (tests/test_requests.py).
   await login(page, "viewer@example.com");
   await openRequests(page);
-  const button = page.getByRole("button", { name: "New request" }).first();
-  await expect(button).toBeDisabled();
-  await expect(page.getByTestId("new-request-reason").first()).toHaveText("Commenters and above file requests");
+  await expect(page.getByTestId("view-only")).toBeVisible();
+  await expect(page.getByRole("button", { name: "New request" })).toHaveCount(0);
 });
 
 test("New request: only an owner names someone else as the requester", async ({ page }) => {

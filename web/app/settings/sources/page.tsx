@@ -23,7 +23,7 @@ import {
 } from "@/components/ds";
 import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
@@ -888,7 +888,7 @@ function useTargetedSource(): string | null {
 export default function SourceSettingsPage() {
   const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
   const kinds = useQuery("source-kinds", () => unwrap(api.GET("/v1/sources/kinds")));
-  const { role } = useMe();
+  const { can } = useMe();
   const list = sources.data ?? [];
   const errors = list.filter((s) => s.status === "error").length;
   const attention = list.filter((s) => s.status === "needs_attention").length;
@@ -980,7 +980,7 @@ export default function SourceSettingsPage() {
             </ul>
           )}
         </Panel>
-        {hasRole(role, "owner") && <CompanyDriveSettings />}
+        {can("put_setting") && <CompanyDriveSettings />}
       </Split>
     </>
   );

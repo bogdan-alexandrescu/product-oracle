@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 
 import { Chip, Empty, Icon, LinkButton, Notice, Page, PageHeader, Panel, Split } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
 
@@ -62,8 +62,10 @@ function pickNeeds(rows: StatedNeed[], max: number): Need[] {
  * per hidden goal.
  */
 export default function HomePage() {
-  const { role } = useMe();
-  const canWrite = hasRole(role, "approver");
+  const { can } = useMe();
+  // #370: New PRD starts a draft (a PRD, any approver's); Build the baseline opens where the baseline's writers build it.
+  const canWrite = can("start_draft", true);
+  const canBuild = can("confirm_entity");
 
   const inboxQ = useQuery("home|inbox", loadInbox);
   // Asked of me, filtered by the API so none is cut off; a failure shows in Needs you.
@@ -188,7 +190,7 @@ export default function HomePage() {
         {setupError && <Notice tone="error">{setupError}</Notice>}
         {setup && !setup.hidden && <SetupPanel setup={setup} onHide={() => hideSetup(true)} busy={setupBusy} />}
 
-        <GoalsPanel goals={goals} history={history} error={goalsError} loading={goalsLoading} canImport={canWrite} />
+        <GoalsPanel goals={goals} history={history} error={goalsError} loading={goalsLoading} canImport={canBuild} />
 
         <Panel
           title="Needs you"

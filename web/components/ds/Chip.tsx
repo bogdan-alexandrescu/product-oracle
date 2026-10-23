@@ -66,3 +66,15 @@ export function GoalTag({ id, proposed = false, title }: { id: string; proposed?
     </span>
   );
 }
+
+/**
+ * #370: a page the signed-in role can read but not change says so, quietly, in its header
+ * (PageHeader's status). The controls it can never use are hidden, not disabled.
+ */
+export function ViewOnly() {
+  return (
+    <Chip kind="na" data-testid="view-only">
+      View only
+    </Chip>
+  );
+}

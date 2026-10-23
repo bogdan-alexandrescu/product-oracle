@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { InfoTip, PageHeader, Panel, Split } from "@/components/ds";
+import { InfoTip, PageHeader, Panel, Split, ViewOnly } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 import { goalViews } from "@/app/home/_goals";
 import { api, unwrap } from "@/lib/api/client";
@@ -23,8 +23,12 @@ import type { DocKind, FindingState } from "./_components/lib";
  * its next version with Oracle; the documents themselves open from the cards.
  */
 export default function StrategyPage() {
-  const { role } = useMe();
-  const owner = role === "owner";
+  const { can, capsReady } = useMe();
+  // #370: a vision or a product strategy is an owner's to start: POST /v1/drafts lets an
+  // approver in by kind, and its per-item role (owner) is the one these kinds need.
+  const owner = can("start_draft", false);
+  // #370: approvers waive drift and owners draft; below that the strategy is read only.
+  const readOnly = capsReady && !can("waive_strategy_finding");
   const [state, setState] = useState<FindingState>("open");
   const [picked, setPicked] = useState<string | null>(null);
   const [drafting, setDrafting] = useState<DocKind | null>(null);
@@ -70,10 +74,13 @@ export default function StrategyPage() {
       <PageHeader
         title="Company"
         status={
-          <InfoTip label="the strategy" align="start" side="bottom">
-            The vision and the product strategy Oracle drafts and an owner approves. Each goal should follow from a focus choice, and each
-            roadmap item from a goal; what does not shows as drift.
-          </InfoTip>
+          <>
+            {readOnly && <ViewOnly />}
+            <InfoTip label="the strategy" align="start" side="bottom">
+              The vision and the product strategy Oracle drafts and an owner approves. Each goal should follow from a focus choice, and
+              each roadmap item from a goal; what does not shows as drift.
+            </InfoTip>
+          </>
         }
       />
       {(stackQ.error || docsQ.error) && <ErrorNote>{stackQ.error ?? docsQ.error}</ErrorNote>}
