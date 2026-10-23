@@ -23,6 +23,7 @@ import {
 } from "@/components/review/Outline";
 import { Kbd } from "@/components/review/parts";
 import { ReviewPanel, type PanelTab } from "@/components/review/ReviewPanel";
+import { RunReviewBar } from "@/components/review/RunReviewBar";
 import { RoleNote } from "@/components/RoleNote";
 import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
@@ -1100,6 +1101,15 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           </div>
         )}
 
+        {/* D10: the run's review of this draft, decided here, above the sections. */}
+        {onDocument && version && (
+          <RunReviewBar
+            doc={doc}
+            n={n}
+            refreshKey={`${refreshKey}|${sections.filter((x) => x.verdict).length}|${version.approved_at ?? ""}`}
+            onDecided={() => void Promise.all([verQ.reload(), docQ.reload()])}
+          />
+        )}
         {pane === "items" && isRoadmap && (
           <RoadmapItemsPane doc={doc} n={n} sections={sections} canDecide={canDecide} />
         )}

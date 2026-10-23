@@ -9,7 +9,9 @@ stored structure with ``get_checkpoint_review``.
 
 The file's keys are fixed (:data:`KEYS`) and the same for every checkpoint kind. The
 entries and their ``action`` words are per kind, built by :data:`ENTRY_BUILDERS`; a kind
-with none sends ``items: []`` and the note as ``general_note``.
+with none sends ``items: []`` and the note as ``general_note``. A PRD or roadmap review
+of an imported version (D10) sends the document's own feedback instead, one entry per
+feedback item, and the version's ``locked_sections`` (:func:`document_review`).
 """
 
 import json
@@ -25,6 +27,8 @@ KEYS = (
     "version", "checkpoint", "run", "segment", "attempt", "file", "items", "unchanged",
     "problems_open", "waived", "general_note",
 )  # fmt: skip
+# Written after the fixed keys when a review has them: D10's locked sections.
+OPTIONAL_KEYS = ("locked_sections",)
 # The posted findings, the lead line included (SwarmCloud's verdict form: a list of strings).
 MAX_FINDINGS = 200
 MORE = "(… more in get_checkpoint_review)"
@@ -36,8 +40,8 @@ ITEM_FILES = {"roadmap_items": "roadmap_items.yaml"}
 # The order an entry's keys are written in (JSONB keeps no order: the stored review is put
 # back in this one, so the file reads the same however it was read).
 ENTRY_KEYS = (
-    "id", "action", "changes", "reorder", "after", "into", "with", "question", "asked_to",
-    "answer", "answers", "note",
+    "id", "action", "section", "summary", "accepted_text", "changes", "reorder", "after",
+    "into", "with", "question", "asked_to", "answer", "answers", "note",
 )  # fmt: skip
 ROW_KEYS = ("id", "code", "reason", "text")
 
@@ -147,6 +151,18 @@ ENTRY_BUILDERS: dict[str, EntryBuilder] = {"roadmap_items": _roadmap_items}
 # --------------------------------------------------------------------------- build
 
 
+def document_review(
+    cp: _Checkpoint, file: str, entries: list[dict[str, Any]], locked: list[str], note: str | None
+) -> dict[str, Any]:
+    """The review file of a PRD or roadmap review sent back from its version (D10):
+    ``entries`` the document's open feedback items and staged changes (``id`` the
+    feedback id, ``section``, ``action: change``, ``summary``, ``accepted_text`` when
+    staged), ``locked`` the version's locked sections."""
+    attempt = (cp.payload or {}).get("attempt")
+    review = build_review(cp, [], [], [], note, attempt if isinstance(attempt, int) else None)
+    return {**review, "file": file, "items": entries, "locked_sections": locked}
+
+
 def build_review(
     cp: _Checkpoint,
     actions: list[ReviewAction],
@@ -204,6 +220,7 @@ def canonical(review: dict[str, Any]) -> dict[str, Any]:
     """The review in its fixed key order: the file's keys, each entry's, nested maps by
     name."""
     out = {k: review.get(k) for k in KEYS}
+    out |= {k: review[k] for k in OPTIONAL_KEYS if k in review}
     out["items"] = [_ordered(e, ENTRY_KEYS) for e in out["items"] or []]
     for k in ("problems_open", "waived"):
         out[k] = [_ordered(r, ROW_KEYS) for r in out[k] or []]
@@ -261,6 +278,12 @@ def _value(v: Any) -> str:
 
 def _line(entry: dict[str, Any]) -> str:
     parts: list[str] = []
+    if entry.get("section"):
+        parts.append(f"section {entry['section']}")
+    if entry.get("summary"):
+        parts.append(f"summary {_value(entry['summary'])}")
+    if entry.get("accepted_text"):
+        parts.append(f"accepted text {_value(entry['accepted_text'])}")
     for field, v in (entry.get("changes") or {}).items():
         if isinstance(v, dict):
             parts.append(" ".join([field, *(f"{k} {_value(x)}" for k, x in v.items())]))

@@ -158,6 +158,23 @@ async def world(client) -> World:
                 check_result={},
             )
         )
+        # A PRD review whose draft made version 2 (D10), for GET .../versions/2/run-review.
+        from oracle.runs.models import Checkpoint
+
+        s.add(
+            Checkpoint(
+                run_id=run.id,
+                kind="prd_review",
+                approver_role="approver",
+                payload={
+                    "import": {
+                        "document_id": str(doc_id),
+                        "version": 2,
+                        "slug": "checkout-redesign",
+                    }
+                },
+            )
+        )
         await s.commit()
     return World(
         r.tenant_id,
@@ -197,6 +214,8 @@ MATRIX: list[tuple[str, str, str, dict]] = [
     ("GET", "/v1/documents/{doc}/versions", "viewer", {}),
     ("GET", V, "viewer", {}),
     ("GET", V + "/markdown", "viewer", {}),
+    # D10: the run review a version's review decides; any member reads it.
+    ("GET", V2 + "/run-review", "viewer", {}),
     ("GET", "/v1/documents/{doc}/diff", "viewer", {"params": {"from": 1, "to": 2}}),
     (
         "POST",
