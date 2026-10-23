@@ -120,7 +120,7 @@ class ProductRequest(TenantScoped, Base):
     source_url: Mapped[str | None] = mapped_column(Text)
     source_kind: Mapped[str | None] = mapped_column(Text)
     source_excerpt: Mapped[str | None] = mapped_column(Text)
-    # The interview it came from (C3 Interviews, migration 0030_interviews).
+    # The interview it came from (C3 Interviews, migration 0032_interviews).
     interview_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("interviews.id", ondelete="SET NULL")
     )

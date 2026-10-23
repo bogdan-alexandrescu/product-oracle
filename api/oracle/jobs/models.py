@@ -43,7 +43,7 @@ JOB_KINDS = ("review_comments", "reporting", "refinement", "quality_review", "re
 INTAKE_JOB_KINDS = ("intake_analysis",)
 # A decision's options (H1, migration 0020_decisions): no document, ``decision_id`` instead.
 DECISION_JOB_KINDS = ("decision_options",)
-# An interview's guide and snapshot (C3, migration 0030_interviews): ``interview_id``.
+# An interview's guide and snapshot (C3, migration 0032_interviews): ``interview_id``.
 INTERVIEW_JOB_KINDS = ("interview_guide", "interview_snapshot")
 ALL_JOB_KINDS = JOB_KINDS + INTAKE_JOB_KINDS + DECISION_JOB_KINDS + INTERVIEW_JOB_KINDS
 JOB_STATUSES = ("queued", "running", "succeeded", "failed", "cancelled")
