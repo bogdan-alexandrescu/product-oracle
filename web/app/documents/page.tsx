@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
+import { ArtifactMenu } from "@/components/ArtifactMenu";
 import { SourceLink } from "@/components/BuildRoadmap";
 import {
   Chip,
@@ -26,6 +27,7 @@ import { peopleByIds } from "@/components/PersonPicker";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { useArtifactsChanged } from "@/lib/artifacts";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
@@ -70,6 +72,16 @@ const COLUMNS: Column<DocumentSummary>[] = [
     align: "right",
     className: "tnum text-text2",
     cell: (d) => <span title={formatDateTime(d.updated_at)}>{formatDate(d.updated_at)}</span>,
+  },
+  {
+    // #482: Edit, Regenerate… and Delete… by role; kept on a phone (right of the title).
+    key: "actions",
+    header: <span className="sr-only">Actions</span>,
+    width: "56px",
+    align: "right",
+    phone: "action",
+    className: "overflow-visible",
+    cell: (d) => <ArtifactMenu doc={{ ...d, kind: "prd" }} />,
   },
 ];
 
@@ -180,6 +192,7 @@ function DocInspector({ d, canPublish }: { d: DocumentSummary; canPublish: boole
 export default function DocumentsPage() {
   // PRDs only: roadmaps have their own screen (/roadmap).
   const q = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
+  useArtifactsChanged(q.reload);
   const documents = [...(q.data ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   const router = useRouter();
   const { can, capsReady } = useMe();

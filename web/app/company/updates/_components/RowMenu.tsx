@@ -1,17 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ds";
 
 /**
  * A row's ⋯ menu. Its panel is fixed to the viewport under the button, so the table's
- * clipping never cuts it off; Escape, a click outside or a scroll closes it.
+ * clipping never cuts it off; it opens upward when the room below (above a phone's tab bar)
+ * is too short. Escape, a click outside or a scroll closes it.
  */
 export function RowMenu({ label, children }: { label: string; children: (close: () => void) => ReactNode }) {
-  const [at, setAt] = useState<{ top: number; right: number } | null>(null);
+  const [at, setAt] = useState<{ top: number; right: number; above: number } | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = panel.current;
+    if (!at || !el) return;
+    const h = el.offsetHeight;
+    // The phone's tab bar covers the bottom 80 px.
+    if (at.top + h > window.innerHeight - 80 && at.above - h - 6 >= 8) el.style.top = `${at.above - h - 6}px`;
+  }, [at]);
   useEffect(() => {
     if (!at) return;
     const close = () => setAt(null);
@@ -43,7 +51,7 @@ export function RowMenu({ label, children }: { label: string; children: (close: 
         onClick={(e) => {
           if (at) return setAt(null);
           const r = e.currentTarget.getBoundingClientRect();
-          setAt({ top: r.bottom + 6, right: Math.max(12, window.innerWidth - r.right) });
+          setAt({ top: r.bottom + 6, right: Math.max(12, window.innerWidth - r.right), above: r.top });
         }}
       />
       {at && (

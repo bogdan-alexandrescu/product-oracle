@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
+import { ArtifactMenu } from "@/components/ArtifactMenu";
 import { Icon, useDocumentDestination } from "@/components/ds";
 import type { DocumentOut } from "@/lib/api/client";
 
@@ -48,13 +50,18 @@ export function DocCrumb({ doc, withTitle = true }: { doc?: DocumentOut; withTit
   );
 }
 
-/** Bar under the shell's top edge: breadcrumb + document status + page tools. */
+/** Bar under the shell's top edge: breadcrumb + document status + page tools + the ⋮ menu (#482). */
 export function DocToolbar({ doc, children }: { doc?: DocumentOut; children?: ReactNode }) {
+  const router = useRouter();
   return (
     <div className="sticky top-0 z-20 border-b border-line bg-bg">
       <div className="flex min-h-14 flex-wrap items-center gap-x-4 gap-y-2 px-6 py-2 max-[600px]:px-2.5">
         <DocCrumb doc={doc} />
-        <div className="ml-auto flex flex-wrap items-center gap-2">{children}</div>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {children}
+          {/* A deleted document is gone: back to its list. */}
+          {doc && <ArtifactMenu doc={doc} onDeleted={() => router.push(home(doc).href)} />}
+        </div>
       </div>
     </div>
   );

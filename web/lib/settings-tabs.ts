@@ -17,6 +17,8 @@ export const SETTINGS_TABS: { label: string; href: string; testId: string; read:
   { label: "Templates", href: "/settings/templates", testId: "nav-templates", read: "list_templates" },
   { label: "Themes", href: "/settings/themes", testId: "nav-themes", read: "list_themes" },
   { label: "Autonomy", href: "/settings/autonomy", testId: "nav-autonomy", read: "get_autonomy" },
+  // #482: owners alone delete and restore, so only they see Trash (#370).
+  { label: "Trash", href: "/settings/trash", testId: "nav-trash", read: "list_trash" },
 ];
 
 /** Settings pages that only make something: they need that operation, not just the read. */

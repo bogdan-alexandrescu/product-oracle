@@ -16,6 +16,7 @@ import { useTheme, type ThemeChoice } from "@/lib/theme";
 
 import { Mark } from "./Brand";
 import { ConfirmHost } from "./ConfirmDialog";
+import { ToastHost } from "./Toast";
 import { initialsOf } from "./Figures";
 import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
@@ -621,6 +622,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <HopDock />
         </Suspense>
         <ConfirmHost />
+        <ToastHost />
       </div>
     </ScreenSubjectProvider>
   );
