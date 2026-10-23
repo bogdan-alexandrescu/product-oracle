@@ -242,6 +242,18 @@ function launchesContext(db: Db, me: MemberRow): LaunchesContext {
     role: me.role,
     askerId: db.members.find((x) => x.role === "commenter")?.id ?? null,
     trackId: db.roadmap?.tracks[0]?.id ?? null,
+    roadmapItems: (trackId) => {
+      const t = db.roadmap?.tracks.find((x) => x.id === trackId);
+      if (!t) return null;
+      const doc = db.documents.find((d) => d.id === t.roadmap_id);
+      const v = db.versions
+        .filter((x) => x.document_id === t.roadmap_id && x.approved_at && db.roadmap!.items[x.id]?.length)
+        .sort((a, b) => b.number - a.number)[0];
+      if (!v) return [];
+      return db.roadmap!.items[v.id].map((i) => ({
+        item_key: i.item_key, title: i.title, horizon: i.horizon, roadmap_slug: doc?.slug ?? null, roadmap_version: v.number,
+      }));
+    },
   };
 }
 
@@ -1431,7 +1443,17 @@ function load(): Db {
   db.access_failures = scenario === "access-failures" ? seedAccessFailures() : [];
   // Launches (H6): three synthetic launches in the "launches" scenario; none otherwise, so
   // other specs' Inbox counts stay as they were.
-  if (scenario === "launches") db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
+  if (scenario === "launches") {
+    db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
+    // Launches are planned from an approved roadmap: usage-alerts-roadmap v1 is approved here,
+    // so New launch (#344) has items to pick.
+    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+    const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
+    if (roadmap && v1) {
+      v1.approved_at = "2026-10-05T09:00:00Z";
+      roadmap.status = "approved";
+    }
+  }
   db.autonomy = emptyAutonomy();
   // Discussions (G1): one private discussion in the "discussions" scenario; none otherwise,
   // so other specs' counts stay as they were.

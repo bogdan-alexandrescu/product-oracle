@@ -30,11 +30,15 @@ import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
+import { APPROVERS_ONLY } from "../_form-dialog";
+import { NewLaunchDialog } from "./_new-launch";
+
 type Summary = Schemas["LaunchSummary"];
 type Task = Schemas["TaskOut"];
 type Note = Schemas["RequesterNoteOut"];
 type Filter = "ready" | "planned" | "launched" | "all";
 type Channel = NonNullable<Note["channel"]>;
+type Audience = Task["audience"];
 
 const STATE_LABEL: Record<Summary["state"], string> = { planned: "Planned", ready: "Ready", launched: "Launched", cancelled: "Cancelled" };
 const STATE_KIND: Record<Summary["state"], ChipKind> = { planned: "na", ready: "warn", launched: "pass", cancelled: "line" };
@@ -105,6 +109,7 @@ function Launches() {
   const [picked, setSelected] = useState<string | null>(null);
   const selected = picked ?? wanted;
   const [sheet, setSheet] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const rows = q.data ?? [];
   const count = (s: Summary["state"]) => rows.filter((l) => l.state === s).length;
@@ -190,9 +195,21 @@ function Launches() {
           )
         }
         action={
-          <LinkButton href="/roadmap/changelog" icon="doc">
-            Changelog
-          </LinkButton>
+          <div className="flex flex-wrap gap-2">
+            <LinkButton href="/roadmap/changelog" icon="doc">
+              Changelog
+            </LinkButton>
+            <Button
+              variant="primary"
+              icon="plus"
+              disabled={!canApprove}
+              title={canApprove ? undefined : APPROVERS_ONLY}
+              onClick={() => setCreating(true)}
+              data-testid="new-launch"
+            >
+              New launch
+            </Button>
+          </div>
         }
       />
       <div className="flex flex-col gap-3">
@@ -233,6 +250,21 @@ function Launches() {
           </Panel>
         </Split>
       </div>
+      {creating && (
+        <NewLaunchDialog
+          onClose={() => setCreating(false)}
+          onCreated={async (l) => {
+            setCreating(false);
+            setFilter(l.state === "ready" ? "ready" : "planned");
+            setSelected(l.id);
+            // A new launch may add a Set tier row to the Inbox.
+            invalidateWaiting();
+            await q.reload();
+            waitingChanged();
+            if (phone) setSheet(true);
+          }}
+        />
+      )}
       {phone && active && (
         <Sheet open={sheet} title={active.title} onClose={() => setSheet(false)} testId="launch-sheet">
           {inspector}
@@ -370,7 +402,7 @@ function LaunchInspector({ id, canApprove, onChanged }: { id: string; canApprove
         <span>{l.owner_id && l.owner_id === myId ? "You" : l.owner_id ? "Another member" : "Nobody yet"}</span>
       </InspectorSection>
       <InspectorSection label="Items">
-        <ul className="flex flex-col gap-1">
+        <ul className="flex flex-col gap-1" data-testid="launch-items">
           {l.items.map((it) => (
             <li key={it.item_key}>
               {it.roadmap_slug ? (
@@ -409,6 +441,7 @@ function LaunchInspector({ id, canApprove, onChanged }: { id: string; canApprove
             />
           ))}
         </ul>
+        <AddTask launchId={l.id} canApprove={canApprove} busy={busy} act={act} />
       </InspectorSection>
       <InspectorSection label="Notes to the people who asked">
         {notesQ.data && notesQ.data.length === 0 && <span className="text-text2">Nobody yet</span>}
@@ -417,6 +450,7 @@ function LaunchInspector({ id, canApprove, onChanged }: { id: string; canApprove
             <NoteRow key={n.id} note={n} canEdit={canApprove || l.owner_id === myId} busy={busy} act={act} />
           ))}
         </ul>
+        <AddNote launchId={l.id} canApprove={canApprove} busy={busy} act={act} />
         {canApprove && l.state === "launched" && (notesQ.data ?? []).some((n) => n.internal && n.status === "drafted") && (
           <Button
             className="mt-2"
@@ -466,6 +500,135 @@ function LaunchInspector({ id, canApprove, onChanged }: { id: string; canApprove
 }
 
 type Act = (key: string, call: () => Promise<unknown>) => Promise<void>;
+
+const FIELD = "h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]";
+
+/** Add task: a task of the company's own at the end of the checklist (approvers). */
+function AddTask({ launchId, canApprove, busy, act }: { launchId: string; canApprove: boolean; busy: string | null; act: Act }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [audience, setAudience] = useState<Audience>("internal");
+  if (!open) {
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Button
+          icon="plus"
+          disabled={!canApprove}
+          title={canApprove ? undefined : APPROVERS_ONLY}
+          onClick={() => setOpen(true)}
+          data-testid="add-task"
+        >
+          Add task
+        </Button>
+        {!canApprove && <span className="text-sm text-text2">{APPROVERS_ONLY}</span>}
+      </div>
+    );
+  }
+  return (
+    <form
+      className="mt-2 flex flex-wrap items-end gap-2"
+      data-testid="add-task-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!title.trim()) return;
+        void act("add-task", async () => {
+          await unwrap(api.POST("/v1/launches/{launch_id}/tasks", { params: { path: { launch_id: launchId } }, body: { title: title.trim(), audience } }));
+          setTitle("");
+          setOpen(false);
+        });
+      }}
+    >
+      <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm font-medium">
+        Task
+        <input className={FIELD} value={title} maxLength={300} onChange={(e) => setTitle(e.target.value)} autoFocus />
+      </label>
+      <label className="flex flex-col gap-1 text-sm font-medium">
+        Audience
+        <select className={FIELD} value={audience} onChange={(e) => setAudience(e.target.value as Audience)}>
+          <option value="internal">Internal</option>
+          <option value="external">External</option>
+        </select>
+      </label>
+      <Button type="submit" variant="solid" disabled={busy !== null || !title.trim()}>
+        Add task
+      </Button>
+      <Button variant="ghost" onClick={() => setOpen(false)}>
+        Cancel
+      </Button>
+    </form>
+  );
+}
+
+/** Add note: someone who asked, added by hand with how to reach them and what they asked (approvers). */
+function AddNote({ launchId, canApprove, busy, act }: { launchId: string; canApprove: boolean; busy: string | null; act: Act }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [hint, setHint] = useState("");
+  const [asked, setAsked] = useState("");
+  if (!open) {
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Button
+          icon="plus"
+          disabled={!canApprove}
+          title={canApprove ? undefined : APPROVERS_ONLY}
+          onClick={() => setOpen(true)}
+          data-testid="add-note"
+        >
+          Add note
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="mt-2 flex flex-col gap-2"
+      data-testid="add-note-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!name.trim()) return;
+        void act("add-note", async () => {
+          await unwrap(
+            api.POST("/v1/launches/{launch_id}/notes", {
+              params: { path: { launch_id: launchId } },
+              body: { display_name: name.trim(), contact_hint: hint.trim() || null, asked: asked.trim() || null },
+            }),
+          );
+          setName("");
+          setHint("");
+          setAsked("");
+          setOpen(false);
+        });
+      }}
+    >
+      <label className="flex flex-col gap-1 text-sm font-medium">
+        Name
+        <input className={FIELD} value={name} maxLength={200} onChange={(e) => setName(e.target.value)} autoFocus />
+      </label>
+      <label className="flex flex-col gap-1 text-sm font-medium">
+        How to reach them
+        <input className={FIELD} value={hint} maxLength={300} onChange={(e) => setHint(e.target.value)} />
+      </label>
+      <label className="flex flex-col gap-1 text-sm font-medium">
+        What they asked
+        <textarea
+          className="min-h-20 rounded-lg border border-line-strong bg-surface p-2.5 text-[15px]"
+          value={asked}
+          maxLength={5000}
+          onChange={(e) => setAsked(e.target.value)}
+        />
+      </label>
+      <div className="flex gap-2">
+        <Button type="submit" variant="solid" disabled={busy !== null || !name.trim()}>
+          Add note
+        </Button>
+        <Button variant="ghost" onClick={() => setOpen(false)}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
 
 function TaskRow({ task, canEdit, mine, busy, act }: { task: Task; canEdit: boolean; mine: boolean; busy: string | null; act: Act }) {
   const [draftOpen, setDraftOpen] = useState(false);
