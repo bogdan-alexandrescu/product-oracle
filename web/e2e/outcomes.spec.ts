@@ -12,8 +12,8 @@ import { login } from "./helpers";
  * rejects), no_claim (what green does not prove).
  */
 
-async function start(page: Page, role?: "viewer" | "approver") {
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "outcomes"));
+async function start(page: Page, role?: "viewer" | "approver", scenario = "outcomes") {
+  await page.addInitScript((s) => localStorage.setItem("po-mock-scenario", s), scenario);
   if (role) await page.addInitScript((r) => localStorage.setItem("po-mock-role", r), role);
   await login(page);
 }
@@ -95,6 +95,7 @@ test("a viewer reads outcomes without Confirm or Edit", async ({ page }) => {
   await expect(inspector(page)).toContainText("Saved payment methods");
   await expect(inspector(page).getByTestId("outcome-confirm")).toHaveCount(0);
   await expect(inspector(page).getByTestId("outcome-edit")).toHaveCount(0);
+  await expect(inspector(page).getByTestId("outcome-assess-edit")).toHaveCount(0);
 });
 
 test("at 390 px the table keeps Item, State and Due with no horizontal scroll", async ({ page }) => {
@@ -113,4 +114,78 @@ test("at 390 px the table keeps Item, State and Due with no horizontal scroll", 
   expect(overflow).toBeLessThanOrEqual(0);
   await first.click();
   await expect(page.getByTestId("outcome-sheet")).toBeVisible();
+});
+
+test("an approver edits Oracle's proposal before recording it", async ({ page }) => {
+  // protects=the proposal's Edit: the owner changes the verdict, the reading and its day,
+  // and adds a note, and that is what is recorded; fails_when=Edit is missing, the form
+  // records Oracle's values anyway, or the history does not show the edit;
+  // no_claim=the API's re-assessment rule (tests/test_outcome_learnings.py).
+  await start(page);
+  await openOutcomes(page);
+  await row(page, "Saved payment methods").click();
+  await inspector(page).getByTestId("outcome-assess-edit").click();
+  const form = inspector(page).getByTestId("assessment-form");
+  await expect(form.getByLabel("Verdict")).toHaveValue("partially_held");
+  await expect(form.getByLabel("Actual value")).toHaveValue("41");
+  await form.getByLabel("Verdict").selectOption("not_held");
+  await form.getByLabel("Actual value").fill("39");
+  await form.getByLabel("Measured on").fill("2026-10-01");
+  await form.getByLabel("Note").fill("The 41% reading counted test accounts");
+  await form.getByRole("button", { name: "Record assessment" }).click();
+  await expect(inspector(page).getByTestId("outcome-state").first()).toHaveText("Not held");
+  const history = inspector(page).getByTestId("outcome-history");
+  await expect(history).toContainText("Not held · 39% · a person");
+  await expect(history).toContainText("The 41% reading counted test accounts");
+});
+
+test("an approver keeps one drafted learning and skips another", async ({ page }) => {
+  // protects=the inspector's drafted learnings: after an assessment each draft has Keep and
+  // Skip; Keep reads Kept and the learning exists, Skip reads Skipped, and both stay after
+  // a reload; fails_when=the drafts vanish with the response, Keep keeps nothing, or Skip
+  // keeps one; no_claim=the learnings signal.
+  await start(page);
+  await openOutcomes(page);
+  await row(page, "Saved payment methods").click();
+  await inspector(page).getByTestId("outcome-confirm").click();
+  await expect(inspector(page).getByTestId("outcome-state").first()).toHaveText("Partly held");
+  const drafts = inspector(page).getByTestId("outcome-learning");
+  await expect(drafts).toHaveCount(2);
+  await expect(drafts.nth(0)).toContainText("ask about success metric earlier");
+  await drafts.nth(0).getByRole("button", { name: "Keep" }).click();
+  await expect(drafts.nth(0)).toContainText("Kept");
+  await drafts.nth(1).getByRole("button", { name: "Skip" }).click();
+  await expect(drafts.nth(1)).toContainText("Skipped");
+  await expect(drafts.getByRole("button", { name: /Keep|Skip/ })).toHaveCount(0);
+
+  await page.reload();
+  await page.getByTestId("outcome-filters").getByRole("button", { name: /^Assessed/ }).click();
+  await row(page, "Saved payment methods").click();
+  await expect(inspector(page).getByTestId("outcome-learning").nth(0)).toContainText("Kept");
+  await expect(inspector(page).getByTestId("outcome-learning").nth(1)).toContainText("Skipped");
+});
+
+test("Change on Oracle's recorded verdict opens it and the owner changes it", async ({ page }) => {
+  // protects=the Inbox's "Oracle recorded" row: Change opens that outcome in Plan › Outcomes,
+  // where the owner records another verdict and the row leaves the Inbox; fails_when=Change
+  // lands on a page with no controls or another outcome, or the row stays;
+  // no_claim=Oracle's autonomy level (the mock seeds its verdict).
+  await start(page, undefined, "outcomes-recorded");
+  await page.goto("/inbox");
+  const need = page.getByTestId("outcome-need").filter({ hasText: "Oracle recorded: partly held · Weekly digest email" });
+  await expect(need).toBeVisible();
+  await page.getByRole("link", { name: "Change" }).first().click();
+  await expect(page).toHaveURL(/\/plan\/outcomes\?outcome=/);
+  await expect(inspector(page)).toContainText("Weekly digest email");
+  await expect(inspector(page).getByTestId("outcome-history")).toContainText("Partly held · 41% · Oracle");
+  await inspector(page).getByTestId("outcome-change").click();
+  const form = inspector(page).getByTestId("assessment-form");
+  await expect(form.getByLabel("Verdict")).toHaveValue("partially_held");
+  await form.getByLabel("Verdict").selectOption("held");
+  await form.getByLabel("Actual value").fill("42");
+  await form.getByRole("button", { name: "Record assessment" }).click();
+  await expect(inspector(page).getByTestId("outcome-state").first()).toHaveText("Held");
+  await expect(inspector(page).getByTestId("outcome-history")).toContainText("Held · 42% · a person");
+  await page.goto("/inbox");
+  await expect(page.getByTestId("outcome-need").filter({ hasText: "Oracle recorded" })).toHaveCount(0);
 });
