@@ -12,6 +12,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { mockUuid, seeded } from "./ids";
+import { diffItems, snapshot } from "./roadmap-diff";
 import itemsFixture from "./roadmap-items.json";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -35,6 +36,7 @@ interface Version {
   document_id: string;
   number: number;
   approved_at?: string | null;
+  created_at?: string;
   source?: Schemas["VersionSource"] | null;
   sections: { section_key: string; heading: string; level: number; content_hash: string }[];
 }
@@ -68,6 +70,8 @@ const DATE_UNVERIFIED =
 const OUTSIDE_NOW = "dated milestones belong only in now; the date was dropped";
 /** The mock scenario (MOCK_SCENARIO_KEY) whose roadmap items carry every field the Items tab shows (E2). */
 export const ITEMS_SCENARIO = "roadmap-items";
+/** The mock scenario whose usage-alerts-roadmap v2 moved, added and dropped one item each since the approved v1 (E3). */
+export const DIFF_SCENARIO = "roadmap-diff";
 
 const now = () => new Date().toISOString();
 const today = () => now().slice(0, 10);
@@ -143,7 +147,8 @@ function itemsFor(ctx: RoadmapContext, roadmap: Version, trackId: string | null)
  */
 export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): RoadmapDb {
   const withItems = scenario === ITEMS_SCENARIO;
-  return seeded(withItems ? `roadmap:${ITEMS_SCENARIO}` : "roadmap", () => {
+  const withDiff = scenario === DIFF_SCENARIO;
+  return seeded(withItems || withDiff ? `roadmap:${scenario}` : "roadmap", () => {
     const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [] };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = ctx.documents.find((d) => d.slug === "usage-alerts-roadmap");
@@ -172,8 +177,101 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
       status: "planned", lock_version: 1, created_at: AT, updated_at: AT,
     });
     if (withItems && rv) db.items[rv.id] = db.items[rv.id].map((i) => fromFixture(db, i));
+    if (withDiff && roadmap) seedDiff(ctx, db, roadmap.id, track.id);
     return db;
   });
+}
+
+/**
+ * "roadmap-diff" (E3): the approved v1 has Behaviour (Now), Success metrics (Next) and Usage
+ * exports (Later); the draft v2 adds Spend limits (Now), moves Behaviour to Next and drops
+ * Usage exports.
+ */
+function seedDiff(ctx: RoadmapContext, db: RoadmapDb, roadmapId: string, trackId: string) {
+  const v1 = ctx.versions.find((v) => v.document_id === roadmapId && v.number === 1);
+  const v2 = ctx.versions.find((v) => v.document_id === roadmapId && v.number === 2);
+  if (!v1 || !v2) return;
+  const extra = (like: Item, key: string, title: string, horizon: Item["horizon"]): Item => ({
+    ...structuredClone(like), id: mockUuid(), item_key: key, title, horizon, milestone: horizon === "now" ? { name: "First release" } : null,
+    prd: { ...like.prd, section_key: null, section_hash: null },
+  });
+  const first = itemsFor(ctx, v1, trackId);
+  db.items[v1.id] = [...first, extra(first[0], "item-exports", "Usage exports", "later")].map((i, position) => ({ ...i, position }));
+  const second = itemsFor(ctx, v2, trackId).map((i) => (i.item_key === "item-behaviour" ? { ...i, horizon: "next" as const } : i));
+  db.items[v2.id] = [extra(second[0], "item-limits", "Spend limits", "now"), ...second].map((i, position) => ({ ...i, position }));
+}
+
+/** E3: GET /v1/roadmap-items/diff, a roadmap version's items against another's (api/oracle/roadmap/diff_views.py). */
+function itemsDiff(ctx: RoadmapContext, db: RoadmapDb, q: URLSearchParams): Response {
+  const parse = (ref: string | null) => {
+    const m = /^([^@\s]+)@([1-9][0-9]{0,5})$/.exec(ref ?? "");
+    if (!m) return json(422, { detail: `'${ref}' is not a ref: write <slug>@<version>` });
+    const doc = ctx.documents.find((d) => d.slug === m[1]);
+    const v = doc && ctx.versions.find((x) => x.document_id === doc.id && x.number === Number(m[2]));
+    if (!doc || !v) return notFound(doc ? `version ${m[2]} of '${doc.slug}'` : `document '${m[1]}'`);
+    if (doc.kind === "prd") return json(409, { detail: `Roadmap items for v${v.number} are not ready yet` });
+    if (doc.kind !== "roadmap") return json(422, { detail: `'${doc.slug}' is a ${doc.kind}: it has no roadmap items` });
+    return { doc, v };
+  };
+  const head = parse(q.get("head"));
+  if (head instanceof Response) return head;
+  const side = (v: Version): Schemas["ItemsRef"] => ({
+    ref: `${head.doc.slug}@${v.number}`, kind: "roadmap", label: `Roadmap v${v.number}`, document: docRef(head.doc, v),
+  });
+  const others = ctx.versions
+    .filter((v) => v.document_id === head.doc.id && v.id !== head.v.id && db.items[v.id]?.length)
+    .sort((a, b) => b.number - a.number);
+  const previous = others.find((v) => v.number < head.v.number);
+  const approved = others.find((v) => v.approved_at);
+  const base = q.get("base") ?? "previous";
+  let against: Version | undefined;
+  if (base === "previous") against = previous;
+  else if (base === "approved") against = approved;
+  else {
+    if (!base.includes("@")) return json(422, { detail: `base must be previous, approved or a ref, not '${base}'` });
+    const named = parse(base);
+    if (named instanceof Response) return named.status === 404 ? named : json(422, { detail: `'${base}' is not a version of '${head.doc.slug}'` });
+    if (named.doc.id !== head.doc.id) return json(422, { detail: `'${base}' is not a version of '${head.doc.slug}'` });
+    against = named.v;
+  }
+  const option = (v?: Version) => (v ? { ref: side(v).ref, label: side(v).label } : null);
+  const out: Schemas["ItemsDiffOut"] = {
+    head: side(head.v), base: null, options: { previous: option(previous), approved: option(approved) }, summary: null, items: [],
+  };
+  if (!against) return json(200, out);
+  const live = (v: Version) => (db.items[v.id] ?? []).map((i) => liveItem(db, i));
+  const diff = diffItems(live(against), live(head.v));
+  return json(200, { ...out, base: side(against), summary: diff.summary, items: diff.items });
+}
+
+/** E3: GET /v1/roadmap-items/history, an item across the roadmap versions tracing to a PRD. */
+function itemHistory(ctx: RoadmapContext, db: RoadmapDb, q: URLSearchParams): Response {
+  const prd = ctx.documents.find((d) => d.slug === q.get("prd"));
+  if (!prd) return notFound(`document '${q.get("prd")}'`);
+  const key = q.get("item_key") ?? "";
+  const versions = ctx.versions
+    .filter((v) => (db.items[v.id] ?? []).some((i) => i.prd.document?.id === prd.id))
+    .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? "") || a.number - b.number)
+    .slice(-50);
+  const entries: Schemas["RoadmapItemHistoryEntry"][] = [];
+  let last: Item | null = null;
+  for (const v of versions) {
+    const found = (db.items[v.id] ?? []).find((i) => i.item_key === key);
+    const item = found ? liveItem(db, found) : null;
+    if (!item && !last) continue;
+    const doc = ctx.documents.find((d) => d.id === v.document_id)!;
+    const common = { ref: `${doc.slug}@${v.number}`, kind: "roadmap" as const, label: `Roadmap v${v.number}`, approved: !!v.approved_at, at: v.created_at ?? AT };
+    if (!item) {
+      entries.push({ ...common, present: false, title: null, horizon: null, milestone_name: null, milestone_date: null, change: "dropped" });
+      last = null;
+      continue;
+    }
+    const s = snapshot(item);
+    const change = last ? diffItems([last], [item]).items[0].change : "added";
+    entries.push({ ...common, present: true, title: s.title, horizon: s.horizon, milestone_name: s.milestone_name, milestone_date: s.milestone_date, change });
+    last = item;
+  }
+  return json(200, { prd: { id: prd.id, slug: prd.slug, title: prd.title, version: null, approved: null }, item_key: key, entries });
 }
 
 /** The fixture's item in place of `seed`, keeping the mock's ids; its basis named by reference. */
@@ -332,6 +430,13 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
   const notVerifier = () => json(403, { detail: "Requires the approver role or the engineering lead" });
   const findDoc = (ref: string) => ctx.documents.find((d) => d.id === ref || d.slug === ref);
   const findTrack = (id: string) => db.tracks.find((t) => t.id === id);
+
+  // E3: /v1/roadmap-items/diff | /history
+  if (p[1] === "roadmap-items" && m === "GET") {
+    if (p[2] === "diff" && !p[3]) return itemsDiff(ctx, db, q);
+    if (p[2] === "history" && !p[3]) return itemHistory(ctx, db, q);
+    return null;
+  }
 
   // /v1/roadmaps/{doc}/items | /alignment | /items/staleness | /versions/{n}/items
   if (p[1] === "roadmaps" && p[2]) {

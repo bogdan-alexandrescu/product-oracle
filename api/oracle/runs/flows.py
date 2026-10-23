@@ -888,6 +888,10 @@ class SourceContext:
     # The run's planning horizons (A1, the planning_horizons setting as the run started,
     # run.knobs["planning_horizons"]); empty: B2's defaults (HORIZONS).
     horizons: dict[str, int] = field(default_factory=dict)
+    # E3: the target roadmap's latest items (id, title, horizon) when it has any, and
+    # where they come from ("roadmap v3"): the agents keep an id for the same item.
+    known_items: list[dict[str, str]] = field(default_factory=list)
+    known_from: str = ""
 
 
 @dataclass(frozen=True)
@@ -1262,6 +1266,13 @@ def source_lines(src: SourceContext, *, paste: bool = True) -> list[str]:
         lines += [f"- {e['src']} {e['type']} {e['dst']}" for e in src.edges]
     else:
         lines.append("- none recorded")
+    if src.known_items:
+        lines += [
+            "",
+            f"Known items ({src.known_from}): keep an item's id when it is the same item; "
+            "give a new id only to a new item.",
+        ]
+        lines += [f"- {k['id']}: {k['title']} ({k['horizon']})" for k in src.known_items]
     if not paste:
         return lines
     text = src.markdown[:MAX_SOURCE_CHARS]

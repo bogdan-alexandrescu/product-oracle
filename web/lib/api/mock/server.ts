@@ -34,7 +34,7 @@ import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } fr
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
-import { dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { DIFF_SCENARIO, dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
@@ -277,7 +277,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * signed-in owner (./autonomy.ts);
  * "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
- * ./roadmap-items.json);
+ * ./roadmap-items.json); "roadmap-diff" as the default company plus usage-alerts-roadmap v2,
+ * a draft whose items moved, added and dropped one each since the approved v1 (E3);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
  * problem (C6, saved-addresses);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
@@ -1440,8 +1441,22 @@ function load(): Db {
   db.discussions = scenario === "discussions" ? seedDiscussionsScenario(db) : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
+  if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
   save(db);
   return db;
+}
+
+/** E3 "roadmap-diff": usage-alerts-roadmap v1 approved, then v2, a draft (./roadmap.ts gives each its items). */
+function addRoadmapVersion(db: Db) {
+  const doc = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+  const v1 = doc && db.versions.find((v) => v.document_id === doc.id && v.number === 1);
+  if (!doc || !v1) return;
+  v1.approved_at ??= "2026-10-05T09:00:00Z";
+  const v2 = structuredClone(v1);
+  Object.assign(v2, { id: uuid(), number: 2, created_at: "2026-10-20T09:00:00Z", approved_at: null });
+  v2.sections = v2.sections.map((s) => ({ ...s, id: uuid() }));
+  db.versions.push(v2);
+  doc.updated_at = v2.created_at;
 }
 
 /** "discussions": the commenter's private discussion with the approver on team-workspaces v2's Problem. */
