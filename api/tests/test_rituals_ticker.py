@@ -222,10 +222,13 @@ async def test_an_owner_who_cannot_start_runs_gets_not_started(client, ctx, at, 
         await tick(ctx.tenant_id)
         user.role = "commenter"
         await db.commit()
+    # In UTC (the default Company time zone) the alignment report's Monday 08:00 had
+    # passed: its catch-up pre-read was summarised on the first tick, as an owner.
+    earlier = {r.id for r in await summary_runs(ctx.tenant_id)}
     ritual = (await rituals_of(ctx.tenant_id))["goals_checkin"]
     at(ritual.next_due_at)
     await tick(ctx.tenant_id)
-    assert await summary_runs(ctx.tenant_id) == []
+    assert {r.id for r in await summary_runs(ctx.tenant_id)} == earlier
     (occ,) = await occurrences_of(ctx.tenant_id, ritual.id)
     assert occ.summary_state == "not_started"
     assert occ.summary_note == "Summary not started: the ritual's owner can no longer start runs"

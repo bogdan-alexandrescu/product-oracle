@@ -1,3 +1,4 @@
+# ruff: noqa: F811 - the ritual fixtures are imported
 """The Company time zone (owner decision 2026-10-22): one setting, UTC by default, that
 the weekly alignment report and the rituals read (goals' "today" is in
 test_goal_measurements). Made-up company and people.

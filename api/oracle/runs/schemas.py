@@ -880,8 +880,8 @@ class InboxStrategy(BaseModel):
 
 
 from oracle.launches.schemas import InboxLaunch  # noqa: E402
-from oracle.rituals.schemas import InboxRitual  # noqa: E402
 from oracle.quality.schemas import InboxOutcome  # noqa: E402
+from oracle.rituals.schemas import InboxRitual  # noqa: E402
 
 
 class InboxOut(BaseModel):

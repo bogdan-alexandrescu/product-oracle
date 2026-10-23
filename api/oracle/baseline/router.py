@@ -19,6 +19,7 @@ from oracle.baseline import (
     conflicts,
     describe,
     evidence,
+    goals,
     measurements,
     public_links,
     scoring,
@@ -143,9 +144,22 @@ async def _entities_out(
     await _fresh(db, *rows)
     counts = await service.evidence_counts(db, entity_ids=[e.id for e in rows])
     view = await evidence.run_view(db, principal, entity_ids=[e.id for e in rows])
+    # B5: a goal's check reads the company's day and its planning horizons.
+    checked = {}
+    if any(e.type == "goal" for e in rows):
+        on, horizons = await goals.company_today(db), await goals.company_horizons(db)
+        checked = {
+            e.id: goals.GoalCheck(
+                **goals.goal_check(e.attrs or {}, status=e.status, on=on, horizons=horizons)
+            )
+            for e in rows
+            if e.type == "goal"
+        }
     out = []
     for e in rows:
-        o = EntityOut.model_validate(e).model_copy(update={"evidence_count": counts.get(e.id, 0)})
+        o = EntityOut.model_validate(e).model_copy(
+            update={"evidence_count": counts.get(e.id, 0), "goal_check": checked.get(e.id)}
+        )
         if view is not None:
             o = o.model_copy(update={"confidence": view.confidence("entity", e.id)})
         out.append(o)

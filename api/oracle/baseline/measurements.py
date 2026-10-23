@@ -112,6 +112,7 @@ async def fill_from_text(db: AsyncSession, principal: Principal) -> dict[str, An
     writer = service.Writer(principal, "agent", reason="Fill from text")
     applied = proposed = 0
     on = await goals.company_today(db)
+    horizons = await goals.company_horizons(db)
     left: list[dict[str, Any]] = []
     rows = await db.scalars(
         select(Entity)
@@ -120,7 +121,7 @@ async def fill_from_text(db: AsyncSession, principal: Principal) -> dict[str, An
     )
     for goal in rows.all():
         attrs = dict(goal.attrs or {})
-        values, unread = goals.read_text(attrs, on=on)
+        values, unread = goals.read_text(attrs, on=on, horizons=horizons)
         left += [
             {"entity_id": goal.id, "field": k, "text": str(attrs[f"{k}_text"])}
             for k in unread

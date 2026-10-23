@@ -261,39 +261,33 @@ async def keep_as_text(db: AsyncSession, attrs: dict[str, Any]) -> tuple[dict[st
 # --- goal_check ---------------------------------------------------------------------------
 
 
-def _quarter_end(d: date, quarters_ahead: int = 0) -> date:
-    q = (d.month - 1) // 3 + quarters_ahead
-    year, q = d.year + q // 4, q % 4
-    month = q * 3 + 3
-    return date(year, month, 30 if month in (6, 9) else 31)
+def _windows(on: date, horizons: dict[str, int] | None) -> dict[str, tuple[date, date]]:
+    from oracle.tenant_settings_api import DEFAULTS, horizon_windows
+
+    return horizon_windows(horizons or DEFAULTS["planning_horizons"], on)
 
 
-def _add_months(d: date, months: int) -> date:
-    m = d.month - 1 + months
-    year, month = d.year + m // 12, m % 12 + 1
-    for day in (d.day, 30, 29, 28):
-        try:
-            return date(year, month, day)
-        except ValueError:
-            continue
-    raise ValueError(d)
+async def company_horizons(db: AsyncSession) -> dict[str, int]:
+    """The company's planning_horizons setting (Settings › Company)."""
+    from oracle.tenant_settings_api import company_horizons as stored
+
+    return await stored(db)
 
 
-def horizon_window(horizon: str, on: date) -> tuple[date, date]:
-    """Decision B2 Company goals: short = this quarter, medium = the next two quarters,
-    long = 12 to 24 months (oracle.runs.flows.HORIZONS), counted from ``on``."""
-    if horizon == "short":
-        return date(on.year, (on.month - 1) // 3 * 3 + 1, 1), _quarter_end(on)
-    if horizon == "medium":
-        return _quarter_end(on) + timedelta(days=1), _quarter_end(on, 2)
-    return _add_months(on, 12), _add_months(on, 24)
+def horizon_window(
+    horizon: str, on: date, horizons: dict[str, int] | None = None
+) -> tuple[date, date]:
+    """The span of ``horizon`` on ``on`` by the company's ``horizons`` (the
+    planning_horizons setting; B2's defaults when not given)."""
+    return _windows(on, horizons)[horizon]
 
 
-def horizon_of(due: date, on: date) -> str:
+def horizon_of(due: date, on: date, horizons: dict[str, int] | None = None) -> str:
     """The horizon a due date falls in (between medium and long: medium)."""
-    if due <= _quarter_end(on):
+    windows = _windows(on, horizons)
+    if due <= windows["short"][1]:
         return "short"
-    if due < _add_months(on, 12):
+    if due < windows["long"][0]:
         return "medium"
     return "long"
 
@@ -307,7 +301,13 @@ def meets(value: float, comparison: str, target: float) -> bool:
     }[comparison]
 
 
-def goal_check(attrs: dict[str, Any], *, status: str | None = None, on: date | None = None) -> dict:
+def goal_check(
+    attrs: dict[str, Any],
+    *,
+    status: str | None = None,
+    on: date | None = None,
+    horizons: dict[str, int] | None = None,
+) -> dict:
     on = on or today()
     # The company's day can be a day ahead of UTC's: a value measured on it is not refused
     # here (the write-time check reads the company's day).
@@ -327,7 +327,7 @@ def goal_check(attrs: dict[str, Any], *, status: str | None = None, on: date | N
         warnings.append("target_already_met")
     due = _date(attrs.get("due"))
     if due is not None and attrs.get("horizon") in HORIZONS:
-        low, high = horizon_window(attrs["horizon"], on)
+        low, high = horizon_window(attrs["horizon"], on, horizons)
         if not low <= due <= high:
             warnings.append("due_outside_horizon")
     if due is not None and due < on and status == "confirmed":
@@ -371,7 +371,9 @@ def target_words(attrs: dict[str, Any]) -> str | None:
 _CURRENCY = {"$": "USD", "€": "EUR", "£": "GBP"}
 
 
-def read_text(attrs: dict[str, Any], *, on: date | None = None) -> tuple[dict[str, Any], list[str]]:
+def read_text(
+    attrs: dict[str, Any], *, on: date | None = None, horizons: dict[str, int] | None = None
+) -> tuple[dict[str, Any], list[str]]:
     """The typed values the goal's ``*_text`` keys read as (same rules as Home), and the
     text fields left unread (each has its ``<field>_text`` key). Only keys whose typed value
     is absent are read. A field whose reading the checks would refuse (a current value
@@ -409,7 +411,7 @@ def read_text(attrs: dict[str, Any], *, on: date | None = None) -> tuple[dict[st
         if word in HORIZONS:
             read["horizon"] = {"horizon": word}
         elif due is not None:
-            read["horizon"] = {"horizon": horizon_of(due, on)}
+            read["horizon"] = {"horizon": horizon_of(due, on, horizons)}
             if not _set(attrs, "due"):
                 read["horizon"]["due"] = due.isoformat()
         else:
