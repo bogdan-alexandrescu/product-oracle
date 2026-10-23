@@ -41,6 +41,7 @@ from oracle.roadmap.schemas import (
     BasisStatus,
     ChangeSetOut,
     ChangeSetPatch,
+    ChangeSetStatus,
     ItemProblem,
     ItemsImport,
     ItemsImportOut,
@@ -271,6 +272,22 @@ async def open_roadmap_change_set(
     if not created:
         response.status_code = status.HTTP_200_OK
     return await changeset.view(db, document, row)
+
+
+@router.get("/roadmaps/{doc}/change-sets", response_model=list[ChangeSetOut])
+async def list_roadmap_change_sets(
+    doc: str,
+    principal: Reader,
+    db: TenantDB,
+    status_: Annotated[ChangeSetStatus | None, Query(alias="status")] = None,
+) -> list[ChangeSetOut]:
+    """The roadmap's change sets, newest first: the draft being edited, the proposals
+    waiting for the decider (``approved`` false) and the rest."""
+    document = await _document(db, doc, "roadmap")
+    return [
+        await changeset.view(db, document, row)
+        for row in await changeset.list_sets(db, document, status_)
+    ]
 
 
 @router.get("/roadmaps/{doc}/change-sets/{set_id}", response_model=ChangeSetOut)

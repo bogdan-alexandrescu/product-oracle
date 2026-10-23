@@ -162,6 +162,16 @@ async def get(db: AsyncSession, document: Document, set_id: uuid.UUID) -> Roadma
     return row
 
 
+async def list_sets(
+    db: AsyncSession, document: Document, status: str | None = None
+) -> list[RoadmapChangeSet]:
+    query = select(RoadmapChangeSet).where(RoadmapChangeSet.roadmap_document_id == document.id)
+    if status is not None:
+        query = query.where(RoadmapChangeSet.status == status)
+    order = (RoadmapChangeSet.created_at.desc(), RoadmapChangeSet.id)
+    return list(await db.scalars(query.order_by(*order).limit(50)))
+
+
 async def check_base(db: AsyncSession, document: Document, row: RoadmapChangeSet) -> None:
     """Refuse a change set whose base is no longer the approved version."""
     base = await db.get(DocumentVersion, row.base_version_id)
@@ -266,6 +276,7 @@ async def view(db: AsyncSession, document: Document, row: RoadmapChangeSet) -> C
         diff=diff,
         summary=summary,
         proposed_version=proposed.number if proposed else None,
+        approved=proposed is not None and proposed.approved_at is not None,
         decider_id=policy.decider_id,
         lock_version=row.lock_version,
         created_by=row.created_by,

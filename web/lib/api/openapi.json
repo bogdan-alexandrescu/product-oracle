@@ -25932,6 +25932,80 @@
             }
           }
         }
+      },
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "List Roadmap Change Sets",
+        "description": "The roadmap's change sets, newest first: the draft being edited, the proposals\nwaiting for the decider (``approved`` false) and the rest.",
+        "operationId": "list_roadmap_change_sets",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "draft",
+                    "proposed",
+                    "discarded"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChangeSetOut"
+                  },
+                  "title": "Response List Roadmap Change Sets"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/roadmaps/{doc}/change-sets/{set_id}": {
@@ -37161,6 +37235,11 @@
               }
             ],
             "title": "Proposed Version"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved",
+            "default": false
           },
           "decider_id": {
             "anyOf": [
