@@ -57,7 +57,10 @@ async def test_a_draft_compares_with_the_previous_draft_by_default(client, owner
     assert out["head"]["label"] == "Draft v2" and out["head"]["document"]["slug"] == PRD
     assert out["base"]["ref"] == f"{PRD}@1" and out["base"]["kind"] == "prd_draft"
     assert out["base"]["label"] == "Draft v1"
-    assert out["options"] == {"previous": {"ref": f"{PRD}@1", "label": "Draft v1"}, "approved": None}
+    assert out["options"] == {
+        "previous": {"ref": f"{PRD}@1", "label": "Draft v1"},
+        "approved": None,
+    }
     assert out["summary"] == {"added": 1, "dropped": 0, "moved": 1, "changed": 0, "unchanged": 1}
     assert [(i["item_key"], i["change"]) for i in out["items"]] == [
         ("payment-step", "unchanged"), ("shipping-step", "moved"), ("address-book", "added"),
