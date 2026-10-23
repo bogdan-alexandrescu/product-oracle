@@ -564,6 +564,8 @@ class ChangeSetOut(BaseModel):
     diff: list[ChangeSetDiffItem]
     summary: dict[str, int]
     proposed_version: int | None = None
+    # The proposed version is approved: it is the live plan (or was).
+    approved: bool = False
     # Who approves the proposed version: the document's designated decider, when named.
     decider_id: uuid.UUID | None = None
     lock_version: int
