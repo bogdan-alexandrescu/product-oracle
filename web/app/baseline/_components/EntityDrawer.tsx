@@ -101,6 +101,8 @@ export function EntityDrawer({
   const onAuth = useAuthRedirect();
   const [editing, setEditing] = useState(false);
   const [promoting, setPromoting] = useState(promote && canWrite);
+  // Reject (a proposed item) or Archive (a confirmed one) asks for the reason first.
+  const [asking, setAsking] = useState<"reject" | "archive" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -164,6 +166,18 @@ export function EntityDrawer({
       await unwrap(Promise.resolve(res));
       setEditing(false);
       return "Saved. The item is now locked against agent changes.";
+    });
+
+  const decide = (action: "confirm" | "reject" | "archive", note?: string) =>
+    write(async () => {
+      const params = { params: { path: { entity_id: entity.id } }, body: { note: note || null } };
+      if (action === "confirm") await unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", params));
+      // Archiving a confirmed item rejects it, as the API does: it leaves the baseline, its history keeps why.
+      else await unwrap(api.POST("/v1/baseline/entities/{entity_id}/reject", params));
+      setAsking(null);
+      if (action === "confirm") return `Confirmed “${title}”.`;
+      if (action === "archive") return `Archived “${title}”: it leaves the baseline; its history keeps the reason.`;
+      return `Rejected “${title}”.`;
     });
 
   const promoteBlocker = (body: Schemas["BlockerCreate"]) =>
@@ -361,24 +375,102 @@ export function EntityDrawer({
               )}
             </InspectorSection>
 
-            {canWrite && !editing && !(promoting && suggestion) && (
+            {!editing && !(promoting && suggestion) && (
               <InspectorSection>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    onClick={() => {
-                      setNotice(null);
-                      setEditing(true);
-                    }}
-                  >
-                    Edit
-                  </Button>
-                </div>
+                {asking ? (
+                  <AskReason action={asking} busy={busy} onBack={() => setAsking(null)} onSubmit={(note) => decide(asking, note)} />
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      {d.status === "proposed" && (
+                        <>
+                          <Button variant="solid" disabled={!canWrite || busy} onClick={() => decide("confirm")}>
+                            Confirm
+                          </Button>
+                          <Button disabled={!canWrite || busy} onClick={() => setAsking("reject")}>
+                            Reject
+                          </Button>
+                        </>
+                      )}
+                      {canWrite && (
+                        <Button
+                          onClick={() => {
+                            setNotice(null);
+                            setEditing(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      )}
+                      {d.status === "confirmed" && (
+                        <Button variant="danger" disabled={!canWrite || busy} onClick={() => setAsking("archive")}>
+                          Archive
+                        </Button>
+                      )}
+                    </div>
+                    {!canWrite && d.status !== "rejected" && (
+                      <p className="text-sm text-text2" data-testid="decide-note">
+                        Only approvers and owners confirm, reject or archive items.
+                      </p>
+                    )}
+                  </div>
+                )}
               </InspectorSection>
             )}
           </>
         )}
       </Inspector>
     </div>
+  );
+}
+
+/** The in-page confirm for Reject and Archive, with the reason the item's history keeps. */
+function AskReason({
+  action,
+  busy,
+  onBack,
+  onSubmit,
+}: {
+  action: "reject" | "archive";
+  busy: boolean;
+  onBack: () => void;
+  onSubmit: (note: string) => void;
+}) {
+  const [note, setNote] = useState("");
+  const [invalid, setInvalid] = useState(false);
+  const name = action === "reject" ? "Reject" : "Archive";
+  return (
+    <form
+      aria-label={name}
+      className="flex flex-col gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (action === "archive" && !note.trim()) {
+          setInvalid(true);
+          return;
+        }
+        onSubmit(note.trim());
+      }}
+    >
+      <p className="text-text2">
+        {action === "reject"
+          ? "Reject this proposed item? It leaves the baseline."
+          : "Archive this item? It leaves the baseline and the Ledger; its history keeps it."}
+      </p>
+      <label className="flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
+        Reason{action === "reject" && " (optional)"}
+        <textarea className={INPUT} rows={2} value={note} autoFocus onChange={(e) => setNote(e.target.value)} />
+      </label>
+      {invalid && <Notice tone="error">Say why it is archived.</Notice>}
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" variant="danger" disabled={busy}>
+          {name}
+        </Button>
+        <Button onClick={onBack} disabled={busy}>
+          Back
+        </Button>
+      </div>
+    </form>
   );
 }
 

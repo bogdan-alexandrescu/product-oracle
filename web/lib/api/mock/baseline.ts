@@ -672,6 +672,83 @@ function updateEntity(
   return null;
 }
 
+const KEY_RE = /^[a-z0-9][a-z0-9._-]*$/;
+
+/** A person's new entity, as service.create_entity: confirmed and locked, a goal proposed (B2). */
+function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: string): EntityRow {
+  if (!input.title?.trim()) throw new MockError(422, "title must not be empty");
+  if (!input.key || input.key.length > 120 || !KEY_RE.test(input.key)) throw new MockError(422, "key: lowercase letters, digits, . _ -");
+  if (s.entities.some((e) => e.type === input.type && e.key === input.key)) throw new MockError(409, `${input.type}:${input.key} already exists`);
+  if (input.type === "goal" && input.status === "confirmed") {
+    throw new MockError(422, "goals start proposed; confirm them with POST .../confirm");
+  }
+  const at = now();
+  const e: EntityRow = {
+    id: newId(),
+    type: input.type,
+    key: input.key,
+    title: input.title,
+    body: input.body ?? null,
+    attrs: { ...(input.attrs ?? {}) },
+    status: input.status ?? (input.type === "goal" ? "proposed" : "confirmed"),
+    origin: "user",
+    locked: false,
+    locked_by: null,
+    locked_at: null,
+    confidence: null,
+    run_id: null,
+    created_at: at,
+    updated_at: at,
+  };
+  lock(e, userId);
+  s.entities.push(e);
+  (s.revisions ??= []).push({
+    id: newId(),
+    entity_id: e.id,
+    edge_id: null,
+    before: null,
+    after: entitySnapshot(e),
+    actor: `user:${userId}`,
+    reason: input.reason ?? null,
+    created_at: at,
+  });
+  return e;
+}
+
+/** A person's new link, as service.create_edge: both ends exist, a supports link carries its contribution 0-3. */
+function createEdge(s: BaselineState, input: Schemas["EdgeCreate"], userId: string): EdgeRow {
+  if (!s.entities.some((e) => e.id === input.src_id) || !s.entities.some((e) => e.id === input.dst_id)) {
+    throw new MockError(404, "Entity not found");
+  }
+  const c = input.attrs?.contribution;
+  if (input.type === "supports" && !(typeof c === "number" && Number.isInteger(c) && c >= 0 && c <= 3)) {
+    throw new MockError(422, "a supports edge needs attrs.contribution, an integer 0-3");
+  }
+  if (s.edges.some((e) => e.src_id === input.src_id && e.dst_id === input.dst_id && e.type === input.type)) {
+    throw new MockError(409, "That link already exists");
+  }
+  const at = now();
+  const e: EdgeRow = {
+    id: newId(),
+    src_id: input.src_id,
+    dst_id: input.dst_id,
+    type: input.type,
+    attrs: { ...(input.attrs ?? {}) },
+    status: input.status ?? "confirmed",
+    origin: "user",
+    locked: false,
+    locked_by: null,
+    locked_at: null,
+    confidence: null,
+    run_id: null,
+    created_at: at,
+    updated_at: at,
+  };
+  lock(e, userId);
+  s.edges.push(e);
+  return e;
+}
+
 /** service.entity_snapshot: what a revision keeps of an entity. */
 function entitySnapshot(e: EntityRow): Record<string, unknown> {
   return { type: e.type, key: e.key, title: e.title, body: e.body ?? null, attrs: { ...e.attrs }, status: e.status };
@@ -748,6 +825,19 @@ export async function routeBaseline(
       );
     }
 
+    if (head === "entities" && !id && m === "POST") {
+      const input = await body<Schemas["EntityCreate"]>();
+      const e = createEntity(s, input, caller.userId);
+      const out: Schemas["EntityWriteOut"] = { applied: true, entity: entityOut(e), proposal: null };
+      return json(201, out);
+    }
+    if (head === "edges" && !id && m === "POST") {
+      const input = await body<Schemas["EdgeCreate"]>();
+      const e = createEdge(s, input, caller.userId);
+      const out: Schemas["EdgeWriteOut"] = { applied: true, edge: edgeOut(e), proposal: null };
+      return json(201, out);
+    }
+
     if (head === "entities" && id) {
       const e = findEntity(id);
       if (!e) return fail(404, "Entity not found");
@@ -774,10 +864,23 @@ export async function routeBaseline(
       }
       if ((action === "confirm" || action === "reject") && m === "POST") {
         const status = action === "confirm" ? "confirmed" : "rejected";
+        const note = (await body<Schemas["ProposalDecision"] | null>())?.note;
         if (e.status !== status) {
+          // As service.set_entity_status: a person's decision locks, with a revision and its reason.
+          const before = entitySnapshot(e);
           e.status = status;
           e.updated_at = now();
           lock(e, caller.userId);
+          (s.revisions ??= []).push({
+            id: newId(),
+            entity_id: e.id,
+            edge_id: null,
+            before,
+            after: entitySnapshot(e),
+            actor: `user:${caller.userId}`,
+            reason: note || `${status} by user:${caller.userId}`,
+            created_at: e.updated_at,
+          });
         }
         return json(200, entityOut(e));
       }
