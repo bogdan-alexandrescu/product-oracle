@@ -211,7 +211,7 @@ test.describe("typed goals: comparison gives the direction, typed beats text", (
 
   // Decided 2026-10-21, B5 "Vague goals": a confirmed goal with no typed target says No target.
   test("a confirmed goal without a typed target and no current value shows No target", () => {
-    const [g] = goalViews([{ ...goal({ target_text: "below 8%" }), goal_check: { measurable: false, missing: ["unit", "comparison", "target"], warnings: [] } } as EntityOut]);
+    const [g] = goalViews([{ ...goal({ target_text: "below 8%" }), goal_check: { measurable: false, missing: ["unit", "comparison", "target"], warnings: [], problems: [] } } as EntityOut]);
     const p = assess(g);
     expect(p.state).toBe("notarget");
     expect(p.text).toBe("No target");

@@ -14,6 +14,7 @@ import { goalTags, KPI_PHONE } from "./_components/common";
 import { ConflictsTab } from "./_components/ConflictsTab";
 import { EntityDrawer } from "./_components/EntityDrawer";
 import { FlaggedTab } from "./_components/FlaggedTab";
+import { fillNotice } from "./_components/goal-fields";
 import { GraphTab } from "./_components/GraphTab";
 import { noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
 import { Tabs, type TabItem } from "./_components/Tabs";
@@ -138,6 +139,9 @@ export default function BaselinePage() {
       await unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", { params: { path: { entity_id: goal.id } } }));
       return `Confirmed “${goal.title}”.`;
     });
+
+  const fillFromText = () =>
+    act(async () => fillNotice(await unwrap(api.POST("/v1/baseline/goals/fill-from-text"))));
 
   const pick = (conflict: ConflictOut, claim: number) =>
     act(async () => {
@@ -289,6 +293,7 @@ export default function BaselinePage() {
                   tags={tags}
                   onOpen={setOpenId}
                   onConfirm={confirmGoal}
+                  onFill={fillFromText}
                 />
               )}
             </>

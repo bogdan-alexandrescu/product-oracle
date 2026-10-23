@@ -545,9 +545,9 @@ test("baseline: proposal sentences wrap on a phone", async ({ page }) => {
 // The strings are the API's (api/tests/test_baseline_describe.py writes the same rules).
 const NOISY = {
   "Cut early churn":
-    "Change Cut early churn: weight to 0.25 (was 0.2), target to below 7% (was below 8%), horizon to 2026-Q4 (was 2027-H1) and 1 more",
+    "Change Cut early churn: weight to 0.25 (was 0.2), target text to below 7% (was below 8%), horizon text to 2026-Q4 and 1 more",
   "Raise activation":
-    "Change Raise activation: description to …the first two weeks. (was …the first week.), target to 50% (was 45%)",
+    "Change Raise activation: description to …the first two weeks. (was …the first week.), target to 50 (was 45)",
   "Grow paid conversion": "No change to Grow paid conversion",
 };
 

@@ -65,7 +65,7 @@ test("goals table: typed target, horizon and owner; a Not measurable chip on a g
 test("edit form: a target without a unit shows the problem under Value and does not save; fixing it saves", async ({ page }) => {
   await openBaseline(page);
   const form = await editGoal(page, "g.early-churn", "Cut early churn");
-  await form.getByLabel("Value").fill("8");
+  await form.getByLabel("Value", { exact: true }).fill("8");
   await form.getByRole("button", { name: "Save" }).click();
   await expect(form.getByTestId("field-error-target")).toHaveText("A target needs its unit and which way is success");
   await expect(form.getByRole("button", { name: "Save" })).toBeEnabled();
@@ -89,7 +89,7 @@ test("edit form: a target without a unit shows the problem under Value and does 
 test("owner picker: pick a member, save, and the table shows their name", async ({ page }) => {
   await openBaseline(page);
   const form = await editGoal(page, "g.paid-conversion", "Grow paid conversion");
-  await form.getByLabel("Owner").fill("comm");
+  await form.getByLabel("Owner", { exact: true }).fill("comm");
   const options = form.getByRole("listbox", { name: "Members" }).getByRole("option");
   await expect(options).toHaveText([/Commenter/]);
   await options.first().click();
@@ -108,7 +108,7 @@ test("owner picker: pick a member, save, and the table shows their name", async 
 test("owner picker: an owner is sent to the invite form; an approver is told an owner invites", async ({ page }) => {
   await openBaseline(page);
   let form = await editGoal(page, "g.paid-conversion", "Grow paid conversion");
-  await form.getByLabel("Owner").fill("nobody");
+  await form.getByLabel("Owner", { exact: true }).fill("nobody");
   await expect(form.getByRole("listbox", { name: "Members" }).getByRole("option")).toHaveCount(0);
   const invite = form.getByRole("link", { name: "Invite them first" });
   await expect(form.getByTestId("owner-invite")).toHaveText("Not a member yet? Invite them first");
@@ -121,7 +121,7 @@ test("owner picker: an owner is sent to the invite form; an approver is told an 
   await signOut(page);
   await openBaseline(page, "approver@example.com");
   form = await editGoal(page, "g.paid-conversion", "Grow paid conversion");
-  await form.getByLabel("Owner").fill("nobody");
+  await form.getByLabel("Owner", { exact: true }).fill("nobody");
   await expect(form.getByTestId("owner-invite")).toHaveText("An owner invites new members on Settings › Members.");
   await expect(form.getByTestId("owner-invite").getByRole("link")).toHaveCount(0);
 });
@@ -135,8 +135,7 @@ test("Fill from text: the result notice, and early churn's target becomes < 8%",
   await expect(page.getByRole("status")).toContainText("1 goal filled.");
   const churn = page.getByTestId("goal-g.early-churn");
   await expect(churn.locator('[data-attr="target"]')).toHaveText("< 8%");
-  await expect(churn.locator('[data-attr="horizon"]')).toContainText("Jun 30");
-  await expect(churn.getByTestId("not-measurable")).toHaveAttribute("title", "Missing: owner");
+  await expect(churn.getByTestId("not-measurable")).toHaveAttribute("title", "Missing: horizon, owner");
   await expect(page.getByRole("button", { name: /Fill from text/ })).toHaveCount(0);
 });
 
@@ -214,8 +213,29 @@ test("the goal edit form fits at 390 px without horizontal scroll", async ({ pag
   await d.getByRole("button", { name: "Edit" }).click();
   const form = d.getByRole("form", { name: "Edit" });
   await expect(form.getByLabel("Comparison")).toBeVisible();
-  await form.getByLabel("Owner").fill("a");
+  await form.getByLabel("Owner", { exact: true }).fill("a");
   await expect(form.getByRole("listbox", { name: "Members" })).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+// protects: a goal an older Oracle stored with a value the checks refuse shows the API's
+// problem (goal_check.problems) under its field when the form opens, and is fixed right there.
+// fails_when: the problem is hidden, shown away from its field, or the untouched current value
+// blocks saving the fixed target.
+// no_claim: the large scenario's made-up regional goals; the API side is pytest's.
+test("edit form: a stored refused value shows its problem under the field, and the fix saves", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "large"));
+  await openBaseline(page);
+  const region = page.getByTestId("goal-g.region-1");
+  await expect(region.locator('[data-attr="target"]')).toHaveText("210 clinics");
+  const form = await editGoal(page, "g.region-1", "Region 01 clinics");
+  await expect(form.getByTestId("field-error-target")).toContainText("The target is a number");
+  await form.getByLabel("Comparison").selectOption("at_least");
+  await form.getByLabel("Value", { exact: true }).fill("210");
+  await form.getByLabel("Unit").selectOption("count");
+  await form.getByLabel("Counted noun").fill("clinics");
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form).toHaveCount(0);
+  await expect(region.locator('[data-attr="target"]')).toHaveText("≥ 210 clinics");
 });

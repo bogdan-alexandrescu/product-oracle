@@ -45,9 +45,11 @@ async function editDb(page: Page, edit: string, arg?: unknown) {
 
 /**
  * Home's first paint makes at most this many calls, however large the company. A1 added
- * one: the Set up checklist (/v1/setup), a fixed call whatever the company's size.
+ * one: the Set up checklist (/v1/setup), a fixed call whatever the company's size. B5 added
+ * one: a shown goal with a typed current reads its trend from its measurements first, and
+ * from its revisions only when it has fewer than two (here: paid conversion).
  */
-const CALL_BUDGET = 14;
+const CALL_BUDGET = 15;
 
 test("Home: a large company's first paint stays within the call budget", async ({ page }) => {
   await openHome(page, "large");
