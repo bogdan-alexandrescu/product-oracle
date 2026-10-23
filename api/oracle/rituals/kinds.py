@@ -40,7 +40,7 @@ KINDS: dict[str, RitualKind] = {
         RitualKind("roadmap_refresh", "Monthly roadmap refresh",
                    _s("monthly", week_of_month=1, weekday=1, time="10:00"), 60, 24,
                    ("tracks", "slips", "stale_items", "done_items", "priority_changes",
-                    "suggested_next"), None, True),
+                    "new_requests", "suggested_next"), None, True),
         RitualKind("goals_review", "Quarterly goals review",
                    _s("quarterly", month=1, week_of_month=1, weekday=2, time="10:00"), 90, 48,
                    ("goals", "horizon_ending", "goal_gaps", "outcomes_assessed",
