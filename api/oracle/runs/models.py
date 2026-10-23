@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    false,
     func,
     text,
 )
@@ -81,6 +83,8 @@ ACTION_KINDS = (
 # Staged by the checkpoint's approver role or above; suggested by a commenter (counts for
 # nothing until an approver stages it).
 ACTION_STATES = ("staged", "suggested")
+# Where an action came from: a review screen's row, or a discussion (G4).
+ACTION_ORIGINS = ("row", "discussion")
 
 # US dollars to four decimal places: enough for per-call model costs.
 Usd = Numeric(12, 4)
@@ -187,6 +191,7 @@ class CheckpointAction(TenantScoped, Base):
     __table_args__ = (
         CheckConstraint(_in("kind", ACTION_KINDS), name="kind"),
         CheckConstraint(_in("state", ACTION_STATES), name="state"),
+        CheckConstraint(_in("origin", ACTION_ORIGINS), name="origin"),
         # One action per item, kind and field: staging again replaces it.
         Index(
             "ux_checkpoint_actions_slot",
@@ -220,4 +225,15 @@ class CheckpointAction(TenantScoped, Base):
     updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+    # G4: staged from a discussion; how it was staged (private) is never rewritten.
+    origin: Mapped[str] = mapped_column(Text, nullable=False, default="row", server_default="row")
+    discussion_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("discussions.id", ondelete="SET NULL")
+    )
+    discussion_change_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("discussion_changes.id", ondelete="SET NULL")
+    )
+    from_private: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
     )

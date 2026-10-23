@@ -32,7 +32,7 @@ CURRENT = {
     "refinement": "refinement.v1",
     "intake_analysis": "intake_analysis.v2",
     "quality_review": "quality_review.v1",
-    "refinement_batch": "refinement_batch.v1",
+    "refinement_batch": "refinement_batch.v2",
     "decision_options": "decision_options.v1",
 }
 

@@ -63,6 +63,7 @@ from oracle.sources.fireflies_browse import router as fireflies_browse_router
 from oracle.sources.repair import run_at_startup as repair_version_urls_at_startup
 from oracle.sources.router import router as sources_router
 from oracle.specs.router import router as specs_router
+from oracle.staging.router import router as staging_router
 from oracle.strategy.router import router as strategy_router
 from oracle.swarm import close_runtime
 from oracle.templates.router import router as templates_router
@@ -184,6 +185,7 @@ def create_app() -> FastAPI:
     app.include_router(review_router)
     # G1: one thread per subject, open by default, private when its starter says so.
     app.include_router(discussions_router)
+    app.include_router(staging_router)
     app.include_router(review_v2_router)
     app.include_router(export_router)
     app.include_router(llm_jobs_router)

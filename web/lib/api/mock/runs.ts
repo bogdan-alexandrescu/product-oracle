@@ -32,6 +32,10 @@ type Kind = DocumentRow["kind"];
 type DraftActionRow = Omit<Schemas["ReviewAction"], "created_by" | "updated_by" | "question"> & {
   created_by: string | null;
   updated_by: string | null;
+  /** G4: staged from a discussion (row actions have none), and whether it was private then. */
+  origin?: "row" | "discussion";
+  discussion_id?: string | null;
+  from_private?: boolean;
 };
 /** D8: a checkpoint's shared draft; `log` says who made each revision (the 409's names). */
 export interface DraftRow {

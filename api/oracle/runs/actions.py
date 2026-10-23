@@ -294,6 +294,16 @@ def _context(found: _File | None) -> ValidationContext:
 # --------------------------------------------------------------------------- writes
 
 
+@dataclass(frozen=True)
+class ActionSource:
+    """Where an action came from when a discussion staged it (G4): the discussion, its
+    change and whether the discussion was private as it was staged."""
+
+    discussion_id: uuid.UUID
+    change_id: uuid.UUID
+    from_private: bool
+
+
 async def _writable(
     db: AsyncSession,
     principal: Principal,
@@ -429,10 +439,15 @@ async def put_action(
     run_id: uuid.UUID,
     checkpoint_id: uuid.UUID,
     body: ActionIn,
-) -> None:
-    """Stage (the approver role or above) or suggest (commenters) one action: one per
-    item, kind and field, so the same again replaces it."""
+    *,
+    source: ActionSource | None = None,
+    suggest_only: bool = False,
+) -> CheckpointAction:
+    """Stage (the approver role or above) or suggest (commenters, or ``suggest_only``) one
+    action: one per item, kind and field, so the same again replaces it. ``source``: the
+    discussion change it comes from (G4), whose status follows the action."""
     from oracle.auth.service import caller_refusal
+    from oracle.staging import hooks
 
     run, cp = await _writable(db, principal, run_id, checkpoint_id, stage=False)
     found = await _file(db, run, cp) if cp.kind in VOCABULARY else None
@@ -441,7 +456,7 @@ async def put_action(
         validate(cp.kind, body, ctx)
     except InvalidAction as exc:
         raise service.Invalid(str(exc)) from None
-    stages = _stages(principal, cp)
+    stages = _stages(principal, cp) and not suggest_only
     if stages:
         # A staged action counts: the approver role, re-read under the gate.
         refusal = await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
@@ -455,8 +470,9 @@ async def put_action(
             func.coalesce(CheckpointAction.field, "") == (body.field or ""),
         )
     )
-    if existing is not None and not stages and existing.created_by != principal.id:
+    if existing is not None and not _stages(principal, cp) and existing.created_by != principal.id:
         raise service.Forbidden("Only its author or an approver can change this action")
+    replaced = existing.discussion_change_id if existing is not None else None
     question_id = None
     if body.kind == "question":
         if existing is not None:
@@ -473,12 +489,19 @@ async def put_action(
     # Staging again replaces the action: its author is who wrote it now.
     action.created_by = principal.id
     action.updated_by = principal.id
+    action.origin = "discussion" if source else "row"
+    action.discussion_id = source.discussion_id if source else None
+    action.discussion_change_id = source.change_id if source else None
+    action.from_private = source.from_private if source else False
     if existing is None:
         db.add(action)
     await db.flush()
+    if replaced is not None and replaced != action.discussion_change_id:
+        await hooks.replaced(db, replaced)
     event = STAGED if stages else SUGGESTED
     await _bump(db, principal, run, cp, event, body.item_key, _snapshot(action))
     await db.commit()
+    return action
 
 
 async def stage_action(
@@ -497,6 +520,10 @@ async def stage_action(
     action.state = "staged"
     action.updated_by = principal.id
     await db.flush()
+    if action.discussion_change_id is not None:
+        from oracle.staging import hooks
+
+        await hooks.staged(db, action)
     await _bump(db, principal, run, cp, STAGED, action.item_key, _snapshot(action))
     await db.commit()
 
@@ -521,6 +548,10 @@ async def remove_action(
         if refusal is not None:
             raise service.Forbidden(refusal)
     await _withdraw(db, principal, action.question_id)
+    if action.discussion_change_id is not None:
+        from oracle.staging import hooks
+
+        await hooks.removed(db, action.discussion_change_id)
     snapshot = _snapshot(action)
     await db.delete(action)
     await db.flush()
