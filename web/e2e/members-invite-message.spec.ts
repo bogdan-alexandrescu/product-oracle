@@ -50,10 +50,11 @@ test("invite message: an invite with no message shows no note", async ({ page })
   await expect(inviteRow(page, "sam@example.com").getByTestId("invite-note")).toHaveCount(0);
 });
 
-test("invite message: the Message field is not shown to a non-owner", async ({ page }) => {
-  await login(page, "approver@example.com");
+// A5: approvers invite viewers and commenters (with a message); a commenter invites no one.
+test("invite message: the Message field is not shown to a role that cannot invite", async ({ page }) => {
+  await login(page, "commenter@example.com");
   await page.goto("/settings/members");
-  await expect(page.getByTestId("not-for-role")).toContainText("Not available for your role");
+  await expect(page.getByTestId("people-readonly")).toBeVisible();
   await expect(page.getByLabel("Message (optional)")).toHaveCount(0);
   await expect(page.getByRole("form", { name: "Invite" })).toHaveCount(0);
 });
