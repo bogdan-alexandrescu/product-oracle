@@ -24,6 +24,7 @@ from oracle.priorities.models import PrioritySnapshot
 from oracle.quality.models import OutcomeRecord
 from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackerRecord, TrackMilestone
 from oracle.runs.models import Checkpoint, Run
+from oracle.v2.models import BlockerResolutionEvent
 
 TITLES = {
     "goals": "Goals",
@@ -35,6 +36,7 @@ TITLES = {
     "stale_items": "Possibly stale items",
     "done_items": "Done",
     "priority_changes": "Priority changes",
+    "new_requests": "New requests",
     "horizon_ending": "Goals whose horizon ends this quarter",
     "goal_gaps": "Goals missing a field",
     "outcomes_assessed": "Outcomes assessed",
@@ -214,11 +216,27 @@ async def since_last(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
         .select_from(Proposal)
         .where(Proposal.status == "accepted", Proposal.decided_at.between(*window))
     )
+    # Blockers (CR-04): constraint entities carrying a blocker strategy, opened in the
+    # window, and those whose status turned resolved in it.
+    opened = await count(
+        select(func.count())
+        .select_from(Entity)
+        .where(Entity.type == "constraint", Entity.attrs.has_key("blocker"),
+               Entity.created_at.between(*window))
+    )  # fmt: skip
+    resolved = await count(
+        select(func.count(func.distinct(BlockerResolutionEvent.blocker_id))).where(
+            BlockerResolutionEvent.to_status == "resolved",
+            BlockerResolutionEvent.created_at.between(*window),
+        )
+    )
     figures_ = [
         ("PRD versions approved", by_kind.get("prd", 0), "/documents?kind=prd"),
         ("Roadmap versions approved", by_kind.get("roadmap", 0), "/roadmap"),
         ("Runs finished", runs, "/runs"),
         ("Proposals accepted", proposals, "/baseline"),
+        ("Blockers opened", opened, "/baseline?type=constraint"),
+        ("Blockers resolved", resolved, "/baseline?type=constraint"),
     ]
     return [{"label": label, "count": n, "href": href, "text": f"{label}: {n}"}
             for label, n, href in figures_]  # fmt: skip
@@ -363,6 +381,22 @@ async def priority_changes(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, An
                          "to": r["rank"], "href": "/priorities",
                          "text": f"{title}: #{old['rank']} -> #{r['rank']}"})  # fmt: skip
     return rows
+
+
+async def new_requests(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
+    """C1 requests filed in the window, merged ones left out (their survivor counts)."""
+    from oracle.requests.models import ProductRequest
+
+    return [
+        {"request_id": str(r.id), "title": r.title, "channel": r.channel, "state": r.state,
+         "href": f"/requests?request={r.id}", "text": f"{r.title} ({r.channel})"}
+        for r in await db.scalars(
+            select(ProductRequest)
+            .where(ProductRequest.created_at.between(ctx.period_from, ctx.period_to),
+                   ProductRequest.state != "merged")
+            .order_by(ProductRequest.created_at)
+        )
+    ]  # fmt: skip
 
 
 def _quarter_end(d: date) -> date:
@@ -598,6 +632,7 @@ BUILDERS: dict[str, Builder] = {
     "stale_items": stale_items,
     "done_items": done_items,
     "priority_changes": priority_changes,
+    "new_requests": new_requests,
     "horizon_ending": horizon_ending,
     "goal_gaps": goal_gaps,
     "outcomes_assessed": outcomes_assessed,
