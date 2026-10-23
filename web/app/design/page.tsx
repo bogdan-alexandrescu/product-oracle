@@ -2,8 +2,8 @@
 
 import { useState, useSyncExternalStore } from "react";
 
-import { Chip, Page, PageHeader, SegmentedControl } from "@/components/ds";
-import { hasRole, useMe } from "@/lib/me";
+import { Page, PageHeader, SegmentedControl } from "@/components/ds";
+import { useMe } from "@/lib/me";
 import { useTheme } from "@/lib/theme";
 
 import { Gallery } from "./_gallery";
@@ -30,13 +30,14 @@ function useSystemDark(): boolean {
  * the second copy scoped to the other theme by `.ds-light` / `.ds-dark`.
  */
 export default function DesignPage() {
-  const { role, loading } = useMe();
+  const { can, capsReady } = useMe();
   const [theme, setTheme] = useTheme();
   const systemDark = useSystemDark();
   const [both, setBoth] = useState(false);
-  const owner = hasRole(role, "owner");
+  // #370: the kit is for whoever may read the company's settings (owners).
+  const owner = can("get_setting_endpoint");
 
-  if (loading || !owner) {
+  if (!capsReady || !owner) {
     return (
       <Page>
         <PageHeader title="Design" testId="design-header" />
@@ -57,7 +58,6 @@ export default function DesignPage() {
       <PageHeader
         title="Design"
         testId="design-header"
-        status={<Chip kind="acc">Owners only</Chip>}
         action={
           <SegmentedControl
             label="Theme"

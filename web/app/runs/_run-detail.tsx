@@ -30,7 +30,7 @@ import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { displayZone, formatInZone } from "@/lib/dates";
 import { formatDateTime, formatDay } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe, type Operation } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -88,7 +88,7 @@ function toDecision() {
 
 export function RunDetail({ id }: { id: string }) {
   const q = useQuery(`run|${id}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: id } } })));
-  const { me, role } = useMe();
+  const { me, can } = useMe();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // #258: what the last "Check agents now" checked, said once it answers.
@@ -134,8 +134,8 @@ export function RunDetail({ id }: { id: string }) {
   }
 
   const path = { params: { path: { run_id: id } } };
-  const owner = role === "owner";
-  const mayManage = owner || (hasRole(role, "approver") && run?.created_by === me?.user_id);
+  // #370: the handlers let an owner manage any run, an approver only a run they created.
+  const mayManage = (op: Operation) => can(op, run?.created_by === me?.user_id);
   const back = (
     <Link href="/runs" className="inline-flex items-center gap-1 hover:text-text hover:underline">
       <Icon name="back" size={16} />
@@ -224,7 +224,7 @@ export function RunDetail({ id }: { id: string }) {
         }
         action={
           <>
-            {owner && run.status === "awaiting_approval" && (
+            {can("approve_run") && run.status === "awaiting_approval" && (
               <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/approve", path)))}>
                 Approve {usd(run.estimate_usd)} and start
               </Button>
@@ -235,7 +235,7 @@ export function RunDetail({ id }: { id: string }) {
                 Decide
               </Button>
             )}
-            {owner && run.status === "paused_overrun" && (
+            {can("resume_run") && run.status === "paused_overrun" && (
               <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/resume", path)))}>
                 Resume
               </Button>
@@ -250,61 +250,59 @@ export function RunDetail({ id }: { id: string }) {
           <Notice
             testId="run-stuck"
             action={
-              mayManage && (
-                <>
-                  {run.can_retry && (
-                    <Button
-                      disabled={busy}
-                      onClick={async () => {
-                        if (await confirmInPage({ action: "Retry", message: RETRY_CONFIRM })) {
-                          void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry", path)));
-                        }
-                      }}
-                    >
-                      Retry
-                    </Button>
-                  )}
-                  {run.can_stop_cancelling && (
-                    <Button
-                      disabled={busy}
-                      onClick={async () => {
-                        if (await confirmInPage({ destructive: true, action: "Stop cancelling", message: STOP_CANCELLING_CONFIRM })) {
-                          void act(() => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path)));
-                        }
-                      }}
-                    >
-                      Stop cancelling
-                    </Button>
-                  )}
-                  {run.can_retry_lookup && (
-                    <Button disabled={busy} onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry-lookup", path)))}>
-                      Retry lookup
-                    </Button>
-                  )}
-                  {(run.cancel_again ?? []).map((wid, _, all) => (
-                    <Button
-                      key={wid}
-                      disabled={busy}
-                      onClick={async () => {
-                        if (await confirmInPage({ destructive: true, action: "Cancel again", message: CANCEL_AGAIN_CONFIRM })) {
-                          void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path, body: { workflow_id: wid } })));
-                        }
-                      }}
-                    >
-                      {all.length > 1 ? `Cancel again ${wid}` : "Cancel again"}
-                    </Button>
-                  ))}
-                  {run.can_dismiss_overrun && (
-                    <Button
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/dismiss-overrun", path)))}
-                    >
-                      Dismiss
-                    </Button>
-                  )}
-                </>
-              )
+              <>
+                {run.can_retry && mayManage("retry_run") && (
+                  <Button
+                    disabled={busy}
+                    onClick={async () => {
+                      if (await confirmInPage({ action: "Retry", message: RETRY_CONFIRM })) {
+                        void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry", path)));
+                      }
+                    }}
+                  >
+                    Retry
+                  </Button>
+                )}
+                {run.can_stop_cancelling && mayManage("stop_cancelling_run") && (
+                  <Button
+                    disabled={busy}
+                    onClick={async () => {
+                      if (await confirmInPage({ destructive: true, action: "Stop cancelling", message: STOP_CANCELLING_CONFIRM })) {
+                        void act(() => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path)));
+                      }
+                    }}
+                  >
+                    Stop cancelling
+                  </Button>
+                )}
+                {run.can_retry_lookup && mayManage("retry_lookup_run") && (
+                  <Button disabled={busy} onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry-lookup", path)))}>
+                    Retry lookup
+                  </Button>
+                )}
+                {mayManage("cancel_again_run") && (run.cancel_again ?? []).map((wid, _, all) => (
+                  <Button
+                    key={wid}
+                    disabled={busy}
+                    onClick={async () => {
+                      if (await confirmInPage({ destructive: true, action: "Cancel again", message: CANCEL_AGAIN_CONFIRM })) {
+                        void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path, body: { workflow_id: wid } })));
+                      }
+                    }}
+                  >
+                    {all.length > 1 ? `Cancel again ${wid}` : "Cancel again"}
+                  </Button>
+                ))}
+                {run.can_dismiss_overrun && mayManage("dismiss_overrun_run") && (
+                  <Button
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/dismiss-overrun", path)))}
+                  >
+                    Dismiss
+                  </Button>
+                )}
+              </>
             }
           >
             {run.stuck}
@@ -315,7 +313,7 @@ export function RunDetail({ id }: { id: string }) {
             tone="error"
             testId="run-import-failed"
             action={
-              owner &&
+              can("retry_import_run") &&
               run.can_retry_import && (
                 <Button disabled={busy} onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry-import", path)))}>
                   Retry
@@ -350,7 +348,7 @@ export function RunDetail({ id }: { id: string }) {
               <span className="tnum text-sm font-semibold text-text2">
                 {done}/{run.segments.length} segments
               </span>
-              {owner && open && (
+              {can("tick") && open && (
                 <Button
                   variant="ghost"
                   disabled={busy}
@@ -366,7 +364,7 @@ export function RunDetail({ id }: { id: string }) {
                   Check agents now
                 </Button>
               )}
-              {mayManage && !FINAL_STATUSES.includes(run.status) && (
+              {mayManage("cancel_run") && !FINAL_STATUSES.includes(run.status) && (
                 <Button
                   disabled={busy}
                   data-testid="run-cancel"

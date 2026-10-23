@@ -1,7 +1,7 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
 import { shownDay } from "@/lib/dates";
-import type { Role } from "@/lib/me";
+import type { useMe } from "@/lib/me";
 
 export type Stack = Schemas["StrategyStackOut"];
 export type Finding = Schemas["StrategyFindingOut"];
@@ -39,10 +39,13 @@ export const FINDING_STATES: { value: FindingState; label: string }[] = [
   { value: "resolved", label: "Resolved" },
 ];
 
-/** Owners waive any finding; approvers only an item outside the strategy (as the API). */
-export function canWaive(f: Finding, role: Role | null | undefined): boolean {
+/**
+ * Whether the signed-in member may waive an open finding (#370: `can` from useMe). Below the
+ * handler's role, only an item outside the strategy (as the API).
+ */
+export function canWaive(f: Finding, can: ReturnType<typeof useMe>["can"]): boolean {
   if (f.status !== "open") return false;
-  return role === "owner" || (role === "approver" && f.kind === "outside_strategy");
+  return can("waive_strategy_finding", f.kind === "outside_strategy");
 }
 
 /** "1 Oct 2027" from an ISO date or time. */

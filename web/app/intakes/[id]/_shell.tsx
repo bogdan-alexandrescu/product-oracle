@@ -7,7 +7,7 @@ import { Button, Chip, confirmInPage, Notice, Page, PageHeader, Sheet, Split } f
 import { ErrorNote, Loading } from "@/components/ui";
 import { Menu, TabBar } from "@/components/review/parts";
 import { api, unwrap } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -53,7 +53,7 @@ type Tab = "questions" | "gaps" | "proposals" | "findings";
  * or record a decision from the inspector.
  */
 export function BeforeDrafting({ id }: { id: string }) {
-  const { me, role } = useMe();
+  const { me, role, can } = useMe();
   const phone = useIsPhone();
   const [version, setVersion] = useState(0);
   const [tab, setTab] = useState<Tab>("questions");
@@ -105,7 +105,13 @@ export function BeforeDrafting({ id }: { id: string }) {
   const gate = s.readiness;
   const blocked = gate.gate === "blocked";
   const author = s.intake.author_id === me?.user_id;
-  const approver = hasRole(role, "approver");
+  // #370: what the controls call. Drafting is an approver's (start_intake_run); archiving
+  // is the author's or an approver's (the handler's author_or); Re-analyse and Pin new
+  // sources are the author's only.
+  const mayDraft = can("start_intake_run");
+  const mayArchive = can("update_intake", author || mayDraft);
+  const mayAnalyze = author && can("analyze_intake");
+  const mayRepin = author && can("repin_intake");
   const converted = s.intake.status === "converted";
   const archived = s.intake.status === "archived";
   const reason = blocked ? gateReason(gate.blocking_gap_ids.length) : null;
@@ -114,16 +120,16 @@ export function BeforeDrafting({ id }: { id: string }) {
   const fresh = s.new_evidence.visible ? (s.new_evidence.count ?? 0) : 0;
 
   const inspector = <IntakeInspector summary={s} role={role} onChanged={changed} />;
-  const more = (author || approver) && !converted && (
+  const more = (mayAnalyze || mayRepin || (mayArchive && !archived)) && !converted && (
     <Menu label="More actions" icon="more" iconOnly>
       {(close) => (
         <div className="flex min-w-48 flex-col gap-1" role="menu">
-          {author && (
+          {mayAnalyze && (
             <Button variant="ghost" role="menuitem" className="justify-start" disabled={busy} onClick={() => (close(), act(() => unwrap(api.POST("/v1/intakes/{intake_id}/analyze", { params: { path: { intake_id: id } } }))))}>
               Re-analyse
             </Button>
           )}
-          {author && (
+          {mayRepin && (
             <Button variant="ghost" role="menuitem" className="justify-start" disabled={busy} onClick={() => (close(), act(() => unwrap(api.POST("/v1/intakes/{intake_id}/repin", { params: { path: { intake_id: id } } }))))}>
               Pin new sources
               {fresh > 0 && (
@@ -133,7 +139,7 @@ export function BeforeDrafting({ id }: { id: string }) {
               )}
             </Button>
           )}
-          {!archived && (
+          {mayArchive && !archived && (
             <Button
               variant="ghost"
               role="menuitem"
@@ -175,8 +181,8 @@ export function BeforeDrafting({ id }: { id: string }) {
         }
         action={
           <>
-            {!converted && !archived && (
-              <Button variant="primary" icon="doc" disabled={busy || blocked || !approver} title={reason ?? (approver ? undefined : "An approver starts the draft")} onClick={() => setDrafting(true)}>
+            {mayDraft && !converted && !archived && (
+              <Button variant="primary" icon="doc" disabled={busy || blocked} title={reason ?? undefined} onClick={() => setDrafting(true)}>
                 Draft with Oracle
               </Button>
             )}
@@ -222,8 +228,8 @@ export function BeforeDrafting({ id }: { id: string }) {
               )}
             </>
           )}
-          {tab === "gaps" && <GapsTab summary={s} role={role} onChanged={changed} />}
-          {tab === "proposals" && <ProposalsTab summary={s} role={role} onChanged={changed} />}
+          {tab === "gaps" && <GapsTab summary={s} onChanged={changed} />}
+          {tab === "proposals" && <ProposalsTab summary={s} onChanged={changed} />}
           {tab === "findings" && <FindingsTab intakeId={id} author={author} version={version} />}
         </div>
       </Split>

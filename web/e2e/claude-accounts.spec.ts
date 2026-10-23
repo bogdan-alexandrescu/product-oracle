@@ -184,7 +184,8 @@ test("claude accounts: other roles read the pool and get no controls", async ({ 
   await expect(row(page, "personal")).toBeVisible();
   await expect(page.getByRole("button", { name: "+ Add account" })).toHaveCount(0);
   await row(page, "personal").getByRole("button").click();
-  await expect(detail(page)).toContainText("Only an owner changes accounts.");
+  await expect(page.getByTestId("view-only")).toHaveText("View only");
+  await expect(detail(page)).not.toContainText("Only an owner changes accounts.");
   await expect(detail(page).getByRole("button", { name: /^(Make available|Pause|Drain)$/ })).toHaveCount(0);
   await expect(page.getByTestId("fallback").getByRole("button")).toHaveCount(0);
 });

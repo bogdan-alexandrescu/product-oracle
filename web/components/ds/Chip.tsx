@@ -66,3 +66,16 @@ export function GoalTag({ id, proposed = false, title }: { id: string; proposed?
     </span>
   );
 }
+
+/**
+ * #370: a page the signed-in role can read but not change says so, quietly, in its header
+ * (PageHeader's status; `hero` in an Inspector's chips). The controls it can never use are
+ * hidden, not disabled.
+ */
+export function ViewOnly({ hero = false }: { hero?: boolean }) {
+  return (
+    <Chip kind="na" hero={hero} data-testid="view-only">
+      View only
+    </Chip>
+  );
+}

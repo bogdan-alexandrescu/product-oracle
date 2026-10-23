@@ -16,6 +16,7 @@ from oracle.baseline.goals import GoalAttrs
 from oracle.baseline.router import router as baseline_router
 from oracle.baseline.service import GoalFieldsInvalid
 from oracle.blockers.router import router as blockers_router
+from oracle.capabilities import stamp_openapi
 from oracle.claude_accounts.router import router as claude_accounts_router
 from oracle.claude_accounts.sweep import get_pool_settings, run_scheduler
 from oracle.config import get_settings
@@ -266,6 +267,8 @@ def create_app() -> FastAPI:
         return app.openapi_schema
 
     app.openapi = openapi
+    # #370: each operation's role in the OpenAPI document (x-min-role).
+    stamp_openapi(app)
     return app
 
 

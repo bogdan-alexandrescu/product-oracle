@@ -13,6 +13,7 @@ import {
   LinkButton,
   Notice,
   PageHeader,
+  ViewOnly,
   Panel,
   Split,
   type Column,
@@ -20,6 +21,7 @@ import {
 import { ThemeThumbnail } from "@/components/ThemePreview";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 type Theme = Schemas["ThemeOut"];
@@ -139,6 +141,8 @@ function ThemeInspector({ t }: { t: Theme }) {
 }
 
 export default function ThemesPage() {
+  const { can, capsReady } = useMe();
+  const canCreate = can("create_theme");
   const [showArchived, setShowArchived] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const q = useQuery(`themes|${showArchived}`, () =>
@@ -154,15 +158,20 @@ export default function ThemesPage() {
       <PageHeader
         title="Themes"
         status={
-          <InfoTip label="themes" align="start" side="bottom">
-            How exported PRDs and roadmaps look: fonts, colours, spacing, page and layout features. Text colours must be
-            readable on the background (WCAG AA).
-          </InfoTip>
+          <>
+            <InfoTip label="themes" align="start" side="bottom">
+              How exported PRDs and roadmaps look: fonts, colours, spacing, page and layout features. Text colours must be
+              readable on the background (WCAG AA).
+            </InfoTip>
+            {capsReady && !canCreate && <ViewOnly />}
+          </>
         }
         action={
-          <LinkButton variant="primary" icon="plus" href="/settings/themes/new">
-            New theme
-          </LinkButton>
+          canCreate && (
+            <LinkButton variant="primary" icon="plus" href="/settings/themes/new">
+              New theme
+            </LinkButton>
+          )
         }
       />
       <Split inspector={current ? <ThemeInspector t={current} /> : undefined}>

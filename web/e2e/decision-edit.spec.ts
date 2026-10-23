@@ -110,15 +110,14 @@ test("a stale save shows the conflict message and keeps the form", async ({ brow
   await context.close();
 });
 
-test("viewers see Edit disabled with the reason; a decided decision has no Edit", async ({ page }) => {
-  // protects=a viewer sees the Edit control disabled and why; a decided decision offers no
-  // Edit (it is revisited instead); fails_when=a viewer can open the form, the reason is
-  // missing, or Edit shows on a decided call; no_claim=the API's 403 and 409 are pytest's.
+test("viewers see no Edit (#370); a decided decision has no Edit", async ({ page }) => {
+  // protects=a viewer, who can never edit, is not shown the Edit control (#370: hidden, not
+  // disabled); a decided decision offers no Edit (it is revisited instead); fails_when=a
+  // viewer sees Edit or can open the form, or Edit shows on a decided call; no_claim=the
+  // API's 403 and 409 are pytest's.
   await login(page, VIEWER);
   await openCaps(page);
-  const edit = inspector(page).getByRole("button", { name: "Edit", exact: true });
-  await expect(edit).toBeDisabled();
-  await expect(inspector(page)).toContainText("Editing needs the commenter role");
+  await expect(inspector(page).getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
   await row(page, "Price the team plan per seat").click();
   await expect(inspector(page)).toContainText("Per seat or per company?");
   await expect(inspector(page).getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);

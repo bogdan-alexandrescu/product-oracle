@@ -3,10 +3,10 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button, Chip, InfoTip, KpiStrip, Notice, Page, PageHeader, Split, type Kpi } from "@/components/ds";
+import { Button, Chip, InfoTip, KpiStrip, Notice, Page, PageHeader, Split, ViewOnly, type Kpi } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { AddItemSheet, type AddKind } from "./_components/AddItem";
@@ -62,9 +62,10 @@ function OpenFromUrl({ onOpen, onBlocker }: { onOpen: (id: string) => void; onBl
 }
 
 export default function BaselinePage() {
-  const { me, role } = useMe();
-  const canWrite = hasRole(role, "approver");
-  const canComment = hasRole(role, "commenter");
+  const { me, can, capsReady } = useMe();
+  // #370: approvers change the baseline, commenters propose; a viewer only reads it.
+  const canWrite = can("confirm_entity");
+  const canComment = can("create_proposal");
   const onAuth = useAuthRedirect();
 
   const graph = useQuery("baseline-graph", () => unwrap(api.GET("/v1/baseline/graph")));
@@ -278,14 +279,7 @@ export default function BaselinePage() {
                 {s.confirmed_goals} confirmed
               </Chip>
             )}
-            {!canWrite && role && (
-              <>
-                <Chip kind="na">Read only</Chip>
-                <InfoTip label="Read only" align="start" side="bottom">
-                  You can read the baseline; approvers make changes.
-                </InfoTip>
-              </>
-            )}
+            {capsReady && !canComment && <ViewOnly />}
             <InfoTip label="Baseline" align="start" side="bottom">
               Goals, products and features the product is built on, each linked to its evidence.
             </InfoTip>

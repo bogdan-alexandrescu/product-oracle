@@ -8,7 +8,7 @@ import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 /*
@@ -151,8 +151,8 @@ function PolicyForm({
   onSaved: () => Promise<void>;
   onCancel: () => void;
 }) {
-  const { role } = useMe();
-  const canEdit = hasRole(role, "owner");
+  const { can } = useMe();
+  const canEdit = can("put_review_policy");
   const q = useQuery(`review-policy|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}/review-policy", { params: { path: { doc } } })));
   // The edits not saved yet, over the policy as loaded; null shows the policy as loaded.
   const [edits, setEdits] = useState<Policy | null>(null);
@@ -299,8 +299,8 @@ function PolicyForm({
 
 /** Each section of the latest version with its owner, reviewers and due date, editable in place (approvers). */
 export function SectionAssignments({ doc, states, onSaved }: { doc: string; states: SectionState[]; onSaved: () => Promise<void> }) {
-  const { role } = useMe();
-  const canEdit = hasRole(role, "approver");
+  const { can } = useMe();
+  const canEdit = can("put_section_assignment");
   const people = usePeople(states.flatMap((s) => [s.owner_id, ...(s.reviewer_ids ?? [])]));
   const [editing, setEditing] = useState<string | null>(null);
   return (
@@ -454,8 +454,8 @@ function ChangedNote({ was, now, people }: { was: SectionState; now: SectionStat
 
 /** Feedback campaigns on the document: Ask for feedback opens one on the latest version; each can be closed and reopened (approvers). */
 export function Campaigns({ doc }: { doc: string }) {
-  const { role } = useMe();
-  const canEdit = hasRole(role, "approver");
+  const { can } = useMe();
+  const canEdit = can("create_review_campaign");
   const q = useQuery(`campaigns|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}/campaigns", { params: { path: { doc } } })));
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);

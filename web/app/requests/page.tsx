@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 
-import { Button, Empty, Page, PageHeader, Panel, SegmentedControl, Split } from "@/components/ds";
+import { Button, Empty, Page, PageHeader, Panel, SegmentedControl, Split, ViewOnly } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { FoundInSources } from "./_components/FoundInSources";
@@ -24,10 +24,11 @@ import { ClassifyNow, DailyTriageSwitch, TriageStatusLine, useTriage } from "./_
  * The queue (#348) filters by state, goal and theme and searches titles and words; the
  * selected request opens in the inspector. The Themes tab lists, creates, renames and
  * archives themes.
- * Interview a customer (C3, commenters and up).
+ * Interview a customer (C3, commenters and up). #370: each control shows only to a role that
+ * can use it (can()); a role that can file nothing reads the page as View only.
  */
 export default function RequestsPage() {
-  const { role } = useMe();
+  const { can, capsReady } = useMe();
   const triage = useTriage();
   const run = triage.data;
   const requests = useQuery("requests", () => unwrap(api.GET("/v1/requests", { params: { query: { limit: 200 } } })));
@@ -73,18 +74,25 @@ export default function RequestsPage() {
     <Page>
       <PageHeader
         title="Requests"
-        status={<TriageStatusLine status={run} />}
-        action={
+        status={
           <>
-            <DailyTriageSwitch triage={triage} canChange={hasRole(role, "approver")} />
-            {hasRole(role, "approver") && <ClassifyNow triage={triage} />}
-            {hasRole(role, "commenter") && <Button onClick={() => setInterviewing(true)}>Interview a customer</Button>}
-            <NewRequestButton onFiled={filed} />
+            {capsReady && !can("create_request", true) && <ViewOnly />}
+            <TriageStatusLine status={run} />
           </>
+        }
+        action={
+          capsReady && (
+            <>
+              <DailyTriageSwitch triage={triage} canChange={can("set_request_triage_daily")} />
+              {can("start_request_triage") && <ClassifyNow triage={triage} />}
+              {can("create_interview") && <Button onClick={() => setInterviewing(true)}>Interview a customer</Button>}
+              <NewRequestButton onFiled={filed} />
+            </>
+          )
         }
       />
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
-        {hasRole(role, "commenter") && <FoundInSources refresh={`${run?.run_id ?? ""}:${run?.active ?? false}`} />}
+        {can("list_request_candidates") && <FoundInSources refresh={`${run?.run_id ?? ""}:${run?.active ?? false}`} />}
         <SegmentedControl
           label="Requests view"
           value={tab}
