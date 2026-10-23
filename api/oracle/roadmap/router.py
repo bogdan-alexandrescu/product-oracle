@@ -13,7 +13,7 @@ potentially stale) after the trace lane's ``trace.mark_stale``, and
 """
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select, text
@@ -26,7 +26,7 @@ from oracle.authz import require_role
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.leads import engineering_leads, may_verify_dates
-from oracle.roadmap import diff_views, links, schedule, staleness, tracker, tracks, views
+from oracle.roadmap import alerts, diff_views, links, schedule, staleness, tracker, tracks, views
 from oracle.roadmap import items as items_mod
 from oracle.roadmap.models import (
     ProductTrack,
@@ -36,6 +36,8 @@ from oracle.roadmap.models import (
     TrackMilestone,
 )
 from oracle.roadmap.schemas import (
+    AcceptDateOut,
+    AlertState,
     AlignmentReport,
     BasisStatus,
     ItemProblem,
@@ -46,6 +48,7 @@ from oracle.roadmap.schemas import (
     ItemStalenessOut,
     ItemView,
     MilestoneCreate,
+    MilestoneMoved,
     MilestoneOut,
     MilestonePatch,
     MonitorOut,
@@ -54,6 +57,9 @@ from oracle.roadmap.schemas import (
     ScheduleBasisCreate,
     ScheduleBasisOut,
     ScheduleBasisWithdraw,
+    TrackAlertAccept,
+    TrackAlertKeep,
+    TrackAlertOut,
     TrackChange,
     TrackCreate,
     TrackerConnectorOut,
@@ -63,6 +69,7 @@ from oracle.roadmap.schemas import (
     TrackerPlanEpic,
     TrackerPlanIssue,
     TrackerPlanOut,
+    TrackerRecordEventOut,
     TrackerRecordOut,
     TrackerRecordsImport,
     TrackOverview,
@@ -878,3 +885,108 @@ async def update_milestone(
     await db.commit()
     await db.refresh(row)
     return row
+
+
+# --- track alerts (F2 Track health) -----------------------------------------------------------
+
+
+async def alert_reader(principal: Reader) -> Principal:
+    """Viewers and above read track alerts and act as their role allows. A run's token is
+    refused: the ``track-alerts`` area is in no run-token scope."""
+    if principal.run_id is not None or principal.run_token_id is not None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Track alerts are for people")
+    return principal
+
+
+AlertReader = Annotated[Principal, Depends(alert_reader)]
+
+
+def _alert_fail(exc: alerts.AlertError | tracks.TrackError) -> HTTPException:
+    return HTTPException(exc.status_code, str(exc))
+
+
+async def _alert_out(db, principal: Principal, row) -> TrackAlertOut:
+    return alerts.out(row, principal, await alerts.lookups(db, [row]))
+
+
+@router.get("/track-alerts", response_model=list[TrackAlertOut])
+async def list_track_alerts(
+    principal: AlertReader,
+    db: TenantDB,
+    state: Annotated[AlertState | Literal["all"], Query()] = "open",
+    track_id: uuid.UUID | None = None,
+) -> list[TrackAlertOut]:
+    """A track's situations that need someone (F2): slips, drift both ways, blockers,
+    stale items, a moved PRD. ``actions``: only what the caller may do now."""
+    if track_id is not None:
+        await _track(db, track_id)
+    return await alerts.list_alerts(db, principal, state, track_id)
+
+
+@router.post("/track-alerts/{alert_id}/keep", response_model=TrackAlertOut)
+async def keep_track_alert(
+    alert_id: uuid.UUID, principal: AlertReader, db: TenantDB, body: TrackAlertKeep | None = None
+) -> TrackAlertOut:
+    """Keep watching: the alert leaves the Inbox until its facts change (the people it
+    goes to). 409 when it is not open."""
+    try:
+        row = await alerts.keep(db, principal, alert_id, body.note if body else None)
+    except alerts.AlertError as e:
+        raise _alert_fail(e) from e
+    await db.commit()
+    return await _alert_out(db, principal, row)
+
+
+@router.post("/track-alerts/{alert_id}/reopen", response_model=TrackAlertOut)
+async def reopen_track_alert(
+    alert_id: uuid.UUID, principal: AlertReader, db: TenantDB
+) -> TrackAlertOut:
+    """Put a kept alert back in the Inbox. 409 when it is not kept."""
+    try:
+        row = await alerts.reopen(db, principal, alert_id)
+    except alerts.AlertError as e:
+        raise _alert_fail(e) from e
+    await db.commit()
+    return await _alert_out(db, principal, row)
+
+
+@router.post("/track-alerts/{alert_id}/accept-date", response_model=AcceptDateOut)
+async def accept_track_alert_date(
+    alert_id: uuid.UUID, principal: AlertReader, db: TenantDB,
+    body: TrackAlertAccept | None = None,
+) -> AcceptDateOut:  # fmt: skip
+    """Accept a slipped date, in one transaction: a verified basis from the tracker
+    record, the planned Now milestones resting on the old date moved to the new one, the
+    old bases withdrawn, the track monitored again. Engineering leads and owners; approvers
+    while no lead is named (F3). 409 when the alert is not an open date slip or the
+    tracker date changed since it opened; 422 when the new date breaks Now's rules."""
+    try:
+        done = await alerts.accept_date(db, principal, alert_id, body.reason if body else None)
+    except alerts.Conflict as e:
+        # The alert re-synced to the tracker's new date.
+        await db.commit()
+        raise _alert_fail(e) from e
+    except (alerts.AlertError, tracks.TrackError) as e:
+        await db.rollback()
+        raise _alert_fail(e) from e
+    await db.commit()
+    await db.refresh(done.basis)
+    return AcceptDateOut(
+        alert=await _alert_out(db, principal, done.alert),
+        basis=ScheduleBasisOut.model_validate(done.basis),
+        withdrawn_basis_ids=done.withdrawn,
+        milestones_moved=[MilestoneMoved(id=i, from_=f, to=t) for i, f, t in done.moved],
+        stale_item_ids=done.stale,
+    )
+
+
+@router.get("/tracker/records/{record_id}/events", response_model=list[TrackerRecordEventOut])
+async def list_tracker_record_events(
+    record_id: uuid.UUID, principal: AlertReader, db: TenantDB
+) -> list:
+    """What an import changed on a tracker record: state, target date, estimate and the
+    tracker's own status, before and after (F2)."""
+    try:
+        return await alerts.record_events(db, record_id)
+    except alerts.AlertError as e:
+        raise _alert_fail(e) from e

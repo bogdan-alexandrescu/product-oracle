@@ -13,8 +13,10 @@ import pytest
 from sqlalchemy import select, update
 
 from oracle.audit import AuditEvent
+from oracle.auth.deps import RUN_TOKEN_HEADER
 from oracle.auth.models import User
 from oracle.docs.models import Document
+from oracle.mcp import scopes
 from oracle.roadmap import alerts, views
 from oracle.roadmap.models import (
     ProductTrack,
@@ -22,9 +24,10 @@ from oracle.roadmap.models import (
     TrackAlert,
     TrackerRecord,
 )
+from oracle.runs.models import Run
+from oracle.runtokens import mint_run_token
 from oracle.tenancy import tenant_session
 from tests.roadmap_helpers import basis, other_company, seed_trace
-from tests.test_mcp import run_token
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     PRD,
     approved_prd,
@@ -420,11 +423,24 @@ async def test_another_company_and_run_tokens_are_refused(client, owner, runtime
     resp = await client.get("/v1/track-alerts", params={"track_id": track["id"]}, headers=other)
     assert resp.status_code == 404
 
-    raw = await run_token(tenant_id, ["read:baseline", "read:documents"], None)
-    bearer = {"Authorization": f"Bearer {raw}"}
-    assert (await client.get("/v1/track-alerts", headers=bearer)).status_code == 403
-    resp = await client.post(f"/v1/track-alerts/{slip['id']}/keep", headers=bearer)
+    person = await as_user(tenant_id, "owner")
+    async with tenant_session(tenant_id) as s:
+        me = await s.scalar(select(User.id).where(User.email.like("owner-%")))
+        run = Run(flow="baseline_to_prd", status="running", created_by=me)
+        s.add(run)
+        await s.flush()
+        raw = await mint_run_token(s, run.id, ["read:documents", "read:baseline"], 600)
+        await s.commit()
+    run_headers = {**person, RUN_TOKEN_HEADER: raw}
+    assert (await client.get("/v1/track-alerts", headers=run_headers)).status_code == 403
+    resp = await client.post(f"/v1/track-alerts/{slip['id']}/keep", headers=run_headers)
     assert resp.status_code == 403
+    assert scopes.required_scope("GET", "/v1/track-alerts") is None
+    from oracle.main import app
+
+    ops = {op["operationId"] for p in app.openapi()["paths"].values() for op in p.values()}
+    assert {"list_track_alerts", "keep_track_alert", "reopen_track_alert",
+            "accept_track_alert_date", "list_tracker_record_events"} <= ops  # fmt: skip
 
 
 # --- the ticker ---------------------------------------------------------------------------------
