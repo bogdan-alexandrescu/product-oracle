@@ -29,6 +29,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 type Outcome = Schemas["OutcomeOut"];
+type Learning = Schemas["LearningOut"];
 type Prediction = Schemas["Prediction"];
 type State =
   | "needs"
@@ -164,6 +165,10 @@ function Outcomes() {
   const [filter, setFilter] = useState<Filter | null>(null);
   const [selected, setSelected] = useState<string | null>(linked);
   const [sheet, setSheet] = useState(linked != null);
+  const [tracking, setTracking] = useState(false);
+  const learningsQ = useQuery("outcomes|learnings", () =>
+    unwrap(api.GET("/v1/learnings", { params: { query: { limit: 500 } } })),
+  );
 
   const rows = q.data ?? [];
   const goals = new Map((goalsQ.data ?? []).map((g) => [g.id, g.title]));
@@ -261,6 +266,7 @@ function Outcomes() {
       onChanged={async () => {
         await q.reload();
         await recordQ.reload();
+        await learningsQ.reload();
       }}
     />
   ) : null;
@@ -284,9 +290,33 @@ function Outcomes() {
             </>
           )
         }
+        action={
+          canApprove && (
+            <Button
+              variant="primary"
+              onClick={() => setTracking(true)}
+              data-testid="outcome-track"
+            >
+              Track outcome
+            </Button>
+          )
+        }
       />
       <div className="flex flex-col gap-3">
         {q.error && <Notice tone="error">{q.error}</Notice>}
+        {canApprove && tracking && (
+          <TrackOutcomeForm
+            goals={goalsQ.data ?? []}
+            tracked={new Set(rows.map((o) => o.roadmap_item_id))}
+            onCancel={() => setTracking(false)}
+            onTracked={async (o) => {
+              setTracking(false);
+              setFilter("all");
+              setSelected(o.id);
+              await q.reload();
+            }}
+          />
+        )}
         <Split inspector={phone ? undefined : inspector}>
           <Panel
             title="Outcomes"
@@ -348,6 +378,12 @@ function Outcomes() {
             {inspector}
           </Sheet>
         )}
+        <LearningsPanel
+          rows={learningsQ.data}
+          error={learningsQ.error}
+          canApprove={canApprove}
+          onChanged={learningsQ.reload}
+        />
       </div>
     </Page>
   );
@@ -849,5 +885,449 @@ function OutcomeInspector({
         </InspectorSection>
       )}
     </Inspector>
+  );
+}
+
+const FIELD =
+  "h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]";
+
+/** Track outcome: an approved roadmap item, its goal, the expected effect, a metric and a check date. */
+function TrackOutcomeForm({
+  goals,
+  tracked,
+  onCancel,
+  onTracked,
+}: {
+  goals: { id: string; title: string }[];
+  tracked: Set<string | null | undefined>;
+  onCancel: () => void;
+  onTracked: (o: Outcome) => Promise<void>;
+}) {
+  const itemsQ = useQuery("outcomes|plan-items", () =>
+    unwrap(api.GET("/v1/plan", { params: { query: { scope: "approved" } } })),
+  );
+  const items = (itemsQ.data?.items ?? []).filter((i) => !tracked.has(i.id));
+  const [itemId, setItemId] = useState("");
+  const [goalId, setGoalId] = useState("");
+  const [effect, setEffect] = useState("");
+  const [metric, setMetric] = useState("");
+  const [by, setBy] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const item = items.find((i) => i.id === itemId);
+
+  async function save() {
+    if (!item) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const o = await unwrap(
+        api.POST("/v1/outcomes", {
+          body: {
+            title: item.title,
+            goal_id: goalId,
+            roadmap_item_id: item.id,
+            module_keys: [],
+            gap_categories: [],
+            prediction: {
+              metric: metric.trim(),
+              predicted: effect.trim(),
+              by: by || null,
+            },
+          },
+        }),
+      );
+      await onTracked(o);
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(false);
+    }
+  }
+
+  const ready = item && goalId && effect.trim() && metric.trim();
+  return (
+    <Panel title="Track outcome">
+      <form
+        className="grid grid-cols-2 gap-2.5 max-[600px]:grid-cols-1"
+        data-testid="track-outcome-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        {itemsQ.error && (
+          <div className="col-span-full">
+            <Notice tone="error">{itemsQ.error}</Notice>
+          </div>
+        )}
+        {error && (
+          <div className="col-span-full">
+            <Notice tone="error">{error}</Notice>
+          </div>
+        )}
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-text2">Item</span>
+          <select
+            className={FIELD}
+            value={itemId}
+            onChange={(e) => {
+              setItemId(e.target.value);
+              // The item's first goal, when it serves one.
+              const next = items.find((i) => i.id === e.target.value);
+              const first = next?.goal_ids.find((g) =>
+                goals.some((x) => x.id === g),
+              );
+              if (first) setGoalId(first);
+            }}
+          >
+            <option value="">
+              {itemsQ.loading ? "Loading…" : "Choose an approved item"}
+            </option>
+            {items.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-text2">Goal</span>
+          <select
+            className={FIELD}
+            value={goalId}
+            onChange={(e) => setGoalId(e.target.value)}
+          >
+            <option value="">Choose a goal</option>
+            {goals.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-text2">Expected effect</span>
+          <input
+            className={FIELD}
+            value={effect}
+            placeholder="+5 weekly active teams"
+            maxLength={300}
+            onChange={(e) => setEffect(e.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-text2">Metric</span>
+          <input
+            className={FIELD}
+            value={metric}
+            maxLength={300}
+            onChange={(e) => setMetric(e.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-text2">Check date</span>
+          <input
+            className={FIELD}
+            type="date"
+            value={by}
+            onChange={(e) => setBy(e.target.value)}
+          />
+        </label>
+        <div className="col-span-full flex flex-wrap gap-2">
+          <Button type="submit" variant="primary" disabled={busy || !ready}>
+            Track outcome
+          </Button>
+          <Button type="button" variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
+const APPLIES_TO: Record<Learning["applies_to"], string> = {
+  module: "Module",
+  question_category: "Question category",
+  criterion: "Quality criterion",
+};
+const DIRECTION: Record<Learning["direction"], string> = {
+  recommend_more: "Recommend more",
+  recommend_less: "Recommend less",
+  note: "Note",
+};
+
+/** Learnings: what outcomes taught, kept from a draft or added by hand; an approver retires one with a reason. */
+function LearningsPanel({
+  rows,
+  error,
+  canApprove,
+  onChanged,
+}: {
+  rows: Learning[] | undefined;
+  error: string | null;
+  canApprove: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const [adding, setAdding] = useState(false);
+  return (
+    <Panel
+      title="Learnings"
+      count={rows?.length}
+      testId="learnings-panel"
+      tools={
+        canApprove &&
+        !adding && (
+          <Button variant="secondary" onClick={() => setAdding(true)}>
+            Add learning
+          </Button>
+        )
+      }
+    >
+      {error && <Notice tone="error">{error}</Notice>}
+      {canApprove && adding && (
+        <LearningForm
+          onCancel={() => setAdding(false)}
+          onAdded={async () => {
+            setAdding(false);
+            await onChanged();
+          }}
+        />
+      )}
+      {rows === undefined ? (
+        <Loading />
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-text2">
+          No learnings yet. Keep one Oracle drafts from an assessment, or add
+          one.
+        </p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {rows.map((l) => (
+            <LearningRow
+              key={`${l.id}-${l.status}`}
+              l={l}
+              canApprove={canApprove}
+              onChanged={onChanged}
+            />
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+function LearningForm({
+  onCancel,
+  onAdded,
+}: {
+  onCancel: () => void;
+  onAdded: () => Promise<void>;
+}) {
+  const [statement, setStatement] = useState("");
+  const [appliesTo, setAppliesTo] =
+    useState<Learning["applies_to"]>("question_category");
+  const [target, setTarget] = useState("");
+  const [direction, setDirection] =
+    useState<Learning["direction"]>("recommend_more");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      await unwrap(
+        api.POST("/v1/learnings", {
+          body: {
+            statement: statement.trim(),
+            applies_to: appliesTo,
+            target: target.trim(),
+            direction,
+            weight: 1,
+          },
+        }),
+      );
+      await onAdded();
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      className="mb-3 grid grid-cols-3 gap-2.5 max-[600px]:grid-cols-1"
+      data-testid="learning-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+    >
+      {error && (
+        <div className="col-span-full">
+          <Notice tone="error">{error}</Notice>
+        </div>
+      )}
+      <label className="col-span-full flex flex-col gap-1 text-sm">
+        <span className="text-text2">Learning</span>
+        <textarea
+          className="min-h-16 w-full rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-[15px]"
+          value={statement}
+          maxLength={2000}
+          onChange={(e) => setStatement(e.target.value)}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="text-text2">Applies to</span>
+        <select
+          className={FIELD}
+          value={appliesTo}
+          onChange={(e) =>
+            setAppliesTo(e.target.value as Learning["applies_to"])
+          }
+        >
+          {Object.entries(APPLIES_TO).map(([v, label]) => (
+            <option key={v} value={v}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="text-text2">Key</span>
+        <input
+          className={FIELD}
+          value={target}
+          placeholder="success_metric"
+          maxLength={200}
+          onChange={(e) => setTarget(e.target.value)}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="text-text2">Direction</span>
+        <select
+          className={FIELD}
+          value={direction}
+          onChange={(e) =>
+            setDirection(e.target.value as Learning["direction"])
+          }
+        >
+          {Object.entries(DIRECTION).map(([v, label]) => (
+            <option key={v} value={v}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="col-span-full flex flex-wrap gap-2">
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={busy || !statement.trim() || !target.trim()}
+        >
+          Add learning
+        </Button>
+        <Button type="button" variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function LearningRow({
+  l,
+  canApprove,
+  onChanged,
+}: {
+  l: Learning;
+  canApprove: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const [retiring, setRetiring] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const active = l.status === "active";
+
+  async function retire() {
+    setBusy(true);
+    setError(null);
+    try {
+      await unwrap(
+        api.POST("/v1/learnings/{learning_id}/retire", {
+          params: { path: { learning_id: l.id } },
+          body: { reason: reason.trim() || null },
+        }),
+      );
+      await onChanged();
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li
+      className="flex flex-col gap-1.5 py-2.5 text-sm"
+      data-testid="learning-row"
+      data-status={l.status}
+    >
+      <div className="flex flex-wrap items-start gap-2">
+        <span className="min-w-0 flex-1">{l.statement}</span>
+        <Chip kind={active ? "pass" : "line"} data-testid="learning-status">
+          {active ? "Active" : "Retired"}
+        </Chip>
+      </div>
+      <span className="text-text2">
+        {APPLIES_TO[l.applies_to]} · {l.target} · {DIRECTION[l.direction]}
+      </span>
+      {!active && (
+        <span className="text-text2">
+          Retired{l.retired_at ? ` ${formatDate(l.retired_at)}` : ""}
+          {l.retired_reason ? `: ${l.retired_reason}` : ""}
+        </span>
+      )}
+      {error && <Notice tone="error">{error}</Notice>}
+      {canApprove && active && !retiring && (
+        <span>
+          <Button variant="secondary" onClick={() => setRetiring(true)}>
+            Retire
+          </Button>
+        </span>
+      )}
+      {canApprove && active && retiring && (
+        <form
+          className="flex flex-col gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void retire();
+          }}
+        >
+          <label className="flex flex-col gap-1">
+            <span className="text-text2">Reason</span>
+            <input
+              className={FIELD}
+              value={reason}
+              maxLength={2000}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </label>
+          <span className="flex flex-wrap gap-2">
+            <Button type="submit" variant="primary" disabled={busy}>
+              Retire learning
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setRetiring(false)}
+            >
+              Cancel
+            </Button>
+          </span>
+        </form>
+      )}
+    </li>
   );
 }
