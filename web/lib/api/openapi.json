@@ -37998,6 +37998,16 @@
             ],
             "title": "Cannot Approve"
           },
+          "gate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Gate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "console": {
             "anyOf": [
               {
@@ -38174,6 +38184,16 @@
             "type": "boolean",
             "title": "Can Decide",
             "default": false
+          },
+          "gate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Gate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -49974,6 +49994,78 @@
         ],
         "title": "GapPatch"
       },
+      "Gate": {
+        "properties": {
+          "open": {
+            "type": "boolean",
+            "title": "Open"
+          },
+          "blocking_open": {
+            "type": "integer",
+            "title": "Blocking Open",
+            "default": 0
+          },
+          "file_problems": {
+            "type": "integer",
+            "title": "File Problems",
+            "default": 0
+          },
+          "left": {
+            "items": {
+              "$ref": "#/components/schemas/GateLeft"
+            },
+            "type": "array",
+            "title": "Left",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "open"
+        ],
+        "title": "Gate",
+        "description": "The approve gate (D3 Approve blocked by problems): Approve is refused while a\nblocking reason is open (not waived) or the file has a problem of its own."
+      },
+      "GateLeft": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "item_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Title"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "waivable": {
+            "type": "boolean",
+            "title": "Waivable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "code",
+          "label",
+          "waivable"
+        ],
+        "title": "GateLeft",
+        "description": "One blocking reason still open (D3): its item, code and chip label, and whether an\napprover may waive it (never a date reason)."
+      },
       "GateView": {
         "properties": {
           "open_critical": {
@@ -51067,6 +51159,16 @@
               }
             ],
             "title": "Cannot Approve"
+          },
+          "gate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Gate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "console": {
             "anyOf": [
@@ -73542,6 +73644,66 @@
         "title": "SectionVerdict",
         "description": "Latest verdict for a section in this version."
       },
+      "SegmentAgent": {
+        "properties": {
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "heartbeat_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heartbeat At"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "SegmentAgent",
+        "description": "#258: one agent working on a running segment, as Oracle's last tick read it."
+      },
       "SegmentAttempt": {
         "properties": {
           "attempt": {
@@ -73918,6 +74080,26 @@
               }
             ],
             "title": "Error"
+          },
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/SegmentAgent"
+            },
+            "type": "array",
+            "title": "Agents",
+            "default": []
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
           }
         },
         "type": "object",

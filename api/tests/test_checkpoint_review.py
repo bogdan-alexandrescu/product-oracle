@@ -193,6 +193,10 @@ class Review:
             await s.commit()
 
 
+WAIVE = {"item_key": "gift-cards", "kind": "waive", "answers": ["unknown_prd_section"],
+         "value": {"reason": "Section lands in the next PRD version"}}  # fmt: skip
+
+
 def item_of(review: dict, key: str) -> dict:
     return next(i for i in review["items"] if i["key"] == key)
 
@@ -351,17 +355,18 @@ async def test_a_stale_decision_is_refused_and_changes_nothing(review):
     """protects=nobody decides over changes they have not seen; fails_when=a decide with an
     older revision lands or is audited; no_claim=SwarmCloud delivery."""
     mail = await emails(review)
+    await review.act("approver", **WAIVE)  # D3: the gate open first
     await review.note("approver", "Ship it after caps")
     await review.act("commenter", item_key="mobile-push", kind="accept")
     await review.act("commenter2", item_key="gift-cards", kind="drop")
     resp = await review.client.post(
         f"{review.base}/decide",
-        json={"decision": "approved", "expected_revision": 1},
+        json={"decision": "approved", "expected_revision": 2},
         headers=review.h("approver"),
     )
     assert resp.status_code == 409, resp.text
     detail = resp.json()["detail"]
-    assert detail["code"] == "review_changed" and detail["revision"] == 3
+    assert detail["code"] == "review_changed" and detail["revision"] == 4
     assert detail["changes"] == 2
     assert detail["by"] == [name(mail["commenter"]), name(mail["commenter2"])]
     assert detail["message"] == (
@@ -378,7 +383,7 @@ async def test_a_stale_decision_is_refused_and_changes_nothing(review):
         )
     assert approved == 0
     # With the revision the decider saw: decided as today, the note from the draft.
-    run = await review.decide("approver", decision="approved", expected_revision=3)
+    run = await review.decide("approver", decision="approved", expected_revision=4)
     cp = next(c for c in run["checkpoints"] if c["id"] == review.cp["id"])
     assert cp["status"] == "approved" and cp["note"] == "Ship it after caps"
 
@@ -396,17 +401,18 @@ async def test_a_console_confirm_goes_through_the_same_revision_check(review):
         "role": "approver",
     }
     await review.set_payload(wait={"console": console})
+    await review.act("approver", **WAIVE)  # D3: the gate open first
     await review.act("commenter", item_key="mobile-push", kind="accept")
     resp = await review.client.post(
         f"{review.base}/decide",
-        json={"decision": "confirm", "expected_revision": 0},
+        json={"decision": "confirm", "expected_revision": 1},
         headers=review.h("approver"),
     )
     assert resp.status_code == 409 and resp.json()["detail"]["code"] == "review_changed"
     async with tenant_session(review.tenant_id) as s:
         row = await s.get(Checkpoint, uuid.UUID(review.cp["id"]))
         assert row.status == "pending" and row.payload["wait"]["console"] == console
-    run = await review.decide("approver", decision="confirm", expected_revision=1)
+    run = await review.decide("approver", decision="confirm", expected_revision=2)
     cp = next(c for c in run["checkpoints"] if c["id"] == review.cp["id"])
     assert cp["status"] == "approved"
 
@@ -415,9 +421,10 @@ async def test_after_the_decision_the_draft_is_frozen_and_kept(review):
     """protects=decided checkpoints keep their actions as history and take no writes;
     fails_when=a write lands after the decision or the actions vanish; no_claim=what the
     agents do with them."""
+    await review.act("approver", **WAIVE)  # D3: the gate open first
     got = await review.act("commenter", item_key="mobile-push", kind="accept")
     [action] = item_of(got, "mobile-push")["actions"]
-    await review.decide("approver", decision="approved", expected_revision=1)
+    await review.decide("approver", decision="approved", expected_revision=2)
     for call in (
         review.act("approver", expect=409, item_key="gift-cards", kind="drop"),
         review.stage("approver", action["id"], expect=409),
@@ -427,7 +434,7 @@ async def test_after_the_decision_the_draft_is_frozen_and_kept(review):
         out = await call
         assert out["detail"] == "this checkpoint is decided"
     got = await review.get("viewer")
-    assert got["status"] == "approved" and got["revision"] == 1
+    assert got["status"] == "approved" and got["revision"] == 2
     assert [a["id"] for a in item_of(got, "mobile-push")["actions"]] == [action["id"]]
     assert (got["can_suggest"], got["can_stage"], got["can_decide"]) == (False, False, False)
 

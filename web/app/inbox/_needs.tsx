@@ -340,6 +340,8 @@ export function feedbackNeeds(
 
 const path = (id: string) => ({ params: { path: { run_id: id } } });
 
+const CONSOLE_HELD = "Blocking problems are open: fix or waive them, then confirm";
+
 /** What Oracle still needs of a checkpoint answered in SwarmCloud's console. */
 function consoleNeeds(c: NonNullable<InboxOut["checkpoints"][number]["console"]>): string {
   if (c.needs === "confirm") return "needs an approver to confirm";
@@ -639,6 +641,8 @@ export function strategyNeeds(strategy: InboxOut["strategy"]): Need[] {
  * a failed import one action that opens the run, where the rest are.
  */
 export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compact = false) {
+  // D3: a console approval held while blocking problems are open waits for a review.
+  const held = (c: InboxOut["checkpoints"][number]) => c.console?.needs === "confirm" && !!c.gate && !c.gate.open;
   const checkpoints: Need[] = inbox.checkpoints.map((c) => ({
     key: c.id,
     icon: "flag",
@@ -646,7 +650,11 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     item: (
       <>
         <span className="truncate">{CHECKPOINT_LABEL[c.kind]}</span>
-        {c.console && (
+        {held(c) ? (
+          <Chip kind="warn" title={CONSOLE_HELD}>
+            Console approval held
+          </Chip>
+        ) : c.console && (
           // Answered in SwarmCloud's console: what Oracle still needs before it counts.
           <Chip kind="warn" title={`Answered in SwarmCloud by ${c.console.answered_by ?? "someone"}: ${consoleNeeds(c.console)}`}>
             <span className="truncate">
@@ -660,11 +668,15 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       <span className="block truncate" title={[c.flow_title, c.segment_title, c.document_slug].filter(Boolean).join(" · ")}>
         {c.segment_title ?? c.flow_title}
         {c.document_slug && <span className="ml-1.5 font-mono text-sm text-text2">{c.document_slug}</span>}
+        {held(c) && <span className="block truncate text-warn">{CONSOLE_HELD}</span>}
       </span>
     ),
     run: shortId(c.run_id),
     at: c.created_at,
-    action: (
+    action: held(c) ? (
+      // The run page's checkpoint row, until the kind's review screen ships (D1).
+      <LinkButton href={`/runs/${c.run_id}#decide`}>Review</LinkButton>
+    ) : (
       // The same verb as the runs list: the run page opens at the decision; a priority stop
       // opens its order next to the live ranking (C8), where it is decided too.
       <LinkButton href={orderHref(c) ?? `/runs/${c.run_id}#decide`}>Decide</LinkButton>

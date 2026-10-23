@@ -243,6 +243,17 @@ class SegmentAttempt(BaseModel):
     state: str | None = None
 
 
+class SegmentAgent(BaseModel):
+    """#258: one agent working on a running segment, as Oracle's last tick read it."""
+
+    role: str | None = None
+    # The runtime's task state, lower case (running, leased, ...).
+    state: str
+    started_at: datetime | None = None
+    heartbeat_at: datetime | None = None
+    cost_usd: float | None = None
+
+
 class PrdLinks(BaseModel):
     """Cross-document links from a roadmap draft to its PRD version's sections."""
 
@@ -461,6 +472,10 @@ class SegmentOut(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error: str | None = None
+    # #258: a running segment's working agents and when Oracle last read them (None: not
+    # read since it started); empty once the segment is no longer running.
+    agents: list[SegmentAgent] = []
+    checked_at: datetime | None = None
 
 
 class ConsoleAnswer(BaseModel):
@@ -511,6 +526,27 @@ class CheckpointDelivery(BaseModel):
     last_tried_at: datetime | None = None
 
 
+class GateLeft(BaseModel):
+    """One blocking reason still open (D3): its item, code and chip label, and whether an
+    approver may waive it (never a date reason)."""
+
+    item: str
+    item_title: str | None = None
+    code: str
+    label: str
+    waivable: bool
+
+
+class Gate(BaseModel):
+    """The approve gate (D3 Approve blocked by problems): Approve is refused while a
+    blocking reason is open (not waived) or the file has a problem of its own."""
+
+    open: bool
+    blocking_open: int = 0
+    file_problems: int = 0
+    left: list[GateLeft] = []
+
+
 class CheckpointOut(BaseModel):
     id: uuid.UUID
     run_id: uuid.UUID
@@ -532,6 +568,8 @@ class CheckpointOut(BaseModel):
     # not imported (Request changes, or Retry import on the segment, first), or the feature
     # set has blocking problems (C6: Request changes).
     cannot_approve: str | None = None
+    # The approve gate of a kind with blocking reasons (D3); None for other kinds.
+    gate: Gate | None = None
     # An open checkpoint answered in SwarmCloud's console, waiting on an approver (W5).
     console: ConsoleAnswer | None = None
     # A decided checkpoint whose decision Oracle has not delivered to the run yet.
@@ -1139,3 +1177,5 @@ class CheckpointReview(BaseModel):
     can_suggest: bool = False
     can_stage: bool = False
     can_decide: bool = False
+    # The approve gate, as decide reads it (D3); None for a kind with no blocking reasons.
+    gate: Gate | None = None

@@ -101,7 +101,7 @@ BLOCKING = (
     .replace("rank: 2\n", "rank: 1\n")
     .replace("rank: X\n", "rank: 2\n")
 )
-BLOCKED = "The priority order has 1 blocking problem; send it back with Request changes"
+BLOCKED = "1 blocking problem left: fix or waive them, or send back to the agents"
 
 
 async def seed_baseline(tenant_id) -> None:
@@ -404,7 +404,7 @@ async def test_approve_refused_with_blocking_then_request_changes_discards(
     for headers in (auth, await as_user(tenant_id, "approver")):
         resp = await client.post(url, json={"decision": "approved"}, headers=headers)
         assert resp.status_code == 409, resp.text
-        assert resp.json()["detail"] == BLOCKED
+        assert resp.json()["detail"]["message"] == BLOCKED
     async with mcp_client(await api_token(tenant_id)) as c:
         out = await c.call_tool(
             "decide_checkpoint",

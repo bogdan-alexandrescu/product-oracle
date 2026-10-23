@@ -243,6 +243,18 @@ function launchesContext(db: Db, me: MemberRow): LaunchesContext {
     role: me.role,
     askerId: db.members.find((x) => x.role === "commenter")?.id ?? null,
     trackId: db.roadmap?.tracks[0]?.id ?? null,
+    roadmapItems: (trackId) => {
+      const t = db.roadmap?.tracks.find((x) => x.id === trackId);
+      if (!t) return null;
+      const doc = db.documents.find((d) => d.id === t.roadmap_id);
+      const v = db.versions
+        .filter((x) => x.document_id === t.roadmap_id && x.approved_at && db.roadmap!.items[x.id]?.length)
+        .sort((a, b) => b.number - a.number)[0];
+      if (!v) return [];
+      return db.roadmap!.items[v.id].map((i) => ({
+        item_key: i.item_key, title: i.title, horizon: i.horizon, roadmap_slug: doc?.slug ?? null, roadmap_version: v.number,
+      }));
+    },
   };
 }
 
@@ -266,7 +278,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * "alignment-report" as the default company plus two weekly alignment reports and Oracle's
  * Slack install (./reports.ts, F6);
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
- * next tick (recorded, the decide call answers 503; ./runs.ts); "questions" as the default
+ * next tick (recorded, the decide call answers 503; ./runs.ts); "slow-agents" as the default
+ * company where a segment's agents take two ticks: the first reads them working (#258); "questions" as the default
  * company plus an "Oracle asks" question on an intake with no PRD and an "Approver asks"
  * question on a PRD section, both asked of the signed-in owner, and one delegated to
  * approver@example.com (C2); "private-finding" as "questions" plus a private finding (S6) on
@@ -1305,6 +1318,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       return who;
     },
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
+    slowAgents: localStorage.getItem(MOCK_SCENARIO_KEY) === "slow-agents",
     feedback: db.feedback,
     documents: db.documents,
     confirmedGoals: () =>
@@ -1459,7 +1473,17 @@ function load(): Db {
   db.access_failures = scenario === "access-failures" ? seedAccessFailures() : [];
   // Launches (H6): three synthetic launches in the "launches" scenario; none otherwise, so
   // other specs' Inbox counts stay as they were.
-  if (scenario === "launches") db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
+  if (scenario === "launches") {
+    db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
+    // Launches are planned from an approved roadmap: usage-alerts-roadmap v1 is approved here,
+    // so New launch (#344) has items to pick.
+    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+    const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
+    if (roadmap && v1) {
+      v1.approved_at = "2026-10-05T09:00:00Z";
+      roadmap.status = "approved";
+    }
+  }
   db.autonomy = emptyAutonomy();
   // Discussions (G1): one private discussion in the "discussions" scenario; none otherwise,
   // so other specs' counts stay as they were.
@@ -2591,7 +2615,16 @@ async function route(db: Db, req: Request): Promise<Response> {
       return routeRuns({ ...runsContext(db), db: db.runs! }, patch, ["v1", "runs", id]).then((r) => r ?? notFound("Route"));
     };
     const confirmedGoals = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals }, req, p, q);
+    const lockedSections = (ref: string) => {
+      const doc = db.documents.find((d) => d.id === ref || d.slug === ref);
+      const latest = doc && db.versions.filter((v) => v.document_id === doc.id).sort((a, b) => b.number - a.number)[0];
+      if (!latest) return [];
+      return latest.sections.map((s) => s.section_key).filter((k) => {
+        const r = latestReview(db, latest.id, k);
+        return r?.verdict === "approved" && !r.lapsed_at;
+      });
+    };
+    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections }, req, p, q);
     if (intake) return intake;
   }
   // Requests and their themes (C1) check roles themselves: commenters add, approvers decide.

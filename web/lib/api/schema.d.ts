@@ -11321,6 +11321,7 @@ export interface components {
             can_decide: boolean;
             /** Cannot Approve */
             cannot_approve?: string | null;
+            gate?: components["schemas"]["Gate"] | null;
             console?: components["schemas"]["ConsoleAnswer"] | null;
             delivery?: components["schemas"]["CheckpointDelivery"] | null;
         };
@@ -11398,6 +11399,7 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            gate?: components["schemas"]["Gate"] | null;
         };
         /** Choice */
         Choice: {
@@ -15673,6 +15675,47 @@ export interface components {
             stop_condition?: string | null;
         };
         /**
+         * Gate
+         * @description The approve gate (D3 Approve blocked by problems): Approve is refused while a
+         *     blocking reason is open (not waived) or the file has a problem of its own.
+         */
+        Gate: {
+            /** Open */
+            open: boolean;
+            /**
+             * Blocking Open
+             * @default 0
+             */
+            blocking_open: number;
+            /**
+             * File Problems
+             * @default 0
+             */
+            file_problems: number;
+            /**
+             * Left
+             * @default []
+             */
+            left: components["schemas"]["GateLeft"][];
+        };
+        /**
+         * GateLeft
+         * @description One blocking reason still open (D3): its item, code and chip label, and whether an
+         *     approver may waive it (never a date reason).
+         */
+        GateLeft: {
+            /** Item */
+            item: string;
+            /** Item Title */
+            item_title?: string | null;
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+            /** Waivable */
+            waivable: boolean;
+        };
+        /**
          * GateView
          * @description The review gate as everyone sees it. ``private_blocking_gap_ids``: for the author
          *     only, their private critical blockers, which gate nothing until shared at counts or
@@ -16075,6 +16118,7 @@ export interface components {
             can_decide: boolean;
             /** Cannot Approve */
             cannot_approve?: string | null;
+            gate?: components["schemas"]["Gate"] | null;
             console?: components["schemas"]["ConsoleAnswer"] | null;
             delivery?: components["schemas"]["CheckpointDelivery"] | null;
             /**
@@ -24136,6 +24180,22 @@ export interface components {
             /** Lapse Reason */
             lapse_reason?: string | null;
         };
+        /**
+         * SegmentAgent
+         * @description #258: one agent working on a running segment, as Oracle's last tick read it.
+         */
+        SegmentAgent: {
+            /** Role */
+            role?: string | null;
+            /** State */
+            state: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Heartbeat At */
+            heartbeat_at?: string | null;
+            /** Cost Usd */
+            cost_usd?: number | null;
+        };
         /** SegmentAttempt */
         SegmentAttempt: {
             /** Attempt */
@@ -24240,6 +24300,13 @@ export interface components {
             finished_at?: string | null;
             /** Error */
             error?: string | null;
+            /**
+             * Agents
+             * @default []
+             */
+            agents: components["schemas"]["SegmentAgent"][];
+            /** Checked At */
+            checked_at?: string | null;
         };
         /** SettingIn */
         SettingIn: {

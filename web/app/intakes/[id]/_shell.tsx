@@ -11,8 +11,11 @@ import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { DraftSheet } from "./_draft-sheet";
+import { FindingsTab } from "./_findings";
+import { GapsTab } from "./_gaps";
 import { IntakeInspector } from "./_inspector";
 import { OPEN_GAP, STATUS, dayMonth, gateReason, type Batch } from "./_lib";
+import { ProposalsTab } from "./_proposals";
 import { QuestionsTab } from "./_questions";
 
 const PHONE = "(max-width: 600px)";
@@ -40,7 +43,7 @@ async function loadBatches(intakeId: string, current: number | null | undefined)
   return batches.filter((b) => b.questions.length > 0);
 }
 
-type Tab = "questions";
+type Tab = "questions" | "gaps" | "proposals" | "findings";
 
 /**
  * Before drafting (C5, B1 Split): what Oracle still needs to know about a brief, asked of
@@ -192,14 +195,32 @@ export function BeforeDrafting({ id }: { id: string }) {
         </Button>
       )}
       <Split inspector={phone ? undefined : inspector}>
-        <TabBar<Tab> label="Before drafting" tabs={[{ id: "questions", label: "Questions" }]} value={tab} onChange={setTab} idFor={(t) => `intake-${t}`} />
-        <div role="tabpanel" id="intake-questions-panel" aria-labelledby="intake-questions" className="min-w-0">
-          {batchesQ.error && <ErrorNote>{batchesQ.error}</ErrorNote>}
-          {batchesQ.data ? (
-            <QuestionsTab summary={s} batches={batchesQ.data} me={{ id: me?.user_id ?? null, role }} version={version} onChanged={changed} />
-          ) : (
-            <Loading />
+        <TabBar<Tab>
+          label="Before drafting"
+          tabs={[
+            { id: "questions", label: "Questions" },
+            { id: "gaps", label: "Gaps", count: openGaps },
+            { id: "proposals", label: "Proposals", count: s.proposals.filter((p) => p.status === "proposed").length },
+            { id: "findings", label: "Findings" },
+          ]}
+          value={tab}
+          onChange={setTab}
+          idFor={(t) => `intake-${t}`}
+        />
+        <div role="tabpanel" id={`intake-${tab}-panel`} aria-labelledby={`intake-${tab}`} className="min-w-0">
+          {tab === "questions" && (
+            <>
+              {batchesQ.error && <ErrorNote>{batchesQ.error}</ErrorNote>}
+              {batchesQ.data ? (
+                <QuestionsTab summary={s} batches={batchesQ.data} me={{ id: me?.user_id ?? null, role }} version={version} onChanged={changed} />
+              ) : (
+                <Loading />
+              )}
+            </>
           )}
+          {tab === "gaps" && <GapsTab summary={s} role={role} onChanged={changed} />}
+          {tab === "proposals" && <ProposalsTab summary={s} role={role} onChanged={changed} />}
+          {tab === "findings" && <FindingsTab intakeId={id} author={author} version={version} />}
         </div>
       </Split>
       {/* C4: Draft with Oracle opens its sheet (template, baseline, depth, stops, estimate). Closed,

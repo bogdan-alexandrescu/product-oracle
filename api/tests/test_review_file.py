@@ -25,7 +25,7 @@ from oracle.runs import review_file
 from oracle.runs.schemas import ReviewAction, ReviewAnswer, ReviewAnswerer, ReviewQuestion
 from tests.test_adapter_v2 import feedback_doc, on, use
 from tests.test_adapter_v2 import settings as _v2_settings
-from tests.test_checkpoint_review import Review, item_of, review  # noqa: F401 - fixtures
+from tests.test_checkpoint_review import WAIVE, Review, item_of, review  # noqa: F401 - fixtures
 from tests.test_roadmap import approved_prd, owner, runtime, seed_baseline  # noqa: F401
 from tests.test_runs import get, pending, started, tick
 
@@ -472,6 +472,7 @@ async def test_nothing_to_send_is_422_and_a_note_alone_works_as_today(review):  
 async def test_an_approval_stores_no_review(review):  # noqa: F811
     """protects=only a send-back has a review file; fails_when=an approval serves one;
     no_claim=approve with edits (D7)."""
+    await review.act("approver", **WAIVE)  # D3: the gate open first
     run = await review.decide("approver", decision="approved")
     [cp_out] = [c for c in run["checkpoints"] if c["id"] == review.cp["id"]]
     assert cp_out["review"] is None

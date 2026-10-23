@@ -9,6 +9,8 @@ import { formatDate } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { NewEntryDialog } from "./_new-entry";
+
 type Entry = Schemas["ChangelogEntryOut"];
 
 const CATEGORIES: Entry["category"][] = ["added", "changed", "deprecated", "removed", "fixed", "security"];
@@ -45,6 +47,7 @@ export default function ChangelogPage() {
   const canApprove = hasRole(role, "approver");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const entries = q.data ?? [];
 
   async function act(key: string, call: () => Promise<unknown>) {
@@ -113,6 +116,11 @@ export default function ChangelogPage() {
             <Button disabled={busy !== null} onClick={() => exportAs("html")} data-testid="export-html">
               Export HTML
             </Button>
+            {canApprove && (
+              <Button variant="primary" icon="plus" onClick={() => setCreating(true)} data-testid="new-entry">
+                New entry
+              </Button>
+            )}
           </div>
         }
       />
@@ -139,6 +147,17 @@ export default function ChangelogPage() {
           ))}
         </Panel>
       </div>
+      {creating && (
+        <NewEntryDialog
+          categories={CATEGORIES}
+          categoryLabel={CATEGORY_LABEL}
+          onClose={() => setCreating(false)}
+          onCreated={async () => {
+            setCreating(false);
+            await q.reload();
+          }}
+        />
+      )}
     </Page>
   );
 }

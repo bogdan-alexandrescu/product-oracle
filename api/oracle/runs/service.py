@@ -165,7 +165,17 @@ from oracle.review.schemas import Resolution
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import doc_dates, schedule
 from oracle.roadmap.views import items_version, version_items
-from oracle.runs import extensions, feature_set, flows, reasons, rejection, reuse, roadmap, workflow
+from oracle.runs import (
+    extensions,
+    feature_set,
+    flows,
+    gate,
+    reasons,
+    rejection,
+    reuse,
+    roadmap,
+    workflow,
+)
 from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -179,6 +189,7 @@ from oracle.runs.schemas import (
     FlowOut,
     FlowSegmentOut,
     FlowStart,
+    Gate,
     InboxAccessFailure,
     InboxCheckpoint,
     InboxCounts,
@@ -200,6 +211,7 @@ from oracle.runs.schemas import (
     RunPatch,
     RunProgress,
     RunSummary,
+    SegmentAgent,
     SegmentAttempt,
     SegmentEstimate,
     SegmentOut,
@@ -221,7 +233,7 @@ from oracle.swarm import (
     load_learned,
     redact,
 )
-from oracle.swarm.runtime import MERGE, NOT_YET, not_reached
+from oracle.swarm.runtime import MERGE, NOT_YET, WORKING, not_reached
 from oracle.swarm.settings import get_runtime_settings
 from oracle.templates import service as templates_service
 from oracle.templates.builtins import (
@@ -782,11 +794,18 @@ def _checkpoint_out(
     *,
     flow: str,
     leads: frozenset[uuid.UUID],
+    staged: dict[uuid.UUID, list[CheckpointAction]] | None = None,
 ) -> CheckpointOut:
     """``names``: :func:`_decider_names` of the checkpoints read; ``flow``: the run's;
-    ``leads``: :func:`oracle.members.leads.engineering_leads`, read once per request."""
+    ``leads``: :func:`oracle.members.leads.engineering_leads`, read once per request;
+    ``staged``: :func:`_staged_actions` of the checkpoints read (the approve gate)."""
     console = ((cp.payload or {}).get("wait") or {}).get("console")
     payload, delivery = _delivery(cp, names or {})
+    shut = (
+        gate.approve_gate(cp, None, (staged or {}).get(cp.id, []))
+        if cp.status == "pending"
+        else None
+    )
     return CheckpointOut(
         id=cp.id,
         run_id=cp.run_id,
@@ -806,9 +825,46 @@ def _checkpoint_out(
         can_decide=cp.status == "pending"
         and principal is not None
         and may_decide(principal, cp, flow, leads),
-        cannot_approve=_cannot_approve(cp),
+        cannot_approve=_cannot_approve(cp)
+        or (gate.message(shut) if shut is not None and not shut.open else None),
+        gate=shut,
         delivery=delivery,
     )
+
+
+async def _staged_actions(
+    db: AsyncSession, checkpoints: list[Checkpoint]
+) -> dict[uuid.UUID, list[CheckpointAction]]:
+    """The staged draft actions (D8) of the pending checkpoints that have an approve gate."""
+    ids = [c.id for c in checkpoints if c.status == "pending" and c.kind in gate.BLOCKING_SOURCES]
+    out: dict[uuid.UUID, list[CheckpointAction]] = {}
+    if not ids:
+        return out
+    for action in await db.scalars(
+        select(CheckpointAction).where(
+            CheckpointAction.checkpoint_id.in_(ids), CheckpointAction.state == "staged"
+        )
+    ):
+        out.setdefault(action.checkpoint_id, []).append(action)
+    return out
+
+
+async def approve_gate_of(db: AsyncSession, cp: Checkpoint) -> Gate | None:
+    """The approve gate of ``cp`` now (D3): its stored blocking reasons and staged actions."""
+    staged = await _staged_actions(db, [cp])
+    return gate.approve_gate(cp, None, staged.get(cp.id, []))
+
+
+def blocking_open(shut: Gate) -> RunError:
+    """The 409 an approval gets while the gate is closed (decide, console confirm)."""
+    message = gate.message(shut)
+    error = RunError(message)
+    error.detail = {  # type: ignore[attr-defined]
+        "code": "blocking_open",
+        "message": message,
+        "left": [x.model_dump() for x in shut.left],
+    }
+    return error
 
 
 def _segment_out(
@@ -823,6 +879,9 @@ def _segment_out(
     imp = art.get("import")
     check = art.get("items_check")
     merged = art.get("baseline_import") or {}
+    progress = art.get("progress") or {}
+    if segment.status != "running" or progress.get("workflow_id") != segment.swarm_workflow_id:
+        progress = {}
     return SegmentOut(
         id=segment.id,
         seq=segment.seq,
@@ -855,6 +914,9 @@ def _segment_out(
         started_at=segment.started_at,
         finished_at=segment.finished_at,
         error=segment.error,
+        # #258: only while it runs, and only what was read of its current workflow.
+        agents=[SegmentAgent(**a) for a in progress.get("agents") or []],
+        checked_at=progress.get("checked_at"),
     )
 
 
@@ -971,6 +1033,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     checkpoints = await _checkpoints(db, [run.id])
     names = await _decider_names(db, checkpoints)
     leads = await engineering_leads(db)
+    staged = await _staged_actions(db, checkpoints)
     refs = await _refs(db, [run])
     knobs = _knobs(run)
     kind = await _target_kind(db, run)
@@ -1009,7 +1072,8 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         notes=notes,
         segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
         checkpoints=[
-            _checkpoint_out(c, principal, names, flow=run.flow, leads=leads) for c in checkpoints
+            _checkpoint_out(c, principal, names, flow=run.flow, leads=leads, staged=staged)
+            for c in checkpoints
         ],
         token_read_only=await token_hold(db, run.id, live=False) is not None,
         open_proposals=await db.scalar(
@@ -2594,6 +2658,39 @@ def _lookup_exhausted(lost: dict[str, Any]) -> bool:
 
 def _plan_entry(wf: dict[str, Any], seq: int) -> dict[str, Any] | None:
     return next((e for e in wf.get("segments") or [] if e.get("seq") == seq), None)
+
+
+def _record_agents(
+    segment: RunSegment, workflow_id: str, status: WorkflowStatus, steps: set[str] | None = None
+) -> None:
+    """#258: the running segment's working agents as this tick read them (``steps``: the
+    segment's own steps in a workflow that runs several; None: every step), and when."""
+    agents = [
+        {
+            "role": st.role,
+            "state": st.state.lower(),
+            "started_at": st.started_at.isoformat() if st.started_at else None,
+            "heartbeat_at": st.heartbeat_at.isoformat() if st.heartbeat_at else None,
+            "cost_usd": float(st.cost_usd) if st.cost_usd is not None else None,
+        }
+        for st in status.steps
+        if st.state in WORKING and (steps is None or st.step_id in steps)
+    ]
+    art = _art(segment)
+    checked = _now().isoformat()
+    art["progress"] = {"workflow_id": workflow_id, "checked_at": checked, "agents": agents}
+    _set_art(segment, art)
+
+
+def _record_running(wf: dict[str, Any], status: WorkflowStatus, segments: list[RunSegment]) -> None:
+    """#258: the agents of the run's running segment in the workflow just read, its own
+    steps only."""
+    current = next((s for s in segments if s.status == "running"), None)
+    if current is None or current.swarm_workflow_id != wf["id"]:
+        return
+    entry = _plan_entry(wf, current.seq)
+    own = {*(entry.get("work") or []), *(entry.get("revises") or [])} if entry else None
+    _record_agents(current, wf["id"], status, own)
 
 
 @dataclass
@@ -4720,21 +4817,25 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
         ),
         None,
     )
-    if earlier is not None:
-        _cost_on(
-            run, segments, {"seq": earlier.seq, "id": running.swarm_workflow_id}, status.cost_usd
-        )
     if art["attempts"]:
-        # The running workflow's attempt (one found later may sit after it).
+        # The running workflow's attempt (one found later may sit after it). On an earlier
+        # segment's workflow it keeps what its own agents spent (:func:`_take_cost`).
         current = _current_attempt(art, running)
-        current["cost_usd"] = (
-            0 if earlier is not None else _higher(status.cost_usd, current.get("cost_usd"))
-        )
+        if earlier is None:
+            current["cost_usd"] = _higher(status.cost_usd, current.get("cost_usd"))
         current["state"] = status.state
     running.cost_usd = sum(
         (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
     )
+    _set_art(running, art)
+    if earlier is not None:
+        # The rest of the workflow's cost, counted once.
+        _cost_on(
+            run, segments, {"seq": earlier.seq, "id": running.swarm_workflow_id}, status.cost_usd
+        )
     _recompute_spend(run, segments)
+    _record_agents(running, workflow_id, status)
+    art = _art(running)
 
     if status.terminal:
         stats.finished += 1
@@ -4780,10 +4881,29 @@ def _take_cost(
     """The live workflow's cost, on the attempt of the segment it was submitted for, and
     the run's spend from it. Returns that segment.
 
-    The whole workflow's cost goes on its first attempt there: a revision inside the
-    workflow is another attempt on the same workflow, and counts nothing again. A cost
-    is never lowered."""
+    #258: a later segment started in the workflow carries what its own steps cost; the
+    rest of the workflow's cost goes on the first attempt of the segment it was submitted
+    for: a revision inside the workflow is another attempt on the same workflow, and
+    counts nothing again. The workflow's cost and a step's are never lowered."""
     start = next((s for s in segments if s.seq == wf.get("start_seq")), None)
+    others = Decimal(0)
+    for entry in wf.get("segments") or []:
+        later = next((s for s in segments if s.seq == entry.get("seq")), None)
+        if later is None or later is start:
+            continue
+        own = {*entry.get("work", []), *entry.get("reviews", []), *entry.get("revises", [])}
+        spent = sum((st.cost_usd or 0 for st in status.steps if st.step_id in own), Decimal(0))
+        art = _art(later)
+        first = True
+        for a in art["attempts"]:
+            if a.get("workflow_id") == wf["id"]:
+                a["cost_usd"] = _higher(spent, a.get("cost_usd")) if first else 0
+                others += Decimal(str(a["cost_usd"]))
+                first = False
+        later.cost_usd = sum(
+            (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
+        )
+        _set_art(later, art)
     if start is not None:
         art = _art(start)
         first = True
@@ -4791,7 +4911,12 @@ def _take_cost(
             if a.get("workflow_id") == wf["id"]:
                 # Never lowered: a read made earlier (cancel() reads before it takes the
                 # run's row lock) is not newer than one the tick recorded meanwhile.
-                a["cost_usd"] = _higher(status.cost_usd, a.get("cost_usd")) if first else 0
+                if first:
+                    total = _higher(status.cost_usd, a.get("workflow_cost_usd", a.get("cost_usd")))
+                    a["workflow_cost_usd"] = total
+                    a["cost_usd"] = max(total - float(others), 0)
+                else:
+                    a["cost_usd"] = 0
                 first = False
         start.cost_usd = sum(
             (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
@@ -5138,15 +5263,33 @@ def _searching(run: Run) -> str | None:
 
 def _cost_on(run: Run, segments: list[RunSegment], entry: dict[str, Any], cost: Decimal) -> None:
     """A searched workflow's cost on its segment's first attempt with its id (a revision
-    inside a workflow counts nothing again), never lower than one already recorded."""
+    inside a workflow counts nothing again), never lower than one already recorded.
+
+    #258: what other segments started in the workflow carry (their own agents' spend,
+    :func:`_take_cost`) is not counted again: the segment carries the rest."""
     segment = next((s for s in segments if s.seq == entry.get("seq")), None)
     if segment is None:
         return
+    others = sum(
+        (
+            Decimal(str(a.get("cost_usd") or 0))
+            for s in segments
+            if s is not segment
+            for a in _art(s)["attempts"]
+            if a.get("workflow_id") == entry["id"]
+        ),
+        Decimal(0),
+    )
     art = _art(segment)
     first = True
     for a in art["attempts"]:
         if a.get("workflow_id") == entry["id"]:
-            a["cost_usd"] = _higher(cost, a.get("cost_usd")) if first else 0
+            if first:
+                total = _higher(cost, a.get("workflow_cost_usd", a.get("cost_usd")))
+                a["workflow_cost_usd"] = total
+                a["cost_usd"] = max(total - float(others), 0)
+            else:
+                a["cost_usd"] = 0
             first = False
     segment.cost_usd = sum(
         (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
@@ -5542,6 +5685,7 @@ async def _tick_workflow(
         status = await _rt().status(wf["id"])
     start = _take_cost(run, wf, status, segments)
     current = next((s for s in segments if s.status == "running"), None)
+    _record_running(wf, status, segments)
     for parked in status.parked:
         if parked.reason == "CREDENTIAL_MISSING":
             _note(current or start or segments[0], workflow.ADVICE["CREDENTIAL_MISSING"])
@@ -5559,6 +5703,7 @@ async def _tick_workflow(
         await _watch_wait(db, run, wf, status, segments)
         followed = _drivable(run)
         if run.status != "running" or followed is None or followed["id"] != wf["id"]:
+            _record_running(wf, status, segments)
             return  # still waiting, or done with this workflow
         wf = followed
 
@@ -5623,6 +5768,8 @@ async def _tick_workflow(
             await _detach(db, run, cancel=False, state="ended")
         if await _advance(db, run, current, segments):
             stats.advanced += 1
+    # A segment that started during this check shows what the check read.
+    _record_running(wf, status, segments)
 
     if status.terminal and run.status == "running" and _live(run) is not None:
         current = next((s for s in segments if s.status == "running"), None)
@@ -5836,12 +5983,14 @@ async def _take_answer(
         )
     counted = ours or reason is None
     if counted and approved and not ours and cp.kind == "feature_set":
-        if await _recheck_scope(db, cp):
+        # The gate below reads the scope as stored, re-checked now (C6).
+        await _recheck_scope(db, cp)
+    if counted and approved and not ours:
+        # D3 "Console gate": held while a blocking reason is not fixed or waived.
+        shut = await approve_gate_of(db, cp)
+        if shut is not None and not shut.open:
             await _hold_console_approval(db, run, cp, segment, record, wait, at, revise, member)
             return
-    if counted and approved and not ours and cp.kind == "priority_order" and _order_blocking(cp):
-        await _hold_console_approval(db, run, cp, segment, record, wait, at, revise, member)
-        return
     if not counted or (not approved and not revise):
         console = _console_record(run, segment, record, at, revise)
         console.update(
@@ -6410,14 +6559,17 @@ async def decide_checkpoint(
             await db.commit()
             return
     if decision == "approved" and cp.kind == "feature_set" and await _recheck_scope(db, cp):
-        # The scope as stored still has blocking problems: the refreshed check is kept for
-        # the run page and the Inbox, and nothing is decided.
-        blocked = _cannot_approve(cp)
-        await db.commit()
-        raise RunError(blocked or "the feature set has blocking problems")
+        # The scope as stored still has blocking problems: unless each is waived, the
+        # refreshed check is kept for the run page and the Inbox, and nothing is decided.
+        if (shut := await approve_gate_of(db, cp)) and not shut.open:
+            await db.commit()
+            raise blocking_open(shut)
     if decision == "approved" and (blocked := _cannot_approve(cp)):
         # Approve, a confirmed console approval and Continue alike: nothing is decided.
         raise RunError(blocked)
+    if decision == "approved" and (shut := await approve_gate_of(db, cp)) and not shut.open:
+        # D3: the same for a blocking reason not fixed or waived (one gate for every path).
+        raise blocking_open(shut)
     if decision == "changes_requested" and not note:
         if not send_back:
             raise Invalid("say what to change: a note is required to request changes")
@@ -6451,6 +6603,8 @@ async def decide_checkpoint(
     if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW:
         # F4 Engineering review stop reads whether a lead was named when it was decided.
         data["engineering_lead_named"] = bool(leads)
+    if via == "swarmcloud_console":
+        data["via"] = via
     await audit.record(db, principal, f"checkpoint.{decision}", "checkpoint", cp.id, data)
     # H1: the stop's decision is a checkpoint record, in this transaction.
     await decisions_capture.checkpoint(db, principal, run, cp, decided_via=via)
@@ -7895,14 +8049,6 @@ async def _order_decided(
         run_order.discard(snapshot, cp.decided_by)
 
 
-def _order_blocking(cp: Checkpoint) -> int:
-    """Blocking problems of the priority order a checkpoint decides (C8), as checked at
-    segment end: nothing edits the order until pick C9, so it is not re-checked."""
-    if cp.kind != "priority_order":
-        return 0
-    return run_order.blocking_of((cp.payload or {}).get("priority_check"))
-
-
 # What the Inbox says of a console approval held while the feature set has blocking problems
 # (D3 Approve blocked by problems, "Console gate", decided 2026-10-20).
 CONSOLE_BLOCKED = "Blocking problems are open: fix or waive them, then confirm"
@@ -7967,21 +8113,12 @@ NOT_IMPORTED = "the draft was not imported: retry import, or request changes"
 
 def _cannot_approve(cp: Checkpoint) -> str | None:
     """Why approving this checkpoint is refused now (web, Inbox and MCP alike): the draft
-    its segment left was refused at import (until Retry import imports it), the feature
-    set it stands for has blocking problems (C6, as last checked: :func:`_recheck_scope`),
-    or the priority order does (C8, :func:`_order_blocking`)."""
+    its segment left was refused at import (until Retry import imports it). Blocking
+    problems, the feature set's (C6) and the priority order's (C8) included, are the
+    approve gate's (D3, oracle.runs.gate)."""
     imp = (cp.payload or {}).get("import")
     if cp.status == "pending" and isinstance(imp, dict) and imp.get("error"):
         return NOT_IMPORTED
-    if cp.status == "pending" and cp.kind == "feature_set":
-        # C6 (call c3): Approve waits while the feature set has a blocking problem. Pick D3
-        # Approve blocked by problems takes this over in its one approve gate.
-        n = feature_set.blocking_of((cp.payload or {}).get("feature_set_check"))
-        if n:
-            return feature_set.blocking_message(n)
-    if cp.status == "pending" and (n := _order_blocking(cp)):
-        # C8 (call c3): the same for the priority order; pick D3 takes it over too.
-        return run_order.blocking_message(n)
     return None
 
 
@@ -8701,6 +8838,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     mine = [c for c in pending if may_decide(principal, c, runs[c.run_id].flow, leads)]
     owed = [c for c in owing if may_decide(principal, c, runs[c.run_id].flow, leads)]
     names = await _decider_names(db, owed)
+    staged = await _staged_actions(db, mine)
     owner = principal.role == "owner"
     waiting_runs: list[Run] = []
     if owner:
@@ -8719,7 +8857,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         seq = (c.payload or {}).get("segment_seq")
         sdef = _flow(run).segments[seq - 1] if seq else None
         return InboxCheckpoint(
-            **_checkpoint_out(c, principal, names, flow=run.flow, leads=leads).model_dump(),
+            **_checkpoint_out(
+                c, principal, names, flow=run.flow, leads=leads, staged=staged
+            ).model_dump(),
             flow=run.flow,  # type: ignore[arg-type]
             flow_title=_flow(run).title,
             document_slug=refs.get(run.document_id),

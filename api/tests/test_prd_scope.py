@@ -287,7 +287,7 @@ async def test_approve_refused_with_blocking(client, owner, runtime):  # noqa: F
     tenant_id, auth = owner
     run = await at_feature_set(client, owner, runtime, BLOCKING)
     cp = pending(run)
-    reason = "The feature set has 1 blocking problem; send it back with Request changes"
+    reason = "1 blocking problem left: fix or waive them, or send back to the agents"
     assert cp["cannot_approve"] == reason
     (p,) = cp["payload"]["feature_set_check"]["problems"]
     assert p["code"] == "depends_on_excluded" and p["feature"] == "saved-addresses"
@@ -296,7 +296,7 @@ async def test_approve_refused_with_blocking(client, owner, runtime):  # noqa: F
     for headers in (auth, await as_user(tenant_id, "approver")):
         resp = await client.post(url, json={"decision": "approved"}, headers=headers)
         assert resp.status_code == 409, resp.text
-        assert resp.json()["detail"] == reason
+        assert resp.json()["detail"]["message"] == reason
     # MCP decide_checkpoint (the same route, a person's client).
     async with mcp_client(await api_token(tenant_id)) as c:
         out = await c.call_tool(
@@ -343,7 +343,7 @@ async def test_a_file_level_problem_stays_when_the_rows_are_rechecked(client, ow
         headers=auth,
     )
     assert resp.status_code == 409, resp.text
-    assert resp.json()["detail"].startswith("The feature set has 1 blocking problem")
+    assert resp.json()["detail"]["message"].startswith("1 blocking problem left")
 
 
 @pytest.mark.parametrize("case", list(ONLY_IN_THE_FILE))
@@ -361,7 +361,7 @@ async def test_a_problem_only_the_file_shows_stays_when_the_rows_are_rechecked(
     assert text != CLEAN
     run = await at_feature_set(client, owner, runtime, text)
     cp = pending(run)
-    reason = "The feature set has 1 blocking problem; send it back with Request changes"
+    reason = "1 blocking problem left: fix or waive them, or send back to the agents"
     assert cp["cannot_approve"] == reason
     (p,) = cp["payload"]["feature_set_check"]["problems"]
     assert (p["code"], p["message"]) == (code, message)
@@ -369,7 +369,7 @@ async def test_a_problem_only_the_file_shows_stays_when_the_rows_are_rechecked(
     for _ in range(2):  # a second re-check reads the first one's result
         resp = await client.post(url, json={"decision": "approved"}, headers=auth)
         assert resp.status_code == 409, resp.text
-        assert resp.json()["detail"] == reason
+        assert resp.json()["detail"]["message"] == reason
     async with mcp_client(await api_token(tenant_id)) as c:
         out = await c.call_tool(
             "decide_checkpoint",

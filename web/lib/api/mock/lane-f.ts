@@ -8,6 +8,7 @@ import type { Schemas } from "@/lib/api/client";
 import { plainText } from "@/lib/markdown";
 import { presenterNotes, resolveBrief } from "./brief";
 import { mockUuid, seeded } from "./ids";
+import { cannotApproveNow } from "./runs";
 
 import type { Db, DocumentRow, VersionRow } from "./server";
 
@@ -1859,7 +1860,7 @@ function compare(db: Db, snap: SnapshotRow): Schemas["CompareOut"] {
     live_generated_at: live.generated_at,
     run: run ? { id: run.id, flow_title: run.flow_title, status: run.status, document_slug: run.document_slug ?? null } : null,
     checkpoint: cp
-      ? { id: cp.id, status: cp.status, approver_role: cp.approver_role, cannot_approve: cp.cannot_approve ?? null, can_decide: cp.status === "pending" }
+      ? { id: cp.id, status: cp.status, approver_role: cp.approver_role, cannot_approve: cannotApproveNow(db.runs, cp), can_decide: cp.status === "pending" }
       : null,
   };
 }
