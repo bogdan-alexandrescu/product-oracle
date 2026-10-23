@@ -164,7 +164,17 @@ from oracle.review.models import FeedbackItem
 from oracle.review.schemas import Resolution
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import doc_dates, schedule
-from oracle.runs import extensions, feature_set, flows, reasons, rejection, reuse, roadmap, workflow
+from oracle.runs import (
+    extensions,
+    feature_set,
+    flows,
+    reasons,
+    rejection,
+    reuse,
+    review_link,
+    roadmap,
+    workflow,
+)
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -511,6 +521,7 @@ def _summary(
         started_at=run.started_at,
         finished_at=run.finished_at,
         waiting_on=waiting.kind if waiting else None,  # type: ignore[arg-type]
+        review_link=review_link.link(waiting) if waiting else None,
         error=run.error,
         stuck=_stuck(run),
         can_retry=_can_retry(run),
@@ -801,6 +812,7 @@ def _checkpoint_out(
         and may_decide(principal, cp, flow, leads),
         cannot_approve=_cannot_approve(cp),
         delivery=delivery,
+        review_link=review_link.link(cp),
     )
 
 
@@ -6230,7 +6242,9 @@ async def decide_checkpoint(
     decision: str,
     note: str | None,
     expected_revision: int | None = None,
+    audit_via: str | None = None,
 ) -> None:
+    """``audit_via``: ``document_review`` when the version's review decided it (D10)."""
     from oracle.auth.service import caller_refusal
     from oracle.review import publish
 
@@ -6258,6 +6272,13 @@ async def decide_checkpoint(
     )
     if refusal is not None:
         raise Forbidden(refusal)
+    if (
+        audit_via is None
+        and cp.kind in review_link.KINDS
+        and not review_link.is_decider(principal, await review_link.decider_of(db, cp))
+    ):
+        # D10: Approve draft and Send back are the designated decider's, as approve_version.
+        raise Forbidden(review_link.DECIDER_ONLY)
     if cp.status in DECIDED:
         # A recorded decision is final (owner, 2026-10-20), delivered to the run or not
         # yet: the same decision again, or the other one, changes nothing. A different
@@ -6317,7 +6338,14 @@ async def decide_checkpoint(
     if decision == "approved" and (blocked := _cannot_approve(cp)):
         # Approve, a confirmed console approval and Continue alike: nothing is decided.
         raise RunError(blocked)
-    if decision == "changes_requested" and not note:
+    if decision == "changes_requested":
+        # D10: a PRD or roadmap review sends back the document's own feedback, the note
+        # optional; the review file is the change request (cp.note stays the person's).
+        package = await review_link.review_file(db, cp, note)
+        if package is not None:
+            text, findings = package
+            cp.payload = {**(cp.payload or {}), "review_file": text, "review_findings": findings}
+    if decision == "changes_requested" and not note and not _review_file(cp):
         raise Invalid("say what to change: a note is required to request changes")
     segments = await _segments(db, run.id)
     seq = (cp.payload or {}).get("segment_seq")
@@ -6335,6 +6363,8 @@ async def decide_checkpoint(
     cp.note = note
     _record_decider(cp, *decider)
     data: dict[str, Any] = {"run_id": str(run.id), "kind": cp.kind}
+    if audit_via is not None:
+        data["via"] = audit_via
     if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW:
         # F4 Engineering review stop reads whether a lead was named when it was decided.
         data["engineering_lead_named"] = bool(leads)
@@ -6391,11 +6421,18 @@ async def decide_checkpoint(
         if voided is not None:
             raise Forbidden(f"{voided}: the decision was voided before it reached the run")
         return
-    await _continue_decided(db, run, cp, segment, segments, later, decision, note)
+    await _continue_decided(
+        db, run, cp, segment, segments, later, decision, _review_file(cp) or note
+    )
     if _cancel_pending(run):
         # Nothing is submitted after a workflow SwarmCloud may still be running.
         raise _unconfirmed("continue the run as a new workflow")
     await db.commit()  # the router submits it (submit_queued), outside the gate
+
+
+def _review_file(cp: Checkpoint) -> str | None:
+    """D10: the structured review file a run review was sent back with, if any."""
+    return (cp.payload or {}).get("review_file") if cp.status != "approved" else None
 
 
 async def _continue_decided(
@@ -6641,7 +6678,9 @@ async def _deliver_decision(
             _finished_posting(cp)
             await db.commit()
             return
-    await _continue_decided(db, run, cp, segment, segments, later, decision, note)
+    await _continue_decided(
+        db, run, cp, segment, segments, later, decision, _review_file(cp) or note
+    )
     if _cancel_pending(run):
         # Nothing is submitted after a workflow SwarmCloud may still be running.
         raise _unconfirmed("continue the run as a new workflow")
@@ -7079,7 +7118,11 @@ async def _decide_in_workflow(
         if approved
         else {
             "verdict": NOT_YET,
-            "findings": ([cp.note] if cp.note else []) + await _problem_findings(db, run, cp),
+            # D10: a run review sent back from its version: one line per review entry.
+            "findings": (
+                (cp.payload or {}).get("review_findings") or ([cp.note] if cp.note else [])
+            )
+            + await _problem_findings(db, run, cp),
         }
     )
     on_behalf_of = await _email(db, user_id)
