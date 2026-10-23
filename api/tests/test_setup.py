@@ -223,7 +223,8 @@ async def test_timezone_done_once_the_company_time_zone_is_stored(client, tenant
     # "Time zone" copy and where it opens.
     approver = await make_person(tenant_id, "approver@example.com", "approver")
     assert "timezone" not in [s["key"] for s in (await _setup(client, approver))["steps"]]
-    assert _step(await _setup(client, owner), "timezone") == {
+    before = await _setup(client, owner)
+    assert _step(before, "timezone") == {
         "key": "timezone", "done": False, "count": None, "detail": None,
     }  # fmt: skip
     url = "/v1/settings/company_timezone"
@@ -233,7 +234,7 @@ async def test_timezone_done_once_the_company_time_zone_is_stored(client, tenant
     assert _step(body, "timezone") == {
         "key": "timezone", "done": True, "count": None, "detail": "Europe/Lisbon",
     }  # fmt: skip
-    assert body["done"] == 1
+    assert body["done"] == before["done"] + 1
     reset = await client.put(url, json={"value": None}, headers=owner.headers)
     assert reset.status_code == 200
     assert _step(await _setup(client, owner), "timezone")["done"] is False
@@ -259,7 +260,7 @@ async def test_a_second_company_sees_only_its_own_counts(client, tenant_id, owne
     other = await make_person(await make_tenant("Second Co"), "second-owner@example.com")
     body = await _setup(client, other)
     assert [s["key"] for s in body["steps"]] == OWNER_KEYS
-    assert [s["done"] for s in body["steps"]] == [False] * 7
+    assert [s["done"] for s in body["steps"]] == [False] * 8
     assert _step(body, "connect")["count"] == 0
     assert _step(body, "sources")["count"] == 0
     assert _step(body, "invite")["count"] == 1
@@ -310,7 +311,8 @@ async def test_the_cost_is_fixed_whatever_the_size(tenant_id, owner, members):
             event.remove(engine, "before_cursor_execute", count)
     assert [st.key for st in out.steps] == OWNER_KEYS
     assert out.steps[2].count == members
-    assert len(statements) <= 8, statements
+    # One statement per owner step (eight), plus the hide preference.
+    assert len(statements) <= 9, statements
 
 
 def test_step_keys_are_checked_against_the_registry():
