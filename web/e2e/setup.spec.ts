@@ -52,7 +52,7 @@ async function nameLeadFromSetup(page: Page) {
   await backToHome(page);
 }
 
-/** H2: saves the Company time zone (UTC) from the checklist's Time zone step. */
+/** H2: saves the Company time zone (Los Angeles, the default) from the checklist's Time zone step. */
 async function setZoneFromSetup(page: Page) {
   await row(page, "timezone").getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company\?from=setup#timezone$/);

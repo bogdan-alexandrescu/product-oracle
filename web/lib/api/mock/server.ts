@@ -1238,7 +1238,7 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     me: { id: me.id, email: me.email, role: me.role, status: me.status },
     members: db.members.map((m) => ({ id: m.id, email: m.email, role: m.role, status: m.status })),
     uuid,
-    companyTimezone: () => String(mockSettingValue("company_timezone") ?? "UTC"),
+    companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     decisions: () => db.decisions?.decisions ?? [],
   };
 }
@@ -1912,6 +1912,10 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
     { key: "timezone", done: facts.timezone != null, count: null, detail: facts.timezone },
     { key: "build_baseline", done: built != null, count: null, detail: built },
   ];
+  // The "setup-new-step" scenario: an API with a step this web build has no words for.
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) === "setup-new-step") {
+    owner.push({ key: "calendar" as Schemas["SetupStep"]["key"], done: false, count: null, detail: null });
+  }
   const steps = me.role === "owner" ? [...personal, ...owner] : me.role === "viewer" ? [] : personal;
   return {
     steps,

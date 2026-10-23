@@ -6,11 +6,14 @@ import { formatDay } from "@/lib/format";
 
 type Step = Schemas["SetupStep"];
 
+type Copy = { label: string; href?: string; status: (s: Step) => string };
+
 /**
  * The web's copy of each setup step the API names (A1): label, where Open goes, and the
- * status figure. A pick that adds a step to oracle.setup.STEPS adds its line here.
+ * status figure. A pick that adds a step to oracle.setup.STEPS adds its line here; until
+ * then the step is still listed, under its key's words (copyOf).
  */
-const STEPS: Record<string, { label: string; href: string; status: (s: Step) => string }> = {
+const STEPS: Record<string, Copy> = {
   connect: {
     label: "Connect tools",
     href: "/settings/connections?from=setup",
@@ -56,6 +59,14 @@ const STEPS: Record<string, { label: string; href: string; status: (s: Step) => 
   },
 };
 
+/** A step's copy; a step this build has no words for keeps its row: "Calendar", Done or Not done, no Open. */
+function copyOf(s: Step): Copy {
+  const known = STEPS[s.key];
+  if (known) return known;
+  const words = String(s.key).replace(/_/g, " ");
+  return { label: words.charAt(0).toUpperCase() + words.slice(1), status: (x) => (x.done ? "Done" : "Not done") };
+}
+
 /** Whether the checklist has anything left for this person. */
 export function setupOpen(setup: Schemas["SetupOut"] | undefined): setup is Schemas["SetupOut"] {
   return !!setup && setup.total > 0 && setup.done < setup.total;
@@ -81,7 +92,6 @@ export function SetupChip({ setup, onShow, busy }: { setup: Schemas["SetupOut"];
  * away. Drawn first on Home while a step is open and the person has not hidden it.
  */
 export function SetupPanel({ setup, onHide, busy }: { setup: Schemas["SetupOut"]; onHide: () => void; busy: boolean }) {
-  const steps = setup.steps.filter((s) => s.key in STEPS);
   return (
     <Panel
       title="Set up"
@@ -94,9 +104,8 @@ export function SetupPanel({ setup, onHide, busy }: { setup: Schemas["SetupOut"]
       }
     >
       <ul>
-        {steps.map((s) => {
-          const copy = STEPS[s.key];
-          if (!copy) return null;
+        {setup.steps.map((s) => {
+          const copy = copyOf(s);
           const status = copy.status(s);
           return (
             <li
@@ -119,9 +128,11 @@ export function SetupPanel({ setup, onHide, busy }: { setup: Schemas["SetupOut"]
                 <span data-testid="setup-status" title={status} className="tnum min-w-0 truncate text-[15px] text-text2">
                   {status}
                 </span>
-                <LinkButton href={copy.href} className="flex-none">
-                  Open
-                </LinkButton>
+                {copy.href && (
+                  <LinkButton href={copy.href} className="flex-none">
+                    Open
+                  </LinkButton>
+                )}
               </span>
             </li>
           );

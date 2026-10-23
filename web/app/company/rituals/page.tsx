@@ -216,14 +216,14 @@ function AddRitual({ onClose, onAdded }: { onClose: () => void; onAdded: (r: Rit
         e.preventDefault();
         setError(null);
         try {
-          const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
           const r = await unwrap(
             api.POST("/v1/rituals", {
               body: {
                 kind: "custom",
                 title: title.trim(),
                 attendee_ids: [],
-                schedule: { freq: "weekly", interval: 1, weekday: 0, week_of_month: 1, month: 1, time: "09:00", timezone },
+                // In the Company time zone: a ritual has no zone of its own.
+                schedule: { freq: "weekly", interval: 1, weekday: 0, week_of_month: 1, month: 1, time: "09:00" },
               },
             }),
           );

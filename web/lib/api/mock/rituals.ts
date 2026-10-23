@@ -12,7 +12,7 @@ import type { Schemas } from "@/lib/api/client";
 
 type RitualOut = Schemas["RitualOut"];
 type OccurrenceOut = Schemas["OccurrenceOut"];
-type Schedule = Schemas["Schedule"];
+type Schedule = Schemas["RitualSchedule"] & { timezone: string };
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Member = { id: string; email: string; role: Role; status?: string };
 
@@ -138,19 +138,9 @@ function runsPerMonth(s: Schedule): number {
   return { weekly: 4.33, monthly: 1, quarterly: 0.33, yearly: 0.08 }[s.freq];
 }
 
-function validZone(tz: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /** The API's 422s for a schedule (Schedule's validators), or null. */
 function scheduleError(s: Schedule): string | null {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(s.time)) return "schedule.time: time must be HH:MM (00:00 to 23:59)";
-  if (!validZone(s.timezone)) return `schedule.timezone: unknown time zone '${s.timezone}'`;
   if (![-1, 1, 2, 3, 4].includes(s.week_of_month)) return "schedule.week_of_month: week_of_month must be 1 to 4, or -1 for the last";
   if (s.freq === "every_n_weeks" && !(s.interval >= 2 && s.interval <= 12)) return "schedule.interval: every_n_weeks repeats every 2 to 12 weeks";
   if (s.freq === "quarterly" && s.month > 3) return "schedule.month: a quarter starts in its month 1, 2 or 3";
@@ -166,7 +156,7 @@ const sched = (freq: Schedule["freq"], fields: Partial<Schedule>): Schedule => (
   week_of_month: 1,
   month: 1,
   time: "09:00",
-  timezone: "UTC",
+  timezone: "America/Los_Angeles",
   ...fields,
 });
 
@@ -320,13 +310,12 @@ function tick(db: RitualsDb) {
   }
 }
 
-/** The Company time zone changed: the rituals on the old one take the new one and their next date in it. */
+/** The Company time zone changed: every ritual takes the new one and its next date in it (one zone). */
 function followZone(ctx: RitualsContext, db: RitualsDb) {
   const zone = ctx.companyTimezone();
-  const old = db.zone ?? "UTC";
-  if (zone === old) return;
+  if (zone === db.zone) return;
   for (const r of db.rituals) {
-    if (r.schedule.timezone !== old) continue;
+    if (r.schedule.timezone === zone) continue;
     r.schedule = { ...r.schedule, timezone: zone };
     if (r.status === "active") r.next_due_at = nextOccurrence(r.schedule, now()).toISOString();
     r.lock_version += 1;
@@ -441,7 +430,8 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
         const input = await body<Schemas["RitualCreate"]>();
         if (input.kind !== "custom") return fail(422, "kind: the mock adds custom rituals only");
         if (!input.title?.trim()) return fail(422, "title: give the ritual a title");
-        const schedule = sched("weekly", { ...input.schedule });
+        // A zone sent with the rule is not read: every ritual is in the Company time zone.
+        const schedule = sched("weekly", { ...input.schedule, timezone: ctx.companyTimezone() });
         const bad = scheduleError(schedule);
         if (bad) return fail(422, bad);
         const r: Ritual = {
@@ -483,7 +473,7 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
         if (input.attendee_ids?.some((id) => !memberIds.has(id))) return fail(422, "attendee_ids: every attendee is a member");
         if (input.owner_id && !memberIds.has(input.owner_id)) return fail(422, "owner_id: the owner is a member");
         if (input.schedule) {
-          const schedule = sched(input.schedule.freq, input.schedule);
+          const schedule = sched(input.schedule.freq, { ...input.schedule, timezone: ctx.companyTimezone() });
           const bad = scheduleError(schedule);
           if (bad) return fail(422, bad);
           r.schedule = schedule;

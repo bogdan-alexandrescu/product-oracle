@@ -20,6 +20,7 @@ import {
   localTime,
   personName,
   presetOf,
+  ruleOf,
   scheduleOf,
   whenText,
   zoneTime,
@@ -29,11 +30,6 @@ import {
   type Ritual,
   type Schedule,
 } from "./lib";
-
-function zones(current: string): string[] {
-  const all = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
-  return [...new Set(["UTC", current, ...all])];
-}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -106,7 +102,7 @@ export function RitualInspector({
           ...path,
           body: {
             lock_version: ritual.lock_version,
-            schedule,
+            schedule: ruleOf(schedule),
             duration_min: Number(duration),
             prep_hours: Number(prep),
             owner_id: owner,
@@ -262,15 +258,13 @@ export function RitualInspector({
           <Field label="Time">
             <input type="time" required className={INPUT} value={schedule.time} onChange={(e) => set({ time: e.target.value })} />
           </Field>
-          <Field label="Time zone">
-            <select className={INPUT} value={schedule.timezone} onChange={(e) => set({ timezone: e.target.value })}>
-              {zones(schedule.timezone).map((z) => (
-                <option key={z} value={z}>
-                  {z}
-                </option>
-              ))}
-            </select>
-          </Field>
+          {/* One zone (owner decision 2026-10-22): every ritual is in the Company time zone. */}
+          <p className="col-span-2 self-center text-sm text-text2 max-[600px]:col-span-1">
+            <span data-testid="ritual-zone">Company time zone · {saved.timezone}</span>{" "}
+            <Link href="/settings/company#timezone" className="font-semibold text-accent-ink hover:underline">
+              Change
+            </Link>
+          </p>
           <Field label="Length (minutes)">
             <input type="number" min={5} max={480} required className={INPUT} value={duration} onChange={(e) => setDuration(e.target.value)} />
           </Field>

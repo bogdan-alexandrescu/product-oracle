@@ -91,8 +91,9 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
   planning_horizons: { short_quarters: 1, medium_quarters: 2, long_from_months: 12, long_to_months: 24 },
   // F6: the weekly alignment report, Monday 08:00 in the Company time zone; the channel once Slack is connected.
   alignment_report: { enabled: true, weekday: "mon", time: "08:00", slack_channel: null },
-  // The Company time zone: goals' today, the weekly report and rituals (UTC until an owner sets it).
-  company_timezone: "UTC",
+  // The Company time zone: goals' today, the weekly report and rituals (Los Angeles until an
+  // owner sets one, owner decision 2026-10-22).
+  company_timezone: "America/Los_Angeles",
 };
 
 /** A company setting's value as stored, else its default (./reports.ts reads the report's channel). */

@@ -4,7 +4,8 @@ import type { Schemas } from "@/lib/api/client";
 export type Ritual = Schemas["RitualOut"];
 export type Occurrence = Schemas["OccurrenceOut"];
 export type OccurrenceSummary = Schemas["OccurrenceSummary"];
-export type Schedule = Schemas["Schedule"];
+/** A stored schedule: the rule people set, in the Company time zone (a ritual has no zone of its own). */
+export type Schedule = Schemas["RitualSchedule"] & { timezone: string };
 export type Member = Schemas["MemberOut"];
 export type Person = Schemas["PersonOut"];
 export type SummarySettings = Schemas["SummarySettingsOut"];
@@ -37,7 +38,7 @@ export function presetOf(s: Schedule): Preset {
 
 /** A complete schedule from the API's stored dict (its defaults filled in). */
 export function scheduleOf(raw: Ritual["schedule"]): Schedule {
-  return { freq: "weekly", interval: 1, weekday: 0, week_of_month: 1, month: 1, time: "09:00", timezone: "UTC", ...(raw as Partial<Schedule>) };
+  return { freq: "weekly", interval: 1, weekday: 0, week_of_month: 1, month: 1, time: "09:00", timezone: "America/Los_Angeles", ...(raw as Partial<Schedule>) };
 }
 
 /** "9:00" from "09:00". */
@@ -106,3 +107,8 @@ export function estimateText(s: SummarySettings): string {
 
 /** A person's name from the member directory (GET /v1/people), which every member may read. */
 export const personName = (people: Person[] | undefined, id: string) => people?.find((p) => p.user_id === id)?.name ?? "—";
+
+/** The rule alone, as the API takes it: the ritual is in the Company time zone. */
+export function ruleOf(s: Schedule): Schemas["RitualSchedule"] {
+  return { freq: s.freq, interval: s.interval, weekday: s.weekday, week_of_month: s.week_of_month, month: s.month, time: s.time };
+}
