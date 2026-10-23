@@ -167,13 +167,6 @@ EXCEPTIONS = {
     ("roadmap/diff.py", "_day"): "a milestone's calendar date as the agents wrote it",
     ("runs/reasons.py", "_day"): "a milestone's calendar date as the agents wrote it",
     ("sources/connectors/slack.py", "_thread"): "source item text the agents read",
-    ("blockers/render.py", "_date"): (
-        "a blocker's review and decision days in a document body; not in #463 fixes 1, "
-        "asked the owner"
-    ),
-    ("jobs/service.py", "reports_markdown"): (
-        "the version reports download, labelled UTC; not in #463 fixes 1, asked the owner"
-    ),
 }
 
 
@@ -429,3 +422,110 @@ def test_the_deck_banner_names_the_company_time():
         document=doc, version=version, sections=[], citations=[], latest_number=2, zone=AUCKLAND
     )
     assert "approved 2026-10-13 09:00 NZDT" in deck._banner(ev)
+
+
+# --------------------------------------------------------------------------- #463 fixes 2
+
+
+async def test_the_documents_blocker_section_names_the_company_day(client):
+    """The blocker module a published document carries: "Risk accepted until", "Review
+    date" and "Decision gate" name the Company day the gate rationale names."""
+    from tests.blocker_helpers import create_blocker, make_document
+
+    ctx = await make_ctx()
+    await company_zone(client, ctx, AUCKLAND)
+    # 20:00 UTC thirty days out: the next day in Auckland.
+    soon = datetime.combine(date.today() + timedelta(days=30), time(20), tzinfo=UTC)
+    soon_day = company_time.day(soon, AUCKLAND).isoformat()
+    assert soon_day != soon.date().isoformat()
+
+    doc_id = await make_document(ctx, "gate-doc")
+    risky = await create_blocker(client, ctx, key="risky", document_ids=[str(doc_id)])
+    resp = await client.post(
+        f"/v1/blockers/{risky['blocker']['id']}/accept-risk",
+        json={"reason": "Pilot volume stays low", "review_at": soon.isoformat()},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 200, resp.text
+    scoped = await create_blocker(client, ctx, key="scoped", document_ids=[str(doc_id)])
+    exp = await client.post(
+        f"/v1/blockers/{scoped['blocker']['id']}/experiments",
+        json={
+            "hypothesis": "Batching halves calls",
+            "success_threshold": "Under 50 a minute",
+            "decision_gate_at": soon.isoformat(),
+        },
+        headers=ctx.as_("approver"),
+    )
+    assert exp.status_code in (200, 201), exp.text
+
+    resp = await client.get(
+        "/v1/documents/gate-doc/blocker-strategy/render", headers=ctx.as_("viewer")
+    )
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    assert f"Risk accepted until {soon_day}" in out["brief_markdown"]
+    assert f"- **Review date:** {soon_day}" in out["full_markdown"]
+    assert f"Decision gate: {soon_day}." in out["full_markdown"]
+
+
+def _reports():
+    from oracle.jobs.schemas import ChangesReport, NewSource, VersionReports
+
+    return VersionReports(
+        document_id=uuid.uuid4(),
+        version=2,
+        generated_at=LATE,
+        changes=ChangesReport(
+            since=1,
+            summary="The problem is sharper.",
+            sections=[],
+            new_sources=[NewSource(title="Invite funnel, October", kind="file", added_at=LATE)],
+        ),
+    )
+
+
+def test_the_version_reports_name_the_company_time():
+    from oracle.docs.models import Document
+    from oracle.jobs import service as jobs
+
+    doc = Document(slug="saved-addresses", title="Saved addresses PRD", kind="prd")
+    md = jobs.reports_markdown(doc, _reports(), AUCKLAND)
+    assert "Product Oracle · saved-addresses · version 2 · generated 2026-10-13 09:00 NZDT" in md
+    assert "- Invite funnel, October, file, added 2026-10-13" in md
+    assert "UTC" not in md
+
+
+async def test_the_reports_download_names_the_company_time(client):
+    """The download the version page offers, in the zone the company saved."""
+    from oracle.docs.models import DocumentVersion
+    from oracle.jobs.models import LlmJob
+    from tests.test_llm_jobs import DRAFT_V1, SLUG, import_draft
+
+    ctx = await make_ctx()
+    await company_zone(client, ctx, AUCKLAND)
+    await import_draft(client, {"headers": ctx.as_("owner")}, DRAFT_V1)
+    reports = _reports()
+    async with tenant_session(ctx.tenant_id) as s:
+        version = (await s.scalars(select(DocumentVersion))).one()
+        s.add(
+            LlmJob(
+                kind="reporting",
+                document_id=version.document_id,
+                version_id=version.id,
+                status="succeeded",
+                output={
+                    "resolution": {"summary": "Nothing was open.", "counts": {}, "items": []},
+                    "changes": reports.changes.model_dump(mode="json"),
+                },
+                finished_at=LATE,
+            )
+        )
+        await s.commit()
+    resp = await client.get(
+        f"/v1/documents/{SLUG}/versions/1/reports/export", headers=ctx.as_("viewer")
+    )
+    assert resp.status_code == 200, resp.text
+    assert "· generated 2026-10-13 09:00 NZDT" in resp.text
+    assert "added 2026-10-13" in resp.text
+    assert "UTC" not in resp.text
