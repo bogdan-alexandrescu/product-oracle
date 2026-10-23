@@ -1151,6 +1151,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   return {
     // Launch rows (H6) are added by the server (./launches.ts).
     launches: [],
+    // A5: no access requests in the mock yet.
+    access_requests: [],
     checkpoints,
     deliveries,
     approvals,

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ActedCell, SETTLING, Unavailable, useActed } from "@/components/account/acted";
 import { ConfirmDialog } from "@/components/account/ConfirmDialog";
+import { AccessRequests } from "@/components/members/AccessRequests";
 import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
 import {
   Avatar,
@@ -256,6 +257,7 @@ function StatusChip({ m }: { m: Member }) {
 }
 
 function OwnerView({ selfId }: { selfId: string | null }) {
+  const { me } = useMe();
   const membersQ = useQuery("members", () => unwrap(api.GET("/v1/members")));
   const invitesQ = useQuery("invites", () => unwrap(api.GET("/v1/invites")));
   const zone = useQuery("settings|alignment_report", loadReportSetting).data?.timezone ?? DEFAULT_ZONE;
@@ -689,6 +691,11 @@ function OwnerView({ selfId }: { selfId: string | null }) {
                   <>
                     <Chip kind="acc">{ROLE_LABEL[i.role]}</Chip>
                     {i.engineering_lead && <Chip kind="acc">Eng lead</Chip>}
+                    {i.status === "expired" ? (
+                      <Chip kind="warn">Expired {formatDate(i.expires_at)}</Chip>
+                    ) : (
+                      <Chip kind="line">Expires {formatDate(i.expires_at)}</Chip>
+                    )}
                     <Button variant="ghost" icon="link" aria-label={`Copy link for ${i.email}`} onClick={() => copyLink(i)}>
                       {copied === i.id ? "Copied" : "Copy link"}
                     </Button>
@@ -735,6 +742,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
       />
       <Split inspector={inspector}>
         {error && <Notice tone="error">{error}</Notice>}
+        <AccessRequests roles={me?.invite_roles ?? []} defaultRole="commenter" onInvited={() => void invitesQ.reload()} />
         <Panel title="People" count={members?.length}>
           {membersQ.error ? (
             <div className="p-4">

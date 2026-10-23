@@ -38,6 +38,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Access State
+         * @description Where the Google-signed person stands (A5), read from the Google sign-in alone (no
+         *     member needed) and creating nothing: ``member``, ``pending`` (an owner has not
+         *     decided their access request yet), ``approved`` (the next page load signs them in),
+         *     ``declined``, ``invite_expired``, ``invite_only``, ``outside_domains``, ``removed``;
+         *     ``no_google_sign_in`` without Google sign-in. Browser only: not an MCP tool.
+         */
+        get: operations["get_access_state"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/access/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Access Note
+         * @description Set the note an owner reads on the caller's pending access request (A5). Browser
+         *     only: not an MCP tool.
+         */
+        post: operations["send_access_note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -1821,39 +1866,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/invites": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Invites
-         * @description Invites, newest first: open ones unless ``status`` asks for others (or ``all``).
-         */
-        get: operations["list_invites"];
-        put?: never;
-        /**
-         * Create Invite
-         * @description Pre-assign a role to an email: its first Google sign-in lands with that role, and as
-         *     an engineering lead when ``engineering_lead`` (never with role viewer: 422).
-         *
-         *     The invitee is granted Google IAP access on Oracle's backend services
-         *     (``access``: ``granted``; ``skipped`` with no backends configured; ``pending`` with
-         *     ``access_error`` when the grant failed: the invite is kept, and
-         *     ``POST /v1/invites/{invite_id}/access`` retries it). Oracle emails them the sign-in
-         *     link in the background (``email_status``: ``queued``, then ``sent`` or ``failed``;
-         *     ``not_sent`` with no sender configured: send them ``sign_in_url``). Refused (422)
-         *     for an address outside the domains that can sign in.
-         */
-        post: operations["create_invite"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/invites/{invite_id}/access": {
         parameters: {
             query?: never;
@@ -1892,28 +1904,6 @@ export interface paths {
          */
         post: operations["resend_invite_email"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/invites/{invite_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Revoke Invite
-         * @description Revoke an open invite. Revoking twice is a no-op; an accepted invite is a 409.
-         *     The invitee's Google IAP access is taken away, unless they are an active member or
-         *     have another open invite (audited).
-         */
-        delete: operations["revoke_invite"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1963,6 +1953,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sign-in-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Sign In Rules
+         * @description Who becomes a member through Google sign-in: whether it is on, whether new
+         *     sign-ins are off where Oracle is deployed, the company's email domains and where
+         *     each is set, the rule for people without an invite and the default role. Change
+         *     them with ``PUT /v1/settings/{key}`` (``sign_in_without_invite``,
+         *     ``iap_default_role``, ``company_email_domains``).
+         */
+        get: operations["get_sign_in_rules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/people": {
         parameters: {
             query?: never;
@@ -1990,6 +2004,175 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Invites
+         * @description Invites, newest first: open ones (expired included, as both still need an action)
+         *     unless ``status`` asks for others (or ``all``). Owners see every invite, approvers the
+         *     ones they sent.
+         */
+        get: operations["list_invites"];
+        put?: never;
+        /**
+         * Create Invite
+         * @description Pre-assign a role (and a name) to an email: its first Google sign-in lands with
+         *     that role, and as an engineering lead when ``engineering_lead`` (never with role
+         *     viewer: 422). Owners invite with any role; approvers viewers and commenters (A5).
+         *     The invite expires in 14 days (``expires_at``; Resend gives 14 more).
+         *
+         *     The invitee is granted Google IAP access on Oracle's backend services
+         *     (``access``: ``granted``; ``skipped`` with no backends configured; ``pending`` with
+         *     ``access_error`` when the grant failed: the invite is kept, and
+         *     ``POST /v1/invites/{invite_id}/access`` retries it). Oracle emails them the sign-in
+         *     link in the background (``email_status``: ``queued``, then ``sent`` or ``failed``;
+         *     ``not_sent`` with no sender configured: send them ``sign_in_url``). With Google
+         *     sign-in on, refused (422) for an address outside the company's email domains.
+         */
+        post: operations["create_invite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invites/{invite_id}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend Invite
+         * @description Give an open or expired invite 14 more days from now (A5): ``expires_at``,
+         *     ``resent_at`` and ``resend_count``; audited ``invite.resend``. Its email goes out
+         *     again when a sender is configured and its last one is over a minute old. Approvers
+         *     resend only the invites they sent.
+         */
+        post: operations["resend_invite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invites/{invite_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Invite
+         * @description Revoke an open invite (approvers: one they sent). Revoking twice is a no-op; an
+         *     accepted invite is a 409.
+         *     The invitee's Google IAP access is taken away, unless they are an active member or
+         *     have another open invite (audited).
+         */
+        delete: operations["revoke_invite"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Access Requests
+         * @description People from the company's email domains who signed in with Google without an
+         *     invite (rule ``request``), newest first: pending ones unless ``status`` asks for
+         *     others.
+         */
+        get: operations["list_access_requests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-requests/{request_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Access Request
+         * @description Let them in with ``role`` (and a ``name``): an open invite is made for their email
+         *     (14 days), so their next page load signs them in. Owners approve with any role,
+         *     approvers as viewer or commenter. Audited.
+         */
+        post: operations["approve_access_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-requests/{request_id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline Access Request
+         * @description Turn the request down: later sign-ins stay refused (an invite still lets them in).
+         */
+        post: operations["decline_access_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-requests/{request_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Access Request
+         * @description Undo: a declined request, or an approved one whose invite is not claimed yet (the
+         *     invite is revoked), is pending again. Approvers undo only the approvals they gave:
+         *     they revoke only the invites they sent.
+         */
+        post: operations["reopen_access_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/account": {
         parameters: {
             query?: never;
@@ -1999,8 +2182,8 @@ export interface paths {
         };
         /**
          * Get My Account
-         * @description Your email, role, when you last signed in and how you sign in: with a password,
-         *     with Google (when this deployment signs in through Google), or both.
+         * @description Your email, name, role, when you last signed in and how you sign in: with a
+         *     password, with Google (when this deployment signs in through Google), or both.
          */
         get: operations["get_my_account"];
         put?: never;
@@ -2008,7 +2191,12 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update My Account
+         * @description Set your name (A5), shown to your teammates instead of your email; null clears
+         *     it. Any role; a read-only token or MCP client cannot change it. Audited.
+         */
+        patch: operations["update_my_account"];
         trace?: never;
     };
     "/v1/me/password": {
@@ -9115,6 +9303,80 @@ export interface components {
             /** Parts */
             parts: ("theme" | "goals" | "duplicate" | "feature")[];
         };
+        /** AccessApprove */
+        AccessApprove: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+            /** Name */
+            name?: string | null;
+        };
+        /** AccessNote */
+        AccessNote: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * AccessRequestOut
+         * @description Someone who signed in with Google without an invite, asking to join (A5).
+         */
+        AccessRequestOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "declined" | "closed";
+            /** Note */
+            note?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Role */
+            role?: ("viewer" | "commenter" | "approver" | "owner") | null;
+            /** Invite Id */
+            invite_id?: string | null;
+        };
+        /**
+         * AccessStateOut
+         * @description Where a Google-signed person stands (A5): never anything about other people.
+         */
+        AccessStateOut: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "member" | "pending" | "approved" | "declined" | "invite_expired" | "invite_only" | "outside_domains" | "removed" | "no_google_sign_in";
+            /** Email */
+            email?: string | null;
+            /** Company */
+            company?: string | null;
+            /** Requested At */
+            requested_at?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Invite Expired At */
+            invite_expired_at?: string | null;
+        };
         /** AccountCreated */
         AccountCreated: {
             account: components["schemas"]["AccountOut"];
@@ -16063,6 +16325,39 @@ export interface components {
             /** Next Attempt At */
             next_attempt_at?: string | null;
         };
+        /**
+         * InboxAccessRequest
+         * @description Someone from the company's email domains who signed in with Google without an
+         *     invite and waits for an owner, or an approver, to let them in (A5).
+         */
+        InboxAccessRequest: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /** Note */
+            note?: string | null;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /**
+             * Default Role
+             * @enum {string}
+             */
+            default_role: "viewer" | "commenter" | "approver" | "owner";
+            /** Roles */
+            roles: ("viewer" | "commenter" | "approver" | "owner")[];
+        };
         /** InboxCheckpoint */
         InboxCheckpoint: {
             /**
@@ -16438,6 +16733,11 @@ export interface components {
              * @default []
              */
             access_failures: components["schemas"]["InboxAccessFailure"][];
+            /**
+             * Access Requests
+             * @default []
+             */
+            access_requests: components["schemas"]["InboxAccessRequest"][];
             /**
              * Reports
              * @default []
@@ -17185,6 +17485,8 @@ export interface components {
              * @enum {string}
              */
             role: "viewer" | "commenter" | "approver" | "owner";
+            /** Name */
+            name?: string | null;
             /**
              * Engineering Lead
              * @default false
@@ -17214,14 +17516,32 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "open" | "accepted" | "revoked";
+            status: "open" | "expired" | "accepted" | "revoked";
+            /** Name */
+            name?: string | null;
             /** Invited By */
             invited_by?: string | null;
+            /** Invited By Name */
+            invited_by_name?: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Resent At */
+            resent_at?: string | null;
+            /**
+             * Resend Count
+             * @default 0
+             */
+            resend_count: number;
+            /** Access Request Id */
+            access_request_id?: string | null;
             /** Accepted At */
             accepted_at?: string | null;
             /** Revoked At */
@@ -18416,6 +18736,13 @@ export interface components {
             token_id?: string | null;
             /** Token Name */
             token_name?: string | null;
+            /** Name */
+            name?: string | null;
+            /**
+             * Invite Roles
+             * @default []
+             */
+            invite_roles: ("viewer" | "commenter" | "approver" | "owner")[];
         };
         /** MemberOut */
         MemberOut: {
@@ -18426,6 +18753,8 @@ export interface components {
             id: string;
             /** Email */
             email: string;
+            /** Name */
+            name?: string | null;
             /**
              * Role
              * @enum {string}
@@ -18462,13 +18791,16 @@ export interface components {
         };
         /**
          * MemberPatch
-         * @description A role, the engineering lead flag, or both (applied in one change, role first).
+         * @description A role, the engineering lead flag, a name (A5), or several (applied in one
+         *     change: role first). ``"name": null`` clears the name.
          */
         MemberPatch: {
             /** Role */
             role?: ("viewer" | "commenter" | "approver" | "owner") | null;
             /** Engineering Lead */
             engineering_lead?: boolean | null;
+            /** Name */
+            name?: string | null;
         };
         /** MergeIn */
         MergeIn: {
@@ -18782,6 +19114,8 @@ export interface components {
             user_id: string;
             /** Email */
             email: string;
+            /** Name */
+            name?: string | null;
             /**
              * Role
              * @enum {string}
@@ -18806,6 +19140,14 @@ export interface components {
              * @enum {string}
              */
             signed_in_via: "browser" | "api_token" | "mcp_client";
+        };
+        /**
+         * NamePatch
+         * @description ``PATCH /v1/me/account``: your name (A5); null clears it.
+         */
+        NamePatch: {
+            /** Name */
+            name: string | null;
         };
         /**
          * NewEvidence
@@ -24386,6 +24728,35 @@ export interface components {
              */
             sharing: "private" | "counts" | "summary" | "full";
         };
+        /** SignInDomain */
+        SignInDomain: {
+            /** Domain */
+            domain: string;
+            /**
+             * From
+             * @enum {string}
+             */
+            from: "deployment" | "settings";
+        };
+        /** SignInRulesOut */
+        SignInRulesOut: {
+            /** Google Sign In */
+            google_sign_in: boolean;
+            /** New Sign Ins Off */
+            new_sign_ins_off: boolean;
+            /** Domains */
+            domains: components["schemas"]["SignInDomain"][];
+            /**
+             * Without Invite
+             * @enum {string}
+             */
+            without_invite: "request" | "join" | "refuse";
+            /**
+             * Default Role
+             * @enum {string}
+             */
+            default_role: "viewer" | "commenter" | "approver" | "owner";
+        };
         /**
          * SignedOutEverywhere
          * @description Every session signed before ``sessions_valid_after`` is refused, this one too;
@@ -28184,6 +28555,66 @@ export interface operations {
             };
         };
     };
+    get_access_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessStateOut"];
+                };
+            };
+        };
+    };
+    send_access_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessNote"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessStateOut"];
+                };
+            };
+            /** @description No pending access request */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     logout: {
         parameters: {
             query?: never;
@@ -31812,75 +32243,6 @@ export interface operations {
             };
         };
     };
-    list_invites: {
-        parameters: {
-            query?: {
-                status?: ("open" | "accepted" | "revoked") | "all";
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InviteOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_invite: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InviteCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InviteOut"];
-                };
-            };
-            /** @description Already a member, or an open invite exists */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not an address that can sign in (ORACLE_IAP_ALLOWED_DOMAINS) */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     retry_invite_access: {
         parameters: {
             query?: never;
@@ -31978,35 +32340,6 @@ export interface operations {
             };
         };
     };
-    revoke_invite: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                invite_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     retry_member_follow_up: {
         parameters: {
             query?: never;
@@ -32097,6 +32430,26 @@ export interface operations {
             };
         };
     };
+    get_sign_in_rules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInRulesOut"];
+                };
+            };
+        };
+    };
     list_people: {
         parameters: {
             query?: {
@@ -32130,6 +32483,340 @@ export interface operations {
             };
         };
     };
+    list_invites: {
+        parameters: {
+            query?: {
+                status?: ("open" | "expired" | "accepted" | "revoked") | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_invite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteOut"];
+                };
+            };
+            /** @description A role the caller may not invite with */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Already a member, or an open or expired invite exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Outside the company's email domains (outside_company_domains) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resend_invite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteOut"];
+                };
+            };
+            /** @description No such invite */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Accepted or revoked */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_invite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_access_requests: {
+        parameters: {
+            query?: {
+                status?: "pending" | "approved" | "declined" | "closed" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequestOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_access_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessApprove"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequestOut"];
+                };
+            };
+            /** @description A role the caller may not approve with */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such request */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not pending, or already a member */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decline_access_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequestOut"];
+                };
+            };
+            /** @description No such request */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not pending */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_access_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequestOut"];
+                };
+            };
+            /** @description An approval another person gave (approvers) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such request */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cannot reopen */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_my_account: {
         parameters: {
             query?: never;
@@ -32146,6 +32833,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MyAccountOut"];
+                };
+            };
+        };
+    };
+    update_my_account: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NamePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyAccountOut"];
+                };
+            };
+            /** @description A read-only credential */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

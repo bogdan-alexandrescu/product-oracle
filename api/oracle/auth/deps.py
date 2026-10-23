@@ -87,6 +87,23 @@ def _unauthorized() -> HTTPException:
     )
 
 
+async def iap_claims(request: Request) -> dict | None:
+    """The verified IAP claims of the request, ``None`` without an assertion or with IAP
+    SSO off; a present but invalid assertion is a 401 (``GET /v1/auth/access``)."""
+    audiences = get_settings().iap_audiences
+    assertion = request.headers.get(iap.ASSERTION_HEADER)
+    if not audiences or not assertion:
+        return None
+    try:
+        return await iap.verify_assertion(assertion, audiences)
+    except iap.InvalidAssertion:
+        raise _unauthorized() from None
+    except KeysUnavailable:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Cannot verify the sign-in right now"
+        ) from None
+
+
 async def _iap_user(request: Request) -> User | None:
     """The IAP-signed-in user, ``None`` without an assertion or with IAP SSO off.
 

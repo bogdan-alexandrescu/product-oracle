@@ -23,6 +23,8 @@ ROLES = ("viewer", "commenter", "approver", "owner")
 Role = Literal["viewer", "commenter", "approver", "owner"]
 # A3: the engineering lead flag is a commenter's or above, never a viewer's.
 ENGINEERING_LEAD_ROLE = "NOT engineering_lead OR role <> 'viewer'"
+# A5: a person's optional name (members and invites).
+NAME_LENGTH = "name IS NULL OR char_length(name) BETWEEN 1 AND 80"
 
 
 class User(TenantScoped, Base):
@@ -31,9 +33,12 @@ class User(TenantScoped, Base):
         UniqueConstraint("tenant_id", "email"),
         CheckConstraint(_in("role", ROLES), name="role"),
         CheckConstraint(ENGINEERING_LEAD_ROLE, name="engineering_lead_role"),
+        CheckConstraint(NAME_LENGTH, name="name_length"),
     )
 
     email: Mapped[str] = mapped_column(Text, nullable=False)
+    # A5: how teammates know them (1 to 80 characters); None: named from the email.
+    name: Mapped[str | None] = mapped_column(Text)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(Text, nullable=False, default="owner")
     # Removing a member disables them (C2): the row stays, so every *_by reference and
