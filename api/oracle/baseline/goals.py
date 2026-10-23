@@ -79,6 +79,9 @@ class GoalCheck(BaseModel):
     # Fields the checks refuse, kept from before they ran (a goal an older Oracle wrote):
     # shown to fix; a save that leaves them alone is not refused for them.
     problems: list[GoalProblem] = []
+    # The company's planning horizons the check used (the form's Horizon tip); null when
+    # checked on B2's defaults outside the baseline API.
+    horizons: dict[str, int] | None = None
 
 
 class GoalFieldsError(Exception):
