@@ -85,6 +85,11 @@ class FakeEndpoint:
         self.refuse: Exception | None = None
         self.refuse_once: Exception | None = None
         self.n = 0
+        # Who the sign-in was for, as the token endpoint reports it beside the tokens.
+        self.identity: dict[str, Any] = {
+            "account": {"uuid": "acct-1", "email_address": "ada@example.com"},
+            "organization": {"uuid": "org-1", "name": "Example Studio"},
+        }
 
     async def exchange(self, refresh_token: str) -> dict[str, Any]:
         self.exchanged.append(refresh_token)
@@ -112,6 +117,7 @@ class FakeEndpoint:
             "access_token": "acc-signed-in",
             "refresh_token": "ref-signed-in",
             "expires_in": 28800,
+            **self.identity,
         }
 
 

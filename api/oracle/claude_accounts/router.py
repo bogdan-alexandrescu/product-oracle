@@ -44,6 +44,7 @@ from oracle.claude_accounts.oauth import (
     build_authorize_url,
     challenge_for,
     credential_from_token_response,
+    identity_from_token_response,
     new_state,
     new_verifier,
     parse_credential,
@@ -108,6 +109,10 @@ class AccountOut(BaseModel):
     # floor: that window (``seven_day``, ``five_hour``) and when it resets. Null otherwise.
     spent_by: str | None
     spent_until: datetime | None
+    # Which Claude account it is, as Claude reported it at sign-in. Null: not reported
+    # (a pasted saved login carries neither).
+    claude_email: str | None
+    claude_organization: str | None
 
 
 class PoolOut(BaseModel):
@@ -295,6 +300,8 @@ def account_out(account: Account, *, now: datetime | None = None) -> AccountOut:
         takes_calls=takes,
         spent_by=spent[0] if spent else None,
         spent_until=spent[1] if spent else None,
+        claude_email=account.claude_email,
+        claude_organization=account.claude_organization,
     )
 
 
@@ -428,6 +435,7 @@ async def finish_claude_sign_in(body: ExchangeIn, principal: Owner, db: TenantDB
             state=body.state,
         )
         credential = credential_from_token_response(payload)
+        email, organization = identity_from_token_response(payload)
     except CredentialError as e:
         # The pending sign-in stays, so the person can paste again.
         raise _unprocessable(str(e)) from None
@@ -441,6 +449,8 @@ async def finish_claude_sign_in(body: ExchangeIn, principal: Owner, db: TenantDB
         pair=serialise(credential),
         access_token=credential.access_token,
         added_by=principal.id,
+        claude_email=email,
+        claude_organization=organization,
     )
     # Single-use, deleted only once the account exists.
     await db.delete(pending)

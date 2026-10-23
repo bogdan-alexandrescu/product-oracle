@@ -119,7 +119,7 @@ test("claude accounts: add one by signing in with Claude and pasting the code", 
   const add = page.getByTestId("add-account");
   await add.getByLabel("Label").fill("team");
   const popup = page.waitForEvent("popup");
-  await add.getByRole("button", { name: "Sign in with Claude" }).click();
+  await add.getByRole("button", { name: "Open Claude's sign-in page" }).click();
   await (await popup).close();
   await expect(add.getByTestId("signin-link")).toHaveAttribute("href", /claude\.com\/cai\/oauth\/authorize/);
 
@@ -140,12 +140,12 @@ test("claude accounts: a pasted saved login must carry a refresh token; signing 
   await page.getByRole("button", { name: "+ Add account" }).click();
   const add = page.getByTestId("add-account");
   await add.getByLabel("Label").fill("laptop-2");
-  await add.getByRole("tab", { name: "Paste Claude Code's saved login" }).click();
-  await add.getByLabel("Saved login").fill('{"claudeAiOauth": {"accessToken": "only-an-access-token"}}');
+  await add.getByRole("radio", { name: "Paste Claude Code's saved login" }).check();
+  await add.getByLabel("Saved login", { exact: true }).fill('{"claudeAiOauth": {"accessToken": "only-an-access-token"}}');
   await add.getByRole("button", { name: "Add account" }).click();
   await expect(add.getByRole("alert")).toContainText("no refresh token");
   await add
-    .getByLabel("Saved login")
+    .getByLabel("Saved login", { exact: true })
     .fill('{"claudeAiOauth": {"accessToken": "a", "refreshToken": "r", "expiresAt": 1}}');
   await add.getByRole("button", { name: "Add account" }).click();
   await expect(row(page, "laptop-2")).toBeVisible();

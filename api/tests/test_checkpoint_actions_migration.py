@@ -71,7 +71,7 @@ def _has_table() -> bool:
 
 def test_the_chain_ends_here_after_agent_staging():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0039_company_timezone"]
+    assert script.get_heads() == ["0040_claude_account_identity"]
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
