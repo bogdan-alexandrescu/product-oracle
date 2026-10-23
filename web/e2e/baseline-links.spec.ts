@@ -109,16 +109,24 @@ test("baseline: cite a source item as evidence, then remove evidence with a reas
   await expect(evidence).not.toContainText("Pricing strategy");
 });
 
-test("baseline: a viewer sees the link and evidence controls disabled, with the reason", async ({ page }) => {
+test("baseline: a viewer sees no link or evidence controls, and a View only label", async ({ page }) => {
   const d = await openItem(page, "f.guided-setup", "Guided setup", "viewer@example.com");
+  await expect(d.getByText("View only", { exact: true })).toBeVisible();
   for (const name of ["Link to goal", "Add dependency", "Cite a source item"]) {
-    const b = d.getByRole("button", { name });
-    await expect(b).toBeDisabled();
-    await expect(b).toHaveAttribute("title", /approvers/i);
+    await expect(d.getByRole("button", { name })).toHaveCount(0);
   }
   await expect(d.getByRole("button", { name: /^Remove link/ })).toHaveCount(0);
   await expect(d.getByRole("button", { name: /^Remove / })).toHaveCount(0);
   await expect(d.getByLabel(/^Contribution to/)).toHaveCount(0);
+});
+
+test("baseline: a commenter sees no link or cite controls, but can still add an evidence link", async ({ page }) => {
+  const d = await openItem(page, "f.guided-setup", "Guided setup", "commenter@example.com");
+  for (const name of ["Link to goal", "Add dependency", "Cite a source item"]) {
+    await expect(d.getByRole("button", { name })).toHaveCount(0);
+  }
+  await expect(d.getByRole("button", { name: "Add evidence link" })).toBeVisible();
+  await expect(d.getByText("View only", { exact: true })).toHaveCount(0);
 });
 
 test("baseline: on a phone the Link to goal form fits", async ({ page }) => {
