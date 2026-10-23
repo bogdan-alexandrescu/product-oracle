@@ -8,7 +8,6 @@ and audited.
 Against a fake IAP policy client and a fake mailer: no Google or mail calls.
 """
 
-import json
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -206,7 +205,9 @@ async def test_run_and_read_only_tokens_cannot_retry(client, iap):
     assert len(await _access_failures(client, headers)) == 1
 
 
-async def test_the_item_never_holds_googles_response_body(client, owner, iap, mail, monkeypatch):
+async def test_the_item_holds_googles_message_with_the_status(
+    client, owner, iap, mail, monkeypatch
+):
     tenant_id, headers = owner
     await _invite(client, headers, ADDRESS)
     real = iap_access.GoogleIapClient("oracle-prod", FakeAuth())
@@ -220,5 +221,7 @@ async def test_the_item_never_holds_googles_response_body(client, owner, iap, ma
     await _age(tenant_id)
     await _tick(tenant_id)
     [item] = await _access_failures(client, headers)
-    assert item["last_error"] == "oracle-api-be: Google returned 403 (permission denied)"
-    assert "4815162342" not in json.dumps(item)
+    assert item["last_error"] == (
+        "oracle-api-be: Google returned 403 (permission denied): "
+        "Project 4815162342 policy for oracle-api-be is denied"
+    )

@@ -289,7 +289,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * ./discussions.ts);
  * "mail-off" as the default company with no invite sender configured (invites are not
  * emailed); "mail-fails" where every first invite email fails (Resend sends it);
- * "iap-pending" where an invite's Google IAP access is not granted until Retry (#242);
+ * "iap-pending" where an invite's Google IAP access is not granted until Retry (#242; a plus
+ * address never gets it, in any scenario: Google answers 400, #330);
  * "iap-revoke-fails" where removing a member leaves their Google IAP access to remove (the
  * tick retries it).
  */
@@ -1909,6 +1910,15 @@ const SIGN_IN_DOMAINS = ["example.com"];
 /** A queued invite email goes out (or fails) this long after it was queued. */
 const MAIL_DELAY_MS = 400;
 
+/** How long a Retry of an invite's access takes (Google's IAP API). */
+const RETRY_DELAY_MS = 600;
+/** What Oracle records of Google refusing an invite's IAP access (#330): a plus address is
+ * no Google account of its own, so Google answers 400 with its own message. */
+const iapRefusal = (email: string) =>
+  email.includes("+")
+    ? `oracle-api-be: Google returned 400 (bad request): User ${email} does not exist.`
+    : "oracle-api-be: Google returned 403 (permission denied)";
+
 /** The background send: queued invite emails whose time has come are sent, or fail. */
 function settleInviteEmails(db: Db) {
   const fails = localStorage.getItem(MOCK_SCENARIO_KEY) === "mail-fails";
@@ -2006,8 +2016,8 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         created_at: now(),
         accepted_at: null,
         revoked_at: null,
-        ...(scenario === "iap-pending"
-          ? { access: "pending", access_error: "oracle-api-be: Google returned 403 (permission denied)" }
+        ...(scenario === "iap-pending" || email.includes("+")
+          ? { access: "pending", access_error: iapRefusal(email) }
           : { access: "granted", access_error: null }),
         access_at: now(),
         email_status: scenario === "mail-off" ? "not_sent" : "queued",
@@ -2021,7 +2031,16 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
     if (!invite) return notFound("Invite");
     if (m === "POST" && (p[3] === "access" || p[3] === "email")) {
       if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
-      if (p[3] === "access") Object.assign(invite, { access: "granted", access_error: null, access_at: now() });
+      if (p[3] === "access") {
+        // The grant is Google's IAP API under way: it takes a moment.
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+        Object.assign(
+          invite,
+          invite.email.includes("+")
+            ? { access: "pending", access_error: iapRefusal(invite.email), access_at: now() }
+            : { access: "granted", access_error: null, access_at: now() },
+        );
+      }
       else if (invite.email_status === "queued") return json(409, { detail: "Oracle is sending this invite's email" });
       else if (invite.email_status === "sent" && invite.email_at && Date.now() - Date.parse(invite.email_at) < 60_000) {
         const wait = Math.ceil((60_000 - (Date.now() - Date.parse(invite.email_at))) / 1000);

@@ -976,42 +976,81 @@ async def test_resend_waits_a_minute_after_the_last_send(client, owner, iap, mai
 
 
 GOOGLE_BODY = {"error": {"message": "Project 4815162342 policy for oracle-api-be is denied"}}
+GOOGLE_400 = {"error": {"code": 400, "message": "User pat+tag@example.com does not exist."}}
+# Made-up credentials a response could echo back: none of them is ever recorded.
+LEAKED = ("eyJhbGciOi.eyJzdWIiOi.c2lnbmF0dXJl", "po_faketoken123")
 
 
-async def test_the_iap_client_keeps_a_short_generic_reason_never_googles_body():
+async def test_the_iap_client_keeps_googles_own_message_with_the_status():
     client = iap_access.GoogleIapClient("oracle-prod", FakeAuth())
+    transport = httpx.MockTransport(lambda r: httpx.Response(400, json=GOOGLE_400))
+    async with httpx.AsyncClient(transport=transport) as http:
+        with pytest.raises(iap_access.IapError) as raised:
+            await client.set_policy(http, "oracle-api-be", {})
+    assert str(raised.value) == (
+        "Google returned 400 (bad request): User pat+tag@example.com does not exist."
+    )
     for code, reason in ((403, "permission denied"), (503, "unavailable"), (500, "server error")):
         transport = httpx.MockTransport(lambda r, code=code: httpx.Response(code, json=GOOGLE_BODY))
         async with httpx.AsyncClient(transport=transport) as http:
             with pytest.raises(iap_access.IapError) as raised:
                 await client.get_policy(http, "oracle-api-be")
-        assert str(raised.value) == f"Google returned {code} ({reason})"
+        assert str(raised.value) == (
+            f"Google returned {code} ({reason}): {GOOGLE_BODY['error']['message']}"
+        )
 
 
-async def test_the_gmail_mailer_keeps_a_short_generic_reason_never_googles_body():
-    transport = httpx.MockTransport(lambda r: httpx.Response(403, json=GOOGLE_BODY))
+def test_googles_message_is_capped_and_holds_no_tokens():
+    leaky = {"error": {"message": f"Bearer {LEAKED[0]} and {LEAKED[1]} refused"}}
+    said = iap_access.google_refusal(400, json.dumps(leaky))
+    assert said.startswith("Google returned 400 (bad request): ")
+    for token in LEAKED:
+        assert token not in said
+    assert "[token removed]" in said
+
+    long = iap_access.google_refusal(400, json.dumps({"error": {"message": "denied " * 1000}}))
+    assert len(long) <= len("Google returned 400 (bad request): ") + iap_access.MESSAGE_CAP
+    assert long.endswith("…")
+    # Not Google's JSON error (HTML, empty, or no message): the status alone.
+    assert iap_access.google_refusal(502, "<html>Bad gateway</html>") == (
+        "Google returned 502 (unavailable)"
+    )
+    assert iap_access.google_refusal(404, "") == "Google returned 404 (not found)"
+    assert iap_access.google_refusal(400, json.dumps({"error": {"code": 400}})) == (
+        "Google returned 400 (bad request)"
+    )
+    # OAuth's token endpoint says it its own way.
+    oauth = {"error": "unauthorized_client", "error_description": "Client is unauthorized."}
+    assert iap_access.google_refusal(401, json.dumps(oauth)) == (
+        "Google returned 401 (not authenticated): Client is unauthorized."
+    )
+
+
+async def test_the_gmail_mailer_keeps_googles_own_message_with_the_status():
+    transport = httpx.MockTransport(lambda r: httpx.Response(400, json=GOOGLE_400))
     sender = mailer.GmailApiMailer("oracle@example.com", FakeMinter())
     message = mailer.invite_email(
         to="pat@example.com", company="C", role="viewer", inviter="a@example.com", link="/"
     )
+    said = "Google returned 400 (bad request): User pat+tag@example.com does not exist."
     async with httpx.AsyncClient(transport=transport) as http:
         with pytest.raises(mailer.MailError) as raised:
             await sender.send(http, message)
-    assert str(raised.value) == "Google returned 403 (permission denied)"
+    assert str(raised.value) == said
 
     minter = mailer.DelegatedTokenMinter("oracle@example.com", FakeAuth())
     async with httpx.AsyncClient(transport=transport) as http:
         with pytest.raises(mailer.MailError) as raised:
             await minter.token(http)
-    assert str(raised.value) == "Google returned 403 (permission denied)"
+    assert str(raised.value) == said
 
 
-async def test_the_invite_records_no_more_than_the_generic_reason(
+async def test_the_invite_records_googles_message_never_an_exceptions_text(
     client, owner, iap, mail, monkeypatch
 ):
     _, headers = owner
     real = iap_access.GoogleIapClient("oracle-prod", FakeAuth())
-    transport = httpx.MockTransport(lambda r: httpx.Response(403, json=GOOGLE_BODY))
+    transport = httpx.MockTransport(lambda r: httpx.Response(400, json=GOOGLE_400))
     monkeypatch.setattr(iap_access, "get_client", lambda: real)
     opened = httpx.AsyncClient  # every client Oracle opens meanwhile answers 403
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: opened(transport=transport))
@@ -1025,7 +1064,10 @@ async def test_the_invite_records_no_more_than_the_generic_reason(
     await delivery.drain()
     invite = (await _open_invites(client, headers))["pat@example.com"]
     assert invite["access"] == "pending"
-    assert invite["access_error"] == "oracle-api-be: Google returned 403 (permission denied)"
+    assert invite["access_error"] == (
+        "oracle-api-be: Google returned 400 (bad request): User pat+tag@example.com does not exist."
+    )
+    assert invite["access_at"] is not None
     assert invite["email_status"] == "failed"
     assert "4815162342" not in invite["email_error"]
     assert body["id"] == invite["id"]

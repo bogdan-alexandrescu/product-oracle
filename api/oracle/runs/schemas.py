@@ -802,8 +802,8 @@ class InboxAccessFailure(BaseModel):
     email: str
     # What was owed: "Access not removed" or "Access not granted".
     owed: str
-    # Oracle's own short reason ("Google returned 403 (permission denied)"), never
-    # Google's response body.
+    # Oracle's short reason with Google's own message, capped and with no tokens
+    # ("Google returned 400 (bad request): User ... does not exist.", #330).
     last_error: str | None = None
     attempts: int
     # Failing since.
