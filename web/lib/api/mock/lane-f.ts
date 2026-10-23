@@ -1793,7 +1793,7 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
     snapshot: null,
     warnings: [],
     // #255: as the API, the skeleton has no content yet.
-    notes: [{ code: "template_only", message: "the template's skeleton, with no content yet", section_keys: [] }],
+    notes: [{ code: "template_only", message: "the template's skeleton, with no content yet", section_keys: [], refs: {} }],
     imported_by: "4a1c8e6f-2d93-4b57-9e0a-c3f6d81b2a75",
     imported_by_name: "draft-picker",
     approved_at: null,

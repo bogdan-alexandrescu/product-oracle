@@ -14,7 +14,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from oracle import changes
+from oracle import changes, wording
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.runs import extensions
@@ -43,6 +43,8 @@ extensions.register_importer("spec", service.import_spec)
 
 
 def _http(exc: service.SpecError) -> HTTPException:
+    if exc.refs:
+        return wording.Refused(exc.status, str(exc), exc.refs)
     return HTTPException(exc.status, str(exc))
 
 

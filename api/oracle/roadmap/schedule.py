@@ -33,12 +33,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import wording
 from oracle.roadmap.models import ScheduleBasis
 
 UNVERIFIED = (
     "a date needs a verified estimate, capacity or commitment recorded for this PRD (and "
-    "item) that supports it (record one with POST /v1/schedule-bases); Oracle never "
-    "invents dates"
+    f"item) that supports it ({wording.RECORD_DATE_BASIS}); Oracle never invents dates"
 )
 OUTSIDE_NOW = "dated milestones belong only in now; the date was dropped"
 

@@ -141,6 +141,7 @@ async def test_a_refused_draft_carries_its_problems_and_summary(runtime, client)
         "section_key": None,
         "cite_key": "k1",
         "line": None,
+        "refs": {},
     }
     knock_on = next(p for p in imp["problems"] if p["code"] == "unknown_citation")
     assert knock_on["cite_key"] == "k1" and knock_on["section_key"] == "s0"
@@ -192,6 +193,7 @@ async def test_a_segment_that_left_no_draft_carries_the_same_shape(runtime, clie
             "section_key": None,
             "cite_key": None,
             "line": None,
+            "refs": {},
         }
     ]
     assert imp["summary"] == MISSING_SUMMARY

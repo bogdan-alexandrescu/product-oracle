@@ -1802,8 +1802,8 @@ async def create_run(
         raise Invalid(f"start a {flow.title} run from {flow.entry}")
     if flow.key == "launch_kit" and not (oracle_knobs or {}).get("launch_id"):
         raise Invalid(
-            "the Launch kit flow starts from a launch: Draft on the launch "
-            "(POST /v1/launches/{id}/draft)"
+            "the Launch kit flow starts from a launch: open it on Roadmap › Launches and "
+            "choose Draft with Oracle"
         )
     if flow.key == "update_draft" and not has_role(principal.role, "owner"):
         # H8: the CEO decides what is said to the board and investors.
@@ -2003,7 +2003,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
     if run.status != "draft":
         raise RunError(f"run is {run.status}, not a draft")
     if run.estimate_usd is None:
-        raise RunError("estimate the run first: POST /v1/runs/{id}/estimate")
+        raise RunError("estimate the run first: press Estimate, then Start run")
     await _recheck_reuse(db, run)
     await _one_build_at_a_time(db, _flow(run))
     knobs = _knobs(run)

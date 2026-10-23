@@ -335,8 +335,8 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         return value
     if key == "autonomy":
         raise InvalidSetting(
-            "autonomy changes one responsibility at a time, with a reason: use "
-            "PUT /v1/autonomy/{key} (a null value here resets every default)"
+            "autonomy changes one responsibility at a time, with a reason: change it on "
+            "Settings › Autonomy (a null value here resets every default)"
         )
     raise KeyError(key)
 

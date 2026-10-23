@@ -31,6 +31,16 @@ const I = {
   requirement: "c3000000-0000-4000-8000-000000000041",
 };
 
+// #396: why a spec version that may be stale is not approved (api/oracle/wording.py STALE).
+const STALE =
+  "may be stale: the PRD it rests on changed since it was written (the reasons are beside its Potentially stale label). Review or reconcile it against the PRD, or regenerate it, before approving";
+
+/** The refusal of Approve on a spec document's version whose spec version may be stale (api/oracle/specs/service.py). */
+export function staleSpecRefusal(db: SpecsDb | undefined, slug: string, n: number): { detail: string; refs: Record<string, string> } | null {
+  const av = db?.specs.find((s) => s.document_slug === slug)?.versions.find((x) => x.document_version === n)?.artifact_version;
+  return av?.freshness === "potentially_stale" ? { detail: `this spec version ${STALE} its approach`, refs: { artifact_version: av.id } } : null;
+}
+
 export interface SpecsDb {
   specs: Spec[];
   /** Stored outputs by "<version id>/<name>". */
