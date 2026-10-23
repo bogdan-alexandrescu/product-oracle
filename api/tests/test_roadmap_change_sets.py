@@ -331,3 +331,113 @@ async def test_a_later_proposal_supersedes_the_waiting_one(client, owner, runtim
         )
     assert event is not None and event.entity_id == uuid.UUID(first["id"])
     assert (event.data["version"], event.data["superseded_by_version"]) == (2, 3)
+
+
+async def test_a_failed_proposal_leaves_no_version(client, owner, runtime, monkeypatch):  # noqa: F811
+    """protects=propose is one transaction: a failure after the new version is imported
+    (its items written, as the waiting proposals are superseded) leaves no version 2, the
+    document as it was and the change set a draft, and proposing again then works;
+    fails_when=the import commits the version on its own, so the failure leaves a version
+    with no items; no_claim=the UI."""
+    from oracle.docs.models import Document, DocumentVersion
+    from oracle.roadmap import changeset
+
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    out = (await client.post(SETS, headers=auth)).json()
+    await patch(client, auth, out, CHANGES)
+
+    async def fail(*args, **kwargs):
+        raise changeset.ChangeSetError("injected failure after the version was created")
+
+    monkeypatch.setattr(changeset, "_supersede", fail)
+    resp = await client.post(f"{SETS}/{out['id']}/propose", headers=auth)
+    assert resp.status_code == 422 and "injected failure" in resp.json()["detail"]
+
+    async with tenant_session(tenant_id) as s:
+        document = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        numbers = list(
+            await s.scalars(
+                select(DocumentVersion.number).where(DocumentVersion.document_id == document.id)
+            )
+        )
+        assert numbers == [1]
+        assert document.status == "approved"
+        proposed = await s.scalar(
+            select(AuditEvent).where(AuditEvent.action == "roadmap.change_set_proposed")
+        )
+        assert proposed is None
+    got = (await client.get(f"{SETS}/{out['id']}", headers=auth)).json()
+    assert (got["status"], got["proposed_version"]) == ("draft", None)
+
+    monkeypatch.undo()
+    resp = await client.post(f"{SETS}/{out['id']}/propose", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["proposed_version"] == 2
+    items = (
+        await client.get(f"/v1/roadmaps/{ROADMAP}/items", params={"version": 2}, headers=auth)
+    ).json()["items"]
+    assert [i["item_key"] for i in items] == ["gift-cards", "payment-step"]
+
+
+async def test_a_hidden_roadmaps_change_sets_are_hidden(client, owner, runtime):  # noqa: F811
+    """protects=a real change set (a draft and a proposal) of a roadmap open to owners and
+    approvers only is absent for a commenter or viewer: the list, the set by id (by slug
+    and by the document's id) and every write are 404 and never name it, while an
+    approver reads it; fails_when=a change-set read or write reaches the set without the
+    document's visibility rule; no_claim=the UI."""
+    from oracle.docs.models import Document
+
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    proposal = (await client.post(SETS, headers=auth)).json()
+    await patch(client, auth, proposal, CHANGES)
+    assert (await client.post(f"{SETS}/{proposal['id']}/propose", headers=auth)).status_code == 200
+    draft_set = (await client.post(SETS, headers=auth)).json()
+    async with tenant_session(tenant_id) as s:
+        document = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        document.visibility = "approvers"
+        doc_id = document.id
+        await s.commit()
+
+    approver = await as_user(tenant_id, "approver")
+    listed = await client.get(SETS, headers=approver)
+    assert listed.status_code == 200
+    assert {s["id"] for s in listed.json()} == {proposal["id"], draft_set["id"]}
+    for role in ("commenter", "viewer"):
+        headers = await as_user(tenant_id, role)
+        for base in (SETS, f"/v1/roadmaps/{doc_id}/change-sets"):
+            resp = await client.get(base, headers=headers)
+            assert resp.status_code == 404, (role, resp.text)
+            for set_id in (proposal["id"], draft_set["id"]):
+                resp = await client.get(f"{base}/{set_id}", headers=headers)
+                assert resp.status_code == 404, (role, resp.text)
+                assert set_id not in resp.text and "Gift cards" not in resp.text
+        # The writes the role may not make anyway are as absent as the reads.
+        assert (await client.post(SETS, headers=headers)).status_code in (403, 404)
+    assert (await client.get(f"{SETS}/{draft_set['id']}", headers=approver)).status_code == 200
+
+
+async def test_the_change_set_list_pages(client, owner, runtime):  # noqa: F811
+    """protects=the change-set list pages with ``limit`` and ``offset`` like the other
+    lists, newest first, so a roadmap with more than one page of change sets reaches
+    them all; fails_when=the list ignores the paging and stops at a fixed 50 rows;
+    no_claim=the UI."""
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    made = []
+    for _ in range(3):
+        out = (await client.post(SETS, headers=auth)).json()
+        made.append(out["id"])
+        if len(made) < 3:
+            assert (await client.delete(f"{SETS}/{out['id']}", headers=auth)).status_code == 200
+    newest_first = list(reversed(made))
+
+    first = await client.get(SETS, params={"limit": 2}, headers=auth)
+    assert first.status_code == 200, first.text
+    assert [s["id"] for s in first.json()] == newest_first[:2]
+    rest = await client.get(SETS, params={"limit": 2, "offset": 2}, headers=auth)
+    assert [s["id"] for s in rest.json()] == newest_first[2:]
+    assert [s["id"] for s in (await client.get(SETS, headers=auth)).json()] == newest_first
+    assert (await client.get(SETS, params={"limit": 0}, headers=auth)).status_code == 422
+    assert (await client.get(SETS, params={"limit": 101}, headers=auth)).status_code == 422
