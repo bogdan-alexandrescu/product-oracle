@@ -72,6 +72,15 @@ class PreRead(BaseModel):
     blocks: list[dict[str, Any]] = []
 
 
+class OccurrenceDecision(BaseModel):
+    """A decision recorded with an occurrence; ``href`` opens it on Company › Decisions."""
+
+    id: uuid.UUID
+    number: int
+    title: str
+    href: str
+
+
 class OccurrenceOut(BaseModel):
     id: uuid.UUID
     ritual_id: uuid.UUID
@@ -91,6 +100,9 @@ class OccurrenceOut(BaseModel):
     notes: str | None
     skip_reason: str | None
     decision_ids: list[uuid.UUID]
+    # The decisions recorded with it: named on Mark held, or recorded from it (Record
+    # decision: the occurrence is the decision's subject), in number order.
+    decisions: list[OccurrenceDecision] = []
     summary_run_id: uuid.UUID | None
     summary: str | None
     summary_state: SummaryState

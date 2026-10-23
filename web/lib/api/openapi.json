@@ -60460,6 +60460,36 @@
         ],
         "title": "OAuthErrorOut"
       },
+      "OccurrenceDecision": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "title",
+          "href"
+        ],
+        "title": "OccurrenceDecision",
+        "description": "A decision recorded with an occurrence; ``href`` opens it on Company \u203a Decisions."
+      },
       "OccurrenceOut": {
         "properties": {
           "id": {
@@ -60573,6 +60603,14 @@
             },
             "type": "array",
             "title": "Decision Ids"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/OccurrenceDecision"
+            },
+            "type": "array",
+            "title": "Decisions",
+            "default": []
           },
           "summary_run_id": {
             "anyOf": [
