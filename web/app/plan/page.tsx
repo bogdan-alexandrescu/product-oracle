@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
 import { BuildRoadmapButton } from "@/components/BuildRoadmap";
-import { Chip, InfoTip, LinkButton, Notice, PageHeader, Panel, SegmentedControl, Sheet, Split } from "@/components/ds";
+import { Chip, InfoTip, LinkButton, Notice, PageHeader, Panel, SegmentedControl, Sheet, Split, ViewOnly } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { usePlanScope, type PlanScope } from "@/lib/preferences";
 import { useQuery } from "@/lib/use-query";
 
@@ -61,9 +61,11 @@ function BuildRoadmaps() {
  * One call (GET /v1/plan) plus the goals band's; the inspector reads the item's history.
  */
 export default function PlanPage() {
-  const { me, role } = useMe();
+  const { me, can, capsReady } = useMe();
   const userId = me?.user_id ?? null;
-  const canWrite = hasRole(role, "approver");
+  // #370: approvers start PRDs and build the baseline; below that the Plan is read only.
+  const canWrite = can("start_draft");
+  const canBuild = can("create_run");
   const [scope, setScope, ready] = usePlanScope(userId ?? (me ? "token" : null));
   const q = useQuery(
     `plan|${ready ? scope : "wait"}`,
@@ -93,7 +95,9 @@ export default function PlanPage() {
       <PageHeader
         title="Plan"
         status={
-          counts && (
+          <>
+            {capsReady && !canWrite && !canBuild && <ViewOnly />}
+            {counts && (
             <>
               <Chip kind="acc" data-testid="plan-count-prds">
                 {counts.prds} {counts.prds === 1 ? "PRD" : "PRDs"}
@@ -109,7 +113,8 @@ export default function PlanPage() {
                 </Chip>
               )}
             </>
-          )
+            )}
+          </>
         }
         action={
           <>
@@ -132,7 +137,7 @@ export default function PlanPage() {
       />
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
         {q.error && <Notice tone="error">{q.error}</Notice>}
-        <GoalsBand canImport={canWrite} />
+        <GoalsBand canImport={canBuild} />
         <PrdCards prds={data?.prds} canWrite={canWrite} />
         <Split inspector={inspector && <div className="max-[600px]:hidden">{inspector}</div>}>
           <Panel

@@ -1,7 +1,7 @@
 "use client";
 
-import { Empty, Page, PageHeader, Panel } from "@/components/ds";
-import { hasRole, useMe } from "@/lib/me";
+import { Empty, Page, PageHeader, Panel, ViewOnly } from "@/components/ds";
+import { useMe } from "@/lib/me";
 
 import { FoundInSources } from "./_components/FoundInSources";
 import { ClassifyNow, DailyTriageSwitch, TriageStatusLine, useTriage } from "./_components/Triage";
@@ -13,23 +13,30 @@ import { ClassifyNow, DailyTriageSwitch, TriageStatusLine, useTriage } from "./_
  * queue itself (table, inspector, Add request) comes with the Requests screen lane.
  */
 export default function RequestsPage() {
-  const { role } = useMe();
+  const { can, capsReady } = useMe();
   const triage = useTriage();
   const run = triage.data;
   return (
     <Page>
       <PageHeader
         title="Requests"
-        status={<TriageStatusLine status={run} />}
-        action={
+        status={
           <>
-            <DailyTriageSwitch triage={triage} canChange={hasRole(role, "approver")} />
-            {hasRole(role, "approver") && <ClassifyNow triage={triage} />}
+            {capsReady && !can("create_request") && <ViewOnly />}
+            <TriageStatusLine status={run} />
           </>
+        }
+        action={
+          capsReady && (
+            <>
+              <DailyTriageSwitch triage={triage} canChange={can("set_request_triage_daily")} />
+              {can("start_request_triage") && <ClassifyNow triage={triage} />}
+            </>
+          )
         }
       />
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
-        {hasRole(role, "commenter") && <FoundInSources refresh={`${run?.run_id ?? ""}:${run?.active ?? false}`} />}
+        {can("list_request_candidates") && <FoundInSources refresh={`${run?.run_id ?? ""}:${run?.active ?? false}`} />}
         <Panel>
           <Empty icon="requests" testId="requests-empty">
             Nothing yet
