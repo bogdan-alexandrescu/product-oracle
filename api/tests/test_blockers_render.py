@@ -104,16 +104,16 @@ async def test_the_full_section_carries_everything_section_6_lists(client):
         "A single very large company may still queue",
         # selected option and reason
         "Cheapest path within the quota",
-        # experiment
+        # experiment; its gate (2027-01-10T00:00Z) on the Company day, Los Angeles (#463)
         "Batching halves calls",
         "Under 50 requests a minute at peak",
-        "2027-01-10",
-        # fallback, monitoring, scaling, corrective action, review date
+        "Decision gate: 2027-01-09",
+        # fallback, monitoring, scaling, corrective action, review date (2027-01-15T00:00Z)
         "Queue lookups and retry within the permitted rate",
         "Share of minutes above 80 requests",
         "Above 80 requests a minute for a week",
         "Apply for the provider's higher tier",
-        "2027-01-15",
+        "Review date:** 2027-01-14",
         # scaling characteristics
         "Each company has its own quota",
         "One company at a time",

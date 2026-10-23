@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from markdown_it import MarkdownIt
 from markupsafe import escape
 
+from oracle import company_time
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import require_role, require_role_now
 from oracle.docs.schemas import VersionOut
@@ -358,7 +359,7 @@ async def export_version_reports(
 ) -> Response:
     document = await _call(service.get_document(db, doc))
     reports = await _call(service.version_reports(db, doc, n))
-    text = service.reports_markdown(document, reports)
+    text = service.reports_markdown(document, reports, await company_time.company_time_zone(db))
     stem = f"{document.slug}-v{n}-reports"
     if fmt == "md":
         return Response(

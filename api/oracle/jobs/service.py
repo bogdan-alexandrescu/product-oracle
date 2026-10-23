@@ -16,7 +16,7 @@ import yaml
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, company_time
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.schemas import ImportProblem, VersionOut
@@ -831,13 +831,14 @@ STATUS_WORDS = {
 }
 
 
-def reports_markdown(document: Document, reports: VersionReports) -> str:
+def reports_markdown(document: Document, reports: VersionReports, zone: str) -> str:
+    """The version reports download; its times and days are the Company's, in ``zone`` (#463)."""
     lines = [
         f"# {document.title}: reports for version {reports.version}",
         "",
         f"Product Oracle · {document.slug} · version {reports.version}"
         + (
-            f" · generated {reports.generated_at:%Y-%m-%d %H:%M} UTC"
+            f" · generated {company_time.stamp(reports.generated_at, zone)}"
             if reports.generated_at
             else ""
         ),
@@ -874,7 +875,8 @@ def reports_markdown(document: Document, reports: VersionReports) -> str:
             lines += ["### New sources in the baseline", ""]
             for src in c.new_sources:
                 about = f" (on {src.about})" if src.about else ""
-                lines.append(f"- {src.title}{about}, {src.kind}, added {src.added_at:%Y-%m-%d}")
+                added = company_time.day(src.added_at, zone)
+                lines.append(f"- {src.title}{about}, {src.kind}, added {added}")
             lines.append("")
     if r is None and c is None:
         lines += ["No reports have been generated for this version yet.", ""]

@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.baseline import evidence as baseline_evidence
@@ -399,4 +400,4 @@ async def render_document(db: AsyncSession, document: Document) -> Any:
         )
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     blockers.sort(key=lambda b: (order[b.spec.severity], b.statement.lower(), b.key))
-    return render.render(blockers)
+    return render.render(blockers, await company_time.company_time_zone(db))
