@@ -43,24 +43,31 @@ async def set_mode(client, ctx, mode: str) -> None:
 
 
 async def test_the_first_tick_seeds_the_built_ins_once(ctx, at):
-    """protects=criterion 2: the first tick seeds the built-ins whose feature exists, the
-    three on today's data active, owned by the earliest owner with owners and approvers
-    attending; a second tick seeds nothing; fails_when=a kind whose feature is missing is
-    seeded, a built-in is seeded twice, or the owner/attendees are wrong; no_claim=the
-    H1/H4/H6/H8 kinds once their block builders are registered."""
+    """protects=criterion 2: the first tick seeds every built-in whose feature exists on
+    main (H1 decisions, H4 strategy, H6 launches, H8 updates and F6's report among
+    them), active but investor_update and board_meeting (paused), owned by the earliest
+    owner with owners and approvers attending; a second tick seeds nothing;
+    fails_when=a kind whose feature exists is missing (an empty FEATURES), one is on
+    the wrong state, or a built-in is seeded twice; no_claim=the blocks' content
+    (test_rituals.py)."""
     await tick(ctx.tenant_id)
     seeded = await rituals_of(ctx.tenant_id)
-    assert set(seeded) == {"goals_checkin", "roadmap_refresh", "goals_review", "alignment_report"}
+    assert set(seeded) == {
+        "goals_checkin", "roadmap_refresh", "goals_review", "decision_review",
+        "strategy_review", "changelog", "investor_update", "board_meeting",
+        "alignment_report",
+    }  # fmt: skip
     for r in seeded.values():
-        assert r.status == "active" and r.builtin
+        off = r.kind in ("investor_update", "board_meeting")
+        assert r.status == ("paused" if off else "active") and r.builtin
+        assert (r.next_due_at is None) == off
         assert r.owner_id == ctx.users["owner"].id
         assert set(r.attendee_ids) == {ctx.users["owner"].id, ctx.users["approver"].id}
         # The alignment report keeps F6's zone (its setting's default).
         zone = "America/Los_Angeles" if r.kind == "alignment_report" else "UTC"
-        assert r.schedule["timezone"] == zone and r.next_due_at is not None
-    assert "investor_update" not in seeded and "board_meeting" not in seeded
+        assert r.schedule["timezone"] == zone
     await tick(ctx.tenant_id)
-    assert len(await rituals_of(ctx.tenant_id)) == 4
+    assert len(await rituals_of(ctx.tenant_id)) == 9
 
 
 async def test_an_occurrence_is_created_once_at_its_preparation_moment(ctx, at):
