@@ -107,7 +107,7 @@ for (const email of ["commenter@example.com", "viewer@example.com"]) {
     // 403 (tests/test_requests_triage.py).
     await login(page, email);
     await openRequests(page);
-    await expect(page.getByTestId("requests-empty")).toBeVisible();
+    await expect(page.getByTestId("request-list")).toBeVisible();
     await expect(page.getByRole("button", { name: "Classify now", exact: true })).toHaveCount(0);
     await expect(found(page)).toHaveCount(0);
   });

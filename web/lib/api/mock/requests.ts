@@ -97,8 +97,9 @@ export interface RequestsContext {
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
 const STATES: State[] = ["new", "qualified", "merged", "disqualified"];
-const CHANNELS: Channel[] = ["support", "sales", "team", "interview", "slack", "meeting", "doc", "other"];
+const CHANNELS: Channel[] = ["support", "sales", "team", "interview", "slack", "meeting", "doc", "other", "in_app"];
 const REASONS = ["no_goal", "out_of_scope", "duplicate", "not_a_request", "wont_do", "other"];
+const OWNER_NAMES_REQUESTER = "Only an owner files a request in someone else's name";
 const NEEDS_GOAL = "Link a confirmed goal first, or disqualify it as 'No goal'";
 /** How long the mock's triage run takes. */
 const TRIAGE_MS = 3_000;
@@ -329,9 +330,22 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
     const bad = badGoals(input.goal_ids);
     if (bad.length) return fail(422, `Unknown goal: ${bad.join(", ")} is not a confirmed goal`);
     if (input.theme_id && !liveTheme(input.theme_id)) return fail(422, `Unknown theme: ${input.theme_id}`);
+    let requesterName = input.requester_name?.trim() || null;
+    let requesterKind = input.requester_kind ?? "unknown";
+    if (input.channel === "in_app") {
+      // New request in the app (#329): the signed-in member, as team; an owner may name someone else.
+      const email = ctx.people?.().find((x) => x.id === ctx.userId)?.email;
+      const me = email ? displayName(email) : null;
+      if (requesterName && requesterName !== me) {
+        if (ctx.role !== "owner") return fail(403, OWNER_NAMES_REQUESTER);
+      } else {
+        requesterName = me;
+        requesterKind = "team";
+      }
+    }
     const row: Row = {
       id: mockUuid(), title, body: input.body?.trim() || null, channel: input.channel, origin: "person",
-      requester_name: input.requester_name?.trim() || null, requester_kind: input.requester_kind ?? "unknown",
+      requester_name: requesterName, requester_kind: requesterKind,
       verified: true, state: "new", merged_into_id: null, disqualify_reason: null, decision_note: null,
       theme_id: input.theme_id ?? null, goal_ids: [...new Set(input.goal_ids ?? [])], feature_id: null,
       document_id: null, intake_id: null, interview_id: null, source, suggestion: null, filed_by: ctx.userId,

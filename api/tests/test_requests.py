@@ -744,8 +744,6 @@ async def test_in_app_roles_match_the_other_channels(client, ctx):
         )
         assert resp.status_code == 403, who
         assert resp.json()["detail"] == "Only an owner files a request in someone else's name"
-    named = await add(
-        client, ctx, who="owner", channel="in_app", requester_name="Sam Rivera"
-    )
+    named = await add(client, ctx, who="owner", channel="in_app", requester_name="Sam Rivera")
     assert named["requester_name"] == "Sam Rivera"
     assert named["filed_by"] == str(ctx.users["owner"].id)

@@ -8,7 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from oracle.runs.schemas import RunStatus
 
-Channel = Literal["support", "sales", "team", "interview", "slack", "meeting", "doc", "other"]
+Channel = Literal[
+    "support", "sales", "team", "interview", "slack", "meeting", "doc", "other", "in_app"
+]
 RequesterKind = Literal["customer", "team", "unknown"]
 State = Literal["new", "qualified", "merged", "disqualified"]
 Origin = Literal["person", "oracle", "interview"]

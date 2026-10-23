@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login } from "./helpers";
 
 const DESTINATIONS = [
@@ -35,11 +36,13 @@ test("app shell: hidden when signed out, the rail lists the nine destinations on
   await expect(nav.getByRole("link", { name: "Plan" })).toHaveAttribute("href", "/plan");
 });
 
-test("Requests: a placeholder with a one-line empty state", async ({ page }) => {
+test("Requests: a new company's queue is a one-line empty state offering New request", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "empty"), MOCK_SCENARIO_KEY);
   await login(page);
   await page.goto("/requests");
-  await expect(page.getByTestId("requests-empty")).toHaveText("Nothing yet");
-  await expect(page.getByTestId("requests-empty").locator("svg")).toBeVisible();
+  await expect(page.getByTestId("requests-empty")).toContainText("Nothing yet");
+  await expect(page.getByTestId("requests-empty").getByRole("button", { name: "New request" })).toBeEnabled();
+  await expect(page.getByTestId("requests-empty").locator("svg").first()).toBeVisible();
 });
 
 test("app shell: each destination routes to its page", async ({ page }) => {
