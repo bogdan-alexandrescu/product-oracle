@@ -70491,7 +70491,7 @@
           "schedule": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Schedule"
+                "$ref": "#/components/schemas/RitualSchedule"
               },
               {
                 "type": "null"
@@ -70671,7 +70671,7 @@
           "schedule": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Schedule"
+                "$ref": "#/components/schemas/RitualSchedule"
               },
               {
                 "type": "null"
@@ -70737,6 +70737,58 @@
           "lock_version"
         ],
         "title": "RitualPatch"
+      },
+      "RitualSchedule": {
+        "properties": {
+          "freq": {
+            "type": "string",
+            "enum": [
+              "weekly",
+              "monthly",
+              "quarterly",
+              "yearly",
+              "every_n_weeks"
+            ],
+            "title": "Freq"
+          },
+          "interval": {
+            "type": "integer",
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Interval",
+            "default": 1
+          },
+          "weekday": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Weekday",
+            "default": 0
+          },
+          "week_of_month": {
+            "type": "integer",
+            "title": "Week Of Month",
+            "default": 1
+          },
+          "month": {
+            "type": "integer",
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Month",
+            "default": 1
+          },
+          "time": {
+            "type": "string",
+            "title": "Time",
+            "default": "09:00"
+          }
+        },
+        "type": "object",
+        "required": [
+          "freq"
+        ],
+        "title": "RitualSchedule",
+        "description": "The rule people set: the API's input. A ``timezone`` sent with it is not read: the\nritual is in the Company time zone."
       },
       "RoadmapAnswers": {
         "properties": {
@@ -72496,62 +72548,6 @@
         ],
         "title": "RuntimeStatusOut",
         "description": "Whether Oracle reaches its agent runtime, and as which tenant (owner only)."
-      },
-      "Schedule": {
-        "properties": {
-          "freq": {
-            "type": "string",
-            "enum": [
-              "weekly",
-              "monthly",
-              "quarterly",
-              "yearly",
-              "every_n_weeks"
-            ],
-            "title": "Freq"
-          },
-          "interval": {
-            "type": "integer",
-            "maximum": 12.0,
-            "minimum": 1.0,
-            "title": "Interval",
-            "default": 1
-          },
-          "weekday": {
-            "type": "integer",
-            "maximum": 6.0,
-            "minimum": 0.0,
-            "title": "Weekday",
-            "default": 0
-          },
-          "week_of_month": {
-            "type": "integer",
-            "title": "Week Of Month",
-            "default": 1
-          },
-          "month": {
-            "type": "integer",
-            "maximum": 12.0,
-            "minimum": 1.0,
-            "title": "Month",
-            "default": 1
-          },
-          "time": {
-            "type": "string",
-            "title": "Time",
-            "default": "09:00"
-          },
-          "timezone": {
-            "type": "string",
-            "title": "Timezone",
-            "default": "UTC"
-          }
-        },
-        "type": "object",
-        "required": [
-          "freq"
-        ],
-        "title": "Schedule"
       },
       "ScheduleBasisCreate": {
         "properties": {

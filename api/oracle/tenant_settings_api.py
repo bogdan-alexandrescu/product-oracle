@@ -41,9 +41,11 @@ from every member's Google Docs sources in the same request, with no Drive call
   "slack_channel": {"id", "name"} | null}`` (oracle.reports.alignment). A partial value
   takes the defaults for the rest.
 
-- ``company_timezone``: the Company time zone, an IANA name (``zoneinfo``), UTC by default
-  (H2's A1 Time zone step sets it). Goals' "today", the weekly alignment report's
-  schedule and the rituals read it; a change moves the rituals on the old zone.
+- ``company_timezone``: the Company time zone, an IANA name (``zoneinfo``),
+  America/Los_Angeles by default (owner decision 2026-10-22; H2's A1 Time zone step
+  opens Settings › Company to set it). Goals' "today", the decision log's "today" (#336),
+  the weekly alignment report's schedule and every ritual read it (a ritual has no zone
+  of its own); a change moves every ritual.
 - ``ritual_summaries`` (H2): ``on_demand`` or ``always`` (Every pre-read); also set with
   ``PUT /v1/rituals/summaries``.
 - ``outcome_measure_days`` (H3): 7-365, default 30: an outcome is checked at the later of
@@ -73,6 +75,7 @@ from oracle.auth.models import ROLES
 from oracle.authz import recheck_caller, require_role
 from oracle.baseline.models import LINK_KINDS
 from oracle.confidence import DEFAULTS as CONFIDENCE_DEFAULTS
+from oracle.rituals.schedule import DEFAULT_ZONE as COMPANY_ZONE
 from oracle.sources.models import ITEM_KINDS, SOURCE_KINDS
 from oracle.tenant_settings import TenantSetting
 
@@ -113,8 +116,9 @@ DEFAULTS: dict[str, Any] = {
     },
     # H11: every responsibility at its default (oracle.autonomy.REGISTRY).
     "autonomy": {},
-    # The Company time zone (an IANA name): goals' today, the alignment report, rituals.
-    "company_timezone": "UTC",
+    # The Company time zone (an IANA name): goals' and decisions' today, the alignment
+    # report, rituals. Los Angeles until an owner sets one (owner decision 2026-10-22).
+    "company_timezone": COMPANY_ZONE,
     # H2: Oracle's written summary of a pre-read: on_demand, or always (Every pre-read).
     "ritual_summaries": "on_demand",
     # H3 Predicted versus actual: days after shipping before an outcome is checked, the
@@ -157,12 +161,13 @@ async def clear_setting(session: AsyncSession, key: str) -> None:
 
 
 async def company_timezone(session: AsyncSession) -> ZoneInfo:
-    """The Company time zone from Settings; UTC when none is set (or it no longer reads)."""
+    """The Company time zone from Settings; :data:`COMPANY_ZONE` when none is set (or it
+    no longer reads)."""
     zone = await get_setting(session, "company_timezone")
     try:
-        return ZoneInfo(zone) if isinstance(zone, str) and zone else ZoneInfo("UTC")
+        return ZoneInfo(zone) if isinstance(zone, str) and zone else ZoneInfo(COMPANY_ZONE)
     except (ValueError, ZoneInfoNotFoundError):
-        return ZoneInfo("UTC")
+        return ZoneInfo(COMPANY_ZONE)
 
 
 async def company_horizons(session: AsyncSession) -> dict[str, int]:

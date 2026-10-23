@@ -13,8 +13,9 @@ from oracle.rituals.models import Ritual, RitualOccurrence
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 
-# A Monday, well before the first built-in falls due.
-START = datetime(2026, 10, 19, 12, 0, tzinfo=UTC)
+# A Monday noon in Los Angeles (the default Company time zone), well before the first
+# built-in falls due.
+START = datetime(2026, 10, 19, 19, 0, tzinfo=UTC)
 
 
 @pytest.fixture

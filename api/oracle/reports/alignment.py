@@ -12,7 +12,7 @@ Until F2 Track health ships its alerts, "needs attention" lists the track's curr
 at-risk reasons and says "as of now" (``needs_attention_as_of_now``).
 
 The schedule is the company setting ``alignment_report`` (Monday 08:00 by default) in
-the Company time zone (``company_timezone``, UTC by default). Its clock is H2's: the
+the Company time zone (``company_timezone``, America/Los_Angeles by default). Its clock is H2's: the
 built-in ``alignment_report`` ritual (oracle.rituals) is seeded on this setting's day
 and time in that zone, follows their changes, and at each weekly moment builds the
 week that just ended (``oracle.rituals.blocks.alignment_report``); the same tick posts it to Slack
@@ -37,6 +37,7 @@ from oracle.docs.models import Document
 from oracle.models import AuditEvent
 from oracle.reports import clock
 from oracle.reports.models import AlignmentReport
+from oracle.rituals.schedule import DEFAULT_ZONE
 from oracle.roadmap import views
 from oracle.roadmap.models import ProductTrack, ScheduleBasis
 from oracle.v2.models import ChangeEvent
@@ -79,7 +80,7 @@ class ReportSettings:
     weekday: str = "mon"
     time: str = "08:00"
     # The Company time zone (Settings), read by load_settings; the setting has no zone.
-    timezone: str = "UTC"
+    timezone: str = DEFAULT_ZONE
     slack_channel: dict[str, str] | None = field(default=None, hash=False)
 
     @property

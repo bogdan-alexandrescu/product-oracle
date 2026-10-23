@@ -12,7 +12,9 @@ own ``try``), per company and per tick:
    pattern): ready, or ``attempts`` + 1 and ``failed`` after :data:`MAX_ATTEMPTS`; then,
    with summaries on Every pre-read, start its summary run (oracle.rituals.summaries);
 3b. F6's catch-up: this week's alignment report occurrence, built while there was no
-   track to report, is built again once there is (:func:`_alignment_catch_up`);
+   track to report, is built again once there is (:func:`_alignment_catch_up`); a
+   rebuild that fails leaves it ready as it was, and one that succeeds starts its
+   summary again (the old one summarised the pre-read it no longer has);
 4. mark ready occurrences ``missed`` :data:`MISSED_AFTER` after their end when nothing
    was recorded;
 5. send the weekly alignment report's Slack posts that are due (F6: its report is the
@@ -38,7 +40,13 @@ from oracle.authz import has_role
 from oracle.rituals import blocks, clock
 from oracle.rituals.kinds import KINDS, available, builtins
 from oracle.rituals.models import Ritual, RitualOccurrence, RitualRead
-from oracle.rituals.schedule import Schedule, lookback_days, next_occurrence
+from oracle.rituals.schedule import (
+    DEFAULT_ZONE,
+    RitualSchedule,
+    Schedule,
+    lookback_days,
+    next_occurrence,
+)
 from oracle.rituals.schemas import (
     HeldIn,
     InboxRitual,
@@ -175,7 +183,7 @@ async def follow_alignment_setting(db: AsyncSession) -> None:
 
 
 async def _store_alignment_schedule(
-    db: AsyncSession, principal: Principal, schedule: Schedule
+    db: AsyncSession, principal: Principal, schedule: RitualSchedule
 ) -> None:
     """A new schedule for the weekly alignment report's ritual: weekly, in the Company
     time zone (the report counts its weeks there), and stored as the report's own day
@@ -186,12 +194,6 @@ async def _store_alignment_schedule(
 
     if schedule.freq != "weekly":
         raise RitualError(422, "schedule.freq: the weekly alignment report is weekly")
-    if schedule.timezone != await company_timezone(db):
-        raise RitualError(
-            422,
-            "schedule.timezone: the weekly alignment report runs in the Company time zone "
-            "(Settings › Company)",
-        )
     value = alignment.validate_setting(
         {**alignment.validate_setting(await get_setting(db, alignment.SETTING_KEY)),
          "weekday": alignment.WEEKDAYS[schedule.weekday], "time": schedule.time}
@@ -204,15 +206,15 @@ async def _store_alignment_schedule(
 
 
 async def follow_company_timezone(db: AsyncSession, old: str) -> None:
-    """The Company time zone changed from ``old``: every ritual on it takes the new zone
-    and its next date in it (a ritual an owner put in another zone keeps it), and the
-    alignment report's ritual follows its setting. The caller commits."""
+    """The Company time zone changed from ``old``: every ritual takes the new zone and its
+    next date in it (one zone, owner decision 2026-10-22), and the alignment report's
+    ritual follows its setting. The caller commits."""
     new = await company_timezone(db)
     rows = await db.scalars(select(Ritual).order_by(Ritual.id).with_for_update())
     for ritual in rows.all():
         if (ritual.kind == "alignment_report" and ritual.builtin) or ritual.schedule.get(
             "timezone"
-        ) != old:
+        ) == new:
             continue
         schedule = Schedule(**{**ritual.schedule, "timezone": new})
         ritual.schedule = schedule.model_dump()
@@ -254,9 +256,13 @@ async def _create_occurrence(db: AsyncSession, ritual: Ritual, due_at: datetime)
     return occ_id
 
 
-async def _build(db: AsyncSession, occ: RitualOccurrence, ritual: Ritual) -> bool:
+async def _build(
+    db: AsyncSession, occ: RitualOccurrence, ritual: Ritual, *, rebuild: bool = False
+) -> bool:
     """Build the occurrence's pre-read in a savepoint: ready, or attempts + 1 (failed
-    after :data:`MAX_ATTEMPTS`). Never raises what a builder raises."""
+    after :data:`MAX_ATTEMPTS`). ``rebuild``: the occurrence is ready already; a failure
+    leaves it as it was, and a success clears the summary of the pre-read it replaced.
+    Never raises what a builder raises."""
     kind = KINDS.get(ritual.kind, KINDS["custom"])
     now = clock.now()
     ctx = blocks.BlockCtx(
@@ -270,6 +276,8 @@ async def _build(db: AsyncSession, occ: RitualOccurrence, ritual: Ritual) -> boo
             built = await blocks.build(db, kind.blocks, ctx)
     except Exception as exc:
         log.warning("rituals: the pre-read of occurrence %s failed: %s", occ.id, exc)
+        if rebuild:
+            return False
         occ.attempts += 1
         occ.error = f"{type(exc).__name__}: {exc}"[:2000]
         if occ.attempts >= MAX_ATTEMPTS:
@@ -283,14 +291,21 @@ async def _build(db: AsyncSession, occ: RitualOccurrence, ritual: Ritual) -> boo
     occ.pre_read_built_at = now
     occ.status = "ready"
     occ.error = None
+    if rebuild:
+        # A summary run still under way finds another run named and imports nothing.
+        occ.summary, occ.summary_run_id = None, None
+        occ.summary_state, occ.summary_note = "none", None
     return True
 
 
-async def _alignment_catch_up(db: AsyncSession, now: datetime) -> bool:
+async def _alignment_catch_up(
+    db: AsyncSession, now: datetime
+) -> tuple[uuid.UUID, uuid.UUID] | None:
     """F6's catch-up within the week, kept by its ritual: this week's occurrence of the
     weekly alignment report, built when there was nothing to report (no active or paused
     track), is built again on a later tick of the same local week once there is, so the
-    week that just ended is still reported. One cheap check per tick otherwise."""
+    week that just ended is still reported. One cheap check per tick otherwise. Returns
+    the rebuilt occurrence's and its ritual's ids."""
     from oracle.reports import alignment
     from oracle.reports.models import AlignmentReport
     from oracle.roadmap.models import ProductTrack
@@ -301,11 +316,11 @@ async def _alignment_catch_up(db: AsyncSession, now: datetime) -> bool:
         )
     )
     if ritual is None:
-        return False
+        return None
     schedule = Schedule(**ritual.schedule)
     due = _first_alignment_due(schedule, now)
     if due > now:
-        return False
+        return None
     occ = await db.scalar(
         select(RitualOccurrence)
         .where(RitualOccurrence.ritual_id == ritual.id, RitualOccurrence.due_at == due,
@@ -313,18 +328,18 @@ async def _alignment_catch_up(db: AsyncSession, now: datetime) -> bool:
         .with_for_update(skip_locked=True)
     )  # fmt: skip
     if occ is None:
-        return False
+        return None
     week = alignment.week_start_of(due, schedule.timezone) - timedelta(days=7)
     if await db.scalar(
         select(AlignmentReport.id).where(
             AlignmentReport.kind == "weekly", AlignmentReport.week_start == week
         )
     ):
-        return False
+        return None
     reportable = select(ProductTrack.id).where(ProductTrack.status.in_(alignment.REPORTED_STATUSES))
     if await db.scalar(reportable.limit(1)) is None:
-        return False
-    return await _build(db, occ, ritual)
+        return None
+    return (occ.id, ritual.id) if await _build(db, occ, ritual, rebuild=True) else None
 
 
 async def tick_due(db: AsyncSession) -> dict[str, int]:
@@ -380,9 +395,11 @@ async def tick_due(db: AsyncSession) -> dict[str, int]:
     for occ_id, ritual_id in built:
         await summaries.after_ready(db, occ_id, ritual_id)
 
-    if await _alignment_catch_up(db, now):
-        out["ready"] += 1
+    rebuilt = await _alignment_catch_up(db, now)
     await db.commit()
+    if rebuilt:
+        out["ready"] += 1
+        await summaries.after_ready(db, *rebuilt)
 
     for occ in await db.scalars(
         select(RitualOccurrence).where(
@@ -456,8 +473,11 @@ async def create(db: AsyncSession, principal: Principal, body: RitualCreate) -> 
     owner_id = body.owner_id or principal.id
     await _check_members(db, [owner_id], "owner_id")
     await _check_members(db, body.attendee_ids, "attendee_ids")
-    schedule = body.schedule or Schedule(
-        **{**kind.default_schedule, "timezone": await company_timezone(db)}
+    zone = await company_timezone(db)
+    schedule = (
+        body.schedule.in_zone(zone)
+        if body.schedule
+        else Schedule(**{**kind.default_schedule, "timezone": zone})
     )
     ritual = Ritual(
         kind=body.kind, title=body.title, builtin=builtin, schedule=schedule.model_dump(),
@@ -495,9 +515,10 @@ async def update(
     if body.schedule is not None:
         if ritual.kind == "alignment_report" and ritual.builtin:
             await _store_alignment_schedule(db, principal, body.schedule)
-        ritual.schedule = body.schedule.model_dump()
+        schedule = body.schedule.in_zone(await company_timezone(db))
+        ritual.schedule = schedule.model_dump()
         if ritual.status == "active":
-            ritual.next_due_at = next_occurrence(body.schedule, clock.now())
+            ritual.next_due_at = next_occurrence(schedule, clock.now())
     ritual.lock_version += 1
     await audit.record(
         db, principal, "ritual.updated", "ritual", ritual.id, {"fields": sorted(changed)}
@@ -624,7 +645,8 @@ async def occurrence_out(
     return OccurrenceOut(
         id=occ.id, ritual_id=ritual.id, kind=ritual.kind, title=ritual.title, due_at=occ.due_at,
         ends_at=occ.ends_at, duration_min=ritual.duration_min, owner_id=ritual.owner_id,
-        attendee_ids=list(ritual.attendee_ids), timezone=ritual.schedule.get("timezone", "UTC"),
+        attendee_ids=list(ritual.attendee_ids),
+        timezone=ritual.schedule.get("timezone", DEFAULT_ZONE),
         status=occ.status,  # type: ignore[arg-type]
         period=Period(from_=occ.period_from, to=occ.period_to),
         pre_read=PreRead(built_at=pre.get("built_at"), blocks=pre.get("blocks") or []),

@@ -1,5 +1,9 @@
 """A ritual's schedule: a small typed rule plus an IANA time zone (no new dependency).
 
+One zone (owner decision 2026-10-22): every ritual is in the Company time zone. People
+send the rule (:class:`RitualSchedule`, the API's input, which has no zone); Oracle
+stores it with the company's zone (:class:`Schedule`) and moves it when the zone changes.
+
 ``next_occurrence(schedule, after)`` is the first due time strictly after ``after``, in
 UTC. Times are wall-clock times in the schedule's zone (``zoneinfo``), so a daylight
 saving shift keeps "Mondays 09:00" at 09:00 local.
@@ -23,6 +27,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 Freq = Literal["weekly", "monthly", "quarterly", "yearly", "every_n_weeks"]
+# The Company time zone of a company that never set one (owner decision 2026-10-22).
+DEFAULT_ZONE = "America/Los_Angeles"
 # A Monday: week 0 of every every_n_weeks series.
 EPOCH = date(2024, 1, 1)
 TIME = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
@@ -36,26 +42,22 @@ def zone(name: str) -> ZoneInfo:
         raise ValueError(f"unknown time zone {name!r}") from None
 
 
-class Schedule(BaseModel):
+class RitualSchedule(BaseModel):
+    """The rule people set: the API's input. A ``timezone`` sent with it is not read: the
+    ritual is in the Company time zone."""
+
     freq: Freq
     interval: int = Field(1, ge=1, le=12)
     weekday: int = Field(0, ge=0, le=6)
     week_of_month: int = 1
     month: int = Field(1, ge=1, le=12)
     time: str = "09:00"
-    timezone: str = "UTC"
 
     @field_validator("time")
     @classmethod
     def _time(cls, v: str) -> str:
         if not TIME.fullmatch(v):
             raise ValueError("time must be HH:MM (00:00 to 23:59)")
-        return v
-
-    @field_validator("timezone")
-    @classmethod
-    def _zone(cls, v: str) -> str:
-        zone(v)
         return v
 
     @field_validator("week_of_month")
@@ -72,6 +74,22 @@ class Schedule(BaseModel):
         if self.freq == "quarterly" and self.month > 3:
             raise ValueError("month: a quarter starts in its month 1, 2 or 3")
         return self
+
+    def in_zone(self, timezone: str) -> "Schedule":
+        """The rule in ``timezone`` (the Company time zone), as Oracle stores it."""
+        return Schedule(**self.model_dump(), timezone=timezone)
+
+
+class Schedule(RitualSchedule):
+    """A stored schedule: the rule in the Company time zone."""
+
+    timezone: str = DEFAULT_ZONE
+
+    @field_validator("timezone")
+    @classmethod
+    def _zone(cls, v: str) -> str:
+        zone(v)
+        return v
 
 
 def _clock(s: Schedule) -> time:

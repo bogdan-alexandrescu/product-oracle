@@ -23120,7 +23120,7 @@ export interface components {
             kind: string;
             /** Title */
             title: string;
-            schedule?: components["schemas"]["Schedule"] | null;
+            schedule?: components["schemas"]["RitualSchedule"] | null;
             /** Duration Min */
             duration_min?: number | null;
             /** Prep Hours */
@@ -23178,7 +23178,7 @@ export interface components {
             lock_version: number;
             /** Title */
             title?: string | null;
-            schedule?: components["schemas"]["Schedule"] | null;
+            schedule?: components["schemas"]["RitualSchedule"] | null;
             /** Duration Min */
             duration_min?: number | null;
             /** Prep Hours */
@@ -23187,6 +23187,43 @@ export interface components {
             owner_id?: string | null;
             /** Attendee Ids */
             attendee_ids?: string[] | null;
+        };
+        /**
+         * RitualSchedule
+         * @description The rule people set: the API's input. A ``timezone`` sent with it is not read: the
+         *     ritual is in the Company time zone.
+         */
+        RitualSchedule: {
+            /**
+             * Freq
+             * @enum {string}
+             */
+            freq: "weekly" | "monthly" | "quarterly" | "yearly" | "every_n_weeks";
+            /**
+             * Interval
+             * @default 1
+             */
+            interval: number;
+            /**
+             * Weekday
+             * @default 0
+             */
+            weekday: number;
+            /**
+             * Week Of Month
+             * @default 1
+             */
+            week_of_month: number;
+            /**
+             * Month
+             * @default 1
+             */
+            month: number;
+            /**
+             * Time
+             * @default 09:00
+             */
+            time: string;
         };
         /**
          * RoadmapAnswers
@@ -23734,44 +23771,6 @@ export interface components {
             notes: string[];
             /** Error */
             error?: string | null;
-        };
-        /** Schedule */
-        Schedule: {
-            /**
-             * Freq
-             * @enum {string}
-             */
-            freq: "weekly" | "monthly" | "quarterly" | "yearly" | "every_n_weeks";
-            /**
-             * Interval
-             * @default 1
-             */
-            interval: number;
-            /**
-             * Weekday
-             * @default 0
-             */
-            weekday: number;
-            /**
-             * Week Of Month
-             * @default 1
-             */
-            week_of_month: number;
-            /**
-             * Month
-             * @default 1
-             */
-            month: number;
-            /**
-             * Time
-             * @default 09:00
-             */
-            time: string;
-            /**
-             * Timezone
-             * @default UTC
-             */
-            timezone: string;
         };
         /**
          * ScheduleBasisCreate

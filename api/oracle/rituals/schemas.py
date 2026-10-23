@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from oracle.rituals.schedule import Schedule
+from oracle.rituals.schedule import RitualSchedule
 
 RitualStatus = Literal["active", "paused"]
 OccurrenceStatus = Literal["scheduled", "ready", "held", "skipped", "missed", "failed"]
@@ -18,7 +18,8 @@ class RitualCreate(BaseModel):
     # "custom", or a built-in key the company does not have.
     kind: str = "custom"
     title: str = Field(min_length=1, max_length=120)
-    schedule: Schedule | None = None
+    # In the Company time zone: a ritual has no zone of its own (owner decision 2026-10-22).
+    schedule: RitualSchedule | None = None
     duration_min: int | None = Field(None, ge=5, le=480)
     prep_hours: int | None = Field(None, ge=0, le=168)
     owner_id: uuid.UUID | None = None
@@ -28,7 +29,7 @@ class RitualCreate(BaseModel):
 class RitualPatch(BaseModel):
     lock_version: int
     title: str | None = Field(None, min_length=1, max_length=120)
-    schedule: Schedule | None = None
+    schedule: RitualSchedule | None = None
     duration_min: int | None = Field(None, ge=5, le=480)
     prep_hours: int | None = Field(None, ge=0, le=168)
     owner_id: uuid.UUID | None = None
@@ -40,6 +41,7 @@ class RitualOut(BaseModel):
     kind: str
     title: str
     builtin: bool
+    # The rule and ``timezone``, always the Company time zone.
     schedule: dict[str, Any]
     duration_min: int
     prep_hours: int
