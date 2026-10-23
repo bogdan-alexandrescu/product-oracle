@@ -13,12 +13,16 @@ from sqlalchemy import func, select
 from oracle.auth.deps import RUN_TOKEN_HEADER
 from oracle.auth.service import create_user, make_session_cookie
 from oracle.config import get_settings
+from oracle.db import Base
 from oracle.docs.models import Document, DocumentVersion
 from oracle.models import AuditEvent
+from oracle.review.models import DocumentReviewPolicy, Notification
+from oracle.roadmap.models import ScheduleBasis
 from oracle.runs.models import Checkpoint, Run
 from oracle.runtokens import mint_run_token
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.tenancy import tenant_session
+from oracle.trash import filter as trash_filter
 from oracle.trash import service as trash_service
 from oracle.v2.models import ProductIntake
 from tests.fixtures import seed_auth
@@ -132,8 +136,6 @@ async def test_delete_a_prd_trashes_its_dependents_and_restore_brings_them_back(
         assert (await client.get(f"/v1/documents/{slug}", headers=auth)).status_code == 404
     assert (await client.get(f"/v1/runs/{run['id']}", headers=auth)).status_code == 404
     assert run["id"] not in {r["id"] for r in (await client.get("/v1/runs", headers=auth)).json()}
-    inbox = await client.get("/v1/inbox", headers=auth)
-    assert inbox.status_code == 200, inbox.text
     token = await api_token(tenant_id)
     async with mcp_client(token) as c:
         listed = await c.call_tool("list_documents", {})
@@ -227,6 +229,138 @@ async def test_a_published_document_needs_a_second_confirmation(client, owner, m
     assert ok.status_code == 200, ok.text
 
 
+async def _member(tenant_id: uuid.UUID, role: str) -> tuple[uuid.UUID, dict[str, str]]:
+    async with tenant_session(tenant_id) as s:
+        user = await create_user(s, f"{role}-{uuid.uuid4().hex[:6]}@example.com", "pw")
+        user.role = role
+        await s.commit()
+    cookie = f"{get_settings().session_cookie_name}={make_session_cookie(user)}"
+    return user.id, {"Cookie": cookie}
+
+
+async def _reads(client, headers) -> dict[str, str]:
+    """What the Inbox, Home, Plan, notifications and spec requests read, as JSON text."""
+    paths = {
+        "inbox": "/v1/inbox",
+        "home documents": "/v1/documents?kind=prd",
+        "home runs": "/v1/runs",
+        "plan": "/v1/plan",
+        "plan dates": "/v1/schedule-bases",
+        "plan tracks": "/v1/tracks",
+        "notifications": "/v1/me/notifications",
+        "spec requests": "/v1/spec-requests",
+    }
+    out = {}
+    for name, path in paths.items():
+        resp = await client.get(path, headers=headers)
+        assert resp.status_code == 200, (name, resp.text)
+        out[name] = resp.text
+    return out
+
+
+async def test_rows_pointing_at_a_trashed_document_leave_every_read(client, owner, runtime):
+    tenant_id, auth, run = await _world(client, owner, runtime)
+    user_id, me = await _member(tenant_id, "owner")
+    async with tenant_session(tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == PRD))
+        prd_id = prd.id
+        s.add(
+            Notification(
+                user_id=user_id, kind="comment", title="A comment", document_id=prd_id,
+                actor="system",
+            )
+        )  # fmt: skip
+        s.add(
+            ScheduleBasis(
+                kind="estimate", reference="ENG-977", supports_date=datetime(2026, 12, 1).date(),
+                prd_document_id=prd_id, status="proposed",
+            )
+        )  # fmt: skip
+        await s.commit()
+    before = await _reads(client, me)
+    assert str(prd_id) in before["notifications"]
+    assert "ENG-412" in before["plan dates"] and "ENG-977" in before["inbox"]
+    assert PRD in before["home documents"] and run["id"] in before["home runs"]
+
+    resp = await client.request("DELETE", f"/v1/documents/{PRD}", headers=auth)
+    assert resp.status_code == 200, resp.text
+    after = await _reads(client, me)
+    for name, text in after.items():
+        for gone in (PRD, ROADMAP, SPEC, str(prd_id), run["id"], "ENG-412", "ENG-977"):
+            assert gone not in text, (name, gone, text)
+
+    back = await client.post(f"/v1/documents/{PRD}/restore", headers=auth)
+    assert back.status_code == 200, back.text
+    again = await _reads(client, me)
+    assert str(prd_id) in again["notifications"] and "ENG-977" in again["inbox"]
+
+
+async def test_deleting_a_single_dependent_leaves_its_prd(client, owner, runtime):
+    tenant_id, auth, run = await _world(client, owner, runtime)
+    resp = await client.request("DELETE", f"/v1/documents/{ROADMAP}", headers=auth)
+    assert resp.status_code == 200, resp.text
+    entry = resp.json()
+    assert entry["root"]["slug"] == ROADMAP
+    assert run["id"] in {i["id"] for i in entry["items"] if i["type"] == "run"}
+    assert not [i for i in entry["items"] if i["type"] == "document"]
+    slugs = await _slugs(client, auth)
+    assert {PRD, SPEC} <= slugs and ROADMAP not in slugs
+    assert (await client.get(f"/v1/documents/{PRD}", headers=auth)).status_code == 200
+    plan = await client.get("/v1/plan", headers=auth)
+    assert ROADMAP not in plan.text
+    back = await client.post(f"/v1/trash/{entry['id']}/restore", headers=auth)
+    assert back.status_code == 200, back.text
+    assert ROADMAP in await _slugs(client, auth)
+
+
+# Mapped columns pointing at documents that the trash filter does not follow, each with
+# the reason a row stays visible while that document is in Trash.
+DOCUMENT_LINKS_EXEMPT = {
+    ("Run", "document_id"): "a document's runs go to Trash with it (their own deleted_at)",
+    ("ProductIntake", "document_id"): "a brief outlives the PRD it became; deleting the "
+    "brief takes the PRD, not the other way round",
+    ("ProductRequest", "document_id"): "a request is its requester's: it outlives the PRD "
+    "it fed (SET NULL on purge)",
+    ("ProductTrack", "roadmap_document_id"): "a track is its PRD's (prd_document_id); its "
+    "roadmap link is cleared on purge",
+    ("RoadmapItem", "prd_document_id"): "an item is its roadmap's (roadmap_document_id); "
+    "its PRD link is cleared on purge",
+}
+
+
+def test_every_document_link_is_filtered_or_exempt():
+    """Every mapped column that points at documents (a foreign key, or a document_id
+    column) is followed by the trash filter or exempt above with its reason: a new table
+    cannot show rows of a trashed document."""
+    filtered = {
+        (entity.__name__, name)
+        for entity, parents in trash_filter._children().items()
+        for name, table in parents
+        if table.name == "documents"
+    }
+    unhandled, stale = [], []
+    for mapper in Base.registry.mappers:
+        for column in mapper.local_table.columns:
+            to_documents = any(fk.column.table.name == "documents" for fk in column.foreign_keys)
+            if not to_documents and column.name != "document_id":
+                continue
+            key = (mapper.class_.__name__, column.name)
+            if key not in filtered and key not in DOCUMENT_LINKS_EXEMPT:
+                unhandled.append(key)
+    for key in DOCUMENT_LINKS_EXEMPT:
+        if key in filtered:
+            stale.append(key)
+    assert sorted(unhandled) == [] and stale == []
+    assert ("Notification", "document_id") in filtered
+
+
+def test_oracle_action_is_in_the_model_registry():
+    import oracle.models as registry
+
+    assert registry.OracleAction.__tablename__ == "oracle_actions"
+    assert "OracleAction" in registry.__all__
+
+
 # --------------------------------------------------------------------------- roles
 
 
@@ -288,6 +422,10 @@ async def test_regenerate_a_roadmap_estimates_runs_and_imports_the_next_version(
             continue
         run = await decide(client, auth, run)
     assert run["status"] == "succeeded", run
+    # The note reaches the agents: every step of the regenerate run carries it.
+    steps = [step for spec in runtime.submitted for step in spec.steps]
+    regen = [st for st in steps if run["id"] in st.prompt]
+    assert regen and all("Shipping first this time" in st.prompt for st in regen)
     versions = (await client.get(f"/v1/documents/{ROADMAP}/versions", headers=auth)).json()
     assert [v["number"] for v in versions] == [1, 2]
     async with tenant_session(tenant_id) as s:
@@ -313,6 +451,25 @@ async def test_regenerate_roles_and_kinds(client, owner, runtime):
         f"/v1/documents/{PRD}/regenerate", json={"run_id": str(uuid.uuid4())}, headers=approver
     )
     assert other.status_code == 404, other.text
+
+
+async def test_the_documents_decider_regenerates_whatever_their_role(client, owner, runtime):
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    decider_id, decider = await _member(tenant_id, "commenter")
+    _, other = await _member(tenant_id, "commenter")
+    async with tenant_session(tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == PRD))
+        s.add(DocumentReviewPolicy(document_id=prd.id, decider_id=decider_id))
+        await s.commit()
+    resp = await client.post(f"/v1/documents/{PRD}/regenerate/estimate", json={}, headers=other)
+    assert resp.status_code == 403, resp.text
+    resp = await client.post(f"/v1/documents/{PRD}/regenerate/estimate", json={}, headers=decider)
+    assert resp.status_code == 200, resp.text
+    started = await client.post(
+        f"/v1/documents/{PRD}/regenerate", json={"run_id": resp.json()["run_id"]}, headers=other
+    )
+    assert started.status_code == 403, started.text
 
 
 # --------------------------------------------------------------------------- done when 4
