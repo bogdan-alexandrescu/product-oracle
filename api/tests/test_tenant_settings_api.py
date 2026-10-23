@@ -70,11 +70,30 @@ async def test_defaults_and_unknown_keys(client, owner):
         },
         # H11: every responsibility at its default (written through /v1/autonomy).
         "autonomy": {},
+        # #336: the company's day ("today") is UTC's until an owner sets the zone.
+        "company_timezone": "UTC",
     }
     assert all(s["is_default"] for s in listed)
     assert (await client.get("/v1/settings/nope", headers=owner.headers)).status_code == 404
     put = await client.put("/v1/settings/nope", json={"value": 1}, headers=owner.headers)
     assert put.status_code == 404
+
+
+@pytest.mark.parametrize("bad", ["Mars/Olympus", "", " UTC", 7, None])
+async def test_company_timezone_is_an_iana_zone(client, owner, bad):
+    put = await client.put(
+        "/v1/settings/company_timezone",
+        json={"value": "America/Los_Angeles"},
+        headers=owner.headers,
+    )
+    assert put.status_code == 200 and put.json()["value"] == "America/Los_Angeles"
+    resp = await client.put(
+        "/v1/settings/company_timezone", json={"value": bad}, headers=owner.headers
+    )
+    if bad is None:  # a reset
+        assert resp.status_code == 200 and resp.json()["value"] == "UTC"
+    else:
+        assert resp.status_code == 422 and "time zone" in resp.json()["detail"]
 
 
 async def test_iap_default_role(client, tenant_id, owner):

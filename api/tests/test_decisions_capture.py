@@ -22,7 +22,7 @@ from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.blocker_helpers import add_option, approve_compliance, create_blocker
-from tests.decision_helpers import TODAY, decide_body, propose, rows
+from tests.decision_helpers import clock, decide_body, propose, rows, today  # noqa: F401
 from tests.intake_helpers import gaps_by_category, intake_with_source, summary
 from tests.test_mcp import mcp_client, run_token, text_of, user_with_role
 from tests.test_review import add_version
@@ -71,7 +71,7 @@ async def test_first_version_approval_is_captured_once(client):
         admin = await s.scalar(select(User.id).where(User.email == "admin@example.com"))
     assert d.approver_id == admin
     assert d.expected_outcome == "See the document's success metrics"
-    assert d.review_at == TODAY + timedelta(days=90)
+    assert d.review_at == today() + timedelta(days=90)
     assert {"kind": "document_version", "id": str(version_id)}.items() <= d.subjects[0].items()
 
 

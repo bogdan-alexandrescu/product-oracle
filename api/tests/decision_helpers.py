@@ -1,16 +1,41 @@
 """Shared setup for the decision log tests (H1). Synthetic placeholders only."""
 
+import os
 import uuid
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
+import pytest
 from sqlalchemy import select
 
+from oracle.decisions import service
 from oracle.decisions.models import Decision
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx
 
-TODAY = date.today()
+# One clock for the test and the API (#336): "now" is frozen when the test starts, or at
+# ORACLE_TEST_NOW (an ISO instant with its offset) to run the tests at a chosen hour.
+_NOW: list[datetime] = []
+
+
+@pytest.fixture(autouse=True)
+def clock(monkeypatch) -> datetime:
+    """Freeze the decision log's "now"; autouse in each module that imports it."""
+    raw = os.environ.get("ORACLE_TEST_NOW")
+    at = datetime.fromisoformat(raw).astimezone(UTC) if raw else datetime.now(UTC)
+    freeze(monkeypatch, at)
+    return at
+
+
+def freeze(monkeypatch, at: datetime) -> None:
+    _NOW[:] = [at]
+    monkeypatch.setattr(service, "_now", lambda: at)
+
+
+def today(zone: str = "UTC") -> date:
+    """The frozen clock's date in ``zone`` (the company time zone; UTC by default)."""
+    return _NOW[0].astimezone(ZoneInfo(zone)).date()
 
 
 def two_options() -> list[dict[str, Any]]:
@@ -81,5 +106,5 @@ async def rows(tenant_id: uuid.UUID) -> list[Decision]:
         return list(await s.scalars(select(Decision).order_by(Decision.number)))
 
 
-def in_days(n: int) -> str:
-    return (TODAY + timedelta(days=n)).isoformat()
+def in_days(n: int, zone: str = "UTC") -> str:
+    return (today(zone) + timedelta(days=n)).isoformat()
