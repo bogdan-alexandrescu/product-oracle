@@ -225,8 +225,9 @@ def test_nan_and_infinity_are_refused(change):
 
 
 async def test_a_run_s_items_file_is_parsed_once_per_step(client, owner, runtime, monkeypatch):  # noqa: F811
-    """The checkpoint's check parses it once and the roadmap version's import once: no
-    third parse in on_roadmap_version."""
+    """The checkpoint's check parses it once; the roadmap version's import, with the same
+    PRD version, sections and bases, reuses that check (oracle.runs.roadmap._Checks): no
+    second parse at the import and no third in on_roadmap_version."""
     _, auth = owner
     await approved_prd(client, auth)
     real, calls = items_file.load_items_yaml, []
@@ -237,7 +238,7 @@ async def test_a_run_s_items_file_is_parsed_once_per_step(client, owner, runtime
 
     monkeypatch.setattr(items_file, "load_items_yaml", counted)
     await built_roadmap(client, auth, runtime)
-    assert len(calls) == 2, calls
+    assert calls == [len(ITEMS)], calls
 
 
 def test_a_reference_matches_only_as_an_exact_token():
