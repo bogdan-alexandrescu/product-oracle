@@ -12945,6 +12945,14 @@ export interface components {
             decided_by_email?: string | null;
             /** Decided Actor */
             decided_actor?: string | null;
+            /** Withdrawn At */
+            withdrawn_at?: string | null;
+            /** Withdrawn By */
+            withdrawn_by?: string | null;
+            /** Withdrawn By Email */
+            withdrawn_by_email?: string | null;
+            /** Withdrawn Reason */
+            withdrawn_reason?: string | null;
             /** Created By */
             created_by?: string | null;
             /**

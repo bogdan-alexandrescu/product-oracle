@@ -107,6 +107,14 @@ export function DecisionInspector({
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
+      {d.status === "withdrawn" && (
+        <InspectorSection label="Withdrawn">
+          <p data-testid="decision-withdrawn" className="text-[15px]">
+            Withdrawn by {d.withdrawn_by_email ?? email(d.withdrawn_by) ?? "a member"}, {shortDate(d.withdrawn_at)}
+            {d.withdrawn_reason ? `: ${d.withdrawn_reason}` : ""}
+          </p>
+        </InspectorSection>
+      )}
       {checkpoint ? (
         <InspectorSection label="The stop" testId="decision-stop">
           <InspectorRow value={d.chosen_option === "approve" ? "Approved" : "Sent back"}>{stopLabel(d)}</InspectorRow>

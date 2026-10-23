@@ -48,16 +48,19 @@ export function useQuery<T>(key: string, load: () => Promise<T>, { keepPrevious 
   });
   const onAuth = useAuthRedirect();
   const loadRef = useRef(load);
+  // The key on screen: a reload begun under an older key never lands over a newer one.
+  const keyRef = useRef(key);
   useEffect(() => {
     loadRef.current = load;
+    keyRef.current = key;
   });
 
   const run = useCallback(async () => {
     try {
       const data = await loadRef.current();
-      setState({ key, data, error: null, loading: false });
+      if (keyRef.current === key) setState({ key, data, error: null, loading: false });
     } catch (e) {
-      if (!onAuth(e)) setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
+      if (!onAuth(e) && keyRef.current === key) setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
     }
   }, [key, onAuth]);
 
