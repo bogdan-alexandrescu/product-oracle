@@ -2798,7 +2798,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   );
   if (accountOut) return accountOut;
   if (p[1] === "me") return json(200, meOut(db, me));
-  if (p[1] === "discussions") {
+  if (p[1] === "discussions" || p[1] === "discussion-changes") {
     db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
     const discussionsCtx: DiscussionsContext = {
       db: (db.discussions ??= emptyDiscussions()),

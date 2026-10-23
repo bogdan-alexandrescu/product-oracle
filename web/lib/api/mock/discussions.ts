@@ -4,8 +4,14 @@
  * adds people to a private one, viewers read, and the starter alone makes a private one open
  * with the counts its warning showed (409 with the current counts otherwise, then a system
  * line). Seeded only in the "discussions" scenario.
+ *
+ * G3 Outcome extraction: the canned Oracle reply proposes 2 changes of the kinds its subject
+ * offers (on a section, as the API: section_edit and answer, so 2 section edits) as it ends, and the change routes act as the API's do for the four roles:
+ * commenters suggest and edit, approvers stage, edit and dismiss, viewers only read; a
+ * private discussion's Stage needs the reason everyone will see; a stale lock_version is 409.
  */
 import type { Schemas } from "@/lib/api/client";
+import type { ChangeOut, ChangeStatus, ChangeVerb } from "@/lib/api/discussion-changes";
 
 import { companyDayInWords } from "./connections";
 
@@ -65,8 +71,31 @@ type MessageRow = {
   cancel_requested?: boolean;
 };
 
-/** G3 (mock only): a typed change Oracle proposed in a discussion. */
-type ChangeRow = Schemas["DiscussionChangeOut"] & { discussion_id: string };
+/** G3: a change as the mock stores it (people by id; `action`, `can` and `needs_reason` are computed per reader). */
+export type ChangeRow = {
+  id: string;
+  discussion_id: string;
+  kind: string;
+  label: string;
+  target: Record<string, unknown>;
+  payload: Record<string, unknown>;
+  edited_payload: Record<string, unknown> | null;
+  rationale: string | null;
+  proposed_by_kind: "oracle" | "person";
+  proposed_by: string | null;
+  suggested_by: string | null;
+  status: ChangeStatus;
+  pushback: { reason: string; sources: number[] } | null;
+  basis: { intake_id: string; finding_id: string }[];
+  result_ref: Record<string, unknown> | null;
+  decision_note: string | null;
+  override_reason: string | null;
+  /** A private discussion's Stage: the reason everyone who can see the subject reads. */
+  reason: string | null;
+  from_message_id: string | null;
+  lock_version: number;
+  created_at: string;
+};
 
 export type DiscussionsDb = { discussions: DiscussionRow[]; participants: ParticipantRow[]; messages: MessageRow[]; changes?: ChangeRow[] };
 
@@ -132,7 +161,148 @@ export function documentReply(question: string, sections: DocumentSection[]): { 
 const FIRST_MS = 500;
 const DELTA_MS = 150;
 
-export const emptyDiscussions = (): DiscussionsDb => ({ discussions: [], participants: [], messages: [] });
+export const emptyDiscussions = (): DiscussionsDb => ({ discussions: [], participants: [], messages: [], changes: [] });
+
+/** G3: each kind's main action (the registry, G1 §3.3). */
+const KIND_VERB: Record<string, ChangeVerb> = {
+  item_horizon: "Stage",
+  item_outcome: "Stage",
+  section_edit: "Stage",
+  goal_measure: "Propose",
+  entity_edit: "Propose",
+  conflict_pick: "Resolve",
+  answer: "Use as answer",
+  basis_record: "Record",
+  priority_move: "Apply",
+  priority_pin: "Apply",
+  ask_person: "Ask",
+};
+const VERB_OF_ROUTE: Record<string, ChangeVerb> = {
+  stage: "Stage",
+  propose: "Propose",
+  resolve: "Resolve",
+  answer: "Use as answer",
+  verify: "Record",
+  apply: "Apply",
+  ask: "Ask",
+};
+const VERB_PAST: Record<ChangeVerb, string> = {
+  Stage: "staged",
+  Propose: "proposed",
+  Resolve: "resolved",
+  "Use as answer": "answered",
+  Record: "recorded",
+  Apply: "applied",
+  Ask: "asked",
+};
+/** The kinds each subject offers in the mock, as the API's kinds.available_for does (G1 §3.3). */
+const SUBJECT_KINDS: Record<string, string[]> = {
+  document: ["section_edit", "answer"],
+  section: ["section_edit", "answer"],
+  roadmap_item: ["item_horizon", "item_outcome"],
+  checkpoint: ["item_horizon", "item_outcome", "conflict_pick"],
+  checkpoint_item: ["item_horizon", "item_outcome"],
+  entity: ["goal_measure", "entity_edit"],
+  conflict: ["conflict_pick"],
+  question: ["answer"],
+};
+const TEXT = { type: "string", minLength: 1 };
+const KIND_SCHEMA: Record<string, Record<string, unknown>> = {
+  item_horizon: { type: "object", required: ["item_key", "horizon"], properties: { item_key: TEXT, horizon: { enum: ["now", "next", "later"] } } },
+  item_outcome: { type: "object", required: ["item_key", "outcome"], properties: { item_key: TEXT, outcome: TEXT } },
+  section_edit: { type: "object", required: ["section_key", "instruction"], properties: { section_key: TEXT, instruction: TEXT } },
+  goal_measure: { type: "object", required: ["metric", "target"], properties: { metric: TEXT, target: TEXT, horizon: { type: "string" } } },
+  entity_edit: { type: "object", properties: {} },
+  conflict_pick: { type: "object", required: ["claim_index"], properties: { claim_index: { type: "integer", minimum: 0 } } },
+  answer: { type: "object", required: ["body"], properties: { body: TEXT } },
+};
+export const STAGE_WHY_NOT = "Approvers stage changes. You can suggest it.";
+const APPROVERS_ACT = "Approvers take this action. You can suggest it.";
+const VIEWERS_READ = "Viewers can read discussions but not write in them";
+const STALE = "Someone else changed this since you loaded it; reload and try again";
+const HORIZON_LABEL: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
+const isOpenStatus = (s: ChangeStatus) => s === "proposed" || s === "suggested";
+const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+
+/** A change's plain sentence from its kind and payload. */
+export function changeLabel(kind: string, p: Record<string, unknown>): string {
+  const clip = (t: string) => (t.length > 100 ? `${t.slice(0, 99)}…` : t);
+  const lower = (t: string) => t.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase());
+  if (kind === "item_horizon") return `Move ${str(p.item_key)} to ${HORIZON_LABEL[str(p.horizon)] ?? str(p.horizon)}`;
+  if (kind === "item_outcome") return clip(`Set ${str(p.item_key)}'s outcome: ${lower(str(p.outcome))}`);
+  if (kind === "section_edit") return clip(`Edit ${str(p.section_key)}: ${lower(str(p.instruction))}`);
+  if (kind === "goal_measure") return clip(`Measure the goal by ${str(p.metric)}: ${str(p.target)}${str(p.horizon) ? ` by ${str(p.horizon)}` : ""}`);
+  if (kind === "conflict_pick") return `Settle the conflict with claim ${Number(p.claim_index)}`;
+  if (kind === "answer") return clip(`Answer: ${str(p.body)}`);
+  return kind.replace(/_/g, " ");
+}
+
+/** What a payload lacks for its kind, or null. */
+function incomplete(kind: string, p: Record<string, unknown>): string | null {
+  const required = (KIND_SCHEMA[kind]?.required as string[] | undefined) ?? [];
+  return required.some((k) => (kind === "conflict_pick" ? !Number.isInteger(p[k]) : !str(p[k]))) ? "The change is incomplete" : null;
+}
+
+/**
+ * The 2 changes the canned reply proposes, of the kinds its discussion's subject offers (as the
+ * API drops any other): on a section or document, an edit of the section and one of the
+ * solution; on an item, a move to Next.
+ */
+function cannedChanges(d: DiscussionRow, from: string, uuid: () => string, at: string): ChangeRow[] {
+  const section = str(d.subject.section_key) || "problem";
+  const row = (kind: string, target: Record<string, unknown>, payload: Record<string, unknown>, rationale: string): ChangeRow => ({
+    id: uuid(),
+    discussion_id: d.id,
+    kind,
+    label: changeLabel(kind, payload),
+    target,
+    payload,
+    edited_payload: null,
+    rationale,
+    proposed_by_kind: "oracle",
+    proposed_by: null,
+    suggested_by: null,
+    status: "proposed",
+    pushback: null,
+    basis: [],
+    result_ref: null,
+    decision_note: null,
+    override_reason: null,
+    reason: null,
+    from_message_id: from,
+    lock_version: 1,
+    created_at: at,
+  });
+  const edit = (key: string, instruction: string, rationale: string) =>
+    row("section_edit", { document_id: d.document_id, version: d.subject.version ?? null, section_key: key }, { section_key: key, instruction }, rationale);
+  const offered = SUBJECT_KINDS[d.subject_kind] ?? [];
+  if (offered.includes("section_edit"))
+    return [
+      edit(section, "Say that detection follows once activation holds.", "The goal does not depend on detection [c:1]."),
+      edit(section === "solution" ? "problem" : "solution", "Read the caps from the plan thresholds.", "Caps can ship on the plan thresholds alone [c:1]."),
+    ];
+  if (offered.includes("item_horizon"))
+    return [row("item_horizon", { document_id: d.document_id, item_key: "usage-caps" }, { item_key: "usage-caps", horizon: "next" }, "Caps can ship on the plan thresholds alone [c:1].")];
+  return [];
+}
+
+/** Oracle's new proposals replace its open ones of the same kind and target; a person's suggestion stays. */
+function addProposals(rows: ChangeRow[], made: ChangeRow[]) {
+  for (const c of made) {
+    for (const old of rows)
+      if (
+        old.discussion_id === c.discussion_id &&
+        old.kind === c.kind &&
+        old.proposed_by_kind === "oracle" &&
+        old.status === "proposed" &&
+        JSON.stringify(old.target) === JSON.stringify(c.target)
+      ) {
+        old.status = "superseded";
+        old.lock_version += 1;
+      }
+    rows.push(structuredClone(c));
+  }
+}
 
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 const atLeast = (role: Role, min: Role) => RANK[role] >= RANK[min];
@@ -243,7 +413,7 @@ export function seedDiscussionReplies(ctx: Omit<DiscussionsContext, "me" | "db">
 }
 
 export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
-  if (p[1] !== "discussions") return null;
+  if (p[1] !== "discussions" && p[1] !== "discussion-changes") return null;
   const { db, me } = ctx;
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
@@ -263,6 +433,45 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
   const touch = (d: DiscussionRow) => {
     d.lock_version += 1;
     d.updated_at = ctx.now();
+  };
+
+  const changesOf = (d: DiscussionRow) => (db.changes ?? []).filter((c) => c.discussion_id === d.id);
+  /** G3: a change as this reader sees it: the kind's action, what else they may do, and whether Stage asks for a reason. */
+  const changeOut = (c: ChangeRow, d: DiscussionRow): ChangeOut => {
+    const verb = KIND_VERB[c.kind] ?? "Stage";
+    const open = isOpenStatus(c.status);
+    const writer = atLeast(me.role, "commenter") && readable(d) && d.status === "open";
+    const anyWriter = verb === "Propose" || verb === "Ask";
+    const allowed = writer && open && (anyWriter || atLeast(me.role, "approver"));
+    const whyNot = allowed || !open ? null : d.status !== "open" ? "This discussion is closed" : verb === "Stage" ? STAGE_WHY_NOT : APPROVERS_ACT;
+    return {
+      id: c.id,
+      discussion_id: c.discussion_id,
+      kind: c.kind,
+      label: c.label,
+      target: c.target,
+      payload: c.payload,
+      edited_payload: c.edited_payload,
+      rationale: c.rationale,
+      proposed_by_kind: c.proposed_by_kind,
+      proposed_by: c.proposed_by ? ref(c.proposed_by) : null,
+      suggested_by: c.suggested_by ? ref(c.suggested_by) : null,
+      status: c.status,
+      action: atLeast(me.role, "commenter") ? { verb, allowed, why_not: whyNot } : null,
+      can: {
+        suggest: writer && c.status === "proposed" && !allowed,
+        edit: writer && open,
+        withdraw: writer && c.status === "suggested" && c.suggested_by === me.id,
+        dismiss: writer && open && atLeast(me.role, "approver"),
+      },
+      pushback: c.pushback,
+      needs_reason: open && verb === "Stage" && d.visibility === "private",
+      basis: c.basis,
+      result_ref: c.result_ref,
+      decision_note: c.decision_note,
+      lock_version: c.lock_version,
+      created_at: c.created_at,
+    };
   };
 
   const summary = (d: DiscussionRow): Schemas["DiscussionSummary"] => {
@@ -286,7 +495,11 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       summary: d.summary,
       summary_status: d.summary_status,
       summary_shared: d.summary_shared,
-      changes: { proposed: 0, suggested: 0, staged: 0 },
+      changes: {
+        proposed: changesOf(d).filter((c) => c.status === "proposed").length,
+        suggested: changesOf(d).filter((c) => c.status === "suggested").length,
+        staged: changesOf(d).filter((c) => c.status === "staged").length,
+      },
       me: {
         participant: !!mine,
         can_write: readable(d) && atLeast(me.role, "commenter"),
@@ -416,6 +629,13 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       proposed_by: null,
       suggested_by: null,
       status: "proposed",
+      pushback: null,
+      basis: [],
+      result_ref: null,
+      decision_note: null,
+      override_reason: null,
+      reason: null,
+      from_message_id: null,
       created_at: ctx.now(),
       lock_version: 1,
     });
@@ -478,12 +698,77 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         }
         await write({ status: "complete", body: text, citations });
         controller.enqueue(event("citations", citations));
+        // G3: the reply's changes, stored as it ends and sent before done.
+        // A panel chat's change comes from G7's stub above (proposeSectionEdit), not the canned two.
+        if (d && d.origin !== "panel") {
+          const made = cannedChanges(d, id, ctx.uuid, ctx.now());
+          if (ctx.persist) await ctx.persist((saved) => addProposals((saved.changes ??= []), made));
+          else addProposals((db.changes ??= []), made);
+          controller.enqueue(event("changes", made.map((c) => changeOut(c, d))));
+        }
         controller.enqueue(event("done", messageOut({ ...x, status: "complete", body: text, citations })));
         controller.close();
       },
     });
     return new Response(body, { status: 200, headers: { "content-type": "text/event-stream", "cache-control": "no-cache", "x-accel-buffering": "no" } });
   };
+
+  // G3: /v1/discussion-changes/{id}[/{action}]
+  if (p[1] === "discussion-changes") {
+    const c = (db.changes ?? []).find((x) => x.id === p[2]);
+    const d = c && db.discussions.find((x) => x.id === c.discussion_id);
+    if (!c || !d || (d.author_only && !isIn(d))) return refuse(404, "Change not found");
+    if (!readable(d)) return refuse(403, "This discussion is private");
+    const step = m === "PATCH" && !p[3] ? "edit" : m === "POST" && p[3] && !p[4] ? p[3] : null;
+    if (!step) return null;
+    const input = (await body<Record<string, unknown>>()) ?? {};
+    if (!atLeast(me.role, "commenter")) return refuse(403, VIEWERS_READ);
+    const verb = VERB_OF_ROUTE[step];
+    if (verb) {
+      if (KIND_VERB[c.kind] !== verb) return refuse(422, "This change does not take this action");
+      if (verb !== "Propose" && verb !== "Ask" && !atLeast(me.role, "approver")) return refuse(403, verb === "Stage" ? STAGE_WHY_NOT : APPROVERS_ACT);
+    } else if (step === "dismiss" && !atLeast(me.role, "approver")) return refuse(403, "Approvers dismiss changes");
+    else if (!["edit", "suggest", "withdraw", "dismiss"].includes(step)) return null;
+    if (d.status === "closed") return refuse(409, "This discussion is closed");
+    if (input.lock_version !== c.lock_version) return refuse(409, STALE);
+    if (!isOpenStatus(c.status)) return refuse(409, "This change was already handled");
+    const name = displayName(member(me.id)?.email ?? "someone");
+    const line = (said: string) => push(d, { author_kind: "system", author_id: null, body: said, mentions: [], mentions_oracle: false, reply_to: null });
+    if (step === "suggest") {
+      if (c.status !== "proposed") return refuse(409, "This change is already suggested");
+      Object.assign(c, { status: "suggested", suggested_by: me.id });
+    } else if (step === "edit") {
+      const payload = input.payload;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return refuse(422, "The change is incomplete");
+      const gap = incomplete(c.kind, payload as Record<string, unknown>);
+      if (gap) return refuse(422, gap);
+      c.edited_payload = payload as Record<string, unknown>;
+      c.label = changeLabel(c.kind, c.edited_payload);
+      if (typeof input.rationale === "string") c.rationale = input.rationale.trim() || null;
+      // A commenter's edit becomes their suggestion; an approver's keeps the status.
+      if (!atLeast(me.role, "approver")) Object.assign(c, { status: "suggested", suggested_by: me.id });
+    } else if (step === "withdraw") {
+      if (c.status !== "suggested" || c.suggested_by !== me.id) return refuse(403, "Only the person who suggested it can withdraw it");
+      Object.assign(c, { status: c.proposed_by_kind === "oracle" ? "proposed" : "dismissed", suggested_by: null });
+    } else if (step === "dismiss") {
+      Object.assign(c, { status: "dismissed", decision_note: str(input.note) || null });
+    } else if (verb === "Stage") {
+      if (c.pushback && !str(input.override_reason)) return refuse(422, "Oracle pushed back on this. Give a reason to stage it anyway.");
+      if (d.visibility === "private" && !str(input.reason)) return refuse(422, "Write the reason everyone will see");
+      Object.assign(c, {
+        status: "staged",
+        override_reason: str(input.override_reason) || null,
+        reason: d.visibility === "private" ? str(input.reason) : null,
+        result_ref: { kind: c.target.run_id ? "checkpoint_action" : "next_draft_change", id: ctx.uuid() },
+      });
+      line(`${name} staged: ${c.label}`);
+    } else if (verb) {
+      Object.assign(c, { status: "done", result_ref: { id: ctx.uuid() } });
+      line(`${name} ${VERB_PAST[verb]}: ${c.label}`);
+    }
+    c.lock_version += 1;
+    return json(200, { change: changeOut(c, d), result: null });
+  }
 
   // GET/POST /v1/discussions
   if (!p[2]) {
@@ -693,11 +978,70 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     if (row && mine && (!mine.last_read_at || mine.last_read_at < row.created_at)) mine.last_read_at = row.created_at;
     return json(204, null);
   }
-  if (p[3] === "changes" && m === "GET")
+  if (p[3] === "changes" && !p[4]) {
+    if (m === "GET") return json(200, changesOf(d).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((c) => changeOut(c, d)));
+    if (m !== "POST") return null;
+    const refused = writer();
+    if (refused) return refused;
+    const input = (await body<{ kind?: string; target?: Record<string, unknown>; payload?: Record<string, unknown>; rationale?: string | null }>()) ?? {};
+    const kind = input.kind ?? "";
+    if (!(SUBJECT_KINDS[d.subject_kind] ?? []).includes(kind)) return refuse(422, "This kind of change is not available here");
+    const payload = input.payload && typeof input.payload === "object" ? input.payload : {};
+    const gap = incomplete(kind, payload);
+    if (gap) return refuse(422, gap);
+    // A commenter's change is their suggestion; an approver's is proposed, ready to stage.
+    const approver = atLeast(me.role, "approver");
+    const c: ChangeRow = {
+      id: ctx.uuid(),
+      discussion_id: d.id,
+      kind,
+      label: changeLabel(kind, payload),
+      target: input.target ?? { ...d.subject },
+      payload,
+      edited_payload: null,
+      rationale: str(input.rationale) || null,
+      proposed_by_kind: "person",
+      proposed_by: me.id,
+      suggested_by: approver ? null : me.id,
+      status: approver ? "proposed" : "suggested",
+      pushback: null,
+      basis: [],
+      result_ref: null,
+      decision_note: null,
+      override_reason: null,
+      reason: null,
+      from_message_id: null,
+      lock_version: 1,
+      created_at: ctx.now(),
+    };
+    (db.changes ??= []).push(c);
+    return json(201, { change: changeOut(c, d), result: null });
+  }
+  if (p[3] === "change-kinds" && m === "GET")
     return json(
       200,
-      (db.changes ?? []).filter((c) => c.discussion_id === d.id && (!q.get("status") || c.status === q.get("status"))).map((c) => ({ ...c, discussion_id: undefined })),
+      (SUBJECT_KINDS[d.subject_kind] ?? []).map((kind) => ({ kind, verb: KIND_VERB[kind], schema: KIND_SCHEMA[kind] ?? { type: "object" } })),
     );
+  if (p[3] === "summary" && m === "POST") {
+    const refused = writer();
+    if (refused) return refused;
+    const input = (await body<{ replace?: boolean }>()) ?? {};
+    if (d.summary_status === "confirmed" && !(starter(d) && input.replace))
+      return refuse(409, "The starter confirmed this summary. They can ask Oracle for a new draft.");
+    const rows = changesOf(d);
+    const decided = rows.filter((c) => c.status === "staged" || c.status === "done").map((c) => c.label);
+    const open = rows.filter((c) => isOpenStatus(c.status)).map((c) => c.label);
+    d.summary = [
+      `Decided: ${decided.length ? decided.join("; ") : "nothing yet"}.`,
+      `Open: ${open.length ? open.join("; ") : "no open questions"}.`,
+      `Context: the team discussed ${d.subject_label}.`,
+    ]
+      .join("\n")
+      .slice(0, 1200);
+    d.summary_status = "draft";
+    touch(d);
+    return json(200, out(d));
+  }
   // G7 Share as discussion: a new open discussion on the chat's subject from its edited summary.
   if (p[3] === "share" && m === "POST") {
     if (d.origin !== "panel") return refuse(422, "Only a panel chat is shared as a discussion");
@@ -722,6 +1066,9 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     db.discussions.push(shared);
     add(shared, me.id, "started");
     push(shared, { author_kind: "person", author_id: me.id, body: input.first_message.trim(), mentions: [], mentions_oracle: false, reply_to: null });
+    // As the API: the chat's open changes, of whatever kind, are copied as suggested by the sharer.
+    for (const c of changesOf(d).filter((x) => x.status === "proposed" || x.status === "suggested" || x.status === "staged"))
+      db.changes!.push({ ...c, id: ctx.uuid(), discussion_id: shared.id, status: "suggested", suggested_by: me.id, from_message_id: null, decision_note: null, override_reason: null, reason: null, result_ref: null, lock_version: 1, created_at: at });
     return json(201, out(shared));
   }
   return null;

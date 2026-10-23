@@ -1172,6 +1172,10 @@ async def update(
         d.closed_by = principal.user_id if body.status == "closed" else None
         d.closed_at = datetime.now(UTC) if body.status == "closed" else None
         await _record(db, principal, "close" if body.status == "closed" else "reopen", d)
+        if body.status == "closed":
+            from oracle.discussions import summary
+
+            await summary.queue(db, d)
     if (manages or body.visibility not in (None, d.visibility)) and d.status == "closed":
         raise DiscussionError(409, CLOSED)
     if body.visibility == "open" and d.visibility == "private":
