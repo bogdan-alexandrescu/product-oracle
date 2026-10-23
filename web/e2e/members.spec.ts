@@ -73,10 +73,11 @@ test("members: undo brings a revoked invite back", async ({ page }) => {
   await expect(page.getByTestId("invite-row").filter({ hasText: "new.hire@example.com" })).toHaveCount(1);
 });
 
-test("members: non-owners see a note instead of the member list", async ({ page }) => {
+test("members: non-owners get no Members tab, and its address says it is not for their role", async ({ page }) => {
   await login(page, "approver@example.com");
   await page.goto("/settings/members");
-  await expect(page.getByTestId("role-note")).toContainText("Only owners");
+  await expect(page.getByTestId("not-for-role")).toContainText("Not available for your role");
+  await expect(page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-members")).toHaveCount(0);
   await expect(page.getByTestId("member-row")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Invite", exact: true })).toHaveCount(0);
 });
