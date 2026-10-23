@@ -16020,6 +16020,10 @@ export interface components {
              * @default []
              */
             problems: components["schemas"]["GoalProblem"][];
+            /** Horizons */
+            horizons?: {
+                [key: string]: number;
+            } | null;
         };
         /** GoalLink */
         GoalLink: {

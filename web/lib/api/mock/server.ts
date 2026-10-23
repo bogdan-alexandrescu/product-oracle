@@ -1907,6 +1907,7 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
     },
     { key: "eng_lead", done: engineeringLeads(db).length > 0, count: engineeringLeads(db).length, detail: null },
     { key: "horizons", done: facts.horizons, count: null, detail: null },
+    { key: "timezone", done: facts.timezone != null, count: null, detail: facts.timezone },
     { key: "build_baseline", done: built != null, count: null, detail: built },
   ];
   const steps = me.role === "owner" ? [...personal, ...owner] : me.role === "viewer" ? [] : personal;

@@ -183,7 +183,110 @@ function HorizonsPanel() {
   );
 }
 
-/** Settings > Company: the company-wide choices an owner makes; first, the planning horizons. */
+/** Common zones first; the browser's full list after. */
+const ZONES = ["UTC", "America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "Europe/London", "Europe/Berlin", "Asia/Tokyo", "Australia/Sydney"];
+
+function zones(current: string): string[] {
+  const all = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
+  return [...new Set([current, ...ZONES, ...all])];
+}
+
+/** The Company time zone (one setting, UTC by default): goals' today, the weekly report and rituals. */
+function TimezonePanel() {
+  const settingQ = useQuery("settings|company_timezone", () =>
+    unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "company_timezone" } } })),
+  );
+  const stored = settingQ.data ? String(settingQ.data.value) : null;
+  const [edit, setEdit] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const zone = edit ?? stored;
+
+  async function save() {
+    if (!zone) return;
+    setBusy(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const out: Schemas["SettingOut"] = await unwrap(
+        api.PUT("/v1/settings/{key}", { params: { path: { key: "company_timezone" } }, body: { value: zone } }),
+      );
+      settingQ.setData(() => out);
+      setEdit(null);
+      setSaved(true);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div id="timezone" className="scroll-mt-4" data-testid="timezone-panel">
+      <Panel
+        title="Time zone"
+        tools={
+          <InfoTip label="time zone" side="bottom">
+            Goals&apos; today, the weekly alignment report and rituals use it. Rituals on the old zone move with it.
+          </InfoTip>
+        }
+      >
+        {settingQ.error && (
+          <div className="p-4">
+            <Notice tone="error">{settingQ.error}</Notice>
+          </div>
+        )}
+        {zone && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save();
+            }}
+          >
+            <div className={ROW.replace("88px", "160px")}>
+              <label htmlFor="company-timezone" className={ROW_LABEL}>
+                Company time zone
+              </label>
+              <select
+                id="company-timezone"
+                className={`${SELECT_FIELD} max-w-72`}
+                value={zone}
+                onChange={(e) => {
+                  setEdit(e.target.value);
+                  setSaved(false);
+                }}
+              >
+                {zones(zone).map((z) => (
+                  <option key={z} value={z}>
+                    {z}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {error && (
+              <div className="px-4 pb-1 max-[600px]:px-3">
+                <Notice tone="error">{error}</Notice>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
+              <Button type="submit" variant="solid" disabled={busy}>
+                Save
+              </Button>
+              {saved && (
+                <span role="status" className="text-sm font-semibold text-pass">
+                  Saved
+                </span>
+              )}
+            </div>
+          </form>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+/** Settings > Company: the company-wide choices an owner makes: the planning horizons and the Company time zone. */
 export default function CompanySettingsPage() {
   const { role, loading } = useMe();
   const isOwner = hasRole(role, "owner");
@@ -194,6 +297,7 @@ export default function CompanySettingsPage() {
         (isOwner ? (
           <div className="flex min-w-0 flex-col gap-4">
             <HorizonsPanel />
+            <TimezonePanel />
           </div>
         ) : (
           <p
