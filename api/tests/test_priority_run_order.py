@@ -54,6 +54,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import select
 
+from oracle import company_time
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document
 from oracle.models import AuditEvent
@@ -648,8 +649,9 @@ async def test_roadmap_reads_this_prds_approved_order(client, owner, runtime):  
     prompt = await roadmap_prompt(client, auth, runtime)
     assert "this-prd-order" in prompt
     assert "company-order" not in prompt and "other-prd-order" not in prompt
-    today = datetime.now(UTC)
-    line = f"Priority order (goal_weighted, this PRD's approved order of {today.day} {today:%b}"
+    # The Company day (America/Los_Angeles by default), #463.
+    today = company_time.day_in_words(datetime.now(UTC))
+    line = f"Priority order (goal_weighted, this PRD's approved order of {today}"
     assert line in prompt
 
 
