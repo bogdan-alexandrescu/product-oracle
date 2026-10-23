@@ -4,7 +4,8 @@
  * cut with a reason, reorder) are replaced whole; Propose changes imports the next roadmap
  * version, with the base's items plus the changes and a Plan changes section, for the
  * document's decider. Approving that version (the documents mock's approve) makes it the
- * live plan: the Plan mock reads its items (planVersions).
+ * live plan: the Plan mock reads its items (planVersions). A proposal made while an earlier
+ * one waits supersedes it: the earlier version can't be approved (supersededRefusal).
  *
  * Simplified on purpose: the diff follows E3's statuses for the fields a change set moves
  * (horizon, a new or a cut item, a reorder), not every field. Reads need a viewer; writes
@@ -24,6 +25,8 @@ export interface ChangeSetRow {
   status: Schemas["ChangeSetOut"]["status"];
   changes: Change[];
   proposed_version: number | null;
+  /** The later proposal's version that superseded this one (status "superseded"). */
+  superseded_by_version?: number | null;
   lock_version: number;
   created_by: string;
   created_at: string;
@@ -146,6 +149,7 @@ function view(ctx: PlanEditsContext, db: PlanEditsDb, doc: Doc, row: ChangeSetRo
     summary,
     proposed_version: row.proposed_version,
     approved: !!proposed?.approved_at,
+    superseded_by_version: row.superseded_by_version ?? null,
     decider_id: ctx.deciderOf(doc.id),
     lock_version: row.lock_version,
     created_by: row.created_by,
@@ -172,6 +176,14 @@ function linesOf(base: number, changes: Change[], titles: Map<string, string>): 
     return `- Moved ${name(c.key)} to place ${c.position + 1} in its horizon`;
   });
   return [`Proposed as changes to version ${base}:`, "", ...lines].join("\n");
+}
+
+/** Why version `n` of the roadmap can't be approved when a later proposal superseded it, else null. */
+export function supersededRefusal(db: PlanEditsDb, slug: string, n: number): string | null {
+  const row = db.sets.find((s) => s.roadmap === slug && s.status === "superseded" && s.proposed_version === n);
+  if (!row?.superseded_by_version) return null;
+  const later = row.superseded_by_version;
+  return `Version ${n} was superseded by version ${later}, a later proposal of plan changes: it can't be approved. Approve version ${later} instead.`;
 }
 
 /** /v1/roadmaps/{doc}/change-sets[/{id}[/propose]] */
@@ -246,6 +258,14 @@ export async function routeChangeSets(ctx: PlanEditsContext, db: PlanEditsDb, re
       row.status = "proposed";
       row.proposed_version = version.number;
       stamp(row);
+      // The proposals still waiting for approval are superseded by this one.
+      for (const other of db.sets) {
+        const waiting = ctx.versions.find((v) => v.document_id === doc.id && v.number === other.proposed_version);
+        if (other.roadmap !== doc.slug || other.id === row.id || other.status !== "proposed" || !waiting || waiting.approved_at) continue;
+        other.status = "superseded";
+        other.superseded_by_version = version.number;
+        stamp(other);
+      }
       return json(200, view(ctx, db, doc, row));
     }
     return null;

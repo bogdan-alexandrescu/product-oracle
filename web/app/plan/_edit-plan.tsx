@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { Button, Chip, Notice, Panel } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -257,9 +257,48 @@ function Editor({ set, onChange }: { set: ChangeSet; onChange: (s: ChangeSet | n
         <Button variant="ghost" onClick={discard}>
           Discard
         </Button>
-        <Button variant="solid" disabled={set.changes.length === 0} onClick={propose}>
+        <Button variant="solid" disabled={set.changes.length === 0} title={set.changes.length === 0 ? "Nothing to propose yet: make a change first." : undefined} onClick={propose}>
           Propose changes
         </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Whether `me` approves the change set's proposal: its decider, else any approver. */
+const approves = (set: ChangeSet, me: string | null, canWrite: boolean) => (set.decider_id ? set.decider_id === me : canWrite);
+
+/**
+ * A proposal a later one superseded while it waited: it can't be approved. The one who would
+ * approve it sees Approve disabled with the reason (#370: its state blocks them); nobody else
+ * sees Approve at all.
+ */
+function Superseded({ set, me, canWrite }: { set: ChangeSet; me: string | null; canWrite: boolean }) {
+  const reason = useId();
+  const n = set.proposed_version!;
+  const later = set.superseded_by_version!;
+  return (
+    <div data-testid="plan-superseded" className="flex flex-col gap-2 px-4 py-3">
+      <p className="text-sm">
+        <span className="font-semibold">
+          Version {n} superseded by version {later}
+        </span>{" "}
+        · it can&apos;t be approved
+      </p>
+      <div className="flex items-center justify-end gap-2">
+        <Link href={`/documents/${set.roadmap}/v/${n}`} className="text-sm font-semibold text-accent-ink underline-offset-2 hover:underline">
+          Open version {n}
+        </Link>
+        {approves(set, me, canWrite) && (
+          <>
+            <span id={reason} className="text-sm text-text2">
+              Superseded by version {later}: approve version {later} instead.
+            </span>
+            <Button variant="solid" disabled aria-describedby={reason}>
+              Approve version {n}
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -269,7 +308,7 @@ function Editor({ set, onChange }: { set: ChangeSet; onChange: (s: ChangeSet | n
 function Proposal({ set, me, canWrite, onApproved }: { set: ChangeSet; me: string | null; canWrite: boolean; onApproved: (n: number) => void }) {
   const [error, setError] = useState<string | null>(null);
   const n = set.proposed_version!;
-  const mine = set.decider_id ? set.decider_id === me : canWrite;
+  const mine = approves(set, me, canWrite);
   const who = set.decider_id ? (set.decider_id === me ? "you (the decider)" : "the decider") : "an approver";
   const approve = async () => {
     setError(null);
@@ -324,7 +363,9 @@ export function PlanChanges({
   const all = q.data ?? [];
   const draft = local !== undefined ? (local?.status === "draft" ? local : null) : (opened ?? all.find((s) => s.status === "draft") ?? null);
   const proposed = [...(local?.status === "proposed" ? [local] : []), ...all.filter((s) => s.status === "proposed" && !s.approved && s.id !== local?.id)];
-  if (!draft && proposed.length === 0 && live == null) return null;
+  // Superseded while it waited, by a proposal that still waits (once that one is approved, it is history).
+  const superseded = all.filter((s) => s.status === "superseded" && proposed.some((x) => x.proposed_version === s.superseded_by_version));
+  if (!draft && proposed.length === 0 && superseded.length === 0 && live == null) return null;
   return (
     <Panel title="Plan changes" testId="plan-changes" tools={<span className="text-sm text-text2">{roadmap.slug}</span>}>
       {live != null && (
@@ -349,6 +390,9 @@ export function PlanChanges({
             onPlanChanged();
           }}
         />
+      ))}
+      {superseded.map((s) => (
+        <Superseded key={s.id} set={s} me={me} canWrite={canWrite} />
       ))}
     </Panel>
   );
