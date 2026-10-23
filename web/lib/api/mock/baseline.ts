@@ -1458,6 +1458,38 @@ export function attributeGoalOwner(s: BaselineState, userId: string) {
   if (g) g.attrs = { ...g.attrs, owner: userId };
 }
 
+/** The colleague who locked the seeded items is a member (the mock's members get their ids after the seed). */
+export function attributeLocks(s: BaselineState, userId: string) {
+  for (const e of s.entities) if (e.locked_by === OTHER_MEMBER) e.locked_by = userId;
+}
+
+/**
+ * The "goal-words" scenario (#505): Raise activation as the walk of 2026-10-23 found it, locked
+ * by a colleague, with the attributes a goals run leaves (the words as written and how sure it
+ * is of the owner) and the revision that raised that confidence.
+ */
+export function addGoalWords(s: BaselineState, lockerId: string) {
+  const g = s.entities.find((e) => e.key === "g.activation")!;
+  const before = { type: g.type, key: g.key, title: g.title, body: g.body, attrs: { ...g.attrs, owner_confidence: 0.425 }, status: g.status };
+  Object.assign(g, {
+    locked: true,
+    locked_by: lockerId,
+    locked_at: "2026-10-21T10:05:00Z",
+    attrs: { ...g.attrs, owner_text: "Growth lead", target_text: "45% by the end of the year", horizon_text: "this year", owner_confidence: 1 },
+    updated_at: "2026-10-21T10:05:00Z",
+  });
+  (s.revisions ??= []).push({
+    id: "b5050000-0000-4000-8000-000000000001",
+    entity_id: g.id,
+    edge_id: null,
+    before,
+    after: { type: g.type, key: g.key, title: g.title, body: g.body, attrs: { ...g.attrs }, status: g.status },
+    actor: `user:${lockerId}`,
+    reason: null,
+    created_at: "2026-10-21T10:05:00Z",
+  });
+}
+
 /** Makes the seeded commenter proposal the given member's (the mock's members get their ids after the seed). */
 export function attributeCommenterProposal(s: BaselineState, userId: string) {
   const p = s.proposals.find((x) => x.id === COMMENTER_PROPOSAL);

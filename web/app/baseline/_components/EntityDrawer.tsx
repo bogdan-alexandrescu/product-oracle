@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
+import { peopleByIds } from "@/components/PersonPicker";
 import { Button, Chip, CodeChip, InfoTip, Inspector, InspectorSection, Notice } from "@/components/ds";
 import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type GraphOut, type Schemas } from "@/lib/api/client";
@@ -65,6 +66,29 @@ const EDIT_ATTRS: Partial<Record<EntityOut["type"], { key: string; label: string
 /** A goal's typed fields (B5): the goal form edits them; current and its day follow the measurements. */
 const GOAL_TYPED = new Set(["metric", "unit", "comparison", "target", "start", "current", "current_as_of", "horizon", "due", "owner", "weight"]);
 
+/** #396 (#505): attribute keys a person reads in words; the rest read as they are, underscores as spaces. */
+const ATTR_LABEL: Record<string, string> = {
+  owner_text: "Owner (as written)",
+  target_text: "Target (as written)",
+  horizon_text: "Horizon (as written)",
+  start_text: "Start (as written)",
+  current_text: "Current (as written)",
+  owner_confidence: "Owner confidence",
+};
+
+function attrLabel(key: string): string {
+  if (ATTR_LABEL[key]) return ATTR_LABEL[key];
+  if (!key.includes("_")) return key;
+  const words = key.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** An attribute's value as a person reads it: a 0-1 confidence as a percentage. */
+function attrValue(key: string, value: unknown): string {
+  if (key.endsWith("_confidence") && typeof value === "number" && value >= 0 && value <= 1) return `${Math.round(value * 100)}%`;
+  return formatValue(value);
+}
+
 /** Attributes the edit form offers to add when the entry lacks them, per entity type. */
 const KNOWN_ATTRS: Partial<Record<EntityOut["type"], string[]>> = {
   feature: ["milestone", "size", "evidence_gap", "confidence", "priority_note"],
@@ -125,6 +149,10 @@ export function EntityDrawer({
   const q = useQuery(`baseline-entity:${entity.id}`, () =>
     unwrap(api.GET("/v1/baseline/entities/{entity_id}", { params: { path: { entity_id: entity.id } } })),
   );
+  const lockedBy = q.data ? q.data.locked_by : entity.locked_by;
+  const locker = useQuery(`entity-locker:${lockedBy ?? ""}`, () => peopleByIds([lockedBy]));
+  // The one name rule (display_name, GET /v1/people); "a person" when it cannot be read.
+  const lockerName = lockedBy ? (locker.data?.get(lockedBy)?.name ?? (locker.loading ? "…" : "a person")) : undefined;
   const onAuth = useAuthRedirect();
   const [editing, setEditing] = useState(false);
   const [promoting, setPromoting] = useState(promote && canWrite);
@@ -345,7 +373,7 @@ export function EntityDrawer({
           <>
             <NodeStatusBadge status={(d ?? entity).status} hero />
             <DeliveryChip value={(d ?? entity).type === "feature" ? (d ?? entity).attrs?.status : undefined} hero />
-            <LockBadge entity={d ?? entity} meId={meId} hero />
+            <LockBadge entity={d ?? entity} meId={meId} name={lockerName} hero />
             {!canComment && <Chip hero>View only</Chip>}
             {(d ?? entity).goal_check?.measurable === false && (
               <Chip kind="warn" hero title={missingTip((d ?? entity).goal_check)}>
@@ -402,7 +430,7 @@ export function EntityDrawer({
               >
                 <p className="flex items-center gap-2">
                   <span className="min-w-0 truncate" data-testid="lock-note">
-                    Locked by {d.locked_by === meId ? "you" : d.locked_by ? `member ${d.locked_by.slice(0, 8)}` : "a person"}
+                    Locked by {d.locked_by && d.locked_by === meId ? "you" : (lockerName ?? "a person")}
                     {d.locked_at && <span className="tnum text-text2"> · {formatDateTime(d.locked_at)}</span>}
                     <span className="sr-only">. Agents can only propose changes.</span>
                   </span>
@@ -735,9 +763,9 @@ function Attrs({ attrs }: { attrs: Record<string, unknown> }) {
       <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5" aria-label="Attributes">
         {entries.map(([k, v]) => (
           <div key={k} className="contents">
-            <dt className="text-text2">{k}</dt>
-            <dd className="tnum truncate font-semibold" data-attr={k} title={formatValue(v)}>
-              {k === "status" ? <DeliveryChip value={v} /> : formatValue(v)}
+            <dt className="text-text2">{attrLabel(k)}</dt>
+            <dd className="tnum truncate font-semibold" data-attr={k} title={attrValue(k, v)}>
+              {k === "status" ? <DeliveryChip value={v} /> : attrValue(k, v)}
             </dd>
           </div>
         ))}
@@ -1037,9 +1065,10 @@ function revisionChanges(before: Record<string, unknown> | null | undefined, aft
   const now = (after.attrs ?? {}) as Record<string, unknown>;
   for (const k of new Set([...Object.keys(was), ...Object.keys(now)])) {
     if (asText(was[k]) === asText(now[k])) continue;
-    if (!(k in now)) out.push(`${k} removed`);
-    else if (!(k in was)) out.push(`${k}: ${formatValue(now[k])}`);
-    else out.push(`${k}: ${formatValue(was[k])} → ${formatValue(now[k])}`);
+    const label = attrLabel(k);
+    if (!(k in now)) out.push(`${label} removed`);
+    else if (!(k in was)) out.push(`${label}: ${attrValue(k, now[k])}`);
+    else out.push(`${label}: ${attrValue(k, was[k])} → ${attrValue(k, now[k])}`);
   }
   return out;
 }

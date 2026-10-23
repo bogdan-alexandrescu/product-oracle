@@ -22,7 +22,9 @@ section's hash are recorded as what the item was reconciled against, and later c
 are judged against them; the item's own trace is kept as built).
 """
 
+import re
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -89,6 +91,29 @@ def _entity_ids(event: ChangeEvent) -> set[uuid.UUID]:
     return ids
 
 
+# A bulk write's reason: "11 baseline items changed" (#505).
+_COUNTED = re.compile(r"(\d+) baseline items? (.+)")
+_SIZE = re.compile(r"\d+ baseline items?")
+
+
+def one_count(reasons: Iterable[str]) -> list[str]:
+    """The reasons with one counted line per verb, the latest (#505): two bulk writes read
+    "11 baseline items changed", never "42 baseline items changed; 11 baseline items
+    changed"."""
+    out: list[str] = []
+    for reason in reasons:
+        if m := _COUNTED.fullmatch(reason):
+            out = [r for r in out if not ((o := _COUNTED.fullmatch(r)) and o[2] == m[2])]
+        if reason not in out:
+            out.append(reason)
+    return out
+
+
+def stale_why(reasons: Iterable[str] | None, default: str) -> str:
+    """An item's stale reasons as one line, each said once."""
+    return "; ".join(one_count(reasons or [])) or default
+
+
 def _mark(item: RoadmapItem, event: ChangeEvent, reason: str, now: datetime) -> None:
     if item.freshness != "potentially_stale" or item.stale_since is None:
         item.stale_since = now
@@ -97,7 +122,7 @@ def _mark(item: RoadmapItem, event: ChangeEvent, reason: str, now: datetime) -> 
     reasons = list(item.stale_reasons or [])
     if reason not in reasons:
         reasons.append(reason)
-    item.stale_reasons = reasons[-20:]
+    item.stale_reasons = one_count(reasons)[-20:]
 
 
 async def _by_prd_version(db: AsyncSession, event: ChangeEvent, found: dict) -> None:
@@ -151,10 +176,30 @@ async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> Non
     ids = _entity_ids(event)
     if not ids:
         return
-    what = event.subject_ref or f"{len(ids)} baseline items"
     verb = VERBS.get(event.cause, "changed")
     if event.subject_kind == "blocker_status":
         verb = "changed status"
+    # A bulk write names its size ("42 baseline items"); an item says what of it is its own.
+    counted = event.subject_ref is None or bool(_SIZE.fullmatch(event.subject_ref))
+    refs = {
+        u: str(root["ref"])
+        for root in (event.data or {}).get("roots") or []
+        if isinstance(root, dict) and root.get("ref") and (u := _uuid(root.get("id")))
+    }
+
+    def what(linked: set[uuid.UUID]) -> str:
+        if not counted:
+            return event.subject_ref or ""
+        if len(linked) == 1 and (ref := refs.get(next(iter(linked)))):
+            return ref
+        n = len(linked) or len(ids)
+        return f"{n} baseline item{'' if n == 1 else 's'}"
+
+    def said(linked: set[uuid.UUID]) -> str:
+        subject = what(linked)
+        many = bool(_SIZE.fullmatch(subject)) and not subject.startswith("1 ")
+        return f"{subject} {verb.replace('was ', 'were ', 1) if many else verb}"
+
     id_list = list(ids)
     rows = await db.scalars(
         select(RoadmapItem).where(
@@ -167,17 +212,25 @@ async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> Non
         )
     )
     for item in rows:
-        found.setdefault(item.id, (item, f"{what} {verb}"))
+        own = {item.feature_id, *(item.requirement_ids or []), *(item.blocker_ids or [])}
+        found.setdefault(item.id, (item, said(ids & own)))
     # Items whose PRD section links a changed entity.
     links = (
         await db.execute(
-            select(DocumentSectionLink.version_id, DocumentSectionLink.section_key).where(
+            select(
+                DocumentSectionLink.version_id,
+                DocumentSectionLink.section_key,
+                DocumentSectionLink.entity_id,
+            ).where(
                 DocumentSectionLink.entity_id.in_(id_list),
                 DocumentSectionLink.version_id.is_not(None),
             )
         )
     ).all()
     if links:
+        linked: dict[tuple, set[uuid.UUID]] = {}
+        for v, k, e in links:
+            linked.setdefault((v, k), set()).add(e)
         rows = await db.scalars(
             select(RoadmapItem).where(
                 or_(
@@ -186,16 +239,17 @@ async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> Non
                             RoadmapItem.prd_version_id == v,
                             RoadmapItem.prd_section_key == k,
                         )
-                        for v, k in set(links)
+                        for v, k in linked
                     )
                 ),
                 RoadmapItem.roadmap_version_id.is_not(None),
             )
         )
         for item in rows:
+            own = linked.get((item.prd_version_id, item.prd_section_key), set())
             found.setdefault(
                 item.id,
-                (item, f"PRD section {item.prd_section_key} links {what}, which changed"),
+                (item, f"PRD section {item.prd_section_key} links {what(own)}, which changed"),
             )
 
 

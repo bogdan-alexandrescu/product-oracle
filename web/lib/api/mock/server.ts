@@ -9,7 +9,7 @@ import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
 import { mockUuid, seeded } from "./ids";
-import { addGoalCodes, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
+import { addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
@@ -1151,6 +1151,8 @@ function seed(): Db {
   attributeCommenterProposal(db.baseline, db.members.find((m) => m.email === "commenter@example.com")!.id);
   // B5: activation's owner is the approver.
   attributeGoalOwner(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
+  // The colleague who locked the seeded items is the approver (#505: the lock names a person).
+  attributeLocks(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
   // A member removed two days ago (C2): kept, so history keeps the name; an owner can restore.
   db.members.push({
     ...REMOVED_MEMBER,
@@ -1809,6 +1811,7 @@ function load(): Db {
     db.autonomy.actions.push(seedOracleDid(db.user_id, uuid(), "Moved 'Saved addresses' up 2 within G-B, ahead of G-Z"));
   }
   if (scenario === "proposal-overlap") addOverlappingProposals(db.baseline, uuid);
+  if (scenario === "goal-words") addGoalWords(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
   if (scenario === APPROVED_PLAN_SCENARIO) addApprovedPlan(db);
   if (scenario === VERSION_WARNINGS_SCENARIO) {

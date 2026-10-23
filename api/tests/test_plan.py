@@ -356,6 +356,23 @@ async def test_item_state(client, situation, state):
         assert item["reasons"] and body["counts"]["at_risk"] == 1
 
 
+async def test_why_it_needs_you_names_one_count(client):
+    """#505: an item marked by two bulk writes says what changed once, with the latest
+    count; never "42 baseline items changed; 11 baseline items changed"."""
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        await Seed(s).approved_roadmap(
+            "prd-x",
+            ["it"],
+            freshness="potentially_stale",
+            stale_reasons=["42 baseline items changed", "11 baseline items changed"],
+        )
+        await s.commit()
+    (item,) = (await plan(client, ctx))["items"]
+    stale = [r["detail"] for r in item["reasons"] if r["kind"] == "stale"]
+    assert stale == ["11 baseline items changed"]
+
+
 async def draft_twin(client, ctx: Ctx, approved: dict[str, Any], draft: dict[str, Any]) -> dict:
     """An approved roadmap v1 with item ``it`` and a draft v2 with its twin."""
     async with tenant_session(ctx.tenant_id) as s:
