@@ -1084,9 +1084,15 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               </p>
             )}
             {warnings.map((w, i) => (
-              <div key={i} role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
+              <div key={i} role="status" data-warning={w.code} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
                 <Icon name="alert" size={16} />
                 <p className="min-w-0 flex-1 font-medium">{w.message}</p>
+                {/* #396: a date warning says to record a date basis on Plan › Dates (F3). */}
+                {w.code === "unverified_date" && (
+                  <Link href="/plan/dates" className="font-medium underline underline-offset-2">
+                    Open Plan › Dates
+                  </Link>
+                )}
                 {w.section_keys.map((k) => (
                   <a
                     key={k}

@@ -35,7 +35,7 @@ import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } fr
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
-import { DATE_BASES_SCENARIO, DIFF_SCENARIO, dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
@@ -1038,6 +1038,7 @@ function seed(): Db {
       code: "locked_section_changed",
       message: "Sections approved in v1 changed in this version: scope",
       section_keys: ["scope"],
+      refs: {},
     },
   ];
   // Review comments on v2, which Oracle's review job has already handled (./llm-jobs.ts).
@@ -1496,6 +1497,12 @@ function load(): Db {
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
+  if (scenario === VERSION_WARNINGS_SCENARIO) {
+    const prd = db.documents.find((d) => d.slug === "usage-alerts");
+    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+    const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
+    if (prd && v1) v1.warnings = versionWarnings(prd.title, prd.slug);
+  }
   save(db);
   return db;
 }
