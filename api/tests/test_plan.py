@@ -46,7 +46,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
-from sqlalchemy import event
+from sqlalchemy import event, select
 
 from oracle.auth.deps import RUN_TOKEN_HEADER
 from oracle.baseline.models import Edge, Entity
@@ -639,6 +639,41 @@ async def test_next_decision(client, situation, named_owner, action, label, role
         assert nxt["href"] == "/documents/prd-x/v/1" and nxt["viewer_may"] is True
     if action == "resolve_blocker":
         assert nxt["href"].startswith("/baseline?entity=")
+
+
+async def test_basis_ids_are_the_bases_the_date_source_names(client):
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        p1, _, _, track, _ = await seed.approved_roadmap(
+            "prd-x", ["it", "other"], milestone=dated("ENG-412")
+        )
+        named = await seed.basis(p1, "ENG-412", DAY)
+        # Verified later, on the same date and for the whole PRD, but not named by the date.
+        await seed.basis(p1, "CAP-9", DAY)
+        await s.commit()
+    items = {i["key"]: i for i in (await plan(client, ctx))["items"]}
+    assert items["it"]["engineering"]["date_status"] == "verified"
+    assert items["it"]["engineering"]["basis_ids"] == [str(named.id)]
+
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        row = await s.get(ScheduleBasis, named.id)
+        row.status, row.withdrawn_at, row.withdrawn_reason = "withdrawn", datetime.now(UTC), "re-estimated"
+        cap = await s.scalar(select(ScheduleBasis).where(ScheduleBasis.reference == "CAP-9"))
+        await s.delete(cap)
+        # Withdrawn later on the same date: one the source does not name, one named but
+        # scoped to the other item.
+        await seed.basis(p1, "ENG-450", DAY, status="withdrawn")
+        other = await seed.basis(p1, "ENG-412", DAY, status="withdrawn")
+        other.item_key = "other"
+        await s.commit()
+    items = {i["key"]: i for i in (await plan(client, ctx))["items"]}
+    assert items["it"]["engineering"]["date_status"] == "withdrawn"
+    assert items["it"]["engineering"]["basis_ids"] == [str(named.id)]
+    assert items["other"]["engineering"]["basis_ids"] == sorted(
+        [str(named.id), str(other.id)]
+    )
 
 
 # --- company scoping, access, cost -----------------------------------------------------------

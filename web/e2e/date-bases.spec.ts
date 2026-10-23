@@ -166,8 +166,9 @@ async function selectPlanItem(page: Page, title: string) {
 test("plan inspector: a withdrawn date is struck through with its reason, and Re-verify date records a new basis", async ({ page }) => {
   // protects=AC13 (the Plan half); fails_when=the inspector's date line does not name the
   // basis and who verified it, stays verified after Withdraw, shows no reason, offers no
-  // Re-verify date, or a basis the roadmap's date does not name verifies it (the API's
-  // schedule.supporting: the reference must appear in the date's source, here ENG-412);
+  // Re-verify date, or a basis the roadmap's date does not name verifies it or is shown as
+  // the one it rests on (the API's schedule.supporting: the reference must appear in the
+  // date's source, here ENG-412, and the plan's engineering.basis_ids lists those bases);
   // no_claim=the API's plan rules (api/tests/test_plan.py).
   await asScenario(page);
   let line = await selectPlanItem(page, "Daily alert digest email");
@@ -203,6 +204,21 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   await dialog.getByRole("button", { name: "Verify" }).click();
   await expect(dialog).toBeHidden();
   await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Admin");
+  // A later basis on the same date and item that the date does not name is not what it rests on.
+  await openDates(page);
+  await page.getByRole("button", { name: "Record basis" }).click();
+  await dialog.getByLabel("PRD").selectOption({ label: "Usage alerts PRD" });
+  await dialog.getByLabel("Reference").fill("CAP-9");
+  await dialog.getByLabel("Date it supports").fill("2026-11-30");
+  await dialog.getByLabel("For").selectOption("item");
+  await dialog.getByLabel("Item").selectOption("alert-digest");
+  await dialog.getByRole("button", { name: "Verify" }).click();
+  await expect(dialog).toBeHidden();
+  await page.getByTestId("dates-filter").getByRole("button", { name: "Verified" }).click();
+  await expect(row(page, "CAP-9")).toHaveAttribute("data-status", "verified");
+  line = await selectPlanItem(page, "Daily alert digest email");
+  await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Admin");
+  await expect(line).not.toContainText("CAP-9");
 });
 
 test("plan inspector: an unverified date offers Verify date; the dialog picks the item and the tracker record", async ({ page }) => {
