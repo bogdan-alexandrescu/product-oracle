@@ -66,3 +66,5 @@ async def test_the_api_reads_the_stored_horizons(client, ctx, monkeypatch):
     assert resp.status_code == 200, resp.text
     got = (await client.get(url, headers=ctx.as_("viewer"))).json()
     assert "due_outside_horizon" not in got["goal_check"]["warnings"]
+    # The form's Horizon tip reads them from here (approvers cannot read Settings).
+    assert got["goal_check"]["horizons"] == WIDE
