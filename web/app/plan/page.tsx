@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { BuildRoadmapButton } from "@/components/BuildRoadmap";
 import { Chip, InfoTip, LinkButton, Notice, PageHeader, Panel, SegmentedControl, Sheet, Split } from "@/components/ds";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
 import { usePlanScope, type PlanScope } from "@/lib/preferences";
 import { useQuery } from "@/lib/use-query";
@@ -15,6 +15,7 @@ import { useGoals } from "../home/_use-goals";
 import { PlanInspector } from "./_inspector";
 import { PrdCards } from "./_prd-cards";
 import { grouped, PlanTable, type GroupBy } from "./_table";
+import { MilestoneEditor, TrackPanel, useTracks, type MilestonePick } from "./_tracks";
 
 /** The goals band; with no confirmed goal, one line and the way to the Baseline. */
 function GoalsBand({ canImport }: { canImport: boolean }) {
@@ -76,6 +77,8 @@ export default function PlanPage() {
   const [by, setBy] = useState<GroupBy>("horizon");
   const [picked, setPicked] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
+  const tracks = useTracks();
+  const [milestone, setMilestone] = useState<MilestonePick | null>(null);
 
   const data = q.data;
   const prdOrder = useMemo(() => (data?.prds ?? []).map((p) => p.document.slug), [data]);
@@ -83,10 +86,31 @@ export default function PlanPage() {
   const item = ordered.find((i) => i.id === picked) ?? ordered[0] ?? null;
   const onSelect = useCallback((id: string) => {
     setPicked(id);
+    setMilestone(null);
+    if (window.matchMedia("(max-width: 600px)").matches) setSheet(true);
+  }, []);
+  const onPickMilestone = useCallback((pick: MilestonePick) => {
+    setMilestone(pick);
     if (window.matchMedia("(max-width: 600px)").matches) setSheet(true);
   }, []);
   const counts = data?.counts;
-  const inspector = item ? <PlanInspector key={item.id} item={item} goals={tags} history={history} me={userId} /> : undefined;
+  const putTrack = (t: Schemas["TrackOverview"]) => tracks.setData((ts) => ts?.map((x) => (x.id === t.id ? t : x)));
+  const msTrack = milestone ? tracks.data?.find((t) => t.id === milestone.trackId) : undefined;
+  const inspector = msTrack ? (
+    <MilestoneEditor
+      key={`${msTrack.id}|${milestone?.id ?? "new"}`}
+      track={msTrack}
+      milestoneId={milestone?.id ?? null}
+      canWrite={canWrite}
+      onSaved={async (m) => {
+        const t = await unwrap(api.GET("/v1/tracks/{track_id}", { params: { path: { track_id: m.track_id } } }));
+        putTrack(t);
+        setMilestone({ trackId: m.track_id, id: m.id });
+      }}
+    />
+  ) : item ? (
+    <PlanInspector key={item.id} item={item} goals={tags} history={history} me={userId} />
+  ) : undefined;
 
   return (
     <div className="min-w-0 px-6 pb-6 max-[600px]:px-2.5 max-[600px]:pb-24">
@@ -135,6 +159,10 @@ export default function PlanPage() {
         <GoalsBand canImport={canWrite} />
         <PrdCards prds={data?.prds} canWrite={canWrite} />
         <Split inspector={inspector && <div className="max-[600px]:hidden">{inspector}</div>}>
+          {tracks.error && <Notice tone="error">{tracks.error}</Notice>}
+          {tracks.data?.map((t) => (
+            <TrackPanel key={t.id} track={t} canWrite={canWrite} picked={milestone} onPick={onPickMilestone} onChange={putTrack} />
+          ))}
           <Panel
             title="Roadmap"
             tools={
@@ -174,9 +202,15 @@ export default function PlanPage() {
           </Panel>
         </Split>
       </div>
-      <Sheet open={sheet && !!item} title={item?.title ?? "Item"} onClose={() => setSheet(false)} testId="sheet-plan-item">
-        {inspector}
-      </Sheet>
+      {msTrack ? (
+        <Sheet open={sheet} title="Milestone" onClose={() => setSheet(false)} testId="sheet-plan-milestone">
+          {inspector}
+        </Sheet>
+      ) : (
+        <Sheet open={sheet && !!item} title={item?.title ?? "Item"} onClose={() => setSheet(false)} testId="sheet-plan-item">
+          {inspector}
+        </Sheet>
+      )}
     </div>
   );
 }

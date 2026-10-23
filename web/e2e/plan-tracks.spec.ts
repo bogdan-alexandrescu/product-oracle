@@ -14,15 +14,26 @@ import { login } from "./helpers";
  */
 
 async function asRole(page: Page, role: "viewer" | "commenter" | "approver") {
-  await page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, role] as const);
+  await page.addInitScript(([key, r]) => localStorage.setItem(key, r), [
+    MOCK_ROLE_KEY,
+    role,
+  ] as const);
 }
 
-const track = (page: Page) => page.getByTestId("plan-track").filter({ visible: true }).filter({ hasText: "Usage alerts" });
-const editor = (page: Page) => page.getByTestId("plan-milestone").filter({ visible: true });
+const track = (page: Page) =>
+  page
+    .getByTestId("plan-track")
+    .filter({ visible: true })
+    .filter({ hasText: "Usage alerts" });
+const editor = (page: Page) =>
+  page.getByTestId("plan-milestone").filter({ visible: true });
 
 async function openPlan(page: Page) {
   await login(page);
-  await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Plan", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "Oracle" })
+    .getByRole("link", { name: "Plan", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/plan$/);
   await expect(track(page)).toBeVisible();
 }
@@ -30,7 +41,9 @@ async function openPlan(page: Page) {
 // protects = the track's title, owner and status change in place and stay changed;
 // fails_when = an edit is not sent, or the panel shows the old value; no_claim = the API's
 // owner checks (api/tests).
-test("a track's title, owner and status are edited in place", async ({ page }) => {
+test("a track's title, owner and status are edited in place", async ({
+  page,
+}) => {
   await openPlan(page);
   const t = track(page);
   await expect(t.getByTestId("track-owner")).toHaveText("No owner");
@@ -44,25 +57,41 @@ test("a track's title, owner and status are edited in place", async ({ page }) =
   await t.getByRole("button", { name: "Change owner" }).click();
   await t.getByLabel("Find a person").fill("approver");
   await t.getByRole("option", { name: /approver@example\.com/ }).click();
-  await expect(t.getByTestId("track-owner")).toContainText("approver@example.com");
+  await expect(t.getByTestId("track-owner")).toContainText(
+    "approver@example.com",
+  );
 
-  await t.getByRole("group", { name: "Track status" }).getByRole("button", { name: "Paused" }).click();
+  await t
+    .getByRole("group", { name: "Track status" })
+    .getByRole("button", { name: "Paused" })
+    .click();
   await expect(t.getByTestId("track-health")).toHaveText("Paused");
-  await t.getByRole("group", { name: "Track status" }).getByRole("button", { name: "Active" }).click();
+  await t
+    .getByRole("group", { name: "Track status" })
+    .getByRole("button", { name: "Active" })
+    .click();
   await expect(t.getByTestId("track-health")).toHaveText("On track");
 
   await page.reload();
-  await expect(track(page).getByTestId("track-title")).toHaveText("Usage alerts launch");
-  await expect(track(page).getByTestId("track-owner")).toContainText("approver@example.com");
+  await expect(track(page).getByTestId("track-title")).toHaveText(
+    "Usage alerts launch",
+  );
+  await expect(track(page).getByTestId("track-owner")).toContainText(
+    "approver@example.com",
+  );
 });
 
 // protects = the milestone editor in the inspector: name, horizon, date with its verified
 // basis, items and status; titles read "M1 · Oct 19 – Nov 30"; a date with no basis is refused
 // with the API's reason; fails_when = a date is saved without a basis, or the title has no dates.
-test("milestones are added and edited in the inspector, with dated titles", async ({ page }) => {
+test("milestones are added and edited in the inspector, with dated titles", async ({
+  page,
+}) => {
   await openPlan(page);
   const t = track(page);
-  const m1 = t.getByTestId("track-milestone").filter({ hasText: "First release" });
+  const m1 = t
+    .getByTestId("track-milestone")
+    .filter({ hasText: "First release" });
   await expect(m1.getByTestId("milestone-title")).toHaveText("M1 · no date");
 
   await m1.click();
@@ -81,18 +110,28 @@ test("milestones are added and edited in the inspector, with dated titles", asyn
   await expect(items.first()).toBeVisible();
   await items.first().uncheck();
   await e.getByRole("button", { name: "Save milestone" }).click();
-  await expect(m1.getByTestId("milestone-title")).toHaveText("M1 · Oct 19 – Nov 30");
+  await expect(m1.getByTestId("milestone-title")).toHaveText(
+    "M1 · Oct 19 – Nov 30",
+  );
 
   // Add a second milestone in Next, then mark it done.
   await t.getByRole("button", { name: "Add milestone" }).click();
   await expect(editor(page)).toContainText("New milestone");
   await editor(page).getByLabel("Name").fill("Weekly digest");
-  await editor(page).getByRole("group", { name: "Horizon" }).getByRole("button", { name: "Next" }).click();
+  await editor(page)
+    .getByRole("group", { name: "Horizon" })
+    .getByRole("button", { name: "Next" })
+    .click();
   await editor(page).getByRole("button", { name: "Add milestone" }).click();
-  const m2 = t.getByTestId("track-milestone").filter({ hasText: "Weekly digest" });
+  const m2 = t
+    .getByTestId("track-milestone")
+    .filter({ hasText: "Weekly digest" });
   await expect(m2.getByTestId("milestone-title")).toHaveText("M2 · no date");
   await expect(editor(page).getByLabel("Name")).toHaveValue("Weekly digest");
-  await editor(page).getByRole("group", { name: "Milestone status" }).getByRole("button", { name: "Done" }).click();
+  await editor(page)
+    .getByRole("group", { name: "Milestone status" })
+    .getByRole("button", { name: "Done" })
+    .click();
   await editor(page).getByRole("button", { name: "Save milestone" }).click();
   await expect(m2.getByTestId("milestone-status")).toHaveText("Done");
 });
@@ -100,42 +139,69 @@ test("milestones are added and edited in the inspector, with dated titles", asyn
 // protects = Check now, Draft roadmap from this track and Push to tracker each work from the
 // panel, the push showing the tracker's answer; fails_when = a click does nothing or the push
 // result is hidden; no_claim = what the run then drafts (runs specs).
-test("check now, push to tracker and draft a roadmap from the track", async ({ page }) => {
+test("check now, push to tracker and draft a roadmap from the track", async ({
+  page,
+}) => {
   await openPlan(page);
   const t = track(page);
   await t.getByRole("button", { name: "Check now" }).click();
   await expect(t.getByTestId("track-result")).toContainText("Checked");
   await t.getByRole("button", { name: "Push to tracker" }).click();
-  await expect(t.getByTestId("track-result")).toContainText("Two-way tracker sync is off");
-  await t.getByRole("button", { name: "Draft roadmap from this track" }).click();
+  await expect(t.getByTestId("track-result")).toContainText(
+    "Two-way tracker sync is off",
+  );
+  await t
+    .getByRole("button", { name: "Draft roadmap from this track" })
+    .click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 });
 
 // protects = viewers see every track control disabled, with the reason; fails_when = a viewer
 // is offered a control the API refuses.
-test("viewers see the track controls disabled, with the reason", async ({ page }) => {
+test("viewers see the track controls disabled, with the reason", async ({
+  page,
+}) => {
   await asRole(page, "viewer");
   await openPlan(page);
   const t = track(page);
-  await expect(t.getByTestId("track-readonly")).toContainText("needs the approver role");
-  for (const name of ["Rename", "Change owner", "Add milestone", "Check now", "Draft roadmap from this track", "Push to tracker"]) {
+  await expect(t.getByTestId("track-readonly")).toContainText(
+    "needs the approver role",
+  );
+  for (const name of [
+    "Rename",
+    "Change owner",
+    "Add milestone",
+    "Check now",
+    "Draft roadmap from this track",
+    "Push to tracker",
+  ]) {
     await expect(t.getByRole("button", { name })).toBeDisabled();
   }
   await t.getByTestId("track-milestone").first().click();
-  await expect(editor(page).getByRole("button", { name: "Save milestone" })).toBeDisabled();
+  await expect(
+    editor(page).getByRole("button", { name: "Save milestone" }),
+  ).toBeDisabled();
   await expect(editor(page).getByLabel("Name")).toBeDisabled();
 });
 
 // protects = on a phone (390 px, dark theme) the track panel fits and a milestone opens in a
 // sheet; fails_when = the panel overflows the screen or the editor cannot be reached.
-test("phone: the track panel fits and a milestone opens in a sheet", async ({ page }) => {
+test("phone: the track panel fits and a milestone opens in a sheet", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.addInitScript((key) => localStorage.setItem(key, "dark"), THEME_KEY);
+  await page.addInitScript(
+    (key) => localStorage.setItem(key, "dark"),
+    THEME_KEY,
+  );
   await openPlan(page);
   const box = await track(page).boundingBox();
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(390);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  // Nothing inside the panel is wider than the panel.
+  expect(
+    await track(page).evaluate((el) => el.scrollWidth - el.clientWidth),
+  ).toBeLessThanOrEqual(0);
   await track(page).getByTestId("track-milestone").first().click();
   const sheet = page.getByTestId("sheet-plan-milestone");
   await expect(sheet).toBeVisible();
