@@ -86,7 +86,7 @@ test("engineering lead: the invite form names a lead, never a viewer", async ({ 
   await expect(box).toBeEnabled();
   await form.getByLabel("Email").fill("lead.hire@example.com");
   await box.check();
-  await form.getByRole("button", { name: "Send invite" }).click();
+  await form.getByRole("button", { name: "Send invite", exact: true }).click();
   const row = page.getByTestId("invite-row").filter({ hasText: "lead.hire@example.com" });
   await expect(row).toContainText("Commenter");
   await expect(row).toContainText("Eng lead");

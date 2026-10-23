@@ -7,7 +7,7 @@ import { useMe, type Operation } from "@/lib/me";
  * signed-in role can call it. Which role that is lives in the API's route roles alone.
  */
 export const SETTINGS_TABS: { label: string; href: string; testId: string; read: Operation }[] = [
-  { label: "Members", href: "/settings/members", testId: "nav-members", read: "list_members" },
+  { label: "Members", href: "/settings/members", testId: "nav-members", read: "list_people" },
   { label: "Company", href: "/settings/company", testId: "nav-company", read: "get_setting_endpoint" },
   { label: "API tokens", href: "/settings/api-tokens", testId: "nav-api-tokens", read: "list_api_tokens" },
   { label: "Connections", href: "/settings/connections", testId: "nav-connections", read: "list_connections" },

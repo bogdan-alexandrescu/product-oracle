@@ -16,7 +16,7 @@ test("invite message: an owner writes a note, sends, and sees it on the open inv
   await message.fill("Excited to have you review the roadmap with us.\nSee you Monday.");
   // The counter shows only near the limit.
   await expect(form.getByTestId("invite-message-count")).toHaveCount(0);
-  await form.getByRole("button", { name: "Send invite" }).click();
+  await form.getByRole("button", { name: "Send invite", exact: true }).click();
 
   await expect(page.getByTestId("invite-outcome")).toHaveText("Invite sent to pat@example.com");
   const note = inviteRow(page, "pat@example.com").getByTestId("invite-note");
@@ -45,15 +45,16 @@ test("invite message: an invite with no message shows no note", async ({ page })
   await page.goto("/settings/members");
   const form = page.getByRole("form", { name: "Invite" });
   await form.getByLabel("Email").fill("sam@example.com");
-  await form.getByRole("button", { name: "Send invite" }).click();
+  await form.getByRole("button", { name: "Send invite", exact: true }).click();
   await expect(page.getByTestId("invite-outcome")).toHaveText("Invite sent to sam@example.com");
   await expect(inviteRow(page, "sam@example.com").getByTestId("invite-note")).toHaveCount(0);
 });
 
-test("invite message: the Message field is not shown to a non-owner", async ({ page }) => {
-  await login(page, "approver@example.com");
+// A5: approvers invite viewers and commenters (with a message); a commenter invites no one.
+test("invite message: the Message field is not shown to a role that cannot invite", async ({ page }) => {
+  await login(page, "commenter@example.com");
   await page.goto("/settings/members");
-  await expect(page.getByTestId("not-for-role")).toContainText("Not available for your role");
+  await expect(page.getByTestId("people-readonly")).toBeVisible();
   await expect(page.getByLabel("Message (optional)")).toHaveCount(0);
   await expect(page.getByRole("form", { name: "Invite" })).toHaveCount(0);
 });
