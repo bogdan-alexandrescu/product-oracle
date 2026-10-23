@@ -257,7 +257,8 @@ async def test_confirmed_and_locked_baseline_facts_are_not_asked(client):
     ctx = await company()
     goal = await entity(
         client, ctx, type="goal", key="repeat-purchases", title="Grow repeat purchases",
-        attrs={"metric": "repeat purchase rate", "target": "30% by Q4", "owner": "growth"},
+        attrs={"metric": "repeat purchase rate", "unit": "%", "comparison": "at_least",
+               "target": 30, "horizon": "short", "owner": str(ctx.users["approver"].id)},
     )  # fmt: skip
     await confirm(client, ctx, goal)
     out = await create_intake(

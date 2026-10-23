@@ -3171,6 +3171,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/baseline/entities/{entity_id}/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Goal Measurements
+         * @description A goal's dated values, latest day first.
+         */
+        get: operations["list_goal_measurements"];
+        put?: never;
+        /**
+         * Record Goal Measurement
+         * @description Record a goal's value on a day (a second on the same day replaces it); the latest
+         *     by day becomes the goal's ``current``. 422 when the entity is not a goal, the goal has
+         *     no unit yet, or the day is in the future.
+         */
+        post: operations["record_goal_measurement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/measurements/{measurement_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Goal Measurement */
+        delete: operations["delete_goal_measurement"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/goals/fill-from-text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fill Goals From Text
+         * @description Read each goal's ``*_text`` values (Home's rules, no model call) and write what they
+         *     say as an Oracle write: applied to an unlocked goal, a proposal on a locked one.
+         */
+        post: operations["fill_goals_from_text"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/baseline/entities/{entity_id}/revisions": {
         parameters: {
             query?: never;
@@ -14092,6 +14156,7 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            goal_check?: components["schemas"]["GoalCheck"] | null;
             /**
              * Evidence
              * @default []
@@ -14170,6 +14235,7 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            goal_check?: components["schemas"]["GoalCheck"] | null;
         };
         /** EntityPatch */
         EntityPatch: {
@@ -15045,6 +15111,27 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** FillFromTextResult */
+        FillFromTextResult: {
+            /** Applied */
+            applied: number;
+            /** Proposed */
+            proposed: number;
+            /** Left As Text */
+            left_as_text: components["schemas"]["FilledText"][];
+        };
+        /** FilledText */
+        FilledText: {
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Field */
+            field: string;
+            /** Text */
+            text: string;
+        };
         /**
          * FindingCount
          * @description Findings shared as counts and categories only (S6).
@@ -15434,6 +15521,20 @@ export interface components {
             /** Sso Hint */
             sso_hint?: string | null;
         };
+        /** GoalCheck */
+        GoalCheck: {
+            /** Measurable */
+            measurable: boolean;
+            /** Missing */
+            missing: string[];
+            /** Warnings */
+            warnings: string[];
+            /**
+             * Problems
+             * @default []
+             */
+            problems: components["schemas"]["GoalProblem"][];
+        };
         /** GoalLink */
         GoalLink: {
             /**
@@ -15457,6 +15558,15 @@ export interface components {
              * @enum {string}
              */
             matched_on: "brief" | "feature";
+        };
+        /** GoalProblem */
+        GoalProblem: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Where */
+            where: string;
         };
         /** GoalTerm */
         GoalTerm: {
@@ -18012,6 +18122,51 @@ export interface components {
             token_id?: string | null;
             /** Token Name */
             token_name?: string | null;
+        };
+        /** MeasurementCreate */
+        MeasurementCreate: {
+            /** Value */
+            value: number;
+            /**
+             * Measured On
+             * Format: date
+             */
+            measured_on: string;
+            /** Note */
+            note?: string | null;
+            /** Evidence Id */
+            evidence_id?: string | null;
+        };
+        /** MeasurementOut */
+        MeasurementOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Value */
+            value: number;
+            /**
+             * Measured On
+             * Format: date
+             */
+            measured_on: string;
+            /** Note */
+            note?: string | null;
+            /** Evidence Id */
+            evidence_id?: string | null;
+            /** Recorded By */
+            recorded_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** MemberOut */
         MemberOut: {
@@ -27226,6 +27381,67 @@ export interface components {
             /** Url */
             url: string;
         };
+        /**
+         * GoalAttrs
+         * @description The typed fields of a goal's ``attrs`` (published so MCP clients see the shape).
+         */
+        GoalAttrs: {
+            /**
+             * Metric
+             * @default null
+             */
+            metric: string | null;
+            /**
+             * Unit
+             * @default null
+             */
+            unit: string | null;
+            /**
+             * Comparison
+             * @default null
+             */
+            comparison: ("at_least" | "above" | "at_most" | "below") | null;
+            /**
+             * Target
+             * @default null
+             */
+            target: number | null;
+            /**
+             * Start
+             * @default null
+             */
+            start: number | null;
+            /**
+             * Current
+             * @default null
+             */
+            current: number | null;
+            /**
+             * Current As Of
+             * @default null
+             */
+            current_as_of: string | null;
+            /**
+             * Horizon
+             * @default null
+             */
+            horizon: ("short" | "medium" | "long") | null;
+            /**
+             * Due
+             * @default null
+             */
+            due: string | null;
+            /**
+             * Owner
+             * @default null
+             */
+            owner: string | null;
+            /**
+             * Weight
+             * @default null
+             */
+            weight: number | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -33299,13 +33515,13 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Goal fields rejected (B5), every problem */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["YamlImportError"];
                 };
             };
         };
@@ -33413,13 +33629,13 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Goal fields rejected (B5), every problem */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["YamlImportError"];
                 };
             };
         };
@@ -33521,6 +33737,121 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_goal_measurements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_goal_measurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeasurementCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_goal_measurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                measurement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fill_goals_from_text: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FillFromTextResult"];
                 };
             };
         };
