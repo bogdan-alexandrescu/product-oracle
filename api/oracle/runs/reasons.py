@@ -789,15 +789,57 @@ async def _prd_version(
     return version, prd_title, prd_version, section_changes, headings
 
 
-async def _entities(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, Entity]:
-    return {
-        e.id: e
-        for e in await db.scalars(select(Entity).where(Entity.id.in_(list(ids) or [uuid.uuid4()])))
-    }
+async def _entities(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, Entity]:
+    """The entities, each read once per Inbox call (:mod:`oracle.runs.batch`)."""
+
+    async def load(missing: list[uuid.UUID]) -> dict[uuid.UUID, Entity]:
+        if not missing:
+            return {}
+        return {e.id: e for e in await db.scalars(select(Entity).where(Entity.id.in_(missing)))}
+
+    return await batch.many("entity", ids, load)
 
 
 def _canonical(item: dict[str, Any]) -> str:
     return json.dumps(item, sort_keys=True, default=str)
+
+
+async def _traces(
+    db: AsyncSession, version: DocumentVersion | None, items: list[dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Each item's trace by its id (the first item of an id), the traces not yet read in
+    this Inbox call (:mod:`oracle.runs.batch`) derived together, in a few queries."""
+    from oracle.roadmap.items import derive_traces
+
+    firsts: dict[str, dict[str, Any]] = {}
+    for item in items:
+        firsts.setdefault(item["id"], item)
+    by_text = {_canonical(item): item for item in firsts.values()}
+
+    async def load(missing: list[str]) -> dict[str, dict[str, Any]]:
+        found = await derive_traces(db, version, [by_text[t] for t in missing])
+        return dict(zip(missing, found, strict=True))
+
+    traced = await batch.many(
+        ("trace", version.id if version is not None else None), list(by_text), load
+    )
+    return {key: traced[_canonical(item)] for key, item in firsts.items()}
+
+
+async def read_ahead(db: AsyncSession, runs_items: list[tuple[Run, list[dict[str, Any]]]]) -> None:
+    """In one Inbox call (:mod:`oracle.runs.batch`): the traces of every checkpoint's items
+    and their features and blockers, read together for :func:`reason_context` to share."""
+    from oracle.runs.service import _source_id
+
+    by_source: dict[uuid.UUID | None, list[dict[str, Any]]] = {}
+    for run, items in runs_items:
+        by_source.setdefault(_source_id(run), []).extend(items)
+    ids: list[uuid.UUID] = []
+    for source_id, items in by_source.items():
+        version = (await batch.once(("prd", source_id), lambda s=source_id: _prd_version(db, s)))[0]
+        for t in (await _traces(db, version, items)).values():
+            ids += [f for f in [t["feature_id"]] if f is not None] + t["blocker_ids"]
+    await _entities(db, ids)
 
 
 async def reason_context(
@@ -806,9 +848,8 @@ async def reason_context(
     items: list[dict[str, Any]],
 ) -> ReasonContext:
     """Everything the advisory reasons read, for the run's items, as of now. In one Inbox
-    call (:func:`oracle.runs.batch.batched`) the company-wide reads and each item's trace
-    are read once and shared by its checkpoints."""
-    from oracle.roadmap.items import derive_trace
+    call (:func:`oracle.runs.batch.batched`) the company-wide reads, the items' traces and
+    their entities are read once, for all its checkpoints together (:func:`read_ahead`)."""
     from oracle.runs.service import _low_threshold, _source_id
 
     low = await batch.once(("low_threshold",), lambda: _low_threshold(db))
@@ -820,20 +861,10 @@ async def reason_context(
     # Without a user on purpose: only the features' flags are read, for "serves no goal".
     report = await batch.once(("trace_report",), lambda: baseline_trace.report(db))
     flags = {f.id: f for f in report.features}
-    traced: dict[str, dict[str, Any]] = {}
-    for item in items:
-        key = item["id"]
-        if key not in traced:
-            traced[key] = await batch.once(
-                ("trace", version.id if version is not None else None, _canonical(item)),
-                lambda item=item: derive_trace(db, version, item),
-            )
+    traced = await _traces(db, version, items)
     feature_ids = {t["feature_id"] for t in traced.values() if t["feature_id"] is not None}
     blocker_ids = {b for t in traced.values() for b in t["blocker_ids"]}
-    entities = await batch.once(
-        ("entities", frozenset(feature_ids | blocker_ids)),
-        lambda: _entities(db, feature_ids | blocker_ids),
-    )
+    entities = await _entities(db, list(feature_ids | blocker_ids))
     features: dict[str, TracedFeature | None] = {}
     blockers: dict[str, list[LinkedBlocker]] = {}
     for key, t in traced.items():
