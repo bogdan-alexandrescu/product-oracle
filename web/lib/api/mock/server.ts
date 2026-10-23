@@ -56,6 +56,7 @@ import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
+import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
 /**
@@ -109,6 +110,8 @@ export interface Db {
   llm?: LlmDb;
   /** Product Oracle v2 tables (./v2.ts); absent in data saved before v2. */
   v2?: V2Db;
+  /** #482: Trash (./trash.ts); absent in data saved before it. */
+  trash?: TrashDb;
   /** v2 review state, campaigns, notifications, publications (./review-v2.ts). */
   review_v2?: ReviewV2Db;
   /** Outcome records and learnings (./quality.ts); absent in data saved before CR-08. */
@@ -2617,6 +2620,23 @@ async function route(db: Db, req: Request): Promise<Response> {
     const hidden = findDocument(db, p[2]);
     if (hidden && !canSee(me.role, hidden.visibility)) return notFound("Document");
   }
+  // #482: delete, restore, Settings › Trash and Regenerate (./trash.ts).
+  const trashOut = await routeTrash(
+    {
+      db: (db.trash ??= emptyTrash()),
+      documents: db.documents,
+      versions: db.versions,
+      runs: () => (db.runs ??= seeded("runs", () => seedRuns(runsContext(db)))).runs,
+      intakes: () => ensureV2(db).intakes,
+      me,
+      uuid,
+      now,
+    },
+    req,
+    p,
+    q,
+  );
+  if (trashOut) return trashOut;
   // v2 review routes (./review-v2.ts) check roles themselves.
   if (!db.review_v2) {
     const prd = db.documents.find((d) => d.kind === "prd");

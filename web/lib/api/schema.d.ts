@@ -93,7 +93,7 @@ export interface paths {
         patch: operations["update_preferences"];
         trace?: never;
     };
-    "/v1/documents": {
+    "/v1/documents/{doc}/dependents": {
         parameters: {
             query?: never;
             header?: never;
@@ -101,11 +101,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Documents
-         * @description Documents, newest first; ``kind`` lists only PRDs or only roadmaps. Each carries
-         *     its latest and latest approved version and the latest version's provenance.
+         * Document Dependents
+         * @description What a delete of this document takes to Trash with it (the delete dialog).
          */
-        get: operations["list_documents"];
+        get: operations["document_dependents"];
         put?: never;
         post?: never;
         delete?: never;
@@ -123,6 +122,252 @@ export interface paths {
         };
         /** Get Document */
         get: operations["get_document"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Document
+         * @description Move the document and its dependents to Trash (30 days, then purged). A published
+         *     one needs ``confirm_published`` (409 without): its external copy stays where it is.
+         *     409 while a run is working on any of them.
+         */
+        delete: operations["delete_document"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Document
+         * @description Restore the document with everything that went to Trash with it.
+         */
+        post: operations["restore_document"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/dependents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Intake Dependents */
+        get: operations["intake_dependents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Intake
+         * @description Move the brief, the PRD it became and that PRD's dependents to Trash.
+         */
+        delete: operations["delete_intake"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Intake */
+        post: operations["restore_intake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run */
+        get: operations["get_run"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Run
+         * @description Move a finished, cancelled or draft run to Trash (409 while it works).
+         */
+        delete: operations["delete_run"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Run
+         * @description Change a draft's document or knobs; its estimate is cleared.
+         */
+        patch: operations["update_run"];
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Run */
+        post: operations["restore_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Trash
+         * @description What is in Trash, newest first: who deleted it, when, why, what went with it and
+         *     the days left before the ticker purges it.
+         */
+        get: operations["list_trash"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trash/{entry_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Trash Entry
+         * @description Restore everything the delete took, together.
+         */
+        post: operations["restore_trash_entry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trash/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Purge Trash Entry
+         * @description Delete for good now, without waiting for the 30 days.
+         */
+        delete: operations["purge_trash_entry"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/regenerate/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Estimate Regeneration
+         * @description A draft run of the document's flow, estimated: the inputs it will use and the cost.
+         *     422 for a kind no flow writes (edit it instead).
+         */
+        post: operations["estimate_regeneration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Regeneration
+         * @description Start the estimated run, through the same cost gates as starting any run. Its
+         *     result is imported as the document's next version.
+         */
+        post: operations["start_regeneration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Documents
+         * @description Documents, newest first; ``kind`` lists only PRDs or only roadmaps. Each carries
+         *     its latest and latest approved version and the latest version's provenance.
+         */
+        get: operations["list_documents"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4700,27 +4945,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/v1/runs/{run_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Run */
-        get: operations["get_run"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Update Run
-         * @description Change a draft's document or knobs; its estimate is cleared.
-         */
-        patch: operations["update_run"];
         trace?: never;
     };
     "/v1/runs/{run_id}/decisions": {
@@ -14510,6 +14734,24 @@ export interface components {
             /** Upstream */
             upstream: components["schemas"]["TraceUpstreamRef"][];
         };
+        /**
+         * DependentsOut
+         * @description What the delete dialog lists: the root and everything that goes to Trash with it.
+         *     ``published``: ask once more, the external copy stays where it is. ``working_runs``:
+         *     runs to cancel before the delete is allowed.
+         */
+        DependentsOut: {
+            root: components["schemas"]["TrashItem"];
+            /** Items */
+            items: components["schemas"]["TrashItem"][];
+            /** Published */
+            published: boolean;
+            /**
+             * Working Runs
+             * @default []
+             */
+            working_runs: string[];
+        };
         /** DeriveIn */
         DeriveIn: {
             /**
@@ -24021,20 +24263,38 @@ export interface components {
             /** Readable */
             readable: boolean;
         };
-        /** RegenerateIn */
-        RegenerateIn: {
-            /** Prd Version */
-            prd_version?: number | null;
-            /** Reason */
-            reason?: string | null;
+        /** RegenerateEstimateIn */
+        RegenerateEstimateIn: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * RegenerateEstimateOut
+         * @description A draft run that would regenerate the document, estimated; nothing is spent until
+         *     it is started. Over the threshold an owner approves it first.
+         */
+        RegenerateEstimateOut: {
             /**
-             * @default {
-             *       "depth": "standard",
-             *       "roles": {},
-             *       "checkpoints": {}
-             *     }
+             * Run Id
+             * Format: uuid
              */
-            knobs: components["schemas"]["KnobsIn"];
+            run_id: string;
+            /** Document Slug */
+            document_slug: string;
+            /** Kind */
+            kind: string;
+            /** Flow */
+            flow: string;
+            /** Inputs */
+            inputs: string[];
+            /** Estimate Usd */
+            estimate_usd: number;
+            /** Approval Threshold Usd */
+            approval_threshold_usd: number;
+            /** Needs Owner Approval */
+            needs_owner_approval: boolean;
+            /** Note */
+            note?: string | null;
         };
         /**
          * RegenerationOut
@@ -30620,6 +30880,62 @@ export interface components {
             records: components["schemas"]["TrackerRecordIn"][];
         };
         /**
+         * TrashEntryOut
+         * @description One delete in Settings › Trash: restored together, purged after ``days_left``.
+         */
+        TrashEntryOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            root: components["schemas"]["TrashItem"];
+            /** Items */
+            items: components["schemas"]["TrashItem"][];
+            /** Deleted By */
+            deleted_by?: string | null;
+            /** Deleted By Name */
+            deleted_by_name?: string | null;
+            /**
+             * Deleted At
+             * Format: date-time
+             */
+            deleted_at: string;
+            /** Reason */
+            reason?: string | null;
+            /** Published */
+            published: boolean;
+            /**
+             * Purge After
+             * Format: date-time
+             */
+            purge_after: string;
+            /** Days Left */
+            days_left: number;
+        };
+        /**
+         * TrashItem
+         * @description A document, intake or run as it was when it went to Trash.
+         */
+        TrashItem: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "document" | "intake" | "run";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug?: string | null;
+            /** Title */
+            title: string;
+            /** Kind */
+            kind: string;
+        };
+        /**
          * TriageDailyIn
          * @description Turn "Daily triage at 07:00 PT" on or off.
          */
@@ -31307,6 +31623,31 @@ export interface components {
             /** Threshold Value */
             threshold_value?: number | null;
         };
+        /** RegenerateIn */
+        oracle__specs__schemas__RegenerateIn: {
+            /** Prd Version */
+            prd_version?: number | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * @default {
+             *       "depth": "standard",
+             *       "roles": {},
+             *       "checkpoints": {}
+             *     }
+             */
+            knobs: components["schemas"]["KnobsIn"];
+        };
+        /** RegenerateIn */
+        oracle__trash__schemas__RegenerateIn: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Note */
+            note?: string | null;
+        };
         /**
          * GoalAttrs
          * @description The typed fields of a goal's ``attrs`` (published so MCP clients see the shape).
@@ -31521,13 +31862,13 @@ export interface operations {
             };
         };
     };
-    list_documents: {
+    document_dependents: {
         parameters: {
-            query?: {
-                kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
-            };
+            query?: never;
             header?: never;
-            path?: never;
+            path: {
+                doc: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -31538,7 +31879,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentSummary"][];
+                    "application/json": components["schemas"]["DependentsOut"];
                 };
             };
             /** @description Validation Error */
@@ -31570,6 +31911,478 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_document: {
+        parameters: {
+            query?: {
+                reason?: string | null;
+                confirm_published?: boolean;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_document: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    intake_dependents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependentsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_intake: {
+        parameters: {
+            query?: {
+                reason?: string | null;
+                confirm_published?: boolean;
+            };
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_intake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_run: {
+        parameters: {
+            query?: {
+                reason?: string | null;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_trash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"][];
+                };
+            };
+        };
+    };
+    restore_trash_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    purge_trash_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    estimate_regeneration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateEstimateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegenerateEstimateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_regeneration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["oracle__trash__schemas__RegenerateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_documents: {
+        parameters: {
+            query?: {
+                kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"][];
                 };
             };
             /** @description Validation Error */
@@ -41293,72 +42106,6 @@ export interface operations {
             };
         };
     };
-    get_run: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_run: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RunPatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_run_decisions: {
         parameters: {
             query?: never;
@@ -46627,7 +47374,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RegenerateIn"];
+                "application/json": components["schemas"]["oracle__specs__schemas__RegenerateIn"];
             };
         };
         responses: {
