@@ -28,6 +28,7 @@ from oracle.quality.schemas import (
     Assessment,
     AssessmentIn,
     AssessmentResult,
+    DraftedLearning,
     InboxOutcome,
     LearningCreate,
     LearningDraft,
@@ -240,6 +241,43 @@ def draft_learnings(row: OutcomeRecord, verdict: str) -> list[LearningDraft]:
     return out
 
 
+def drafted(row: OutcomeRecord, verdict: str) -> list[DraftedLearning]:
+    """The drafts an assessment keeps, each drafted until the owner keeps or skips it."""
+    return [DraftedLearning(**d.model_dump()) for d in draft_learnings(row, verdict)]
+
+
+async def decide_learning(
+    db: AsyncSession, principal: "Principal", outcome_id: uuid.UUID, index: int, decision: str
+) -> OutcomeOut:
+    """Keep (an active learning tied to the outcome) or skip one of the latest
+    assessment's drafted learnings; each is decided once."""
+    row = await get_outcome(db, outcome_id)
+    entries = list(row.assessments or [])
+    drafts = list(entries[-1].get("learnings") or []) if entries else []
+    if not 0 <= index < len(drafts):
+        raise OutcomeError(404, "Drafted learning not found")
+    draft = DraftedLearning.model_validate(drafts[index])
+    if draft.state != "drafted":
+        raise OutcomeError(409, "Already decided")
+    if decision == "keep":
+        kept = await create_learning(
+            db, principal, LearningCreate(**draft.model_dump(exclude={"state", "learning_id"}))
+        )
+        draft.state, draft.learning_id = "kept", kept.id
+    else:
+        draft.state = "skipped"
+    drafts[index] = draft.model_dump(mode="json")
+    entries[-1] = {**entries[-1], "learnings": drafts}
+    row.assessments = entries
+    await db.flush()
+    await audit.record(
+        db, principal, f"outcome.learning_{draft.state}", "outcome_record", row.id,
+        {"applies_to": draft.applies_to, "target": draft.target},
+    )  # fmt: skip
+    await db.refresh(row)
+    return OutcomeOut.model_validate(row)
+
+
 async def assess(
     db: AsyncSession, principal: "Principal", outcome_id: uuid.UUID, data: AssessmentIn
 ) -> AssessmentResult:
@@ -255,6 +293,7 @@ async def assess(
         assessed_at=_now(),
         actual_value=data.actual_value,
         measured_at=data.measured_at,
+        learnings=drafted(row, data.verdict),
     )
     before = row.status
     row.assessments = [*(row.assessments or []), entry.model_dump(mode="json")]

@@ -37,6 +37,7 @@ import {
   outcomeInboxRows,
   publishRefusal,
   routeQuality,
+  seedOracleRecorded,
   seedOutcomes,
   seedQuality,
   type QualityContext,
@@ -1448,9 +1449,12 @@ function load(): Db {
   // other specs' Inbox counts stay as they were.
   if (scenario === "launches") db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
   // Outcomes (H3): synthetic predictions, one due for its check, in the "outcomes" scenario.
-  if (scenario === "outcomes") {
+  // "outcomes-recorded" adds a verdict Oracle recorded (H11 at Act within limits) for the owner to change.
+  if (scenario === "outcomes" || scenario === "outcomes-recorded") {
     const goal = db.baseline.entities.find((e) => e.type === "goal" && e.title === "Raise activation");
-    if (goal) db.quality = { outcomes: seedOutcomes(db.user_id, goal.id, null), learnings: [] };
+    const outcomes = goal ? seedOutcomes(db.user_id, goal.id, null) : [];
+    if (goal && scenario === "outcomes-recorded") outcomes.push(seedOracleRecorded(db.user_id, goal.id));
+    if (goal) db.quality = { outcomes, learnings: [] };
   }
   db.autonomy = emptyAutonomy();
   // Discussions (G1): one private discussion in the "discussions" scenario; none otherwise,

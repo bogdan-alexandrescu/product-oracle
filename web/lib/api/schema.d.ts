@@ -6417,6 +6417,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/outcomes/{outcome_id}/learnings/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Outcome Learning
+         * @description Keep or skip one of the latest assessment's drafted learnings (by its index).
+         */
+        post: operations["decide_outcome_learning"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/learnings": {
         parameters: {
             query?: never;
@@ -9631,6 +9651,11 @@ export interface components {
              * @enum {string}
              */
             actor: "person" | "oracle";
+            /**
+             * Learnings
+             * @default []
+             */
+            learnings: components["schemas"]["DraftedLearning"][];
         };
         /** AssessmentIn */
         AssessmentIn: {
@@ -13943,6 +13968,41 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /**
+         * DraftedLearning
+         * @description A drafted learning on its assessment: drafted until the owner keeps or skips it.
+         */
+        DraftedLearning: {
+            /** Outcome Id */
+            outcome_id?: string | null;
+            /** Statement */
+            statement: string;
+            /**
+             * Applies To
+             * @enum {string}
+             */
+            applies_to: "module" | "question_category" | "criterion";
+            /** Target */
+            target: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "recommend_more" | "recommend_less" | "note";
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
+            /**
+             * State
+             * @default drafted
+             * @enum {string}
+             */
+            state: "drafted" | "kept" | "skipped";
+            /** Learning Id */
+            learning_id?: string | null;
+        };
         /** DriftEntry */
         DriftEntry: {
             /**
@@ -17851,6 +17911,14 @@ export interface components {
              * @default 1
              */
             weight: number;
+        };
+        /** LearningDecision */
+        LearningDecision: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "keep" | "skip";
         };
         /**
          * LearningDraft
@@ -40211,6 +40279,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssessmentResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_outcome_learning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearningDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeOut"];
                 };
             };
             /** @description Validation Error */

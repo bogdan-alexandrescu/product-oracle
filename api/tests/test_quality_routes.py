@@ -29,6 +29,7 @@ ROUTES = {
     ("GET", "/v1/outcomes"): "list_outcomes",
     ("GET", "/v1/outcomes/{outcome_id}"): "get_outcome",
     ("POST", "/v1/outcomes/{outcome_id}/assessments"): "assess_outcome",
+    ("POST", "/v1/outcomes/{outcome_id}/learnings/{index}"): "decide_outcome_learning",
     ("POST", "/v1/learnings"): "create_learning",
     ("GET", "/v1/learnings"): "list_learnings",
     ("GET", "/v1/learnings/signals"): "get_learning_signals",
@@ -45,7 +46,7 @@ def test_every_route_is_an_mcp_tool():
 
 async def test_routes_require_auth(client):
     for method, path in ROUTES:
-        url = path.format(doc="x", n=1, outcome_id=uuid.uuid4(), learning_id=uuid.uuid4())
+        url = path.format(doc="x", n=1, outcome_id=uuid.uuid4(), learning_id=uuid.uuid4(), index=0)
         resp = await client.request(method, url, json={})
         assert resp.status_code == 401, (method, path)
 

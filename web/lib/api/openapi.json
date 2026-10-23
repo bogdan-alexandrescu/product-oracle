@@ -22681,6 +22681,77 @@
         }
       }
     },
+    "/v1/outcomes/{outcome_id}/learnings/{index}": {
+      "post": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Decide Outcome Learning",
+        "description": "Keep or skip one of the latest assessment's drafted learnings (by its index).",
+        "operationId": "decide_outcome_learning",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "outcome_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Outcome Id"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Index"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearningDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutcomeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/learnings": {
       "post": {
         "tags": [
@@ -32963,6 +33034,14 @@
             ],
             "title": "Actor",
             "default": "person"
+          },
+          "learnings": {
+            "items": {
+              "$ref": "#/components/schemas/DraftedLearning"
+            },
+            "type": "array",
+            "title": "Learnings",
+            "default": []
           }
         },
         "type": "object",
@@ -45099,6 +45178,90 @@
         "type": "object",
         "title": "DraftNoteIn"
       },
+      "DraftedLearning": {
+        "properties": {
+          "outcome_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome Id"
+          },
+          "statement": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Statement"
+          },
+          "applies_to": {
+            "type": "string",
+            "enum": [
+              "module",
+              "question_category",
+              "criterion"
+            ],
+            "title": "Applies To"
+          },
+          "target": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Target"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "recommend_more",
+              "recommend_less",
+              "note"
+            ],
+            "title": "Direction"
+          },
+          "weight": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Weight",
+            "default": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "drafted",
+              "kept",
+              "skipped"
+            ],
+            "title": "State",
+            "default": "drafted"
+          },
+          "learning_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learning Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "statement",
+          "applies_to",
+          "target",
+          "direction"
+        ],
+        "title": "DraftedLearning",
+        "description": "A drafted learning on its assessment: drafted until the owner keeps or skips it."
+      },
       "DriftEntry": {
         "properties": {
           "kind": {
@@ -55786,6 +55949,23 @@
           "direction"
         ],
         "title": "LearningCreate"
+      },
+      "LearningDecision": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "skip"
+            ],
+            "title": "Decision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "LearningDecision"
       },
       "LearningDraft": {
         "properties": {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState, useSyncExternalStore } from "react";
 
 import {
   Button,
@@ -20,6 +21,7 @@ import {
   type ChipKind,
   type Column,
 } from "@/components/ds";
+import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
@@ -28,7 +30,15 @@ import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 type Outcome = Schemas["OutcomeOut"];
 type Prediction = Schemas["Prediction"];
-type State = "needs" | "predicted" | "measuring" | "due" | "held" | "partially_held" | "not_held" | "inconclusive";
+type State =
+  | "needs"
+  | "predicted"
+  | "measuring"
+  | "due"
+  | "held"
+  | "partially_held"
+  | "not_held"
+  | "inconclusive";
 type Filter = "due" | "measuring" | "needs" | "assessed" | "all";
 
 const STATE_LABEL: Record<State, string> = {
@@ -76,8 +86,10 @@ function useIsPhone(): boolean {
 }
 
 function stateOf(o: Outcome): State {
-  if (o.status === "predicted") return o.needs_prediction ? "needs" : "predicted";
-  if (o.status === "tracking") return o.proposed_assessment ? "due" : "measuring";
+  if (o.status === "predicted")
+    return o.needs_prediction ? "needs" : "predicted";
+  if (o.status === "tracking")
+    return o.proposed_assessment ? "due" : "measuring";
   return o.status;
 }
 
@@ -96,14 +108,23 @@ function actual(o: Outcome): string | null {
   const last = o.assessments[o.assessments.length - 1];
   const value = last?.actual_value ?? o.proposed_assessment?.actual_value;
   const on = last?.measured_at ?? o.proposed_assessment?.measured_at;
-  const text = figure(value, o.prediction.unit) ?? last?.observed ?? o.proposed_assessment?.observed;
+  const text =
+    figure(value, o.prediction.unit) ??
+    last?.observed ??
+    o.proposed_assessment?.observed;
   return text ? `${text}${on ? ` on ${formatDate(on)}` : ""}` : null;
 }
 
 function StateChip({ o, hero = false }: { o: Outcome; hero?: boolean }) {
   const s = stateOf(o);
   return (
-    <Chip kind={STATE_KIND[s]} dot={!hero} hero={hero} data-testid="outcome-state" data-state={s}>
+    <Chip
+      kind={STATE_KIND[s]}
+      dot={!hero}
+      hero={hero}
+      data-testid="outcome-state"
+      data-state={s}
+    >
       {STATE_LABEL[s]}
     </Chip>
   );
@@ -116,30 +137,52 @@ function StateChip({ o, hero = false }: { o: Outcome; hero?: boolean }) {
  * confirms it.
  */
 export default function OutcomesPage() {
-  const q = useQuery("outcomes", () => unwrap(api.GET("/v1/outcomes", { params: { query: { limit: 500 } } })));
+  return (
+    <Suspense fallback={<Loading />}>
+      <Outcomes />
+    </Suspense>
+  );
+}
+
+function Outcomes() {
+  // An Inbox row links here with ?outcome=<id>: that outcome opens, whatever its state.
+  const linked = useSearchParams().get("outcome");
+  const q = useQuery("outcomes", () =>
+    unwrap(api.GET("/v1/outcomes", { params: { query: { limit: 500 } } })),
+  );
   const goalsQ = useQuery("outcomes|goals", () =>
-    unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })),
+    unwrap(
+      api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } }),
+    ),
+  );
+  const recordQ = useQuery("outcomes|calibration", () =>
+    unwrap(api.GET("/v1/priorities/calibration")),
   );
   const { role } = useMe();
   const canApprove = hasRole(role, "approver");
   const phone = useIsPhone();
   const [filter, setFilter] = useState<Filter | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [sheet, setSheet] = useState(false);
+  const [selected, setSelected] = useState<string | null>(linked);
+  const [sheet, setSheet] = useState(linked != null);
 
   const rows = q.data ?? [];
   const goals = new Map((goalsQ.data ?? []).map((g) => [g.id, g.title]));
   const inFilter = (o: Outcome, f: Filter) => {
     const s = stateOf(o);
     if (f === "all") return true;
-    if (f === "assessed") return ["held", "partially_held", "not_held", "inconclusive"].includes(s);
+    if (f === "assessed")
+      return ["held", "partially_held", "not_held", "inconclusive"].includes(s);
     return s === f;
   };
   const count = (f: Filter) => rows.filter((o) => inFilter(o, f)).length;
   // Check due is the default while any check is due.
-  const current: Filter = filter ?? (count("due") > 0 ? "due" : "all");
+  const current: Filter =
+    filter ?? (linked == null && count("due") > 0 ? "due" : "all");
   const shown = rows.filter((o) => inFilter(o, current));
-  const active = shown.find((o) => o.id === selected) ?? rows.find((o) => o.id === selected) ?? shown[0];
+  const active =
+    shown.find((o) => o.id === selected) ??
+    rows.find((o) => o.id === selected) ??
+    shown[0];
 
   const columns: Column<Outcome>[] = [
     {
@@ -157,21 +200,29 @@ export default function OutcomesPage() {
       header: "Goal",
       width: "170px",
       hideOnPhone: true,
-      cell: (o) => <span className="truncate text-text2">{goals.get(o.goal_id) ?? "Goal"}</span>,
+      cell: (o) => (
+        <span className="truncate text-text2">
+          {goals.get(o.goal_id) ?? "Goal"}
+        </span>
+      ),
     },
     {
       key: "predicted",
       header: "Predicted",
       width: "190px",
       hideOnPhone: true,
-      cell: (o) => <span className="tnum truncate">{predicted(o.prediction)}</span>,
+      cell: (o) => (
+        <span className="tnum truncate">{predicted(o.prediction)}</span>
+      ),
     },
     {
       key: "actual",
       header: "Actual",
       width: "130px",
       hideOnPhone: true,
-      cell: (o) => <span className="tnum truncate text-text2">{actual(o) ?? "—"}</span>,
+      cell: (o) => (
+        <span className="tnum truncate text-text2">{actual(o) ?? "—"}</span>
+      ),
     },
     {
       key: "state",
@@ -187,19 +238,30 @@ export default function OutcomesPage() {
       phone: "meta",
       cell: (o) => (
         <span className="tnum text-text2" data-testid="outcome-due">
-          {o.assess_due_on ? formatDate(o.assess_due_on) : o.prediction.by ? formatDate(o.prediction.by) : "—"}
+          {o.assess_due_on
+            ? formatDate(o.assess_due_on)
+            : o.prediction.by
+              ? formatDate(o.prediction.by)
+              : "—"}
         </span>
       ),
     },
   ];
 
+  const counted = new Map(
+    (recordQ.data?.goals ?? []).map((g) => [g.goal_id, g.n]),
+  );
   const inspector = active ? (
     <OutcomeInspector
-      key={`${active.id}-${active.lock_version}-${active.status}`}
+      key={`${active.id}-${active.lock_version}-${active.status}-${active.assessments.length}`}
       o={active}
       goal={goals.get(active.goal_id) ?? "its goal"}
+      counted={counted.get(active.goal_id) ?? null}
       canApprove={canApprove}
-      onChanged={q.reload}
+      onChanged={async () => {
+        await q.reload();
+        await recordQ.reload();
+      }}
     />
   ) : null;
 
@@ -214,8 +276,10 @@ export default function OutcomesPage() {
                 {rows.length} {rows.length === 1 ? "outcome" : "outcomes"}
               </Chip>
               <InfoTip label="Outcomes" align="start" side="bottom">
-                Approving a roadmap records what each item is expected to do for its goal. When the item ships, Oracle
-                waits for the goal to move, then proposes whether the prediction held. A person confirms it.
+                Approving a roadmap records what each item is expected to do for
+                its goal. When the item ships, Oracle waits for the goal to
+                move, then proposes whether the prediction held. A person
+                confirms it.
               </InfoTip>
             </>
           )
@@ -275,7 +339,12 @@ export default function OutcomesPage() {
           </Panel>
         </Split>
         {phone && active && (
-          <Sheet open={sheet} title={active.title} onClose={() => setSheet(false)} testId="outcome-sheet">
+          <Sheet
+            open={sheet}
+            title={active.title}
+            onClose={() => setSheet(false)}
+            testId="outcome-sheet"
+          >
             {inspector}
           </Sheet>
         )}
@@ -286,16 +355,32 @@ export default function OutcomesPage() {
 
 const num = (s: string) => (s.trim() === "" ? null : Number(s));
 
-function PredictionForm({ o, onSave, busy }: { o: Outcome; onSave: (p: Prediction) => void; busy: boolean }) {
+function PredictionForm({
+  o,
+  onSave,
+  busy,
+}: {
+  o: Outcome;
+  onSave: (p: Prediction) => void;
+  busy: boolean;
+}) {
   const p = o.prediction;
   const [baseline, setBaseline] = useState(p.baseline_value?.toString() ?? "");
   const [want, setWant] = useState(p.predicted_value?.toString() ?? "");
   const [line, setLine] = useState(p.threshold_value?.toString() ?? "");
   const [unit, setUnit] = useState(p.unit ?? "");
   const [by, setBy] = useState(p.by ?? "");
-  const [direction, setDirection] = useState<"increase" | "decrease">(p.direction ?? "increase");
-  const field = "h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]";
-  const input = (label: string, value: string, set: (v: string) => void, type = "text") => (
+  const [direction, setDirection] = useState<"increase" | "decrease">(
+    p.direction ?? "increase",
+  );
+  const field =
+    "h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]";
+  const input = (
+    label: string,
+    value: string,
+    set: (v: string) => void,
+    type = "text",
+  ) => (
     <label className="flex flex-col gap-1 text-sm">
       <span className="text-text2">{label}</span>
       <input
@@ -312,7 +397,8 @@ function PredictionForm({ o, onSave, busy }: { o: Outcome; onSave: (p: Predictio
       w = num(want),
       t = num(line);
     const u = unit.trim() || null;
-    const shown = (v: number | null) => (v == null ? null : `${v}${u === "%" ? "%" : u ? ` ${u}` : ""}`);
+    const shown = (v: number | null) =>
+      v == null ? null : `${v}${u === "%" ? "%" : u ? ` ${u}` : ""}`;
     onSave({
       ...p,
       baseline_value: b,
@@ -344,7 +430,9 @@ function PredictionForm({ o, onSave, busy }: { o: Outcome; onSave: (p: Predictio
         <select
           className={field}
           value={direction}
-          onChange={(e) => setDirection(e.target.value as "increase" | "decrease")}
+          onChange={(e) =>
+            setDirection(e.target.value as "increase" | "decrease")
+          }
         >
           <option value="increase">Up</option>
           <option value="decrease">Down</option>
@@ -360,20 +448,130 @@ function PredictionForm({ o, onSave, busy }: { o: Outcome; onSave: (p: Predictio
   );
 }
 
+type Verdict = Schemas["AssessmentIn"]["verdict"];
+const VERDICTS: Verdict[] = [
+  "held",
+  "partially_held",
+  "not_held",
+  "inconclusive",
+];
+
+/** Edit Oracle's proposal, or change a recorded verdict: what a person records instead. */
+function AssessmentForm({
+  o,
+  from,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  o: Outcome;
+  from: {
+    verdict: Verdict;
+    actual_value?: number | null;
+    measured_at?: string | null;
+    note?: string | null;
+  };
+  busy: boolean;
+  onSave: (a: Schemas["AssessmentIn"]) => void;
+  onCancel: () => void;
+}) {
+  const [verdict, setVerdict] = useState<Verdict>(from.verdict);
+  const [value, setValue] = useState(from.actual_value?.toString() ?? "");
+  const [on, setOn] = useState(from.measured_at ?? "");
+  const [note, setNote] = useState(from.note ?? "");
+  const field =
+    "h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]";
+  function save() {
+    const v = num(value);
+    onSave({
+      verdict,
+      observed: figure(v, o.prediction.unit) ?? "no value",
+      actual_value: v,
+      measured_at: on || null,
+      note: note.trim() || null,
+      evidence_ids: [],
+    });
+  }
+  return (
+    <form
+      className="mt-2 grid grid-cols-2 gap-2.5"
+      data-testid="assessment-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="text-text2">Verdict</span>
+        <select
+          className={field}
+          value={verdict}
+          onChange={(e) => setVerdict(e.target.value as Verdict)}
+        >
+          {VERDICTS.map((v) => (
+            <option key={v} value={v}>
+              {STATE_LABEL[v]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="text-text2">Actual value</span>
+        <input
+          className={field}
+          type="number"
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="text-text2">Measured on</span>
+        <input
+          className={field}
+          type="date"
+          value={on}
+          onChange={(e) => setOn(e.target.value)}
+        />
+      </label>
+      <label className="col-span-2 flex flex-col gap-1 text-sm">
+        <span className="text-text2">Note</span>
+        <textarea
+          className="min-h-16 w-full rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-[15px]"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </label>
+      <div className="col-span-2 flex flex-wrap gap-2">
+        <Button type="submit" variant="primary" disabled={busy}>
+          Record assessment
+        </Button>
+        <Button type="button" variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function OutcomeInspector({
   o,
   goal,
+  counted,
   canApprove,
   onChanged,
 }: {
   o: Outcome;
   goal: string;
+  counted: number | null;
   canApprove: boolean;
   onChanged: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  // The assessment form: Edit on Oracle's proposal, Change on a recorded verdict.
+  const [assessing, setAssessing] = useState(false);
   const path = { params: { path: { outcome_id: o.id } } };
   const p = o.prediction;
   const prop = o.proposed_assessment;
@@ -394,21 +592,31 @@ function OutcomeInspector({
     }
   }
 
-  const assess = (verdict: Schemas["AssessmentIn"]["verdict"]) =>
+  const record = (body: Schemas["AssessmentIn"]) =>
     act(() =>
       unwrap(
-        api.POST("/v1/outcomes/{outcome_id}/assessments", {
-          ...path,
-          body: {
-            verdict,
-            observed: prop?.observed ?? "no value",
-            evidence_ids: [],
-            actual_value: prop?.actual_value ?? null,
-            measured_at: prop?.measured_at ?? null,
-          },
+        api.POST("/v1/outcomes/{outcome_id}/assessments", { ...path, body }),
+      ),
+    );
+  const assess = (verdict: Verdict) =>
+    record({
+      verdict,
+      observed: prop?.observed ?? "no value",
+      evidence_ids: [],
+      actual_value: prop?.actual_value ?? null,
+      measured_at: prop?.measured_at ?? null,
+    });
+  const decide = (index: number, decision: "keep" | "skip") =>
+    act(() =>
+      unwrap(
+        api.POST("/v1/outcomes/{outcome_id}/learnings/{index}", {
+          params: { path: { outcome_id: o.id, index } },
+          body: { decision },
         }),
       ),
     );
+  const last = o.assessments[o.assessments.length - 1];
+  const drafts = last?.learnings ?? [];
 
   const now = prop ? figure(prop.actual_value, p.unit) : null;
   const signal = o.ship_signal;
@@ -431,35 +639,58 @@ function OutcomeInspector({
           {figure(p.predicted_value, p.unit) ?? p.predicted}
           {now ? ` · Now ${now}` : ""}
         </p>
-        <InspectorRow value={<span className="text-text2">{goal}</span>}>Goal</InspectorRow>
-        <InspectorRow value={<span className="text-text2">{p.metric}</span>}>Metric</InspectorRow>
+        <InspectorRow value={<span className="text-text2">{goal}</span>}>
+          Goal
+        </InspectorRow>
+        <InspectorRow value={<span className="text-text2">{p.metric}</span>}>
+          Metric
+        </InspectorRow>
         {p.threshold_value != null && (
-          <InspectorRow value={<span className="tnum">{figure(p.threshold_value, p.unit)}</span>}>
+          <InspectorRow
+            value={
+              <span className="tnum">{figure(p.threshold_value, p.unit)}</span>
+            }
+          >
             Partly held at
           </InspectorRow>
         )}
-        {p.by && <InspectorRow value={<span className="tnum">{formatDate(p.by)}</span>}>By</InspectorRow>}
-        {canApprove && o.status === "predicted" && !editing && !o.needs_prediction && (
-          <Button variant="secondary" onClick={() => setEditing(true)} data-testid="outcome-edit">
-            Edit
-          </Button>
+        {p.by && (
+          <InspectorRow
+            value={<span className="tnum">{formatDate(p.by)}</span>}
+          >
+            By
+          </InspectorRow>
         )}
-        {canApprove && o.status === "predicted" && (editing || o.needs_prediction) && (
-          <PredictionForm
-            o={o}
-            busy={busy}
-            onSave={(prediction) =>
-              act(() =>
-                unwrap(
-                  api.PATCH("/v1/outcomes/{outcome_id}", {
-                    ...path,
-                    body: { prediction, lock_version: o.lock_version },
-                  }),
-                ),
-              )
-            }
-          />
-        )}
+        {canApprove &&
+          o.status === "predicted" &&
+          !editing &&
+          !o.needs_prediction && (
+            <Button
+              variant="secondary"
+              onClick={() => setEditing(true)}
+              data-testid="outcome-edit"
+            >
+              Edit
+            </Button>
+          )}
+        {canApprove &&
+          o.status === "predicted" &&
+          (editing || o.needs_prediction) && (
+            <PredictionForm
+              o={o}
+              busy={busy}
+              onSave={(prediction) =>
+                act(() =>
+                  unwrap(
+                    api.PATCH("/v1/outcomes/{outcome_id}", {
+                      ...path,
+                      body: { prediction, lock_version: o.lock_version },
+                    }),
+                  ),
+                )
+              }
+            />
+          )}
       </InspectorSection>
       {signal && (
         <InspectorSection label="Shipped">
@@ -476,13 +707,19 @@ function OutcomeInspector({
           label="Oracle's proposal"
           tools={
             <InfoTip label="How Oracle reads the actual">
-              The first goal value recorded on or after the prediction&apos;s date, else the latest one.
+              The first goal value recorded on or after the prediction&apos;s
+              date, else the latest one.
             </InfoTip>
           }
         >
-          <div data-testid="outcome-proposal" className="flex flex-col gap-1.5 text-sm">
+          <div
+            data-testid="outcome-proposal"
+            className="flex flex-col gap-1.5 text-sm"
+          >
             <span>
-              <Chip kind={STATE_KIND[prop.verdict]}>{STATE_LABEL[prop.verdict]}</Chip>
+              <Chip kind={STATE_KIND[prop.verdict]}>
+                {STATE_LABEL[prop.verdict]}
+              </Chip>
             </span>
             <span className="text-text2">
               {now
@@ -492,7 +729,7 @@ function OutcomeInspector({
             </span>
             <span className="text-text2">{CAVEAT}</span>
           </div>
-          {canApprove && o.status === "tracking" && (
+          {canApprove && o.status === "tracking" && !assessing && (
             <div className="mt-2 flex flex-wrap gap-2">
               <Button
                 variant="primary"
@@ -505,6 +742,14 @@ function OutcomeInspector({
               <Button
                 variant="secondary"
                 disabled={busy}
+                onClick={() => setAssessing(true)}
+                data-testid="outcome-assess-edit"
+              >
+                Edit
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={busy}
                 onClick={() => assess("inconclusive")}
                 data-testid="outcome-inconclusive"
               >
@@ -512,19 +757,95 @@ function OutcomeInspector({
               </Button>
             </div>
           )}
+          {canApprove && o.status === "tracking" && assessing && (
+            <AssessmentForm
+              o={o}
+              from={prop}
+              busy={busy}
+              onSave={record}
+              onCancel={() => setAssessing(false)}
+            />
+          )}
         </InspectorSection>
       )}
-      {o.assessments.length > 0 && (
+      {last && (
         <InspectorSection label="Assessments">
-          <ul className="space-y-1 text-sm">
+          <ul className="space-y-1 text-sm" data-testid="outcome-history">
             {o.assessments.map((a, i) => (
               <li key={i}>
-                {STATE_LABEL[a.verdict]} · {a.observed} · {a.actor === "oracle" ? "Oracle" : "a person"} ·{" "}
+                {STATE_LABEL[a.verdict]} · {a.observed} ·{" "}
+                {a.actor === "oracle" ? "Oracle" : "a person"} ·{" "}
                 {formatDate(a.assessed_at)}
+                {a.note && <span className="block text-text2">{a.note}</span>}
               </li>
             ))}
           </ul>
-          <p className="mt-1.5 text-sm text-text2">Counts toward track record: {goal}</p>
+          {last.verdict !== "inconclusive" && (
+            <p className="mt-1.5 text-sm text-text2">
+              Counts toward track record: {goal}
+              {counted != null ? ` (${counted})` : ""}
+            </p>
+          )}
+          {canApprove && o.status !== "tracking" && !assessing && (
+            <Button
+              variant="secondary"
+              className="mt-2"
+              disabled={busy}
+              onClick={() => setAssessing(true)}
+              data-testid="outcome-change"
+            >
+              Change
+            </Button>
+          )}
+          {canApprove && o.status !== "tracking" && assessing && (
+            <AssessmentForm
+              o={o}
+              from={last}
+              busy={busy}
+              onSave={record}
+              onCancel={() => setAssessing(false)}
+            />
+          )}
+        </InspectorSection>
+      )}
+      {drafts.length > 0 && (
+        <InspectorSection label="Drafted learnings">
+          <ul className="space-y-2 text-sm">
+            {drafts.map((d, i) => (
+              <li
+                key={i}
+                className="flex flex-col gap-1.5"
+                data-testid="outcome-learning"
+                data-state={d.state}
+              >
+                <span>{d.statement}</span>
+                {d.state === "drafted" && canApprove ? (
+                  <span className="flex flex-wrap gap-2">
+                    <Button
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() => decide(i, "keep")}
+                    >
+                      Keep
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() => decide(i, "skip")}
+                    >
+                      Skip
+                    </Button>
+                  </span>
+                ) : d.state !== "drafted" ? (
+                  <span>
+                    <Chip kind={d.state === "kept" ? "pass" : "line"}>
+                      {d.state === "kept" ? "Kept" : "Skipped"}
+                    </Chip>
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
         </InspectorSection>
       )}
     </Inspector>

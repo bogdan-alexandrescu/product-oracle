@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, autonomy
 from oracle.baseline.models import EntityRevision, GoalMeasurement
+from oracle.quality import outcomes
 from oracle.quality.capture import figure_text, number
 from oracle.quality.models import OutcomeRecord
 from oracle.quality.schemas import Assessment
@@ -200,6 +201,7 @@ async def record_verdict(db: AsyncSession, row: OutcomeRecord, *, actor: str) ->
         actual_value=prop.get("actual_value"),
         measured_at=prop.get("measured_at"),
         actor="oracle",
+        learnings=outcomes.drafted(row, prop["verdict"]),
     )
     row.assessments = [*(row.assessments or []), entry.model_dump(mode="json")]
     row.status = entry.verdict

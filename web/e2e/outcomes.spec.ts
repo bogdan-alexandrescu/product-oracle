@@ -172,9 +172,11 @@ test("Change on Oracle's recorded verdict opens it and the owner changes it", as
   // no_claim=Oracle's autonomy level (the mock seeds its verdict).
   await start(page, undefined, "outcomes-recorded");
   await page.goto("/inbox");
-  const need = page.getByTestId("outcome-need").filter({ hasText: "Oracle recorded: partly held · Weekly digest email" });
-  await expect(need).toBeVisible();
-  await page.getByRole("link", { name: "Change" }).first().click();
+  // Oracle recorded is shown, not counted: it waits under Open.
+  await page.getByRole("tab", { name: /^Open/ }).first().click();
+  const section = page.getByTestId("inbox-outcomes");
+  await expect(section.getByTestId("outcome-need")).toHaveText(["Oracle recorded: partly held · Weekly digest email"]);
+  await section.getByRole("link", { name: "Change" }).click();
   await expect(page).toHaveURL(/\/plan\/outcomes\?outcome=/);
   await expect(inspector(page)).toContainText("Weekly digest email");
   await expect(inspector(page).getByTestId("outcome-history")).toContainText("Partly held · 41% · Oracle");
@@ -187,5 +189,6 @@ test("Change on Oracle's recorded verdict opens it and the owner changes it", as
   await expect(inspector(page).getByTestId("outcome-state").first()).toHaveText("Held");
   await expect(inspector(page).getByTestId("outcome-history")).toContainText("Held · 42% · a person");
   await page.goto("/inbox");
+  await page.getByRole("tab", { name: /^Open/ }).first().click();
   await expect(page.getByTestId("outcome-need").filter({ hasText: "Oracle recorded" })).toHaveCount(0);
 });

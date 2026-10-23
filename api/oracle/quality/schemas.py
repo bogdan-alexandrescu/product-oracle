@@ -254,6 +254,8 @@ class Assessment(BaseModel):
     measured_at: date | None = None
     # "oracle" when H11 Autonomy let Oracle record it.
     actor: Literal["person", "oracle"] = "person"
+    # What this assessment suggests the company learn; the owner keeps or skips each.
+    learnings: list["DraftedLearning"] = []
 
 
 class ShipSignal(BaseModel):
@@ -369,6 +371,20 @@ class LearningDraft(BaseModel):
     target: str = Field(min_length=1, max_length=200)
     direction: LearningDirection
     weight: int = Field(default=1, ge=1, le=3)
+
+
+class DraftedLearning(LearningDraft):
+    """A drafted learning on its assessment: drafted until the owner keeps or skips it."""
+
+    state: Literal["drafted", "kept", "skipped"] = "drafted"
+    learning_id: uuid.UUID | None = None
+
+
+Assessment.model_rebuild()
+
+
+class LearningDecision(BaseModel):
+    decision: Literal["keep", "skip"]
 
 
 class AssessmentResult(BaseModel):

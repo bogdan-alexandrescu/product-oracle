@@ -161,6 +161,7 @@ export function seedOutcomes(owner: string, goalId: string, roadmapVersionId: st
   const rows: Outcome[] = [
     outcomeRow({
       title: "Saved payment methods", goal_id: goalId, status: "tracking", prediction: typed, roadmap_item_key: "saved-payment",
+      gap_categories: ["success_metric"], module_keys: ["M-12"],
       roadmap_version_id: roadmapVersionId, confidence_at_prediction: 0.8, shipped_at: shipped, assess_due_on: isoDay(now - 2 * DAY),
       ship_signal: { kind: "tracker", refs: ["github:example-org/storefront#402", "github:example-org/storefront#403", "github:example-org/storefront#404"], at: shipped, note: null },
       proposed_assessment: { verdict: "partially_held", actual_value: 41, measured_at: isoDay(now - 3 * DAY), observed: "41%", source: "goal_history", note: null },
@@ -182,10 +183,47 @@ export function seedOutcomes(owner: string, goalId: string, roadmapVersionId: st
     rows.push(outcomeRow({
       title: `Earlier activation bet ${i + 1}`, goal_id: goalId, status: verdict, confidence_at_prediction: confidence, assessed_at: at,
       observed: verdict === "held" ? "43%" : "37%", prediction: { ...typed, by: isoDay(now - (40 + i * 20) * DAY) },
-      assessments: [{ verdict, observed: verdict === "held" ? "43%" : "37%", note: null, evidence_ids: [], assessed_by: owner, assessed_at: at, actor: "person" }],
+      assessments: [{ verdict, observed: verdict === "held" ? "43%" : "37%", note: null, evidence_ids: [], assessed_by: owner, assessed_at: at, actor: "person", learnings: [] }],
     }, owner));
   });
   return rows;
+}
+
+/** The learnings an assessment drafts, in the API's words (oracle.quality.outcomes.draft_learnings). */
+function draftLearnings(o: Outcome, verdict: Schemas["AssessmentIn"]["verdict"]): Schemas["DraftedLearning"][] {
+  const draft = (applies_to: "question_category" | "module", target: string, statement: string, direction: Schemas["LearningDraft"]["direction"]) =>
+    ({ outcome_id: o.id, statement, applies_to, target, direction, weight: 1, state: "drafted" as const, learning_id: null });
+  if (verdict === "inconclusive")
+    return [draft("question_category", "success_metric", `'${o.title}' could not be assessed: ask for a measurable metric and a decision threshold earlier`, "recommend_more")];
+  const held = verdict === "held";
+  const how = held ? "held" : verdict === "partially_held" ? "partly held" : "did not hold";
+  const direction = held ? "note" : "recommend_more";
+  return [
+    ...o.gap_categories.map((c) => draft("question_category", c, `The prediction for '${o.title}' ${how}${held ? "" : `: ask about ${c.replaceAll("_", " ")} earlier`}`, direction)),
+    ...o.module_keys.map((k) => draft("module", k, `Module ${k} backed a prediction that ${how}${held ? "" : "; recommend it with its validation fields filled"}`, direction)),
+  ];
+}
+
+/** "outcomes-recorded" adds what H11 at Act within limits leaves: Oracle recorded Weekly digest email partly held. */
+export function seedOracleRecorded(owner: string, goalId: string): Outcome {
+  const now = Date.now();
+  const at = new Date(now - 2 * DAY).toISOString();
+  const shipped = new Date(now - 50 * DAY).toISOString();
+  const o = outcomeRow({
+    title: "Weekly digest email", goal_id: goalId, status: "partially_held", roadmap_item_key: "weekly-digest", confidence_at_prediction: 0.5,
+    shipped_at: shipped, assess_due_on: isoDay(now - 3 * DAY), assessed_at: at, observed: "41%", gap_categories: ["success_metric"],
+    ship_signal: { kind: "milestone", refs: [], at: shipped, note: null },
+    prediction: {
+      metric: "Accounts that finish setup within 7 days", baseline: "38%", predicted: "42%", threshold: "40%", by: isoDay(now - 10 * DAY),
+      unit: "%", direction: "increase", baseline_value: 38, predicted_value: 42, threshold_value: 40,
+    },
+    proposed_assessment: { verdict: "partially_held", actual_value: 41, measured_at: isoDay(now - 4 * DAY), observed: "41%", source: "goal_history", note: null },
+  }, owner);
+  o.assessments = [{
+    verdict: "partially_held", observed: "41%", note: null, evidence_ids: [], assessed_by: null, assessed_at: at, actual_value: 41,
+    measured_at: isoDay(now - 4 * DAY), actor: "oracle", learnings: draftLearnings(o, "partially_held"),
+  }];
+  return o;
 }
 
 function figures(rows: Outcome[], min: number): Schemas["CalibrationFigures"] {
@@ -491,19 +529,40 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
     if (m === "POST" && p[2] && p[3] === "assessments") {
       const o = ctx.db.outcomes.find((x) => x.id === p[2]);
       if (!o) return fail(404, "Outcome not found");
+      if (o.status === "predicted") return fail(409, "Not shipped yet: mark it shipped before assessing it");
       const a = await body<Schemas["AssessmentIn"]>();
       const now = new Date().toISOString();
+      const learnings = draftLearnings(o, a.verdict);
       o.assessments.push({
         verdict: a.verdict, observed: a.observed, note: a.note ?? null, evidence_ids: a.evidence_ids ?? [], assessed_by: ctx.userId,
-        assessed_at: now, actual_value: a.actual_value ?? null, measured_at: a.measured_at ?? null, actor: "person",
+        assessed_at: now, actual_value: a.actual_value ?? null, measured_at: a.measured_at ?? null, actor: "person", learnings,
       });
       Object.assign(o, { status: a.verdict, observed: a.observed, assessed_at: now, updated_at: now, lock_version: o.lock_version + 1 });
-      const direction: Schemas["LearningDraft"]["direction"] = a.verdict === "held" ? "note" : "recommend_more";
-      const suggested_learnings: Schemas["LearningDraft"][] = [
-        ...o.gap_categories.map((target) => ({ outcome_id: o.id, statement: `The prediction for '${o.title}' was ${a.verdict.replace("_", " ")}`, applies_to: "question_category" as const, target, direction, weight: 1 })),
-        ...o.module_keys.map((target) => ({ outcome_id: o.id, statement: `Module ${target} backed a prediction that was ${a.verdict.replace("_", " ")}`, applies_to: "module" as const, target, direction, weight: 1 })),
-      ];
+      const suggested_learnings: Schemas["LearningDraft"][] = learnings.map((d) => ({
+        outcome_id: d.outcome_id, statement: d.statement, applies_to: d.applies_to, target: d.target, direction: d.direction, weight: d.weight,
+      }));
       return json(200, { outcome: o, suggested_learnings });
+    }
+    if (m === "POST" && p[2] && p[3] === "learnings" && p[4]) {
+      const o = ctx.db.outcomes.find((x) => x.id === p[2]);
+      if (!o) return fail(404, "Outcome not found");
+      const last = o.assessments[o.assessments.length - 1];
+      const draft = last?.learnings?.[Number(p[4])];
+      if (!draft) return fail(404, "Drafted learning not found");
+      if (draft.state !== "drafted") return fail(409, "Already decided");
+      const { decision } = await body<Schemas["LearningDecision"]>();
+      if (decision === "keep") {
+        const now = new Date().toISOString();
+        const l: Learning = {
+          id: uuid(), outcome_id: o.id, statement: draft.statement, applies_to: draft.applies_to, target: draft.target,
+          direction: draft.direction, weight: draft.weight ?? 1, status: "active", retired_reason: null,
+          created_by: ctx.userId, retired_by: null, retired_at: null, created_at: now, updated_at: now,
+        };
+        ctx.db.learnings.push(l);
+        Object.assign(draft, { state: "kept", learning_id: l.id });
+      } else draft.state = "skipped";
+      o.updated_at = new Date().toISOString();
+      return json(200, o);
     }
     return null;
   }

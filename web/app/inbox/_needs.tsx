@@ -1004,7 +1004,7 @@ export function outcomeNeeds(inbox: InboxOut): { counted: Need[]; shown: Need[] 
     context: <span className="block truncate text-text2">Plan › Outcomes</span>,
     at: r.due_on,
     action: (
-      <LinkButton variant="secondary" href="/plan/outcomes">
+      <LinkButton variant="secondary" href={`/plan/outcomes?outcome=${r.id}`}>
         {r.reason === "oracle_recorded" ? "Change" : "Open"}
       </LinkButton>
     ),

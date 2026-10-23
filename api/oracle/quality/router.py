@@ -27,6 +27,7 @@ from oracle.quality.schemas import (
     CriterionInfo,
     HumanRatingIn,
     LearningCreate,
+    LearningDecision,
     LearningOut,
     LearningRetire,
     LearningSignal,
@@ -177,6 +178,16 @@ async def assess_outcome(
 ) -> AssessmentResult:
     """Record whether the prediction held; returns drafted learnings to keep or drop."""
     out = await _call(outcomes.assess(db, principal, outcome_id, body))
+    await db.commit()
+    return out
+
+
+@router.post("/outcomes/{outcome_id}/learnings/{index}", response_model=OutcomeOut)
+async def decide_outcome_learning(
+    outcome_id: uuid.UUID, index: int, body: LearningDecision, principal: Approver, db: TenantDB
+) -> OutcomeOut:
+    """Keep or skip one of the latest assessment's drafted learnings (by its index)."""
+    out = await _call(outcomes.decide_learning(db, principal, outcome_id, index, body.decision))
     await db.commit()
     return out
 

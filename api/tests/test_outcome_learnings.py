@@ -24,7 +24,7 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
 )
 
 
-async def _assessed(client, auth, runtime, tenant_id) -> str:
+async def _assessed(client, auth, runtime, tenant_id) -> str:  # noqa: F811
     """payment-step shipped, with two question categories and a module behind it,
     assessed partly held by a person: its id."""
     pay = (await outcome_world(client, auth, runtime, tenant_id))["payment-step"]
@@ -85,7 +85,8 @@ async def test_keep_makes_a_learning_and_skip_drops_it(client, owner, runtime): 
         resp = await client.post(f"{url}/{index}", json={"decision": decision}, headers=auth)
         assert resp.status_code == 409, resp.text
         assert resp.json()["detail"] == "Already decided"
-    assert (await client.post(f"{url}/7", json={"decision": "keep"}, headers=auth)).status_code == 404
+    resp = await client.post(f"{url}/7", json={"decision": "keep"}, headers=auth)
+    assert resp.status_code == 404
 
     async with tenant_session(tenant_id) as s:
         actions = list(
