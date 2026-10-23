@@ -132,7 +132,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, autonomy, confidence, safe_yaml
+from oracle import audit, autonomy, confidence, safe_yaml, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -301,6 +301,11 @@ ITEMS_FILE = "roadmap_items.yaml"
 
 class RunError(Exception):
     status = 409
+
+    def __init__(self, *args: object, refs: wording.Refs | None = None) -> None:
+        super().__init__(*args)
+        # #396: the ids agents need beside a message a person reads (oracle.wording).
+        self.refs = refs
 
 
 class NotFound(RunError):
@@ -8698,8 +8703,9 @@ async def cancel_again(
     e = next((x for x in entries if x.get("id") == workflow_id and x.get("cancel") is False), None)
     if e is None or workflow_id not in _cancel_again_ids(run):
         raise RunError(
-            f"nothing to cancel again: workflow {workflow_id} is not one Oracle stopped "
-            "cancelling for this run"
+            "nothing to cancel again: that workflow is not one Oracle stopped cancelling for "
+            "this run",
+            refs={"workflow": workflow_id},
         )
     for key in ("cancel", "cancel_tried_at", "cancelled"):
         e.pop(key, None)
@@ -8710,8 +8716,8 @@ async def cancel_again(
     if target is not None:
         _note(
             target,
-            f"Cancel again: Oracle cancels workflow {workflow_id} again (its cancel calls were "
-            "stopped), and keeps reading its status and cost until it ends.",
+            "Cancel again: Oracle cancels the workflow again (its cancel calls were stopped), "
+            "and keeps reading its status and cost until it ends.",
         )
     await audit.record(
         db, principal, "run.cancel_again", "run", run.id, {"workflow_id": workflow_id}

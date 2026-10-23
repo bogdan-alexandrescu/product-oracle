@@ -1351,7 +1351,11 @@ async def regenerate(
     await _adopted(db, prd, version, list(request.requirement_ids))
     run = await db.get(Run, request.run_id) if request.run_id else None
     if run is not None and run.status not in ("succeeded", "failed", "cancelled"):
-        raise SpecError(f"run {run.id} is still {run.status}: finish or cancel it first")
+        raise SpecError(
+            f"this spec's run has not ended (it is {run.status}): let it finish, or cancel it "
+            "on its run page, first",
+            refs={"run": str(run.id)},
+        )
     keys = [s.section_key for s in await _section_rows(db, version.id)]
     kept = [k for k in request.section_keys if k in keys]
     dropped = [k for k in request.section_keys if k not in keys]

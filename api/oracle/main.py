@@ -167,7 +167,9 @@ def create_app() -> FastAPI:
     @app.exception_handler(wording.Refused)
     async def refused(_request: Request, exc: wording.Refused) -> JSONResponse:
         # #396: a refusal a person reads, with the ids agents need beside it.
-        return JSONResponse({"detail": exc.detail, "refs": exc.refs}, exc.status_code)
+        return JSONResponse(
+            {"detail": exc.detail, "refs": exc.refs}, exc.status_code, headers=exc.headers
+        )
 
     @app.exception_handler(GoalFieldsInvalid)
     async def goal_fields_rejected(_request: Request, exc: GoalFieldsInvalid) -> JSONResponse:

@@ -17,6 +17,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
 
+from oracle import wording
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB, same_origin
 from oracle.authz import require_role, require_role_now
 from oracle.claude_accounts.sweep import summarise_sweep
@@ -63,7 +64,10 @@ async def _call[T](op: Awaitable[T]) -> T:
         return await op
     except service.RunError as exc:
         # A refusal with a structured detail (D8 ``review_changed``) keeps it.
-        raise HTTPException(exc.status, getattr(exc, "detail", None) or str(exc)) from exc
+        detail = getattr(exc, "detail", None) or str(exc)
+        if exc.refs:
+            raise wording.Refused(exc.status, detail, exc.refs) from exc
+        raise HTTPException(exc.status, detail) from exc
 
 
 @router.get("/runtime/status", response_model=RuntimeStatusOut)

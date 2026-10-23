@@ -37,8 +37,15 @@ class Refused(HTTPException):
     """A refusal a person reads (``detail``, in the app's words) with the ids agents need
     beside it (``refs``); oracle.main serves it as ``{"detail": ..., "refs": ...}``."""
 
-    def __init__(self, status_code: int, detail: str, refs: Refs) -> None:
-        super().__init__(status_code, detail)
+    def __init__(
+        self,
+        status_code: int,
+        detail: str,
+        refs: Refs,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
+        # The headers of the error it replaces (a Retry-After) are kept.
+        super().__init__(status_code, detail, headers)
         self.refs = refs
 
 

@@ -379,19 +379,52 @@ REFUSAL_MODULES = [
 # SwarmCloud's advice an operator acts on outside the app (Oracle's MCP server, which no
 # screen manages): it names the API call an operator makes, and is left as it is.
 OPERATOR_ADVICE = {"CREDENTIAL_MISSING", "person_required"}
+# #396 fixes 3: refusals that may name an id filled in at runtime (``_names_an_id``), and
+# why a person never reads that id. A 404 (``NotFound``, a review's ``not_found``) answers a
+# lookup with the id the caller sent ("run {run_id} not found"): the web asks only for what
+# it listed, so only an agent or a stale link meets it. The others, by their message's start:
+ID_EXEMPT = {
+    # An internal check of the import (docs/service.py passes its own version): an error,
+    # never a refusal served to anyone.
+    "version {} does not belong to document": "internal check",
+    # The annotation key the caller sent (a draft's own key, like a citation's id), echoed
+    # back: the web comments only on the annotations it shows.
+    "no annotation {}": "echoes the caller's own key",
+}
+_NOT_FOUND = {"NotFound"}
 
 
-def _refusals() -> list[tuple[str, str]]:
-    """(where, text) of every refusal message raised in REFUSAL_MODULES, and of each of
-    SwarmCloud's advice a run's notes carry (``runs/workflow.py`` ADVICE)."""
+def _refusal_text(arg: ast.AST, constants: dict[str, str]) -> str:
+    text = ""
+    for sub in ast.walk(arg):
+        if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+            text += sub.value
+        elif isinstance(sub, ast.Name | ast.Attribute):
+            text += " " + (_literal(sub, constants) or "")
+    return text
+
+
+def _is_a_404(call: ast.Call) -> bool:
+    fn = call.func
+    name = fn.id if isinstance(fn, ast.Name) else getattr(fn, "attr", None)
+    first = call.args[0] if call.args else None
+    return name in _NOT_FOUND or (isinstance(first, ast.Constant) and first.value == "not_found")
+
+
+def _refusals() -> list[tuple[str, str, bool]]:
+    """(where, text, names an id) of every refusal message raised in REFUSAL_MODULES, and of
+    each of SwarmCloud's advice a run's notes carry (``runs/workflow.py`` ADVICE). An id
+    filled in at runtime counts (``_names_an_id``), except in the 404s and ID_EXEMPT."""
     constants = _constants()
     out = []
     for name in REFUSAL_MODULES:
         path = ORACLE / name
         for node in ast.walk(ast.parse(path.read_text())):
             args: list[ast.AST] = []
+            exempt = False
             if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call):
                 call = node.exc
+                exempt = _is_a_404(call)
                 args = [
                     *call.args,
                     *(k.value for k in call.keywords if k.arg in ("detail", "message")),
@@ -407,24 +440,38 @@ def _refusals() -> list[tuple[str, str]]:
                     if not (isinstance(k, ast.Constant) and k.value in OPERATOR_ADVICE)
                 ]
             for arg in args:
-                text = ""
-                for sub in ast.walk(arg):
-                    if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
-                        text += sub.value
-                    elif isinstance(sub, ast.Name | ast.Attribute):
-                        text += " " + (_literal(sub, constants) or "")
-                out.append((f"{name}:{arg.lineno}", text))
+                literal = _literal(arg, constants) or ""
+                names = (
+                    _names_an_id(arg)
+                    and not exempt
+                    and not any(literal.startswith(start) for start in ID_EXEMPT)
+                )
+                out.append((f"{name}:{arg.lineno}", _refusal_text(arg, constants), names))
     return out
 
 
 def test_every_gate_refusal_a_person_reads_speaks_the_app_s_words():
-    """protects=#396 fixes 2 item 2: the refusals of the approve, publish, review and
-    run-start paths that reach the web; fails_when=one carries /v1/, an HTTP method or a
-    UUID; no_claim=MCP tools' messages (an agent reads them) and SwarmCloud's operator
-    advice (OPERATOR_ADVICE)."""
+    """protects=#396 fixes 2 item 2, fixes 3 item 1: the refusals of the approve, publish,
+    review and run-start paths that reach the web; fails_when=one carries /v1/, an HTTP
+    method or a UUID, as text or as an id filled in at runtime (``{run.id}``,
+    ``{workflow_id}``); no_claim=MCP tools' messages (an agent reads them), SwarmCloud's
+    operator advice (OPERATOR_ADVICE), 404 lookups and ID_EXEMPT."""
     refusals = _refusals()
     assert len(refusals) > 200, "the scan found the refusals"
-    assert [(where, text) for where, text in refusals if wording.api_words(text)] == []
+    assert [(where, text) for where, text, _ in refusals if wording.api_words(text)] == []
+    assert [(where, text) for where, text, names in refusals if names] == []
+
+
+def test_the_refusal_scan_sees_an_id_filled_in_at_runtime():
+    """protects=#396 fixes 3 item 1; fails_when=the scan reads only literal text, so
+    ``{run.id}`` passes; no_claim=which refusals exist (the scan above)."""
+    source = 'raise SpecError(f"run {run.id} is still going")'
+    call = ast.parse(source).body[0].exc
+    assert _names_an_id(call.args[0]) and not _is_a_404(call)
+    lookup = ast.parse('raise NotFound(f"run {run_id} not found")').body[0].exc
+    assert _is_a_404(lookup)
+    review = ast.parse('raise ReviewError("not_found", f"Comment {cid} not found")').body[0].exc
+    assert _is_a_404(review)
 
 
 # --------------------------------------------------------------------------- served refusals
@@ -482,3 +529,82 @@ async def test_starting_a_run_before_its_estimate_says_what_to_do(client, runtim
     assert resp.status_code == 409, resp.text
     _plain(resp.json()["detail"])
     assert "Estimate" in resp.json()["detail"]
+
+
+async def test_regenerate_while_the_spec_s_run_is_going_says_so_in_the_app_s_words(
+    client,
+    runtime,  # noqa: F811
+):
+    """protects=#396 fixes 3 item 2: Regenerate on a spec whose run has not ended, as
+    served; fails_when=the detail names the run's id, or refs loses it; no_claim=when a spec
+    may be regenerated (test_specs_review2.py)."""
+    from tests import specs_helpers as h
+
+    world = await h.make_world(client)
+    created = await h.request_spec(client, world)
+    resp = await client.post(
+        f"/v1/spec-requests/{created['spec']['request']['id']}/regenerate",
+        json={"reason": "v2"},
+        headers=world.ctx.as_("approver"),
+    )
+    assert resp.status_code == 409, resp.text
+    body = resp.json()
+    _plain(body["detail"])
+    assert created["run_id"] not in body["detail"]
+    assert "this spec's run has not ended" in body["detail"]
+    assert body["refs"] == {"run": created["run_id"]}
+
+
+@pytest.fixture
+def swarm_settings(monkeypatch):
+    """test_adapter_v2's environment (its autouse ``settings``), for one test here."""
+    from tests.test_adapter_v2 import settings
+
+    yield from settings.__wrapped__(monkeypatch)
+
+
+async def test_cancel_again_names_no_workflow_id_and_keeps_it_in_refs(
+    client, monkeypatch, swarm_settings
+):
+    """protects=#396 fixes 3 item 2: Cancel again in the Inbox, refused and done, as served;
+    fails_when=the refusal or the run's note names the workflow's id, or refs loses it;
+    no_claim=when Cancel again is offered (test_adapter_v2_round9.py)."""
+    from tests.fixtures import seed_auth
+    from tests.test_adapter_v2 import _Clock, on
+    from tests.test_adapter_v2_round9 import _again, _over_after_stop
+    from tests.test_runs import get
+
+    tenant_id, auth = await seed_auth()
+    swarm = on()
+    clock = _Clock(monkeypatch)
+    run = await _over_after_stop(client, auth, tenant_id, swarm, clock)
+    resp = await _again(client, auth, run["id"], "wf_gone")
+    assert resp.status_code == 409, resp.text
+    body = resp.json()
+    assert "wf_gone" not in body["detail"] and "nothing to cancel again" in body["detail"]
+    assert body["refs"] == {"workflow": "wf_gone"}
+
+    resp = await _again(client, auth, run["id"])
+    assert resp.status_code == 200, resp.text
+    notes = [n for n in (await get(client, auth, run["id"]))["notes"] if "Cancel again" in n]
+    assert notes and all("wf_1" not in n for n in notes), notes
+
+
+# --------------------------------------------------------------------------- Refused
+
+
+def test_a_refusal_keeps_the_headers_of_the_error_it_replaces():
+    """protects=#396 fixes 3 item 3: ``wording.Refused`` in place of an HTTPException keeps
+    its headers (a Retry-After, a WWW-Authenticate); fails_when=Refused drops them or the
+    handler does not serve them; no_claim=which refusals carry headers."""
+    import asyncio
+
+    from oracle.main import app
+
+    refused = wording.Refused(429, "busy", {"run": ID}, headers={"Retry-After": "5"})
+    assert refused.headers == {"Retry-After": "5"}
+    assert wording.Refused(409, "no", {}).headers is None
+    handler = app.exception_handlers[wording.Refused]
+    resp = asyncio.run(handler(None, refused))
+    assert resp.status_code == 429 and resp.headers["Retry-After"] == "5"
+    assert resp.body == b'{"detail":"busy","refs":{"run":"' + ID.encode() + b'"}}'
