@@ -5,6 +5,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { Button, Chip, DataTable, GoalTag, InfoTip, Panel, type Column } from "@/components/ds";
 import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from "@/lib/api/client";
 
+import { ADD_REASON, type AddKind } from "./AddItem";
 import {
   ConfidenceRing,
   contributionOf,
@@ -29,6 +30,8 @@ type Props = {
   tags: Map<string, string>;
   onOpen: (id: string) => void;
   onConfirm: (goal: EntityOut) => void;
+  /** Opens Add item on this kind (the tables' Add). */
+  onAdd: (kind: AddKind) => void;
 };
 
 /** A title that opens the item in the inspector; one line. */
@@ -53,7 +56,7 @@ function TitleButton({ entity, onOpen, className = "" }: { entity: EntityOut; on
  * On a phone the grid becomes a list: each feature's title, then its goal links as small
  * G-tags with their strength.
  */
-export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm }: Props) {
+export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd }: Props) {
   const low = trace?.low ?? DEFAULT_LOW;
   const live = graph.entities.filter((e) => e.status !== "rejected");
   const goals = sortedGoals(graph);
@@ -185,15 +188,24 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
     });
   }
 
+  const add = (kind: AddKind) => (
+    <Button icon="plus" disabled={!canWrite} title={canWrite ? undefined : ADD_REASON} onClick={() => onAdd(kind)}>
+      Add
+    </Button>
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <Panel
         title="Feature × goal"
         count={features.length}
         tools={
-          <InfoTip label="Feature × goal">
-            Each bar group is a feature&apos;s contribution to a goal, 0 (none) to 3 (strong). Rings show confidence.
-          </InfoTip>
+          <>
+            <InfoTip label="Feature × goal">
+              Each bar group is a feature&apos;s contribution to a goal, 0 (none) to 3 (strong). Rings show confidence.
+            </InfoTip>
+            {add("feature")}
+          </>
         }
       >
         {groups.length === 0 ? (
@@ -213,7 +225,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         )}
       </Panel>
 
-      <Panel title="Goals" count={goals.length}>
+      <Panel title="Goals" count={goals.length} tools={add("goal")}>
         <DataTable
           label="Goals"
           columns={goalCols}

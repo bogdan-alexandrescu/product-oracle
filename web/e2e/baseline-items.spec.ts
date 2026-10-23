@@ -19,11 +19,11 @@ test("baseline: Add item adds a risk, the Items tab lists it, and Archive takes 
   await form.getByLabel("Description").fill("A made-up risk for the test.");
   await form.getByRole("button", { name: "Add", exact: true }).click();
   await expect(form).toHaveCount(0);
-  await expect(page.getByRole("status").first()).toContainText("Added “Card network fees rise next year”");
+  await expect(page.getByRole("status").filter({ hasText: "Added" })).toContainText("Added “Card network fees rise next year”");
 
   await page.getByRole("tab", { name: /Items/ }).click();
   await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: /Risks/ }).click();
-  const list = page.getByRole("table", { name: "Items" });
+  const list = page.getByRole("grid", { name: "Items" });
   await list.getByRole("button", { name: "Card network fees rise next year" }).click();
 
   const d = page.getByRole("dialog", { name: "Card network fees rise next year" });
@@ -64,9 +64,9 @@ test("baseline: the Goals table's Add proposes a goal, and the drawer confirms i
   await expect(form.getByLabel("Kind")).toHaveValue("goal");
   await form.getByLabel("Title").fill("Halve support tickets");
   await form.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.getByRole("status").first()).toContainText("goals start proposed");
+  await expect(page.getByRole("status").filter({ hasText: "Added" })).toContainText("goals start proposed");
 
-  await page.getByRole("table", { name: "Goals" }).getByRole("button", { name: "Halve support tickets" }).click();
+  await page.getByRole("grid", { name: "Goals" }).getByRole("button", { name: "Halve support tickets" }).click();
   const d = page.getByRole("dialog", { name: "Halve support tickets" });
   await expect(d.getByText("Proposed").first()).toBeVisible();
   await d.getByRole("button", { name: "Confirm" }).click();
@@ -115,5 +115,5 @@ test("baseline: on a phone the Add item form fits and adds an assumption", async
   expect(width).toBeLessThanOrEqual(390);
   await form.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("tab", { name: /Items/ }).click();
-  await expect(page.getByRole("table", { name: "Items" }).getByRole("button", { name: "Shops sell mostly on phones" })).toBeVisible();
+  await expect(page.getByRole("grid", { name: "Items" }).getByRole("button", { name: "Shops sell mostly on phones" })).toBeVisible();
 });
