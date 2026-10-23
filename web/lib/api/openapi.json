@@ -51082,6 +51082,18 @@
             ],
             "title": "Status"
           },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
           "origin": {
             "type": "string",
             "enum": [
@@ -51260,6 +51272,28 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/GoalCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalProgress"
               },
               {
                 "type": "null"
@@ -51453,6 +51487,28 @@
                 "type": "null"
               }
             ]
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -51522,6 +51578,18 @@
               }
             ],
             "title": "Status"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
           },
           "origin": {
             "type": "string",
@@ -55622,6 +55690,44 @@
         ],
         "title": "GoalProblem"
       },
+      "GoalProgress": {
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "own",
+                  "subgoals"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "subgoals": {
+            "type": "integer",
+            "title": "Subgoals",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "GoalProgress",
+        "description": "#345: a goal's progress, 0 to 1: its own measurement (\"own\") when it has one, else\nthe weighted progress of its subgoals (\"subgoals\"); null source without either."
+      },
       "GoalTerm": {
         "properties": {
           "goal": {
@@ -55662,6 +55768,28 @@
               }
             ],
             "title": "Term"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          },
+          "parent_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Title"
           }
         },
         "type": "object",

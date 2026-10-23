@@ -19,6 +19,9 @@ class GoalTerm(BaseModel):
     # Status of the feature -> goal 'supports' link.
     link_status: str
     term: float | None
+    # #345: a subgoal's parent goal, credited through it (key and title); null otherwise.
+    parent: str | None = None
+    parent_title: str | None = None
 
 
 class EvidenceUsed(BaseModel):

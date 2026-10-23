@@ -2,11 +2,12 @@
 
 import { Chip, CodeChip, InfoTip, LinkButton, Notice, Panel, Ring, Sparkline, ToGo } from "@/components/ds";
 import { namedText } from "@/lib/codes";
+import { percent } from "@/lib/goal-tree";
 
 import { amount, assess, formatFigure, shownGoals, spanMonths, type GoalView, type Point } from "./_goals";
 
 /** One goal: id and title, current over target, confidence ring, trend when there is history, distance to go. */
-function GoalCard({ g, history }: { g: GoalView; history: Point[] | undefined }) {
+function GoalCard({ g, subs, history }: { g: GoalView; subs: GoalView[]; history: Point[] | undefined }) {
   const trend = history && history.length >= 2 ? history : null;
   const change = trend ? Math.round((trend.at(-1)!.value - trend[0].value) * 10) / 10 : null;
   const p = assess(g, history);
@@ -19,7 +20,7 @@ function GoalCard({ g, history }: { g: GoalView; history: Point[] | undefined })
     >
       <div className="flex min-w-0 items-start gap-2">
         <span className="flex min-w-0 flex-1 font-semibold">
-          <CodeChip kind="goal" entityId={g.id} title={g.title} proposed={g.proposed} wrap />
+          <CodeChip kind="goal" entityId={g.id} title={g.title} code={g.code} proposed={g.proposed} wrap />
         </span>
       </div>
       <div className="flex min-w-0 items-center justify-between gap-2">
@@ -75,7 +76,37 @@ function GoalCard({ g, history }: { g: GoalView; history: Point[] | undefined })
           </span>
         )}
       </div>
+      {subs.length > 0 && <Subgoals g={g} subs={subs} />}
     </li>
+  );
+}
+
+/** #345: where the goal's progress comes from, and its subgoals, collapsible. */
+function Subgoals({ g, subs }: { g: GoalView; subs: GoalView[] }) {
+  const pr = g.progress;
+  return (
+    <div className="min-w-0 border-t border-line pt-2 text-sm" data-testid="goal-subgoals">
+      <p className="text-text2" data-testid="goal-rollup" data-source={pr?.source ?? "none"}>
+        {pr?.source === "own" && pr.value != null
+          ? `${percent(pr.value)} · own measurement`
+          : pr?.source === "subgoals" && pr.value != null
+            ? `${percent(pr.value)} · from subgoals`
+            : "No progress yet"}
+      </p>
+      <details className="mt-1" open>
+        <summary className="cursor-pointer font-medium">{subs.length === 1 ? "1 subgoal" : `${subs.length} subgoals`}</summary>
+        <ul className="mt-1 flex flex-col gap-1" aria-label={`Subgoals of ${namedText(g)}`}>
+          {subs.map((s) => (
+            <li key={s.id} className="flex min-w-0 items-center gap-2" data-testid={`home-goal-${s.tag}`}>
+              <span className="flex min-w-0 flex-1">
+                <CodeChip kind="goal" entityId={s.id} title={s.title} code={s.code} proposed={s.proposed} />
+              </span>
+              <span className="tnum flex-none text-text2">{s.progress?.value != null ? percent(s.progress.value) : "–"}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
   );
 }
 
@@ -100,7 +131,7 @@ export function GoalsPanel({
   const proposed = goals?.filter((g) => g.proposed) ?? [];
   // Confirmed goals first, then the proposed ones, each in baseline order; the rest are in the Baseline.
   const shown = goals ? shownGoals(goals) : [];
-  const more = (goals?.length ?? 0) - shown.length;
+  const more = (goals?.filter((g) => !g.parentId).length ?? 0) - shown.length;
   const cols = Math.min(4, Math.max(1, shown.length));
   return (
     <Panel
@@ -156,7 +187,7 @@ export function GoalsPanel({
           style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
         >
           {shown.map((g) => (
-            <GoalCard key={g.id} g={g} history={history.get(g.id)} />
+            <GoalCard key={g.id} g={g} subs={goals!.filter((s) => s.parentId === g.id)} history={history.get(g.id)} />
           ))}
         </ul>
       )}

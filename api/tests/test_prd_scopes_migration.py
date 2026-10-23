@@ -66,7 +66,7 @@ def scratch_db():
 def test_chains_on_mains_head_and_is_the_only_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0040_claude_account_identity"]
+    assert script.get_heads() == ["0041_subgoals"]
 
 
 def test_upgrade_and_downgrade_on_a_seeded_database(scratch_db):
