@@ -74,11 +74,12 @@ def _goal(tenant: uuid.UUID, key: str) -> uuid.UUID:
     return g
 
 
-# protects=one head, this one, right after the company time zone; fails_when=a second head
+# protects=one head, G8's Slack bridge right after this one; fails_when=a second head
 # or a gap in the chain; no_claim=what the column does.
 def test_the_chain_ends_here():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == ["0042_slack_bridge"]
+    assert script.get_revision("0042_slack_bridge").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
