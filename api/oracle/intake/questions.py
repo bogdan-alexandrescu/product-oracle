@@ -284,6 +284,19 @@ async def _token_asker(db: AsyncSession, q: StakeholderQuestion) -> OracleAsker 
     return TokenAsker(name=name or UNNAMED_CLIENT)
 
 
+async def discussion_title(
+    db: AsyncSession, principal: Principal, discussion_id: uuid.UUID
+) -> str | None:
+    """G6: the title of the discussion a question was asked from, if the caller may read it."""
+    from oracle.discussions import service as discussions
+
+    try:
+        d, _parts, _seat = await discussions.readable(db, principal, discussion_id)
+    except discussions.DiscussionError:
+        return None
+    return d.title
+
+
 async def inbox(db: AsyncSession, principal: Principal) -> list[InboxQuestion]:
     """The questions asked of the caller and still open, oldest first, as they may see
     them (a hidden one never appears)."""
@@ -317,9 +330,12 @@ async def inbox(db: AsyncSession, principal: Principal) -> list[InboxQuestion]:
                 names[q.asked_by] = display_name(email) if email else "Someone"
             asked_by = PersonAsker(id=q.asked_by, name=names[q.asked_by])
         paths = [p for p in ANSWER_PATHS if p != "research" or (q.intake_id and q.gap_id)]
+        out_q = StakeholderQuestionOut.model_validate(shown)
+        if q.discussion_id is not None:
+            out_q.discussion_title = await discussion_title(db, principal, q.discussion_id)
         out.append(
             InboxQuestion(
-                question=StakeholderQuestionOut.model_validate(shown),
+                question=out_q,
                 asked_by=asked_by,
                 subject=await subject_of(db, q, readers),
                 gap=KnowledgeGapOut.model_validate(gap) if gap is not None else None,

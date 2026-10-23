@@ -3098,6 +3098,54 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/inbox/discussion-items/{item_id}": {
+      "delete": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Dismiss Inbox Discussion Item",
+        "description": "Dismiss my Invited or Mentioned row (G6): it moves to Done. A changes-proposed row\ncannot be dismissed; it goes when its changes are handled.",
+        "operationId": "dismiss_inbox_discussion_item",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such Inbox row of the caller's"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/staging": {
       "get": {
         "tags": [
@@ -59888,6 +59936,145 @@
         "title": "InboxDecision",
         "description": "A decision row (H1): a proposal I decide, a review that came due (both counted),\na decision made that I am informed of, or one I just handled (shown only)."
       },
+      "InboxDiscussionItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "invited",
+              "mentioned",
+              "changes_proposed"
+            ],
+            "title": "Kind"
+          },
+          "discussion_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Discussion Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "open",
+              "private"
+            ],
+            "title": "Visibility"
+          },
+          "subject_label": {
+            "type": "string",
+            "title": "Subject Label"
+          },
+          "subject_url": {
+            "type": "string",
+            "title": "Subject Url"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InboxDiscussionPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "people": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "People",
+            "default": []
+          },
+          "people_more": {
+            "type": "integer",
+            "title": "People More",
+            "default": 0
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open",
+              "done"
+            ],
+            "title": "State"
+          },
+          "can_write": {
+            "type": "boolean",
+            "title": "Can Write",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "discussion_id",
+          "title",
+          "visibility",
+          "subject_label",
+          "subject_url",
+          "at",
+          "state"
+        ],
+        "title": "InboxDiscussionItem",
+        "description": "G6: a discussion row. ``invited`` (added by a mention or a private one's starter),\n``mentioned`` (mentioned again) or ``changes_proposed`` (approvers: changes waiting on\nthem, derived on read; id ``chg_<discussion id>``). Shown only to those who can read\nthe discussion now."
+      },
+      "InboxDiscussionPerson": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "name"
+        ],
+        "title": "InboxDiscussionPerson"
+      },
       "InboxDocument": {
         "properties": {
           "document_id": {
@@ -60595,6 +60782,14 @@
             },
             "type": "array",
             "title": "Tracks",
+            "default": []
+          },
+          "discussions": {
+            "items": {
+              "$ref": "#/components/schemas/InboxDiscussionItem"
+            },
+            "type": "array",
+            "title": "Discussions",
             "default": []
           }
         },
@@ -89825,6 +90020,29 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "discussion_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discussion Id"
+          },
+          "discussion_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discussion Title"
           }
         },
         "type": "object",

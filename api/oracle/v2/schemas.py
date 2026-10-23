@@ -349,6 +349,9 @@ class StakeholderQuestionOut(ORM):
     status: QuestionStatus
     created_at: datetime
     updated_at: datetime
+    # G6: the discussion it was asked from, and its title when the reader can read it.
+    discussion_id: uuid.UUID | None = None
+    discussion_title: str | None = None
 
 
 class StakeholderAnswerOut(ORM):

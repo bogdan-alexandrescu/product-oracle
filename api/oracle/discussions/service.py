@@ -20,7 +20,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role, recheck_caller
-from oracle.discussions import access, kinds, replies
+from oracle.discussions import access, inbox, kinds, replies
 from oracle.discussions.models import (
     MAX_BODY,
     MAX_SUMMARY,
@@ -947,11 +947,15 @@ async def _post(
     seat: access.Seat,
     body: DiscussionMessageIn,
     via: str,
+    invited: frozenset[uuid.UUID] = frozenset(),
 ) -> DiscussionMessage:
+    """``invited``: people this request already invited (a start's picks): a mention of
+    them is not a second Inbox row."""
     me = _person(principal)
     text = _check_body(body.body)
     mentions = list(dict.fromkeys(body.mentions))
-    await _bring_in(db, principal, d, parts, seat, mentions, "mention")
+    already = set(_active(parts)) - invited
+    added = await _bring_in(db, principal, d, parts, seat, mentions, "mention")
     if body.reply_to is not None:
         parent = await db.get(DiscussionMessage, body.reply_to)
         if parent is None or parent.discussion_id != d.id:
@@ -971,6 +975,9 @@ async def _post(
     )
     db.add(message)
     await db.flush()
+    # G6: who it adds is invited; who was in it already is mentioned.
+    await inbox.invited(db, d, added, me)
+    await inbox.mentioned(db, message, [u for u in mentions if u in already])
     await _touch_thread(db, d, message.created_at)
     await _record(
         db, principal, "message_post", d,
@@ -1034,10 +1041,14 @@ async def start(
     )  # fmt: skip
     for u in picked:
         await _record(db, principal, "participant_add", d, user_id=str(u), via=via)
+    await db.flush()
+    await inbox.invited(db, d, picked, me)
     first = None
     if body.message is not None:
         seat = await _seat(db, principal, d, parts)
-        first = await _post(db, principal, d, parts, seat, body.message, _via(principal))
+        first = await _post(
+            db, principal, d, parts, seat, body.message, _via(principal), frozenset(picked)
+        )
     await db.flush()
     return d, first
 
@@ -1259,6 +1270,7 @@ async def _make_private(
     for user_id, p in _active(parts).items():
         if p.added_via == "followed" and user_id not in writers:
             p.left_at, p.removed_by = now, principal.user_id
+            await inbox.removed(db, d, user_id)
             await _record(db, principal, "participant_remove", d, user_id=str(user_id))
     messages, people = await exposure(db, d)
     d.visibility = "private"
@@ -1284,7 +1296,10 @@ async def add_participants(
             await _record(db, principal, "participant_add", d, user_id=str(me), via="followed")
     else:
         others = [u for u in user_ids if u != me]
-        await _bring_in(db, principal, d, parts, seat, others, "added")
+        added = await _bring_in(db, principal, d, parts, seat, others, "added")
+        # G6: the starter's add to a private discussion is an invitation.
+        if d.visibility == "private":
+            await inbox.invited(db, d, added, me)
     await flush_or_conflict(db)
     return (await discussion_out(db, principal, d)).participants
 
@@ -1308,6 +1323,8 @@ async def remove_participant(
     if row is None:
         return
     row.left_at, row.removed_by = datetime.now(UTC), me
+    # G6: a private discussion's title never stays in the Inbox of someone out of it.
+    await inbox.removed(db, d, user_id)
     await _record(db, principal, "participant_remove", d, user_id=str(user_id))
     await flush_or_conflict(db)
 
@@ -1323,6 +1340,9 @@ async def mark_read(
     if row is not None and (row.last_read_at is None or row.last_read_at < message.created_at):
         row.last_read_at = message.created_at
         await db.flush()
+    # G6: the invitation and the mentions read past are done.
+    if principal.user_id is not None:
+        await inbox.read_to(db, d, principal.user_id, message)
 
 
 async def hand_over(db: AsyncSession, principal: "Principal", user_id: uuid.UUID) -> None:

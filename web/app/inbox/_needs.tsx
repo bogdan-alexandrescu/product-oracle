@@ -283,6 +283,7 @@ export type NeedGroup =
   | "reports"
   | "strategy"
   | "oracle-actions"
+  | "discussions"
   | "feedback"
   | "questions"
   | "searches"
@@ -592,6 +593,99 @@ export function reportNeeds(reports: InboxReport[], seenBefore: string | null | 
           Open
         </LinkButton>
       ),
+    };
+  });
+}
+
+type InboxDiscussion = NonNullable<InboxOut["discussions"]>[number];
+
+/** A link with `param` added to its query, before any #anchor. */
+export function withParam(url: string, param: string): string {
+  const [path, ...anchor] = url.split("#");
+  return `${path}${path.includes("?") ? "&" : "?"}${param}${anchor.length ? `#${anchor.join("#")}` : ""}`;
+}
+
+/** A subject's link opened on one of its discussions (G6). */
+export const discussionHref = (url: string, id: string) => withParam(url, `discussion=${id}`);
+
+function DiscussionTitle({ d, text }: { d: Pick<InboxDiscussion, "visibility">; text: string }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="min-w-0 truncate" title={text}>
+        {text}
+      </span>
+      {d.visibility === "private" && (
+        <span title="Private" className="inline-flex flex-none text-text2" data-testid="discussion-private-lock">
+          <Icon name="lock" size={16} />
+          <span className="sr-only">Private</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+const DISCUSSION_KIND: Record<InboxDiscussion["kind"], string> = {
+  invited: "Invited",
+  mentioned: "Mentioned you",
+  changes_proposed: "Discussion",
+};
+
+/**
+ * G6: the discussions waiting on me, one row each, New or Open until done: Invited (Join, or
+ * Read for viewers), Mentioned you (the excerpt in quotes, Open) and, for approvers, a
+ * discussion's changes proposed (Review changes opens the thread at its changes card).
+ */
+export function discussionNeeds(inbox: InboxOut, seenBefore: string | null | undefined): StatedNeed[] {
+  return (inbox.discussions ?? []).map((r) => {
+    const done = r.state === "done";
+    const state: InboxState = done ? "done" : isNew(r.at, seenBefore) ? "new" : "open";
+    const base = { key: `discussion-${r.id}`, icon: "comment" as const, kind: DISCUSSION_KIND[r.kind], at: r.at, state, counted: true, group: "discussions" as const };
+    if (r.kind === "invited")
+      return {
+        ...base,
+        item: <DiscussionTitle d={r} text={r.title} />,
+        context: (
+          <span className="block truncate" title={r.subject_label}>
+            {r.subject_label}
+            {r.by && <span className="text-text2"> · by {r.by.name}</span>}
+          </span>
+        ),
+        action: (
+          <LinkButton variant={done ? "ghost" : "primary"} href={r.subject_url}>
+            {r.can_write ? "Join" : "Read"}
+          </LinkButton>
+        ),
+      };
+    if (r.kind === "mentioned")
+      return {
+        ...base,
+        item: (
+          <span className="min-w-0 truncate" title={r.excerpt ?? ""}>
+            “{r.excerpt ?? ""}”
+          </span>
+        ),
+        context: (
+          <span className="flex min-w-0 items-center gap-1 truncate" title={`${r.title} · ${r.subject_label}`}>
+            <DiscussionTitle d={r} text={r.title} />
+            <span className="truncate text-text2">· {r.subject_label}</span>
+          </span>
+        ),
+        action: (
+          <LinkButton variant={done ? "ghost" : undefined} href={r.subject_url} aria-label={`Open ${r.title}`}>
+            Open
+          </LinkButton>
+        ),
+      };
+    const people = [...r.people, ...(r.people_more ? [`+${r.people_more}`] : [])].join(", ");
+    return {
+      ...base,
+      item: <DiscussionTitle d={r} text={`${r.title} · ${plural(r.count ?? 0, "change")} proposed`} />,
+      context: (
+        <span className="block truncate text-text2" title={people}>
+          {people}
+        </span>
+      ),
+      action: <LinkButton href={withParam(r.subject_url, "changes=1")}>Review changes</LinkButton>,
     };
   });
 }
@@ -1508,6 +1602,7 @@ export function allNeeds(
     }));
   return [
     ...stated(n.checkpoints, "checkpoints"),
+    ...discussionNeeds(inbox, seenBefore),
     ...trackNeeds(inboxTracks(inbox), busy, act, seenBefore, compact),
     ...stated(n.approvals, "approvals"),
     ...stated(n.overruns, "overruns"),
