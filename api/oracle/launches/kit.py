@@ -199,6 +199,8 @@ async def import_kit(db: AsyncSession, launch: Launch, text: str | None) -> dict
             ChangelogEntry.created_actor == audit.ORACLE,
         )
     )
+    # The UTC day on purpose: released_on is a machine field (a stored date the changelog
+    # API returns as ISO and the web words for people), never text an API builder writes.
     released = (launch.launched_at or datetime.now(UTC)).date()
     entries = [
         ChangelogEntry(

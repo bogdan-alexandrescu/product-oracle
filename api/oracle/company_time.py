@@ -54,6 +54,18 @@ def day_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
     return f"{local:%b} {local.day}"
 
 
+def day_first_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
+    """The company's day at ``moment`` as "25 Oct"."""
+    local = _local(moment, zone)
+    return f"{local.day} {local:%b}"
+
+
+def stamp(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
+    """``moment`` in ``zone`` as "2026-10-25 14:59 PDT" (exports, pre-reads)."""
+    local = _local(moment, zone)
+    return f"{local:%Y-%m-%d %H:%M} {local.tzname()}"
+
+
 def in_words(moment: datetime, zone: str = DEFAULT_ZONE) -> str:
     """``moment`` in ``zone`` as "Sun Oct 25, 2:59 PM PDT"."""
     local = _local(moment, zone)

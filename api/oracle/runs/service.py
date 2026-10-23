@@ -2374,7 +2374,7 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
     )
     if stored is not None:
         at = stored.decided_at or stored.created_at
-        on = company_time.day_in_words(at, await company_time.company_time_zone(db))
+        on = company_time.day_first_in_words(at, await company_time.company_time_zone(db))
         method = f"{stored.method}, this PRD's approved order of {on}"
         ranking = list(stored.ranking or [])
     elif (
@@ -7067,7 +7067,8 @@ async def read_review_file(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: u
         raise NotFound(f"checkpoint {checkpoint_id} not found")
     if cp.status == "pending" or not cp.review or cp.review.get("kind") == "edits":
         raise NotFound("no review was sent back at this checkpoint")
-    return review_file.render_yaml(cp.review, cp.decided_at)
+    zone = await company_time.company_time_zone(db)
+    return review_file.render_yaml(cp.review, cp.decided_at, zone)
 
 
 async def _continue_decided(
@@ -7107,7 +7108,8 @@ async def _continue_decided(
     if decision != "approved" and cp.review:
         from oracle.runs import review_file
 
-        review = review_file.change_request(cp.review, cp.decided_at)
+        zone = await company_time.company_time_zone(db)
+        review = review_file.change_request(cp.review, cp.decided_at, zone)
     await _submit(db, run, target, segments, change_request=note, review=review)
 
 

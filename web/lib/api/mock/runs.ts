@@ -8,7 +8,7 @@ import type { Schemas } from "@/lib/api/client";
 import { displayName } from "@/lib/names";
 
 import { AGENT_RUN, baselineReviewStatus } from "./baseline";
-import { companyDayInWords } from "./connections";
+import { companyDayInWords, companyDayIso } from "./connections";
 import { ranking } from "./lane-f";
 
 type RunOut = Schemas["RunOut"];
@@ -2928,7 +2928,7 @@ function renderReview(review: Record<string, unknown>, decidedAt: string | null 
   const kind = String(review.checkpoint);
   const what = (review.file as string | null) ?? `the ${review.segment ?? kind} output`;
   const attempt = review.attempt ? `, attempt ${review.attempt}` : "";
-  const on = decidedAt ? ` on ${decidedAt.slice(0, 10)}` : "";
+  const on = decidedAt ? ` on ${companyDayIso(decidedAt)}` : "";
   const label = words[kind] ?? kind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
   const ordered = Object.fromEntries(REVIEW_KEYS.map((k) => [k, review[k] ?? null]));
   return [`# Review of ${what}${attempt}, at the ${label} checkpoint.`, `# Sent back by an approver${on}. Apply each entry; answer each in resolutions.`, ...yamlLines(ordered, ""), ""].join("\n");

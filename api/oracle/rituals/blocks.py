@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
 from oracle.baseline import figures
 from oracle.baseline.figures import Figure
 from oracle.baseline.models import Edge, Entity, GoalMeasurement, Proposal
@@ -662,8 +663,14 @@ async def build(db: AsyncSession, keys: tuple[str, ...], ctx: BlockCtx) -> list[
     return out
 
 
-def markdown(title: str, due_at: datetime, blocks: list[dict[str, Any]]) -> str:
-    lines = [f"# {title}", "", f"Due {due_at:%Y-%m-%d %H:%M} UTC", ""]
+def markdown(
+    title: str,
+    due_at: datetime,
+    blocks: list[dict[str, Any]],
+    zone: str = company_time.DEFAULT_ZONE,
+) -> str:
+    """The pre-read as markdown, due in the Company time zone with its short name (#463)."""
+    lines = [f"# {title}", "", f"Due {company_time.stamp(due_at, zone)}", ""]
     for b in blocks:
         lines += [f"## {b['title']}", ""]
         if not b["rows"]:

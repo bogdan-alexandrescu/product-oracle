@@ -7,6 +7,8 @@
 import type { Schemas } from "@/lib/api/client";
 import { parseBlocks, type Block, type Inline } from "@/lib/markdown";
 
+import { companyStamp } from "./connections";
+
 type Section = { section_key: string; level: number; heading: string; body_md: string; layer?: Schemas["SectionOut"]["layer"] };
 type Layered = { brief_source: Schemas["VersionOut"]["brief_source"]; brief: Set<string> };
 
@@ -162,7 +164,7 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
     d.title,
     `Version ${d.number}`,
     d.status.replace("_", " "),
-    `imported ${d.created_at.slice(0, 16).replace("T", " ")} UTC`,
+    `imported ${companyStamp(d.created_at)}`,
     ...(sourceLabel ? [sourceLabel] : []),
   ].join(" · ");
   const slideLinks = (key: string, inner: string) =>

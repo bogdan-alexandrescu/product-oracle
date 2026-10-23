@@ -23,7 +23,7 @@ version built from another one (a roadmap from its PRD version) says so in its b
 import re
 import uuid
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import datetime
 from functools import cache
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -36,7 +36,7 @@ from sqlalchemy import func, inspect, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from oracle import safe_yaml
+from oracle import company_time, safe_yaml
 from oracle.config import get_settings
 from oracle.docs import layers
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
@@ -108,6 +108,8 @@ class ExportVersion:
     # (unverified, withdrawn) that ``sections`` carry a marker after.
     stored_sections: list[Section] = field(default_factory=list)
     date_marks: list = field(default_factory=list)
+    # The Company time zone the export's dates are shown in (#463).
+    zone: str = company_time.DEFAULT_ZONE
 
     @property
     def title(self) -> str:
@@ -353,6 +355,7 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
         all_sections=ordered,
         stored_sections=stored,
         date_marks=marks,
+        zone=await company_time.company_time_zone(db),
     )
     if version.source_version_id is not None:
         from oracle.docs.service import version_sources
@@ -611,12 +614,9 @@ def _safe_href(ref: str | None) -> str | None:
     return ref if urlsplit(ref).scheme in ("http", "https") else None
 
 
-def _format_dt(value: datetime | None) -> str:
-    if value is None:
-        return ""
-    if value.tzinfo is not None:
-        value = value.astimezone(UTC)
-    return value.strftime("%Y-%m-%d %H:%M UTC")
+def _format_dt(value: datetime | None, zone: str) -> str:
+    """A moment in the Company time zone with its short name (#463)."""
+    return company_time.stamp(value, zone) if value is not None else ""
 
 
 @dataclass
@@ -686,7 +686,7 @@ def build_context(ev: ExportVersion) -> dict:
                 ref=c.ref,
                 href=_safe_href(c.ref),
                 excerpt=c.excerpt,
-                retrieved_at=_format_dt(c.retrieved_at),
+                retrieved_at=_format_dt(c.retrieved_at, ev.zone),
                 backref=f"ref-{number}-1" if notes.ref_counts.get(key) else None,
             )
         )
@@ -700,9 +700,9 @@ def build_context(ev: ExportVersion) -> dict:
         "slug": ev.document.slug,
         "number": v.number,
         "status": ev.status,
-        "date": _format_dt(ev.date),
-        "imported_at": _format_dt(v.created_at),
-        "approved_at": _format_dt(v.approved_at),
+        "date": _format_dt(ev.date, ev.zone),
+        "imported_at": _format_dt(v.created_at, ev.zone),
+        "approved_at": _format_dt(v.approved_at, ev.zone),
         "snapshot": v.snapshot,
         "has_title_section": any(s.level == 1 for s in ev.sections),
         "sections": sections,
@@ -963,7 +963,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
             ref=by_key[key].ref,
             href=_safe_href(by_key[key].ref),
             excerpt=by_key[key].excerpt,
-            retrieved_at=_format_dt(by_key[key].retrieved_at),
+            retrieved_at=_format_dt(by_key[key].retrieved_at, ev.zone),
             backref=None,
         )
         for key, number in sorted(numbers.items(), key=lambda kv: kv[1])
@@ -991,9 +991,9 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "number": v.number,
         "latest_number": ev.latest_number,
         "status": ev.status,
-        "as_of": v.snapshot or _format_dt(ev.date),
-        "imported_at": _format_dt(v.created_at),
-        "approved_at": _format_dt(v.approved_at),
+        "as_of": v.snapshot or _format_dt(ev.date, ev.zone),
+        "imported_at": _format_dt(v.created_at, ev.zone),
+        "approved_at": _format_dt(v.approved_at, ev.zone),
         "snapshot": v.snapshot,
         "template": ev.document.template,
         "template_name": ev.template_name,
@@ -1042,12 +1042,12 @@ def banner_line(ev: ExportVersion) -> str:
         f"{ev.document.title} ({ev.document.slug})",
         f"version {ev.version.number}",
         f"status {ev.status}",
-        f"imported {_format_dt(ev.version.created_at)}",
+        f"imported {_format_dt(ev.version.created_at, ev.zone)}",
     ]
     if ev.layer != "full":
         parts.insert(2, ev.layer_label.lower())
     if ev.version.approved_at is not None:
-        parts.append(f"approved {_format_dt(ev.version.approved_at)}")
+        parts.append(f"approved {_format_dt(ev.version.approved_at, ev.zone)}")
     if ev.source is not None:
         parts.append(f"from {ev.source.title} ({ev.source.slug}) version {ev.source.version}")
     # "--" would end the HTML comment early.
