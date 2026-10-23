@@ -15,6 +15,7 @@ blockers, the comparison base and the PRD's newer section hashes. Moved, new and
 come from the one item diff (:func:`oracle.roadmap.diff.diff_items`).
 """
 
+import json
 import math
 import re
 import uuid
@@ -31,7 +32,7 @@ from oracle.blockers.service import UNRESOLVED
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.roadmap import diff as item_diff
 from oracle.roadmap.models import RoadmapItem
-from oracle.runs import roadmap
+from oracle.runs import batch, roadmap
 from oracle.runs.models import Run
 
 # A rank this good or better placed in Later is flagged (rank_vs_horizon).
@@ -742,20 +743,14 @@ async def _sections(db: AsyncSession, version_id: uuid.UUID) -> dict[str, Sectio
     return {s.section_key: s for s in rows}
 
 
-async def reason_context(
-    db: AsyncSession,
-    run: Run,
-    items: list[dict[str, Any]],
-) -> ReasonContext:
-    """Everything the advisory reasons read, for the run's items, as of now."""
-    from oracle.roadmap.items import derive_trace
-    from oracle.runs.service import _low_threshold, _source_id
-
-    low = await _low_threshold(db)
-    version = None
-    source_id = _source_id(run)
-    if source_id is not None:
-        version = await db.get(DocumentVersion, source_id)
+async def _prd_version(
+    db: AsyncSession, source_id: uuid.UUID | None
+) -> tuple[
+    DocumentVersion | None, str | None, int | None, dict[str, tuple[int, bool]], dict[str, str]
+]:
+    """The run's PRD version, its title and number, its sections changed in a newer version
+    and their headings."""
+    version = await db.get(DocumentVersion, source_id) if source_id is not None else None
     prd_title = prd_version = None
     section_changes: dict[str, tuple[int, bool]] = {}
     headings: dict[str, str] = {}
@@ -791,23 +786,85 @@ async def reason_context(
                     section_changes[key] = (v.number, True)
                 elif theirs[key] != section.content_hash:
                     section_changes[key] = (v.number, False)
+    return version, prd_title, prd_version, section_changes, headings
+
+
+async def _entities(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, Entity]:
+    """The entities, each read once per Inbox call (:mod:`oracle.runs.batch`)."""
+
+    async def load(missing: list[uuid.UUID]) -> dict[uuid.UUID, Entity]:
+        if not missing:
+            return {}
+        return {e.id: e for e in await db.scalars(select(Entity).where(Entity.id.in_(missing)))}
+
+    return await batch.many("entity", ids, load)
+
+
+def _canonical(item: dict[str, Any]) -> str:
+    return json.dumps(item, sort_keys=True, default=str)
+
+
+async def _traces(
+    db: AsyncSession, version: DocumentVersion | None, items: list[dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Each item's trace by its id (the first item of an id), the traces not yet read in
+    this Inbox call (:mod:`oracle.runs.batch`) derived together, in a few queries."""
+    from oracle.roadmap.items import derive_traces
+
+    firsts: dict[str, dict[str, Any]] = {}
+    for item in items:
+        firsts.setdefault(item["id"], item)
+    by_text = {_canonical(item): item for item in firsts.values()}
+
+    async def load(missing: list[str]) -> dict[str, dict[str, Any]]:
+        found = await derive_traces(db, version, [by_text[t] for t in missing])
+        return dict(zip(missing, found, strict=True))
+
+    traced = await batch.many(
+        ("trace", version.id if version is not None else None), list(by_text), load
+    )
+    return {key: traced[_canonical(item)] for key, item in firsts.items()}
+
+
+async def read_ahead(db: AsyncSession, runs_items: list[tuple[Run, list[dict[str, Any]]]]) -> None:
+    """In one Inbox call (:mod:`oracle.runs.batch`): the traces of every checkpoint's items
+    and their features and blockers, read together for :func:`reason_context` to share."""
+    from oracle.runs.service import _source_id
+
+    by_source: dict[uuid.UUID | None, list[dict[str, Any]]] = {}
+    for run, items in runs_items:
+        by_source.setdefault(_source_id(run), []).extend(items)
+    ids: list[uuid.UUID] = []
+    for source_id, items in by_source.items():
+        version = (await batch.once(("prd", source_id), lambda s=source_id: _prd_version(db, s)))[0]
+        for t in (await _traces(db, version, items)).values():
+            ids += [f for f in [t["feature_id"]] if f is not None] + t["blocker_ids"]
+    await _entities(db, ids)
+
+
+async def reason_context(
+    db: AsyncSession,
+    run: Run,
+    items: list[dict[str, Any]],
+) -> ReasonContext:
+    """Everything the advisory reasons read, for the run's items, as of now. In one Inbox
+    call (:func:`oracle.runs.batch.batched`) the company-wide reads, the items' traces and
+    their entities are read once, for all its checkpoints together (:func:`read_ahead`)."""
+    from oracle.runs.service import _low_threshold, _source_id
+
+    low = await batch.once(("low_threshold",), lambda: _low_threshold(db))
+    source_id = _source_id(run)
+    version, prd_title, prd_version, section_changes, headings = await batch.once(
+        ("prd", source_id), lambda: _prd_version(db, source_id)
+    )
 
     # Without a user on purpose: only the features' flags are read, for "serves no goal".
-    report = await baseline_trace.report(db)
+    report = await batch.once(("trace_report",), lambda: baseline_trace.report(db))
     flags = {f.id: f for f in report.features}
-    traced: dict[str, dict[str, Any]] = {}
-    for item in items:
-        key = item["id"]
-        if key not in traced:
-            traced[key] = await derive_trace(db, version, item)
+    traced = await _traces(db, version, items)
     feature_ids = {t["feature_id"] for t in traced.values() if t["feature_id"] is not None}
     blocker_ids = {b for t in traced.values() for b in t["blocker_ids"]}
-    entities = {
-        e.id: e
-        for e in await db.scalars(
-            select(Entity).where(Entity.id.in_(list(feature_ids | blocker_ids) or [uuid.uuid4()]))
-        )
-    }
+    entities = await _entities(db, list(feature_ids | blocker_ids))
     features: dict[str, TracedFeature | None] = {}
     blockers: dict[str, list[LinkedBlocker]] = {}
     for key, t in traced.items():
@@ -830,7 +887,10 @@ async def reason_context(
                 linked.append(LinkedBlocker(entity.key, entity.title, spec["status"], str(bid)))
         blockers[key] = linked
 
-    base, base_items = await _base(db, run)
+    base, base_items = await batch.once(
+        ("roadmap_base", run.document_id, (run.knobs or {}).get("document_slug")),
+        lambda: _base(db, run),
+    )
     prd_titles = {
         item["id"]: headings[s]
         for item in items

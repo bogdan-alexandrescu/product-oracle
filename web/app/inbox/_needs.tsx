@@ -6,6 +6,7 @@ import { useId, useState, type ReactNode } from "react";
 import { Button, Chip, CodeText, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { errorMessage } from "@/lib/use-query";
 import { BUILD_PARAM } from "@/components/NextDraft";
 import { sectionHref } from "@/lib/section-link";
 
@@ -47,6 +48,12 @@ export type Need = {
    * "Show the text" opens it under the row with each known code carrying the card.
    */
   quote?: string | null;
+  /** Next to the age: the wait's time left ("19 h left"). */
+  left?: string | null;
+  /** D9: rows drawn indented under this one (Inbox only, never Home); not items of their own. */
+  children?: Need[];
+  /** The parent's key, on a child row. */
+  childOf?: string;
 };
 
 export const NEED_COLUMNS: Column<Need>[] = [
@@ -55,18 +62,29 @@ export const NEED_COLUMNS: Column<Need>[] = [
     header: "Kind",
     width: "170px",
     phone: "meta",
-    cell: (n) => (
-      <span className="flex min-w-0 items-center gap-2.5 max-[600px]:gap-1.5" title={n.kind}>
-        <Icon name={n.icon} className="flex-none text-accent-ink" />
-        <span className="truncate font-medium">{n.kind}</span>
-      </span>
-    ),
+    // A child row's kind cell is empty: the left rule ties it to its parent.
+    className: "max-[600px]:has-[[data-child-rule]]:hidden",
+    cell: (n) =>
+      n.childOf ? (
+        <span data-child-rule aria-hidden className="ml-2 block h-7 border-l-2 border-line-strong" />
+      ) : (
+        <span className="flex min-w-0 items-center gap-2.5 max-[600px]:gap-1.5" title={n.kind}>
+          <Icon name={n.icon} className="flex-none text-accent-ink" />
+          <span className="truncate font-medium">{n.kind}</span>
+        </span>
+      ),
   },
   {
     key: "item",
     header: "Item",
     phone: "title",
-    cell: (n) => <span className="flex min-w-0 items-center gap-x-2.5 gap-y-1 max-[600px]:flex-wrap">{n.item}</span>,
+    cell: (n) => (
+      <span
+        className={`flex min-w-0 items-center gap-x-2.5 gap-y-1 max-[600px]:flex-wrap ${n.childOf ? "text-[14px] max-[600px]:border-l-2 max-[600px]:border-line-strong max-[600px]:pl-2" : ""}`}
+      >
+        {n.item}
+      </span>
+    ),
   },
   { key: "context", header: "For", width: "26%", phone: "meta", cell: (n) => n.context },
   {
@@ -85,6 +103,11 @@ export const NEED_COLUMNS: Column<Need>[] = [
     cell: (n) => (
       <span className="tnum text-text2" title={n.at ? formatDateTime(n.at) : undefined}>
         {age(n.at)}
+        {n.left && (
+          <span className="block text-[12px] leading-4 text-warn max-[600px]:ml-1.5 max-[600px]:inline" data-testid="need-left">
+            {n.left}
+          </span>
+        )}
       </span>
     ),
   },
@@ -95,10 +118,12 @@ export const NEED_COLUMNS: Column<Need>[] = [
     align: "right",
     phone: "action",
     wrap: true,
-    // D14: a feedback row's actions and their fields go under the row on a phone, full width.
-    className: "max-[600px]:has-[[data-inbox-actions]]:order-5 max-[600px]:has-[[data-inbox-actions]]:basis-full",
+    // D14: a feedback row's actions and their fields go under the row on a phone, full width;
+    // so do a child row's fix and Open (D9).
+    className:
+      "max-[600px]:has-[[data-inbox-actions]]:order-5 max-[600px]:has-[[data-inbox-actions]]:basis-full max-[600px]:has-[[data-child-actions]]:order-5 max-[600px]:has-[[data-child-actions]]:basis-full",
     cell: (n) => (
-      <span className="inline-flex flex-wrap justify-end gap-1.5 has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full">
+      <span className="inline-flex flex-wrap justify-end gap-1.5 has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full has-[[data-child-actions]]:flex has-[[data-child-actions]]:w-full">
         {n.action}
       </span>
     ),
@@ -133,7 +158,9 @@ export function NeedTable({
       if (!next.delete(key)) next.add(key);
       return next;
     });
-  const drawn = rows.map((n) =>
+  // D9: each row's children right under it (Home passes none).
+  const flat = rows.flatMap((r) => [r, ...(r.children ?? []).map((c) => ({ ...c, childOf: r.key }))]);
+  const drawn = flat.map((n) =>
     n.quote
       ? {
           ...n,
@@ -171,7 +198,7 @@ export function NeedTable({
         rows={drawn}
         rowKey={(n) => n.key}
         hideHeader
-        rowProps={(n) => ({ "data-need": n.kind, "data-state": n.state })}
+        rowProps={(n) => ({ "data-need": n.childOf ? "Checkpoint item" : n.kind, "data-state": n.state, "data-child-of": n.childOf })}
         detail={(n) =>
           n.quote && shown.has(n.key) ? (
             <>
@@ -682,52 +709,311 @@ export function strategyNeeds(strategy: InboxOut["strategy"]): Need[] {
   ];
 }
 
+type InboxCheckpointRow = InboxOut["checkpoints"][number];
+type InboxSummary = NonNullable<InboxCheckpointRow["summary"]>;
+type InboxChild = InboxSummary["children"][number];
+type DraftAction = NonNullable<InboxChild["staged"]>;
+
+/**
+ * D9: the child rows I fixed on this visit, by `{checkpoint}-{item}`, each at its row's place:
+ * the Inbox's three rows hold only items still needing me, so the page keeps the row I just
+ * fixed, done with Undo, until I undo it or leave.
+ */
+export type FixedHere = {
+  rows: Record<string, { child: InboxChild; at: number }>;
+  set: (key: string, row: { child: InboxChild; at: number } | null) => void;
+};
+
+/** The Inbox page's FixedHere. */
+export function useFixedHere(): FixedHere {
+  const [rows, setRows] = useState<FixedHere["rows"]>({});
+  return {
+    rows,
+    set: (key, row) =>
+      setRows((now) => {
+        const rest = Object.fromEntries(Object.entries(now).filter(([k]) => k !== key));
+        return row ? { ...rest, [key]: row } : rest;
+      }),
+  };
+}
+
+/** The wait's time left, as the decision header words it. */
+const timeLeft = (s: number) => (s >= 3600 ? `${Math.floor(s / 3600)} h left` : `${Math.max(1, Math.floor(s / 60))} min left`);
+
+const HORIZON_WORD: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
+
+/** What a staged or suggested action does, in the words of its fix (`done`: after it is staged). */
+function actionWords(a: Pick<DraftAction, "kind" | "field" | "value">, done: boolean): string {
+  if (a.kind === "accept") return done ? "Accepted" : "Accept";
+  if (a.kind === "drop") return done ? "Dropped" : "Drop";
+  if (a.kind === "edit" && a.field === "horizon") {
+    const h = HORIZON_WORD[String(a.value)] ?? String(a.value);
+    return done ? `Moved to ${h}` : `Move to ${h}`;
+  }
+  if (a.kind === "edit" && a.field === "milestone_date") return done ? "Date removed" : "Remove date";
+  if (a.kind === "edit" && a.field === "depends_on") return done ? "Dependency removed" : "Remove dependency";
+  if (a.kind === "edit" && a.field === "order") return done ? "Order fixed" : "Fix order";
+  return a.field ? `${a.kind} ${a.field}` : a.kind;
+}
+
+/**
+ * D9: up to three items of a roadmap items checkpoint, each with its first reason, its safe
+ * fix (staged in one click, undone in one) and Open, then "+k more · h handled".
+ */
+function childNeeds(c: InboxCheckpointRow, summary: InboxSummary, busy: string | null, act: Act, fixed?: FixedHere): Need[] {
+  const review = `/runs/${c.run_id}#decide`;
+  // The rows I fixed on this visit stay in their places, done; the rest are the API's.
+  const mine = Object.entries(fixed?.rows ?? {}).filter(([k]) => k.startsWith(`${c.id}-`));
+  const children = summary.children.filter((child) => !fixed?.rows[`${c.id}-${child.item}`]);
+  for (const [, row] of mine.sort((a, b) => a[1].at - b[1].at)) children.splice(Math.min(row.at, children.length), 0, row.child);
+  const rows: Need[] = children.map((child, at) => ({
+    key: `${c.id}-${child.item}`,
+    icon: "flag",
+    kind: "",
+    item: (
+      <>
+        <span className="truncate" data-testid="child-title">
+          {child.title ?? child.item}
+        </span>
+        <Chip kind={child.reason.severity === "blocking" ? "crit" : "warn"} title={child.reason.text}>
+          {child.reason.label}
+        </Chip>
+      </>
+    ),
+    context: (
+      <span className="block truncate text-[14px] text-text2" title={child.reason.text}>
+        {child.reason.text}
+      </span>
+    ),
+    action: <ChildActions key={`${child.item}-${child.staged?.id ?? ""}`} c={c} child={child} at={at} busy={busy} act={act} fixed={fixed} />,
+  }));
+  if (summary.more > 0) {
+    rows.push({
+      key: `${c.id}-more`,
+      icon: "flag",
+      kind: "",
+      item: (
+        <Link href={review} className="truncate text-[14px] hover:underline" data-testid="child-more">
+          +{summary.more} more · {summary.handled} handled
+        </Link>
+      ),
+      context: null,
+      action: null,
+    });
+  }
+  return rows;
+}
+
+/** A child row's fix, a commenter's suggestion with Stage, or what was staged with Undo; then Open. */
+function ChildActions({
+  c,
+  child,
+  at,
+  busy,
+  act,
+  fixed,
+}: {
+  c: InboxCheckpointRow;
+  child: InboxChild;
+  at: number;
+  busy: string | null;
+  act: Act;
+  fixed?: FixedHere;
+}) {
+  // Optimistic: the row reads done while the stage lands; an error puts it back, said inline.
+  const [staging, setStaging] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const path = { run_id: c.run_id, checkpoint_id: c.id };
+  const run = (key: string, call: () => Promise<unknown>, reset: () => void) => {
+    setError(null);
+    void act(key, () => call().catch((e) => setError(errorMessage(e)))).finally(reset);
+  };
+  const row = `${c.id}-${child.item}`;
+  // Staged: the row stays here, done with Undo, though the item leaves the Inbox's three rows.
+  const keep = (review: Schemas["CheckpointReview"], found: (a: DraftAction) => boolean) => {
+    const staged = review.items.find((i) => i.key === child.item)?.actions?.find((a) => a.state === "staged" && found(a));
+    if (staged) fixed?.set(row, { child: { ...child, staged }, at });
+  };
+  const staged = child.staged && !undoing ? child.staged : null;
+  const fix = child.fix;
+  const title = child.title ?? child.item;
+  return (
+    <span data-child-actions className="inline-flex flex-wrap items-center justify-end gap-1.5 max-[600px]:w-full max-[600px]:[&>*]:w-full">
+      {staged || (staging && fix) ? (
+        <>
+          <span className="text-[14px] text-pass" data-testid="child-done">
+            ✓ {staged ? actionWords(staged, true) : fix ? actionWords(fix.action, true) : ""}
+          </span>
+          {staged && (
+            <Button
+              variant="ghost"
+              disabled={busy !== null}
+              aria-label={`Undo ${actionWords(staged, true)} on ${title}`}
+              onClick={() => {
+                setUndoing(true);
+                // Undone: the row goes back to the API's once the Inbox has reloaded.
+                let undone = false;
+                run(
+                  `undo-${staged.id}`,
+                  () =>
+                    unwrap(api.DELETE("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}", { params: { path: { ...path, action_id: staged.id } } })).then(() => {
+                      undone = true;
+                    }),
+                  () => {
+                    setUndoing(false);
+                    if (undone) fixed?.set(row, null);
+                  },
+                );
+              }}
+            >
+              Undo
+            </Button>
+          )}
+        </>
+      ) : child.suggested ? (
+        <>
+          <span className="text-[14px] text-text2" data-testid="child-suggested">
+            Suggested: {actionWords(child.suggested, false)}
+          </span>
+          <Button
+            disabled={busy !== null}
+            aria-label={`Stage ${actionWords(child.suggested, false)} on ${title}`}
+            onClick={() => {
+              const id = child.suggested!.id;
+              run(
+                `stage-${id}`,
+                () =>
+                  unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage", { params: { path: { ...path, action_id: id } } })).then((review) =>
+                    keep(review, (a) => a.id === id),
+                  ),
+                () => undefined,
+              );
+            }}
+          >
+            Stage
+          </Button>
+        </>
+      ) : (
+        fix && (
+          <Button
+            disabled={busy !== null}
+            aria-label={`${fix.label} for ${title}`}
+            onClick={() => {
+              setStaging(true);
+              const a = fix.action;
+              run(
+                `fix-${c.id}-${child.item}`,
+                () =>
+                  unwrap(
+                    api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions", {
+                      params: { path },
+                      body: { item_key: a.item, kind: a.kind, field: a.field ?? null, value: a.value ?? null, answers: [child.reason.code] },
+                    }),
+                  ).then((review) => keep(review, (x) => x.kind === a.kind && (x.field ?? null) === (a.field ?? null))),
+                () => setStaging(false),
+              );
+            }}
+          >
+            {fix.label}
+          </Button>
+        )
+      )}
+      <LinkButton variant="ghost" href={`/runs/${c.run_id}?item=${encodeURIComponent(child.item)}#decide`} aria-label={`Open ${title}`}>
+        Open
+      </LinkButton>
+      {error && (
+        <span role="alert" className="basis-full text-right text-[13px] text-crit max-[600px]:text-left" data-testid="child-error">
+          {error}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /**
  * The Inbox's rows, each with its action. `compact` (Home) gives an overrun, a stuck run and
  * a failed import one action that opens the run, where the rest are.
  */
-export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compact = false) {
+export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compact = false, fixed?: FixedHere) {
   // D3: a console approval held while blocking problems are open waits for a review.
-  const held = (c: InboxOut["checkpoints"][number]) => c.console?.needs === "confirm" && !!c.gate && !c.gate.open;
-  const checkpoints: Need[] = inbox.checkpoints.map((c) => ({
-    key: c.id,
-    icon: "flag",
-    kind: "Checkpoint",
-    item: (
-      <>
-        <span className="truncate">{CHECKPOINT_LABEL[c.kind]}</span>
-        {held(c) ? (
-          <Chip kind="warn" title={CONSOLE_HELD}>
-            Console approval held
-          </Chip>
-        ) : c.console && (
-          // Answered in SwarmCloud's console: what Oracle still needs before it counts.
-          <Chip kind="warn" title={`Answered in SwarmCloud by ${c.console.answered_by ?? "someone"}: ${consoleNeeds(c.console)}`}>
-            <span className="truncate">
-              Answered in SwarmCloud by {c.console.answered_by ?? "someone"}: {consoleNeeds(c.console)}
-            </span>
-          </Chip>
-        )}
-      </>
-    ),
-    context: (
-      <span className="block truncate" title={[c.flow_title, c.segment_title, c.document_slug].filter(Boolean).join(" · ")}>
-        {c.segment_title ?? c.flow_title}
-        {c.document_slug && <span className="ml-1.5 font-mono text-sm text-text2">{c.document_slug}</span>}
-        {held(c) && <span className="block truncate text-warn">{CONSOLE_HELD}</span>}
-      </span>
-    ),
-    run: shortId(c.run_id),
-    at: c.created_at,
-    action: held(c) ? (
-      // The run page's checkpoint row, until the kind's review screen ships (D1).
-      <LinkButton href={`/runs/${c.run_id}#decide`}>Review</LinkButton>
-    ) : (
-      // The same verb as the runs list: the run page opens at the decision; a priority stop
-      // opens its order next to the live ranking (C8), where it is decided too.
-      <LinkButton href={orderHref(c) ?? `/runs/${c.run_id}#decide`}>Decide</LinkButton>
-    ),
-  }));
+  const isHeld = (c: InboxOut["checkpoints"][number]) => c.console?.needs === "confirm" && !!c.gate && !c.gate.open;
+  const checkpoints: Need[] = inbox.checkpoints.map((c) => {
+    const summary = c.summary ?? null;
+    const counted = !!summary && c.kind === "roadmap_items";
+    const held = summary?.console_held ? " · console approval held" : "";
+    const label = counted
+      ? summary.need_you === 0 && summary.blocking === 0
+        ? "Roadmap items · ready to approve"
+        : `Roadmap items · ${summary.need_you} need you`
+      : CHECKPOINT_LABEL[c.kind];
+    const from = counted && summary.source ? `from ${summary.source.title} v${summary.source.version}` : null;
+    const wait = summary?.wait;
+    const review = `/runs/${c.run_id}#decide`;
+    return {
+      key: c.id,
+      icon: "flag",
+      kind: "Checkpoint",
+      item: (
+        <>
+          <span className="truncate" data-testid="checkpoint-label">
+            {label}
+            {held}
+          </span>
+          {counted && summary.blocking > 0 && (
+            <Chip kind="crit" data-testid="checkpoint-blocking">
+              {summary.blocking} blocking
+            </Chip>
+          )}
+          {counted && summary.blocking === 0 && summary.need_you > 0 && summary.to_confirm > 0 && (
+            <Chip kind="warn" data-testid="checkpoint-to-confirm">
+              {summary.to_confirm} to confirm
+            </Chip>
+          )}
+          {isHeld(c) ? (
+            <Chip kind="warn" title={CONSOLE_HELD}>
+              Console approval held
+            </Chip>
+          ) : c.console && (
+            // Answered in SwarmCloud's console: what Oracle still needs before it counts.
+            <Chip kind="warn" title={`Answered in SwarmCloud by ${c.console.answered_by ?? "someone"}: ${consoleNeeds(c.console)}`}>
+              <span className="truncate">
+                Answered in SwarmCloud by {c.console.answered_by ?? "someone"}: {consoleNeeds(c.console)}
+              </span>
+            </Chip>
+          )}
+        </>
+      ),
+      context:
+        counted && (summary.title || from) ? (
+          <span className="block truncate" title={[summary.title, from].filter(Boolean).join(" · ")}>
+            {[summary.title ?? c.segment_title ?? c.flow_title, from].filter(Boolean).join(" · ")}
+            {isHeld(c) && <span className="block truncate text-warn">{CONSOLE_HELD}</span>}
+          </span>
+        ) : (
+          <span className="block truncate" title={[c.flow_title, c.segment_title, c.document_slug].filter(Boolean).join(" · ")}>
+            {c.segment_title ?? c.flow_title}
+            {c.document_slug && <span className="ml-1.5 font-mono text-sm text-text2">{c.document_slug}</span>}
+            {isHeld(c) && <span className="block truncate text-warn">{CONSOLE_HELD}</span>}
+          </span>
+        ),
+      run: shortId(c.run_id),
+      at: c.created_at,
+      left: wait?.state === "open" && wait.seconds_left != null ? timeLeft(wait.seconds_left) : null,
+      action: isHeld(c) ? (
+        // The run page's checkpoint row, until the kind's review screen ships (D1).
+        <LinkButton href={review}>Review</LinkButton>
+      ) : counted ? (
+        // Until D1's review screen lands, the run page opens at the decision.
+        <LinkButton href={review}>Review items</LinkButton>
+      ) : (
+        // The same verb as the runs list: the run page opens at the decision; a priority stop
+        // opens its order next to the live ranking (C8), where it is decided too.
+        <LinkButton href={orderHref(c) ?? `/runs/${c.run_id}#decide`}>Decide</LinkButton>
+      ),
+      children: counted && !compact ? childNeeds(c, summary, busy, act, fixed) : undefined,
+    };
+  });
 
   const approvals: Need[] = inbox.approvals.map((r) => ({
     key: r.id,
@@ -1059,8 +1345,9 @@ export function allNeeds(
   seenBefore: string | null | undefined,
   onActed: OnActed,
   compact = false,
+  fixed?: FixedHere,
 ): StatedNeed[] {
-  const n = inboxNeeds(inbox, busy, act, compact);
+  const n = inboxNeeds(inbox, busy, act, compact, fixed);
   // A row may carry its own state and count (a question answered in place: ./_questions).
   const launches = launchNeeds(inbox);
   const stated = (rows: Need[], group: NeedGroup, counted = true): StatedNeed[] =>

@@ -16472,6 +16472,38 @@ export interface components {
             document_slug?: string | null;
             /** Segment Title */
             segment_title?: string | null;
+            summary?: components["schemas"]["InboxSummary"] | null;
+        };
+        /**
+         * InboxChild
+         * @description One item under a checkpoint's Inbox row (D9): an item still needing the caller, its
+         *     first open reason, the safe one-click fix of that reason (None when it has none) and a
+         *     commenter's suggestion on the item. ``staged`` stays null: an item fixed earlier leaves
+         *     its slot (the Inbox page keeps the row it just fixed, done, with Undo).
+         */
+        InboxChild: {
+            /** Item */
+            item: string;
+            /** Title */
+            title?: string | null;
+            reason: components["schemas"]["InboxChildReason"];
+            fix?: components["schemas"]["ReasonFix"] | null;
+            staged?: components["schemas"]["ReviewAction"] | null;
+            suggested?: components["schemas"]["ReviewAction"] | null;
+        };
+        /** InboxChildReason */
+        InboxChildReason: {
+            /** Code */
+            code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "blocking" | "confirm";
+            /** Label */
+            label: string;
+            /** Text */
+            text: string;
         };
         /** InboxCounts */
         InboxCounts: {
@@ -16953,6 +16985,20 @@ export interface components {
              */
             retry_until: string;
         };
+        /** InboxSections */
+        InboxSections: {
+            /** Total */
+            total: number;
+            /** Reviewed */
+            reviewed: number;
+        };
+        /** InboxSource */
+        InboxSource: {
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
         /**
          * InboxStaged
          * @description 'N changes staged for draft N+1' on one document, with the build action.
@@ -17011,6 +17057,60 @@ export interface components {
             title: string;
             /** Href */
             href: string | null;
+        };
+        /**
+         * InboxSummary
+         * @description What a pending checkpoint needs of the caller and how much (D9), from the same read
+         *     as ``GET …/review`` (oracle.runs.actions.inbox_summary): its counts, the wait, up to
+         *     three child rows (blocking first, then in position order) and ``more`` items needing
+         *     the caller beyond them. A kind's review spec registers its own (``SUMMARIES``).
+         */
+        InboxSummary: {
+            /**
+             * Need You
+             * @default 0
+             */
+            need_you: number;
+            /**
+             * Blocking
+             * @default 0
+             */
+            blocking: number;
+            /**
+             * To Confirm
+             * @default 0
+             */
+            to_confirm: number;
+            /**
+             * Handled
+             * @default 0
+             */
+            handled: number;
+            /**
+             * Waiting On
+             * @default 0
+             */
+            waiting_on: number;
+            wait?: components["schemas"]["WaitInfo"] | null;
+            /**
+             * Children
+             * @default []
+             */
+            children: components["schemas"]["InboxChild"][];
+            /**
+             * More
+             * @default 0
+             */
+            more: number;
+            /** Title */
+            title?: string | null;
+            source?: components["schemas"]["InboxSource"] | null;
+            sections?: components["schemas"]["InboxSections"] | null;
+            /**
+             * Console Held
+             * @default false
+             */
+            console_held: boolean;
         };
         /** InspectedModule */
         InspectedModule: {
