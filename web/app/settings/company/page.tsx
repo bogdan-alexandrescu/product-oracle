@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { Button, confirmInPage, InfoTip, Notice, PageHeader, Panel } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { INPUT, SELECT_FIELD } from "../_components/fields";
@@ -185,28 +185,16 @@ function HorizonsPanel() {
 
 /** Settings > Company: the company-wide choices an owner makes; first, the planning horizons. */
 export default function CompanySettingsPage() {
-  const { role, loading } = useMe();
-  const isOwner = hasRole(role, "owner");
+  // #370: Settings' gate answers a role that cannot read the company settings.
+  const { can } = useMe();
   return (
     <>
       <PageHeader title="Company" />
-      {!loading &&
-        (isOwner ? (
-          <div className="flex min-w-0 flex-col gap-4">
-            <HorizonsPanel />
-          </div>
-        ) : (
-          <p
-            role="note"
-            data-testid="role-note"
-            className="flex flex-wrap items-center gap-2 rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink"
-          >
-            <span>
-              Your role is <b>{role ?? "unknown"}</b>.
-            </span>
-            <span>Only owners change company settings.</span>
-          </p>
-        ))}
+      {can("get_setting_endpoint") && (
+        <div className="flex min-w-0 flex-col gap-4">
+          <HorizonsPanel />
+        </div>
+      )}
     </>
   );
 }

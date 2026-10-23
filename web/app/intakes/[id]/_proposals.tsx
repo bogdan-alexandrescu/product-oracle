@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Button, Chip, Empty, type ChipKind } from "@/components/ds";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, type Role } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
 import { when, type Summary } from "./_lib";
@@ -137,12 +137,13 @@ function ProposalCard({ p, approver, onChanged }: { p: Proposal; approver: boole
  * or dismisses, with an optional reason. Others do not see those controls (a control a role
  * can never use is hidden, owner rule #370); the note says who decides.
  */
-export function ProposalsTab({ summary: s, role, onChanged }: { summary: Summary; role: Role | null; onChanged: () => void }) {
-  const approver = hasRole(role, "approver");
+export function ProposalsTab({ summary: s, onChanged }: { summary: Summary; onChanged: () => void }) {
+  const { can, capsReady } = useMe();
+  const approver = can("accept_intake_proposal");
   const proposals = [...s.proposals].sort((a, b) => b.created_at.localeCompare(a.created_at));
   return (
     <div data-testid="intake-proposals" className="flex min-w-0 flex-col gap-3 pt-3">
-      {!approver && (
+      {capsReady && !approver && (
         <p data-testid="proposals-role-note" role="note" className="text-[13px] text-text2">
           {DECIDE_REASON}; you can read them.
         </p>

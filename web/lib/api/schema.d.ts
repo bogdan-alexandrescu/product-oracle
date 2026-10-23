@@ -72,6 +72,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Capabilities
+         * @description What the caller's role may do, from the routes' own role checks (#370): the web
+         *     app reads it once per sign-in and hides the controls a role can never use.
+         */
+        get: operations["capabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/preferences": {
         parameters: {
             query?: never;
@@ -10945,6 +10966,38 @@ export interface components {
             kind: string | null;
             /** Excerpt */
             excerpt: string | null;
+        };
+        /**
+         * Capabilities
+         * @description #370: what the caller's role may do, per API operation (operationId).
+         */
+        Capabilities: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Engineering Lead
+             * @default false
+             */
+            engineering_lead: boolean;
+            /** Operations */
+            operations: {
+                [key: string]: boolean;
+            };
+            /**
+             * Decide Engineering Stops
+             * @default false
+             */
+            decide_engineering_stops: boolean;
+            /**
+             * Per Item
+             * @default {}
+             */
+            per_item: {
+                [key: string]: ("viewer" | "commenter" | "approver" | "owner") | null;
+            };
         };
         /** CatalogModuleDetail */
         CatalogModuleDetail: {
@@ -28218,6 +28271,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+        };
+    };
+    capabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Capabilities"];
                 };
             };
         };

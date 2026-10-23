@@ -12,7 +12,7 @@ import { Button, Chip, Empty } from "@/components/ds";
 import { FeedbackStatusChip, InlineError, Quote, VerdictChip } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type FeedbackItem, type FeedbackStatus, type Schemas, type Suggestion } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { sectionHref } from "@/lib/section-link";
 import { useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -107,8 +107,9 @@ function FeedbackRow({
   goTo?: GoTo;
   onChanged?: () => void;
 }) {
-  const { role } = useMe();
-  const canDecide = hasRole(role, "approver") && !!onChanged;
+  const { can } = useMe();
+  // #370: triage (PATCH /v1/feedback) and the suggestion's accept/dismiss.
+  const canDecide = can("update_feedback") && !!onChanged;
   return item.suggestion ? (
     <SuggestionRow item={item} suggestion={item.suggestion} doc={doc} current={current} goTo={goTo} canDecide={canDecide} onChanged={onChanged} />
   ) : (

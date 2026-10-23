@@ -7,7 +7,7 @@ import { findPeople, type Person } from "@/components/PersonPicker";
 import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime, formatDay } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useRiskPolicy } from "@/lib/risk-policy";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
@@ -125,7 +125,7 @@ export function BlockerInspector({
   /** Called after a write, so the lists behind the inspector refresh. */
   onChanged: () => void;
 }) {
-  const { me, role } = useMe();
+  const { me, can, capsReady } = useMe();
   const policy = useRiskPolicy();
   const onAuth = useAuthRedirect();
   const q = useQuery(`blocker:${blockerId}`, () =>
@@ -166,8 +166,9 @@ export function BlockerInspector({
 
   const s = q.data;
   const b = s?.blocker;
-  const decide: Denied = hasRole(role, "approver") ? null : DECIDERS;
-  const propose: Denied = hasRole(role, "commenter") ? null : "Commenters and above propose options";
+  // #370: what the role may do comes from can(); lowering a gating blocker takes an owner, the API says so.
+  const decide: Denied = can("update_blocker", true) ? null : DECIDERS;
+  const propose: Denied = can("create_blocker_option") ? null : "Commenters and above propose options";
   const name = (id: string | null | undefined) =>
     !id ? "No owner" : id === me?.user_id ? "You" : (people?.find((p) => p.user_id === id)?.name ?? `Member ${id.slice(0, 8)}`);
 
@@ -215,13 +216,13 @@ export function BlockerInspector({
           ]
         }
       >
-        {(q.error || notice || (q.loading && !s) || (role && decide)) && (
+        {(q.error || notice || (q.loading && !s) || (capsReady && decide)) && (
           <InspectorSection>
             <div className="flex flex-col gap-2">
               {q.error && <Notice tone="error">{q.error}</Notice>}
               {q.loading && !s && <Loading />}
               {notice && <Notice>{notice}</Notice>}
-              {role && decide && (
+              {capsReady && decide && (
                 <p className="text-sm text-text2" data-testid="blocker-readonly">
                   {propose ? VIEWER : COMMENTER}
                 </p>
@@ -237,7 +238,7 @@ export function BlockerInspector({
             <Scope
               strategy={s}
               busy={busy}
-              denied={decide ?? (gating(b) && !hasRole(role, policy.role) ? `${policy.role === "owner" ? "Only an owner" : "Only approvers and owners"} can approve this feasibility scope` : null)}
+              denied={decide ?? (gating(b) && !can("approve_feasibility_scope", policy.role !== "owner") ? `${policy.role === "owner" ? "Only an owner" : "Only approvers and owners"} can approve this feasibility scope` : null)}
               act={act}
             />
             <Experiments strategy={s} people={people} meId={me?.user_id} name={name} busy={busy} denied={decide} act={act} />

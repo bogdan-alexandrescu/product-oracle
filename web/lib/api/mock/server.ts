@@ -13,6 +13,7 @@ import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./bl
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
+import { capabilitiesOut } from "./capabilities";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
@@ -2386,6 +2387,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
+  if (p[1] === "me" && p[2] === "capabilities" && m === "GET") return json(200, await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0));
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
     const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false });

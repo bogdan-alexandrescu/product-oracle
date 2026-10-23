@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 
-import { Empty, Page, PageHeader, Panel } from "@/components/ds";
+import { Empty, Page, PageHeader, Panel, ViewOnly } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { FoundInSources } from "./_components/FoundInSources";
@@ -21,7 +21,7 @@ import { ClassifyNow, DailyTriageSwitch, TriageStatusLine, useTriage } from "./_
  * The queue's tabs, facets and inspector come with the Requests screen lane.
  */
 export default function RequestsPage() {
-  const { role } = useMe();
+  const { can, capsReady } = useMe();
   const triage = useTriage();
   const run = triage.data;
   const requests = useQuery("requests", () => unwrap(api.GET("/v1/requests", { params: { query: { limit: 200 } } })));
@@ -36,17 +36,24 @@ export default function RequestsPage() {
     <Page>
       <PageHeader
         title="Requests"
-        status={<TriageStatusLine status={run} />}
-        action={
+        status={
           <>
-            <DailyTriageSwitch triage={triage} canChange={hasRole(role, "approver")} />
-            {hasRole(role, "approver") && <ClassifyNow triage={triage} />}
-            <NewRequestButton onFiled={filed} />
+            {capsReady && !can("create_request", true) && <ViewOnly />}
+            <TriageStatusLine status={run} />
           </>
+        }
+        action={
+          capsReady && (
+            <>
+              <DailyTriageSwitch triage={triage} canChange={can("set_request_triage_daily")} />
+              {can("start_request_triage") && <ClassifyNow triage={triage} />}
+              <NewRequestButton onFiled={filed} />
+            </>
+          )
         }
       />
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
-        {hasRole(role, "commenter") && <FoundInSources refresh={`${run?.run_id ?? ""}:${run?.active ?? false}`} />}
+        {can("list_request_candidates") && <FoundInSources refresh={`${run?.run_id ?? ""}:${run?.active ?? false}`} />}
         <Panel>
           {requests.error && (
             <div className="px-4 pt-3">

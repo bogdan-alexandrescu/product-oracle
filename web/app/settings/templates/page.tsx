@@ -13,12 +13,14 @@ import {
   LinkButton,
   Notice,
   PageHeader,
+  ViewOnly,
   Panel,
   Split,
   type Column,
 } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 type TemplateSummary = Schemas["TemplateSummary"];
@@ -126,6 +128,8 @@ function TemplateInspector({ t }: { t: TemplateSummary }) {
 }
 
 export default function TemplatesPage() {
+  const { can, capsReady } = useMe();
+  const canCreate = can("create_template");
   const [showArchived, setShowArchived] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const q = useQuery(`templates|${showArchived}`, () =>
@@ -157,15 +161,20 @@ export default function TemplatesPage() {
       <PageHeader
         title="Templates"
         status={
-          <InfoTip label="templates" align="start" side="bottom">
-            The skeletons new PRDs and roadmaps start from. Every saved change to a template is a new version; documents keep
-            the version they started from.
-          </InfoTip>
+          <>
+            <InfoTip label="templates" align="start" side="bottom">
+              The skeletons new PRDs and roadmaps start from. Every saved change to a template is a new version; documents keep
+              the version they started from.
+            </InfoTip>
+            {capsReady && !canCreate && <ViewOnly />}
+          </>
         }
         action={
-          <LinkButton variant="primary" icon="plus" href="/settings/templates/new">
-            New template
-          </LinkButton>
+          canCreate && (
+            <LinkButton variant="primary" icon="plus" href="/settings/templates/new">
+              New template
+            </LinkButton>
+          )
         }
       />
       <Split inspector={current ? <TemplateInspector t={current} /> : undefined}>

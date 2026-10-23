@@ -3,7 +3,7 @@ export { AppShell, DESTINATIONS, useDocumentDestination } from "./AppShell";
 export { Button, LinkButton, type ButtonVariant } from "./Button";
 export { FaviconMark, Mark, Wordmark } from "./Brand";
 export { Bars, Meter, Ring, Sparkline, type RingTone } from "./Charts";
-export { Chip, GoalTag, type ChipKind } from "./Chip";
+export { Chip, GoalTag, ViewOnly, type ChipKind } from "./Chip";
 export { ConfirmHost, confirmInPage, useFocusTrap, type ConfirmAsk } from "./ConfirmDialog";
 export { DataTable, type Column } from "./DataTable";
 export { Avatar, CostFigure, initialsOf, KpiStrip, Numeral, ToGo, type Kpi } from "./Figures";
