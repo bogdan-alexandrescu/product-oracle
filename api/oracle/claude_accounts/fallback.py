@@ -1,10 +1,11 @@
-"""The fallback credential: what built-in jobs run on while no account is registered.
+"""The fallback credential: what built-in jobs run on while no account can take them.
 
 SwarmCloud's tenant secret (``swarm-tenant-<id>-anthropic``) in Oracle's database: a
 ``claude setup-token`` value (run through Claude Code) or an Anthropic API key (the
-Messages API), encrypted with oracle.crypto. It is used ONLY when the pool answers
-``no_accounts_registered``; a pool whose accounts are spent or paused is a wait, and
-must not quietly fall back to one shared credential.
+Messages API), encrypted with oracle.crypto. It is used when the pool answers
+``no_accounts_registered`` or ``no_account_available`` (every account is spent: the
+owner's decision of 2026-10-23, so setting a fallback really turns Oracle's AI back
+on); a pool that is paused or waits on a usage reading is a wait (``covers``).
 """
 
 import os
@@ -15,6 +16,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import crypto
+from oracle.claude_accounts.accounts import Unavailable
 from oracle.claude_accounts.models import ClaudeFallbackCredential
 
 # Built from parts so the source holds no credential-shaped literal.
@@ -23,6 +25,15 @@ API_KEY_PREFIX = "-".join(("sk", "ant", "api"))
 # ``ORACLE_ANTHROPIC_API_URL``: where the Messages API is (a fake one in the real-stack test).
 ANTHROPIC_API = os.environ.get("ORACLE_ANTHROPIC_API_URL", "https://api.anthropic.com").rstrip("/")
 ANTHROPIC_VERSION = "2023-06-01"
+
+
+#: The pool's answers a call runs on the fallback for, when one is set.
+COVERED = frozenset({Unavailable.NO_ACCOUNTS_REGISTERED, Unavailable.NO_ACCOUNT_AVAILABLE})
+
+
+def covers(reason: Unavailable) -> bool:
+    """Whether a call the pool answers ``reason`` to runs on the fallback, if one is set."""
+    return reason in COVERED
 
 
 class NotAClaudeCredential(ValueError):

@@ -35,10 +35,26 @@ fewest jobs on it, then label. Headroom is the binding window (the least remaini
 window past its reset counts as full, a never-read account counts as full, and a reading
 older than 30 minutes (`DEFAULT_STALE_AFTER`) is halved.
 
-When nothing qualifies, `eligibility` says why: `no_accounts_registered` (use the
-fallback credential), `pool_paused` (a person), `no_account_available` (a clock, with
-the earliest reset when one is known) or `no_recent_reading` (the next usage poll). Only
-the first falls back; the others raise `NoClaudeAccount` with the reason.
+When nothing qualifies, `eligibility` says why: `no_accounts_registered`, `pool_paused`
+(a person), `no_account_available` (a clock, with the earliest reset when one is known)
+or `no_recent_reading` (the next usage poll). `no_accounts_registered` and
+`no_account_available` run the call on the fallback credential when one is set
+(`fallback.covers`); otherwise, and for the others, the gateway raises `NoClaudeAccount`
+with the reason. Its message
+gives the reset in words in the company's time zone ("Sun Oct 25, 2:59 PM PDT"; the
+alignment report's zone until a Company time zone setting exists, `oracle/company_time.py`),
+never ISO.
+
+The listing (`GET /v1/claude-accounts`) serves the same answer, so the page cannot say
+Available while calls are refused: each account's `takes_calls` is `choose` on it alone,
+and an AVAILABLE account below the floor carries `spent_by` (the window) and
+`spent_until` (its reset), which the page reads as "Spent until …". `pool` is `choose`
+then `eligibility` then `fallback.covers` over the whole pool, exactly as the gateway
+decides (`takes_calls`; `on_fallback` when calls run on the fallback credential; `reason`
+and `until`, why no account takes them and when the earliest spent window clears). When
+it takes no calls, owners see one notice on Home and on Settings › Claude accounts that
+Oracle's AI is off; when every account is spent and calls run on the fallback, the same
+notice says "Oracle is using the fallback credential until …". `time_zone` is the zone those times are shown in.
 
 Each call takes a **hold** (3 hours, `DEFAULT_HOLD_TTL`), recorded in the hold log
 (`claude_account_holds`, kept 90 days) in the same transaction. At the call's turn
@@ -98,10 +114,15 @@ label to confirm) name an account by label or id.
 
 ## Fallback credential
 
-While no account is registered, built-in jobs use the fallback credential set on the
-same page (`PUT /v1/claude-accounts/fallback`): a `claude setup-token` value (run
-through Claude Code) or an Anthropic API key (the Messages API). It is never used for a
-pool whose accounts are spent or paused.
+While no account is registered, or every account is spent (`no_account_available`),
+built-in jobs use the fallback credential set on the same page
+(`PUT /v1/claude-accounts/fallback`): a `claude setup-token` value (run through Claude
+Code) or an Anthropic API key (the Messages API). So setting a fallback really turns
+Oracle's AI back on when the pool is spent (the owner's decision, 2026-10-23); the call
+records it (`via` `fallback_plan` or `fallback_api_key`, no account). It is never used
+for a pool that is paused, draining or waiting on a usage reading: those wait. A call
+already on an account that is refused mid-call and finds no other account to move to
+still refuses; the next call runs on the fallback.
 
 ## Adapted from SwarmCloud
 

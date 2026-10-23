@@ -268,14 +268,29 @@ class Account:
         Uses ``headroom``'s rule, staleness included, so it agrees with ``choose``;
         only windows that actually constrain count.
         """
+        spent = self.spent_by(now, floor=floor, stale_after=stale_after)
+        return spent[1] if spent else None
+
+    def spent_by(
+        self,
+        now: datetime,
+        *,
+        floor: float = DEFAULT_ASSIGN_FLOOR,
+        stale_after: timedelta = DEFAULT_STALE_AFTER,
+    ) -> tuple[str, datetime] | None:
+        """The window that keeps this account below the floor and when it resets (the
+        earliest, when more than one does), or None: ``next_reset`` with its window."""
         if self.headroom(now, stale_after=stale_after) >= floor:
             return None
         blocking = [
-            w.resets_at
-            for w in self.windows.values()
+            (w.resets_at, name)
+            for name, w in self.windows.items()
             if not w.is_reset(now) and w.remaining() < floor
         ]
-        return min(blocking) if blocking else None
+        if not blocking:
+            return None
+        at, name = min(blocking)
+        return name, at
 
     def with_reading(self, windows: dict[str, WindowReading], observed_at: datetime) -> Account:
         """This account with a reading folded in PER WINDOW, or unchanged.

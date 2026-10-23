@@ -8,7 +8,7 @@
 ``claude_account_signins``         ``account_auth/{state}``, a started browser sign-in
 ``claude_sweep_leases``            ``sweep_leases/quota-sweep``, one per company
 ``claude_fallback_credentials``    the tenant secret: a setup-token or API key used
-                                   when no account is registered
+                                   when no account is registered or every one is spent
 
 Every table is tenant-scoped: a company's pool serves that company only.
 """

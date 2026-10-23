@@ -29,6 +29,25 @@ export function inZone(iso: string, timeZone: string): string {
   }
 }
 
+/** "Sun Oct 25, 2:59 PM PDT": a moment in the company's time zone with its weekday, as a refusal words it (api/oracle/company_time.py). */
+export function inWords(iso: string, timeZone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone,
+      timeZoneName: "short",
+    }).formatToParts(new Date(iso));
+    const v = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)?.value ?? "";
+    return `${v("weekday")} ${v("month")} ${v("day")}, ${v("hour")}:${v("minute")} ${v("dayPeriod")} ${v("timeZoneName")}`;
+  } catch {
+    return inZone(iso, timeZone);
+  }
+}
+
 export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
   slack: "Slack",
   notion: "Notion",

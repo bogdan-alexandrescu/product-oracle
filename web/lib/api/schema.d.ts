@@ -9271,6 +9271,12 @@ export interface components {
             last_refresh_reason: string | null;
             /** Last Assigned At */
             last_assigned_at: string | null;
+            /** Takes Calls */
+            takes_calls: boolean;
+            /** Spent By */
+            spent_by: string | null;
+            /** Spent Until */
+            spent_until: string | null;
         };
         /** AccountsPage */
         AccountsPage: {
@@ -9282,6 +9288,9 @@ export interface components {
             unreadable_document_count: number;
             refresh_sweep: components["schemas"]["RefreshSweepOut"];
             fallback: components["schemas"]["FallbackOut"] | null;
+            pool: components["schemas"]["PoolOut"];
+            /** Time Zone */
+            time_zone: string;
         };
         /**
          * ActionIn
@@ -20470,6 +20479,20 @@ export interface components {
              * @default false
              */
             deferred: boolean;
+        };
+        /**
+         * PoolOut
+         * @description Whether Oracle's built-in calls can run now, as the gateway decides it.
+         */
+        PoolOut: {
+            /** Takes Calls */
+            takes_calls: boolean;
+            /** On Fallback */
+            on_fallback: boolean;
+            /** Reason */
+            reason: string | null;
+            /** Until */
+            until: string | null;
         };
         /** PrdAnchor */
         PrdAnchor: {
