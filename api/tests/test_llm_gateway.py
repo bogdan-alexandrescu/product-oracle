@@ -599,7 +599,8 @@ async def test_a_spent_pool_refuses_in_the_company_time_zone_never_iso(tenant_id
 
     await add_account(tenant_id, "weekly", windows={"seven_day": window(0.97, timedelta(days=2))})
     async with tenant_session(tenant_id) as s:
-        s.add(TenantSetting(key="alignment_report", value={"timezone": "Asia/Tokyo"}))
+        # #427 moved the zone from the alignment report into the Company time zone.
+        s.add(TenantSetting(key="company_timezone", value="Asia/Tokyo"))
         await s.commit()
     with pytest.raises(NoClaudeAccount) as info:
         await _call(tenant_id, fakes)
