@@ -9,9 +9,6 @@ import { errorMessage } from "@/lib/use-query";
 
 import { sourceKindLabel, titleOf } from "./common";
 
-/** Links and evidence change only for approvers and owners, as in the API. */
-export const WRITE_REASON = "Only approvers and owners change links and cite source items.";
-
 const LABEL = "flex min-w-0 flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2";
 
 export const RELATIONS = [

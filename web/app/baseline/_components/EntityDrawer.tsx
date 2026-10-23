@@ -19,7 +19,6 @@ import {
   ContributionSelect,
   endName,
   LinkToGoalForm,
-  WRITE_REASON,
   type NewLink,
 } from "./LinkTools";
 import { LIMIT_LABEL, PromoteForm, suggestedBlocker } from "./PromoteBlocker";
@@ -287,6 +286,7 @@ export function EntityDrawer({
             <NodeStatusBadge status={(d ?? entity).status} hero />
             <DeliveryChip value={(d ?? entity).type === "feature" ? (d ?? entity).attrs?.status : undefined} hero />
             <LockBadge entity={d ?? entity} meId={meId} hero />
+            {!canComment && <Chip hero>View only</Chip>}
             {suggestion && (
               <Chip kind="warn" hero data-testid="suggested-blocker">
                 Suggested blocker
@@ -421,34 +421,27 @@ export function EntityDrawer({
               onUnlock={unlockEdge}
             />
 
-            <InspectorSection label="Add a link">
-              {adding === "goal" ? (
-                <LinkToGoalForm detail={d} graph={graph} busy={busy} onCancel={() => setAdding(null)} onSave={addLink} />
-              ) : adding === "dependency" ? (
-                <AddDependencyForm detail={d} graph={graph} busy={busy} onCancel={() => setAdding(null)} onSave={addLink} />
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {d.type !== "goal" && (
-                    <Button
-                      icon="plus"
-                      disabled={!canWrite || busy}
-                      title={canWrite ? undefined : WRITE_REASON}
-                      onClick={() => open("goal")}
-                    >
-                      Link to goal
+            {/* Only approvers and owners change links: other roles never see the controls. */}
+            {canWrite && (
+              <InspectorSection label="Add a link">
+                {adding === "goal" ? (
+                  <LinkToGoalForm detail={d} graph={graph} busy={busy} onCancel={() => setAdding(null)} onSave={addLink} />
+                ) : adding === "dependency" ? (
+                  <AddDependencyForm detail={d} graph={graph} busy={busy} onCancel={() => setAdding(null)} onSave={addLink} />
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {d.type !== "goal" && (
+                      <Button icon="plus" disabled={busy} onClick={() => open("goal")}>
+                        Link to goal
+                      </Button>
+                    )}
+                    <Button icon="plus" disabled={busy} onClick={() => open("dependency")}>
+                      Add dependency
                     </Button>
-                  )}
-                  <Button
-                    icon="plus"
-                    disabled={!canWrite || busy}
-                    title={canWrite ? undefined : WRITE_REASON}
-                    onClick={() => open("dependency")}
-                  >
-                    Add dependency
-                  </Button>
-                </div>
-              )}
-            </InspectorSection>
+                  </div>
+                )}
+              </InspectorSection>
+            )}
 
             <InspectorSection label="Evidence" tools={<span className="tnum text-text">{d.evidence.length}</span>}>
               {d.evidence.length === 0 ? (
@@ -505,20 +498,17 @@ export function EntityDrawer({
                   ))}
                 </ul>
               )}
-              <div className="mt-3">
-                {adding === "cite" ? (
-                  <CiteSourceForm busy={busy} onCancel={() => setAdding(null)} onCite={cite} />
-                ) : (
-                  <Button
-                    icon="plus"
-                    disabled={!canWrite || busy}
-                    title={canWrite ? undefined : WRITE_REASON}
-                    onClick={() => open("cite")}
-                  >
-                    Cite a source item
-                  </Button>
-                )}
-              </div>
+              {canWrite && (
+                <div className="mt-3">
+                  {adding === "cite" ? (
+                    <CiteSourceForm busy={busy} onCancel={() => setAdding(null)} onCite={cite} />
+                  ) : (
+                    <Button icon="plus" disabled={busy} onClick={() => open("cite")}>
+                      Cite a source item
+                    </Button>
+                  )}
+                </div>
+              )}
               {canComment && (
                 <div className="mt-3">
                   <AddEvidenceLink
