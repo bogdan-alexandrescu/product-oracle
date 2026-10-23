@@ -4,7 +4,9 @@ Now/Next/Later on the B2 horizons is the default and needs no date. A date (a da
 milestone, an item's milestone date) is accepted only when a verified estimate, capacity
 figure or commitment supports exactly that date:
 
-- a person with the approver role records the basis (``POST /v1/schedule-bases``) for
+- an engineering lead or an owner (an approver while no lead is named) records and so
+  verifies the basis (``POST /v1/schedule-bases``; an approver's waits as proposed until
+  a lead verifies it, F3) for
   one PRD (O4, owner 2026-10-19), with the reference a roadmap names (``ENG-412``), its
   kind, and the date it supports; optionally only for one roadmap item (``item_key``) or
   for the items one tracker issue is matched to (``tracker_key``); it may come from a
@@ -238,23 +240,18 @@ async def recheck_tracker_milestones(db: AsyncSession, refs: Iterable[str]) -> l
     return undated
 
 
-async def withdraw(
-    db: AsyncSession, principal: Any, basis: ScheduleBasis, reason: str
-) -> tuple[list[uuid.UUID], list[uuid.UUID]]:
-    """Withdraw a basis. Milestones keep their date only if another verified basis
-    supports it; roadmap items whose date rested on it go potentially stale (their
-    content stays: an approved version is never rewritten; the date is withheld when the
-    item is read, unless another basis supports it). The caller commits."""
-    from oracle import audit
-    from oracle.roadmap.models import RoadmapItem, TrackMilestone
+async def _milestone_effects(
+    db: AsyncSession, basis: ScheduleBasis
+) -> list[tuple[Any, list[uuid.UUID]]]:
+    """Each track milestone listing ``basis``, with the other verified bases still
+    supporting its date (withdraw's query, shared with :func:`impact`)."""
+    from oracle.roadmap.models import TrackMilestone
 
-    basis.status = "withdrawn"
-    basis.withdrawn_by = principal.id
-    basis.withdrawn_at = now()
-    await db.flush()
-    undated: list[uuid.UUID] = []
+    out: list[tuple[Any, list[uuid.UUID]]] = []
     for m in await db.scalars(
-        select(TrackMilestone).where(TrackMilestone.basis_ids.contains([basis.id]))
+        select(TrackMilestone)
+        .where(TrackMilestone.basis_ids.contains([basis.id]))
+        .order_by(TrackMilestone.id)
     ):
         rest = [b for b in m.basis_ids if b != basis.id]
         still = (
@@ -270,6 +267,41 @@ async def withdraw(
             if rest
             else []
         )
+        out.append((m, still))
+    return out
+
+
+async def _resting_items(db: AsyncSession, basis: ScheduleBasis) -> list[Any]:
+    """The roadmap items whose stored date rests on ``basis`` (withdraw's query, shared
+    with :func:`impact`)."""
+    from oracle.roadmap.models import RoadmapItem
+
+    return list(
+        await db.scalars(
+            select(RoadmapItem)
+            .where(RoadmapItem.milestone["basis_ids"].astext.contains(str(basis.id)))
+            .order_by(RoadmapItem.id)
+        )
+    )
+
+
+async def withdraw(
+    db: AsyncSession, principal: Any, basis: ScheduleBasis, reason: str
+) -> tuple[list[uuid.UUID], list[uuid.UUID]]:
+    """Withdraw a basis, keeping the reason on it (F3). Milestones keep their date only
+    if another verified basis supports it; roadmap items whose date rested on it go
+    potentially stale (their content stays: an approved version is never rewritten; the
+    date is withheld when the item is read, unless another basis supports it). The
+    caller commits."""
+    from oracle import audit
+
+    basis.status = "withdrawn"
+    basis.withdrawn_by = principal.id
+    basis.withdrawn_at = now()
+    basis.withdrawn_reason = reason
+    await db.flush()
+    undated: list[uuid.UUID] = []
+    for m, still in await _milestone_effects(db, basis):
         m.basis_ids = still
         if not still and m.target_date is not None:
             m.target_date = None
@@ -277,9 +309,7 @@ async def withdraw(
     stale: list[uuid.UUID] = []
     when = now()
     reason_text = f"the schedule basis {basis.reference} was withdrawn"
-    for item in await db.scalars(
-        select(RoadmapItem).where(RoadmapItem.milestone["basis_ids"].astext.contains(str(basis.id)))
-    ):
+    for item in await _resting_items(db, basis):
         if item.freshness != "potentially_stale" or item.stale_since is None:
             item.stale_since = when
         item.freshness = "potentially_stale"
@@ -300,3 +330,136 @@ async def withdraw(
         },
     )
     return undated, stale
+
+
+async def impact(db: AsyncSession, basis: ScheduleBasis) -> Any:
+    """What :func:`withdraw` would change for ``basis`` (F3), writing nothing: the
+    milestones it dates (and whether another verified basis keeps the date), the roadmap
+    items whose date rests on it, and for each roadmap version showing its PRD's dates
+    (each roadmap's latest version, and every version holding one of those items) the
+    places that would show "date withdrawn" (:func:`oracle.roadmap.doc_dates.
+    marks_for_version`, read with the basis withdrawn inside a savepoint rolled back)."""
+    from oracle.docs.models import Document, DocumentVersion, Section
+    from oracle.roadmap import doc_dates
+    from oracle.roadmap.models import ProductTrack
+    from oracle.roadmap.schemas import (
+        BasisImpactOut,
+        ImpactDocument,
+        ImpactItem,
+        ImpactMilestone,
+    )
+
+    milestones = [
+        ImpactMilestone(
+            id=m.id,
+            track_id=m.track_id,
+            name=m.name,
+            target_date=m.target_date,
+            keeps_date=bool(still) or m.target_date is None,
+        )
+        for m, still in await _milestone_effects(db, basis)
+    ]
+    rows = await _resting_items(db, basis)
+    numbers: dict[uuid.UUID, tuple[str, int, uuid.UUID]] = {}
+    version_ids = {r.roadmap_version_id for r in rows}
+    if basis.status == "verified":
+        # Each roadmap whose dates rest on this PRD: built from one of its versions, or
+        # its track's roadmap; its latest version.
+        prd_versions = select(DocumentVersion.id).where(
+            DocumentVersion.document_id == basis.prd_document_id
+        )
+        docs = set(
+            await db.scalars(
+                select(DocumentVersion.document_id).where(
+                    DocumentVersion.source_version_id.in_(prd_versions)
+                )
+            )
+        ) | set(
+            await db.scalars(
+                select(ProductTrack.roadmap_document_id).where(
+                    ProductTrack.prd_document_id == basis.prd_document_id,
+                    ProductTrack.roadmap_document_id.is_not(None),
+                )
+            )
+        )
+        for doc in docs:
+            latest = await db.scalar(
+                select(DocumentVersion.id)
+                .where(DocumentVersion.document_id == doc)
+                .order_by(DocumentVersion.number.desc())
+                .limit(1)
+            )
+            if latest is not None:
+                version_ids.add(latest)
+    versions = (
+        list(
+            await db.scalars(
+                select(DocumentVersion)
+                .where(DocumentVersion.id.in_(version_ids))
+                .order_by(DocumentVersion.document_id, DocumentVersion.number)
+            )
+        )
+        if version_ids
+        else []
+    )
+    slugs = (
+        dict(
+            (
+                await db.execute(
+                    select(Document.id, Document.slug).where(
+                        Document.id.in_({v.document_id for v in versions}),
+                        Document.kind.in_(doc_dates.DATED_KINDS),
+                    )
+                )
+            ).all()
+        )
+        if versions
+        else {}
+    )
+    for v in versions:
+        numbers[v.id] = (slugs.get(v.document_id, ""), v.number, v.document_id)
+    items = [
+        ImpactItem(
+            id=r.id,
+            roadmap=numbers[r.roadmap_version_id][0] if r.roadmap_version_id in numbers else "",
+            version=numbers[r.roadmap_version_id][1] if r.roadmap_version_id in numbers else 0,
+            item_key=r.item_key,
+        )
+        for r in rows
+    ]
+    documents: list[ImpactDocument] = []
+    if basis.status == "verified":
+        for v in versions:
+            if v.document_id not in slugs:
+                continue
+            sections = list(
+                await db.scalars(
+                    select(Section).where(Section.version_id == v.id).order_by(Section.ordinal)
+                )
+            )
+            try:
+                before = await doc_dates.marks_for_version(db, v, sections)
+                savepoint = await db.begin_nested()
+                try:
+                    basis.status = "withdrawn"
+                    await db.flush()
+                    after = await doc_dates.marks_for_version(db, v, sections)
+                finally:
+                    await savepoint.rollback()
+                    # The rollback expired the row: read it back as stored.
+                    await db.refresh(basis)
+            except doc_dates.DatesUnavailable:
+                continue
+            was = {(m.section_key, m.text, m.where) for m in before if m.status == "withdrawn"}
+            marks = sum(
+                1
+                for m in after
+                if m.status == "withdrawn" and (m.section_key, m.text, m.where) not in was
+            )
+            if marks:
+                documents.append(
+                    ImpactDocument(slug=slugs[v.document_id], version=v.number, marks=marks)
+                )
+    return BasisImpactOut(
+        basis_id=basis.id, milestones=milestones, items=items, documents=documents
+    )

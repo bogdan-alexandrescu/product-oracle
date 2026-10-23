@@ -5,6 +5,7 @@ import { formatDay } from "@/lib/format";
 export type PlanItem = Schemas["PlanItem"];
 export type PlanPrd = Schemas["PlanPrd"];
 export type Horizon = PlanItem["horizon"];
+type Basis = Schemas["ScheduleBasisOut"];
 
 export const HORIZONS: Horizon[] = ["now", "next", "later"];
 export const HORIZON_LABEL: Record<Horizon, string> = { now: "Now", next: "Next", later: "Later" };
@@ -43,6 +44,18 @@ export function engineeringLine(i: PlanItem): string {
   else if (target(i)) day = `${formatDay(`${target(i)}T12:00:00Z`)} ✓`;
   else if (keys.length && !e.date) day = "no date";
   return [issue, day].filter(Boolean).join(" · ") || "—";
+}
+
+/**
+ * F3: the basis the item's date rests on (verified) or lost (withdrawn): one of the bases the plan
+ * names for it (engineering.basis_ids: this PRD's, supporting the date, covering the item and named
+ * in the date's source); the latest when several do. None for an unverified date.
+ */
+export function dateBasis(i: PlanItem, bases: Basis[]): Basis | undefined {
+  const { date, date_status, basis_ids } = i.engineering;
+  if (!date || (date_status !== "verified" && date_status !== "withdrawn")) return undefined;
+  const at = (b: Basis) => (date_status === "verified" ? b.verified_at : b.withdrawn_at) ?? b.created_at;
+  return bases.filter((b) => b.status === date_status && basis_ids.includes(b.id)).sort((a, b) => at(b).localeCompare(at(a)))[0];
 }
 
 /** F7: the first linked record's target date (a GitHub issue's milestone due date), when the item has none of its own. */

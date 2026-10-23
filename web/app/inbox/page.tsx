@@ -120,6 +120,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "report-failures", title: "Report not posted to Slack" },
   { id: "reports", title: "Reports" },
   { id: "strategy", title: "Strategy drift" },
+  { id: "dates", title: "Dates to verify" },
   { id: "launches", title: "Launches" },
   { id: "oracle-actions", title: "Oracle did" },
   { id: "feedback", title: "Feedback" },

@@ -46,7 +46,7 @@ TRACK_STATUSES = ("active", "paused", "closed")
 TRACK_HEALTH = ("on_track", "at_risk", "off_track", "no_roadmap", "paused", "closed")
 MILESTONE_STATUSES = ("planned", "done", "dropped")
 BASIS_KINDS = ("estimate", "capacity", "commitment")
-BASIS_STATUSES = ("verified", "withdrawn")
+BASIS_STATUSES = ("verified", "withdrawn", "proposed", "rejected")
 TRACKERS = ("linear", "jira", "github", "other")
 TRACKER_STATES = ("todo", "in_progress", "done", "cancelled", "unknown")
 
@@ -87,8 +87,10 @@ class ScheduleBasis(TenantScoped, Base):
     issue key, a capacity plan); ``supports_date`` is the date it supports. It is
     recorded for one PRD (O4, owner 2026-10-19) and supports only that PRD's roadmap
     items; naming an ``item_key`` or a ``tracker_key`` narrows it to that item, or to the
-    items that tracker issue is matched to. A person with the approver role records and
-    verifies it; a withdrawn basis supports nothing.
+    items that tracker issue is matched to. Who records it decides its status (F3,
+    oracle.members.leads.date_rights): an engineering lead or an owner (an approver while
+    no lead is named) verifies it at once; an approver's waits as ``proposed`` until a lead
+    verifies or rejects it. Only a verified basis supports a date.
     """
 
     __tablename__ = "schedule_bases"
@@ -96,6 +98,10 @@ class ScheduleBasis(TenantScoped, Base):
         CheckConstraint(_in("kind", BASIS_KINDS), name="kind"),
         CheckConstraint(_in("status", BASIS_STATUSES), name="status"),
         CheckConstraint("item_key IS NULL OR tracker_key IS NULL", name="one_key"),
+        CheckConstraint(
+            "status = 'proposed' OR status = 'rejected' OR verified_at IS NOT NULL",
+            name="verified_at",
+        ),
         Index("ix_schedule_bases_reference", "tenant_id", "reference"),
     )
 
@@ -115,9 +121,17 @@ class ScheduleBasis(TenantScoped, Base):
         Text, nullable=False, default="verified", server_default="verified"
     )
     verified_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
-    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     withdrawn_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    withdrawn_reason: Mapped[str | None] = mapped_column(Text)
+    proposed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    proposed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The recorder's or verifier's note.
+    note: Mapped[str | None] = mapped_column(Text)
+    rejected_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejected_reason: Mapped[str | None] = mapped_column(Text)
 
 
 class TrackMilestone(TenantScoped, Base):

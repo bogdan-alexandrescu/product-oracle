@@ -26472,7 +26472,9 @@
                 {
                   "enum": [
                     "verified",
-                    "withdrawn"
+                    "proposed",
+                    "withdrawn",
+                    "rejected"
                   ],
                   "type": "string"
                 },
@@ -26481,6 +26483,22 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "name": "item_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Key"
             }
           }
         ],
@@ -26516,7 +26534,7 @@
           "roadmaps"
         ],
         "summary": "Create Schedule Basis",
-        "description": "Record a verified estimate, capacity figure or commitment supporting a date for\none PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a\ntracker issue is matched to (``tracker_key``). The approver or engineering lead\nrecording it verifies it.\nFrom a tracker record, the record's own target date must be that date, and the record\nmust be this PRD's.",
+        "description": "Record an estimate, capacity figure or commitment supporting a date for one PRD's\nroadmap items (O4), optionally only one item (``item_key``) or the items a tracker\nissue is matched to (``tracker_key``). The recorder's rights decide its status (F3):\nan engineering lead or an owner (an approver while no lead is named) verifies it by\nrecording it; an approver's waits as ``proposed`` until a lead verifies it.\nFrom a tracker record, the record's own target date must be that date, and the record\nmust be this PRD's.",
         "operationId": "create_schedule_basis",
         "security": [
           {
@@ -26558,6 +26576,36 @@
             }
           }
         }
+      }
+    },
+    "/v1/schedule-bases/rights": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Schedule Basis Rights",
+        "description": "The caller's date rights (F3): ``verify``, ``propose`` or null, and whether an\nengineering lead is named (the Record basis dialog's submit label).",
+        "operationId": "get_schedule_basis_rights",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateRightsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
       }
     },
     "/v1/schedule-bases/{basis_id}/withdraw": {
@@ -26605,6 +26653,182 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WithdrawOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/schedule-bases/{basis_id}/verify": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Verify Schedule Basis",
+        "description": "Verify a proposed basis (F3): from now on it supports its date. Milestones of its\ntracker key are re-checked and its PRD's tracks monitored again. 409 unless proposed.",
+        "operationId": "verify_schedule_basis",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "basis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Basis Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleBasisVerify"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleBasisOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/schedule-bases/{basis_id}/reject": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Reject Schedule Basis",
+        "description": "Reject a proposed basis, with a reason (F3): it never supports a date. 409 unless\nproposed.",
+        "operationId": "reject_schedule_basis",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "basis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Basis Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleBasisReject"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleBasisOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/schedule-bases/{basis_id}/impact": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Schedule Basis Impact",
+        "description": "What withdrawing this basis would change (F3), computed as the withdrawal does and\nwriting nothing: the milestones it dates (and whether another basis keeps the date),\nthe roadmap items whose date rests on it, and the roadmap versions' places that would\nshow \"date withdrawn\".",
+        "operationId": "get_schedule_basis_impact",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "basis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Basis Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BasisImpactOut"
                 }
               }
             }
@@ -33896,6 +34120,45 @@
         ],
         "title": "Basis",
         "description": "One input that drove a decision: what was read, what it held, and how we know."
+      },
+      "BasisImpactOut": {
+        "properties": {
+          "basis_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Basis Id"
+          },
+          "milestones": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactMilestone"
+            },
+            "type": "array",
+            "title": "Milestones"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactDocument"
+            },
+            "type": "array",
+            "title": "Documents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "basis_id",
+          "milestones",
+          "items",
+          "documents"
+        ],
+        "title": "BasisImpactOut",
+        "description": "What withdrawing a basis would change (F3), computed as the withdrawal would."
       },
       "BatchState": {
         "properties": {
@@ -41552,6 +41815,35 @@
         ],
         "title": "DateMarkOut",
         "description": "A date written in a roadmap's text, checked against its PRD's schedule bases now\n(O4 'document dates', oracle.roadmap.doc_dates). ``label`` is the marker shown next\nto the date (``unverified``, ``date withdrawn``); None for a verified date. The\ntext itself is never rewritten."
+      },
+      "DateRightsOut": {
+        "properties": {
+          "rights": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "verify",
+                  "propose"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rights"
+          },
+          "lead_named": {
+            "type": "boolean",
+            "title": "Lead Named"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rights",
+          "lead_named"
+        ],
+        "title": "DateRightsOut"
       },
       "DecideIn": {
         "properties": {
@@ -50714,6 +51006,101 @@
         ],
         "title": "HumanView"
       },
+      "ImpactDocument": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "marks": {
+            "type": "integer",
+            "title": "Marks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "version",
+          "marks"
+        ],
+        "title": "ImpactDocument"
+      },
+      "ImpactItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "roadmap": {
+            "type": "string",
+            "title": "Roadmap"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "roadmap",
+          "version",
+          "item_key"
+        ],
+        "title": "ImpactItem"
+      },
+      "ImpactMilestone": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "track_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Track Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "keeps_date": {
+            "type": "boolean",
+            "title": "Keeps Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "track_id",
+          "name",
+          "target_date",
+          "keeps_date"
+        ],
+        "title": "ImpactMilestone"
+      },
       "ImpactReport": {
         "properties": {
           "subject": {
@@ -51277,6 +51664,251 @@
         },
         "type": "object",
         "title": "InboxCounts"
+      },
+      "InboxDateBasis": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "estimate",
+              "capacity",
+              "commitment"
+            ],
+            "title": "Kind"
+          },
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          },
+          "supports_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Supports Date"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "prd_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Prd Document Id"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key"
+          },
+          "tracker_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Key"
+          },
+          "tracker_record_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Record Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "proposed",
+              "withdrawn",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "proposed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By"
+          },
+          "proposed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed At"
+          },
+          "verified_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified By"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "withdrawn_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn By"
+          },
+          "withdrawn_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn At"
+          },
+          "withdrawn_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn Reason"
+          },
+          "rejected_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected By"
+          },
+          "rejected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected At"
+          },
+          "rejected_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected Reason"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/DocumentRef"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "reference",
+          "supports_date",
+          "detail",
+          "prd_document_id",
+          "item_key",
+          "tracker_key",
+          "tracker_record_id",
+          "status",
+          "verified_by",
+          "verified_at",
+          "withdrawn_by",
+          "withdrawn_at",
+          "created_at",
+          "prd"
+        ],
+        "title": "InboxDateBasis",
+        "description": "A proposed basis in the Inbox of those who verify it (F3), with its PRD."
       },
       "InboxDecision": {
         "properties": {
@@ -51956,6 +52588,14 @@
             },
             "type": "array",
             "title": "Oracle Actions",
+            "default": []
+          },
+          "dates": {
+            "items": {
+              "$ref": "#/components/schemas/InboxDateBasis"
+            },
+            "type": "array",
+            "title": "Dates",
             "default": []
           },
           "total": {
@@ -60734,6 +61374,15 @@
               }
             ],
             "title": "Date Status"
+          },
+          "basis_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Basis Ids",
+            "default": []
           },
           "slip_days": {
             "anyOf": [
@@ -71265,6 +71914,18 @@
               }
             ],
             "title": "Tracker Record Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           }
         },
         "additionalProperties": false,
@@ -71276,7 +71937,7 @@
           "prd"
         ],
         "title": "ScheduleBasisCreate",
-        "description": "A verified estimate, capacity figure or commitment. Recording it is the\nverification: the approver says this source supports this date, for this PRD's\nroadmap items (O4)."
+        "description": "An estimate, capacity figure or commitment supporting a date for this PRD's roadmap\nitems (O4). The recorder's rights decide its status (F3): an engineering lead or an\nowner (an approver while no lead is named) verifies it by recording it; an approver's\nwaits as proposed for a lead."
       },
       "ScheduleBasisOut": {
         "properties": {
@@ -71357,9 +72018,46 @@
             "type": "string",
             "enum": [
               "verified",
-              "withdrawn"
+              "proposed",
+              "withdrawn",
+              "rejected"
             ],
             "title": "Status"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "proposed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By"
+          },
+          "proposed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed At"
           },
           "verified_by": {
             "anyOf": [
@@ -71374,8 +72072,15 @@
             "title": "Verified By"
           },
           "verified_at": {
-            "type": "string",
-            "format": "date-time",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Verified At"
           },
           "withdrawn_by": {
@@ -71402,6 +72107,52 @@
             ],
             "title": "Withdrawn At"
           },
+          "withdrawn_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn Reason"
+          },
+          "rejected_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected By"
+          },
+          "rejected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected At"
+          },
+          "rejected_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected Reason"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -71427,6 +72178,42 @@
           "created_at"
         ],
         "title": "ScheduleBasisOut"
+      },
+      "ScheduleBasisReject": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "ScheduleBasisReject"
+      },
+      "ScheduleBasisVerify": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ScheduleBasisVerify"
       },
       "ScheduleBasisWithdraw": {
         "properties": {
