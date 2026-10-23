@@ -294,12 +294,20 @@ function RailLink({ d, pathname, home, badge }: { d: Dest; pathname: string; hom
   );
 }
 
+/**
+ * Pages without the rail: sign-in, MCP client consent, and a customer's interview link (C3,
+ * `/i/<token>`), which a customer opens without an account and never signs in on.
+ */
+function bare(pathname: string): boolean {
+  return pathname.startsWith("/login") || pathname.startsWith("/oauth") || pathname.startsWith("/i/");
+}
+
 /** Rail and tab bar; reads the pathname, so it renders inside its own Suspense boundary. */
 function Navs() {
   const pathname = usePathname();
   const { me, loading } = useMe();
   // While /v1/me loads, keep the rail so a signed-in page never jumps.
-  const shown = (loading || !!me) && !pathname.startsWith("/login") && !pathname.startsWith("/oauth");
+  const shown = (loading || !!me) && !bare(pathname);
   const inbox = useInboxCount(shown);
   const home = useDocumentHome(pathname);
   const [more, setMore] = useState(false);
@@ -451,6 +459,7 @@ function PhoneHeader() {
   const pathname = usePathname();
   const { me } = useMe();
   const title = usePageTitle(pathname);
+  if (pathname.startsWith("/i/")) return null;
   return (
     <header
       data-testid="phone-header"
@@ -469,7 +478,8 @@ function PhoneHeader() {
 
 /**
  * The app shell (I3): SwarmCloud's navy rail with its destinations on desktop, a tab bar
- * (Home, PRDs, Roadmap, Inbox, More) and the phone header on a phone. No rail on /login, /oauth and when
+ * (Home, PRDs, Roadmap, Inbox, More) and the phone header on a phone. No rail on /login, /oauth, a
+ * customer's interview link /i/ (no phone header either) and when
  * signed out: its grid column then collapses to nothing.
  */
 export function AppShell({ children }: { children: ReactNode }) {

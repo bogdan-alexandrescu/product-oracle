@@ -109,8 +109,10 @@ class ProductRequest(TenantScoped, Base):
     source_url: Mapped[str | None] = mapped_column(Text)
     source_kind: Mapped[str | None] = mapped_column(Text)
     source_excerpt: Mapped[str | None] = mapped_column(Text)
-    # The interview it came from; its FK comes with pick C3 Interviews.
-    interview_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # The interview it came from (C3 Interviews, migration 0025_interviews).
+    interview_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("interviews.id", ondelete="SET NULL")
+    )
     state: Mapped[str] = mapped_column(Text, nullable=False, default="new", server_default="new")
     merged_into_id: Mapped[uuid.UUID | None] = _fk("product_requests", "SET NULL")
     disqualify_reason: Mapped[str | None] = mapped_column(Text)

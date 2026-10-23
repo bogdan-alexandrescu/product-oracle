@@ -204,8 +204,9 @@ def test_parity_every_operation_is_a_tool_or_listed_as_unavailable():
             assert (op.method, op.path) == (method.upper(), path)
             if op.excluded:
                 excluded.add(op.operation_id)
-    # Browser sign-in, the OAuth flow itself, file uploads (multipart: use REST), and the
-    # account operations that work from the signed-in browser only (AC1).
+    # Browser sign-in, the OAuth flow itself, file uploads (multipart: use REST), the
+    # account operations that work from the signed-in browser only (AC1), and the
+    # interviewee's own routes behind a private interview link (C3).
     oauth = {o for o in excluded if o.startswith("oauth_")}
     assert {"oauth_token", "oauth_register", "oauth_callback"} <= oauth
     assert excluded - oauth == {
@@ -215,6 +216,10 @@ def test_parity_every_operation_is_a_tool_or_listed_as_unavailable():
         "create_personal_token",
         "change_password",
         "sign_out_everywhere",
+        "public_interview",
+        "public_interview_message",
+        "public_interview_skip",
+        "public_interview_finish",
     }
 
 

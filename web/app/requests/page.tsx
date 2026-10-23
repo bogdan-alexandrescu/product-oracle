@@ -1,21 +1,26 @@
 "use client";
 
-import { Empty, Page, PageHeader, Panel } from "@/components/ds";
+import { useState } from "react";
+
+import { Button, Empty, Page, PageHeader, Panel } from "@/components/ds";
 import { hasRole, useMe } from "@/lib/me";
 
 import { FoundInSources } from "./_components/FoundInSources";
+import { InterviewDialog } from "./_components/InterviewDialog";
 import { ClassifyNow, DailyTriageSwitch, TriageStatusLine, useTriage } from "./_components/Triage";
 
 /**
  * Requests (C1). Oracle's triage: Classify now and the "Daily triage at 07:00 PT" switch
  * (approvers and owners; others see the switch's state) and its status line, and
- * the requests Oracle found in your own sources, yours alone until you file one. The request
- * queue itself (table, inspector, Add request) comes with the Requests screen lane.
+ * the requests Oracle found in your own sources, yours alone until you file one, and
+ * Interview a customer (C3, commenters and up). The request queue itself (table, inspector,
+ * Add request) comes with the Requests screen lane.
  */
 export default function RequestsPage() {
   const { role } = useMe();
   const triage = useTriage();
   const run = triage.data;
+  const [interviewing, setInterviewing] = useState(false);
   return (
     <Page>
       <PageHeader
@@ -25,6 +30,7 @@ export default function RequestsPage() {
           <>
             <DailyTriageSwitch triage={triage} canChange={hasRole(role, "approver")} />
             {hasRole(role, "approver") && <ClassifyNow triage={triage} />}
+            {hasRole(role, "commenter") && <Button onClick={() => setInterviewing(true)}>Interview a customer</Button>}
           </>
         }
       />
@@ -36,6 +42,7 @@ export default function RequestsPage() {
           </Empty>
         </Panel>
       </div>
+      {interviewing && <InterviewDialog onClose={() => setInterviewing(false)} />}
     </Page>
   );
 }
