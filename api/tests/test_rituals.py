@@ -233,21 +233,44 @@ async def test_new_requests_and_blockers_since_last_time(client, ctx, at):
     inside = datetime(2026, 10, 21, 10, tzinfo=UTC)
     before = datetime(2026, 9, 1, 10, tzinfo=UTC)
     async with tenant_session(ctx.tenant_id) as db:
-        db.add(ProductRequest(title="Export to spreadsheet", channel="support",
-                              origin="person", created_at=inside))
-        db.add(ProductRequest(title="Dark mode", channel="sales", origin="person",
-                              created_at=before))
-        opened = Entity(type="constraint", key="vendor-limit", title="Vendor rate limit",
-                        attrs={"blocker": {"type": "hard"}}, status="confirmed",
-                        origin="user", created_at=inside)
-        old = Entity(type="constraint", key="legal-review", title="Legal review",
-                     attrs={"blocker": {"type": "soft"}}, status="confirmed", origin="user",
-                     created_at=before)
+        db.add(
+            ProductRequest(
+                title="Export to spreadsheet", channel="support", origin="person", created_at=inside
+            )
+        )
+        db.add(
+            ProductRequest(title="Dark mode", channel="sales", origin="person", created_at=before)
+        )
+        opened = Entity(
+            type="constraint",
+            key="vendor-limit",
+            title="Vendor rate limit",
+            attrs={"blocker": {"type": "hard"}},
+            status="confirmed",
+            origin="user",
+            created_at=inside,
+        )
+        old = Entity(
+            type="constraint",
+            key="legal-review",
+            title="Legal review",
+            attrs={"blocker": {"type": "soft"}},
+            status="confirmed",
+            origin="user",
+            created_at=before,
+        )
         db.add_all([opened, old])
         await db.flush()
-        db.add(BlockerResolutionEvent(blocker_id=old.id, kind="status_changed",
-                                      from_status="open", to_status="resolved",
-                                      actor="user:test", created_at=inside))
+        db.add(
+            BlockerResolutionEvent(
+                blocker_id=old.id,
+                kind="status_changed",
+                from_status="open",
+                to_status="resolved",
+                actor="user:test",
+                created_at=inside,
+            )
+        )
         await db.commit()  # fmt: skip
 
     occ = await ready_occurrence(client, ctx, at, "goals_checkin")
