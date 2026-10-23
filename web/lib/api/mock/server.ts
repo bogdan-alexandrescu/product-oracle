@@ -20,6 +20,8 @@ import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
+import { afterAccept, goalInterviewReply, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
+import { goalCheck } from "./goals";
 import { emptyDiscussions, routeDiscussions, seedDiscussionReplies, seedDiscussions, seedRunDiscussions, type DiscussionRow, type DiscussionsContext, type DiscussionsDb, type DocumentSection, type SubjectInfo } from "./discussions";
 import { routeEngineering, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
@@ -1464,6 +1466,11 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       return v ? lockedKeys(db, v) : [];
     },
     openProposals: (runId) => db.baseline.proposals.filter((p) => p.run_id === runId && p.status === "open").length,
+    // B6: the confirmed and proposed goals not measurable, for an approved Confirm the baseline stop.
+    vagueGoals: () =>
+      db.baseline.entities.filter(
+        (e) => e.type === "goal" && (e.status === "confirmed" || e.status === "proposed") && !goalCheck(e.attrs, e.status, (id) => activeMember(db, id)).measurable,
+      ).length,
     latestVersion: (id) => {
       const doc = db.documents.find((d) => d.id === id);
       const vs = doc ? docVersions(db, doc) : [];
@@ -1789,6 +1796,22 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
   if (kind === "screen") return { key: `screen:${s.path}`, label: String(s.path), url: String(s.path) };
   const id = Object.values(s)[0];
   return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
+}
+
+/** An active member of this Oracle (a goal's owner must be one). */
+function activeMember(db: Db, userId: string): boolean {
+  return db.members.some((m) => m.id === userId && m.status !== "disabled");
+}
+
+/** /v1/baseline/... through ./baseline.ts, with the caller and the lookups it needs. */
+function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] }, req: Request, p: string[], q: URLSearchParams) {
+  const runOf = (runId: string): Schemas["ProposalRun"] | null => {
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    const r = db.runs.runs.find((x) => x.id === runId);
+    return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
+  };
+  const memberEmail = (userId: string) => db.members.find((m) => m.id === userId)?.email ?? null;
+  return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id) }, req, p.slice(2), q);
 }
 
 function save(db: Db) {
@@ -2819,6 +2842,8 @@ async function route(db: Db, req: Request): Promise<Response> {
         return next;
       },
       current: () => load().discussions ?? emptyDiscussions(),
+      // B6: the scripted Oracle of a goals interview.
+      replyScript: (d, asked) => goalInterviewReply(db.baseline, d, asked.body, (id) => activeMember(db, id)),
       documentText: (d) => discussionDocument(db, d),
     };
     const res = await routeDiscussions(discussionsCtx, req, p, q);
@@ -2854,17 +2879,27 @@ async function route(db: Db, req: Request): Promise<Response> {
     );
     if (traced) return traced;
   }
-  // The baseline mock checks roles itself (commenters propose, approvers decide).
+  // B6 Goals interview: its routes write discussions and proposals, so they come first.
   if (p[1] === "baseline") {
-    const runOf = (runId: string): Schemas["ProposalRun"] | null => {
-      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
-      const r = db.runs.runs.find((x) => x.id === runId);
-      return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
+    const goalCtx: GoalInterviewContext = {
+      baseline: db.baseline,
+      discussions: () => (db.discussions ??= emptyDiscussions()),
+      members: db.members,
+      me: { id: me.id, role: me.role },
+      isMember: (id) => activeMember(db, id),
+      uuid,
+      now,
     };
-    const memberEmail = (userId: string) => db.members.find((m) => m.id === userId)?.email ?? null;
-    const isMember = (userId: string) => db.members.some((m) => m.id === userId && m.status !== "disabled");
-    return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember }, req, p.slice(2), q);
+    const res = await routeGoalInterview(goalCtx, req, p);
+    if (res) return res;
+    if (p[2] === "proposals" && p[3] && p[4] === "accept" && req.method === "POST") {
+      const accepted = await routeBaselineFor(db, me, req, p, q);
+      if (accepted.ok) afterAccept(goalCtx, p[3]);
+      return accepted;
+    }
   }
+  // The baseline mock checks roles itself (commenters propose, approvers decide).
+  if (p[1] === "baseline") return routeBaselineFor(db, me, req, p, q);
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) {
     return routeSources(req, p, q, {

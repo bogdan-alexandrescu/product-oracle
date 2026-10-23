@@ -69,7 +69,8 @@ SOURCE_READS = {
 }
 # Reads for people's clients only, refused to run tokens like the runs reads: whether a
 # new PRD run may reuse the baseline (C4) is about runs, not baseline knowledge.
-PEOPLE_READS = {("baseline", "review-status")}
+# Likewise the goals an interview is offered on (B6): it names people's discussions.
+PEOPLE_READS = {("baseline", "review-status"), ("baseline", "goals", "vague")}
 # Creating a proposal or a piece of evidence; deciding one stays with people.
 PROPOSAL_WRITES = {"proposals", "evidence"}
 

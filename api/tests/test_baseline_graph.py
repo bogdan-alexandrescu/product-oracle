@@ -430,6 +430,8 @@ async def test_every_baseline_route_requires_auth(client):
                         "proposal_id",
                         "conflict_id",
                         "measurement_id",
+                        "goal_id",
+                        "change_id",
                     )  # fmt: skip
                 }
             )

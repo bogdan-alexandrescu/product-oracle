@@ -353,13 +353,18 @@ def _figure(value: float, unit: str) -> str:
     return f"{n} {unit}"
 
 
+def comparison_words(comparison: str, target: float, unit: str) -> str:
+    """A target in words: "less than 8%", "at least 40 teams"."""
+    return f"{_WORDS[comparison]} {_figure(target, unit)}"
+
+
 def target_words(attrs: dict[str, Any]) -> str | None:
     """A goal's typed target in words: "at least 45% (new accounts ...), short horizon,
     due 2026-12-31"; None when it has no typed target."""
     missing = goal_check(attrs)["missing"]
     if any(k in missing for k in ("target", "unit", "comparison")):
         return None
-    out = f"{_WORDS[attrs['comparison']]} {_figure(attrs['target'], attrs['unit'])}"
+    out = comparison_words(attrs["comparison"], attrs["target"], attrs["unit"])
     if attrs.get("metric"):
         out += f" ({str(attrs['metric']).lower()})"
     if attrs.get("horizon") in HORIZONS:

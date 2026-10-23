@@ -256,6 +256,11 @@ class DiscussionChangeOut(BaseModel):
     status: ChangeStatus
     created_at: datetime
     lock_version: int
+    # What acting created ({"proposal_id"} for a goal_measure), C1b's pushback on it
+    # ({"reason"}) and why it was kept anyway.
+    result_ref: dict[str, Any] | None = None
+    pushback: dict[str, Any] | None = None
+    override_reason: str | None = None
 
 
 class DiscussionExposureConflict(BaseModel):

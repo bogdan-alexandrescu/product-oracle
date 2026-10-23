@@ -855,24 +855,28 @@ async def list_changes(
     if status:
         stmt = stmt.where(DiscussionChange.status == status)
     rows = await db.scalars(stmt.order_by(DiscussionChange.created_at, DiscussionChange.id))
-    return [
-        DiscussionChangeOut(
-            id=c.id,
-            kind=c.kind,
-            label=kinds.label(c.kind, c.edited_payload or c.payload),
-            target=c.target,
-            payload=c.payload,
-            edited_payload=c.edited_payload,
-            rationale=c.rationale,
-            proposed_by_kind=c.proposed_by_kind,  # type: ignore[arg-type]
-            proposed_by=c.proposed_by,
-            suggested_by=c.suggested_by,
-            status=c.status,  # type: ignore[arg-type]
-            created_at=c.created_at,
-            lock_version=c.lock_version,
-        )
-        for c in rows
-    ]
+    return [change_out(c) for c in rows]
+
+
+def change_out(c: DiscussionChange) -> DiscussionChangeOut:
+    return DiscussionChangeOut(
+        id=c.id,
+        kind=c.kind,
+        label=kinds.label(c.kind, c.edited_payload or c.payload, c.target),
+        target=c.target,
+        payload=c.payload,
+        edited_payload=c.edited_payload,
+        rationale=c.rationale,
+        proposed_by_kind=c.proposed_by_kind,  # type: ignore[arg-type]
+        proposed_by=c.proposed_by,
+        suggested_by=c.suggested_by,
+        status=c.status,  # type: ignore[arg-type]
+        created_at=c.created_at,
+        lock_version=c.lock_version,
+        result_ref=c.result_ref,
+        pushback=c.pushback,
+        override_reason=c.override_reason,
+    )
 
 
 # --- writing ------------------------------------------------------------------------------
