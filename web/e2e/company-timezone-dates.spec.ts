@@ -83,5 +83,13 @@ test("blocker inspector: history and decision gate in the Company time zone", as
   await plan.getByRole("button", { name: "Plan" }).click();
   const x = insp.getByTestId("experiment").filter({ hasText: "Refunds settle the same day in the sandbox" });
   await expect(x).toContainText("Mar 10");
-  await expect(insp.getByRole("list", { name: "History" })).toContainText(/GMT\+1[23]/);
+
+  const form = insp.getByRole("form", { name: "Change status" });
+  await form.getByLabel("Status", { exact: true }).selectOption("resolved");
+  await form.getByLabel("Reason").fill("The processor confirmed same-day refunds in writing");
+  await form.getByRole("button", { name: "Set status" }).click();
+  const history = insp.getByRole("list", { name: "History" });
+  await expect(history).toContainText("Status changed from open to resolved");
+  // Auckland is GMT+12, or GMT+13 in its summer.
+  await expect(history).toContainText(/GMT\+1[23]/);
 });

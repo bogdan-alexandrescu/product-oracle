@@ -1,4 +1,5 @@
 import type { Schemas } from "@/lib/api/client";
+import { addDays, DEFAULT_ZONE, todayIn } from "@/lib/dates";
 
 export type Update = Schemas["DocumentSummary"];
 export type Period = Schemas["UpdatePeriod"];
@@ -47,17 +48,13 @@ export function formatPeriod(p: Period | null | undefined): string {
   return cross ? `${shortDay(p.from)}, ${p.from.slice(0, 4)} - ${shortDay(p.to)}, ${p.to.slice(0, 4)}` : `${shortDay(p.from)} - ${shortDay(p.to)}`;
 }
 
-/** Today in the reader's calendar, as YYYY-MM-DD. */
-export function todayIso(now: Date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+/** Today in the Company time zone (#401), as YYYY-MM-DD. */
+export function todayIso(zone: string = DEFAULT_ZONE, now: number = Date.now()): string {
+  return todayIn(zone, now);
 }
 
 /** The day after `iso` (YYYY-MM-DD). */
-export function dayAfter(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
-}
+export const dayAfter = (iso: string): string => addDays(iso, 1);
 
 /**
  * The period a new update of `template` covers by default: from the day after the last

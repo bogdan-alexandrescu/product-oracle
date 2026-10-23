@@ -1946,7 +1946,15 @@ const atLeast = (role: Role, min: Role) => ROLE_ORDER.indexOf(role) >= ROLE_ORDE
 const forbidden = (min: Role) => json(403, { detail: `Requires the ${min} role` });
 
 function meOut(db: Db, m: MemberRow): Schemas["Me"] {
-  return { kind: "user", tenant_id: db.tenant_id, user_id: m.id, email: m.email, role: m.role, engineering_lead: !!m.engineering_lead };
+  return {
+    kind: "user",
+    tenant_id: db.tenant_id,
+    user_id: m.id,
+    email: m.email,
+    role: m.role,
+    engineering_lead: !!m.engineering_lead,
+    company_timezone: String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+  };
 }
 
 /** A3, as oracle.members.leads: the active members carrying the engineering lead flag. */

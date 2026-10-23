@@ -21,6 +21,7 @@ import {
 } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { addDays, todayIn, useCompanyZone, zoneInstant } from "@/lib/dates";
 import { hasRole, useMe } from "@/lib/me";
 import { useRiskPolicy } from "@/lib/risk-policy";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
@@ -142,8 +143,6 @@ function OnPublish({ n }: { n: number }) {
   );
 }
 
-const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-
 /** Accept a blocker's risk: the company's acceptance role (B4, owners by default); others are told so. */
 function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: string) => void }) {
   const { role } = useMe();
@@ -151,10 +150,11 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
   const onAuth = useAuthRedirect();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
-  const [today] = useState(() => Date.now());
+  const zone = useCompanyZone();
+  const today = todayIn(zone);
   // Thirty days out, inside the company's limit (a day short of it); null until edited.
   const [picked, setPicked] = useState<string | null>(null);
-  const review = picked ?? isoDay(today + Math.max(1, Math.min(30, policy.maxDays - 1)) * DAY);
+  const review = picked ?? addDays(today, Math.max(1, Math.min(30, policy.maxDays - 1)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const who = policy.role === "owner" ? { only: "Only an owner", chip: "Owners only" } : { only: "Only approvers and owners", chip: "Approvers and owners" };
@@ -175,10 +175,10 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
       await unwrap(
         api.POST("/v1/blockers/{blocker_id}/accept-risk", {
           params: { path: { blocker_id: blocker.blocker.id } },
-          // 09:00 UTC on the chosen day, kept inside the company's limit from now.
+          // 09:00 on the chosen day in the Company time zone, kept inside the company's limit from now.
           body: {
             reason: reason.trim(),
-            review_at: new Date(Math.min(Date.parse(`${review}T09:00:00Z`), Date.now() + policy.maxDays * DAY - 60_000)).toISOString(),
+            review_at: new Date(Math.min(Date.parse(zoneInstant(review, "09:00", zone)), Date.now() + policy.maxDays * DAY - 60_000)).toISOString(),
           },
         }),
       );
@@ -221,8 +221,8 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
           className={INPUT}
           type="date"
           value={review}
-          min={isoDay(today + DAY)}
-          max={isoDay(today + policy.maxDays * DAY)}
+          min={addDays(today, 1)}
+          max={addDays(today, policy.maxDays)}
           onChange={(e) => setPicked(e.target.value)}
           aria-describedby="risk-review-limit"
           required

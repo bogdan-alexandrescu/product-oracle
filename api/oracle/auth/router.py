@@ -5,6 +5,7 @@ from oracle.auth.deps import CurrentPrincipal, TenantDB
 from oracle.auth.models import ApiToken, User
 from oracle.auth.schemas import LoginRequest, Me
 from oracle.config import get_settings
+from oracle.tenant_settings_api import company_timezone
 
 router = APIRouter(prefix="/v1", tags=["auth"])
 
@@ -43,6 +44,7 @@ async def logout(response: Response) -> None:
 
 @router.get("/me", response_model=Me)
 async def me(principal: CurrentPrincipal, db: TenantDB) -> Me:
+    zone = (await company_timezone(db)).key
     if principal.kind == "user":
         user = await db.get(User, principal.user_id)
         # An API token acting for this user also names itself.
@@ -56,6 +58,7 @@ async def me(principal: CurrentPrincipal, db: TenantDB) -> Me:
             engineering_lead=user.engineering_lead,
             token_id=token.id if token else None,
             token_name=token.name if token else None,
+            company_timezone=zone,
         )
     token = await db.get(ApiToken, principal.token_id)
     return Me(
@@ -64,4 +67,5 @@ async def me(principal: CurrentPrincipal, db: TenantDB) -> Me:
         role=principal.role,
         token_id=token.id,
         token_name=token.name,
+        company_timezone=zone,
     )

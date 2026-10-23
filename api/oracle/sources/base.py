@@ -55,8 +55,9 @@ item in the source.
 
 from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, date, datetime, time, tzinfo
 from typing import Any, Protocol, runtime_checkable
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from oracle.sources.models import ITEM_KINDS
 
@@ -168,6 +169,31 @@ SCOPE_KEY = "_scope"
 
 # How long a stored display name of a pick may be; longer ones are cut on save.
 LABEL_LENGTH = 200
+
+
+# #401: the zone a picker's days (Fireflies From/To, Slack Since/Until) are days in, as
+# the picker saved it beside them (the Company time zone). A config without one, saved
+# before, keeps UTC days.
+ZONE_KEY = "timezone"
+
+
+def config_zone(config: dict[str, Any]) -> tzinfo:
+    """The zone of a config's picker days: ``config["timezone"]`` (an IANA name), else
+    UTC; raises :class:`ConnectorConfigError` when it names no zone."""
+    value = config.get(ZONE_KEY)
+    if value is None or value == "":
+        return UTC
+    if not isinstance(value, str) or len(value) > 64:
+        raise ConnectorConfigError(f"{ZONE_KEY} must be an IANA time zone name")
+    try:
+        return ZoneInfo(value)
+    except (ValueError, ZoneInfoNotFoundError):
+        raise ConnectorConfigError(f"{ZONE_KEY} must be an IANA time zone name") from None
+
+
+def zone_midnight(day: date, zone: tzinfo) -> datetime:
+    """The start of ``day`` in ``zone``, in UTC."""
+    return datetime.combine(day, time.min, zone).astimezone(UTC)
 
 
 def selection(config: dict[str, Any]) -> dict[str, Any]:

@@ -1,3 +1,4 @@
+import { calendarDay } from "@/lib/dates";
 import type { CitationOut, FeedbackStatus, JobSettings, LlmJob, LlmJobKind, Suggestion, Verdict } from "@/lib/api/client";
 
 const dateFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" });
@@ -9,13 +10,12 @@ const dateTimeFmt = new Intl.DateTimeFormat("en", {
 });
 
 const dayFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" });
-const utcDayFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
 
 export const formatDate = (iso: string) => dateFmt.format(new Date(iso));
 /** "Oct 16". */
 export const formatDay = (iso: string) => dayFmt.format(new Date(iso));
-/** "Oct 12" in UTC, the date the API's notes give (runs/reuse.py short_date). */
-export const formatDayUtc = (iso: string) => utcDayFmt.format(new Date(iso));
+/** "Oct 12": the UTC day, to match the date the API's notes give (runs/reuse.py short_date). */
+export const formatDayUtc = (iso: string) => calendarDay(new Date(iso).toISOString());
 export const formatDateTime = (iso: string) => dateTimeFmt.format(new Date(iso));
 
 /** "Oct 19, 8:00 AM PDT": a moment in the company's time zone, as Settings > Notifications sets it. */
