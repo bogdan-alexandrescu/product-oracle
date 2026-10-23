@@ -25,6 +25,7 @@ from tests.ritual_helpers import (  # noqa: F401 - fixtures
     at,
     ctx,
     occurrences_of,
+    only,
     ready_occurrence,
     rituals_of,
     tick,
@@ -49,15 +50,17 @@ async def test_the_first_tick_seeds_the_built_ins_once(ctx, at):
     H1/H4/H6/H8 kinds once their block builders are registered."""
     await tick(ctx.tenant_id)
     seeded = await rituals_of(ctx.tenant_id)
-    assert set(seeded) == {"goals_checkin", "roadmap_refresh", "goals_review"}
+    assert set(seeded) == {"goals_checkin", "roadmap_refresh", "goals_review", "alignment_report"}
     for r in seeded.values():
         assert r.status == "active" and r.builtin
         assert r.owner_id == ctx.users["owner"].id
         assert set(r.attendee_ids) == {ctx.users["owner"].id, ctx.users["approver"].id}
-        assert r.schedule["timezone"] == "UTC" and r.next_due_at is not None
+        # The alignment report keeps F6's zone (its setting's default).
+        zone = "America/Los_Angeles" if r.kind == "alignment_report" else "UTC"
+        assert r.schedule["timezone"] == zone and r.next_due_at is not None
     assert "investor_update" not in seeded and "board_meeting" not in seeded
     await tick(ctx.tenant_id)
-    assert len(await rituals_of(ctx.tenant_id)) == 3
+    assert len(await rituals_of(ctx.tenant_id)) == 4
 
 
 async def test_an_occurrence_is_created_once_at_its_preparation_moment(ctx, at):
@@ -180,6 +183,7 @@ async def test_every_pre_read_starts_one_summary_per_covered_occurrence(
     occurrence starts exactly one ritual_summary run created by the ritual's owner, and
     ten more ticks start no second; fails_when=none starts, two start, or it is created
     as someone else; no_claim=the run's content."""
+    await only(client, ctx, "goals_checkin")
     await set_mode(client, ctx, "always")
     occ = await ready_occurrence(client, ctx, at, "goals_checkin")
     runs = await summary_runs(ctx.tenant_id)
@@ -228,6 +232,7 @@ async def test_a_failed_summary_run_leaves_the_pre_read_and_can_be_retried(clien
     runtime's own retry rules."""
     set_runtime(FakeRuntime({"summary": [Outcome(state="failed", error="runtime down")]}))
     try:
+        await only(client, ctx, "goals_checkin")
         await set_mode(client, ctx, "always")
         occ = await ready_occurrence(client, ctx, at, "goals_checkin")
         resp = await client.post("/v1/internal/tick", headers=ctx.as_("owner"))

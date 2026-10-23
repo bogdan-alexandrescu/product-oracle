@@ -4,7 +4,7 @@ work and the Inbox rows.
 The ticker step (:func:`tick_due`, from ``oracle.ticker.router._tick_company`` in its
 own ``try``), per company and per tick:
 
-1. seed the built-in rituals (oracle.rituals.kinds) for a company that has none;
+1. seed the built-in rituals (oracle.rituals.kinds) a company does not have yet;
 2. for each active ritual whose ``next_due_at - prep_hours`` has come, create its
    occurrence (unique ``(ritual_id, due_at)``: idempotent across ticks and overlapping
    calls) and advance ``next_due_at``;
@@ -12,7 +12,9 @@ own ``try``), per company and per tick:
    pattern): ready, or ``attempts`` + 1 and ``failed`` after :data:`MAX_ATTEMPTS`; then,
    with summaries on Every pre-read, start its summary run (oracle.rituals.summaries);
 4. mark ready occurrences ``missed`` :data:`MISSED_AFTER` after their end when nothing
-   was recorded.
+   was recorded;
+5. send the weekly alignment report's Slack posts that are due (F6: its report is the
+   ``alignment_report`` ritual's pre-read; this is the report's only clock).
 
 At most :data:`PER_TICK` occurrences per company per tick; the rest wait for the next
 minute. Building a pre-read makes no model call.
@@ -84,15 +86,46 @@ async def _active_users(db: AsyncSession) -> list[User]:
 # --- seeding and the ticker -------------------------------------------------------------
 
 
+async def _alignment_schedule(db: AsyncSession) -> tuple[Schedule, bool]:
+    """The ``alignment_report`` ritual's schedule and whether it is on: F6's stored day,
+    time and zone (oracle.reports.alignment settings)."""
+    from oracle.reports import alignment
+
+    settings = await alignment.load_settings(db)
+    schedule = Schedule(
+        freq="weekly", weekday=alignment.WEEKDAYS.index(settings.weekday), time=settings.time,
+        timezone=settings.timezone,
+    )  # fmt: skip
+    return schedule, settings.enabled
+
+
+def _first_alignment_due(schedule: Schedule, now: datetime) -> datetime:
+    """F6's catch-up, kept: when this local week's moment has already passed, the week
+    that just ended is reported on the first tick (its block finds a report already
+    built); otherwise the next moment."""
+    from oracle.reports.alignment import week_start_of
+
+    passed = next_occurrence(schedule, now - timedelta(days=7))
+    if passed <= now and week_start_of(passed, schedule.timezone) == week_start_of(
+        now, schedule.timezone
+    ):
+        return passed
+    return next_occurrence(schedule, now)
+
+
 async def seed(db: AsyncSession) -> int:
-    """The built-in rituals for a company that has none (its first tick): each kind's
-    defaults in the company's time zone, owned by its earliest active owner, with every
-    owner and approver attending. Returns how many were added; the caller commits."""
+    """The built-in rituals a company does not have yet (all of them on its first tick;
+    a kind whose feature lands later on a later tick): each kind's defaults in the
+    company's time zone, owned by its earliest active owner, with every owner and
+    approver attending. ``alignment_report`` takes F6's stored schedule. Returns how many
+    were added; the caller commits."""
     tenant = current_tenant(db)
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtext('rituals.seed:' || :t))"), {"t": str(tenant)}
     )
-    if await db.scalar(select(Ritual.id).limit(1)) is not None:
+    have = set(await db.scalars(select(Ritual.kind).where(Ritual.builtin)))
+    missing = [k for k in builtins() if k.key not in have]
+    if not missing:
         return 0
     users = await _active_users(db)
     owners = [u for u in users if u.role == "owner"]
@@ -101,20 +134,41 @@ async def seed(db: AsyncSession) -> int:
     attendees = [u.id for u in users if u.role in ("owner", "approver")]
     tz = await company_timezone(db)
     now = clock.now()
-    for kind in builtins():
+    for kind in missing:
         schedule = Schedule(**{**kind.default_schedule, "timezone": tz})
         active = kind.enabled_by_default
+        first = next_occurrence(schedule, now)
+        if kind.key == "alignment_report":
+            schedule, active = await _alignment_schedule(db)
+            first = _first_alignment_due(schedule, now)
         db.add(
             Ritual(
                 kind=kind.key, title=kind.title, builtin=True,
                 schedule=schedule.model_dump(), duration_min=kind.duration_min,
                 prep_hours=kind.prep_hours, owner_id=owners[0].id, attendee_ids=attendees,
                 status="active" if active else "paused",
-                next_due_at=next_occurrence(schedule, now) if active else None,
+                next_due_at=first if active else None,
             )
         )  # fmt: skip
     await db.flush()
-    return len(builtins())
+    return len(missing)
+
+
+async def follow_alignment_setting(db: AsyncSession) -> None:
+    """F6's ``alignment_report`` setting changed: its ritual takes the new day, time and
+    zone, and is paused while the report is disabled. The caller commits."""
+    ritual = await db.scalar(
+        select(Ritual).where(Ritual.kind == "alignment_report", Ritual.builtin).with_for_update()
+    )
+    if ritual is None:
+        return
+    schedule, enabled = await _alignment_schedule(db)
+    if ritual.schedule == schedule.model_dump() and (ritual.status == "active") == enabled:
+        return
+    ritual.schedule = schedule.model_dump()
+    ritual.status = "active" if enabled else "paused"
+    ritual.next_due_at = next_occurrence(schedule, clock.now()) if enabled else None
+    ritual.lock_version += 1
 
 
 async def _previous_due(db: AsyncSession, ritual_id: uuid.UUID, due_at: datetime):
@@ -240,6 +294,12 @@ async def tick_due(db: AsyncSession) -> dict[str, int]:
     ):
         occ.status = "missed"
         out["missed"] += 1
+    await db.commit()
+    # The weekly alignment report's Slack posts that are due (F6), after its ritual built
+    # it: the report goes out on the tick that made it, and failed posts retry here.
+    from oracle.reports import slack as report_slack
+
+    await report_slack.deliver_due(db)
     await db.commit()
     return out
 
@@ -557,6 +617,9 @@ async def inbox_rows(db: AsyncSession, principal: Principal) -> list[InboxRitual
                            reason=reason, state=state, counts=counts)  # type: ignore[arg-type]  # fmt: skip
 
     for o, r in pairs:
+        if r.kind == "alignment_report" and o.status != "failed":
+            # The report has its own Inbox row (oracle.reports.service); no meeting to note.
+            continue
         if o.status == "failed":
             if r.status == "active" and has_role(principal.role, "owner"):
                 rows.append(row(o, r, "failed", "open", True))

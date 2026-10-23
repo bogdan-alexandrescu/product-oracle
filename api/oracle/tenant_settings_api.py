@@ -445,6 +445,15 @@ async def _company_narrowing(
     return {"hidden_items": hidden} if hidden else {}
 
 
+async def _follow(db: AsyncSession, key: str) -> None:
+    """What follows a stored change: F6's report schedule moves its ritual (H2)."""
+    if key == "alignment_report":
+        from oracle.rituals.service import follow_alignment_setting
+
+        await db.flush()
+        await follow_alignment_setting(db)
+
+
 @router.put(
     "/settings/{key}",
     response_model=SettingOut,
@@ -461,6 +470,7 @@ async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB)
     before = await company_scope(db, principal.tenant_id) if key in COMPANY_KEYS else None
     if body.value is None:
         await clear_setting(db, key)
+        await _follow(db, key)
         extra = await _company_narrowing(db, principal, before)
         await audit.record(
             db, principal, "setting.reset", "tenant_setting", data={"key": key, **extra}
@@ -478,6 +488,7 @@ async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB)
     else:
         row.value = value
         row.updated_by = principal.id
+    await _follow(db, key)
     extra = await _company_narrowing(db, principal, before)
     await audit.record(
         db,

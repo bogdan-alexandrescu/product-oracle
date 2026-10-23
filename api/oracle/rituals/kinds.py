@@ -60,6 +60,11 @@ KINDS: dict[str, RitualKind] = {
         RitualKind("board_meeting", "Board meeting",
                    _s("every_n_weeks", interval=7, weekday=3, time="10:00"), 120, 72,
                    ("update_draft", "goals", "outcomes_assessed"), "updates", False),
+        # F6's weekly report on the ritual clock: seeded on F6's stored day, time and zone
+        # (oracle.reports.alignment settings), built at its moment with no lead time.
+        RitualKind("alignment_report", "Weekly alignment report",
+                   _s("weekly", weekday=0, time="08:00"), 15, 0,
+                   ("alignment_report",), None, True),
         RitualKind("custom", "Custom ritual",
                    _s("weekly", weekday=0, time="09:00"), 30, 12,
                    ("since_last", "needs_decision"), None, True),
