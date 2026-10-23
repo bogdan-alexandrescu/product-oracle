@@ -66,7 +66,7 @@ test("the creator edits every field of a proposal; the inspector and a reload sh
   await expect(ins).toContainText("Hard to reverse");
   await expect(ins).toContainText("Spend incidents drop below 2 a month");
   await expect(ins).toContainText("spend incidents per month: 6 → 2");
-  await expect(ins.getByText("Informed")).toBeVisible();
+  await expect(ins).toContainText(/Informed[^]*approver@example\.com/);
 
   await page.reload();
   await chip(page, "All").click();
@@ -86,14 +86,14 @@ test("a stale save shows the conflict message and keeps the form", async ({ brow
   // two people.
   const context = await browser.newContext();
   const first = await context.newPage();
-  const second = await context.newPage();
   await login(first, COMMENTER);
   await openCaps(first);
+  const second = await context.newPage();
   await inspector(first).getByRole("button", { name: "Edit", exact: true }).click();
   const stale = inspector(first).getByRole("form", { name: "Edit decision" });
   await stale.getByLabel("Decision", { exact: true }).fill("A stale title");
 
-  await login(second, COMMENTER);
+  // The second tab shares the browser's sign-in: the same commenter, in another tab.
   await openCaps(second);
   await inspector(second).getByRole("button", { name: "Edit", exact: true }).click();
   const fresh = inspector(second).getByRole("form", { name: "Edit decision" });

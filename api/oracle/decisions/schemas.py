@@ -133,7 +133,8 @@ class DecideIn(BaseModel):
     rationale: str = Field(max_length=4000)
     # The approver confirms it; defaults to the decision's.
     reversibility: Reversibility | None = None
-    # Default: the decision date plus 90 days; at most 365 days out, never in the past.
+    # Default: the proposal's review date, else the decision date plus 90 days; at most
+    # 365 days out, never in the past.
     review_at: date | None = None
     expected_outcome: str = Field(max_length=2000)
     prediction: PredictionIn | None = None

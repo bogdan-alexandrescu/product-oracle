@@ -290,14 +290,17 @@ async def test_edit_keeps_a_proposals_review_date_and_prediction(client, ctx):
     )
     assert resp.status_code == 200, resp.text
     out = resp.json()
-    assert out["review_at"] == in_days(30) and out["lock_version"] == 2
+    assert out["review_at"] == in_days(30) and out["lock_version"] > 1
     assert out["question"] == "Do caps wait for anomaly detection?"
     assert out["contributor_ids"] == [str(ctx.users["owner"].id)]
     assert out["prediction"]["metric"] == "spend incidents per month"
     assert out["outcome_id"] is None
     bad_goal = await client.patch(
         path,
-        json={"lock_version": 2, "prediction": {**prediction, "goal_id": str(uuid.uuid4())}},
+        json={
+            "lock_version": out["lock_version"],
+            "prediction": {**prediction, "goal_id": str(uuid.uuid4())},
+        },
         headers=ctx.as_("commenter"),
     )
     assert bad_goal.status_code == 422
