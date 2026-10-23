@@ -25,6 +25,7 @@ import {
   type ChipKind,
 } from "@/components/ds";
 import { DiscussSubject } from "@/components/discuss/StartDiscussion";
+import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
 import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
@@ -659,7 +660,11 @@ function SegmentItem({
   onDraftChanged: () => void;
 }) {
   const kind = s.checkpoint;
-  const { me } = useMe();
+  const { me, role } = useMe();
+  // B6: once the baseline is approved, Oracle offers a goals interview on the goals still vague.
+  const vague = hasRole(role, "commenter")
+    ? (checkpoints.find((c) => c.kind === "baseline_confirm" && c.status === "approved") as { vague_goals?: number | null } | undefined)?.vague_goals ?? 0
+    : 0;
   // D8: the waiting checkpoint's shared draft, for every member who can see the run.
   const waitingCp = checkpoints.find((c) => c.status === "pending") ?? null;
   const draft = useDraft(run.id, waitingCp?.id ?? null);
@@ -698,6 +703,7 @@ function SegmentItem({
     deciding.length > 0 ||
     delivering.length > 0 ||
     s.status === "running" ||
+    vague > 0 ||
     !!shared;
   const rejected = !!s.draft_import?.error;
   // Each open decision's note, here so Send back to writer can fill it in.
@@ -913,6 +919,7 @@ function SegmentItem({
           {delivering.map((cp) => (
             <DeliveryLine key={cp.id} cp={cp} />
           ))}
+          <VagueGoalsLine count={vague} href={`/baseline?tab=proposals&run=${run.id}&interview=vague`} />
           {deciding.map((cp, i) =>
             // D10: a PRD or roadmap review with its draft imported is decided in the version;
             // a refused draft and a console answer stay here.

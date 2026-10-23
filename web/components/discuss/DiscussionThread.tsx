@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
 
 import { CitationChip } from "@/components/CitationChip";
 import { findPeople, PersonPicker, type Person } from "@/components/PersonPicker";
@@ -282,13 +282,26 @@ function OracleReply({ m, discussionId, asker }: { m: Message; discussionId: str
 
 type Draft = { user_id: string; name: string };
 
+/** What a page drives in the composer (B6's quick replies): send a reply, or start an @mention. */
+export type ComposerHandle = { send: (text: string) => Promise<void>; mention: () => void };
+
 /**
  * The composer: plain text, "@" opens the member picker (C2's directory; viewers show as
  * "can read"). In a private discussion only the starter brings someone new in: anyone
  * else's mention of an outsider turns amber, says so, and keeps Send disabled until it is
  * removed.
  */
-function Composer({ d, messages, onSent }: { d: Discussion; messages: Message[]; onSent: () => Promise<void> }) {
+function Composer({
+  d,
+  messages,
+  onSent,
+  handle,
+}: {
+  d: Discussion;
+  messages: Message[];
+  onSent: () => Promise<void>;
+  handle?: Ref<ComposerHandle>;
+}) {
   const { me } = useMe();
   const [text, setText] = useState("");
   // B6 Goals interview's discussions start with "Ask Oracle" on (the entity's interview flag).
@@ -331,26 +344,45 @@ function Composer({ d, messages, onSent }: { d: Discussion; messages: Message[];
     setQuery(null);
     box.current?.focus();
   };
-  const send = async () => {
-    if (!text.trim() || anyBlocked) return;
+  const post = async (body: string, picked: Draft[]) => {
     setSending(true);
     setError(null);
     try {
       await unwrap(
         api.POST("/v1/discussions/{discussion_id}/messages", {
           params: { path: { discussion_id: d.id } },
-          body: { body: text.trim(), mention_oracle: askOracle, mentions: mentions.filter((m) => text.includes(`@${m.name}`)).map((m) => m.user_id) },
+          body: { body, mention_oracle: askOracle, mentions: picked.filter((m) => body.includes(`@${m.name}`)).map((m) => m.user_id) },
         }),
       );
-      setText("");
-      setMentions([]);
-      await onSent();
+      return true;
     } catch (e) {
       setError(detail(e));
+      return false;
     } finally {
       setSending(false);
     }
   };
+  const send = async () => {
+    if (!text.trim() || anyBlocked) return;
+    if (!(await post(text.trim(), mentions))) return;
+    setText("");
+    setMentions([]);
+    await onSent();
+  };
+  useImperativeHandle(handle, () => ({
+    send: async (reply: string) => {
+      if (await post(reply, [])) await onSent();
+    },
+    mention: () => {
+      const next = text && !/\s$/.test(text) ? `${text} @` : `${text}@`;
+      setText(next);
+      setQuery("");
+      requestAnimationFrame(() => {
+        box.current?.focus();
+        box.current?.setSelectionRange(next.length, next.length);
+      });
+    },
+  }));
 
   return (
     <form
@@ -462,12 +494,24 @@ export function DiscussionThread({
   onBack,
   backLabel = "All feedback",
   onChanged,
+  refreshKey = 0,
+  belowHeader,
+  renderAfter,
+  composer,
 }: {
   id: string;
   onBack?: () => void;
   backLabel?: string;
   /** Something about it changed (a message, its visibility): lists showing it reload. */
   onChanged?: () => void;
+  /** A change made elsewhere (a version proposed or accepted): bumping it reloads the thread. */
+  refreshKey?: number;
+  /** Under the header (B6: the missing-field chips). */
+  belowHeader?: ReactNode;
+  /** Under a message (B6: Oracle's version cards and quick replies). */
+  renderAfter?: (m: Message, ctx: { d: Discussion; messages: Message[] }) => ReactNode;
+  /** The composer's handle (B6's quick replies send and mention through it). */
+  composer?: Ref<ComposerHandle>;
 }) {
   const { me, role } = useMe();
   const myId = me?.user_id ?? null;
@@ -490,7 +534,7 @@ export function DiscussionThread({
     return () => {
       live = false;
     };
-  }, [id]);
+  }, [id, refreshKey]);
 
   const back = onBack && (
     <Button variant="ghost" icon="chevron-left" onClick={onBack} aria-label={backLabel}>
@@ -690,6 +734,7 @@ export function DiscussionThread({
           {!open && <Chip kind="na">Closed</Chip>}
           <span className="min-w-0 truncate">{d.subject_label}</span>
         </div>
+        {belowHeader}
         {d.summary && (
           <p className="rounded-lg bg-surface2 px-3 py-2 text-sm leading-5 break-words" data-testid="discussion-summary">
             <span className="font-semibold">Summary: </span>
@@ -773,6 +818,7 @@ export function DiscussionThread({
               {!m.deleted && open && d.me.can_write && m.author_kind === "person" && m.author?.user_id && (
                 <OwnMessageActions m={m} discussionId={d.id} onDelete={() => void remove(m)} onSaved={() => void reload()} />
               )}
+              {renderAfter?.(m, { d, messages })}
             </li>
           ),
         )}
@@ -793,6 +839,7 @@ export function DiscussionThread({
         <Composer
           d={d}
           messages={messages}
+          handle={composer}
           onSent={async () => {
             await reload();
             onChanged?.();

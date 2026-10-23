@@ -35,6 +35,11 @@ type Props = {
   onAdd: (kind: AddKind) => void;
   /** B5: read the goals' `*_text` values into typed fields (approvers). */
   onFill?: () => void;
+  /** B6: Make measurable on a Not measurable chip (commenters and up). */
+  onMakeMeasurable?: (goal: EntityOut) => void;
+  /** B6: the vague goals and the header's Interview vague goals (commenters and up). */
+  vague?: number;
+  onInterviewVague?: () => void;
 };
 
 /** A goal's typed cell, or its text in grey with the tooltip saying it is not checked yet. */
@@ -80,7 +85,7 @@ function TitleButton({
  * On a phone the grid becomes a list: each feature's title, then its goal links as small
  * G-tags with their strength.
  */
-export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill }: Props) {
+export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onMakeMeasurable, vague = 0, onInterviewVague }: Props) {
   const low = trace?.low ?? DEFAULT_LOW;
   const live = graph.entities.filter((e) => e.status !== "rejected");
   const goals = sortedGoals(graph);
@@ -115,20 +120,43 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
     {
       key: "goal",
       header: "Goal",
-      cell: (g) => (
-        <span className="flex min-w-0 items-center gap-2">
-          <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} proposed={g.status === "proposed"} codeOnly />
-          <TitleButton entity={g} name={tags.get(g.id)} onOpen={onOpen} className="font-medium" />
-          {g.goal_check?.measurable === false && (
-            <span className="flex-none">
-              <Chip kind="warn" title={missingTip(g.goal_check)} data-testid="not-measurable">
-                Not measurable
-              </Chip>
+      cell: (g) => {
+        const vague = g.goal_check?.measurable === false;
+        const chip = (
+          <Chip kind="warn" title={missingTip(g.goal_check)} data-testid="not-measurable">
+            Not measurable
+          </Chip>
+        );
+        const head = (
+          <span className="flex min-w-0 items-center gap-2">
+            <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} proposed={g.status === "proposed"} codeOnly />
+            <TitleButton entity={g} name={tags.get(g.id)} onOpen={onOpen} className="font-medium" />
+            {vague && !onMakeMeasurable && <span className="flex-none">{chip}</span>}
+            <LockMark entity={g} meId={meId} />
+          </span>
+        );
+        if (!vague || !onMakeMeasurable) return head;
+        // B6: the chip and its Make measurable on a line of their own, so the title keeps its room.
+        return (
+          <span className="flex min-w-0 flex-col gap-1 py-1">
+            {head}
+            <span className="flex min-w-0 items-center gap-1">
+              <span className="flex-none">{chip}</span>
+              <Button
+                variant="ghost"
+                disabled={busy}
+                data-testid="make-measurable"
+                onClick={(e: MouseEvent) => {
+                  e.stopPropagation();
+                  onMakeMeasurable(g);
+                }}
+              >
+                Make measurable
+              </Button>
             </span>
-          )}
-          <LockMark entity={g} meId={meId} />
-        </span>
-      ),
+          </span>
+        );
+      },
     },
     {
       key: "status",
@@ -280,6 +308,16 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         count={goals.length}
         tools={
           <>
+            {onInterviewVague && vague > 0 && (
+              <>
+                <Button disabled={busy} onClick={onInterviewVague}>
+                  {`Interview vague goals (${vague})`}
+                </Button>
+                <InfoTip label="the goals interview">
+                  Oracle asks one question at a time and proposes measurable versions. Nothing runs until you start.
+                </InfoTip>
+              </>
+            )}
             {add("goal")}
             {canWrite && onFill && toFill > 0 && (
               <>
