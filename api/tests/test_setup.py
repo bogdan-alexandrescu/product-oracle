@@ -23,7 +23,10 @@ from oracle.tenancy import tenant_session
 from tests.conftest import make_tenant
 from tests.connection_helpers import add_connection, make_person
 
-OWNER_KEYS = ["connect", "sources", "invite", "domains", "eng_lead", "horizons", "build_baseline"]
+OWNER_KEYS = [
+    "connect", "sources", "invite", "domains", "eng_lead", "horizons", "timezone",
+    "build_baseline",
+]  # fmt: skip
 DEFAULT_HORIZONS = {
     "short_quarters": 1,
     "medium_quarters": 2,
@@ -59,12 +62,12 @@ def _step(body: dict, key: str) -> dict:
 
 async def test_a_new_companys_owner_has_every_step_open(client, owner):
     # protects=the owner's checklist for a new company; fails_when=a step reads done
-    # without its rows, or the order differs; no_claim=the web draws it (seven owner
-    # steps, A3's eng_lead and B1's build_baseline among them).
+    # without its rows, or the order differs; no_claim=the web draws it (eight owner
+    # steps, A3's eng_lead, H2's timezone and B1's build_baseline among them).
     body = await _setup(client, owner)
     assert [s["key"] for s in body["steps"]] == OWNER_KEYS
-    assert [s["done"] for s in body["steps"]] == [False] * 7
-    assert body["done"] == 0 and body["total"] == 7 and body["hidden"] is False
+    assert [s["done"] for s in body["steps"]] == [False] * 8
+    assert body["done"] == 0 and body["total"] == 8 and body["hidden"] is False
     assert _step(body, "connect")["count"] == 0
     assert _step(body, "sources")["count"] == 0
     assert _step(body, "invite")["count"] == 1
@@ -211,6 +214,29 @@ async def test_horizons_done_while_a_row_is_stored(client, owner):
     )
     assert reset.status_code == 200 and reset.json()["is_default"] is True
     assert _step(await _setup(client, owner), "horizons")["done"] is False
+
+
+async def test_timezone_done_once_the_company_time_zone_is_stored(client, tenant_id, owner):
+    # protects=H2's Time zone step (A1's registry): owners only, done once an owner stored
+    # company_timezone, open again after a reset; fails_when=the UTC default reads as
+    # done, an approver gets the step, or a reset leaves it done; no_claim=the web's
+    # "Time zone" copy and where it opens.
+    approver = await make_person(tenant_id, "approver@example.com", "approver")
+    assert "timezone" not in [s["key"] for s in (await _setup(client, approver))["steps"]]
+    assert _step(await _setup(client, owner), "timezone") == {
+        "key": "timezone", "done": False, "count": None, "detail": None,
+    }  # fmt: skip
+    url = "/v1/settings/company_timezone"
+    put = await client.put(url, json={"value": "Europe/Lisbon"}, headers=owner.headers)
+    assert put.status_code == 200, put.text
+    body = await _setup(client, owner)
+    assert _step(body, "timezone") == {
+        "key": "timezone", "done": True, "count": None, "detail": "Europe/Lisbon",
+    }  # fmt: skip
+    assert body["done"] == 1
+    reset = await client.put(url, json={"value": None}, headers=owner.headers)
+    assert reset.status_code == 200
+    assert _step(await _setup(client, owner), "timezone")["done"] is False
 
 
 async def test_a_second_company_sees_only_its_own_counts(client, tenant_id, owner):
