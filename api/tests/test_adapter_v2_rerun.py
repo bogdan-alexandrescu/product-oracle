@@ -7,7 +7,7 @@ import pytest
 
 from tests.fixtures import seed_auth
 from tests.swarmcloud_fake import EGRESS, FakeSwarmCloud
-from tests.test_adapter_v2 import LB, mcp_session, token_of, use
+from tests.test_adapter_v2 import LB, REVIEW_LEAD, mcp_session, token_of, use
 from tests.test_adapter_v2 import settings as _v2_settings
 from tests.test_draft_sent_back import BAD_PRD, WRITER, _feedback_run
 from tests.test_runs import decide, get, pending, started, tick
@@ -61,8 +61,8 @@ async def test_attached_agents_read_the_previous_files_with_get_run_output(clien
 
 
 async def test_a_person_s_not_yet_posts_the_problems_after_the_note(client, owner):
-    """AC6: the last segment's review, a draft still refused: the findings are the note,
-    then a lead line and the import's problems."""
+    """AC6: the last segment's review, a draft still refused: the findings are the
+    structured review (D4), its note verbatim, then a lead line and the import's problems."""
     tenant_id, auth = owner
     swarm = FakeSwarmCloud(mcp=True, await_input=True, service_answer=True)
     swarm.step_files[WRITER] = {"prd.md": BAD_PRD}
@@ -79,14 +79,15 @@ async def test_a_person_s_not_yet_posts_the_problems_after_the_note(client, owne
     assert answer["step_id"] == "next_draft-review2"
     assert answer["payload"]["verdict"] == "NOT_YET"
     assert answer["payload"]["findings"] == [
-        "Cite the Slack thread",
+        REVIEW_LEAD.format(attempt=2),
+        "Note: Cite the Slack thread",
         "Oracle's check found these problems in prd.md; fix each one:",
         summary,
     ]
 
 
 async def test_a_person_s_not_yet_with_no_problems_posts_the_note_only(client, owner):
-    """AC6: no problems: the findings are [note], as before."""
+    """AC6: no problems: the findings are the structured review (D4) and its note."""
     tenant_id, auth = owner
     swarm = FakeSwarmCloud(mcp=True, await_input=True, service_answer=True)
     run = await _feedback_run(client, auth, tenant_id, swarm)
@@ -96,7 +97,7 @@ async def test_a_person_s_not_yet_with_no_problems_posts_the_note_only(client, o
     await decide(client, auth, run, "changes_requested", note="Add a guardrail metric")
     assert swarm.answers[-1]["payload"] == {
         "verdict": "NOT_YET",
-        "findings": ["Add a guardrail metric"],
+        "findings": [REVIEW_LEAD.format(attempt=1), "Note: Add a guardrail metric"],
     }
 
 

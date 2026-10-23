@@ -25,7 +25,7 @@ from oracle.runs.models import Checkpoint
 from oracle.tenancy import tenant_session
 from tests.fixtures import seed_auth
 from tests.swarmcloud_fake import FakeSwarmCloud
-from tests.test_adapter_v2 import feedback_doc, on, use
+from tests.test_adapter_v2 import REVIEW_LEAD, feedback_doc, on, use
 from tests.test_adapter_v2 import settings as _v2_settings
 from tests.test_priorities import _token
 from tests.test_runs import decide, get, pending, started, tick
@@ -201,14 +201,16 @@ async def test_a_draft_still_refused_after_the_revision_opens_the_inbox(client, 
     assert inbox["revising"] == []
 
     # The person requests changes: posted for them, and revise2 runs. The draft is still
-    # refused, so the import's problems follow the note (D5 Re-run keeps its output).
+    # refused, so the import's problems follow the structured review and its note (D4, D5
+    # Re-run keeps its output).
     run = await decide(client, auth, run, "changes_requested", note="Cite the Slack thread")
     assert run["status"] == "running"
     assert swarm.answers[-1]["step_id"] == "next_draft-review2"
     assert swarm.answers[-1]["payload"] == {
         "verdict": "NOT_YET",
         "findings": [
-            "Cite the Slack thread",
+            REVIEW_LEAD.format(attempt=2),
+            "Note: Cite the Slack thread",
             "Oracle's check found these problems in prd.md; fix each one:",
             cp["payload"]["import"]["summary"],
         ],

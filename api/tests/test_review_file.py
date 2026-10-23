@@ -337,6 +337,14 @@ def test_findings_lead_one_line_per_entry_unchanged_and_note():
     assert len(lines) == 6
 
 
+def test_findings_put_oracles_check_after_the_note():
+    """protects=the person's note comes before Oracle's check, as before D4 (D5); fails_when=
+    the check sits between the review and its note; no_claim=SwarmCloud."""
+    check = ["Oracle's check found these problems in prd.md; fix each one:", "Oracle refused"]
+    lines = review_file.findings(_full(), check)
+    assert lines[-3:] == ["Note: Keep it short", *check]
+
+
 def test_findings_are_capped_at_200_lines():
     """protects=a long review stays a bounded answer; fails_when=more than 200 lines or no
     pointer to the rest; no_claim=what the agent reads next."""
@@ -411,6 +419,9 @@ async def test_a_send_back_with_staged_actions_and_no_note_stores_the_review(rev
     assert sent["unchanged"] == [] and sent["general_note"] is None
     assert "accept" not in [e["action"] for e in sent["items"]]
 
+    # No note: the attempt shows none (never the YAML); the agents still get the file.
+    [seg] = [s for s in run["segments"] if s["name"] == "roadmap_items"]
+    assert seg["attempts"][-1]["note"] is None
     # The re-run's first step has the YAML, after the instruction lines.
     spec = runtime.submitted[-1]
     assert spec.labels["attempt"] == "2"

@@ -33,6 +33,11 @@ from tests.test_runs import as_user, decide, get, pending, started, tick
 
 PUBLIC = "https://oracle.swarm.saga.xyz"
 MCP_URL = PUBLIC + "/mcp"
+# D4: the lead line of a note-only send-back's findings (oracle.runs.review_file.findings).
+REVIEW_LEAD = (
+    "Structured review of the next_draft output, attempt {attempt}: 0 entries. "
+    "The full review: get_checkpoint_review."
+)
 # The client as Google's load balancer appends it: "<client>, <load balancer>".
 LB = "35.191.0.1"
 CONTRACT_BODY = {
@@ -391,7 +396,11 @@ async def test_two_round_workflow_answers_replay_and_the_revise_step(client, own
             "workflow_id": "wf_1",
             "step_id": "next_draft-review1",
             "answer_id": cp["id"],
-            "payload": {"verdict": "NOT_YET", "findings": ["Add a guardrail metric"]},
+            # D4: the revise step reads the structured review; the note is in it verbatim.
+            "payload": {
+                "verdict": "NOT_YET",
+                "findings": [REVIEW_LEAD.format(attempt=1), "Note: Add a guardrail metric"],
+            },
             "via": "mcp",
             "on_behalf_of": "pm@example.com",
         }
@@ -439,7 +448,7 @@ async def test_two_round_workflow_answers_replay_and_the_revise_step(client, own
     # What SwarmCloud serves back: the record, never the payload.
     record = await runtime.answer_record("wf_1", "next_draft-review1", "review1.json")
     assert record.answer_id == cp["id"] and record.verdict == "NOT_YET"
-    assert record.findings == ("Add a guardrail metric",)
+    assert record.findings == (REVIEW_LEAD.format(attempt=1), "Note: Add a guardrail metric")
     assert record.on_behalf_of == "pm@example.com" and record.via == "mcp"
     served = swarm.workflows["wf_1"].step("next_draft-review1").answer
     assert "payload" not in served and served["sha256"]
@@ -713,7 +722,7 @@ async def test_already_answered_by_oracles_lost_post_with_the_same_verdict(clien
     assert attempt["note"] == "Add a guardrail metric"
     # The revision used the first wording; the run goes on to round 2 in the same workflow.
     staged = json.loads(swarm.workflows["wf_1"].step("next_draft-revise1").staged["review1.json"])
-    assert staged["findings"] == ["Add a guardrail metric"]
+    assert staged["findings"] == [REVIEW_LEAD.format(attempt=1), "Note: Add a guardrail metric"]
     await tick(client, auth)
     run = await get(client, auth, run["id"])
     assert run["status"] == "awaiting_checkpoint"
