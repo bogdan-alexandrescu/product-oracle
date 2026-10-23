@@ -146,5 +146,6 @@ async def test_decide_409_bodies_and_the_approve_fields_match(edits):  # noqa: F
     assert set(seen) == set(CONFLICT_FIELDS)
     for code, fields in CONFLICT_FIELDS.items():
         _same_shape(seen[code], fx["conflicts"][code], fields, code)
+    want = fx["conflicts"]["edits_leave_problems"]["left"][0]
     for left in seen["edits_leave_problems"]["left"]:
-        _same_shape(left, fx["conflicts"]["edits_leave_problems"]["left"][0], GATE_LEFT_FIELDS, "left")
+        _same_shape(left, want, GATE_LEFT_FIELDS, "left")

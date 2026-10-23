@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
-import { login, seedRoadmapReview } from "./helpers";
+import { login, openSeeded, seedRoadmapReview } from "./helpers";
 
 // D1 Roadmap items review at 390 px: rows become cards grouped by horizon, a card opens the
 // inspector as a full-height sheet, and the bar stays at the bottom. The seeded roadmap review run.
@@ -16,8 +16,7 @@ test.use({ viewport: { width: 390, height: 844 } });
 // scroll, a clipped chip or no sheet; no_claim = real devices.
 test("phone: cards by horizon, a sheet inspector, no horizontal scroll", async ({ page }) => {
   await login(page);
-  await seedRoadmapReview(page);
-  await page.goto(`/runs/${RUN}/review/${CP}`);
+  await openSeeded(page, seedRoadmapReview, `/runs/${RUN}/review/${CP}`);
   const card = page.locator('[data-testid="item-row"][data-key="budget-caps"]');
   await expect(card).toContainText("Depends on a later item");
   await expect(card.getByRole("button", { name: "Move to Later", exact: true })).toBeVisible();

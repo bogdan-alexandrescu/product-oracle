@@ -239,6 +239,20 @@ export async function seedRoadmapReview(page: Page): Promise<string> {
   }, ROADMAP_REVIEW_RUN);
 }
 
+/**
+ * Seeds the mock and opens `url`; seeds again when the app's own writes right after sign-in
+ * landed over the seed (the page then says "run … not found").
+ */
+export async function openSeeded(page: Page, seed: (page: Page) => Promise<string>, url: string) {
+  const missing = page.getByText(/^run [0-9a-f-]+ not found$/);
+  for (let i = 0; i < 3; i++) {
+    await seed(page);
+    await page.goto(url);
+    await expect(page.locator("main h1").or(missing).first()).toBeVisible();
+    if (!(await missing.isVisible())) return;
+  }
+}
+
 /** Seeds the mock with the roadmap review run whose file cannot be read as items (ROADMAP_FILE_PROBLEM_RUN, D1). */
 export async function seedRoadmapFileProblem(page: Page): Promise<string> {
   return page.evaluate((seed) => {

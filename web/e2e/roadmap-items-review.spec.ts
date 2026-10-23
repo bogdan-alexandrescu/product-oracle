@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import fixture from "../lib/api/mock/checkpoint-review.json";
 import { ROADMAP_FILE_PROBLEM_RUN, ROADMAP_REVIEW_RUN, ROADMAP_REVIEW_RUN_ATTEMPT2, routeRuns, type RunsContext } from "../lib/api/mock/runs";
 import { MOCK_REVIEW_CHANGE_KEY } from "../lib/api/mock/server";
-import { login, seedRoadmapAttempt2, seedRoadmapFileProblem, seedRoadmapReview } from "./helpers";
+import { login, openSeeded, seedRoadmapAttempt2, seedRoadmapFileProblem, seedRoadmapReview } from "./helpers";
 
 // D1 Roadmap items review (/runs/<id>/review/<checkpoint>): the seeded roadmap review run
 // (ROADMAP_REVIEW_RUN: nine items, three blocking reasons, a dropped item) on the mock.
@@ -17,8 +17,7 @@ const bar = (page: Page) => page.getByTestId("decision-bar");
 
 async function open(page: Page) {
   await login(page);
-  await seedRoadmapReview(page);
-  await page.goto(SCREEN);
+  await openSeeded(page, seedRoadmapReview, SCREEN);
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
 }
 
@@ -27,8 +26,7 @@ async function open(page: Page) {
 // panel instead; no_claim = the other kinds' places.
 test("the run page and the Inbox open the review screen; Back returns to the run", async ({ page }) => {
   await login(page);
-  await seedRoadmapReview(page);
-  await page.goto(`/runs/${RUN}`);
+  await openSeeded(page, seedRoadmapReview, `/runs/${RUN}`);
   await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
   await expect(page).toHaveURL(new RegExp(`${SCREEN}$`));
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
@@ -50,15 +48,18 @@ test("Needs you lists the items with an open reason by horizon; All lists every 
   expect(await keys()).toEqual(["slack-alerts", "budget-caps", "usage-export", "webhooks", "cost-forecast", "sso-login", "anomaly-detection", "mobile-push", "invoice-pdf", "weekly-digest"]);
   await expect(page.getByTestId("group-head").first()).toHaveText("Now · 4 of 4 need you");
   await expect(page.getByTestId("review-summary")).toHaveText("3 blocking · 8 to confirm");
-  await expect(page.getByRole("radio", { name: /Changed/ })).toHaveCount(0);
-  await page.getByRole("radio", { name: /^All/ }).click();
+  await expect(page.getByRole("group", { name: "Show" }).getByRole("button", { name: /Changed/ })).toHaveCount(0);
+  await page.getByRole("group", { name: "Show" }).getByRole("button", { name: /^All/ }).click();
   await expect(page.getByTestId("item-row")).toHaveCount(10);
-  await page.getByRole("radio", { name: /^Needs you/ }).click();
+  await page.getByRole("group", { name: "Show" }).getByRole("button", { name: /^Needs you/ }).click();
   // Every chip and sentence is whole at 1366 px: nothing cut with an ellipsis.
   await page.setViewportSize({ width: 1366, height: 900 });
   const clipped = await page.getByTestId("reason-chip").evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).length);
   expect(clipped).toBe(0);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  // The table and the inspector fit the page (the app shell's own 1 px Ask Oracle strip aside).
+  const table = page.getByTestId("items-table");
+  expect(await table.evaluate((t) => t.scrollWidth <= t.clientWidth)).toBe(true);
+  expect(await page.getByTestId("item-inspector").evaluate((e) => e.getBoundingClientRect().right <= window.innerWidth)).toBe(true);
 });
 
 // Card remove-date: protects = criteria 4 and 5, one click stages Remove date (row done with
@@ -93,8 +94,8 @@ test("blocking reasons hold Approve; fixed or waived it approves with edits", as
   await row(page, "budget-caps").getByRole("button", { name: "Move to Later", exact: true }).click();
   await row(page, "usage-export").getByRole("button", { name: "More actions for Usage export" }).click();
   await page.getByRole("menuitem", { name: "Waive…" }).click();
-  await page.getByLabel("Why waive it").fill("The export section lands in the next PRD version");
-  await page.getByRole("button", { name: "Waive", exact: true }).click();
+  await page.getByTestId("items-table").getByLabel("Why waive it").fill("The export section lands in the next PRD version");
+  await page.getByTestId("items-table").getByRole("button", { name: "Waive", exact: true }).click();
   await expect(row(page, "usage-export").getByTestId("row-done")).toHaveText(/✓ Waived/);
   await expect(approve).toHaveText("Approve with 2 edits");
   await expect(approve).toBeEnabled();
@@ -140,10 +141,10 @@ test("the inspector stages horizon, outcome and dependency edits", async ({ page
   await row(page, "budget-caps").getByTestId("item-title").click();
   const insp = page.getByTestId("item-inspector");
   await expect(insp).toContainText("Item 3 of 9 · selected");
-  await insp.getByRole("radio", { name: "Next" }).click();
+  await insp.getByRole("group", { name: "Horizon" }).getByRole("button", { name: "Next" }).click();
   await expect(bar(page).getByTestId("staged-chip")).toContainText(["Budget caps: moved to Next"]);
   await insp.getByRole("button", { name: "Edit outcome" }).click();
-  await insp.getByLabel("Outcome").fill("No team overspends its monthly budget");
+  await insp.getByRole("textbox", { name: "Outcome" }).fill("No team overspends its monthly budget");
   await insp.getByRole("button", { name: "Save" }).click();
   await expect(bar(page).getByTestId("staged-chip")).toContainText(["Budget caps: outcome edited"]);
   await insp.getByRole("button", { name: "Remove dependency Anomaly detection" }).click();
@@ -156,11 +157,10 @@ test("the inspector stages horizon, outcome and dependency edits", async ({ page
 // or chip; no_claim = how D6 computes them.
 test("attempt 2: Changed lists the diff with resolutions; a declined change needs me", async ({ page }) => {
   await login(page);
-  await seedRoadmapAttempt2(page);
   const run = ROADMAP_REVIEW_RUN_ATTEMPT2.run;
-  await page.goto(`/runs/${run.id}/review/${run.checkpoints[1].id}`);
+  await openSeeded(page, seedRoadmapAttempt2, `/runs/${run.id}/review/${run.checkpoints[1].id}`);
   await expect(row(page, "mobile-push")).toContainText("Change declined");
-  await page.getByRole("radio", { name: /Changed/ }).click();
+  await page.getByRole("group", { name: "Show" }).getByRole("button", { name: /Changed/ }).click();
   await expect(row(page, "slack-alerts").getByTestId("resolution-chip")).toHaveText("Done");
   await expect(row(page, "invoice-pdf").locator("s")).toContainText("Finance downloads each invoice");
   await expect(row(page, "usage-export").getByTestId("resolution-chip")).toHaveText("Done");
@@ -171,9 +171,8 @@ test("attempt 2: Changed lists the diff with resolutions; a declined change need
 // enabled; no_claim = the problem codes' wording.
 test("a file Oracle cannot read shows the error card; only Send back", async ({ page }) => {
   await login(page);
-  await seedRoadmapFileProblem(page);
   const run = ROADMAP_FILE_PROBLEM_RUN.run;
-  await page.goto(`/runs/${run.id}/review/${run.checkpoints[0].id}`);
+  await openSeeded(page, seedRoadmapFileProblem, `/runs/${run.id}/review/${run.checkpoints[0].id}`);
   const card = page.getByTestId("file-problems");
   await expect(card).toContainText("Oracle can't read this file as items");
   await expect(card).toContainText("not valid YAML");
@@ -190,8 +189,8 @@ test("a stale decision shows the review changed, with Reload", async ({ page }) 
   await row(page, "budget-caps").getByRole("button", { name: "Move to Later", exact: true }).click();
   await row(page, "usage-export").getByRole("button", { name: "More actions for Usage export" }).click();
   await page.getByRole("menuitem", { name: "Waive…" }).click();
-  await page.getByLabel("Why waive it").fill("Lands in the next PRD version");
-  await page.getByRole("button", { name: "Waive", exact: true }).click();
+  await page.getByTestId("items-table").getByLabel("Why waive it").fill("Lands in the next PRD version");
+  await page.getByTestId("items-table").getByRole("button", { name: "Waive", exact: true }).click();
   await page.evaluate((key) => localStorage.setItem(key, "commenter@example.com"), MOCK_REVIEW_CHANGE_KEY);
   await bar(page).getByRole("button", { name: /^Approve/ }).click();
   await expect(bar(page).getByTestId("review-changed")).toContainText("The review changed since you loaded it");

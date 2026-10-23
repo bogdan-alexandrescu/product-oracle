@@ -951,6 +951,18 @@ function SegmentItem({
             <AppliedEditsLine key={cp.id} cp={cp} />
           ))}
           {s.feature_set_check && <FeatureSetCheckLine check={s.feature_set_check} />}
+          {waitingCp?.kind === "roadmap_items" && reviewHref(waitingCp) && (
+            // D1: the items are reviewed on their own screen, one row per item that needs a person.
+            <p className="mt-2 flex flex-wrap items-center gap-2" data-testid="items-review-line">
+              <span className="font-semibold">
+                {shared ? shared.tally.need_you + shared.tally.handled + shared.items.filter((i) => i.state === "waiting").length : new Set(s.items_check?.reasons.map((x) => x.item)).size} need you
+                {` · ${shared?.tally.blocking_open ?? s.items_check?.blocking ?? 0} blocking`}
+              </span>
+              <LinkButton href={reviewHref(waitingCp)!} icon="flag" variant={waitingCp.can_decide ? "primary" : "secondary"}>
+                Review items
+              </LinkButton>
+            </p>
+          )}
           {waitingCp?.kind === "feature_set" && reviewHref(waitingCp) && !deciding.includes(waitingCp) && (
             // C7: commenters suggest and viewers read on the review screen too.
             <p className="mt-2" data-testid="review-link">

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login, seedConsoleHeld, seedRoadmapReview } from "./helpers";
+import { login, openSeeded, seedConsoleHeld, seedRoadmapReview } from "./helpers";
 
 /**
  * D3 Approve blocked by problems: Approve and continue stays disabled while a blocking reason
@@ -72,26 +72,31 @@ test("with only the date left approve stays disabled and request changes still s
 // runtime's real console.
 test("a console approval held by blocking problems is confirmed once they are waived", async ({ page }) => {
   await login(page);
-  await seedConsoleHeld(page);
-  await page.goto("/inbox");
+  await openSeeded(page, seedConsoleHeld, "/inbox");
   const badge = page.getByTestId("nav-inbox-badge");
   const before = Number(await badge.textContent());
-  const row = page.locator("tr[data-row]").filter({ hasText: "usage-alerts-roadmap-2" }).filter({ visible: true });
+  // D9's counted row names the roadmap and its PRD, not the run's document slug.
+  const row = page.locator("tr[data-row]").filter({ hasText: "console approval held" }).filter({ visible: true });
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("Console approval held");
   await expect(row).toContainText("Blocking problems are open: fix or waive them, then confirm");
+  // D1: Review opens the Roadmap items review screen, where C7's decision bar holds the
+  // console approval as Confirm until the blocking problem is waived.
   await row.getByRole("link", { name: "Review" }).click();
-
-  const confirm = decision(page).getByRole("button", { name: "Confirm approval" });
-  await expect(decision(page).getByTestId("console-answer")).toContainText("Blocking problems are open: fix or waive them, then confirm");
+  const bar = page.getByTestId("decision-bar");
+  const confirm = bar.getByRole("button", { name: "Confirm" });
+  await expect(bar.getByTestId("console-held")).toContainText("Approved in the console: blocking problems are open: fix or waive them, then confirm");
   await expect(confirm).toBeDisabled();
   await expect(confirm).toHaveAttribute("title", "1 blocking problem left");
-  await waive(page, "Usage export", "Section lands in the next PRD version");
+  await page.locator('[data-testid="item-row"][data-key="usage-export"]').getByRole("button", { name: "More actions for Usage export" }).click();
+  await page.getByRole("menuitem", { name: "Waive…" }).click();
+  await page.getByTestId("items-table").getByLabel("Why waive it").fill("Section lands in the next PRD version");
+  await page.getByTestId("items-table").getByRole("button", { name: "Waive", exact: true }).click();
   await expect(confirm).toBeEnabled();
   await confirm.click();
-  await expect(page.getByTestId("segment-roadmap_items").getByTestId("checkpoint-roadmap_items")).toContainText("Approved");
+  await expect(page.getByTestId("review-status")).toHaveText("Approved");
 
   await page.goto("/inbox");
   await expect(badge).toHaveText(String(before - 1));
-  await expect(page.locator("tr[data-row]").filter({ hasText: "usage-alerts-roadmap-2" })).toHaveCount(0);
+  await expect(page.locator("tr[data-row]").filter({ hasText: "console approval held" })).toHaveCount(0);
 });

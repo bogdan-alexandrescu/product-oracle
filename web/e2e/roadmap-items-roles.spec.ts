@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
-import { login, seedRoadmapReview, signOut } from "./helpers";
+import { login, openSeeded, seedRoadmapReview, signOut } from "./helpers";
 
 // D1 Roadmap items review, by role (c6 Who may stage): commenters suggest, approvers stage and
 // decide, viewers read. The seeded roadmap review run on the mock.
@@ -18,7 +18,7 @@ const bar = (page: Page) => page.getByTestId("decision-bar");
 // approver cannot stage it; no_claim = polling latency.
 test("a commenter suggests; the approver stages the suggestion", async ({ page }) => {
   await login(page);
-  await seedRoadmapReview(page);
+  await openSeeded(page, seedRoadmapReview, SCREEN);
   await signOut(page);
   await login(page, "commenter@example.com");
   await page.goto(SCREEN);
@@ -50,13 +50,13 @@ test("a commenter suggests; the approver stages the suggestion", async ({ page }
 // the row does not say who; no_claim = the member's Inbox and answering (C2's own screens).
 test("Ask a teammate: the row shows who was asked", async ({ page }) => {
   await login(page);
-  await seedRoadmapReview(page);
-  await page.goto(SCREEN);
+  await openSeeded(page, seedRoadmapReview, SCREEN);
   await row(page, "cost-forecast").getByRole("button", { name: "More actions for Cost forecast" }).click();
   await page.getByRole("menuitem", { name: "Ask a teammate…" }).click();
-  await page.getByLabel("Ask").selectOption({ label: "Commenter" });
-  await page.getByLabel("Question").fill("Can the forecast wait for Next?");
-  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const form = page.getByTestId("form-ask");
+  await form.getByLabel("Ask", { exact: true }).selectOption({ label: "Commenter" });
+  await form.getByLabel("Question").fill("Can the forecast wait for Next?");
+  await form.getByRole("button", { name: "Ask", exact: true }).click();
   await expect(row(page, "cost-forecast").getByTestId("asked-chip")).toHaveText("Asked Commenter");
   await expect(bar(page).getByTestId("decision-tally")).toContainText("1 waiting on Commenter");
 });
@@ -64,11 +64,8 @@ test("Ask a teammate: the row shows who was asked", async ({ page }) => {
 // Card viewer: protects = #370, a viewer reads the screen with no buttons that change it;
 // fails_when = a fix, Approve or Send back is drawn; no_claim = the API's refusals.
 test("a viewer reads the review with no buttons", async ({ page }) => {
-  await login(page);
-  await seedRoadmapReview(page);
-  await signOut(page);
   await login(page, "viewer@example.com");
-  await page.goto(SCREEN);
+  await openSeeded(page, seedRoadmapReview, SCREEN);
   await expect(row(page, "slack-alerts")).toContainText("Date unverified");
   await expect(row(page, "slack-alerts").getByRole("button", { name: "Remove date", exact: true })).toHaveCount(0);
   await expect(bar(page).getByTestId("decision-tally")).toContainText("0 of 10 handled");

@@ -61,6 +61,10 @@ export function DecisionBar({
   canNote,
   onDecided,
   onReload,
+  title = "Feature set",
+  approveBlocked = null,
+  sendBackSummary = null,
+  decidedBy = null,
 }: {
   runId: string;
   checkpointId: string;
@@ -79,6 +83,14 @@ export function DecisionBar({
   canNote: boolean;
   onDecided: (decision: "approved" | "changes_requested" | "confirm") => void;
   onReload: () => Promise<void>;
+  /** The screen's name, in the phone's decide sheet ("Decide: Roadmap items"). */
+  title?: string;
+  /** D7: why Approve waits besides the gate ("Split needs the agents"); Send back stays. */
+  approveBlocked?: string | null;
+  /** D4: what a send-back carries ("2 entries · 7 unchanged items"): Send back confirms it first. */
+  sendBackSummary?: string | null;
+  /** Shown instead of the buttons to a reader who cannot decide ("An approver decides"). */
+  decidedBy?: string | null;
 }) {
   const phone = usePhone();
   const [open, setOpen] = useState(false);
@@ -87,7 +99,8 @@ export function DecisionBar({
   const [error, setError] = useState<string | null>(null);
   const [changed, setChanged] = useState<string | null>(null);
   const held = answer?.needs === "confirm" && answer.verdict === "MERGE";
-  const blocked = gateReason(gate);
+  const blocked = [gateReason(gate), approveBlocked].filter(Boolean).join(" · ") || null;
+  const [confirming, setConfirming] = useState(false);
   const tooLong = note.length > NOTE_MAX;
   const canSend = (changes > 0 || !!note.trim()) && !tooLong;
   const approveLabel = held ? "Confirm" : edits > 0 ? `Approve with ${plural(edits, "edit")}` : "Approve";
@@ -115,6 +128,7 @@ export function DecisionBar({
         }),
       );
       setOpen(false);
+      setConfirming(false);
       onDecided(decision);
     } catch (e) {
       if (e instanceof ApiError && e.code === "review_changed") setChanged(e.message);
@@ -183,7 +197,11 @@ export function DecisionBar({
             />
             {tooLong && <span className="text-crit">At most {NOTE_MAX} characters</span>}
           </label>
-          <Button disabled={busy || !canSend} title={canSend ? undefined : "Change a row or write a note to send back"} onClick={() => void decide("changes_requested")}>
+          <Button
+            disabled={busy || !canSend}
+            title={canSend ? undefined : "Change a row or write a note to send back"}
+            onClick={() => (sendBackSummary ? setConfirming(true) : void decide("changes_requested"))}
+          >
             Send back to agents
           </Button>
           <span className="flex flex-wrap items-center gap-2">
@@ -198,24 +216,51 @@ export function DecisionBar({
           </span>
         </div>
       )}
+      {!canDecide && decidedBy && (
+        <p className="text-sm text-text2" data-testid="decided-by">
+          {decidedBy}
+        </p>
+      )}
     </div>
+  );
+
+  // Outside the sticky bar: its stacking context would put the sheet under the app's rail.
+  const confirmSheet = (
+    <Sheet open={confirming} title="Send back to agents" onClose={() => setConfirming(false)} testId="sheet-send-back">
+      <div className="flex flex-col gap-3 px-4 py-3">
+        <p className="text-sm">{sendBackSummary}</p>
+        {note.trim() && <p className="text-sm text-text2">With your note to the agents.</p>}
+        <span className="flex gap-2">
+          <Button variant="solid" disabled={busy} onClick={() => void decide("changes_requested")}>
+            Send back
+          </Button>
+          <Button onClick={() => setConfirming(false)}>Cancel</Button>
+        </span>
+      </div>
+    </Sheet>
   );
 
   if (phone) {
     return (
-      <div className="sticky bottom-[68px] z-20 -mx-2.5 border-t border-line bg-surface px-2.5 py-2" data-testid="decision-bar" data-collapsed="true">
-        <Button className="w-full justify-center" variant={canDecide ? "solid" : "secondary"} onClick={() => setOpen(true)}>
-          {canDecide ? `${plural(changes, "change")} · ${held ? "Confirm" : "Approve"}` : `${plural(changes, "change")} · Details`}
-        </Button>
-        <Sheet open={open} title="Decide: Feature set" onClose={() => setOpen(false)} testId="sheet-decide">
-          <div className="px-4 py-3">{body}</div>
-        </Sheet>
-      </div>
+      <>
+        {confirmSheet}
+        <div className="sticky bottom-[68px] z-20 -mx-2.5 border-t border-line bg-surface px-2.5 py-2" data-testid="decision-bar" data-collapsed="true">
+          <Button className="w-full justify-center" variant={canDecide ? "solid" : "secondary"} onClick={() => setOpen(true)}>
+            {canDecide ? `${plural(changes, "change")} · ${held ? "Confirm" : "Approve"}` : `${plural(changes, "change")} · Details`}
+          </Button>
+          <Sheet open={open} title={`Decide: ${title}`} onClose={() => setOpen(false)} testId="sheet-decide">
+            <div className="px-4 py-3">{body}</div>
+          </Sheet>
+        </div>
+      </>
     );
   }
   return (
-    <div className="sticky bottom-0 z-20 border-t border-line bg-surface px-1 py-3 shadow-panel" data-testid="decision-bar">
-      {body}
-    </div>
+    <>
+      {confirmSheet}
+      <div className="sticky bottom-0 z-20 border-t border-line bg-surface px-1 py-3 shadow-panel" data-testid="decision-bar">
+        {body}
+      </div>
+    </>
   );
 }
