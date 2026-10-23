@@ -68,6 +68,12 @@ def invite_roles(principal: "Principal") -> tuple[Role, ...]:
     return () if principal.is_run else roles_for(principal.role)
 
 
+def least_inviter(role: Role, engineering_lead: bool = False) -> Role:
+    """The least role that may invite with ``role`` (and name an engineering lead): what the
+    caller is re-read against under the gate, so one demoted while waiting is refused."""
+    return "approver" if role in APPROVER_INVITE_ROLES and not engineering_lead else "owner"
+
+
 def roles_for(role: str) -> tuple[Role, ...]:
     if role == "owner":
         return ROLES  # type: ignore[return-value]
@@ -235,11 +241,11 @@ def _check_role(principal: "Principal", role: Role) -> None:
         )
 
 
-async def _gate(session: AsyncSession, principal: "Principal") -> None:
+async def _gate(session: AsyncSession, principal: "Principal", role: Role = "approver") -> None:
     from oracle.members.service import MemberError, _gate
 
     try:
-        await _gate(session, principal, shared=True, role="approver")
+        await _gate(session, principal, shared=True, role=role)
     except MemberError as e:
         raise AccessError(e.kind, e.message) from None
 
@@ -253,7 +259,7 @@ async def approve(
 ) -> AccessRequest:
     """Make an open invite for the request's email (the caller's ``invite_roles`` only)."""
     _check_role(principal, role)
-    await _gate(session, principal)
+    await _gate(session, principal, least_inviter(role))
     row = await _locked(session, request_id)
     if row.status != "pending":
         raise AccessError("conflict", f"This request was already {row.status}")

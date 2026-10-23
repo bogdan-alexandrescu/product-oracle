@@ -251,6 +251,9 @@ WRITE_ROUTES = {
     ("post", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage"): "approver",
     ("delete", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}"): "commenter",
     ("put", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note"): "approver",
+    # Trash (#482): only an owner deletes a run or restores it.
+    ("delete", "/v1/runs/{run_id}"): "owner",
+    ("post", "/v1/runs/{run_id}/restore"): "owner",
 }
 
 
@@ -396,6 +399,8 @@ NO_CALL = {
     ("post", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage"),
     ("delete", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}"),
     ("put", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note"),
+    ("delete", "/v1/runs/{run_id}"),
+    ("post", "/v1/runs/{run_id}/restore"),
 }
 
 

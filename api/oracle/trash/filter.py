@@ -17,6 +17,7 @@ Only oracle.trash reads trashed rows, with the :data:`INCLUDE_TRASHED` execution
 would get around this (raw SQL or Core reads of these tables).
 """
 
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy import ColumnElement, Table, Text, and_, cast, event, literal_column, or_, select
@@ -108,50 +109,61 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
     }
 
 
-def _spec_document_live() -> ColumnElement[bool]:
+def _spec_document_live(cls: Any) -> ColumnElement[bool]:
     """A spec request whose own tech brief (``params["document_id"]``) is not trashed."""
     from oracle.docs.models import Document
-    from oracle.v2.models import ArtifactRequest
 
     docs = Document.__table__
-    spec = ArtifactRequest.params.op("->>", return_type=Text)(literal_column("'document_id'"))
+    spec = cls.params.op("->>", return_type=Text)(literal_column("'document_id'"))
     trashed = select(cast(docs.c.id, Text)).where(docs.c.deleted_at.is_not(None))
     return or_(spec.is_(None), spec.not_in(trashed))
 
 
-_CRITERIA: dict[type, ColumnElement[bool]] = {}
+def _live_parents(parents: list[tuple[str, Any]]) -> Callable[[Any], ColumnElement[bool]]:
+    """The clause for a class (or an alias of it): each parent link empty or not trashed."""
+    return lambda cls: and_(
+        *(
+            or_(getattr(cls, name).is_(None), getattr(cls, name).not_in(_trashed(t)))
+            for name, t in parents
+        )
+    )
 
 
-def criteria() -> dict[type, ColumnElement[bool]]:
-    """Mapped class -> the clause keeping only its live rows (built once: plain
-    expressions, no bound values, so the statement cache keeps working)."""
+_CRITERIA: dict[type, Callable[[Any], ColumnElement[bool]]] = {}
+
+
+def criteria() -> dict[type, Callable[[Any], ColumnElement[bool]]]:
+    """Mapped class -> a function of the class, or of an alias of it, giving the clause that
+    keeps only its live rows. Built once; no bound values, so the statement cache works."""
     if not _CRITERIA:
         from oracle.docs.models import Document
         from oracle.runs.models import Run
-        from oracle.v2.models import ProductIntake
+        from oracle.v2.models import ArtifactRequest, ProductIntake
 
         for entity in (Document, ProductIntake, Run):
-            _CRITERIA[entity] = entity.deleted_at.is_(None)
+            _CRITERIA[entity] = lambda cls: cls.deleted_at.is_(None)
         for entity, parents in _children().items():
-            _CRITERIA[entity] = and_(
-                *(
-                    or_(getattr(entity, name).is_(None), getattr(entity, name).not_in(_trashed(t)))
-                    for name, t in parents
-                )
-            )
-        from oracle.v2.models import ArtifactRequest
-
-        _CRITERIA[ArtifactRequest] = and_(_CRITERIA[ArtifactRequest], _spec_document_live())
+            _CRITERIA[entity] = _live_parents(parents)
+        request = _CRITERIA[ArtifactRequest]
+        _CRITERIA[ArtifactRequest] = lambda cls: and_(request(cls), _spec_document_live(cls))
     return _CRITERIA
+
+
+def _live(cls: Any) -> ColumnElement[bool]:
+    """The live-rows clause for ``cls``: a mapped class, or the alias a join used, so the
+    clause names the alias's own columns."""
+    return next(fn for entity, fn in criteria().items() if entity.__table__ is cls.__table__)(cls)
 
 
 @event.listens_for(TenantSession, "do_orm_execute")
 def _leave_out_trash(state: ORMExecuteState) -> None:
     if not state.is_select or state.execution_options.get(INCLUDE_TRASHED):
         return
+    # One function for every class: SQLAlchemy caches a criteria function by its code, so
+    # per-class closures would all get the first class's clause.
     state.statement = state.statement.options(
         *(
-            with_loader_criteria(entity, clause, include_aliases=True)
-            for entity, clause in criteria().items()
+            with_loader_criteria(entity, lambda cls: _live(cls), include_aliases=True)
+            for entity in criteria()
         )
     )
