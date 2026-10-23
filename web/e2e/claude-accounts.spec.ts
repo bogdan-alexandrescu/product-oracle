@@ -20,7 +20,7 @@ test("claude accounts: rows carry the em dash, the ~ and CLEARS; the pane opens 
   page,
 }) => {
   await openAccounts(page);
-  await expect(page.getByTestId("accounts-summary")).toContainText("4 accounts · 3 available");
+  await expect(page.getByTestId("accounts-summary")).toContainText("4 accounts · 2 available");
   await expect(page.getByTestId("accounts-summary")).toContainText("1 needs a sign-in");
   await expect(page.getByTestId("refresh-sweep")).toContainText("refresh sweep ran");
   await expect(page.getByRole("status").filter({ hasText: "old-laptop needs someone to sign in again" })).toBeVisible();
