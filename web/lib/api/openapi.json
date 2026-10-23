@@ -7428,6 +7428,53 @@
             "description": "Would demote the last owner"
           },
           "422": {
+            "description": "A hand-over target cannot hold it (hand_over_target)"
+          }
+        },
+        "x-min-role": "owner"
+      },
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Get Member",
+        "description": "One member: how they joined (``joined.via``: invite, access_request, domain,\nseeded or unknown), the responsibilities they hold (open items only) and the\napprovals and decisions a removal would lapse or void.",
+        "operationId": "get_member",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberDetailOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
@@ -7498,7 +7545,7 @@
           "members"
         ],
         "summary": "Disable Member",
-        "description": "Remove a member by disabling them: sign-in is refused on every path; their\nconnections are disconnected (revoked at the provider) and their sources recorded\nas revoked, so documents citing them cannot publish; their API tokens and OAuth\ngrants are revoked, their runs cancelled, the open invite for their email revoked;\ntheir approvals lapse for good; every session they signed is ended. The calls at\nthe providers and the runtime are made after the disable commits, outside the\nreview gate, and retried by the tick when they fail. Their Google IAP access is\ntaken away, and that of the invites revoked with them (audited). The member stays\nin the list (history keeps the name); an owner can restore them, and they sign in\nfresh. A no-op for a disabled member.",
+        "description": "Remove a member by disabling them: sign-in is refused on every path; their\nconnections are disconnected (revoked at the provider) and their sources recorded\nas revoked, so documents citing them cannot publish; their API tokens and OAuth\ngrants are revoked, their runs cancelled, the open invite for their email revoked;\ntheir approvals lapse for good; every session they signed is ended. The calls at\nthe providers and the runtime are made after the disable commits, outside the\nreview gate, and retried by the tick when they fail. Their Google IAP access is\ntaken away, and that of the invites revoked with them (audited). The member stays\nin the list (history keeps the name); an owner can restore them, and they sign in\nfresh. A no-op for a disabled member. With ``hand_over`` (A5), those\nresponsibilities move first, in the same transaction; a refused target is a 422\n(``hand_over_target``) and nothing is moved or removed.",
         "operationId": "disable_member",
         "security": [
           {
@@ -7520,6 +7567,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/HandOverIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -7602,6 +7666,226 @@
                 }
               }
             }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/members/{user_id}/impact": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Get Member Impact",
+        "description": "What removing the member (``change=remove``) or changing their role\n(``change=role&role=commenter``) would end, void and lapse, and the responsibilities\nthey hold (``holder_ok``: whether they may keep each after the change). Reads only:\nthe same selections the change applies, no locks, no writes. ``nothing`` is true\nwhen the change touches nothing (a promotion, their own role, a removed member).",
+        "operationId": "get_member_impact",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "change",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "remove",
+                "role"
+              ],
+              "type": "string",
+              "title": "Change"
+            }
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "viewer",
+                    "commenter",
+                    "approver",
+                    "owner"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/members/{user_id}/approvals": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "List Member Approvals",
+        "description": "The member's section verdicts and version approvals, given in person or through\ntheir API tokens and grants, oldest first; ``lapsed=true`` includes lapsed ones.",
+        "operationId": "list_member_approvals",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "lapsed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Lapsed"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TokenApprovalOut"
+                  },
+                  "title": "Response List Member Approvals"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/members/{user_id}/hand-over": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Hand Over",
+        "description": "Move an active or removed member's responsibilities to other members (``to``)\nor clear them (``to`` null), all or none; kinds left out stay. Returns what they\nstill hold.",
+        "operationId": "hand_over",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandOverIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandOverOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "422": {
+            "description": "An unknown kind, or a target that cannot hold it"
           }
         },
         "x-min-role": "owner"
@@ -59809,6 +60093,63 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "HandOver": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "HandOver",
+        "description": "Move one kind of responsibility to ``to`` (an active member with the kind's\nrole), or clear it (``to`` null). A kind left out stays as it is."
+      },
+      "HandOverIn": {
+        "properties": {
+          "hand_over": {
+            "items": {
+              "$ref": "#/components/schemas/HandOver"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Hand Over",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "HandOverIn"
+      },
+      "HandOverOut": {
+        "properties": {
+          "responsibilities": {
+            "items": {
+              "$ref": "#/components/schemas/ResponsibilityOut"
+            },
+            "type": "array",
+            "title": "Responsibilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "responsibilities"
+        ],
+        "title": "HandOverOut"
+      },
       "Health": {
         "properties": {
           "status": {
@@ -59847,6 +60188,24 @@
         },
         "type": "object",
         "title": "HeldIn"
+      },
+      "HeldOut": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "title"
+        ],
+        "title": "HeldOut"
       },
       "HiddenDiscussion": {
         "properties": {
@@ -60045,6 +60404,34 @@
         ],
         "title": "HoldersOut"
       },
+      "HoldsOut": {
+        "properties": {
+          "section_approvals": {
+            "type": "integer",
+            "title": "Section Approvals"
+          },
+          "version_approvals": {
+            "type": "integer",
+            "title": "Version Approvals"
+          },
+          "spend_approvals": {
+            "type": "integer",
+            "title": "Spend Approvals"
+          },
+          "checkpoint_decisions": {
+            "type": "integer",
+            "title": "Checkpoint Decisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_approvals",
+          "version_approvals",
+          "spend_approvals",
+          "checkpoint_decisions"
+        ],
+        "title": "HoldsOut"
+      },
       "HumanRatingIn": {
         "properties": {
           "ratings": {
@@ -60166,6 +60553,36 @@
         ],
         "title": "HumanView"
       },
+      "ImpactCheckpoint": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checkpoint Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "checkpoint_id",
+          "kind",
+          "title"
+        ],
+        "title": "ImpactCheckpoint"
+      },
       "ImpactDocument": {
         "properties": {
           "slug": {
@@ -60188,6 +60605,60 @@
           "marks"
         ],
         "title": "ImpactDocument"
+      },
+      "ImpactEnds": {
+        "properties": {
+          "sign_in": {
+            "type": "boolean",
+            "title": "Sign In"
+          },
+          "api_tokens": {
+            "type": "integer",
+            "title": "Api Tokens"
+          },
+          "mcp_clients": {
+            "type": "integer",
+            "title": "Mcp Clients"
+          },
+          "connections": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Connections"
+          },
+          "sources": {
+            "type": "integer",
+            "title": "Sources"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactRun"
+            },
+            "type": "array",
+            "title": "Runs"
+          },
+          "llm_jobs": {
+            "type": "integer",
+            "title": "Llm Jobs"
+          },
+          "invites": {
+            "type": "integer",
+            "title": "Invites"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sign_in",
+          "api_tokens",
+          "mcp_clients",
+          "connections",
+          "sources",
+          "runs",
+          "llm_jobs",
+          "invites"
+        ],
+        "title": "ImpactEnds"
       },
       "ImpactItem": {
         "properties": {
@@ -60217,6 +60688,27 @@
           "item_key"
         ],
         "title": "ImpactItem"
+      },
+      "ImpactLapses": {
+        "properties": {
+          "section_approvals": {
+            "type": "integer",
+            "title": "Section Approvals"
+          },
+          "version_approvals": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactVersion"
+            },
+            "type": "array",
+            "title": "Version Approvals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_approvals",
+          "version_approvals"
+        ],
+        "title": "ImpactLapses"
       },
       "ImpactMilestone": {
         "properties": {
@@ -60260,6 +60752,84 @@
           "keeps_date"
         ],
         "title": "ImpactMilestone"
+      },
+      "ImpactOut": {
+        "properties": {
+          "member_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Member Id"
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "remove",
+              "role"
+            ],
+            "title": "Change"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "viewer",
+                  "commenter",
+                  "approver",
+                  "owner"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "title": "As Of"
+          },
+          "ends": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImpactEnds"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "voids": {
+            "$ref": "#/components/schemas/ImpactVoids"
+          },
+          "lapses": {
+            "$ref": "#/components/schemas/ImpactLapses"
+          },
+          "responsibilities": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactResponsibilityOut"
+            },
+            "type": "array",
+            "title": "Responsibilities"
+          },
+          "nothing": {
+            "type": "boolean",
+            "title": "Nothing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "member_id",
+          "change",
+          "as_of",
+          "voids",
+          "lapses",
+          "responsibilities",
+          "nothing"
+        ],
+        "title": "ImpactOut",
+        "description": "What removing or demoting the member would do, read as of ``as_of``."
       },
       "ImpactReport": {
         "properties": {
@@ -60333,6 +60903,107 @@
         ],
         "title": "ImpactReport"
       },
+      "ImpactResponsibilityOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HeldOut"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "needs_role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Needs Role"
+          },
+          "blocks": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocks"
+          },
+          "holder_ok": {
+            "type": "boolean",
+            "title": "Holder Ok"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "count",
+          "needs_role",
+          "holder_ok"
+        ],
+        "title": "ImpactResponsibilityOut"
+      },
+      "ImpactRun": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status"
+        ],
+        "title": "ImpactRun"
+      },
+      "ImpactRunRef": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "title"
+        ],
+        "title": "ImpactRunRef"
+      },
       "ImpactSubject": {
         "properties": {
           "kind": {
@@ -60391,6 +61062,61 @@
           "kind"
         ],
         "title": "ImpactSubject"
+      },
+      "ImpactVersion": {
+        "properties": {
+          "document": {
+            "type": "string",
+            "title": "Document"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document",
+          "title",
+          "version"
+        ],
+        "title": "ImpactVersion"
+      },
+      "ImpactVoids": {
+        "properties": {
+          "spend_approvals": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactRunRef"
+            },
+            "type": "array",
+            "title": "Spend Approvals"
+          },
+          "resumes": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactRunRef"
+            },
+            "type": "array",
+            "title": "Resumes"
+          },
+          "checkpoint_decisions": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactCheckpoint"
+            },
+            "type": "array",
+            "title": "Checkpoint Decisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "spend_approvals",
+          "resumes",
+          "checkpoint_decisions"
+        ],
+        "title": "ImpactVoids"
       },
       "ImportErrorResponse": {
         "properties": {
@@ -66567,6 +67293,61 @@
         "title": "JobSettings",
         "description": "Which built-in jobs run on this document (all on by default)."
       },
+      "JoinedOut": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "via": {
+            "type": "string",
+            "enum": [
+              "invite",
+              "access_request",
+              "domain",
+              "seeded",
+              "unknown"
+            ],
+            "title": "Via"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "via"
+        ],
+        "title": "JoinedOut"
+      },
       "KindCoverage": {
         "properties": {
           "kind": {
@@ -68991,6 +69772,140 @@
         ],
         "title": "MeasurementOut"
       },
+      "MemberDetailOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          },
+          "engineering_lead": {
+            "type": "boolean",
+            "title": "Engineering Lead",
+            "default": false
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "disabled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled At"
+          },
+          "disabled_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled By"
+          },
+          "last_sign_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sign In At"
+          },
+          "open_tokens": {
+            "type": "integer",
+            "title": "Open Tokens",
+            "default": 0
+          },
+          "access_pending": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "revoke",
+                  "grant"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Pending"
+          },
+          "joined": {
+            "$ref": "#/components/schemas/JoinedOut"
+          },
+          "responsibilities": {
+            "items": {
+              "$ref": "#/components/schemas/ResponsibilityOut"
+            },
+            "type": "array",
+            "title": "Responsibilities"
+          },
+          "holds": {
+            "$ref": "#/components/schemas/HoldsOut"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "title": "Status",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role",
+          "created_at",
+          "joined",
+          "responsibilities",
+          "holds",
+          "status"
+        ],
+        "title": "MemberDetailOut"
+      },
       "MemberOut": {
         "properties": {
           "id": {
@@ -69150,6 +70065,15 @@
               }
             ],
             "title": "Name"
+          },
+          "hand_over": {
+            "items": {
+              "$ref": "#/components/schemas/HandOver"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Hand Over",
+            "default": []
           }
         },
         "type": "object",
@@ -80942,6 +81866,59 @@
         ],
         "title": "ResolutionReport",
         "description": "How each feedback item raised on earlier versions was handled, as of ``version``."
+      },
+      "ResponsibilityOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HeldOut"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "needs_role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Needs Role"
+          },
+          "blocks": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "count",
+          "needs_role"
+        ],
+        "title": "ResponsibilityOut"
       },
       "ReusedBaseline": {
         "properties": {

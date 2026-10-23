@@ -2118,7 +2118,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get Member
+         * @description One member: how they joined (``joined.via``: invite, access_request, domain,
+         *     seeded or unknown), the responsibilities they hold (open items only) and the
+         *     approvals and decisions a removal would lapse or void.
+         */
+        get: operations["get_member"];
         put?: never;
         post?: never;
         /**
@@ -2160,7 +2166,9 @@ export interface paths {
          *     review gate, and retried by the tick when they fail. Their Google IAP access is
          *     taken away, and that of the invites revoked with them (audited). The member stays
          *     in the list (history keeps the name); an owner can restore them, and they sign in
-         *     fresh. A no-op for a disabled member.
+         *     fresh. A no-op for a disabled member. With ``hand_over`` (A5), those
+         *     responsibilities move first, in the same transaction; a refused target is a 422
+         *     (``hand_over_target``) and nothing is moved or removed.
          */
         post: operations["disable_member"];
         delete?: never;
@@ -2185,6 +2193,73 @@ export interface paths {
          *     Their Google IAP access is granted again (audited).
          */
         post: operations["restore_member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/members/{user_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Member Impact
+         * @description What removing the member (``change=remove``) or changing their role
+         *     (``change=role&role=commenter``) would end, void and lapse, and the responsibilities
+         *     they hold (``holder_ok``: whether they may keep each after the change). Reads only:
+         *     the same selections the change applies, no locks, no writes. ``nothing`` is true
+         *     when the change touches nothing (a promotion, their own role, a removed member).
+         */
+        get: operations["get_member_impact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/members/{user_id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Member Approvals
+         * @description The member's section verdicts and version approvals, given in person or through
+         *     their API tokens and grants, oldest first; ``lapsed=true`` includes lapsed ones.
+         */
+        get: operations["list_member_approvals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/members/{user_id}/hand-over": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand Over
+         * @description Move an active or removed member's responsibilities to other members (``to``)
+         *     or clear them (``to`` null), all or none; kinds left out stay. Returns what they
+         *     still hold.
+         */
+        post: operations["hand_over"];
         delete?: never;
         options?: never;
         head?: never;
@@ -18757,6 +18832,30 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * HandOver
+         * @description Move one kind of responsibility to ``to`` (an active member with the kind's
+         *     role), or clear it (``to`` null). A kind left out stays as it is.
+         */
+        HandOver: {
+            /** Kind */
+            kind: string;
+            /** To */
+            to?: string | null;
+        };
+        /** HandOverIn */
+        HandOverIn: {
+            /**
+             * Hand Over
+             * @default []
+             */
+            hand_over: components["schemas"]["HandOver"][];
+        };
+        /** HandOverOut */
+        HandOverOut: {
+            /** Responsibilities */
+            responsibilities: components["schemas"]["ResponsibilityOut"][];
+        };
         /** Health */
         Health: {
             /** Status */
@@ -18776,6 +18875,13 @@ export interface components {
              * @default []
              */
             decision_ids: string[];
+        };
+        /** HeldOut */
+        HeldOut: {
+            /** Ref */
+            ref: string;
+            /** Title */
+            title: string;
         };
         /**
          * HiddenDiscussion
@@ -18849,6 +18955,17 @@ export interface components {
             /** Holders */
             holders: components["schemas"]["HolderOut"][];
         };
+        /** HoldsOut */
+        HoldsOut: {
+            /** Section Approvals */
+            section_approvals: number;
+            /** Version Approvals */
+            version_approvals: number;
+            /** Spend Approvals */
+            spend_approvals: number;
+            /** Checkpoint Decisions */
+            checkpoint_decisions: number;
+        };
         /**
          * HumanRatingIn
          * @description A person's rating of the ten criteria (all or some), for comparison with the rules.
@@ -18898,6 +19015,23 @@ export interface components {
              */
             created_at: string;
         };
+        /** ImpactCheckpoint */
+        ImpactCheckpoint: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Checkpoint Id
+             * Format: uuid
+             */
+            checkpoint_id: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+        };
         /** ImpactDocument */
         ImpactDocument: {
             /** Slug */
@@ -18906,6 +19040,27 @@ export interface components {
             version: number;
             /** Marks */
             marks: number;
+        };
+        /** ImpactEnds */
+        ImpactEnds: {
+            /** Sign In */
+            sign_in: boolean;
+            /** Api Tokens */
+            api_tokens: number;
+            /** Mcp Clients */
+            mcp_clients: number;
+            /** Connections */
+            connections: {
+                [key: string]: number;
+            };
+            /** Sources */
+            sources: number;
+            /** Runs */
+            runs: components["schemas"]["ImpactRun"][];
+            /** Llm Jobs */
+            llm_jobs: number;
+            /** Invites */
+            invites: number;
         };
         /** ImpactItem */
         ImpactItem: {
@@ -18920,6 +19075,13 @@ export interface components {
             version: number;
             /** Item Key */
             item_key: string;
+        };
+        /** ImpactLapses */
+        ImpactLapses: {
+            /** Section Approvals */
+            section_approvals: number;
+            /** Version Approvals */
+            version_approvals: components["schemas"]["ImpactVersion"][];
         };
         /** ImpactMilestone */
         ImpactMilestone: {
@@ -18939,6 +19101,36 @@ export interface components {
             target_date: string | null;
             /** Keeps Date */
             keeps_date: boolean;
+        };
+        /**
+         * ImpactOut
+         * @description What removing or demoting the member would do, read as of ``as_of``.
+         */
+        ImpactOut: {
+            /**
+             * Member Id
+             * Format: uuid
+             */
+            member_id: string;
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "remove" | "role";
+            /** Role */
+            role?: ("viewer" | "commenter" | "approver" | "owner") | null;
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            ends?: components["schemas"]["ImpactEnds"] | null;
+            voids: components["schemas"]["ImpactVoids"];
+            lapses: components["schemas"]["ImpactLapses"];
+            /** Responsibilities */
+            responsibilities: components["schemas"]["ImpactResponsibilityOut"][];
+            /** Nothing */
+            nothing: boolean;
         };
         /** ImpactReport */
         ImpactReport: {
@@ -18970,6 +19162,51 @@ export interface components {
              */
             truncated: boolean;
         };
+        /** ImpactResponsibilityOut */
+        ImpactResponsibilityOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["HeldOut"][];
+            /**
+             * Needs Role
+             * @enum {string}
+             */
+            needs_role: "viewer" | "commenter" | "approver" | "owner";
+            /** Blocks */
+            blocks?: string | null;
+            /** Holder Ok */
+            holder_ok: boolean;
+        };
+        /** ImpactRun */
+        ImpactRun: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+        };
+        /** ImpactRunRef */
+        ImpactRunRef: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Title */
+            title: string;
+        };
         /** ImpactSubject */
         ImpactSubject: {
             /** Kind */
@@ -18982,6 +19219,24 @@ export interface components {
             title?: string | null;
             /** Document Id */
             document_id?: string | null;
+        };
+        /** ImpactVersion */
+        ImpactVersion: {
+            /** Document */
+            document: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
+        /** ImpactVoids */
+        ImpactVoids: {
+            /** Spend Approvals */
+            spend_approvals: components["schemas"]["ImpactRunRef"][];
+            /** Resumes */
+            resumes: components["schemas"]["ImpactRunRef"][];
+            /** Checkpoint Decisions */
+            checkpoint_decisions: components["schemas"]["ImpactCheckpoint"][];
         };
         /**
          * ImportErrorResponse
@@ -21399,6 +21654,20 @@ export interface components {
              */
             quality_review: boolean;
         };
+        /** JoinedOut */
+        JoinedOut: {
+            /** At */
+            at?: string | null;
+            /**
+             * Via
+             * @enum {string}
+             */
+            via: "invite" | "access_request" | "domain" | "seeded" | "unknown";
+            /** By */
+            by?: string | null;
+            /** By Name */
+            by_name?: string | null;
+        };
         /** KindCoverage */
         KindCoverage: {
             /** Kind */
@@ -22255,6 +22524,55 @@ export interface components {
              */
             created_at: string;
         };
+        /** MemberDetailOut */
+        MemberDetailOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /** Name */
+            name?: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Engineering Lead
+             * @default false
+             */
+            engineering_lead: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Disabled At */
+            disabled_at?: string | null;
+            /** Disabled By */
+            disabled_by?: string | null;
+            /** Last Sign In At */
+            last_sign_in_at?: string | null;
+            /**
+             * Open Tokens
+             * @default 0
+             */
+            open_tokens: number;
+            /** Access Pending */
+            access_pending?: ("revoke" | "grant") | null;
+            joined: components["schemas"]["JoinedOut"];
+            /** Responsibilities */
+            responsibilities: components["schemas"]["ResponsibilityOut"][];
+            holds: components["schemas"]["HoldsOut"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            readonly status: "active" | "disabled";
+        };
         /** MemberOut */
         MemberOut: {
             /**
@@ -22312,6 +22630,11 @@ export interface components {
             engineering_lead?: boolean | null;
             /** Name */
             name?: string | null;
+            /**
+             * Hand Over
+             * @default []
+             */
+            hand_over: components["schemas"]["HandOver"][];
         };
         /** MilestoneCreate */
         MilestoneCreate: {
@@ -26559,6 +26882,27 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+        };
+        /** ResponsibilityOut */
+        ResponsibilityOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["HeldOut"][];
+            /**
+             * Needs Role
+             * @enum {string}
+             */
+            needs_role: "viewer" | "commenter" | "approver" | "owner";
+            /** Blocks */
+            blocks?: string | null;
         };
         /**
          * ReusedBaseline
@@ -37993,6 +38337,44 @@ export interface operations {
             };
         };
     };
+    get_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberDetailOut"];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     remove_member: {
         parameters: {
             query?: never;
@@ -38067,14 +38449,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description A hand-over target cannot hold it (hand_over_target) */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -38087,7 +38467,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["HandOverIn"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -38158,6 +38542,127 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_member_impact: {
+        parameters: {
+            query: {
+                change: "remove" | "role";
+                role?: ("viewer" | "commenter" | "approver" | "owner") | null;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactOut"];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_member_approvals: {
+        parameters: {
+            query?: {
+                lapsed?: boolean;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenApprovalOut"][];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hand_over: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandOverIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandOverOut"];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An unknown kind, or a target that cannot hold it */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
