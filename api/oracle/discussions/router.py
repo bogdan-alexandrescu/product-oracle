@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role
-from oracle.discussions import replies, service
+from oracle.discussions import agent_view, replies, service
 from oracle.discussions.schemas import (
     ChangeStatus,
     DiscussionChangeOut,
@@ -32,6 +32,7 @@ from oracle.discussions.schemas import (
     DiscussionReadIn,
     DiscussionStarted,
     Origin,
+    RunDiscussionsOut,
     Status,
 )
 
@@ -106,6 +107,26 @@ async def list_discussions(
         status=status_, mine=mine, origin=origin, limit=limit,
     )  # fmt: skip
     return DiscussionPage(items=items)
+
+
+@router.get(
+    "/runs/{run_id}/discussions",
+    response_model=RunDiscussionsOut,
+    responses={404: {"description": "No such run (a run's token reads its own run only)"}},
+)
+async def list_run_discussions(
+    run_id: uuid.UUID, principal: Viewer, db: TenantDB
+) -> RunDiscussionsOut:
+    """The discussions about a run (G5): its checkpoints', its intake's and, for a feedback
+    loop, its document's with staged next-draft changes; newest activity first, at most 50.
+    Each gives its summary and the changes staged from it, never its messages or people.
+    A private discussion shows its title and summary only to the people in it; a run's
+    agents (the get_run_discussions tool) get its staged changes, and its summary when the
+    starter shared it."""
+    try:
+        return await agent_view.run_discussions(db, principal, run_id)
+    except agent_view.RunNotFound:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"run {run_id} not found") from None
 
 
 @router.get(

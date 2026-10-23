@@ -665,3 +665,72 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
   if (p[3] === "changes" && m === "GET") return json(200, []);
   return null;
 }
+
+/** G5 "run-discussions": the discussion links a run's agents are given open these. */
+export const RUN_DISCUSSION_OPEN = "d15c0000-0000-4000-8000-0000000000a1";
+export const RUN_DISCUSSION_PRIVATE = "d15c0000-0000-4000-8000-0000000000a2";
+
+/**
+ * The "run-discussions" scenario (G5): on the feature-set run's checkpoint, an open discussion
+ * the approver started on bulk-address-edit, and a private one the approver started with the
+ * owner on saved-addresses (the commenter is not in it), one message each.
+ */
+export function seedRunDiscussions(
+  ctx: Omit<DiscussionsContext, "me" | "db">,
+  run: { id: string; label: string; checkpoint_id: string; checkpoint_kind: string },
+): DiscussionsDb {
+  const db = emptyDiscussions();
+  const by = (email: string) => ctx.members.find((m) => m.email === email)!.id;
+  const approver = by("approver@example.com");
+  const owner = ctx.members.find((m) => m.role === "owner")!.id;
+  const at = "2026-10-21T09:00:00Z";
+  const row = (id: string, item: string, title: string, visibility: "open" | "private"): DiscussionRow => ({
+    id,
+    subject_kind: "checkpoint_item",
+    subject: { run_id: run.id, checkpoint_id: run.checkpoint_id, checkpoint_kind: run.checkpoint_kind, item_key: item },
+    subject_key: `run_item:${run.id}:${run.checkpoint_kind}:${item}`,
+    subject_label: `${run.label} · ${item}`,
+    subject_url: `/runs/${run.id}`,
+    document_id: null,
+    run_id: run.id,
+    title,
+    visibility,
+    author_only: false,
+    status: "open",
+    origin: "discuss",
+    started_by: approver,
+    summary: null,
+    summary_status: "none",
+    summary_shared: visibility === "open",
+    last_message_at: at,
+    lock_version: 1,
+    created_at: at,
+    updated_at: at,
+  });
+  const open = row(RUN_DISCUSSION_OPEN, "bulk-address-edit", "Bulk edit: keep it without the export?", "open");
+  const hidden = row(RUN_DISCUSSION_PRIVATE, "saved-addresses", "Saved addresses: who pays for storage?", "private");
+  db.discussions.push(open, hidden);
+  db.participants.push(
+    { discussion_id: open.id, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at },
+    { discussion_id: hidden.id, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at },
+    { discussion_id: hidden.id, user_id: owner, added_via: "added", left_at: null, last_read_at: null, created_at: at },
+  );
+  for (const [d, body] of [
+    [open, "Can bulk edit ship before the export does?"],
+    [hidden, "Storage costs are still open with finance."],
+  ] as const)
+    db.messages.push({
+      id: ctx.uuid(),
+      discussion_id: d.id,
+      author_kind: "person",
+      author_id: approver,
+      body,
+      mentions: [],
+      mentions_oracle: false,
+      reply_to: null,
+      created_at: at,
+      edited_at: null,
+      deleted_at: null,
+    });
+  return db;
+}

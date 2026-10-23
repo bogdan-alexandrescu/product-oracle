@@ -548,6 +548,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/discussions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Run Discussions
+         * @description The discussions about a run (G5): its checkpoints', its intake's and, for a feedback
+         *     loop, its document's with staged next-draft changes; newest activity first, at most 50.
+         *     Each gives its summary and the changes staged from it, never its messages or people.
+         *     A private discussion shows its title and summary only to the people in it; a run's
+         *     agents (the get_run_discussions tool) get its staged changes, and its summary when the
+         *     starter shared it.
+         */
+        get: operations["list_run_discussions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/discussions/{discussion_id}": {
         parameters: {
             query?: never;
@@ -25977,6 +26002,16 @@ export interface components {
             strategy_brief?: components["schemas"]["StrategyBriefIn"] | null;
         };
         /**
+         * RunDecidedChange
+         * @description A change already done (an answer, a verified basis, a baseline proposal).
+         */
+        RunDecidedChange: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+        };
+        /**
          * RunDecision
          * @description A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):
          *     who decided by role only (no names reach the agents), when, and what. A console
@@ -26032,6 +26067,63 @@ export interface components {
             delivered: boolean;
             /** Summary */
             summary: string;
+        };
+        /**
+         * RunDiscussion
+         * @description One discussion as a run sees it (G5): never its messages or people. A private one
+         *     shows its title and summary only to the people in it; to agents, only its staged
+         *     changes, and its summary when the starter shared it.
+         */
+        RunDiscussion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "open" | "private";
+            /** Title */
+            title: string | null;
+            /** Subject Label */
+            subject_label: string | null;
+            /** Subject */
+            subject: {
+                [key: string]: unknown;
+            };
+            /** Link */
+            link: string;
+            /** Summary */
+            summary: string | null;
+            /** Summary Status */
+            summary_status: ("none" | "draft" | "confirmed") | null;
+            /** Summary Withheld */
+            summary_withheld: boolean;
+            /** Staged Changes */
+            staged_changes: components["schemas"]["RunStagedChange"][];
+            /** Decided */
+            decided: components["schemas"]["RunDecidedChange"][];
+        };
+        /**
+         * RunDiscussionsOut
+         * @description The discussions about a run: its checkpoints', its intake's and, for a feedback
+         *     loop, its document's with staged next-draft changes. Newest activity first, at most
+         *     50 and 40,000 characters; ``omitted`` counts the rest.
+         */
+        RunDiscussionsOut: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Discussions */
+            discussions: components["schemas"]["RunDiscussion"][];
+            /** Truncated */
+            truncated: boolean;
+            /** Omitted */
+            omitted: number;
         };
         /** RunOut */
         RunOut: {
@@ -26252,6 +26344,43 @@ export interface components {
             reviewed: number;
             /** Approved */
             approved: number;
+        };
+        /**
+         * RunStagedChange
+         * @description A change people staged from a discussion for this run (G5): a D8 action on one of the
+         *     run's checkpoints (``staged`` while it waits, ``sent`` once the checkpoint was decided)
+         *     or a ``next_draft_changes`` row for the document's next draft. The shape D4, D6 and D11
+         *     share.
+         */
+        RunStagedChange: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Item Key */
+            item_key?: string | null;
+            /** Section Key */
+            section_key?: string | null;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "staged" | "sent";
+            /** Target */
+            target: {
+                [key: string]: unknown;
+            };
         };
         /** RunSummary */
         RunSummary: {
@@ -32621,6 +32750,44 @@ export interface operations {
                 };
             };
             /** @description The subject is not in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_run_discussions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunDiscussionsOut"];
+                };
+            };
+            /** @description No such run (a run's token reads its own run only) */
             404: {
                 headers: {
                     [name: string]: unknown;
