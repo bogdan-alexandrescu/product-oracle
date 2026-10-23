@@ -8,6 +8,7 @@ import pytest
 
 from tests.baseline_helpers import Ctx, make_ctx
 from tests.test_requests import act, add, audits, get, goal, suggest
+from tests.test_requests_triage import apply, triage_file, triage_run
 
 
 @pytest.fixture
@@ -62,3 +63,33 @@ async def test_decline_needs_an_approver_a_suggestion_and_a_new_request(client, 
     resp = await act(client, ctx, r["id"], "suggestion/decline")
     assert resp.status_code == 409
     assert (await get(client, ctx, r["id"]))["suggestion"]["declined_at"] is None
+
+
+async def test_triage_leaves_a_declined_suggestion_alone(client, ctx):
+    """protects=the owner's decision (2026-10-23): a declined suggestion stays on the
+    request, marked declined (who and when), and triage (Classify now, the daily run) leaves
+    it; fails_when=a later triage run overwrites it, offers it again or loses who declined
+    it; no_claim=the agent's classification quality (fake runtime)."""
+    g = await goal(client, ctx)
+    r = await add(client, ctx, title="Keep my address")
+    await suggest(ctx, r["id"], theme_title="Faster check-out", goal_ids=[g["id"]])
+    resp = await act(client, ctx, r["id"], "suggestion/decline")
+    assert resp.status_code == 200, resp.text
+    declined = resp.json()["suggestion"]
+    assert declined["declined_by"] == str(ctx.users["approver"].id)
+    assert declined["declined_by_name"] == "Approver"
+
+    run = await triage_run(ctx)
+    text = triage_file(
+        [{"id": r["id"], "theme": {"title": "Saved addresses"}, "goals": ["activation"],
+          "confidence": 0.9, "rationale": "Same need: retyping the address"}]
+    )  # fmt: skip
+    result = await apply(ctx, run, text)
+    assert result["suggestions"] == 0
+    assert result["notes"] == ["1 entry dropped (suggestion declined)"]
+
+    s = (await get(client, ctx, r["id"]))["suggestion"]
+    assert s == declined
+    assert s["theme_title"] == "Faster check-out" and s["declined_at"] is not None
+    resp = await act(client, ctx, r["id"], "suggestion/accept", parts=["goals"])
+    assert resp.status_code == 422

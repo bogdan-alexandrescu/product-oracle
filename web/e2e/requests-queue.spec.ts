@@ -152,18 +152,100 @@ test("Inspector: accept Oracle's suggestion", async ({ page }) => {
   await expect(inspector(page).getByTestId("request-suggestion")).toHaveCount(0);
 });
 
-test("Inspector: decline Oracle's suggestion; it stays declined after a reload", async ({ page }) => {
-  // protects=#348 Build 2 (decline Oracle's suggestion); fails_when=the suggestion is
-  // still offered or the request gains its goal or theme; no_claim=a later triage run.
+test("Inspector: decline Oracle's suggestion; it stays declined, with who and when, after Classify now", async ({ page }) => {
+  // protects=#348 Build 2 (decline Oracle's suggestion) and the owner's decision of
+  // 2026-10-23 (a declined suggestion stays marked declined, who and when, is no longer
+  // offered, and triage leaves it); fails_when=the suggestion is still offered, the request
+  // gains its goal or theme, the inspector does not say who declined it and when, or a
+  // triage run brings it back; no_claim=the real triage run (the mock finishes it itself).
   await login(page);
   await openRequests(page);
   await pick(page, "Save my card for the next order");
+  const declinedOn = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date());
   await inspector(page).getByTestId("request-suggestion").getByRole("button", { name: "Decline" }).click();
-  await expect(inspector(page).getByTestId("request-suggestion")).toHaveCount(0);
+  const suggestion = inspector(page).getByTestId("request-suggestion");
+  await expect(suggestion).toContainText(`Declined by Admin, ${declinedOn}`);
+  await expect(suggestion.getByRole("button")).toHaveCount(0);
   await expect(row(page, "Save my card for the next order").getByTestId("goal-chip")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Classify now", exact: true }).click();
+  await expect(page.getByTestId("triage-status")).toContainText(/\d+ suggestions?, \d+ found/, { timeout: 15_000 });
   await page.reload();
   await pick(page, "Save my card for the next order");
+  await expect(inspector(page).getByTestId("request-suggestion")).toContainText(`Declined by Admin, ${declinedOn}`);
+  await expect(inspector(page).getByRole("button", { name: "Accept suggestion" })).toHaveCount(0);
+  await expect(row(page, "Save my card for the next order").getByTestId("goal-chip")).toHaveCount(0);
+});
+
+test("Inspector: Oracle's suggestion names the feature it suggests", async ({ page }) => {
+  // protects=review fix 6 (the suggestion names the feature by its title); fails_when=the
+  // suggestion says "A feature in the baseline" or a feature other than the one accepting
+  // links; no_claim=the triage that picks the feature.
+  await login(page);
+  await openRequests(page);
+  await pick(page, "Save my card for the next order");
+  const feature = inspector(page).getByTestId("suggested-feature");
+  await expect(feature).toHaveText(/^Feature: \S/);
+  await expect(feature).not.toContainText("A feature");
+  const title = ((await feature.textContent()) ?? "").replace(/^Feature: /, "");
+  await inspector(page).getByRole("button", { name: "Accept suggestion" }).click();
   await expect(inspector(page).getByTestId("request-suggestion")).toHaveCount(0);
+  await page.reload();
+  await pick(page, "Save my card for the next order");
+  await expect(inspector(page).getByLabel("Feature").locator("option:checked")).toHaveText(title);
+});
+
+test("Inspector: a Merged or Disqualified request shows its links without Save links", async ({ page }) => {
+  // protects=review fix 2 (the API refuses link changes on a Merged or Disqualified
+  // request, so the inspector offers none); fails_when=Save links shows for either;
+  // no_claim=the API's refusal (the API's tests).
+  await login(page);
+  await openRequests(page);
+  await pick(page, "Remember my address");
+  await expect(inspector(page).getByText("Merged into Keep the delivery address between orders")).toBeVisible();
+  await expect(inspector(page).getByRole("button", { name: "Save links" })).toHaveCount(0);
+  await pick(page, "Pay by bank transfer");
+  const panel = inspector(page);
+  await panel.getByRole("button", { name: "Disqualify", exact: true }).click();
+  await panel.getByLabel("Reason").selectOption({ label: "Out of scope" });
+  await panel.getByRole("button", { name: "Disqualify request" }).click();
+  await expect(row(page, "Pay by bank transfer")).toContainText("Disqualified");
+  await expect(panel.getByRole("button", { name: "Save links" })).toHaveCount(0);
+  await panel.getByRole("button", { name: "Reopen" }).click();
+  await expect(row(page, "Pay by bank transfer")).toContainText("New");
+  await expect(panel.getByRole("button", { name: "Save links" })).toBeVisible();
+});
+
+test("Inspector: clearing the description sends no description (null)", async ({ page }) => {
+  // protects=review fix 3 (a cleared description is sent as null, not ""); fails_when=the
+  // PATCH carries body "" or the inspector does not say "No description"; no_claim=the
+  // API's own normalising of "".
+  await page.addInitScript(() => {
+    // Records the PATCH bodies the typed client builds, as the network would see them.
+    const Native = window.Request;
+    const sent: unknown[] = [];
+    (window as unknown as { __patches: unknown[] }).__patches = sent;
+    window.Request = class extends Native {
+      constructor(input: RequestInfo | URL, init?: RequestInit) {
+        super(input, init);
+        if (init?.method === "PATCH" && typeof init.body === "string") sent.push(JSON.parse(init.body));
+      }
+    } as typeof Request;
+  });
+  await login(page);
+  await openRequests(page);
+  await page.getByRole("button", { name: "New request" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New request" });
+  await dialog.getByLabel("Title").fill(TITLE);
+  await dialog.getByLabel("What it is and why").fill(WHY);
+  await dialog.getByRole("button", { name: "File request" }).click();
+
+  await inspector(page).getByRole("button", { name: "Edit" }).click();
+  await inspector(page).getByLabel("What it is and why").fill("");
+  await inspector(page).getByRole("button", { name: "Save", exact: true }).click();
+  await expect(inspector(page).getByText("No description")).toBeVisible();
+  const patches = await page.evaluate(() => (window as unknown as { __patches: Record<string, unknown>[] }).__patches);
+  expect(patches.at(-1)).toMatchObject({ title: TITLE, body: null });
 });
 
 test("Themes: create, rename and archive a theme", async ({ page }) => {
@@ -186,7 +268,45 @@ test("Themes: create, rename and archive a theme", async ({ page }) => {
   await renamed.getByRole("button", { name: "Archive" }).click();
   await expect(renamed).toContainText("Archived");
   await page.getByRole("button", { name: "Queue" }).click();
-  await expect(filter(page, "Theme").locator("option", { hasText: "Payments and billing" })).toHaveCount(0);
+  await expect(filter(page, "Theme").locator("option", { hasText: "Payments and billing" })).toHaveText("Payments and billing (archived)");
+});
+
+test("Themes: restore an archived theme", async ({ page }) => {
+  // protects=#348 Build 3 (restore, un-archive) and review fix 5; fails_when=Restore is
+  // missing on an archived theme, the theme stays archived, or the Theme filter still marks
+  // it archived; no_claim=the API's unique-title rule on restore.
+  await login(page);
+  await openRequests(page);
+  await page.getByRole("button", { name: "Themes" }).click();
+  const theme = page.getByTestId("theme-row").filter({ hasText: "Reporting" });
+  await theme.getByRole("button", { name: "Archive" }).click();
+  await expect(theme).toContainText("Archived");
+  await expect(theme.getByRole("button", { name: "Rename" })).toHaveCount(0);
+  await theme.getByRole("button", { name: "Restore" }).click();
+  await expect(theme).not.toContainText("Archived");
+  await expect(theme.getByRole("button", { name: "Archive" })).toBeVisible();
+  await expect(theme.getByRole("button", { name: "Rename" })).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Themes" }).click();
+  await expect(page.getByTestId("theme-row").filter({ hasText: "Reporting" })).not.toContainText("Archived");
+  await page.getByRole("button", { name: "Queue" }).click();
+  await expect(filter(page, "Theme").locator("option", { hasText: "Reporting" })).toHaveText("Reporting");
+});
+
+test("Queue: the Theme filter lists archived themes, marked, and filters by them", async ({ page }) => {
+  // protects=review fix 4 (requests on an archived theme can still be found);
+  // fails_when=an archived theme is missing from the Theme filter, unmarked, or filtering
+  // by it drops its requests; no_claim=the API's theme_id filter.
+  await login(page);
+  await openRequests(page);
+  await page.getByRole("button", { name: "Themes" }).click();
+  await page.getByTestId("theme-row").filter({ hasText: "Reporting" }).getByRole("button", { name: "Archive" }).click();
+  await expect(page.getByTestId("theme-row").filter({ hasText: "Reporting" })).toContainText("Archived");
+  await page.getByRole("button", { name: "Queue" }).click();
+  await filter(page, "Theme").selectOption({ label: "Reporting (archived)" });
+  await expect(page.getByTestId("request-row")).toHaveCount(2);
+  await expect(row(page, "Weekly summary email")).toBeVisible();
+  await expect(row(page, "Export orders to a spreadsheet")).toBeVisible();
 });
 
 test("A commenter sees no decisions, links or theme controls", async ({ page }) => {
