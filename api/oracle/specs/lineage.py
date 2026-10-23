@@ -303,9 +303,11 @@ async def on_document_version(db: AsyncSession, event: ChangeEvent) -> None:
                 [
                     ImportProblem(
                         code="spec_without_request",
-                        message="a spec is created from an approved PRD through a spec request "
-                        "(POST /v1/spec-requests), so it keeps its lineage; import new versions "
-                        "of an existing spec instead",
+                        # #396: no route in what a person may read; the code is the
+                        # agent's.
+                        message="a spec is created from an approved PRD through a spec "
+                        "request, so it keeps its lineage; import new versions of an "
+                        "existing spec instead",
                     )
                 ]
             )

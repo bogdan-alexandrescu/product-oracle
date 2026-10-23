@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from oracle import wording
 
@@ -55,18 +55,21 @@ class VersionWarning(BaseModel):
     """A non-fatal import finding stored on the version."""
 
     code: Literal["locked_section_changed"] | str
-    # What a person reads, in the app's words (#396: oracle.wording, which also rewrites
-    # the wording stored before it); the ids are in ``refs`` and ``section_keys``.
+    # What a person reads, in the app's words (#396: its builder writes them; the wording
+    # stored before #396 is read through oracle.wording.legacy); the ids are in ``refs``
+    # and ``section_keys``.
     message: str
     section_keys: list[str] = []
     # The ids agents and the API need (a date's text and PRD slug, a citation's key and
-    # source item), never shown to a person.
+    # source item, the feedback left open), never shown to a person.
     refs: dict[str, str] = {}
 
-    @field_validator("message")
-    @classmethod
-    def _in_the_app_s_words(cls, v: str) -> str:
-        return wording.say(v)
+    @model_validator(mode="after")
+    def _stored_before_396(self) -> "VersionWarning":
+        message, refs = wording.legacy(self.message)
+        if refs or message != self.message:
+            self.message, self.refs = message, {**refs, **self.refs}
+        return self
 
 
 class ImportProblem(BaseModel):
@@ -75,12 +78,8 @@ class ImportProblem(BaseModel):
     section_key: str | None = None
     cite_key: str | None = None
     line: int | None = None
+    # The ids agents and the API need (#396), when the message is one a person reads.
     refs: dict[str, str] = {}
-
-    @field_validator("message")
-    @classmethod
-    def _in_the_app_s_words(cls, v: str) -> str:
-        return wording.say(v)
 
 
 class ImportErrorResponse(BaseModel):

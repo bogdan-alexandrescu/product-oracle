@@ -182,7 +182,7 @@ def test_feedback_an_agent_s_draft_left_open_is_named_by_section():
     headings = {"problem": "Problem", "risks": "Risks"}
     message, refs = wording.feedback_left_open({a: "problem", b: "risks", c: None}, headings)
     _plain(message)
-    assert '3 feedback items stay open' in message
+    assert "3 feedback items stay open" in message
     assert '"Problem"' in message and '"Risks"' in message and "the document" in message
     assert refs == {"feedback_items": f"{a}, {b}, {c}"}
     one, refs = wording.feedback_left_open({a: "problem"}, headings)

@@ -7,16 +7,14 @@ its heading, says where in the app to act, and never carries an HTTP method, a `
 route or a UUID; the ids stay in the machine fields (``code``, ``refs``,
 ``section_keys``) for agents and the API.
 
-:func:`say` is the guard every served message passes through (the schemas' validators):
-it rewrites the wording stored on versions before #396 and, should a new message still
-carry a route or an id, drops it and logs the message so it is fixed at its builder.
+:func:`legacy` reads the wording stored on versions before #396 (the version warning's
+validator): it rewrites only those exact phrases and moves any id they carried into
+``refs``. Nothing else is rewritten, so no message loses an id; a builder gives its own
+message the app's words and its ids ``refs`` (tests/test_warning_wording.py scans them).
 """
 
-import logging
 import re
-from collections.abc import Sequence
-
-log = logging.getLogger(__name__)
+from collections.abc import Mapping, Sequence
 
 # Where a person records the estimate, capacity or commitment a date rests on (F3,
 # Plan › Dates). A viewer cannot record one: the engineering lead can.
@@ -27,28 +25,21 @@ _METHOD = r"\b(?:GET|POST|PUT|PATCH|DELETE)\b"
 _UUID = r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
 _API_WORDS = re.compile(rf"/v1/|{_METHOD}|{_UUID}")
 
-# The wording stored on versions before #396, as the old builders wrote it.
-_LEGACY: list[tuple[re.Pattern[str], str]] = [
+# The wording stored on versions before #396, as the old builders wrote it: the date
+# messages' routes, and the ids the citation and left-open feedback warnings named.
+_LEGACY_ROUTES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"record one \(POST /v1/schedule-bases\)"), RECORD_DATE_BASIS),
     (re.compile(r"\(record one with POST /v1/schedule-bases\)"), f"({RECORD_DATE_BASIS})"),
     (
         re.compile(r"Record a basis \(POST /v1/schedule-bases\)"),
         "Record a date basis on Plan › Dates (or ask the engineering lead to),",
     ),
-    (
-        re.compile(r"citation '[^']*' names source item '[^']*', which this company does not have"),
-        f"a citation names {MISSING_SOURCE_ITEM}",
-    ),
 ]
-# What is left of a route or an id after that: dropped (a parenthesised route with its
-# brackets), a bare route as "the app", an id as "an item".
-_FALLBACK: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(rf"\s*\((?:[^()]*\s)?{_METHOD} /v1/[^()]*\)"), ""),
-    (re.compile(rf"{_METHOD} /v1/\S*"), "the app"),
-    (re.compile(r"/v1/\S*"), "the app"),
-    (re.compile(_METHOD), "a request"),
-    (re.compile(_UUID), "an item"),
-]
+_LEGACY_CITATION = re.compile(
+    r"citation '(?P<cite_key>[^']*)' names source item '(?P<source_item>[^']*)', which this "
+    r"company does not have"
+)
+_LEGACY_LEFT_OPEN = re.compile(r"these stay open: (?P<ids>.+)$")
 
 
 def api_words(text: str) -> list[str]:
@@ -57,19 +48,22 @@ def api_words(text: str) -> list[str]:
     return [m.group(0) for m in _API_WORDS.finditer(text)]
 
 
-def say(text: str) -> str:
-    """``text`` in the app's words: the pre-#396 wording rewritten, and any route or id
-    still in it dropped (and logged, so its builder is fixed)."""
+def legacy(text: str) -> tuple[str, dict[str, str]]:
+    """``text`` as stored before #396, in the app's words, and the ids it named (for
+    ``refs``). Any other text is returned as it is."""
     if not _API_WORDS.search(text):
-        return text
-    for pattern, repl in _LEGACY:
+        return text, {}
+    for pattern, repl in _LEGACY_ROUTES:
         text = pattern.sub(repl, text)
-    if not _API_WORDS.search(text):
-        return text
-    log.warning("a message a person reads carried API words: %r", text)
-    for pattern, repl in _FALLBACK:
-        text = pattern.sub(repl, text)
-    return text
+    refs: dict[str, str] = {}
+    if m := _LEGACY_CITATION.search(text):
+        refs = {"cite_key": m["cite_key"], "source_item": m["source_item"]}
+        text = text[: m.start()] + f"a citation names {MISSING_SOURCE_ITEM}" + text[m.end() :]
+    elif m := _LEGACY_LEFT_OPEN.search(text):
+        ids = [i.strip() for i in m["ids"].split(",")]
+        refs = {"feedback_items": ", ".join(ids)}
+        text = text[: m.start()] + _left_open(len(ids))
+    return text, refs
 
 
 def quoted(name: str | None, fallback: str) -> str:
@@ -92,3 +86,25 @@ def unknown_source_item(headings: Sequence[str]) -> str:
         f" in {listed([quoted(h, 'an untitled section') for h in headings])}" if headings else ""
     )
     return f"a citation{where} names {MISSING_SOURCE_ITEM}; the citation is kept without it"
+
+
+def _left_open(n: int) -> str:
+    return f"{n} feedback item{'s stay' if n != 1 else ' stays'} open"
+
+
+def feedback_left_open(
+    skipped: Mapping[str, str | None], headings: Mapping[str, str]
+) -> tuple[str, dict[str, str]]:
+    """The warning for the feedback an agent's draft may not close, and its ``refs``;
+    ``skipped``: feedback id -> the section it is on (None: the whole document). The
+    message names each section by its heading; the feedback ids are in ``refs``."""
+    keys = list(dict.fromkeys(skipped.values()))
+    places = [quoted(headings.get(k), "an untitled section") for k in keys if k]
+    if None in keys:
+        places.append("the document")
+    message = (
+        "an agent's draft closes feedback only as addressed, and only on a section whose text "
+        f"or evidence it changed in this version; {_left_open(len(skipped))}: on "
+        f"{listed(places)}"
+    )
+    return message, {"feedback_items": ", ".join(skipped)}

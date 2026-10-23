@@ -2,9 +2,8 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
-from oracle import wording
 from oracle.docs.schemas import (
     DateMarkOut,
     DocumentStatus,
@@ -598,11 +597,6 @@ class PublishBlock(BaseModel):
     title: str
     # In the app's words (#396, oracle.wording); the ids are in ``key`` and ``id``.
     rationale: str
-
-    @field_validator("rationale")
-    @classmethod
-    def _in_the_app_s_words(cls, v: str) -> str:
-        return wording.say(v)
 
 
 class PublishBlockedOut(BaseModel):

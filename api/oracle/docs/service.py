@@ -726,6 +726,16 @@ async def _citation_items(
     return {key: item for key, item in ids.items() if item in found}, warnings
 
 
+def unknown_feedback_item(fid: uuid.UUID) -> ImportProblem:
+    """A resolution naming feedback the document does not have: the import's refusal to
+    the agent that wrote it, which echoes the id it sent (and keeps it in ``refs``)."""
+    return ImportProblem(
+        code="unknown_feedback_item",
+        message=f"resolution references unknown feedback item {fid}",
+        refs={"feedback_item": str(fid)},
+    )
+
+
 def _document_mismatch(slug: str, draft: ParsedDraft) -> DraftError:
     return DraftError(
         [
@@ -981,13 +991,16 @@ async def import_draft(
     if origin == "run" and previous is not None and resolutions:
         resolutions, skipped = await _run_resolutions(db, document, previous, draft, revisions)
         if skipped:
+            # #396: the sections by heading; the feedback ids in refs.
+            message, refs = wording.feedback_left_open(
+                skipped, {s.section_key: s.heading for s in draft.sections}
+            )
             warnings.append(
                 VersionWarning(
                     code="resolution_not_applied",
-                    message="an agent's draft closes feedback only as addressed, and only "
-                    "on a section whose text or evidence it changed in this version; "
-                    f"these stay open: {', '.join(skipped)}",
+                    message=message,
                     section_keys=sorted({k for k in skipped.values() if k}),
+                    refs=refs,
                 )
             )
     notes: list[VersionWarning] = []
@@ -1147,15 +1160,7 @@ async def import_draft(
         )
     except review_service.UnknownFeedbackItemsError as exc:
         await db.rollback()
-        raise DraftError(
-            [
-                ImportProblem(
-                    code="unknown_feedback_item",
-                    message=f"resolution references unknown feedback item {fid}",
-                )
-                for fid in exc.feedback_ids
-            ]
-        ) from exc
+        raise DraftError([unknown_feedback_item(fid) for fid in exc.feedback_ids]) from exc
 
     from oracle.review import patches, state
 

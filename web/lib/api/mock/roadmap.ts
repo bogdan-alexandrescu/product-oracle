@@ -1253,9 +1253,10 @@ function trackerLinks(
 }
 
 /**
- * #396: the warnings the API stores on a roadmap version for GA's date with no basis and a
- * citation whose source item Oracle no longer has, worded as api/oracle/roadmap/doc_dates.py
- * problem_message and api/oracle/wording.py unknown_source_item write them; the ids in refs.
+ * #396: the warnings the API stores on a roadmap version for GA's date with no basis, a
+ * citation whose source item Oracle no longer has and the feedback an agent's draft left open,
+ * worded as api/oracle/roadmap/doc_dates.py problem_message and api/oracle/wording.py
+ * unknown_source_item and feedback_left_open write them; the ids in refs.
  */
 export function versionWarnings(prdTitle: string, prdSlug: string): Schemas["VersionWarning"][] {
   return [
@@ -1270,6 +1271,13 @@ export function versionWarnings(prdTitle: string, prdSlug: string): Schemas["Ver
       message: 'a citation in "Summary" names a source item Oracle no longer has; the citation is kept without it',
       section_keys: ["summary"],
       refs: { cite_key: "c-usage", source_item: "00000000-0000-4000-8000-000000000396" },
+    },
+    {
+      code: "resolution_not_applied",
+      message:
+        'an agent\'s draft closes feedback only as addressed, and only on a section whose text or evidence it changed in this version; 2 feedback items stay open: on "Summary" and "Behaviour"',
+      section_keys: ["item-behaviour", "summary"],
+      refs: { feedback_items: "00000000-0000-4000-8000-000000000397, 00000000-0000-4000-8000-000000000398" },
     },
   ];
 }
