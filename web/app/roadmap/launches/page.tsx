@@ -30,7 +30,6 @@ import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
-import { APPROVERS_ONLY } from "../_form-dialog";
 import { NewLaunchDialog } from "./_new-launch";
 
 type Summary = Schemas["LaunchSummary"];
@@ -199,16 +198,11 @@ function Launches() {
             <LinkButton href="/roadmap/changelog" icon="doc">
               Changelog
             </LinkButton>
-            <Button
-              variant="primary"
-              icon="plus"
-              disabled={!canApprove}
-              title={canApprove ? undefined : APPROVERS_ONLY}
-              onClick={() => setCreating(true)}
-              data-testid="new-launch"
-            >
-              New launch
-            </Button>
+            {canApprove && (
+              <Button variant="primary" icon="plus" onClick={() => setCreating(true)} data-testid="new-launch">
+                New launch
+              </Button>
+            )}
           </div>
         }
       />
@@ -441,7 +435,7 @@ function LaunchInspector({ id, canApprove, onChanged }: { id: string; canApprove
             />
           ))}
         </ul>
-        <AddTask launchId={l.id} canApprove={canApprove} busy={busy} act={act} />
+        {canApprove && <AddTask launchId={l.id} busy={busy} act={act} />}
       </InspectorSection>
       <InspectorSection label="Notes to the people who asked">
         {notesQ.data && notesQ.data.length === 0 && <span className="text-text2">Nobody yet</span>}
@@ -450,7 +444,7 @@ function LaunchInspector({ id, canApprove, onChanged }: { id: string; canApprove
             <NoteRow key={n.id} note={n} canEdit={canApprove || l.owner_id === myId} busy={busy} act={act} />
           ))}
         </ul>
-        <AddNote launchId={l.id} canApprove={canApprove} busy={busy} act={act} />
+        {canApprove && <AddNote launchId={l.id} busy={busy} act={act} />}
         {canApprove && l.state === "launched" && (notesQ.data ?? []).some((n) => n.internal && n.status === "drafted") && (
           <Button
             className="mt-2"
@@ -504,23 +498,16 @@ type Act = (key: string, call: () => Promise<unknown>) => Promise<void>;
 const FIELD = "h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]";
 
 /** Add task: a task of the company's own at the end of the checklist (approvers). */
-function AddTask({ launchId, canApprove, busy, act }: { launchId: string; canApprove: boolean; busy: string | null; act: Act }) {
+function AddTask({ launchId, busy, act }: { launchId: string; busy: string | null; act: Act }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [audience, setAudience] = useState<Audience>("internal");
   if (!open) {
     return (
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Button
-          icon="plus"
-          disabled={!canApprove}
-          title={canApprove ? undefined : APPROVERS_ONLY}
-          onClick={() => setOpen(true)}
-          data-testid="add-task"
-        >
+        <Button icon="plus" onClick={() => setOpen(true)} data-testid="add-task">
           Add task
         </Button>
-        {!canApprove && <span className="text-sm text-text2">{APPROVERS_ONLY}</span>}
       </div>
     );
   }
@@ -560,7 +547,7 @@ function AddTask({ launchId, canApprove, busy, act }: { launchId: string; canApp
 }
 
 /** Add note: someone who asked, added by hand with how to reach them and what they asked (approvers). */
-function AddNote({ launchId, canApprove, busy, act }: { launchId: string; canApprove: boolean; busy: string | null; act: Act }) {
+function AddNote({ launchId, busy, act }: { launchId: string; busy: string | null; act: Act }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [hint, setHint] = useState("");
@@ -568,13 +555,7 @@ function AddNote({ launchId, canApprove, busy, act }: { launchId: string; canApp
   if (!open) {
     return (
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Button
-          icon="plus"
-          disabled={!canApprove}
-          title={canApprove ? undefined : APPROVERS_ONLY}
-          onClick={() => setOpen(true)}
-          data-testid="add-note"
-        >
+        <Button icon="plus" onClick={() => setOpen(true)} data-testid="add-note">
           Add note
         </Button>
       </div>

@@ -5,9 +5,6 @@ import { useRef, type FormEvent, type ReactNode } from "react";
 import { Button, useFocusTrap } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 
-/** Who may plan launches and add tasks, notes and changelog entries (POST needs the approver role). */
-export const APPROVERS_ONLY = "Approvers plan launches and add tasks, notes and changelog entries";
-
 /**
  * A modal form for the launches and changelog screens (the New update dialog's shape): a
  * title, the fields, an error and Cancel beside the submit. Escape and Cancel close it.

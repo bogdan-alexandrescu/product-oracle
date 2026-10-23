@@ -9,7 +9,6 @@ import { formatDate } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { APPROVERS_ONLY } from "../_form-dialog";
 import { NewEntryDialog } from "./_new-entry";
 
 type Entry = Schemas["ChangelogEntryOut"];
@@ -117,16 +116,11 @@ export default function ChangelogPage() {
             <Button disabled={busy !== null} onClick={() => exportAs("html")} data-testid="export-html">
               Export HTML
             </Button>
-            <Button
-              variant="primary"
-              icon="plus"
-              disabled={!canApprove}
-              title={canApprove ? undefined : APPROVERS_ONLY}
-              onClick={() => setCreating(true)}
-              data-testid="new-entry"
-            >
-              New entry
-            </Button>
+            {canApprove && (
+              <Button variant="primary" icon="plus" onClick={() => setCreating(true)} data-testid="new-entry">
+                New entry
+              </Button>
+            )}
           </div>
         }
       />
