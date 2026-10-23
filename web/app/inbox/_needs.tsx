@@ -22,6 +22,8 @@ import {
   type TrackAlertOut,
 } from "@/lib/api/track-alerts";
 
+import { calendarDay } from "@/lib/dates";
+
 import { InboxActions, SuggestionPeek, type OnActed } from "./_actions";
 import {
   CANCEL_AGAIN_CONFIRM,
@@ -698,13 +700,11 @@ export function oracleActionNeeds(actions: OracleAction[], busy: string | null, 
   });
 }
 
-const dayFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-
 /** F3: each proposed date basis, for the engineering leads (and owners while none is named):
  * Verify in place, Reject (with a reason) on Plan › Dates. */
 export function dateNeeds(inbox: InboxOut, busy: string | null, act: Act): Need[] {
   return (inbox.dates ?? []).map((b) => {
-    const day = dayFmt.format(new Date(`${b.supports_date}T00:00:00Z`));
+    const day = calendarDay(b.supports_date);
     const path = { params: { path: { basis_id: b.id } } };
     return {
       key: `date-${b.id}`,

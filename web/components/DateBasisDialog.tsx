@@ -7,6 +7,7 @@ import { Button, Icon, Notice } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { DEFAULT_ZONE, calendarDay, zoneDay } from "@/lib/dates";
 
 export type Basis = Schemas["ScheduleBasisOut"];
 export type DateRights = Schemas["DateRightsOut"];
@@ -21,13 +22,8 @@ export const HELP =
   "Record what supports this date: an estimate, a capacity plan or a commitment from the team doing the work. Oracle never invents dates.";
 export const LEAD_VERIFIES = "The engineering lead verifies it before any date rests on it.";
 
-const dayFmt = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  timeZone: "UTC",
-});
-/** "2026-11-30" (or a timestamp) as "Nov 30". */
-export const shortDay = (iso: string) => dayFmt.format(new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso));
+/** "2026-11-30" as "Nov 30"; a timestamp as its day in the Company time zone (#401). */
+export const shortDay = (iso: string, zone: string = DEFAULT_ZONE) => (iso.length === 10 ? calendarDay(iso) : zoneDay(iso, zone));
 
 /** F3: what the signed-in member may do with a date basis (GET /v1/schedule-bases/rights). */
 export function useDateRights() {
