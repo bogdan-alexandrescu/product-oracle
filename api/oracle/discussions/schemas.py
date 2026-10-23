@@ -221,8 +221,29 @@ class DiscussionMessagePage(BaseModel):
     has_more: bool
 
 
+ChangeVerb = Literal["Stage", "Propose", "Resolve", "Use as answer", "Ask", "Record", "Apply"]
+
+
+class ChangeAction(BaseModel):
+    """The kind's action as the caller may take it (G3 3.2); ``why_not`` in 3.2's copy."""
+
+    verb: ChangeVerb
+    allowed: bool
+    why_not: str | None = None
+
+
+class ChangeCan(BaseModel):
+    """What else the caller may do with the change."""
+
+    suggest: bool = False
+    edit: bool = False
+    withdraw: bool = False
+    dismiss: bool = False
+
+
 class DiscussionChangeOut(BaseModel):
     id: uuid.UUID
+    discussion_id: uuid.UUID
     kind: str
     # The plain sentence from the registry (oracle.discussions.kinds).
     label: str
@@ -231,11 +252,70 @@ class DiscussionChangeOut(BaseModel):
     edited_payload: dict[str, Any] | None
     rationale: str | None
     proposed_by_kind: Literal["oracle", "person"]
-    proposed_by: uuid.UUID | None
-    suggested_by: uuid.UUID | None
+    proposed_by: DiscussionPerson | None
+    suggested_by: DiscussionPerson | None
     status: ChangeStatus
+    # None for a caller who can never act on it (viewers).
+    action: ChangeAction | None = None
+    can: ChangeCan = ChangeCan()
+    # C1b: {"reason", "sources": [n]}; Stage asks "Why stage it anyway?".
+    pushback: dict[str, Any] | None = None
+    # A private discussion: Stage asks for the reason everyone will see (3.4).
+    needs_reason: bool = False
+    basis: list[dict[str, Any]] = Field(default_factory=list)
+    result_ref: dict[str, Any] | None = None
+    decision_note: str | None = None
     created_at: datetime
     lock_version: int
+
+
+class ChangeKindOut(BaseModel):
+    """A kind "Propose a change" offers on this subject, with its payload's JSON schema."""
+
+    kind: str
+    verb: ChangeVerb
+    schema_: dict[str, Any] = Field(alias="schema", serialization_alias="schema")
+
+
+class ChangeIn(BaseModel):
+    kind: str = Field(min_length=1, max_length=50)
+    target: dict[str, Any] = Field(default_factory=dict)
+    payload: dict[str, Any]
+    rationale: str | None = Field(default=None, max_length=1000)
+
+
+class ChangeEdit(BaseModel):
+    payload: dict[str, Any]
+    rationale: str | None = Field(default=None, max_length=1000)
+    lock_version: int
+
+
+class ChangeActIn(BaseModel):
+    lock_version: int
+
+
+class ChangeStageIn(ChangeActIn):
+    # C1b: why stage it anyway, when Oracle pushed back.
+    override_reason: str | None = Field(default=None, max_length=1000)
+    # 3.4: the reason everyone will see; required from a private discussion.
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class ChangeDismissIn(ChangeActIn):
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class ChangeResult(BaseModel):
+    """Every action's answer: the change, and what acting created (a staged change, a
+    proposal, a resolved conflict, an answer), or None."""
+
+    change: DiscussionChangeOut
+    result: dict[str, Any] | None = None
+
+
+class SummaryAsk(BaseModel):
+    # The starter asks for a new draft over a confirmed summary.
+    replace: bool = False
 
 
 class DiscussionExposureConflict(BaseModel):

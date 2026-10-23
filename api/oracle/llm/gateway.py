@@ -75,6 +75,8 @@ JOBS = (
     "override_reason_check",
     # G2 Live replies: what a person waits for in a discussion.
     "discussion_reply",
+    # G3: a discussion's summary draft for the people and agents who did not read it.
+    "discussion_summary",
 )
 
 #: Accounts one call may try before giving up (the first plus two swaps).

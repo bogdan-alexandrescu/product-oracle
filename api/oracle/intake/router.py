@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, require_role
+from oracle.discussions import changes as discussion_changes
 from oracle.intake import answers, checks, engine, questions, service, sharing, summary, views
 from oracle.intake import categories as cats
 from oracle.intake import evidence as ev
@@ -497,6 +498,9 @@ async def set_intake_finding_sharing(
         await service.set_sharing(db, principal, intake, [(str(finding_id), body.sharing)])
     except service.IntakeError as e:
         raise _http(e) from e
+    if body.sharing == "private":
+        # S6 rule 5 (G3): open discussion changes resting on it are superseded.
+        await discussion_changes.on_finding_lowered(db, intake.id, [str(finding_id)])
     await db.commit()
     await db.refresh(intake)
     [out] = await _findings(db, intake, principal, {str(finding_id)})
@@ -537,6 +541,8 @@ async def set_intake_findings_sharing(
         done = await service.set_sharing(db, principal, intake, changes)
     except service.IntakeError as e:
         raise _http(e) from e
+    private = [f for f, level in changes if level == "private"]
+    await discussion_changes.on_finding_lowered(db, intake.id, private)
     await db.commit()
     await db.refresh(intake)
     return await _findings(db, intake, principal, set(done))

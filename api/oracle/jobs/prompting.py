@@ -34,7 +34,8 @@ CURRENT = {
     "quality_review": "quality_review.v1",
     "refinement_batch": "refinement_batch.v2",
     "decision_options": "decision_options.v1",
-    "discussion_reply": "discussion_reply.v1",
+    "discussion_reply": "discussion_reply.v2",
+    "discussion_summary": "discussion_summary.v1",
 }
 
 

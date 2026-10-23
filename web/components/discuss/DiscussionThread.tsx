@@ -2,17 +2,18 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
-import { CitationChip } from "@/components/CitationChip";
 import { findPeople, PersonPicker, type Person } from "@/components/PersonPicker";
 import { Button, Chip, confirmInPage, Icon, Notice, useFocusTrap } from "@/components/ds";
 import { InlineError, Menu, TEXTAREA } from "@/components/review/parts";
 import { Loading } from "@/components/ui";
-import { api, ApiError, unwrap, type CitationOut, type Schemas } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { openStream } from "@/lib/stream";
 import { errorMessage } from "@/lib/use-query";
 
+import { ChangesCard } from "./ChangesCard";
+import { type Cite, ReplyBody } from "./cited";
 import { plural } from "./DiscussionList";
 
 type Discussion = Schemas["DiscussionOut"];
@@ -129,51 +130,23 @@ function MakeOpenWarning({
   );
 }
 
-type Cite = { n: number; kind: string; ref: string; title: string; url?: string | null; excerpt?: string | null; confidence?: number | null; low_confidence?: boolean };
-
-/** A discussion citation as the document citation chip reads it. */
-function chipCitation(c: Cite): CitationOut {
-  const link = c.kind === "public_link" && !!c.url;
-  return {
-    id: `c${c.n}`,
-    cite_key: `c:${c.n}`,
-    source: link ? "web" : "oracle",
-    ref: link ? c.url! : c.title,
-    title: c.title,
-    excerpt: c.excerpt ?? null,
-    added: false,
-    confidence: c.confidence ?? null,
-    low_confidence: !!c.low_confidence,
-  } as CitationOut;
-}
-
-/** Oracle's text with each `[c:n]` drawn as a citation chip. */
-function ReplyBody({ text, citations }: { text: string; citations: Cite[] }) {
-  const parts = text.split(/(\[c:\d{1,4}\])/g);
-  return (
-    <>
-      {parts.map((part, i) => {
-        const n = /^\[c:(\d+)\]$/.exec(part)?.[1];
-        if (!n) return <span key={i}>{part}</span>;
-        const c = citations.find((x) => x.n === Number(n));
-        return c ? <CitationChip key={i} citeKey={`c-${n}`} citation={chipCitation(c)} number={c.n} /> : null;
-      })}
-    </>
-  );
-}
-
 /**
  * Oracle's reply (G2): "Oracle is thinking…" while pending, the text growing with a caret
  * while it streams (Stop for the person who asked), citations as chips, an amber "Oracle
  * pushes back" label, and a failed or stopped reply's copy with Retry.
  */
-function OracleReply({ m, discussionId, asker }: { m: Message; discussionId: string; asker: boolean }) {
+function OracleReply({ m, discussionId, asker, onEnded }: { m: Message; discussionId: string; asker: boolean; onEnded?: () => void }) {
   const [msg, setMsg] = useState<Message>(m);
   const [text, setText] = useState(m.body);
   const [live, setLive] = useState(m.status === "pending" || m.status === "streaming");
   const [error, setError] = useState<string | null>(m.error ?? null);
   const [run, setRun] = useState(0);
   const { role } = useMe();
+  // G3: the reply's changes land as it ends; the card under the thread reloads them.
+  const ended = useRef(onEnded);
+  useEffect(() => {
+    ended.current = onEnded;
+  });
 
   useEffect(() => {
     if (!live) return;
@@ -197,7 +170,9 @@ function OracleReply({ m, discussionId, asker }: { m: Message; discussionId: str
         setText(done.body);
         setError(null);
         setLive(false);
+        ended.current?.();
       },
+      onChanges: () => ended.current?.(),
       onError: (e) => {
         if (abort.signal.aborted) return;
         setMsg((x) => ({ ...x, status: "failed", error_reason: e.reason }));
@@ -470,6 +445,8 @@ export function DiscussionThread({
   const [warning, setWarning] = useState<Counts | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // G3: bumped when a reply ends, so the changes card reloads.
+  const [changesKey, setChangesKey] = useState(0);
 
   const reload = async () => {
     const next = await load(id);
@@ -682,12 +659,6 @@ export function DiscussionThread({
           {!open && <Chip kind="na">Closed</Chip>}
           <span className="min-w-0 truncate">{d.subject_label}</span>
         </div>
-        {d.summary && (
-          <p className="rounded-lg bg-surface2 px-3 py-2 text-sm leading-5 break-words" data-testid="discussion-summary">
-            <span className="font-semibold">Summary: </span>
-            {d.summary}
-          </p>
-        )}
       </div>
 
       {editing && (
@@ -756,7 +727,12 @@ export function DiscussionThread({
                 {m.edited_at && !m.deleted && <span>edited</span>}
               </p>
               {m.author_kind === "oracle" && !m.deleted ? (
-                <OracleReply m={m} discussionId={d.id} asker={!!myId && messages.some((x) => x.id === m.reply_to && x.author?.user_id === myId)} />
+                <OracleReply
+                  m={m}
+                  discussionId={d.id}
+                  asker={!!myId && messages.some((x) => x.id === m.reply_to && x.author?.user_id === myId)}
+                  onEnded={() => setChangesKey((k) => k + 1)}
+                />
               ) : (
                 <p className="text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
                   {m.deleted ? <span className="text-text2 italic">Message deleted</span> : <Body m={m} />}
@@ -795,6 +771,8 @@ export function DiscussionThread({
           Viewers can read but not write here.
         </p>
       )}
+
+      <ChangesCard d={d} refreshKey={changesKey} onThreadChanged={() => void reload().then(() => onChanged?.())} />
 
       {warning && (
         <MakeOpenWarning

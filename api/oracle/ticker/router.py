@@ -51,6 +51,7 @@ from oracle.config import get_settings
 from oracle.connections import service as connections_service
 from oracle.db import get_engine
 from oracle.discussions import replies as discussion_replies
+from oracle.discussions import summary as discussion_summary
 from oracle.discussions.replies import RepliesTick
 from oracle.jobs import worker as llm_jobs
 from oracle.launches import service as launches_service
@@ -287,6 +288,15 @@ async def _run_jobs(
                 name,
                 getattr(out.discussion_replies, name) + getattr(got, name),
             )
+        # G3: the summary drafts queued by a close or a first staged change.
+        if (
+            HARD_LIMIT_SECONDS - (time.monotonic() - started)
+            > 2 * discussion_replies.reply_seconds()
+        ):
+            try:
+                await discussion_summary.run_queued(tenant_id, limit=2)
+            except Exception:
+                log.exception("run ticker: discussion summaries failed for company %s", tenant_id)
     limit = llm_jobs.get_worker_settings().max_per_tick
     if limit <= 0:
         return
