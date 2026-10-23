@@ -408,7 +408,8 @@
             }
           }
         },
-        "x-min-role": "owner"
+        "x-min-role": "owner",
+        "x-per-item": "owner"
       }
     },
     "/v1/documents/{doc}/versions": {
@@ -2183,7 +2184,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/discussions/{discussion_id}/messages/{message_id}": {
@@ -2262,7 +2264,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       },
       "delete": {
         "tags": [
@@ -2322,7 +2325,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/discussions/{discussion_id}/participants": {
@@ -3051,7 +3055,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/documents/{doc}/section-patches": {
@@ -8206,7 +8211,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/oracle-actions/{action_id}/undo": {
@@ -8262,7 +8268,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/claude-accounts": {
@@ -13513,7 +13520,8 @@
             "description": "Invalid options, rationale, expected outcome or review date"
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/decisions/{decision}/reassign": {
@@ -13576,7 +13584,8 @@
             "description": "Invalid options, rationale, expected outcome or review date"
           }
         },
-        "x-min-role": "owner"
+        "x-min-role": "owner",
+        "x-per-item": "owner"
       }
     },
     "/v1/decisions/{decision}/withdraw": {
@@ -15067,7 +15076,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}": {
@@ -15775,7 +15785,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/cancel-again": {
@@ -15964,7 +15975,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review": {
@@ -16027,7 +16039,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions": {
@@ -16100,7 +16113,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage": {
@@ -16173,7 +16187,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}": {
@@ -16246,7 +16261,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note": {
@@ -16319,7 +16335,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/segments/{seq}/artifacts/{name}": {
@@ -16546,7 +16563,8 @@
             "APIKeyCookie": []
           }
         ],
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/modules": {
@@ -17459,7 +17477,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/intakes/{item_id}": {
@@ -17573,7 +17592,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/gaps": {
@@ -17923,7 +17943,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/questions": {
@@ -21116,7 +21137,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/intakes/{intake_id}/question-batches": {
@@ -21198,7 +21220,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/intakes/{intake_id}/composition-inputs": {
@@ -21324,7 +21347,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "approver"
       }
     },
     "/v1/intakes/{intake_id}/proposals": {
@@ -21434,7 +21458,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "approver"
       }
     },
     "/v1/intake-proposals/{proposal_id}/dismiss": {
@@ -21836,7 +21861,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/gaps/{gap_id}/research": {
@@ -21952,7 +21978,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/inbox/questions": {
@@ -22050,7 +22077,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/quality/criteria": {
@@ -25680,7 +25708,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       },
       "get": {
         "tags": [
@@ -25857,7 +25886,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/design-artifacts/{version_id}": {
@@ -26448,7 +26478,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "approver",
+        "x-lead-role": "commenter"
       }
     },
     "/v1/schedule-bases/{basis_id}/withdraw": {
@@ -26511,7 +26542,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "approver",
+        "x-lead-role": "commenter"
       }
     },
     "/v1/tracker/connector": {
@@ -27125,7 +27157,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/tracks/{track_id}/tracker-plan": {
@@ -29234,7 +29267,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "viewer"
       }
     },
     "/v1/plan/items/history": {
@@ -29299,7 +29333,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "viewer"
       }
     },
     "/v1/strategy/stack": {
@@ -29508,7 +29543,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/strategy/check": {
@@ -30299,7 +30335,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/launches/{launch_id}/notify-members": {
@@ -36745,6 +36782,32 @@
             },
             "type": "object",
             "title": "Operations"
+          },
+          "decide_engineering_stops": {
+            "type": "boolean",
+            "title": "Decide Engineering Stops",
+            "default": false
+          },
+          "per_item": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "viewer",
+                    "commenter",
+                    "approver",
+                    "owner"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Per Item",
+            "default": {}
           }
         },
         "type": "object",
