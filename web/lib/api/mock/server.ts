@@ -14,7 +14,7 @@ import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from 
 import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
-import { connectionsRoute, setupFacts } from "./connections";
+import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { emptyDiscussions, routeDiscussions, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
 import { routeEngineering, type CodeMapRow } from "./engineering";
@@ -1238,6 +1238,8 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     me: { id: me.id, email: me.email, role: me.role, status: me.status },
     members: db.members.map((m) => ({ id: m.id, email: m.email, role: m.role, status: m.status })),
     uuid,
+    companyTimezone: () => String(mockSettingValue("company_timezone") ?? "UTC"),
+    decisions: () => db.decisions?.decisions ?? [],
   };
 }
 

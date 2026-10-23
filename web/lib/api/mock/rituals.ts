@@ -19,7 +19,7 @@ type Member = { id: string; email: string; role: Role; status?: string };
 /** A stored ritual: the API's record without what is derived on the way out. */
 type Ritual = Omit<RitualOut, "last_pre_read" | "schedule"> & { schedule: Schedule; created_at: string };
 /** A stored occurrence; the summary run finishes on its owner's `summary_reads`-th read. */
-type Occurrence = Omit<OccurrenceOut, "kind" | "title" | "duration_min" | "owner_id" | "attendee_ids" | "timezone" | "read_by_me"> & {
+type Occurrence = Omit<OccurrenceOut, "kind" | "title" | "duration_min" | "owner_id" | "attendee_ids" | "timezone" | "read_by_me" | "decisions"> & {
   summary_reads?: number;
   read_by: string[];
 };
@@ -28,12 +28,21 @@ export interface RitualsDb {
   rituals: Ritual[];
   occurrences: Occurrence[];
   mode: "on_demand" | "always";
+  /** The Company time zone the rituals last followed (the API moves them on a change). */
+  zone?: string;
 }
+
+/** A decision as the rituals mock reads it from the decision log (./decisions.ts). */
+type LoggedDecision = { id: string; number: number; title: string; subjects: { [key: string]: unknown }[] };
 
 export interface RitualsContext {
   me: Member;
   members: Member[];
   uuid: () => string;
+  /** The Company time zone (Settings › Company). */
+  companyTimezone: () => string;
+  /** The decision log, for the decisions recorded with an occurrence. */
+  decisions: () => LoggedDecision[];
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -235,20 +244,21 @@ export function seedRituals(ctx: RitualsContext, scenario: boolean): RitualsDb {
   const owner = ctx.members.find((m) => m.role === "owner" && m.status !== "disabled")!;
   const attendees = ctx.members.filter((m) => (m.role === "owner" || m.role === "approver") && m.status !== "disabled").map((m) => m.id);
   const t = now();
-  const db: RitualsDb = { rituals: [], occurrences: [], mode: "on_demand" };
+  const zone = ctx.companyTimezone();
+  const db: RitualsDb = { rituals: [], occurrences: [], mode: "on_demand", zone };
   for (const b of BUILTINS) {
     db.rituals.push({
       id: ctx.uuid(),
       kind: b.kind,
       title: b.title,
       builtin: true,
-      schedule: b.schedule,
+      schedule: { ...b.schedule, timezone: zone },
       duration_min: b.duration_min,
       prep_hours: b.prep_hours,
       owner_id: owner.id,
       attendee_ids: attendees,
       status: b.on ? "active" : "paused",
-      next_due_at: nextOccurrence(b.schedule, t).toISOString(),
+      next_due_at: nextOccurrence({ ...b.schedule, timezone: zone }, t).toISOString(),
       lock_version: 1,
       created_at: t.toISOString(),
     });
@@ -260,13 +270,15 @@ export function seedRituals(ctx: RitualsContext, scenario: boolean): RitualsDb {
   const due = new Date(refresh.next_due_at!);
   db.occurrences.push(occurrence(ctx, refresh, due, { status: "ready", pre_read: { built_at: asOf, blocks: roadmapBlocks(asOf, TRACK_ID) } }));
   refresh.next_due_at = nextOccurrence(refresh.schedule, due).toISOString();
-  // Last week's goals check-in: held, and its Every pre-read summary failed.
+  // Last week's goals check-in: held with a decision named, and its Every pre-read summary failed.
+  const named = ctx.decisions().find((d) => d.title === "Ship usage caps before anomaly detection");
   const checkin = db.rituals.find((r) => r.kind === "goals_checkin")!;
   const last = nextOccurrence(checkin.schedule, new Date(t.getTime() - 8 * DAY_MS));
   db.occurrences.push(
     occurrence(ctx, checkin, last, {
       status: "held",
       notes: "Activation is on pace; conversion still has no current value.",
+      decision_ids: named ? [named.id] : [],
       pre_read: { built_at: new Date(last.getTime() - 12 * 3_600_000).toISOString(), blocks: goalsBlocks(asOf) },
       summary_state: "failed",
       summary_note: "Summary failed · Summarize with Oracle to retry",
@@ -308,6 +320,29 @@ function tick(db: RitualsDb) {
   }
 }
 
+/** The Company time zone changed: the rituals on the old one take the new one and their next date in it. */
+function followZone(ctx: RitualsContext, db: RitualsDb) {
+  const zone = ctx.companyTimezone();
+  const old = db.zone ?? "UTC";
+  if (zone === old) return;
+  for (const r of db.rituals) {
+    if (r.schedule.timezone !== old) continue;
+    r.schedule = { ...r.schedule, timezone: zone };
+    if (r.status === "active") r.next_due_at = nextOccurrence(r.schedule, now()).toISOString();
+    r.lock_version += 1;
+  }
+  db.zone = zone;
+}
+
+/** The decisions recorded with an occurrence: those it names (and `extra`), and those whose subject it is. */
+function decisionsOf(ctx: RitualsContext, o: Occurrence, extra: string[] = []): LoggedDecision[] {
+  const named = new Set([...o.decision_ids, ...extra]);
+  return ctx
+    .decisions()
+    .filter((d) => named.has(d.id) || d.subjects.some((s) => s.kind === "ritual_occurrence" && s.id === o.id))
+    .sort((a, b) => a.number - b.number);
+}
+
 function summaryOf(o: Occurrence): Schemas["OccurrenceSummary"] {
   return { id: o.id, ritual_id: o.ritual_id, due_at: o.due_at, ends_at: o.ends_at, status: o.status };
 }
@@ -334,6 +369,7 @@ function occurrenceOut(ctx: RitualsContext, r: Ritual, o: Occurrence): Occurrenc
     attendee_ids: r.attendee_ids,
     timezone: r.schedule.timezone,
     read_by_me: o.read_by.includes(ctx.me.id),
+    decisions: decisionsOf(ctx, o).map((d) => ({ id: d.id, number: d.number, title: d.title, href: `/company/decisions?d=${d.number}` })),
   };
 }
 
@@ -377,6 +413,7 @@ const SUMMARY_TEXT =
 export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "rituals" && p[1] !== "ritual-occurrences") return null;
   tick(db);
+  followZone(ctx, db);
   const m = req.method;
   const role = ctx.me.role;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
@@ -524,7 +561,10 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
     if (p[3] === "held") {
       const input = await body<Schemas["HeldIn"]>();
       if ((input.notes ?? "").length > 10_000) return fail(422, "notes: at most 10,000 characters");
-      Object.assign(o, { status: "held", notes: input.notes || null, decision_ids: input.decision_ids ?? [] });
+      const decisions = decisionsOf(ctx, o, input.decision_ids ?? []);
+      const unknown = (input.decision_ids ?? []).filter((id) => !decisions.some((d) => d.id === id));
+      if (unknown.length) return fail(422, `decision_ids: no such decision: ${unknown.join(", ")}`);
+      Object.assign(o, { status: "held", notes: input.notes || null, decision_ids: decisions.map((d) => d.id) });
     } else {
       const input = await body<Schemas["SkipIn"]>();
       if (!input?.reason?.trim()) return fail(422, "reason: say why it was skipped");
